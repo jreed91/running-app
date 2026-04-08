@@ -1,0 +1,164 @@
+name: RunningApp
+
+options:
+  bundleIdPrefix: com.runningapp
+  deploymentTarget:
+    iOS: "17.0"
+    watchOS: "10.0"
+  xcodeVersion: "16.2"
+  createIntermediateGroups: true
+  groupSortPosition: top
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    SWIFT_VERSION: 6.0
+    SWIFT_STRICT_CONCURRENCY: complete
+    ENABLE_TESTABILITY: YES
+    DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+  configs:
+    Debug:
+      SWIFT_OPTIMIZATION_LEVEL: "-Onone"
+    Release:
+      SWIFT_OPTIMIZATION_LEVEL: "-O"
+
+targets:
+
+  # ── iOS app ──────────────────────────────────────────────────────────────────
+  RunningApp:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+
+    sources:
+      - path: RunningApp
+        excludes:
+          - Resources/Assets.xcassets   # handled separately below
+
+    resources:
+      - RunningApp/Resources/Assets.xcassets
+
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.runningapp.app
+        PRODUCT_NAME: RunningApp
+        INFOPLIST_FILE: RunningApp/Resources/Info.plist
+        TARGETED_DEVICE_FAMILY: "1"         # iPhone only
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: ""                # set your team ID here
+
+    entitlements:
+      path: RunningApp/Resources/RunningApp.entitlements
+      properties:
+        com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.access:
+          - health-records
+
+    info:
+      path: RunningApp/Resources/Info.plist
+      properties:
+        UIBackgroundModes:
+          - location
+        NSLocationWhenInUseUsageDescription: "RunningApp uses your location to track your route during a run."
+        NSLocationAlwaysAndWhenInUseUsageDescription: "RunningApp uses your location in the background to continue tracking your route."
+        NSHealthShareUsageDescription: "RunningApp reads your workout and heart-rate history to show training insights."
+        NSHealthUpdateUsageDescription: "RunningApp saves your completed runs to Apple Health."
+        NSMotionUsageDescription: "RunningApp uses motion data to measure cadence during runs."
+
+    dependencies:
+      - target: RunningAppWatch
+        embed: true
+
+  # ── watchOS companion ─────────────────────────────────────────────────────────
+  RunningAppWatch:
+    type: application
+    platform: watchOS
+    deploymentTarget: "10.0"
+
+    sources:
+      - path: WatchApp
+        excludes:
+          - Info.plist
+
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.runningapp.app.watchkitapp
+        PRODUCT_NAME: RunningApp Watch
+        INFOPLIST_FILE: WatchApp/Info.plist
+        TARGETED_DEVICE_FAMILY: "4"
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: ""
+
+    info:
+      path: WatchApp/Info.plist
+      properties:
+        WKApplication: true
+
+  # ── Unit tests ────────────────────────────────────────────────────────────────
+  RunningAppTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+
+    sources:
+      - RunningAppTests
+
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.runningapp.app.tests
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: ""
+
+    dependencies:
+      - target: RunningApp
+
+  # ── UI tests ──────────────────────────────────────────────────────────────────
+  RunningAppUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "17.0"
+
+    sources:
+      - RunningAppUITests
+
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.runningapp.app.uitests
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: ""
+        TEST_TARGET_NAME: RunningApp
+
+    dependencies:
+      - target: RunningApp
+
+# ── Schemes ───────────────────────────────────────────────────────────────────
+schemes:
+  RunningApp:
+    build:
+      targets:
+        RunningApp: all
+        RunningAppWatch: all
+        RunningAppTests: [test]
+        RunningAppUITests: [test]
+    run:
+      config: Debug
+      askForAppToLaunch: false
+    test:
+      config: Debug
+      targets:
+        - name: RunningAppTests
+          parallelizable: true
+          randomExecutionOrder: true
+        - name: RunningAppUITests
+          parallelizable: false
+          randomExecutionOrder: false
+      testPlans:
+        - path: RunningApp.xctestplan
+          defaultPlan: true
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
+      revealArchiveInOrganizer: true

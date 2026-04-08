@@ -1,0 +1,22 @@
+# Generated Xcode project — recreated from project.yml via `xcodegen generate`
+*.xcodeproj/
+*.xcworkspace/
+
+# Xcode build artefacts
+build/
+DerivedData/
+*.xcarchive
+*.ipa
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+
+# Test results
+TestResults/
+*.xcresult
