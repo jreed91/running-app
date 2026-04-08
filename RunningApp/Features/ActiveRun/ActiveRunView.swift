@@ -1,13 +1,20 @@
 import SwiftUI
+import SwiftData
 
 struct ActiveRunView: View {
     @Environment(\.appContainer) private var container
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
 
+    @Query private var profiles: [UserProfile]
     @State private var showFinishConfirmation = false
 
     private var tracker: WorkoutTrackerService { container.workoutTrackerService }
+
+    private var trainingPaces: TrainingPaces? {
+        guard let time = profiles.first?.currentEstimated5KTimeSeconds else { return nil }
+        return PaceCalculatorService.trainingPaces(from5KTimeSeconds: time)
+    }
 
     var body: some View {
         ZStack {
@@ -29,9 +36,20 @@ struct ActiveRunView: View {
                             value: tracker.currentPaceSecondsPerKm.paceString,
                             label: "PACE"
                         )
+                        if let hr = tracker.currentHeartRate {
+                            metricBlock(value: "\(Int(hr))", label: "BPM")
+                        }
                     }
                 }
                 .foregroundStyle(.white)
+
+                // Pace zone indicator
+                if let paces = trainingPaces, tracker.trackingState == .active {
+                    PaceZoneIndicator(
+                        currentPace: tracker.currentPaceSecondsPerKm,
+                        paces: paces
+                    )
+                }
 
                 Spacer()
 

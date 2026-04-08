@@ -1,6 +1,7 @@
 import Foundation
 import CoreLocation
 import Combine
+import HealthKit
 
 // MARK: - Tracking state
 
@@ -43,6 +44,10 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
     private let locationManager = CLLocationManager()
     private let autoPauseThresholdMs: Double = 500  // < 0.5 m/s ≈ standing still
 
+    private let hkStore = HKHealthStore()
+    private var hrQuery: HKAnchoredObjectQuery?
+    private var hrSamples: [Double] = []
+
     // MARK: Public API
 
     func startWorkout(type: WorkoutType) {
@@ -54,6 +59,7 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
         configureLocationManager()
         locationManager.startUpdatingLocation()
         startTimer()
+        startHeartRateQuery(from: startDate)
     }
 
     func pauseWorkout() {
@@ -61,6 +67,7 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
         trackingState = .paused
         timer?.invalidate()
         locationManager.stopUpdatingLocation()
+        if let q = hrQuery { hkStore.stop(q) }
     }
 
     func resumeWorkout() {
@@ -68,12 +75,14 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
         trackingState = .active
         locationManager.startUpdatingLocation()
         startTimer()
+        startHeartRateQuery(from: Date())
     }
 
     func finishWorkout() -> RunWorkout? {
         guard trackingState == .active || trackingState == .paused else { return nil }
         timer?.invalidate()
         locationManager.stopUpdatingLocation()
+        if let q = hrQuery { hkStore.stop(q); hrQuery = nil }
         trackingState = .finished
 
         let workout = RunWorkout(
@@ -84,7 +93,9 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
         )
         workout.routeCoordinates = coordinates
         workout.splits = splits
-        if let hr = currentHeartRate { workout.averageHeartRate = hr }
+        if !hrSamples.isEmpty {
+            workout.averageHeartRate = hrSamples.reduce(0, +) / Double(hrSamples.count)
+        }
         return workout
     }
 
@@ -94,10 +105,46 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
         elapsedSeconds = 0
         distanceMeters = 0
         currentPaceSecondsPerKm = 0
+        currentHeartRate = nil
         coordinates = []
         splits = []
+        hrSamples = []
         lastLocation = nil
         lastSplitDistance = 0
+    }
+
+    private func startHeartRateQuery(from startDate: Date) {
+        guard HKHealthStore.isHealthDataAvailable() else { return }
+        let hrType = HKQuantityType(.heartRate)
+        let predicate = HKQuery.predicateForSamples(withStart: startDate, end: nil, options: .strictStartDate)
+        let handler: (HKAnchoredObjectQuery, [HKSample]?, [HKDeletedObject]?, HKQueryAnchor?, (any Error)?) -> Void = {
+            [weak self] _, newSamples, _, _, _ in
+            self?.processHRSamples(newSamples)
+        }
+        let query = HKAnchoredObjectQuery(
+            type: hrType,
+            predicate: predicate,
+            anchor: nil,
+            limit: HKObjectQueryNoLimit,
+            resultsHandler: handler
+        )
+        query.updateHandler = handler
+        hrQuery = query
+        hkStore.execute(query)
+    }
+
+    private nonisolated func processHRSamples(_ samples: [HKSample]?) {
+        guard let samples, !samples.isEmpty else { return }
+        let unit = HKUnit.count().unitDivided(by: .minute())
+        let bpmValues: [Double] = samples.compactMap {
+            ($0 as? HKQuantitySample)?.quantity.doubleValue(for: unit)
+        }
+        guard !bpmValues.isEmpty else { return }
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.hrSamples.append(contentsOf: bpmValues)
+            self.currentHeartRate = bpmValues.last
+        }
     }
 
     private func startTimer() {

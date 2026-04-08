@@ -1,14 +1,22 @@
 import SwiftUI
 import MapKit
+import SwiftData
 
 struct RunSummaryView: View {
     let workout: RunWorkout
+
+    @Query private var scheduledWorkouts: [ScheduledWorkout]
+
+    private var matchedScheduled: ScheduledWorkout? {
+        scheduledWorkouts.first { $0.completedWorkout?.id == workout.id }
+    }
 
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
                 routeMap
                 statsGrid
+                performanceFeedbackSection
                 splitsSection
             }
             .padding()
@@ -61,6 +69,68 @@ struct RunSummaryView: View {
         .frame(maxWidth: .infinity)
         .padding()
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    // MARK: Performance Feedback
+
+    @ViewBuilder
+    private var performanceFeedbackSection: some View {
+        if let scheduled = matchedScheduled, let targetRange = scheduled.targetPaceRange {
+            let actual = workout.averagePaceSecondsPerKm
+            let status = paceStatus(actual: actual, target: targetRange)
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text("PERFORMANCE")
+                    .font(.sectionHeader)
+                    .foregroundStyle(.secondary)
+
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Target pace")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text("\(targetRange.lowerBound.paceString) – \(targetRange.upperBound.paceString) /km")
+                            .font(.bodyStrong)
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 4) {
+                        Text("Your pace")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text("\(actual.paceString) /km")
+                            .font(.bodyStrong)
+                    }
+                }
+
+                Label(status.label, systemImage: status.icon)
+                    .font(.bodyStrong)
+                    .foregroundStyle(status.color)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(status.color.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+            }
+        }
+    }
+
+    private struct PaceStatus {
+        let label: String
+        let icon: String
+        let color: Color
+    }
+
+    private func paceStatus(actual: Double, target: ClosedRange<Double>) -> PaceStatus {
+        if target.contains(actual) {
+            return PaceStatus(label: "On target", icon: "checkmark.circle.fill", color: .success)
+        }
+        // Within 10% of the range bounds
+        let margin = (target.upperBound - target.lowerBound) * 0.1 + target.upperBound * 0.05
+        if actual <= target.upperBound + margin && actual >= target.lowerBound - margin {
+            return PaceStatus(label: "Slightly off target", icon: "exclamationmark.circle.fill", color: .warning)
+        }
+        if actual < target.lowerBound {
+            return PaceStatus(label: "Too fast", icon: "bolt.fill", color: .warning)
+        }
+        return PaceStatus(label: "Too slow", icon: "tortoise.fill", color: .destructive)
     }
 
     // MARK: Splits
