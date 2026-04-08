@@ -12,7 +12,6 @@ concurrency:
 
 env:
   SCHEME: RunningApp
-  WATCH_SCHEME: RunningAppWatch
   SIMULATOR: iPhone 16
   IOS_VERSION: "18.0"
 
@@ -46,11 +45,17 @@ jobs:
       - name: Print Xcode version
         run: xcodebuild -version
 
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
       - name: Cache DerivedData
         uses: actions/cache@v4
         with:
           path: ~/Library/Developer/Xcode/DerivedData
-          key: deriveddata-ios-${{ hashFiles('**/*.xcodeproj/project.pbxproj', '**/*.xcworkspace/contents.xcworkspacedata', '**/Package.resolved') }}
+          key: deriveddata-ios-${{ hashFiles('project.yml') }}
           restore-keys: |
             deriveddata-ios-
 
@@ -78,7 +83,7 @@ jobs:
             -scheme "$SCHEME" \
             -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
             -derivedDataPath ~/Library/Developer/Xcode/DerivedData \
-            -testPlan UnitTests \
+            -only-testing:RunningAppTests \
             -resultBundlePath TestResults/unit.xcresult \
             CODE_SIGNING_ALLOWED=NO \
             | xcbeautify --renderer github-actions
@@ -89,7 +94,7 @@ jobs:
             -scheme "$SCHEME" \
             -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
             -derivedDataPath ~/Library/Developer/Xcode/DerivedData \
-            -testPlan UITests \
+            -only-testing:RunningAppUITests \
             -resultBundlePath TestResults/ui.xcresult \
             CODE_SIGNING_ALLOWED=NO \
             | xcbeautify --renderer github-actions
@@ -102,9 +107,9 @@ jobs:
           path: TestResults/
           retention-days: 7
 
-  # ── Build & Test (watchOS) ──────────────────────────────────────────────────
-  test-watch:
-    name: Test — watchOS
+  # ── Build (watchOS) ──────────────────────────────────────────────────────────
+  build-watch:
+    name: Build — watchOS
     runs-on: macos-15
     needs: lint
 
@@ -114,18 +119,24 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -switch /Applications/Xcode_16.2.app
 
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
       - name: Cache DerivedData
         uses: actions/cache@v4
         with:
           path: ~/Library/Developer/Xcode/DerivedData
-          key: deriveddata-watch-${{ hashFiles('**/*.xcodeproj/project.pbxproj', '**/*.xcworkspace/contents.xcworkspacedata', '**/Package.resolved') }}
+          key: deriveddata-watch-${{ hashFiles('project.yml') }}
           restore-keys: |
             deriveddata-watch-
 
       - name: Build watchOS target
         run: |
           xcodebuild build \
-            -scheme "$WATCH_SCHEME" \
+            -scheme "$SCHEME" \
             -destination "platform=watchOS Simulator,name=Apple Watch Series 10 (46mm)" \
             -derivedDataPath ~/Library/Developer/Xcode/DerivedData \
             CODE_SIGNING_ALLOWED=NO \
@@ -135,7 +146,7 @@ jobs:
   archive:
     name: Archive
     runs-on: macos-15
-    needs: [test-ios, test-watch]
+    needs: [test-ios, build-watch]
     # Only archive on pushes to main (not PRs)
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
@@ -145,11 +156,17 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -switch /Applications/Xcode_16.2.app
 
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
       - name: Cache DerivedData
         uses: actions/cache@v4
         with:
           path: ~/Library/Developer/Xcode/DerivedData
-          key: deriveddata-archive-${{ hashFiles('**/*.xcodeproj/project.pbxproj', '**/*.xcworkspace/contents.xcworkspacedata', '**/Package.resolved') }}
+          key: deriveddata-archive-${{ hashFiles('project.yml') }}
           restore-keys: |
             deriveddata-archive-
 
