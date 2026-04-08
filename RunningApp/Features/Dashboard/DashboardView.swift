@@ -110,7 +110,6 @@ struct DashboardView: View {
     private var nextScheduledWorkout: ScheduledWorkout? {
         activePlan?.currentWeek?.workouts
             .filter { !$0.isCompleted && $0.workoutType != .rest }
-            .sorted { $0.scheduledDate < $1.scheduledDate }
-            .first
+            .min(by: { $0.scheduledDate < $1.scheduledDate })
     }
 }

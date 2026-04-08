@@ -234,7 +234,6 @@ struct TrainingPlanService {
 
     /// Spread run days evenly across Mon-Sun (0=Mon … 6=Sun).
     private func runDayOffsets(count: Int) -> [Int] {
-        let available = [0, 1, 2, 3, 4, 5, 6]  // Mon…Sun
         guard count > 0 && count <= 7 else { return [] }
         let step = 7.0 / Double(count)
         return (0..<count).map { Int(Double($0) * step) }

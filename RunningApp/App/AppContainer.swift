@@ -37,7 +37,12 @@ final class AppContainer: ObservableObject {
             ScheduledWorkout.self
         ])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-        let container = try! ModelContainer(for: schema, configurations: [config])
+        let container: ModelContainer
+        do {
+            container = try ModelContainer(for: schema, configurations: [config])
+        } catch {
+            fatalError("Failed to create SwiftData ModelContainer: \(error)")
+        }
 
         self.modelContainer = container
 
