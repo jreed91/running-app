@@ -1,0 +1,121 @@
+import Foundation
+
+// MARK: - Training Paces
+
+struct TrainingPaces: Sendable {
+    /// Easy run pace range (seconds/km). Lower = faster.
+    var easyRange: ClosedRange<Double>
+    /// Marathon pace (seconds/km).
+    var marathon: Double
+    /// Threshold / tempo pace (seconds/km).
+    var threshold: Double
+    /// Interval pace (seconds/km).
+    var interval: Double
+    /// Short repetition pace (seconds/km).
+    var repetition: Double
+}
+
+// MARK: - PaceCalculatorService
+
+/// Pure, stateless service implementing Jack Daniels' VDOT methodology.
+///
+/// References:
+/// - Daniels, J. (2014). *Daniels' Running Formula* (3rd ed.)
+/// - VO₂ at speed: `VO₂ = 0.000104v² + 0.182258v − 4.60`  (v in m/min)
+/// - %VO₂max at time t (min): `0.8 + 0.1894393·e^(−0.012778t) + 0.2989558·e^(−0.1932605t)`
+/// - VDOT = VO₂ / %VO₂max
+enum PaceCalculatorService {
+
+    // MARK: Core VDOT equations
+
+    /// VO₂ demand for a given running speed (m/min).
+    static func vo2(forSpeedMetersPerMinute speed: Double) -> Double {
+        -4.60 + 0.182258 * speed + 0.000104 * speed * speed
+    }
+
+    /// Fraction of VO₂max that can be sustained for `duration` minutes.
+    static func fractionVO2max(forDurationMinutes duration: Double) -> Double {
+        0.8
+        + 0.1894393 * exp(-0.012778 * duration)
+        + 0.2989558 * exp(-0.1932605 * duration)
+    }
+
+    // MARK: VDOT from race result
+
+    /// Derives VDOT from a known race performance.
+    static func vdot(distanceMeters: Double, timeSeconds: Double) -> Double {
+        let timeMinutes = timeSeconds / 60
+        let speed = distanceMeters / timeMinutes
+        return vo2(forSpeedMetersPerMinute: speed) / fractionVO2max(forDurationMinutes: timeMinutes)
+    }
+
+    // MARK: Race prediction
+
+    /// Predicts finish time (seconds) for a given distance using binary search.
+    static func predictedTime(vdot: Double, distanceMeters: Double) -> TimeInterval {
+        var lo = 1.0          // 1 minute
+        var hi = 600.0        // 10 hours
+        for _ in 0..<64 {
+            let mid = (lo + hi) / 2
+            let speed = distanceMeters / mid
+            let computed = vo2(forSpeedMetersPerMinute: speed)
+                           / fractionVO2max(forDurationMinutes: mid)
+            if computed > vdot { lo = mid } else { hi = mid }
+        }
+        return ((lo + hi) / 2) * 60
+    }
+
+    // MARK: Training paces
+
+    /// Returns all training paces derived from a runner's VDOT.
+    static func trainingPaces(forVDOT vdot: Double) -> TrainingPaces {
+        TrainingPaces(
+            easyRange: paceRange(fractionLo: 0.59, fractionHi: 0.74, vdot: vdot, typicalDuration: 60),
+            marathon: pace(fraction: 0.79, vdot: vdot, typicalDuration: 180),
+            threshold: pace(fraction: 0.86, vdot: vdot, typicalDuration: 30),
+            interval: pace(fraction: 0.975, vdot: vdot, typicalDuration: 12),
+            repetition: pace(fraction: 1.10, vdot: vdot, typicalDuration: 3)
+        )
+    }
+
+    /// Convenience: derive training paces directly from a 5 K time (seconds).
+    static func trainingPaces(from5KTimeSeconds time: Double) -> TrainingPaces {
+        let v = vdot(distanceMeters: 5_000, timeSeconds: time)
+        return trainingPaces(forVDOT: v)
+    }
+
+    // MARK: Helpers
+
+    /// Seconds-per-km pace at a given fraction of VDOT.
+    private static func pace(
+        fraction: Double,
+        vdot: Double,
+        typicalDuration: Double
+    ) -> Double {
+        let speed = speedForFraction(fraction, vdot: vdot, duration: typicalDuration)
+        return 1_000 / speed   // m/min → sec/km
+    }
+
+    private static func paceRange(
+        fractionLo: Double,
+        fractionHi: Double,
+        vdot: Double,
+        typicalDuration: Double
+    ) -> ClosedRange<Double> {
+        let faster = pace(fraction: fractionHi, vdot: vdot, typicalDuration: typicalDuration)
+        let slower = pace(fraction: fractionLo, vdot: vdot, typicalDuration: typicalDuration)
+        return faster...slower
+    }
+
+    /// Solves the quadratic VO₂ = 0.000104v² + 0.182258v − 4.60 for v.
+    private static func speedForFraction(
+        _ fraction: Double,
+        vdot: Double,
+        duration: Double
+    ) -> Double {
+        let targetVO2 = fraction * vdot * fractionVO2max(forDurationMinutes: duration)
+        let a = 0.000104, b = 0.182258, c = -(4.60 + targetVO2)
+        let disc = b * b - 4 * a * c
+        return (-b + sqrt(disc)) / (2 * a)
+    }
+}

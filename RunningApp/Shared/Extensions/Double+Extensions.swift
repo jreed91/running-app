@@ -1,0 +1,51 @@
+import Foundation
+
+extension Double {
+    // MARK: Pace formatting
+
+    /// Formats seconds-per-km into "M:SS /km", e.g. "5:30 /km".
+    var paceString: String {
+        guard self > 0 && self.isFinite else { return "--:-- /km" }
+        let totalSeconds = Int(self)
+        let minutes = totalSeconds / 60
+        let seconds = totalSeconds % 60
+        return String(format: "%d:%02d /km", minutes, seconds)
+    }
+
+    /// Formats seconds-per-km into "M:SS /mi".
+    var paceStringImperial: String {
+        guard self > 0 && self.isFinite else { return "--:-- /mi" }
+        let secsPerMile = self * 1.60934
+        let totalSeconds = Int(secsPerMile)
+        let minutes = totalSeconds / 60
+        let seconds = totalSeconds % 60
+        return String(format: "%d:%02d /mi", minutes, seconds)
+    }
+
+    // MARK: Distance formatting
+
+    /// Formats meters as kilometres with one decimal, e.g. "10.5 km".
+    var distanceKmString: String {
+        String(format: "%.1f km", self / 1000)
+    }
+
+    // MARK: Duration formatting
+
+    /// Formats a duration in seconds as "H:MM:SS" or "M:SS".
+    var durationString: String {
+        guard self > 0 && self.isFinite else { return "0:00" }
+        let total = Int(self)
+        let hours = total / 3600
+        let minutes = (total % 3600) / 60
+        let seconds = total % 60
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, seconds)
+        }
+        return String(format: "%d:%02d", minutes, seconds)
+    }
+
+    // MARK: Unit conversion
+
+    var metersToKm: Double { self / 1000 }
+    var kmToMeters: Double { self * 1000 }
+}
