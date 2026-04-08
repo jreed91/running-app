@@ -152,9 +152,6 @@ schemes:
         - name: RunningAppUITests
           parallelizable: false
           randomExecutionOrder: false
-      testPlans:
-        - path: RunningApp.xctestplan
-          defaultPlan: true
     profile:
       config: Release
     analyze:
