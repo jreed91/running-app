@@ -1,0 +1,172 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SCHEME: RunningApp
+  WATCH_SCHEME: RunningAppWatch
+  SIMULATOR: iPhone 16
+  IOS_VERSION: "18.0"
+
+jobs:
+  # ── Lint ────────────────────────────────────────────────────────────────────
+  lint:
+    name: Lint (SwiftLint)
+    runs-on: macos-15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install SwiftLint
+        run: brew install swiftlint
+
+      - name: Run SwiftLint
+        run: swiftlint lint --reporter github-actions-logging
+
+  # ── Build & Test (iOS) ──────────────────────────────────────────────────────
+  test-ios:
+    name: Test — iOS
+    runs-on: macos-15
+    needs: lint
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -switch /Applications/Xcode_16.2.app
+
+      - name: Print Xcode version
+        run: xcodebuild -version
+
+      - name: Cache DerivedData
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Developer/Xcode/DerivedData
+          key: deriveddata-ios-${{ hashFiles('**/*.xcodeproj/project.pbxproj', '**/*.xcworkspace/contents.xcworkspacedata', '**/Package.resolved') }}
+          restore-keys: |
+            deriveddata-ios-
+
+      - name: Boot simulator
+        run: |
+          UDID=$(xcrun simctl list devices available -j \
+            | jq -r --arg name "$SIMULATOR" --arg os "com.apple.CoreSimulator.SimRuntime.iOS-${IOS_VERSION//./-}" \
+              '.devices[$os][] | select(.name == $name) | .udid' \
+            | head -1)
+          echo "SIMULATOR_UDID=$UDID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$UDID" || true
+
+      - name: Build for testing
+        run: |
+          xcodebuild build-for-testing \
+            -scheme "$SCHEME" \
+            -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
+            -derivedDataPath ~/Library/Developer/Xcode/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcbeautify --renderer github-actions
+
+      - name: Run unit tests
+        run: |
+          xcodebuild test-without-building \
+            -scheme "$SCHEME" \
+            -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
+            -derivedDataPath ~/Library/Developer/Xcode/DerivedData \
+            -testPlan UnitTests \
+            -resultBundlePath TestResults/unit.xcresult \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcbeautify --renderer github-actions
+
+      - name: Run UI tests
+        run: |
+          xcodebuild test-without-building \
+            -scheme "$SCHEME" \
+            -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
+            -derivedDataPath ~/Library/Developer/Xcode/DerivedData \
+            -testPlan UITests \
+            -resultBundlePath TestResults/ui.xcresult \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcbeautify --renderer github-actions
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-ios
+          path: TestResults/
+          retention-days: 7
+
+  # ── Build & Test (watchOS) ──────────────────────────────────────────────────
+  test-watch:
+    name: Test — watchOS
+    runs-on: macos-15
+    needs: lint
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -switch /Applications/Xcode_16.2.app
+
+      - name: Cache DerivedData
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Developer/Xcode/DerivedData
+          key: deriveddata-watch-${{ hashFiles('**/*.xcodeproj/project.pbxproj', '**/*.xcworkspace/contents.xcworkspacedata', '**/Package.resolved') }}
+          restore-keys: |
+            deriveddata-watch-
+
+      - name: Build watchOS target
+        run: |
+          xcodebuild build \
+            -scheme "$WATCH_SCHEME" \
+            -destination "platform=watchOS Simulator,name=Apple Watch Series 10 (46mm)" \
+            -derivedDataPath ~/Library/Developer/Xcode/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcbeautify --renderer github-actions
+
+  # ── Archive (release build) ─────────────────────────────────────────────────
+  archive:
+    name: Archive
+    runs-on: macos-15
+    needs: [test-ios, test-watch]
+    # Only archive on pushes to main (not PRs)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -switch /Applications/Xcode_16.2.app
+
+      - name: Cache DerivedData
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Developer/Xcode/DerivedData
+          key: deriveddata-archive-${{ hashFiles('**/*.xcodeproj/project.pbxproj', '**/*.xcworkspace/contents.xcworkspacedata', '**/Package.resolved') }}
+          restore-keys: |
+            deriveddata-archive-
+
+      - name: Archive (no signing)
+        run: |
+          xcodebuild archive \
+            -scheme "$SCHEME" \
+            -destination "generic/platform=iOS" \
+            -archivePath build/RunningApp.xcarchive \
+            -derivedDataPath ~/Library/Developer/Xcode/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            SKIP_INSTALL=NO \
+            | xcbeautify --renderer github-actions
+
+      - name: Upload archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: RunningApp-archive-${{ github.sha }}
+          path: build/RunningApp.xcarchive
+          retention-days: 14
