@@ -19,7 +19,7 @@ jobs:
   # ── Lint ────────────────────────────────────────────────────────────────────
   lint:
     name: Lint (SwiftLint)
-    runs-on: macos-16
+    runs-on: macos-26
 
     steps:
       - uses: actions/checkout@v4
@@ -33,7 +33,7 @@ jobs:
   # ── Build & Test (iOS) ──────────────────────────────────────────────────────
   test-ios:
     name: Test — iOS
-    runs-on: macos-16
+    runs-on: macos-26
     needs: lint
 
     steps:
@@ -110,7 +110,7 @@ jobs:
   # ── Build (watchOS) ──────────────────────────────────────────────────────────
   build-watch:
     name: Build — watchOS
-    runs-on: macos-16
+    runs-on: macos-26
     needs: lint
 
     steps:
@@ -145,7 +145,7 @@ jobs:
   # ── Archive (release build) ─────────────────────────────────────────────────
   archive:
     name: Archive
-    runs-on: macos-16
+    runs-on: macos-26
     needs: [test-ios, build-watch]
     # Only archive on pushes to main (not PRs)
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
