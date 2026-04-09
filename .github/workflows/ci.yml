@@ -12,14 +12,14 @@ concurrency:
 
 env:
   SCHEME: RunningApp
-  SIMULATOR: iPhone 16
-  IOS_VERSION: "18.0"
+  SIMULATOR: iPhone 17
+  IOS_VERSION: "26.4"
 
 jobs:
   # ── Lint ────────────────────────────────────────────────────────────────────
   lint:
     name: Lint (SwiftLint)
-    runs-on: macos-15
+    runs-on: macos-16
 
     steps:
       - uses: actions/checkout@v4
@@ -33,14 +33,14 @@ jobs:
   # ── Build & Test (iOS) ──────────────────────────────────────────────────────
   test-ios:
     name: Test — iOS
-    runs-on: macos-15
+    runs-on: macos-16
     needs: lint
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Select Xcode
-        run: sudo xcode-select -switch /Applications/Xcode_16.2.app
+        run: sudo xcode-select -switch /Applications/Xcode_18.3.app
 
       - name: Print Xcode version
         run: xcodebuild -version
@@ -110,14 +110,14 @@ jobs:
   # ── Build (watchOS) ──────────────────────────────────────────────────────────
   build-watch:
     name: Build — watchOS
-    runs-on: macos-15
+    runs-on: macos-16
     needs: lint
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Select Xcode
-        run: sudo xcode-select -switch /Applications/Xcode_16.2.app
+        run: sudo xcode-select -switch /Applications/Xcode_18.3.app
 
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -145,7 +145,7 @@ jobs:
   # ── Archive (release build) ─────────────────────────────────────────────────
   archive:
     name: Archive
-    runs-on: macos-15
+    runs-on: macos-16
     needs: [test-ios, build-watch]
     # Only archive on pushes to main (not PRs)
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -154,7 +154,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Select Xcode
-        run: sudo xcode-select -switch /Applications/Xcode_16.2.app
+        run: sudo xcode-select -switch /Applications/Xcode_18.3.app
 
       - name: Install XcodeGen
         run: brew install xcodegen
