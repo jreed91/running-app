@@ -70,7 +70,9 @@ final class AppContainer: ObservableObject {
 import SwiftUI
 
 private struct AppContainerKey: EnvironmentKey {
-    nonisolated(unsafe) static let defaultValue = AppContainer()
+    nonisolated(unsafe) static let defaultValue: AppContainer = MainActor.assumeIsolated {
+        AppContainer()
+    }
 }
 
 extension EnvironmentValues {
