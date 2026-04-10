@@ -53,7 +53,10 @@ struct RunSummaryView: View {
         LazyVGrid(columns: [.init(.flexible()), .init(.flexible())], spacing: 16) {
             statCell(value: workout.distanceMeters.distanceString(unit: appSettings.unitPreference), label: "Distance")
             statCell(value: workout.durationSeconds.durationString, label: "Duration")
-            statCell(value: workout.averagePaceSecondsPerKm.paceString(unit: appSettings.unitPreference), label: "Avg Pace")
+            statCell(
+                value: workout.averagePaceSecondsPerKm.paceString(unit: appSettings.unitPreference),
+                label: "Avg Pace"
+            )
             if let hr = workout.averageHeartRate {
                 statCell(value: "\(Int(hr)) bpm", label: "Avg HR")
             }
@@ -91,8 +94,12 @@ struct RunSummaryView: View {
                         Text("Target pace")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Text("\(targetRange.lowerBound.paceString(unit: appSettings.unitPreference)) – \(targetRange.upperBound.paceString(unit: appSettings.unitPreference))")
-                            .font(.bodyStrong)
+                        Text(
+                            "\(targetRange.lowerBound.paceString(unit: appSettings.unitPreference))" +
+                            " – " +
+                            "\(targetRange.upperBound.paceString(unit: appSettings.unitPreference))"
+                        )
+                        .font(.bodyStrong)
                     }
                     Spacer()
                     VStack(alignment: .trailing, spacing: 4) {

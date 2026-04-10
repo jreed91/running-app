@@ -51,8 +51,12 @@ struct WorkoutDetailView: View {
     private func paceSection(range: ClosedRange<Double>) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("TARGET PACE").font(.sectionHeader).foregroundStyle(.secondary)
-            Text("\(range.lowerBound.paceString(unit: appSettings.unitPreference)) – \(range.upperBound.paceString(unit: appSettings.unitPreference))")
-                .font(.metricSmall)
+            Text(
+                "\(range.lowerBound.paceString(unit: appSettings.unitPreference))" +
+                " – " +
+                "\(range.upperBound.paceString(unit: appSettings.unitPreference))"
+            )
+            .font(.metricSmall)
         }
     }
 

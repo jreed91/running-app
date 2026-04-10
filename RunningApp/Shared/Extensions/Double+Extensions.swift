@@ -51,6 +51,11 @@ extension Double {
 
     // MARK: Unit-aware formatting
 
+    /// Formats a value already in kilometres as a distance string in the given unit.
+    func distanceStringFromKm(unit: UnitPreference) -> String {
+        (self * 1_000).distanceString(unit: unit)
+    }
+
     /// Formats meters as a distance string in the given unit, e.g. "10.5 km" or "6.5 mi".
     func distanceString(unit: UnitPreference) -> String {
         switch unit {

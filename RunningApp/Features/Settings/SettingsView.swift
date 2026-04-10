@@ -67,8 +67,9 @@ struct SettingsView: View {
     }
 
     private var aboutSection: some View {
-        Section("About") {
-            LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—")
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
+        return Section("About") {
+            LabeledContent("Version", value: version)
         }
     }
 
