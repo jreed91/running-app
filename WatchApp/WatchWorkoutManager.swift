@@ -13,11 +13,19 @@ final class WatchWorkoutManager: NSObject, ObservableObject {
     @Published private(set) var distanceMeters: Double = 0
     @Published private(set) var currentPaceSecondsPerKm: Double = 0
 
+    // MARK: Unit preference (read from shared UserDefaults)
+
+    private var unitPreference: WatchUnitPreference {
+        let raw = UserDefaults.standard.string(forKey: "unitPreference") ?? ""
+        return WatchUnitPreference(rawValue: raw) ?? .metric
+    }
+
     // MARK: Formatted helpers
 
     var elapsedTimeString: String { elapsedSeconds.durationString }
-    var distanceKmString: String { distanceMeters.distanceKmString }
-    var currentPaceString: String { currentPaceSecondsPerKm.paceString }
+    var distanceString: String { distanceMeters.distanceString(unit: unitPreference) }
+    var distanceUnitLabel: String { unitPreference == .imperial ? "MI" : "KM" }
+    var currentPaceString: String { currentPaceSecondsPerKm.paceString(unit: unitPreference) }
 
     // MARK: Private
 
@@ -133,6 +141,11 @@ extension WatchWorkoutManager: HKLiveWorkoutBuilderDelegate {
 
 // MARK: - Formatting helpers (duplicated from iOS target – watch has no shared module yet)
 
+private enum WatchUnitPreference: String {
+    case metric = "metric"
+    case imperial = "imperial"
+}
+
 private extension Double {
     var durationString: String {
         guard self > 0 && isFinite else { return "0:00" }
@@ -142,11 +155,21 @@ private extension Double {
         return String(format: "%d:%02d", minutes, seconds)
     }
 
-    var distanceKmString: String { String(format: "%.2f", self / 1_000) }
+    func distanceString(unit: WatchUnitPreference) -> String {
+        switch unit {
+        case .metric: return String(format: "%.2f", self / 1_000)
+        case .imperial: return String(format: "%.2f", self / 1_609.344)
+        }
+    }
 
-    var paceString: String {
+    func paceString(unit: WatchUnitPreference) -> String {
         guard self > 0 && isFinite else { return "--:--" }
-        let total = Int(self)
+        let secs: Double
+        switch unit {
+        case .metric: secs = self
+        case .imperial: secs = self * 1.60934
+        }
+        let total = Int(secs)
         return String(format: "%d:%02d", total / 60, total % 60)
     }
 }

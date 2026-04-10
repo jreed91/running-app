@@ -34,6 +34,7 @@ struct HistoryView: View {
 
 struct WorkoutRowView: View {
     let workout: RunWorkout
+    @Environment(AppSettings.self) private var appSettings
 
     var body: some View {
         HStack(spacing: 12) {
@@ -53,9 +54,9 @@ struct WorkoutRowView: View {
             Spacer()
 
             VStack(alignment: .trailing, spacing: 2) {
-                Text(workout.distanceMeters.distanceKmString)
+                Text(workout.distanceMeters.distanceString(unit: appSettings.unitPreference))
                     .font(.bodyStrong)
-                Text(workout.averagePaceSecondsPerKm.paceString)
+                Text(workout.averagePaceSecondsPerKm.paceString(unit: appSettings.unitPreference))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

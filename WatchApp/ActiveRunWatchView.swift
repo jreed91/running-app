@@ -8,7 +8,7 @@ struct ActiveRunWatchView: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            metricRow(value: manager.distanceKmString, label: "KM")
+            metricRow(value: manager.distanceString, label: manager.distanceUnitLabel)
             metricRow(value: manager.elapsedTimeString, label: "TIME")
             metricRow(value: manager.currentPaceString, label: "PACE")
 

@@ -3,6 +3,7 @@ import SwiftData
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var context
+    @Environment(AppSettings.self) private var appSettings
     @Query private var profiles: [UserProfile]
 
     @State private var showResetConfirmation = false
@@ -15,6 +16,7 @@ struct SettingsView: View {
                 if let profile {
                     profileSection(profile: profile)
                 }
+                unitsSection
                 notificationsSection
                 aboutSection
                 dangerSection
@@ -41,6 +43,17 @@ struct SettingsView: View {
             LabeledContent("Goal Race", value: profile.goalRace.displayName)
             LabeledContent("Fitness Level", value: profile.fitnessLevel.displayName)
             LabeledContent("Run Days / Week", value: "\(profile.weeklyRunDays)")
+        }
+    }
+
+    private var unitsSection: some View {
+        Section("Units") {
+            Picker("Distance", selection: Bindable(appSettings).unitPreference) {
+                ForEach(UnitPreference.allCases, id: \.self) { unit in
+                    Text(unit.displayName).tag(unit)
+                }
+            }
+            .pickerStyle(.segmented)
         }
     }
 

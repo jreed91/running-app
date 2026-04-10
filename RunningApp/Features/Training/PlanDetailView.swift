@@ -23,6 +23,7 @@ struct PlanDetailView: View {
 struct WeekCardView: View {
     let week: TrainingWeek
 
+    @Environment(AppSettings.self) private var appSettings
     @State private var isExpanded = false
 
     var body: some View {
@@ -35,7 +36,7 @@ struct WeekCardView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Week \(week.weekNumber) · \(week.phase.displayName)")
                             .font(.bodyStrong)
-                        Text(String(format: "%.0f km target", week.targetDistanceKm))
+                        Text("\(week.targetDistanceKm.kmToMeters.distanceString(unit: appSettings.unitPreference)) target")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -72,6 +73,7 @@ struct WeekCardView: View {
 
 struct ScheduledWorkoutRow: View {
     let workout: ScheduledWorkout
+    @Environment(AppSettings.self) private var appSettings
 
     var body: some View {
         HStack(spacing: 12) {
@@ -90,7 +92,7 @@ struct ScheduledWorkoutRow: View {
             Spacer()
 
             if let dist = workout.targetDistanceMeters {
-                Text(dist.distanceKmString)
+                Text(dist.distanceString(unit: appSettings.unitPreference))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

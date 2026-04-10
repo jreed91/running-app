@@ -6,6 +6,7 @@ struct ProgressDashboardView: View {
     @Query(sort: [SortDescriptor(\RunWorkout.date)])
     private var workouts: [RunWorkout]
 
+    @Environment(AppSettings.self) private var appSettings
     @State private var selectedRange: ChartRange = .threeMonths
 
     enum ChartRange: String, CaseIterable {
@@ -62,7 +63,7 @@ struct ProgressDashboardView: View {
             Chart(weeklyBuckets, id: \.week) { bucket in
                 BarMark(
                     x: .value("Week", bucket.week, unit: .weekOfYear),
-                    y: .value("km", bucket.distanceKm)
+                    y: .value(appSettings.unitPreference.distanceLabel, bucket.distanceValue)
                 )
                 .foregroundStyle(.brand)
             }
@@ -97,7 +98,8 @@ struct ProgressDashboardView: View {
                 AxisMarks { value in
                     AxisValueLabel {
                         if let secs = value.as(Double.self) {
-                            Text(secs.paceString.replacingOccurrences(of: " /km", with: ""))
+                            Text(secs.paceString(unit: appSettings.unitPreference)
+                                .replacingOccurrences(of: " \(appSettings.unitPreference.paceLabel)", with: ""))
                         }
                     }
                 }
@@ -112,14 +114,14 @@ struct ProgressDashboardView: View {
 
     private var totalStatsSummary: some View {
         let runs = filteredWorkouts
-        let totalKm = runs.reduce(0) { $0 + $1.distanceMeters } / 1_000
+        let totalMeters = runs.reduce(0) { $0 + $1.distanceMeters }
         let avgPace = runs.isEmpty ? 0
             : runs.reduce(0) { $0 + $1.averagePaceSecondsPerKm } / Double(runs.count)
 
         return LazyVGrid(columns: [.init(.flexible()), .init(.flexible()), .init(.flexible())], spacing: 16) {
             summaryCell(value: "\(runs.count)", label: "Runs")
-            summaryCell(value: String(format: "%.0f km", totalKm), label: "Distance")
-            summaryCell(value: avgPace > 0 ? avgPace.paceString : "--", label: "Avg Pace")
+            summaryCell(value: totalMeters.distanceString(unit: appSettings.unitPreference), label: "Distance")
+            summaryCell(value: avgPace > 0 ? avgPace.paceString(unit: appSettings.unitPreference) : "--", label: "Avg Pace")
         }
     }
 
@@ -138,16 +140,23 @@ struct ProgressDashboardView: View {
     private struct WeekBucket: Identifiable {
         let id = UUID()
         let week: Date
-        let distanceKm: Double
+        let distanceValue: Double
     }
 
     private var weeklyBuckets: [WeekBucket] {
         var byWeek: [Date: Double] = [:]
         for workout in filteredWorkouts {
             let key = workout.date.startOfWeek
-            byWeek[key, default: 0] += workout.distanceMeters / 1_000
+            byWeek[key, default: 0] += workout.distanceMeters
         }
-        return byWeek.map { WeekBucket(week: $0.key, distanceKm: $0.value) }
-            .sorted { $0.week < $1.week }
+        return byWeek.map { key, meters -> WeekBucket in
+            let value: Double
+            switch appSettings.unitPreference {
+            case .metric: value = meters / 1_000
+            case .imperial: value = meters / 1_609.344
+            }
+            return WeekBucket(week: key, distanceValue: value)
+        }
+        .sorted { $0.week < $1.week }
     }
 }

@@ -81,3 +81,31 @@ enum RecoveryType: String, Codable, Sendable {
     case jog
     case standing
 }
+
+// MARK: - UnitPreference
+
+enum UnitPreference: String, CaseIterable, Sendable {
+    case metric = "metric"
+    case imperial = "imperial"
+
+    var displayName: String {
+        switch self {
+        case .metric: return "Kilometers"
+        case .imperial: return "Miles"
+        }
+    }
+
+    var distanceLabel: String {
+        switch self {
+        case .metric: return "km"
+        case .imperial: return "mi"
+        }
+    }
+
+    var paceLabel: String {
+        switch self {
+        case .metric: return "/km"
+        case .imperial: return "/mi"
+        }
+    }
+}

@@ -4,6 +4,7 @@ struct WorkoutDetailView: View {
     let workout: ScheduledWorkout
 
     @Environment(\.appContainer) private var container
+    @Environment(AppSettings.self) private var appSettings
 
     var body: some View {
         ScrollView {
@@ -50,7 +51,7 @@ struct WorkoutDetailView: View {
     private func paceSection(range: ClosedRange<Double>) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("TARGET PACE").font(.sectionHeader).foregroundStyle(.secondary)
-            Text("\(range.lowerBound.paceString) – \(range.upperBound.paceString)")
+            Text("\(range.lowerBound.paceString(unit: appSettings.unitPreference)) – \(range.upperBound.paceString(unit: appSettings.unitPreference))")
                 .font(.metricSmall)
         }
     }
@@ -67,7 +68,7 @@ struct WorkoutDetailView: View {
                     }
                     Spacer()
                     if let pace = interval.targetPaceSecondsPerKm {
-                        Text("@ \(pace.paceString)")
+                        Text("@ \(pace.paceString(unit: appSettings.unitPreference))")
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -80,7 +81,7 @@ struct WorkoutDetailView: View {
     private func distanceSection(dist: Double) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("DISTANCE").font(.sectionHeader).foregroundStyle(.secondary)
-            Text(dist.distanceKmString).font(.metricSmall)
+            Text(dist.distanceString(unit: appSettings.unitPreference)).font(.metricSmall)
         }
     }
 

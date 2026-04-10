@@ -48,4 +48,34 @@ extension Double {
 
     var metersToKm: Double { self / 1000 }
     var kmToMeters: Double { self * 1000 }
+
+    // MARK: Unit-aware formatting
+
+    /// Formats meters as a distance string in the given unit, e.g. "10.5 km" or "6.5 mi".
+    func distanceString(unit: UnitPreference) -> String {
+        switch unit {
+        case .metric:
+            return String(format: "%.1f km", self / 1_000)
+        case .imperial:
+            return String(format: "%.1f mi", self / 1_609.344)
+        }
+    }
+
+    /// Formats seconds-per-km pace into the given unit, e.g. "5:30 /km" or "8:51 /mi".
+    func paceString(unit: UnitPreference) -> String {
+        switch unit {
+        case .metric: return paceString
+        case .imperial: return paceStringImperial
+        }
+    }
+
+    /// Formats a weekly distance in km into the given unit for display.
+    func weeklyDistanceString(unit: UnitPreference) -> String {
+        switch unit {
+        case .metric:
+            return String(format: "%.0f km", self)
+        case .imperial:
+            return String(format: "%.0f mi", self / 1.60934)
+        }
+    }
 }
