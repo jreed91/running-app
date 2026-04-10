@@ -30,18 +30,22 @@ struct OnboardingView: View {
 
     private var nameStep: some View {
         VStack(spacing: 24) {
+            Spacer()
             Text("What's your name?")
                 .font(.metricMedium)
             TextField("Runner name", text: $name)
                 .textFieldStyle(.roundedBorder)
                 .padding(.horizontal)
+            Spacer()
             nextButton(enabled: !name.trimmingCharacters(in: .whitespaces).isEmpty)
         }
         .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var goalStep: some View {
         VStack(spacing: 24) {
+            Spacer()
             Text("Pick your race goal")
                 .font(.metricMedium)
             Picker("Race", selection: $goalRace) {
@@ -49,13 +53,16 @@ struct OnboardingView: View {
             }
             .pickerStyle(.segmented)
             .padding(.horizontal)
+            Spacer()
             nextButton(enabled: true)
         }
         .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var fitnessStep: some View {
         VStack(spacing: 24) {
+            Spacer()
             Text("Current fitness level")
                 .font(.metricMedium)
             Picker("Fitness", selection: $fitnessLevel) {
@@ -63,22 +70,27 @@ struct OnboardingView: View {
             }
             .pickerStyle(.segmented)
             .padding(.horizontal)
+            Spacer()
             nextButton(enabled: true)
         }
         .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var scheduleStep: some View {
         VStack(spacing: 24) {
+            Spacer()
             Text("How many days per week?")
                 .font(.metricMedium)
             Stepper("\(weeklyRunDays) days", value: $weeklyRunDays, in: 2...6)
                 .padding(.horizontal)
+            Spacer()
             Button("Start Training") { createProfile() }
                 .buttonStyle(.borderedProminent)
                 .disabled(weeklyRunDays < 2)
         }
         .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func nextButton(enabled: Bool) -> some View {
