@@ -3,7 +3,7 @@ import HealthKit
 
 // MARK: - Protocol
 
-protocol HealthKitRepositoryProtocol {
+protocol HealthKitRepositoryProtocol: Sendable {
     var isAvailable: Bool { get }
     func requestAuthorization() async throws
     func save(_ workout: RunWorkout) async throws -> String
@@ -12,7 +12,7 @@ protocol HealthKitRepositoryProtocol {
 
 // MARK: - Live implementation
 
-final class HealthKitRepository: HealthKitRepositoryProtocol {
+final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendable {
     private let store = HKHealthStore()
 
     private static let shareTypes: Set<HKSampleType> = [
