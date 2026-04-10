@@ -2,8 +2,8 @@ import SwiftUI
 import Charts
 import SwiftData
 
-struct ProgressView: View {
-    @Query(sort: \RunWorkout.date, order: .ascending)
+struct ProgressDashboardView: View {
+    @Query(sort: [SortDescriptor(\RunWorkout.date)])
     private var workouts: [RunWorkout]
 
     @State private var selectedRange: ChartRange = .threeMonths

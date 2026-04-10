@@ -14,7 +14,7 @@ A fully native iOS app built with Swift that replicates the core functionality o
 | UI Framework | SwiftUI |
 | Navigation | NavigationStack + TabView |
 | Concurrency | Swift Concurrency (async/await, Actors) |
-| Local Persistence | SwiftData (iOS 17+) |
+| Local Persistence | SwiftData (iOS 26.0+) |
 | Health & GPS | HealthKit + CoreLocation |
 | Watch Support | watchOS companion app (WatchKit / SwiftUI) |
 | Notifications | UserNotifications framework |
@@ -237,14 +237,14 @@ NSMotionUsageDescription                — Cadence via CMPedometer (optional)
 
 ## Development Notes
 
-- **iOS deployment target**: iOS 17.0 (required for SwiftData)
-- **Xcode version**: 16+
+- **iOS deployment target**: iOS 26.0
+- **Xcode version**: 26.4
 - **Swift version**: 6 (strict concurrency enabled)
 - **Testing**: XCTest for services; Swift Testing for unit tests on plan generation logic
 - **No third-party dependencies** — 100% Apple frameworks
 
 ### Running the App
-1. Open `RunningApp.xcodeproj` in Xcode 16+
+1. Open `RunningApp.xcodeproj` in Xcode 26.4
 2. Select a physical device (GPS + HealthKit require real hardware)
 3. Enable the `HealthKit` and `Background Modes` capabilities in the project settings
 4. Build & run (`Cmd+R`)
@@ -252,7 +252,7 @@ NSMotionUsageDescription                — Cadence via CMPedometer (optional)
 ### Key Commands
 ```bash
 # Run unit tests
-xcodebuild test -scheme RunningApp -destination 'platform=iOS Simulator,name=iPhone 16'
+xcodebuild test -scheme RunningApp -destination 'platform=iOS Simulator,name=iPhone 17'
 
 # Build for release
 xcodebuild archive -scheme RunningApp -archivePath build/RunningApp.xcarchive

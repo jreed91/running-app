@@ -109,7 +109,7 @@ struct ActiveRunView: View {
         guard let workout = tracker.finishWorkout() else { dismiss(); return }
         context.insert(workout)
         try? context.save()
-        Task {
+        Task { @MainActor in
             try? await container.healthKitRepository.save(workout)
         }
         dismiss()

@@ -3,9 +3,9 @@ name: RunningApp
 options:
   bundleIdPrefix: com.runningapp
   deploymentTarget:
-    iOS: "17.0"
-    watchOS: "10.0"
-  xcodeVersion: "16.2"
+    iOS: "26.0"
+    watchOS: "26.0"
+  xcodeVersion: "26.4"
   createIntermediateGroups: true
   groupSortPosition: top
   generateEmptyDirectories: true
@@ -28,7 +28,7 @@ targets:
   RunningApp:
     type: application
     platform: iOS
-    deploymentTarget: "17.0"
+    deploymentTarget: "26.0"
 
     sources:
       - path: RunningApp
@@ -57,6 +57,7 @@ targets:
     info:
       path: RunningApp/Resources/Info.plist
       properties:
+        CFBundleIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER)
         UIBackgroundModes:
           - location
         NSLocationWhenInUseUsageDescription: "RunningApp uses your location to track your route during a run."
@@ -73,7 +74,7 @@ targets:
   RunningAppWatch:
     type: application
     platform: watchOS
-    deploymentTarget: "10.0"
+    deploymentTarget: "26.0"
 
     sources:
       - path: WatchApp
@@ -92,13 +93,15 @@ targets:
     info:
       path: WatchApp/Info.plist
       properties:
+        CFBundleIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER)
         WKApplication: true
+        WKCompanionAppBundleIdentifier: com.runningapp.app
 
   # ── Unit tests ────────────────────────────────────────────────────────────────
   RunningAppTests:
     type: bundle.unit-test
     platform: iOS
-    deploymentTarget: "17.0"
+    deploymentTarget: "26.0"
 
     sources:
       - RunningAppTests
@@ -116,7 +119,7 @@ targets:
   RunningAppUITests:
     type: bundle.ui-testing
     platform: iOS
-    deploymentTarget: "17.0"
+    deploymentTarget: "26.0"
 
     sources:
       - RunningAppUITests

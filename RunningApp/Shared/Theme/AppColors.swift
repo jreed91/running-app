@@ -24,3 +24,19 @@ extension Color {
     static let warning = Color("Warning")
     static let destructive = Color("Destructive")
 }
+
+// Allows shorthand dot syntax when the expected type is `some ShapeStyle`,
+// e.g. .background(.surfaceSecondary) or .fill(.brand).
+extension ShapeStyle where Self == Color {
+    static var brand: Color { Color("Brand") }
+    static var brandSecondary: Color { Color("BrandSecondary") }
+    static var zoneEasy: Color { Color("ZoneEasy") }
+    static var zoneTempo: Color { Color("ZoneTempo") }
+    static var zoneInterval: Color { Color("ZoneInterval") }
+    static var surfacePrimary: Color { Color("SurfacePrimary") }
+    static var surfaceSecondary: Color { Color("SurfaceSecondary") }
+    static var surfaceTertiary: Color { Color("SurfaceTertiary") }
+    static var success: Color { Color("Success") }
+    static var warning: Color { Color("Warning") }
+    static var destructive: Color { Color("Destructive") }
+}
