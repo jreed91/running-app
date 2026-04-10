@@ -3,7 +3,7 @@ name: RunningApp
 options:
   bundleIdPrefix: com.runningapp
   deploymentTarget:
-    iOS: "26.4"
+    iOS: "26.0"
     watchOS: "10.0"
   xcodeVersion: "26.4"
   createIntermediateGroups: true
@@ -28,7 +28,7 @@ targets:
   RunningApp:
     type: application
     platform: iOS
-    deploymentTarget: "26.4"
+    deploymentTarget: "26.0"
 
     sources:
       - path: RunningApp
@@ -98,7 +98,7 @@ targets:
   RunningAppTests:
     type: bundle.unit-test
     platform: iOS
-    deploymentTarget: "26.4"
+    deploymentTarget: "26.0"
 
     sources:
       - RunningAppTests
@@ -116,7 +116,7 @@ targets:
   RunningAppUITests:
     type: bundle.ui-testing
     platform: iOS
-    deploymentTarget: "26.4"
+    deploymentTarget: "26.0"
 
     sources:
       - RunningAppUITests
