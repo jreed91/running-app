@@ -14,16 +14,15 @@ struct OnboardingView: View {
     @State private var step = 0
 
     var body: some View {
-        NavigationStack {
-            TabView(selection: $step) {
-                nameStep.tag(0)
-                goalStep.tag(1)
-                fitnessStep.tag(2)
-                scheduleStep.tag(3)
-            }
-            .tabViewStyle(.page(indexDisplayMode: .always))
-            .animation(.easeInOut, value: step)
+        TabView(selection: $step) {
+            nameStep.tag(0)
+            goalStep.tag(1)
+            fitnessStep.tag(2)
+            scheduleStep.tag(3)
         }
+        .tabViewStyle(.page(indexDisplayMode: .always))
+        .animation(.easeInOut, value: step)
+        .ignoresSafeArea(edges: .top)
     }
 
     // MARK: Steps

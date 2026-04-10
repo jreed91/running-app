@@ -43,7 +43,7 @@ final class RunningAppUITests: XCTestCase {
 
     func testAllTabsAreAccessible() throws {
         guard app.tabBars.firstMatch.waitForExistence(timeout: 5) else {
-            XCTSkip("Onboarding not completed — run onboarding test first")
+            try XCTSkip("Onboarding not completed — run onboarding test first")
         }
         let tabBar = app.tabBars.firstMatch
         for label in ["Home", "Plan", "History", "Progress", "Settings"] {
