@@ -14,7 +14,7 @@ A fully native iOS app built with Swift that replicates the core functionality o
 | UI Framework | SwiftUI |
 | Navigation | NavigationStack + TabView |
 | Concurrency | Swift Concurrency (async/await, Actors) |
-| Local Persistence | SwiftData (iOS 17+) |
+| Local Persistence | SwiftData (iOS 26+) |
 | Health & GPS | HealthKit + CoreLocation |
 | Watch Support | watchOS companion app (WatchKit / SwiftUI) |
 | Notifications | UserNotifications framework |
@@ -237,7 +237,7 @@ NSMotionUsageDescription                — Cadence via CMPedometer (optional)
 
 ## Development Notes
 
-- **iOS deployment target**: iOS 17.0 (required for SwiftData)
+- **iOS deployment target**: iOS 26.4
 - **Xcode version**: 26.4
 - **Swift version**: 6 (strict concurrency enabled)
 - **Testing**: XCTest for services; Swift Testing for unit tests on plan generation logic
