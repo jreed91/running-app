@@ -57,6 +57,7 @@ targets:
     info:
       path: RunningApp/Resources/Info.plist
       properties:
+        CFBundleIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER)
         UIBackgroundModes:
           - location
         NSLocationWhenInUseUsageDescription: "RunningApp uses your location to track your route during a run."
