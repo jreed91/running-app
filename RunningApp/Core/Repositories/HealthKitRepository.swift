@@ -6,7 +6,7 @@ import HealthKit
 protocol HealthKitRepositoryProtocol: Sendable {
     var isAvailable: Bool { get }
     func requestAuthorization() async throws
-    func save(_ workout: RunWorkout) async throws -> String
+    @MainActor func save(_ workout: RunWorkout) async throws -> String
     func fetchWorkouts(from startDate: Date, to endDate: Date) async throws -> [HKWorkout]
 }
 
@@ -40,7 +40,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         )
     }
 
-    func save(_ workout: RunWorkout) async throws -> String {
+    @MainActor func save(_ workout: RunWorkout) async throws -> String {
         let hkWorkout = HKWorkout(
             activityType: .running,
             start: workout.date,
