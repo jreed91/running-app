@@ -93,7 +93,9 @@ targets:
     info:
       path: WatchApp/Info.plist
       properties:
+        CFBundleIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER)
         WKApplication: true
+        WKCompanionAppBundleIdentifier: com.runningapp.app
 
   # ── Unit tests ────────────────────────────────────────────────────────────────
   RunningAppTests:
