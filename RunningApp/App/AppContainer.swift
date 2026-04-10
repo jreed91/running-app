@@ -77,7 +77,12 @@ private struct AppContainerKey: EnvironmentKey {
 
 extension EnvironmentValues {
     var appContainer: AppContainer {
-        get { self[AppContainerKey.self] }
+        get {
+            guard let container = self[AppContainerKey.self] else {
+                fatalError("AppContainer has not been injected into the SwiftUI environment.")
+            }
+            return container
+        }
         set { self[AppContainerKey.self] = newValue }
     }
 }
