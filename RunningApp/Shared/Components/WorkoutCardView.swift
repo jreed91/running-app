@@ -11,12 +11,18 @@ struct WorkoutCardView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(workout.workoutType.displayName).font(.bodyStrong)
                 if let dist = workout.targetDistanceMeters {
-                    Text(dist.distanceString(unit: appSettings.unitPreference)).font(.caption).foregroundStyle(.secondary)
-                }
-                if let range = workout.targetPaceRange {
-                    Text("\(range.lowerBound.paceString(unit: appSettings.unitPreference)) – \(range.upperBound.paceString(unit: appSettings.unitPreference))")
+                    Text(dist.distanceString(unit: appSettings.unitPreference))
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                }
+                if let range = workout.targetPaceRange {
+                    Text(
+                        "\(range.lowerBound.paceString(unit: appSettings.unitPreference))" +
+                        " – " +
+                        "\(range.upperBound.paceString(unit: appSettings.unitPreference))"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 }
                 if let notes = workout.notes {
                     Text(notes)

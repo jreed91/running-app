@@ -120,7 +120,10 @@ struct ProgressDashboardView: View {
         return LazyVGrid(columns: [.init(.flexible()), .init(.flexible()), .init(.flexible())], spacing: 16) {
             summaryCell(value: "\(runs.count)", label: "Runs")
             summaryCell(value: totalMeters.distanceString(unit: appSettings.unitPreference), label: "Distance")
-            summaryCell(value: avgPace > 0 ? avgPace.paceString(unit: appSettings.unitPreference) : "--", label: "Avg Pace")
+            summaryCell(
+                value: avgPace > 0 ? avgPace.paceString(unit: appSettings.unitPreference) : "--",
+                label: "Avg Pace"
+            )
         }
     }
 

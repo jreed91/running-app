@@ -35,7 +35,7 @@ struct WeekCardView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Week \(week.weekNumber) · \(week.phase.displayName)")
                             .font(.bodyStrong)
-                        Text("\(week.targetDistanceKm.kmToMeters.distanceString(unit: appSettings.unitPreference)) target")
+                        Text(week.targetDistanceKm.distanceStringFromKm(unit: appSettings.unitPreference) + " target")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
