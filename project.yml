@@ -32,11 +32,6 @@ targets:
 
     sources:
       - path: RunningApp
-        excludes:
-          - Resources/Assets.xcassets   # handled separately below
-
-    resources:
-      - RunningApp/Resources/Assets.xcassets
 
     settings:
       base:
