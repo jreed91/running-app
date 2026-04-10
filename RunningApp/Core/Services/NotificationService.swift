@@ -3,6 +3,7 @@ import UserNotifications
 
 // MARK: - NotificationService
 
+@MainActor
 final class NotificationService {
 
     static let shared = NotificationService()
