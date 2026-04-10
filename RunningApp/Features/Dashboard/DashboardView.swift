@@ -51,6 +51,7 @@ struct DashboardView: View {
             }
         }
         .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
     }
 

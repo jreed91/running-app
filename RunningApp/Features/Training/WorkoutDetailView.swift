@@ -23,6 +23,7 @@ struct WorkoutDetailView: View {
                 }
             }
             .padding()
+            .frame(maxWidth: .infinity)
         }
         .navigationTitle(workout.workoutType.displayName)
         .navigationBarTitleDisplayMode(.inline)

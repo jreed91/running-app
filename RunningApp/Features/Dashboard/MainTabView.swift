@@ -3,20 +3,21 @@ import SwiftUI
 struct MainTabView: View {
     var body: some View {
         TabView {
-            DashboardView()
-                .tabItem { Label("Home", systemImage: "house.fill") }
-
-            TrainingPlanListView()
-                .tabItem { Label("Plan", systemImage: "calendar") }
-
-            HistoryView()
-                .tabItem { Label("History", systemImage: "clock.arrow.circlepath") }
-
-            ProgressDashboardView()
-                .tabItem { Label("Progress", systemImage: "chart.line.uptrend.xyaxis") }
-
-            SettingsView()
-                .tabItem { Label("Settings", systemImage: "gear") }
+            Tab("Home", systemImage: "house.fill") {
+                DashboardView()
+            }
+            Tab("Plan", systemImage: "calendar") {
+                TrainingPlanListView()
+            }
+            Tab("History", systemImage: "clock.arrow.circlepath") {
+                HistoryView()
+            }
+            Tab("Progress", systemImage: "chart.line.uptrend.xyaxis") {
+                ProgressDashboardView()
+            }
+            Tab("Settings", systemImage: "gear") {
+                SettingsView()
+            }
         }
     }
 }

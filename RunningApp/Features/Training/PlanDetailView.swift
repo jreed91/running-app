@@ -11,6 +11,7 @@ struct PlanDetailView: View {
                 }
             }
             .padding()
+            .frame(maxWidth: .infinity)
         }
         .navigationTitle("\(plan.targetRace.displayName) Plan")
         .navigationBarTitleDisplayMode(.inline)
