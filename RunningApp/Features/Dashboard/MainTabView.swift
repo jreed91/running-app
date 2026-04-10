@@ -12,7 +12,7 @@ struct MainTabView: View {
             HistoryView()
                 .tabItem { Label("History", systemImage: "clock.arrow.circlepath") }
 
-            ProgressView()
+            ProgressDashboardView()
                 .tabItem { Label("Progress", systemImage: "chart.line.uptrend.xyaxis") }
 
             SettingsView()
