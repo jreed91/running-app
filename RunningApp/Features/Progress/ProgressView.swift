@@ -39,6 +39,7 @@ struct ProgressDashboardView: View {
                     totalStatsSummary
                 }
                 .padding()
+                .frame(maxWidth: .infinity)
             }
             .navigationTitle("Progress")
         }

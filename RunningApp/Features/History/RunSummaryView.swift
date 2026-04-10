@@ -20,6 +20,7 @@ struct RunSummaryView: View {
                 splitsSection
             }
             .padding()
+            .frame(maxWidth: .infinity)
         }
         .navigationTitle(workout.workoutType.displayName)
         .navigationBarTitleDisplayMode(.inline)
