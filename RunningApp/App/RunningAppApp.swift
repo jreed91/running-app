@@ -5,11 +5,13 @@ import SwiftData
 struct RunningAppApp: App {
 
     @StateObject private var container = AppContainer()
+    @State private var appSettings = AppSettings()
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environment(\.appContainer, container)
+                .environment(appSettings)
                 .modelContainer(container.modelContainer)
                 .task {
                     // Request permissions on first launch — non-blocking.

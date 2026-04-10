@@ -5,6 +5,7 @@ import SwiftData
 struct RunSummaryView: View {
     let workout: RunWorkout
 
+    @Environment(AppSettings.self) private var appSettings
     @Query private var scheduledWorkouts: [ScheduledWorkout]
 
     private var matchedScheduled: ScheduledWorkout? {
@@ -49,9 +50,9 @@ struct RunSummaryView: View {
 
     private var statsGrid: some View {
         LazyVGrid(columns: [.init(.flexible()), .init(.flexible())], spacing: 16) {
-            statCell(value: workout.distanceMeters.distanceKmString, label: "Distance")
+            statCell(value: workout.distanceMeters.distanceString(unit: appSettings.unitPreference), label: "Distance")
             statCell(value: workout.durationSeconds.durationString, label: "Duration")
-            statCell(value: workout.averagePaceSecondsPerKm.paceString, label: "Avg Pace")
+            statCell(value: workout.averagePaceSecondsPerKm.paceString(unit: appSettings.unitPreference), label: "Avg Pace")
             if let hr = workout.averageHeartRate {
                 statCell(value: "\(Int(hr)) bpm", label: "Avg HR")
             }
@@ -89,7 +90,7 @@ struct RunSummaryView: View {
                         Text("Target pace")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Text("\(targetRange.lowerBound.paceString) – \(targetRange.upperBound.paceString) /km")
+                        Text("\(targetRange.lowerBound.paceString(unit: appSettings.unitPreference)) – \(targetRange.upperBound.paceString(unit: appSettings.unitPreference))")
                             .font(.bodyStrong)
                     }
                     Spacer()
@@ -97,7 +98,7 @@ struct RunSummaryView: View {
                         Text("Your pace")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Text("\(actual.paceString) /km")
+                        Text(actual.paceString(unit: appSettings.unitPreference))
                             .font(.bodyStrong)
                     }
                 }
@@ -144,9 +145,9 @@ struct RunSummaryView: View {
                         .foregroundStyle(.secondary)
                     ForEach(workout.splits, id: \.kilometer) { split in
                         HStack {
-                            Text("km \(split.kilometer)").font(.bodyRegular)
+                            Text("\(appSettings.unitPreference.distanceLabel) \(split.kilometer)").font(.bodyRegular)
                             Spacer()
-                            Text(split.paceSecondsPerKm.paceString)
+                            Text(split.paceSecondsPerKm.paceString(unit: appSettings.unitPreference))
                                 .font(.bodyStrong)
                         }
                         Divider()

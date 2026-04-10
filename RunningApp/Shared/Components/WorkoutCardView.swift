@@ -3,6 +3,7 @@ import SwiftUI
 /// Compact card showing a scheduled workout — used on the Dashboard.
 struct WorkoutCardView: View {
     let workout: ScheduledWorkout
+    @Environment(AppSettings.self) private var appSettings
 
     var body: some View {
         HStack(spacing: 16) {
@@ -10,10 +11,10 @@ struct WorkoutCardView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(workout.workoutType.displayName).font(.bodyStrong)
                 if let dist = workout.targetDistanceMeters {
-                    Text(dist.distanceKmString).font(.caption).foregroundStyle(.secondary)
+                    Text(dist.distanceString(unit: appSettings.unitPreference)).font(.caption).foregroundStyle(.secondary)
                 }
                 if let range = workout.targetPaceRange {
-                    Text("\(range.lowerBound.paceString) – \(range.upperBound.paceString)")
+                    Text("\(range.lowerBound.paceString(unit: appSettings.unitPreference)) – \(range.upperBound.paceString(unit: appSettings.unitPreference))")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

@@ -5,6 +5,7 @@ struct ActiveRunView: View {
     @Environment(\.appContainer) private var container
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
+    @Environment(AppSettings.self) private var appSettings
 
     @Query private var profiles: [UserProfile]
     @State private var showFinishConfirmation = false
@@ -24,7 +25,7 @@ struct ActiveRunView: View {
                 // Primary metrics
                 VStack(spacing: 8) {
                     metricBlock(
-                        value: tracker.distanceMeters.distanceKmString,
+                        value: tracker.distanceMeters.distanceString(unit: appSettings.unitPreference),
                         label: "DISTANCE"
                     )
                     HStack(spacing: 48) {
@@ -33,7 +34,7 @@ struct ActiveRunView: View {
                             label: "TIME"
                         )
                         metricBlock(
-                            value: tracker.currentPaceSecondsPerKm.paceString,
+                            value: tracker.currentPaceSecondsPerKm.paceString(unit: appSettings.unitPreference),
                             label: "PACE"
                         )
                         if let hr = tracker.currentHeartRate {

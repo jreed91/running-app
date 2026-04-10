@@ -11,6 +11,7 @@ struct DashboardView: View {
     @Query(sort: \RunWorkout.date, order: .reverse)
     private var recentWorkouts: [RunWorkout]
 
+    @Environment(AppSettings.self) private var appSettings
     @State private var showActiveRun = false
 
     private var activePlan: TrainingPlan? { activePlans.first }
@@ -98,7 +99,7 @@ struct DashboardView: View {
         let total = recentWorkouts
             .filter { $0.date >= monday }
             .reduce(0) { $0 + $1.distanceMeters }
-        return total.distanceKmString
+        return total.distanceString(unit: appSettings.unitPreference)
     }
 
     private var weekRunCountString: String {
