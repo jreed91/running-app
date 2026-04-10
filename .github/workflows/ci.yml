@@ -137,7 +137,7 @@ jobs:
         run: |
           xcodebuild build \
             -scheme "$SCHEME" \
-            -destination "generic/platform=watchOS Simulator" \
+            -destination "generic/platform=watchOS" \
             -derivedDataPath ~/Library/Developer/Xcode/DerivedData \
             CODE_SIGNING_ALLOWED=NO \
             | xcbeautify --renderer github-actions
