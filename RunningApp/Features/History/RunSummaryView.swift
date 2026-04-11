@@ -118,7 +118,8 @@ struct RunSummaryView: View {
     // MARK: Split pace chart
 
     private var splitPaceChart: some View {
-        chartSection(title: "SPLIT PACES") {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("SPLIT PACES").font(.sectionHeader).foregroundStyle(.secondary)
             Chart(workout.splits, id: \.kilometer) { split in
                 BarMark(
                     x: .value(appSettings.unitPreference.distanceLabel, split.kilometer),
@@ -144,7 +145,8 @@ struct RunSummaryView: View {
     // MARK: Split HR chart
 
     private var splitHRChart: some View {
-        chartSection(title: "HEART RATE BY SPLIT") {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("HEART RATE BY SPLIT").font(.sectionHeader).foregroundStyle(.secondary)
             Chart(workout.splits.filter { $0.heartRate != nil }, id: \.kilometer) { split in
                 LineMark(
                     x: .value(appSettings.unitPreference.distanceLabel, split.kilometer),
@@ -165,7 +167,8 @@ struct RunSummaryView: View {
     // MARK: Split elevation chart
 
     private var splitElevationChart: some View {
-        chartSection(title: "ELEVATION BY SPLIT") {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("ELEVATION BY SPLIT").font(.sectionHeader).foregroundStyle(.secondary)
             Chart(workout.splits, id: \.kilometer) { split in
                 BarMark(
                     x: .value(appSettings.unitPreference.distanceLabel, split.kilometer),
@@ -237,15 +240,6 @@ struct RunSummaryView: View {
                 .foregroundStyle(g >= 0 ? Color.success : Color.destructive)
         } else {
             Text("—").foregroundStyle(.secondary)
-        }
-    }
-
-    // MARK: Chart section helper
-
-    private func chartSection<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.sectionHeader).foregroundStyle(.secondary)
-            content()
         }
     }
 
