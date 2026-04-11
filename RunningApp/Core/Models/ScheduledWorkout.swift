@@ -14,7 +14,7 @@ final class ScheduledWorkout {
     var isCompleted: Bool
     var notes: String?
 
-    /// HealthKit `HKWorkoutPlan` UUID for this scheduled workout.
+    /// Local tracking ID assigned when this workout is synced via ``HealthKitRepository``.
     var healthKitPlanID: String?
 
     /// JSON-encoded `[WorkoutInterval]` — only set for interval sessions.
