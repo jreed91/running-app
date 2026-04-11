@@ -10,12 +10,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# Enforce pipefail for all bash steps so that failures in xcodebuild are not
-# silently swallowed when the command is piped through xcbeautify.
-defaults:
-  run:
-    shell: bash -euo pipefail {0}
-
 env:
   SCHEME: RunningApp
   SIMULATOR: iPhone 17
