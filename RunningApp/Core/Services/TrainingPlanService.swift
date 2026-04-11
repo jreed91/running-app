@@ -30,7 +30,7 @@ struct TrainingPlanService {
         let vdot = estimatedVDOT(from: profile)
         let paces = PaceCalculatorService.trainingPaces(forVDOT: vdot)
         let phases = phaseSchedule(totalWeeks: numberOfWeeks, raceType: profile.goalRace)
-        let baseKm = profile.fitnessLevel.startingWeeklyKm
+        let baseKm = profile.fitnessLevel.startingWeeklyKm(for: profile.goalRace)
 
         // Prefer explicit indices; fall back to even distribution from profile
         let effectiveDayOffsets: [Int]? = runDayIndices.isEmpty ? nil : runDayIndices.sorted()
