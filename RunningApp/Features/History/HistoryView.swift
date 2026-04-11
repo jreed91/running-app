@@ -5,6 +5,11 @@ struct HistoryView: View {
     @Query(sort: \RunWorkout.date, order: .reverse)
     private var workouts: [RunWorkout]
 
+    @Environment(\.modelContext) private var context
+    @Environment(\.appContainer) private var container
+
+    @State private var isSyncing = false
+
     var body: some View {
         NavigationStack {
             List {
@@ -17,15 +22,56 @@ struct HistoryView: View {
                 }
             }
             .navigationTitle("History")
+            .toolbar {
+                if isSyncing {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                    }
+                }
+            }
             .overlay {
-                if workouts.isEmpty {
+                if workouts.isEmpty && !isSyncing {
                     ContentUnavailableView(
                         "No runs yet",
                         systemImage: "figure.run.circle",
-                        description: Text("Start your first run from the Home tab.")
+                        description: Text("Start your first run or sync from Apple Health.")
                     )
                 }
             }
+            .task {
+                await syncRecentHealthKitWorkouts()
+            }
+        }
+    }
+
+    // MARK: Auto-sync
+
+    /// Silently imports running workouts from the last 60 days that aren't
+    /// already in the app. Triggered every time the History tab appears.
+    @MainActor
+    private func syncRecentHealthKitWorkouts() async {
+        let repo = container.healthKitRepository
+        guard repo.isAvailable else { return }
+        isSyncing = true
+        defer { isSyncing = false }
+        do {
+            try await repo.requestAuthorization()
+            let cutoff = Calendar.current.date(byAdding: .day, value: -60, to: Date()) ?? Date()
+            let existingIDs = Set(workouts.compactMap(\.healthKitWorkoutID))
+            let newWorkouts = try await repo.fetchImportableWorkouts(
+                from: cutoff,
+                to: Date(),
+                existingIDs: existingIDs
+            )
+            for workout in newWorkouts {
+                context.insert(workout)
+            }
+            if !newWorkouts.isEmpty {
+                try context.save()
+            }
+        } catch {
+            // Silent failure — background sync shouldn't interrupt the user
         }
     }
 }

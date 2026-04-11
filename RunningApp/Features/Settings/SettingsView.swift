@@ -26,6 +26,7 @@ struct SettingsView: View {
                     profileSection(profile: profile)
                 }
                 unitsSection
+                appleHealthSection
                 notificationsSection
                 aboutSection
                 dangerSection
@@ -66,6 +67,16 @@ struct SettingsView: View {
                 }
             }
             .pickerStyle(.segmented)
+        }
+    }
+
+    private var appleHealthSection: some View {
+        Section("Apple Health") {
+            NavigationLink("Import Older Workouts") {
+                HealthKitImportView()
+            }
+        } footer: {
+            Text("Recent runs from the Workout and Fitness apps sync automatically when you open History.")
         }
     }
 

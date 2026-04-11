@@ -12,6 +12,13 @@ protocol HealthKitRepositoryProtocol: Sendable {
     @MainActor func syncWorkoutPlans(for plan: TrainingPlan) async throws
     /// Clears the local tracking IDs for every workout in the plan.
     @MainActor func removeWorkoutPlans(for plan: TrainingPlan) async throws
+    /// Fetches running workouts from HealthKit, converts them to RunWorkout models,
+    /// and skips any whose HK UUID is already in `existingIDs`.
+    @MainActor func fetchImportableWorkouts(
+        from startDate: Date,
+        to endDate: Date,
+        existingIDs: Set<String>
+    ) async throws -> [RunWorkout]
 }
 
 // MARK: - Live implementation
@@ -31,7 +38,8 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         HKQuantityType(.distanceWalkingRunning),
         HKQuantityType(.heartRate),
         HKQuantityType(.activeEnergyBurned),
-        HKQuantityType(.vo2Max)
+        HKQuantityType(.vo2Max),
+        HKQuantityType(.elevationAscended)
     ]
 
     var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
@@ -62,9 +70,6 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
 
     // MARK: - Workout plans (planned workouts)
 
-    /// Assigns a stable local UUID to each non-rest scheduled workout so the app
-    /// can track which workouts have been "planned". HealthKit has no public API
-    /// for storing planned workouts, so the ID is kept in the SwiftData model only.
     @MainActor func syncWorkoutPlans(for plan: TrainingPlan) async throws {
         for week in plan.weeks {
             for workout in week.workouts where workout.workoutType != .rest {
@@ -74,7 +79,6 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         }
     }
 
-    /// Clears the local plan IDs that were previously assigned for this training plan.
     @MainActor func removeWorkoutPlans(for plan: TrainingPlan) async throws {
         for week in plan.weeks {
             for workout in week.workouts {
@@ -112,5 +116,97 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         }
     }
 
+    // MARK: - Import workouts from HealthKit
 
+    /// Fetches running workouts from HealthKit in the given range, converts each to a
+    /// `RunWorkout` (with heart rate and elevation from associated HealthKit samples),
+    /// and returns only those whose HK UUID is not already in `existingIDs`.
+    @MainActor func fetchImportableWorkouts(
+        from startDate: Date,
+        to endDate: Date,
+        existingIDs: Set<String>
+    ) async throws -> [RunWorkout] {
+        let hkWorkouts = try await fetchWorkouts(from: startDate, to: endDate)
+        var result: [RunWorkout] = []
+
+        for hkWorkout in hkWorkouts {
+            let hkID = hkWorkout.uuid.uuidString
+            guard !existingIDs.contains(hkID) else { continue }
+
+            let distanceMeters = hkWorkout.totalDistance?.doubleValue(for: .meter()) ?? 0
+            guard distanceMeters > 100 else { continue }
+
+            let hrStats = try? await fetchHeartRateStats(for: hkWorkout)
+            let elevation = try? await fetchElevationGain(for: hkWorkout)
+
+            let run = RunWorkout(
+                date: hkWorkout.startDate,
+                distanceMeters: distanceMeters,
+                durationSeconds: hkWorkout.duration,
+                workoutType: inferWorkoutType(distanceMeters: distanceMeters, durationSeconds: hkWorkout.duration)
+            )
+            run.averageHeartRate = hrStats?.avg
+            run.maxHeartRate = hrStats?.max
+            run.elevationGainMeters = elevation
+            run.healthKitWorkoutID = hkID
+            result.append(run)
+        }
+        return result
+    }
+
+    // MARK: - HealthKit sample helpers
+
+    private func fetchHeartRateStats(for workout: HKWorkout) async throws -> (avg: Double?, max: Double?) {
+        let hrType = HKQuantityType(.heartRate)
+        let predicate = HKQuery.predicateForSamples(
+            withStart: workout.startDate, end: workout.endDate, options: .strictStartDate
+        )
+        let stats: HKStatistics? = try await withCheckedThrowingContinuation { cont in
+            let query = HKStatisticsQuery(
+                quantityType: hrType,
+                quantitySamplePredicate: predicate,
+                options: [.discreteAverage, .discreteMax]
+            ) { _, result, error in
+                if let error { cont.resume(throwing: error) }
+                else { cont.resume(returning: result) }
+            }
+            store.execute(query)
+        }
+        let bpmUnit = HKUnit(from: "count/min")
+        return (
+            avg: stats?.averageQuantity()?.doubleValue(for: bpmUnit),
+            max: stats?.maximumQuantity()?.doubleValue(for: bpmUnit)
+        )
+    }
+
+    private func fetchElevationGain(for workout: HKWorkout) async throws -> Double? {
+        let elevType = HKQuantityType(.elevationAscended)
+        let predicate = HKQuery.predicateForSamples(
+            withStart: workout.startDate, end: workout.endDate, options: .strictStartDate
+        )
+        let stats: HKStatistics? = try await withCheckedThrowingContinuation { cont in
+            let query = HKStatisticsQuery(
+                quantityType: elevType,
+                quantitySamplePredicate: predicate,
+                options: .cumulativeSum
+            ) { _, result, error in
+                if let error { cont.resume(throwing: error) }
+                else { cont.resume(returning: result) }
+            }
+            store.execute(query)
+        }
+        return stats?.sumQuantity()?.doubleValue(for: .meter())
+    }
+
+    // MARK: - Helpers
+
+    /// Infers a broad workout type from distance and pace.
+    /// Apple Health has no concept of Easy/Tempo/LongRun, so we approximate.
+    private func inferWorkoutType(distanceMeters: Double, durationSeconds: Double) -> WorkoutType {
+        let distanceKm = distanceMeters / 1_000
+        let paceSecPerKm = distanceMeters > 0 ? durationSeconds / distanceMeters * 1_000 : 400
+        if distanceKm >= 16 { return .longRun }
+        if paceSecPerKm < 320 { return .tempo }
+        return .easy
+    }
 }
