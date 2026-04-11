@@ -40,9 +40,9 @@ enum FitnessLevel: String, Codable, CaseIterable, Sendable {
         switch raceType {
         case .fiveK:
             switch self {
-            case .beginner:     return 15   // ~9 mi/wk
-            case .intermediate: return 25   // ~15 mi/wk
-            case .advanced:     return 40   // ~25 mi/wk
+            case .beginner:     return 15   // ~9 mi/wk start, ~14 mi/wk peak
+            case .intermediate: return 20   // ~12 mi/wk start, ~19 mi/wk peak
+            case .advanced:     return 40   // ~25 mi/wk start, ~37 mi/wk peak
             }
         case .halfMarathon:
             switch self {
