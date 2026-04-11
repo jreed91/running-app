@@ -63,7 +63,7 @@ struct RunSummaryView: View {
                 RoundedRectangle(cornerRadius: 16)
                     .fill(.surfaceSecondary)
                     .frame(height: 220)
-                    .overlay { Label("No route data", systemImage: "map.slash") }
+                    .overlay { Label("No route data", systemImage: "map") }
             } else {
                 Map {
                     MapPolyline(coordinates: workout.routeCoordinates.map(\.clCoordinate))
