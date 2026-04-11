@@ -10,6 +10,12 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Enforce pipefail for all bash steps so that failures in xcodebuild are not
+# silently swallowed when the command is piped through xcbeautify.
+defaults:
+  run:
+    shell: bash -euo pipefail {0}
+
 env:
   SCHEME: RunningApp
   SIMULATOR: iPhone 17
@@ -45,8 +51,8 @@ jobs:
       - name: Print Xcode version
         run: xcodebuild -version
 
-      - name: Install XcodeGen
-        run: brew install xcodegen
+      - name: Install XcodeGen and xcbeautify
+        run: brew install xcodegen xcbeautify
 
       - name: Generate Xcode project
         run: xcodegen generate
@@ -65,7 +71,14 @@ jobs:
             | jq -r --arg name "$SIMULATOR" --arg os "com.apple.CoreSimulator.SimRuntime.iOS-${IOS_VERSION//./-}" \
               '.devices[$os][] | select(.name == $name) | .udid' \
             | head -1)
+          if [[ -z "$UDID" ]]; then
+            echo "::error::No available simulator named '$SIMULATOR' for iOS $IOS_VERSION was found."
+            echo "Available devices:"
+            xcrun simctl list devices available
+            exit 1
+          fi
           echo "SIMULATOR_UDID=$UDID" >> "$GITHUB_ENV"
+          # Boot is best-effort: the simulator may already be in Booted state.
           xcrun simctl boot "$UDID" || true
 
       - name: Build for testing
@@ -119,8 +132,8 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -switch /Applications/Xcode_26.4.app
 
-      - name: Install XcodeGen
-        run: brew install xcodegen
+      - name: Install XcodeGen and xcbeautify
+        run: brew install xcodegen xcbeautify
 
       - name: Generate Xcode project
         run: xcodegen generate
@@ -156,8 +169,8 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -switch /Applications/Xcode_26.4.app
 
-      - name: Install XcodeGen
-        run: brew install xcodegen
+      - name: Install XcodeGen and xcbeautify
+        run: brew install xcodegen xcbeautify
 
       - name: Generate Xcode project
         run: xcodegen generate
