@@ -16,7 +16,8 @@ struct TrainingPlanService {
     func generatePlan(
         profile: UserProfile,
         startDate: Date,
-        numberOfWeeks: Int
+        numberOfWeeks: Int,
+        runDayIndices: [Int] = []
     ) -> TrainingPlan {
         let endDate = startDate.adding(weeks: numberOfWeeks)
         let plan = TrainingPlan(
@@ -29,7 +30,10 @@ struct TrainingPlanService {
         let vdot = estimatedVDOT(from: profile)
         let paces = PaceCalculatorService.trainingPaces(forVDOT: vdot)
         let phases = phaseSchedule(totalWeeks: numberOfWeeks, raceType: profile.goalRace)
-        let baseKm = profile.fitnessLevel.startingWeeklyKm
+        let baseKm = profile.fitnessLevel.startingWeeklyKm(for: profile.goalRace)
+
+        // Prefer explicit indices; fall back to even distribution from profile
+        let effectiveDayOffsets: [Int]? = runDayIndices.isEmpty ? nil : runDayIndices.sorted()
 
         for (index, phase) in phases.enumerated() {
             let weekStart = startDate.adding(weeks: index)
@@ -49,6 +53,7 @@ struct TrainingPlanService {
             week.workouts = buildWorkouts(
                 weekStart: weekStart,
                 runDays: profile.weeklyRunDays,
+                dayOffsets: effectiveDayOffsets,
                 phase: phase,
                 paces: paces,
                 raceType: profile.goalRace,
@@ -132,12 +137,13 @@ struct TrainingPlanService {
     private func buildWorkouts(
         weekStart: Date,
         runDays: Int,
+        dayOffsets: [Int]?,
         phase: TrainingPhase,
         paces: TrainingPaces,
         raceType: RaceType,
         targetKm: Double
     ) -> [ScheduledWorkout] {
-        let days = runDayOffsets(count: runDays)
+        let days = dayOffsets ?? runDayOffsets(count: runDays)
         var workouts: [ScheduledWorkout] = []
 
         // Determine quality session types for the week

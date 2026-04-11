@@ -1,7 +1,12 @@
 import SwiftUI
+import SwiftData
 
 struct PlanDetailView: View {
     let plan: TrainingPlan
+
+    @Environment(\.modelContext) private var context
+    @Environment(\.dismiss) private var dismiss
+    @State private var showDeleteConfirmation = false
 
     var body: some View {
         ScrollView {
@@ -15,6 +20,29 @@ struct PlanDetailView: View {
         }
         .navigationTitle("\(plan.targetRace.displayName) Plan")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .destructiveAction) {
+                Button(role: .destructive) {
+                    showDeleteConfirmation = true
+                } label: {
+                    Label("Delete Plan", systemImage: "trash")
+                }
+            }
+        }
+        .confirmationDialog(
+            "Delete this plan?",
+            isPresented: $showDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Plan", role: .destructive) {
+                context.delete(plan)
+                try? context.save()
+                dismiss()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will permanently remove all \(plan.totalWeeks) weeks and scheduled workouts.")
+        }
     }
 }
 

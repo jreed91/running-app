@@ -8,10 +8,9 @@ protocol HealthKitRepositoryProtocol: Sendable {
     func requestAuthorization() async throws
     @MainActor func save(_ workout: RunWorkout) async throws -> String
     func fetchWorkouts(from startDate: Date, to endDate: Date) async throws -> [HKWorkout]
-    /// Saves an `HKWorkoutPlan` for each non-rest scheduled workout in the plan.
-    /// The HealthKit UUID is written back to `workout.healthKitPlanID`.
+    /// Assigns a local tracking ID to each non-rest scheduled workout in the plan.
     @MainActor func syncWorkoutPlans(for plan: TrainingPlan) async throws
-    /// Removes previously saved `HKWorkoutPlan` objects for every workout in the plan.
+    /// Clears the local tracking IDs for every workout in the plan.
     @MainActor func removeWorkoutPlans(for plan: TrainingPlan) async throws
 }
 
@@ -61,46 +60,27 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         return hkWorkout.uuid.uuidString
     }
 
-    // MARK: - Workout plans (planned workouts → Apple Fitness)
+    // MARK: - Workout plans (planned workouts)
 
-    /// Creates one `HKWorkoutPlan` per non-rest scheduled workout and stores its UUID
-    /// back on the model so duplicates and deletions can be managed later.
+    /// Assigns a stable local UUID to each non-rest scheduled workout so the app
+    /// can track which workouts have been "planned". HealthKit has no public API
+    /// for storing planned workouts, so the ID is kept in the SwiftData model only.
     @MainActor func syncWorkoutPlans(for plan: TrainingPlan) async throws {
         for week in plan.weeks {
             for workout in week.workouts where workout.workoutType != .rest {
-                // Skip workouts that are already synced
                 guard workout.healthKitPlanID == nil else { continue }
-
-                let config = HKWorkoutConfiguration()
-                config.activityType = .running
-                config.locationType = .outdoor
-
-                let hkPlan = HKWorkoutPlan(workoutConfiguration: config)
-                try await store.save(hkPlan)
-                workout.healthKitPlanID = hkPlan.uuid.uuidString
+                workout.healthKitPlanID = UUID().uuidString
             }
         }
     }
 
-    /// Deletes the `HKWorkoutPlan` objects that were previously saved for this training plan.
+    /// Clears the local plan IDs that were previously assigned for this training plan.
     @MainActor func removeWorkoutPlans(for plan: TrainingPlan) async throws {
-        var plansToDelete: [HKObject] = []
-
         for week in plan.weeks {
             for workout in week.workouts {
-                guard let uuidString = workout.healthKitPlanID,
-                      let uuid = UUID(uuidString: uuidString)
-                else { continue }
-
-                if let hkPlan = try await fetchWorkoutPlan(uuid: uuid) {
-                    plansToDelete.append(hkPlan)
-                }
                 workout.healthKitPlanID = nil
             }
         }
-
-        guard !plansToDelete.isEmpty else { return }
-        try await store.delete(plansToDelete)
     }
 
     // MARK: - Historical workout fetch
@@ -132,24 +112,5 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         }
     }
 
-    // MARK: - Private
 
-    private func fetchWorkoutPlan(uuid: UUID) async throws -> HKWorkoutPlan? {
-        try await withCheckedThrowingContinuation { continuation in
-            let predicate = HKQuery.predicateForObject(with: uuid)
-            let query = HKSampleQuery(
-                sampleType: .workoutType(),
-                predicate: predicate,
-                limit: 1,
-                sortDescriptors: nil
-            ) { _, samples, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else {
-                    continuation.resume(returning: samples?.first as? HKWorkoutPlan)
-                }
-            }
-            store.execute(query)
-        }
-    }
 }

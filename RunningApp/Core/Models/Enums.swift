@@ -32,12 +32,24 @@ enum FitnessLevel: String, Codable, CaseIterable, Sendable {
 
     var displayName: String { rawValue.capitalized }
 
-    /// Approximate starting weekly mileage in km
-    var startingWeeklyKm: Double {
-        switch self {
-        case .beginner: return 20
-        case .intermediate: return 40
-        case .advanced: return 65
+    /// Starting weekly volume in km, scaled to the target race distance.
+    ///
+    /// 5K plans use lower base volumes than half marathon plans because the
+    /// race-specific adaptations require less overall mileage and more speed work.
+    func startingWeeklyKm(for raceType: RaceType) -> Double {
+        switch raceType {
+        case .fiveK:
+            switch self {
+            case .beginner:     return 15   // ~9 mi/wk start, ~14 mi/wk peak
+            case .intermediate: return 20   // ~12 mi/wk start, ~19 mi/wk peak
+            case .advanced:     return 40   // ~25 mi/wk start, ~37 mi/wk peak
+            }
+        case .halfMarathon:
+            switch self {
+            case .beginner:     return 25   // ~15 mi/wk
+            case .intermediate: return 40   // ~25 mi/wk
+            case .advanced:     return 60   // ~37 mi/wk
+            }
         }
     }
 }
