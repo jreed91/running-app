@@ -10,6 +10,9 @@ final class UserProfile {
     var weeklyRunDays: Int
     var fitnessLevel: FitnessLevel
     var currentEstimated5KTimeSeconds: Double?
+    /// Weekday indices (0 = Monday … 6 = Sunday) the user prefers to run.
+    /// Empty means "spread evenly based on weeklyRunDays".
+    var preferredRunDayIndices: [Int]
     var createdAt: Date
     var updatedAt: Date
 
@@ -19,7 +22,8 @@ final class UserProfile {
         goalFinishTime: TimeInterval,
         weeklyRunDays: Int,
         fitnessLevel: FitnessLevel,
-        currentEstimated5KTimeSeconds: Double? = nil
+        currentEstimated5KTimeSeconds: Double? = nil,
+        preferredRunDayIndices: [Int] = []
     ) {
         self.id = UUID()
         self.name = name
@@ -28,6 +32,7 @@ final class UserProfile {
         self.weeklyRunDays = weeklyRunDays
         self.fitnessLevel = fitnessLevel
         self.currentEstimated5KTimeSeconds = currentEstimated5KTimeSeconds
+        self.preferredRunDayIndices = preferredRunDayIndices
         self.createdAt = Date()
         self.updatedAt = Date()
     }

@@ -59,12 +59,25 @@ struct DashboardView: View {
     private var upcomingWorkoutCard: some View {
         Group {
             if let nextWorkout = nextScheduledWorkout {
-                NavigationLink {
-                    WorkoutDetailView(workout: nextWorkout)
-                } label: {
-                    WorkoutCardView(workout: nextWorkout)
+                VStack(spacing: 12) {
+                    NavigationLink {
+                        WorkoutDetailView(workout: nextWorkout)
+                    } label: {
+                        WorkoutCardView(workout: nextWorkout)
+                    }
+                    .buttonStyle(.plain)
+
+                    if Calendar.current.isDateInToday(nextWorkout.scheduledDate) {
+                        Button {
+                            showActiveRun = true
+                        } label: {
+                            Label("Start This Workout", systemImage: "play.fill")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                    }
                 }
-                .buttonStyle(.plain)
             } else {
                 Text("No workouts scheduled today.")
                     .foregroundStyle(.secondary)
@@ -79,10 +92,10 @@ struct DashboardView: View {
         Button {
             showActiveRun = true
         } label: {
-            Label("Start a Run", systemImage: "figure.run")
+            Label("Start a Free Run", systemImage: "figure.run")
                 .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.borderedProminent)
+        .buttonStyle(.bordered)
         .controlSize(.large)
     }
 
