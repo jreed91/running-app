@@ -8,7 +8,13 @@ struct SettingsView: View {
 
     @State private var showResetConfirmation = false
     #if DEBUG
+    @Query(
+        filter: #Predicate<TrainingPlan> { $0.isActive },
+        sort: \TrainingPlan.createdAt, order: .reverse
+    )
+    private var activePlans: [TrainingPlan]
     @State private var seedWeeks = 8
+    @State private var completionCutoff = Date()
     #endif
 
     private var profile: UserProfile? { profiles.first }
@@ -91,20 +97,47 @@ struct SettingsView: View {
 
     #if DEBUG
     private var developerSection: some View {
-        Section {
-            Stepper("\(seedWeeks) weeks of history", value: $seedWeeks, in: 2...24)
-
-            Button("Seed Run History") {
-                DebugRunGenerator.seed(weeks: seedWeeks, context: context)
+        let plan = activePlans.first
+        return Group {
+            Section {
+                Stepper("\(seedWeeks) weeks of history", value: $seedWeeks, in: 2...24)
+                Button("Seed Run History") {
+                    DebugRunGenerator.seed(weeks: seedWeeks, context: context)
+                }
+                Button("Clear Seeded Runs", role: .destructive) {
+                    DebugRunGenerator.clear(context: context)
+                }
+            } header: {
+                Text("Developer – Run History")
+            } footer: {
+                Text("Inserts fake RunWorkout entries tagged for easy removal.")
             }
 
-            Button("Clear Seeded Runs", role: .destructive) {
-                DebugRunGenerator.clear(context: context)
+            Section {
+                if let plan {
+                    DatePicker(
+                        "Complete through",
+                        selection: $completionCutoff,
+                        in: plan.startDate...plan.endDate,
+                        displayedComponents: .date
+                    )
+                    Button("Mark Workouts Complete") {
+                        DebugRunGenerator.completePlan(
+                            upTo: completionCutoff, plan: plan, context: context
+                        )
+                    }
+                    Button("Reset Debug Completions", role: .destructive) {
+                        DebugRunGenerator.resetPlanProgress(plan: plan, context: context)
+                    }
+                } else {
+                    Text("No active training plan.")
+                        .foregroundStyle(.secondary)
+                }
+            } header: {
+                Text("Developer – Plan Progress")
+            } footer: {
+                Text("Creates matching RunWorkouts for each scheduled workout up to the chosen date. Only debug-tagged completions are removed on reset.")
             }
-        } header: {
-            Text("Developer")
-        } footer: {
-            Text("Inserts fake RunWorkout entries. Only visible in DEBUG builds.")
         }
     }
     #endif
@@ -170,6 +203,43 @@ enum DebugRunGenerator {
         try? context.save()
     }
 
+    // MARK: Plan completion
+
+    /// Marks every non-rest ``ScheduledWorkout`` in `plan` whose date falls on
+    /// or before `cutoff` as complete, backing each one with a fake ``RunWorkout``.
+    static func completePlan(upTo cutoff: Date, plan: TrainingPlan, context: ModelContext) {
+        let cal = Calendar.current
+        for week in plan.weeks {
+            for workout in week.workouts {
+                guard
+                    !workout.isCompleted,
+                    workout.workoutType != .rest,
+                    cal.compare(workout.scheduledDate, to: cutoff, toGranularity: .day) != .orderedDescending
+                else { continue }
+
+                let run = makeCompletionRun(for: workout)
+                context.insert(run)
+                workout.completedWorkout = run
+                workout.isCompleted = true
+            }
+        }
+        try? context.save()
+    }
+
+    /// Removes debug-tagged completions from `plan`, restoring those workouts
+    /// to their incomplete state. Real (non-tagged) completions are left alone.
+    static func resetPlanProgress(plan: TrainingPlan, context: ModelContext) {
+        for week in plan.weeks {
+            for workout in week.workouts where workout.isCompleted {
+                guard let run = workout.completedWorkout, run.notes == tag else { continue }
+                context.delete(run)
+                workout.completedWorkout = nil
+                workout.isCompleted = false
+            }
+        }
+        try? context.save()
+    }
+
     // MARK: Private helpers
 
     private static func makeWorkout(
@@ -232,6 +302,68 @@ enum DebugRunGenerator {
                 pace:     365 - improvement + Double.random(in: -10 ... 10),
                 hr:       140
             )
+        }
+    }
+
+    /// Builds a ``RunWorkout`` that plausibly satisfies a ``ScheduledWorkout``'s targets.
+    private static func makeCompletionRun(for scheduled: ScheduledWorkout) -> RunWorkout {
+        let distance = scheduled.targetDistanceMeters ?? fallbackDistance(for: scheduled.workoutType)
+
+        // Pick a pace inside the target range if available, otherwise use a default
+        let pace: Double
+        if let range = scheduled.targetPaceRange {
+            pace = Double.random(in: range.lowerBound...range.upperBound)
+        } else {
+            pace = fallbackPace(for: scheduled.workoutType) + Double.random(in: -10...10)
+        }
+
+        let duration = (distance / 1_000) * pace
+        let runDate = Calendar.current.startOfDay(for: scheduled.scheduledDate)
+            .addingTimeInterval(Double.random(in: 6.5 * 3_600 ... 8 * 3_600))
+
+        let run = RunWorkout(
+            date: runDate,
+            distanceMeters: distance + Double.random(in: -150...150),
+            durationSeconds: duration,
+            workoutType: scheduled.workoutType
+        )
+        run.averageHeartRate = fallbackHR(for: scheduled.workoutType) + Double.random(in: -4...4)
+        run.elevationGainMeters = Double.random(in: 8...45)
+        run.notes = tag
+        run.splits = makeSplits(distanceMeters: distance, basePace: pace)
+        return run
+    }
+
+    private static func fallbackDistance(for type: WorkoutType) -> Double {
+        switch type {
+        case .easy:         return 7_000
+        case .tempo:        return 7_000
+        case .interval:     return 8_500   // warmup + reps + cooldown
+        case .longRun:      return 15_000
+        case .race:         return 5_000
+        default:            return 6_000
+        }
+    }
+
+    private static func fallbackPace(for type: WorkoutType) -> Double {
+        switch type {
+        case .easy:         return 370
+        case .tempo:        return 305
+        case .interval:     return 330
+        case .longRun:      return 380
+        case .race:         return 290
+        default:            return 360
+        }
+    }
+
+    private static func fallbackHR(for type: WorkoutType) -> Double {
+        switch type {
+        case .easy:         return 138
+        case .tempo:        return 162
+        case .interval:     return 170
+        case .longRun:      return 148
+        case .race:         return 178
+        default:            return 140
         }
     }
 
