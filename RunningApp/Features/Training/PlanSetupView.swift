@@ -145,8 +145,8 @@ struct PlanSetupView: View {
 
         Task {
             await container.notificationService.scheduleReminders(for: plan)
-            await container.calendarSyncService.syncPlan(plan)
-            // Persist EventKit identifiers written back onto workout models
+            try? await container.healthKitRepository.syncWorkoutPlans(for: plan)
+            // Persist HealthKit plan UUIDs written back onto workout models
             try? context.save()
             dismiss()
         }

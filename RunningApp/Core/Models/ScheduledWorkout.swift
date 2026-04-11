@@ -14,8 +14,8 @@ final class ScheduledWorkout {
     var isCompleted: Bool
     var notes: String?
 
-    /// EventKit calendar event identifier for this planned workout.
-    var calendarEventID: String?
+    /// HealthKit `HKWorkoutPlan` UUID for this scheduled workout.
+    var healthKitPlanID: String?
 
     /// JSON-encoded `[WorkoutInterval]` — only set for interval sessions.
     var intervalsData: Data?

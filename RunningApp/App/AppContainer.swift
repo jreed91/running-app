@@ -25,7 +25,6 @@ final class AppContainer: ObservableObject {
     let trainingPlanService: TrainingPlanService
     let workoutTrackerService: WorkoutTrackerService
     let notificationService: NotificationService
-    let calendarSyncService: CalendarSyncService
 
     // MARK: Init
 
@@ -55,7 +54,6 @@ final class AppContainer: ObservableObject {
         self.trainingPlanService = TrainingPlanService()
         self.workoutTrackerService = WorkoutTrackerService()
         self.notificationService = NotificationService.shared
-        self.calendarSyncService = CalendarSyncService()
     }
 
     // MARK: Preview support
