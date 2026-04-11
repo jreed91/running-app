@@ -117,8 +117,9 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
         guard HKHealthStore.isHealthDataAvailable() else { return }
         let hrType = HKQuantityType(.heartRate)
         let predicate = HKQuery.predicateForSamples(withStart: startDate, end: nil, options: .strictStartDate)
-        let handler: @Sendable (HKAnchoredObjectQuery, [HKSample]?, [HKDeletedObject]?, HKQueryAnchor?, (any Error)?) -> Void = {
-            [weak self] _, newSamples, _, _, _ in
+        let handler: @Sendable (
+            HKAnchoredObjectQuery, [HKSample]?, [HKDeletedObject]?, HKQueryAnchor?, (any Error)?
+        ) -> Void = { [weak self] _, newSamples, _, _, _ in
             self?.processHRSamples(newSamples)
         }
         let query = HKAnchoredObjectQuery(
