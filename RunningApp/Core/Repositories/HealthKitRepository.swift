@@ -38,8 +38,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         HKQuantityType(.distanceWalkingRunning),
         HKQuantityType(.heartRate),
         HKQuantityType(.activeEnergyBurned),
-        HKQuantityType(.vo2Max),
-        HKQuantityType(.elevationAscended)
+        HKQuantityType(.vo2Max)
     ]
 
     var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
@@ -137,7 +136,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             guard distanceMeters > 100 else { continue }
 
             let hrStats = try? await fetchHeartRateStats(for: hkWorkout)
-            let elevation = try? await fetchElevationGain(for: hkWorkout)
+            let elevation = elevationGain(from: hkWorkout)
 
             let run = RunWorkout(
                 date: hkWorkout.startDate,
@@ -179,23 +178,13 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         )
     }
 
-    private func fetchElevationGain(for workout: HKWorkout) async throws -> Double? {
-        let elevType = HKQuantityType(.elevationAscended)
-        let predicate = HKQuery.predicateForSamples(
-            withStart: workout.startDate, end: workout.endDate, options: .strictStartDate
-        )
-        let stats: HKStatistics? = try await withCheckedThrowingContinuation { cont in
-            let query = HKStatisticsQuery(
-                quantityType: elevType,
-                quantitySamplePredicate: predicate,
-                options: .cumulativeSum
-            ) { _, result, error in
-                if let error { cont.resume(throwing: error) }
-                else { cont.resume(returning: result) }
-            }
-            store.execute(query)
+    /// Reads cumulative elevation ascended from the workout's metadata.
+    /// Apple Watch workouts store this under HKMetadataKeyElevationAscended.
+    private func elevationGain(from workout: HKWorkout) -> Double? {
+        guard let quantity = workout.metadata?[HKMetadataKeyElevationAscended] as? HKQuantity else {
+            return nil
         }
-        return stats?.sumQuantity()?.doubleValue(for: .meter())
+        return quantity.doubleValue(for: .meter())
     }
 
     // MARK: - Helpers
