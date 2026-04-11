@@ -14,8 +14,6 @@ struct RunningAppApp: App {
                 .environment(appSettings)
                 .modelContainer(container.modelContainer)
                 .task {
-                    // Request permissions on first launch — non-blocking.
-                    try? await container.healthKitRepository.requestAuthorization()
                     try? await container.notificationService.requestAuthorization()
                 }
         }

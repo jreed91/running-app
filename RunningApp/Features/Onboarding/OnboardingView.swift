@@ -9,9 +9,9 @@ struct OnboardingView: View {
     @State private var goalRace: RaceType = .fiveK
     @State private var fitnessLevel: FitnessLevel = .beginner
     @State private var weeklyRunDays = 3
-    @State private var known5KMinutes = 30.0
     @State private var goalMinutes = 25.0
     @State private var step = 0
+    @State private var isCreatingPlan = false
 
     var body: some View {
         TabView(selection: $step) {
@@ -19,6 +19,7 @@ struct OnboardingView: View {
             goalStep.tag(1)
             fitnessStep.tag(2)
             scheduleStep.tag(3)
+            healthKitStep.tag(4)
         }
         .tabViewStyle(.page(indexDisplayMode: .always))
         .animation(.easeInOut, value: step)
@@ -84,9 +85,39 @@ struct OnboardingView: View {
             Stepper("\(weeklyRunDays) days", value: $weeklyRunDays, in: 2...6)
                 .padding(.horizontal)
             Spacer()
-            Button("Start Training") { createProfile() }
-                .buttonStyle(.borderedProminent)
-                .disabled(weeklyRunDays < 2)
+            nextButton(enabled: weeklyRunDays >= 2)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var healthKitStep: some View {
+        VStack(spacing: 24) {
+            Spacer()
+            Image(systemName: "heart.fill")
+                .font(.system(size: 56))
+                .foregroundStyle(.red)
+            Text("Connect Health")
+                .font(.metricMedium)
+            Text("Allow access to Apple Health so your runs are saved and your training plan adapts to your real fitness data.")
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal)
+            Spacer()
+            Button {
+                Task { await requestHealthKitThenCreatePlan() }
+            } label: {
+                Group {
+                    if isCreatingPlan {
+                        ProgressView()
+                    } else {
+                        Text("Start Training")
+                    }
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(isCreatingPlan)
         }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -100,7 +131,14 @@ struct OnboardingView: View {
 
     // MARK: Actions
 
-    private func createProfile() {
+    private func requestHealthKitThenCreatePlan() async {
+        isCreatingPlan = true
+        // Request HealthKit access; proceed regardless of whether it's granted
+        try? await container.healthKitRepository.requestAuthorization()
+        createProfileAndPlan()
+    }
+
+    private func createProfileAndPlan() {
         let profile = UserProfile(
             name: name.trimmingCharacters(in: .whitespaces),
             goalRace: goalRace,
@@ -109,6 +147,15 @@ struct OnboardingView: View {
             fitnessLevel: fitnessLevel
         )
         context.insert(profile)
+
+        let startDate = Date().startOfWeek.adding(weeks: 1)
+        let numberOfWeeks = goalRace == .fiveK ? 8 : 12
+        let plan = container.trainingPlanService.generatePlan(
+            profile: profile,
+            startDate: startDate,
+            numberOfWeeks: numberOfWeeks
+        )
+        context.insert(plan)
         try? context.save()
     }
 }
