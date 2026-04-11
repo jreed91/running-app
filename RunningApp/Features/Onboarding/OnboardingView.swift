@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import CoreLocation
 
 struct OnboardingView: View {
     @Environment(\.modelContext) private var context
@@ -12,6 +13,7 @@ struct OnboardingView: View {
     @State private var goalMinutes = 25.0
     @State private var step = 0
     @State private var isCreatingPlan = false
+    @State private var locationManager = CLLocationManager()
 
     var body: some View {
         TabView(selection: $step) {
@@ -19,7 +21,8 @@ struct OnboardingView: View {
             goalStep.tag(1)
             fitnessStep.tag(2)
             scheduleStep.tag(3)
-            healthKitStep.tag(4)
+            locationStep.tag(4)
+            healthKitStep.tag(5)
         }
         .tabViewStyle(.page(indexDisplayMode: .always))
         .animation(.easeInOut, value: step)
@@ -86,6 +89,29 @@ struct OnboardingView: View {
                 .padding(.horizontal)
             Spacer()
             nextButton(enabled: weeklyRunDays >= 2)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var locationStep: some View {
+        VStack(spacing: 24) {
+            Spacer()
+            Image(systemName: "location.fill")
+                .font(.system(size: 56))
+                .foregroundStyle(.blue)
+            Text("Track Your Route")
+                .font(.metricMedium)
+            Text("GPS is used to map your runs, measure distance, and calculate pace. Your location is never shared.")
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal)
+            Spacer()
+            Button("Enable Location") {
+                locationManager.requestWhenInUseAuthorization()
+                withAnimation { step += 1 }
+            }
+            .buttonStyle(.borderedProminent)
         }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
