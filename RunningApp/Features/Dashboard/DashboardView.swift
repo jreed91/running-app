@@ -13,20 +13,29 @@ struct DashboardView: View {
 
     @Environment(AppSettings.self) private var appSettings
     @State private var showActiveRun = false
+    @State private var selectedDate = Date()
 
     private var activePlan: TrainingPlan? { activePlans.first }
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    weekSummaryCard
-                    upcomingWorkoutCard
-                    startRunButton
+            VStack(spacing: 0) {
+                WeekCalendarView(activePlan: activePlan, selectedDate: $selectedDate)
+                    .background(.surfaceSecondary)
+
+                Divider()
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        weekSummaryCard
+                        selectedDaySection
+                        startRunButton
+                    }
+                    .padding()
                 }
-                .padding()
             }
             .navigationTitle("Today")
+            .navigationBarTitleDisplayMode(.inline)
             .fullScreenCover(isPresented: $showActiveRun) {
                 ActiveRunView()
             }
@@ -56,34 +65,40 @@ struct DashboardView: View {
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
     }
 
-    private var upcomingWorkoutCard: some View {
-        Group {
-            if let nextWorkout = nextScheduledWorkout {
-                VStack(spacing: 12) {
-                    NavigationLink {
-                        WorkoutDetailView(workout: nextWorkout)
-                    } label: {
-                        WorkoutCardView(workout: nextWorkout)
-                    }
-                    .buttonStyle(.plain)
+    private var selectedDaySection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(selectedDayLabel)
+                .font(.sectionHeader)
+                .foregroundStyle(.secondary)
 
-                    if Calendar.current.isDateInToday(nextWorkout.scheduledDate) {
-                        Button {
-                            showActiveRun = true
-                        } label: {
-                            Label("Start This Workout", systemImage: "play.fill")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.large)
+            if let workout = workoutForSelectedDate {
+                NavigationLink {
+                    WorkoutDetailView(workout: workout)
+                } label: {
+                    WorkoutCardView(workout: workout)
+                }
+                .buttonStyle(.plain)
+
+                if Calendar.current.isDateInToday(selectedDate) && !workout.isCompleted {
+                    Button {
+                        showActiveRun = true
+                    } label: {
+                        Label("Start This Workout", systemImage: "play.fill")
+                            .frame(maxWidth: .infinity)
                     }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
                 }
             } else {
-                Text("No workouts scheduled today.")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
+                HStack(spacing: 12) {
+                    Image(systemName: "moon.stars")
+                        .foregroundStyle(.secondary)
+                    Text("Rest day – recovery is part of training.")
+                        .foregroundStyle(.secondary)
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
             }
         }
     }
@@ -108,6 +123,25 @@ struct DashboardView: View {
 
     // MARK: Computed
 
+    private var selectedDayLabel: String {
+        if Calendar.current.isDateInToday(selectedDate) { return "TODAY" }
+        if Calendar.current.isDateInTomorrow(selectedDate) { return "TOMORROW" }
+        return selectedDate
+            .formatted(.dateTime.weekday(.wide).month().day())
+            .uppercased()
+    }
+
+    private var workoutForSelectedDate: ScheduledWorkout? {
+        guard let plan = activePlan else { return nil }
+        for week in plan.weeks {
+            for w in week.workouts
+            where Calendar.current.isDate(w.scheduledDate, inSameDayAs: selectedDate) {
+                return w.workoutType == .rest ? nil : w
+            }
+        }
+        return nil
+    }
+
     private var weekDistanceString: String {
         let monday = Date().startOfWeek
         let total = recentWorkouts
@@ -120,11 +154,5 @@ struct DashboardView: View {
         let monday = Date().startOfWeek
         let count = recentWorkouts.filter { $0.date >= monday }.count
         return "\(count)"
-    }
-
-    private var nextScheduledWorkout: ScheduledWorkout? {
-        activePlan?.currentWeek?.workouts
-            .filter { !$0.isCompleted && $0.workoutType != .rest }
-            .min(by: { $0.scheduledDate < $1.scheduledDate })
     }
 }
