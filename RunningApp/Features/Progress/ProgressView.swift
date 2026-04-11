@@ -181,7 +181,7 @@ struct ProgressDashboardView: View {
                         x: .value("Date", workout.date, unit: .day),
                         y: .value(elevationUnit, elevationDisplay(workout.elevationGainMeters ?? 0))
                     )
-                    .foregroundStyle(.success)
+                    .foregroundStyle(Color.success)
                 }
                 .frame(height: 140)
                 .chartXAxis {
