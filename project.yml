@@ -1,7 +1,7 @@
-name: RunningApp
+name: JacobReedRunningApp
 
 options:
-  bundleIdPrefix: com.jacobreedrunningapp
+  bundleIdPrefix: com.jacobreedrunningapp2
   deploymentTarget:
     iOS: "26.0"
     watchOS: "26.0"
@@ -35,7 +35,7 @@ targets:
 
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.jacobreedrunningapp
+        PRODUCT_BUNDLE_IDENTIFIER: com.jacobreedrunningapp2
         PRODUCT_NAME: RunningApp
         INFOPLIST_FILE: RunningApp/Resources/Info.plist
         TARGETED_DEVICE_FAMILY: "1"         # iPhone only
@@ -79,7 +79,7 @@ targets:
 
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.jacobreedrunningapp.watch
+        PRODUCT_BUNDLE_IDENTIFIER: com.jacobreedrunningapp2.watch
         PRODUCT_NAME: RunningApp Watch
         INFOPLIST_FILE: WatchApp/Info.plist
         TARGETED_DEVICE_FAMILY: "4"
@@ -96,7 +96,7 @@ targets:
       properties:
         CFBundleIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER)
         WKApplication: true
-        WKCompanionAppBundleIdentifier: com.jacobreedrunningapp
+        WKCompanionAppBundleIdentifier: com.jacobreedrunningapp2
 
   # ── Unit tests ────────────────────────────────────────────────────────────────
   RunningAppTests:
@@ -109,7 +109,7 @@ targets:
 
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.jacobreedrunningapp.tests
+        PRODUCT_BUNDLE_IDENTIFIER: com.jacobreedrunningapp2.tests
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: "VMNPGK3Q29"
 
@@ -127,7 +127,7 @@ targets:
 
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.jacobreedrunningapp.uitests
+        PRODUCT_BUNDLE_IDENTIFIER: com.jacobreedrunningapp2.uitests
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: "VMNPGK3Q29"
         TEST_TARGET_NAME: RunningApp
