@@ -25,6 +25,7 @@ final class AppContainer: ObservableObject {
     let trainingPlanService: TrainingPlanService
     let workoutTrackerService: WorkoutTrackerService
     let notificationService: NotificationService
+    let workoutAnalyticsService: WorkoutAnalyticsService
 
     // MARK: Init
 
@@ -54,6 +55,24 @@ final class AppContainer: ObservableObject {
         self.trainingPlanService = TrainingPlanService()
         self.workoutTrackerService = WorkoutTrackerService()
         self.notificationService = NotificationService.shared
+        self.workoutAnalyticsService = WorkoutAnalyticsService()
+    }
+
+    // MARK: - Workout adaptation
+
+    /// Returns an adapted ``ScheduledWorkout`` based on the runner's recent history.
+    /// If history is empty the original workout is returned unchanged.
+    func adaptedWorkout(
+        scheduled: ScheduledWorkout,
+        history: [RunWorkout],
+        profile: UserProfile
+    ) -> ScheduledWorkout {
+        guard !history.isEmpty else { return scheduled }
+        return trainingPlanService.adaptWorkout(
+            scheduled: scheduled,
+            history: history,
+            profile: profile
+        )
     }
 
     // MARK: Preview support

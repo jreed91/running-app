@@ -40,3 +40,40 @@ struct WorkoutInterval: Codable, Hashable, Sendable {
     var recoverySeconds: Double
     var recoveryType: RecoveryType
 }
+
+// MARK: - WorkoutSegment
+
+/// A single continuous segment of a run (warm-up, work repeat, recovery, cool-down).
+struct WorkoutSegment: Codable, Hashable, Sendable {
+    /// Target distance in meters. Nil when segment is time-based or open.
+    var distanceMeters: Double?
+    /// Target duration in seconds. Nil when segment is distance-based or open.
+    var durationSeconds: Double?
+    /// Target pace in seconds/km. Nil for open/recovery segments.
+    var targetPaceSecondsPerKm: Double?
+    /// Human-readable label, e.g. "Warm-up", "Cool-down", "Recovery jog".
+    var label: String
+}
+
+// MARK: - WorkoutSet
+
+/// One repeated block: N repetitions of a work segment followed by a recovery segment.
+struct WorkoutSet: Codable, Hashable, Sendable {
+    var repetitions: Int
+    var workSegment: WorkoutSegment
+    var recoverySegment: WorkoutSegment
+    /// Human-readable label, e.g. "VO2max Intervals", "Tempo Block".
+    var label: String
+}
+
+// MARK: - WorkoutStructure
+
+/// Full structured representation of a workout with warm-up, main sets, and cool-down.
+/// Serialised to JSON and stored in ``ScheduledWorkout/structureData``.
+struct WorkoutStructure: Codable, Hashable, Sendable {
+    var warmup: WorkoutSegment
+    var mainSets: [WorkoutSet]
+    var cooldown: WorkoutSegment
+    var totalEstimatedDistanceMeters: Double
+    var totalEstimatedDurationSeconds: Double
+}

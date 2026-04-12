@@ -119,7 +119,70 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
     // MARK: - WorkoutKit plan builder
 
     private func makeWorkoutPlan(for workout: ScheduledWorkout) -> WorkoutPlan {
-        let warmup = WorkoutStep(goal: .open, alert: nil)
+        let customWorkout: CustomWorkout
+        if let structure = workout.workoutStructure, !structure.mainSets.isEmpty {
+            customWorkout = makeCustomWorkout(from: structure, workout: workout)
+        } else {
+            customWorkout = makeCustomWorkoutLegacy(for: workout)
+        }
+        return WorkoutPlan(.custom(customWorkout), id: UUID())
+    }
+
+    /// Builds a ``CustomWorkout`` from a ``WorkoutStructure`` with precise distance/time goals.
+    private func makeCustomWorkout(
+        from structure: WorkoutStructure,
+        workout: ScheduledWorkout
+    ) -> CustomWorkout {
+        let warmupGoal: WorkoutGoal = structure.warmup.distanceMeters
+            .map { .distance($0, UnitLength.meters) } ?? .open
+        let warmupStep = WorkoutStep(goal: warmupGoal, alert: nil)
+
+        let blocks: [IntervalBlock] = structure.mainSets.map { set in
+            let workGoal: WorkoutGoal
+            if let dist = set.workSegment.distanceMeters {
+                workGoal = .distance(dist, UnitLength.meters)
+            } else if let dur = set.workSegment.durationSeconds {
+                workGoal = .time(dur, UnitDuration.seconds)
+            } else {
+                workGoal = .open
+            }
+            let workStep = IntervalStep(.work, goal: workGoal, alert: nil)
+
+            var steps: [IntervalStep] = [workStep]
+            if let recDur = set.recoverySegment.durationSeconds, recDur > 0 {
+                steps.append(IntervalStep(
+                    .recovery,
+                    goal: .time(recDur, UnitDuration.seconds),
+                    alert: nil
+                ))
+            } else if let recDist = set.recoverySegment.distanceMeters, recDist > 0 {
+                steps.append(IntervalStep(
+                    .recovery,
+                    goal: .distance(recDist, UnitLength.meters),
+                    alert: nil
+                ))
+            }
+
+            return IntervalBlock(steps: steps, iterations: set.repetitions)
+        }
+
+        let cooldownGoal: WorkoutGoal = structure.cooldown.distanceMeters
+            .map { .distance($0, UnitLength.meters) } ?? .open
+        let cooldownStep = WorkoutStep(goal: cooldownGoal, alert: nil)
+
+        return CustomWorkout(
+            activity: .running,
+            location: .outdoor,
+            displayName: workout.workoutType.displayName,
+            warmup: warmupStep,
+            blocks: blocks,
+            cooldown: cooldownStep
+        )
+    }
+
+    /// Legacy path for workouts without a ``WorkoutStructure`` (flat interval array).
+    private func makeCustomWorkoutLegacy(for workout: ScheduledWorkout) -> CustomWorkout {
+        let warmup   = WorkoutStep(goal: .open, alert: nil)
         let cooldown = WorkoutStep(goal: .open, alert: nil)
         let blocks: [IntervalBlock]
 
@@ -148,7 +211,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             blocks = [IntervalBlock(steps: [workStep], iterations: 1)]
         }
 
-        let customWorkout = CustomWorkout(
+        return CustomWorkout(
             activity: .running,
             location: .outdoor,
             displayName: workout.workoutType.displayName,
@@ -156,7 +219,6 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             blocks: blocks,
             cooldown: cooldown
         )
-        return WorkoutPlan(.custom(customWorkout), id: UUID())
     }
 
     // MARK: - Historical workout fetch
