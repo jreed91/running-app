@@ -11,10 +11,18 @@ final class AppSettings {
         }
     }
 
+    var orsAPIKey: String {
+        didSet {
+            UserDefaults.standard.set(orsAPIKey, forKey: Self.orsAPIKeyKey)
+        }
+    }
+
     private static let unitPreferenceKey = "unitPreference"
+    private static let orsAPIKeyKey      = "orsAPIKey"
 
     init() {
         let raw = UserDefaults.standard.string(forKey: Self.unitPreferenceKey) ?? ""
         self.unitPreference = UnitPreference(rawValue: raw) ?? .metric
+        self.orsAPIKey = UserDefaults.standard.string(forKey: Self.orsAPIKeyKey) ?? ""
     }
 }

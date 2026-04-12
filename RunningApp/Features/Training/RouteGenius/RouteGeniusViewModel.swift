@@ -43,28 +43,33 @@ final class RouteGeniusViewModel {
     // MARK: Current location
 
     var currentCoordinate: CLLocationCoordinate2D?
-    private var locationTask: Task<Void, Never>?
+    // nonisolated(unsafe) lets deinit cancel the task without a MainActor hop.
+    // Task.cancel() is thread-safe so this is sound.
+    nonisolated(unsafe) private var locationTask: Task<Void, Never>?
 
     // MARK: Saved routes
 
     var savedRoutes: [SavedRoute] = []
 
-    // MARK: Dependencies (internal so View can read unitPreference for labels)
+    // MARK: Dependencies
 
     private let service: RouteGeniusService
     private let repository: RouteRepositoryProtocol
-    let unitPreference: UnitPreference
+    /// Kept as a reference so the view can observe `unitPreference` and `orsAPIKey` reactively.
+    let appSettings: AppSettings
+
+    var unitPreference: UnitPreference { appSettings.unitPreference }
 
     // MARK: Init
 
     init(
         service: RouteGeniusService,
         repository: RouteRepositoryProtocol,
-        unitPreference: UnitPreference
+        appSettings: AppSettings
     ) {
         self.service = service
         self.repository = repository
-        self.unitPreference = unitPreference
+        self.appSettings = appSettings
         loadSavedRoutes()
         startLocationUpdates()
     }
@@ -146,7 +151,8 @@ final class RouteGeniusViewModel {
             generatedRoute = try await service.generateRoute(
                 start: coord,
                 distanceMeters: distance,
-                routeType: routeType
+                routeType: routeType,
+                apiKey: appSettings.orsAPIKey
             )
         } catch {
             errorMessage = error.localizedDescription

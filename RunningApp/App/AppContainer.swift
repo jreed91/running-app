@@ -60,17 +60,17 @@ final class AppContainer: ObservableObject {
         self.workoutTrackerService = WorkoutTrackerService()
         self.notificationService = NotificationService.shared
         self.workoutAnalyticsService = WorkoutAnalyticsService()
-        self.routeGeniusService = RouteGeniusService(apiKey: RouteGeniusService.loadAPIKey())
+        self.routeGeniusService = RouteGeniusService()
     }
 
     // MARK: - Route Genius
 
     /// Creates a fresh ``RouteGeniusViewModel`` wired to the container's service and repository.
-    func makeRouteGeniusViewModel(unitPreference: UnitPreference) -> RouteGeniusViewModel {
+    func makeRouteGeniusViewModel(appSettings: AppSettings) -> RouteGeniusViewModel {
         RouteGeniusViewModel(
             service: routeGeniusService,
             repository: routeRepository,
-            unitPreference: unitPreference
+            appSettings: appSettings
         )
     }
 

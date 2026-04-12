@@ -89,9 +89,7 @@ struct PlanTabView: View {
             }
             .sheet(isPresented: $showRouteGenius) {
                 RouteGeniusView(
-                    viewModel: container.makeRouteGeniusViewModel(
-                        unitPreference: appSettings.unitPreference
-                    )
+                    viewModel: container.makeRouteGeniusViewModel(appSettings: appSettings)
                 )
             }
         }

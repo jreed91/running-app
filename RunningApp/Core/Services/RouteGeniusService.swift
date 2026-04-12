@@ -37,12 +37,10 @@ struct RouteGeniusService: Sendable {
 
     // MARK: Configuration
 
-    private let apiKey: String
     private let baseURL = "https://api.openrouteservice.org"
     private let session: URLSession
 
-    init(apiKey: String, session: URLSession = .shared) {
-        self.apiKey = apiKey
+    init(session: URLSession = .shared) {
         self.session = session
     }
 
@@ -54,19 +52,21 @@ struct RouteGeniusService: Sendable {
     ///   - start: Starting GPS coordinate.
     ///   - distanceMeters: Requested distance in metres (±10% tolerance).
     ///   - routeType: `.loop` or `.outAndBack`.
+    ///   - apiKey: OpenRouteService API token (set once in Settings → Route Genius).
     /// - Returns: A ``GeneratedRoute`` with decoded coordinates and turn-by-turn steps.
     func generateRoute(
         start: CLLocationCoordinate2D,
         distanceMeters: Double,
-        routeType: RouteType
+        routeType: RouteType,
+        apiKey: String
     ) async throws -> GeneratedRoute {
         guard !apiKey.isEmpty else { throw RouteError.missingAPIKey }
 
         switch routeType {
         case .loop:
-            return try await generateLoop(start: start, distanceMeters: distanceMeters)
+            return try await generateLoop(start: start, distanceMeters: distanceMeters, apiKey: apiKey)
         case .outAndBack:
-            return try await generateOutAndBack(start: start, distanceMeters: distanceMeters)
+            return try await generateOutAndBack(start: start, distanceMeters: distanceMeters, apiKey: apiKey)
         }
     }
 
@@ -74,7 +74,8 @@ struct RouteGeniusService: Sendable {
 
     private func generateLoop(
         start: CLLocationCoordinate2D,
-        distanceMeters: Double
+        distanceMeters: Double,
+        apiKey: String
     ) async throws -> GeneratedRoute {
         let body: [String: Any] = [
             "coordinates": [[start.longitude, start.latitude]],
@@ -86,14 +87,15 @@ struct RouteGeniusService: Sendable {
                 ]
             ]
         ]
-        return try await fetchRoute(body: body)
+        return try await fetchRoute(body: body, apiKey: apiKey)
     }
 
     // MARK: Out-and-back generation
 
     private func generateOutAndBack(
         start: CLLocationCoordinate2D,
-        distanceMeters: Double
+        distanceMeters: Double,
+        apiKey: String
     ) async throws -> GeneratedRoute {
         // Place the turnaround point at half the requested distance in a random bearing.
         let bearing = Double.random(in: 0..<360)
@@ -107,7 +109,7 @@ struct RouteGeniusService: Sendable {
         ]
 
         // Fetch the outward leg.
-        let outLeg = try await fetchRoute(body: body)
+        let outLeg = try await fetchRoute(body: body, apiKey: apiKey)
 
         // Build the return leg by reversing the outward coordinates.
         let returnCoords = Array(outLeg.coordinates.reversed())
@@ -131,7 +133,7 @@ struct RouteGeniusService: Sendable {
 
     // MARK: Network
 
-    private func fetchRoute(body: [String: Any]) async throws -> GeneratedRoute {
+    private func fetchRoute(body: [String: Any], apiKey: String) async throws -> GeneratedRoute {
         guard let url = URL(string: "\(baseURL)/v2/directions/foot-walking/json") else {
             throw RouteError.noRouteFound
         }
@@ -302,16 +304,3 @@ private struct ORSStep: Decodable {
     }
 }
 
-// MARK: - API key loader
-
-extension RouteGeniusService {
-    /// Reads the ORS API key from `Secrets.plist` in the main bundle.
-    static func loadAPIKey() -> String {
-        guard
-            let url = Bundle.main.url(forResource: "Secrets", withExtension: "plist"),
-            let dict = NSDictionary(contentsOf: url),
-            let key = dict["ORSAPIKey"] as? String
-        else { return "" }
-        return key
-    }
-}
