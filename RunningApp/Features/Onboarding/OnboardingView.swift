@@ -7,19 +7,22 @@ import HealthKit
 struct OnboardingView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.appContainer) private var container
+    @Environment(AppSettings.self) private var appSettings
 
     @State private var name = ""
     @State private var goalRace: RaceType = .fiveK
     @State private var fitnessLevel: FitnessLevel = .beginner
     @State private var weeklyRunDays = 3
-    @State private var goalMinutes = 25.0
+    @State private var goalPaceMinutes = 5
+    @State private var goalPaceSeconds = 30
     @State private var stepIndex = 0
     @State private var isCreatingPlan = false
     @State private var locationManager = CLLocationManager()
     @State private var visibleSteps: [OnboardingStep] = OnboardingStep.allCases
+    @FocusState private var isNameFocused: Bool
 
     private enum OnboardingStep: CaseIterable {
-        case name, goalRace, fitnessLevel, schedule, location, notifications, healthKit
+        case name, goalRace, goalPace, fitnessLevel, schedule, location, notifications, healthKit
     }
 
     var body: some View {
@@ -42,7 +45,7 @@ struct OnboardingView: View {
     // MARK: - Permission-aware step list
 
     private func buildVisibleSteps() async {
-        var steps: [OnboardingStep] = [.name, .goalRace, .fitnessLevel, .schedule]
+        var steps: [OnboardingStep] = [.name, .goalRace, .goalPace, .fitnessLevel, .schedule]
 
         if locationManager.authorizationStatus == .notDetermined {
             steps.append(.location)
@@ -68,7 +71,7 @@ struct OnboardingView: View {
         switch current {
         case .name:
             nextButton(enabled: !name.trimmingCharacters(in: .whitespaces).isEmpty)
-        case .goalRace, .fitnessLevel:
+        case .goalRace, .goalPace, .fitnessLevel:
             nextButton(enabled: true)
         case .schedule:
             nextButton(enabled: weeklyRunDays >= 2)
@@ -111,6 +114,7 @@ struct OnboardingView: View {
         switch step {
         case .name:       nameStep
         case .goalRace:   goalStep
+        case .goalPace:   goalPaceStep
         case .fitnessLevel: fitnessStep
         case .schedule:   scheduleStep
         case .location:   locationStep
@@ -127,16 +131,25 @@ struct OnboardingView: View {
             TextField("Runner name", text: $name)
                 .textFieldStyle(.roundedBorder)
                 .padding(.horizontal)
+                .focused($isNameFocused)
                 .submitLabel(.next)
                 .onSubmit {
                     if !name.trimmingCharacters(in: .whitespaces).isEmpty {
                         withAnimation { stepIndex += 1 }
                     }
                 }
+                .toolbar {
+                    ToolbarItemGroup(placement: .keyboard) {
+                        Spacer()
+                        Button("Done") { isNameFocused = false }
+                    }
+                }
             Spacer()
         }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .contentShape(Rectangle())
+        .onTapGesture { isNameFocused = false }
     }
 
     private var goalStep: some View {
@@ -149,6 +162,41 @@ struct OnboardingView: View {
             }
             .pickerStyle(.segmented)
             .padding(.horizontal)
+            Spacer()
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var goalPaceStep: some View {
+        let minutesRange = appSettings.unitPreference == .imperial ? 4...25 : 3...15
+        return VStack(spacing: 24) {
+            Spacer()
+            Text("What's your goal pace?")
+                .font(.metricMedium)
+            Text(appSettings.unitPreference.paceLabel)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            HStack(spacing: 0) {
+                Picker("Minutes", selection: $goalPaceMinutes) {
+                    ForEach(minutesRange, id: \.self) { Text("\($0)").tag($0) }
+                }
+                .pickerStyle(.wheel)
+                .frame(width: 80)
+                Text(":")
+                    .font(.title2.bold())
+                Picker("Seconds", selection: $goalPaceSeconds) {
+                    ForEach(stride(from: 0, through: 55, by: 5).map { $0 }, id: \.self) {
+                        Text(String(format: "%02d", $0)).tag($0)
+                    }
+                }
+                .pickerStyle(.wheel)
+                .frame(width: 80)
+                Text("/ \(appSettings.unitPreference.distanceLabel)")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, 8)
+            }
             Spacer()
         }
         .padding()
@@ -255,10 +303,16 @@ struct OnboardingView: View {
     }
 
     private func createProfileAndPlan() {
+        let paceSecondsRaw = Double(goalPaceMinutes * 60 + goalPaceSeconds)
+        let paceSecondsPerKm = appSettings.unitPreference == .imperial
+            ? paceSecondsRaw / 1.60934
+            : paceSecondsRaw
+        let distanceKm = goalRace.distanceMeters / 1_000
+        let goalFinishTime = paceSecondsPerKm * distanceKm
         let profile = UserProfile(
             name: name.trimmingCharacters(in: .whitespaces),
             goalRace: goalRace,
-            goalFinishTime: goalMinutes * 60,
+            goalFinishTime: goalFinishTime,
             weeklyRunDays: weeklyRunDays,
             fitnessLevel: fitnessLevel
         )
