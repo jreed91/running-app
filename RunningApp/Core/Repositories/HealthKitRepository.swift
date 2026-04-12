@@ -22,12 +22,21 @@ protocol HealthKitRepositoryProtocol: Sendable {
         to endDate: Date,
         existingIDs: Set<String>
     ) async throws -> [RunWorkout]
+    /// Enables HealthKit background delivery for running workouts at `.immediate` frequency.
+    /// Safe to call multiple times — HealthKit is idempotent.
+    func enableBackgroundDelivery() async throws
+    /// Registers a long-lived observer query that calls `handler` whenever new running
+    /// workouts are written to HealthKit. The handler is invoked on an arbitrary
+    /// background queue; callers are responsible for hopping to the appropriate actor.
+    func registerObserverQuery(handler: @escaping @Sendable () -> Void)
 }
 
 // MARK: - Live implementation
 
 final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendable {
     private let store = HKHealthStore()
+    // Retained so the observer is not deallocated after registration.
+    private var observerQuery: HKObserverQuery?
 
     private static let shareTypes: Set<HKSampleType> = [
         HKObjectType.workoutType(),
@@ -219,6 +228,29 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             blocks: blocks,
             cooldown: cooldown
         )
+    }
+
+    // MARK: - Background delivery & observer
+
+    func enableBackgroundDelivery() async throws {
+        guard isAvailable else { return }
+        try await store.enableBackgroundDelivery(for: .workoutType(), frequency: .immediate)
+    }
+
+    func registerObserverQuery(handler: @escaping @Sendable () -> Void) {
+        guard isAvailable else { return }
+        let predicate = HKQuery.predicateForWorkouts(with: .running)
+        let query = HKObserverQuery(
+            sampleType: .workoutType(),
+            predicate: predicate
+        ) { _, completionHandler, error in
+            // completionHandler must always be called so iOS doesn't penalise the app.
+            defer { completionHandler() }
+            guard error == nil else { return }
+            handler()
+        }
+        observerQuery = query
+        store.execute(query)
     }
 
     // MARK: - Historical workout fetch

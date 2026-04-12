@@ -28,6 +28,7 @@ final class AppContainer: ObservableObject {
     let notificationService: NotificationService
     let workoutAnalyticsService: WorkoutAnalyticsService
     let routeGeniusService: RouteGeniusService
+    let workoutSyncService: WorkoutSyncService
 
     // MARK: Init
 
@@ -53,14 +54,21 @@ final class AppContainer: ObservableObject {
         let context = container.mainContext
         self.workoutRepository = WorkoutRepository(context: context)
         self.planRepository = PlanRepository(context: context)
-        self.healthKitRepository = HealthKitRepository()
+        let hkRepository = HealthKitRepository()
+        self.healthKitRepository = hkRepository
         self.routeRepository = RouteRepository(context: context)
 
         self.trainingPlanService = TrainingPlanService()
         self.workoutTrackerService = WorkoutTrackerService()
-        self.notificationService = NotificationService.shared
+        let notifications = NotificationService.shared
+        self.notificationService = notifications
         self.workoutAnalyticsService = WorkoutAnalyticsService()
         self.routeGeniusService = RouteGeniusService()
+        self.workoutSyncService = WorkoutSyncService(
+            healthKitRepository: hkRepository,
+            notificationService: notifications,
+            context: context
+        )
     }
 
     // MARK: - Route Genius
