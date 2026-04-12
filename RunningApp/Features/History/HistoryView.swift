@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 
 struct HistoryView: View {
-    @Query(sort: \RunWorkout.date, order: .reverse)
+    @Query(sort: [SortDescriptor(\RunWorkout.date, order: .reverse)])
     private var allWorkouts: [RunWorkout]
 
     @Environment(\.modelContext) private var context
@@ -79,7 +79,7 @@ struct HistoryView: View {
         do {
             try await repo.requestAuthorization()
             let cutoff = Calendar.current.date(byAdding: .day, value: -60, to: Date()) ?? Date()
-            let existingIDs = Set(workouts.compactMap(\.healthKitWorkoutID))
+            let existingIDs = Set(allWorkouts.compactMap(\.healthKitWorkoutID))
             let newWorkouts = try await repo.fetchImportableWorkouts(
                 from: cutoff,
                 to: Date(),
