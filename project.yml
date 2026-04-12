@@ -79,7 +79,7 @@ targets:
 
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.jacobreedrunningapp.watchkitapp
+        PRODUCT_BUNDLE_IDENTIFIER: com.jacobreedrunningapp.watch
         PRODUCT_NAME: RunningApp Watch
         INFOPLIST_FILE: WatchApp/Info.plist
         TARGETED_DEVICE_FAMILY: "4"
