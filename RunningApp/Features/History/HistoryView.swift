@@ -2,23 +2,44 @@ import SwiftUI
 import SwiftData
 
 struct HistoryView: View {
-    @Query(sort: \RunWorkout.date, order: .reverse)
-    private var workouts: [RunWorkout]
+    @Query(sort: [SortDescriptor(\RunWorkout.date, order: .reverse)])
+    private var allWorkouts: [RunWorkout]
 
     @Environment(\.modelContext) private var context
     @Environment(\.appContainer) private var container
 
     @State private var isSyncing = false
+    @State private var displayLimit = 20
+
+    private let pageSize = 20
+
+    private var displayedWorkouts: [RunWorkout] {
+        Array(allWorkouts.prefix(displayLimit))
+    }
 
     var body: some View {
         NavigationStack {
             List {
-                ForEach(workouts) { workout in
+                ForEach(Array(displayedWorkouts.enumerated()), id: \.element.id) { index, workout in
                     NavigationLink {
                         RunSummaryView(workout: workout)
                     } label: {
                         WorkoutRowView(workout: workout)
                     }
+                    .onAppear {
+                        if index >= displayedWorkouts.count - 5 {
+                            displayLimit = min(displayLimit + pageSize, allWorkouts.count)
+                        }
+                    }
+                }
+
+                if displayedWorkouts.count < allWorkouts.count {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                        Spacer()
+                    }
+                    .listRowSeparator(.hidden)
                 }
             }
             .navigationTitle("History")
@@ -31,7 +52,7 @@ struct HistoryView: View {
                 }
             }
             .overlay {
-                if workouts.isEmpty && !isSyncing {
+                if allWorkouts.isEmpty && !isSyncing {
                     ContentUnavailableView(
                         "No runs yet",
                         systemImage: "figure.run.circle",
@@ -58,7 +79,7 @@ struct HistoryView: View {
         do {
             try await repo.requestAuthorization()
             let cutoff = Calendar.current.date(byAdding: .day, value: -60, to: Date()) ?? Date()
-            let existingIDs = Set(workouts.compactMap(\.healthKitWorkoutID))
+            let existingIDs = Set(allWorkouts.compactMap(\.healthKitWorkoutID))
             let newWorkouts = try await repo.fetchImportableWorkouts(
                 from: cutoff,
                 to: Date(),

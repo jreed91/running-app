@@ -69,19 +69,26 @@ struct TrainingPlanService {
     /// Maps each week index to a `TrainingPhase`.
     ///
     /// Layout:
-    /// - 5K  (8–12 w): Base 40% | Build 30% | Peak 20% | Taper 10%
-    /// - HM (12–20 w): Base 40% | Build 35% | Peak 15% | Taper 10%
+    /// - 5K     (8–12 w):  Base 40% | Build 30% | Peak 20% | Taper 10%
+    /// - HM    (12–20 w):  Base 40% | Build 35% | Peak 15% | Taper 10%
+    /// - Marathon (16–24 w): Base 40% | Build 30% | Peak 18% | Taper 12%
     private func phaseSchedule(totalWeeks: Int, raceType: RaceType) -> [TrainingPhase] {
-        let taperWeeks = max(1, Int(Double(totalWeeks) * 0.10))
+        let taperWeeks: Int
         let peakWeeks: Int
         let buildWeeks: Int
         switch raceType {
         case .fiveK:
+            taperWeeks = max(1, Int(Double(totalWeeks) * 0.10))
             peakWeeks  = max(1, Int(Double(totalWeeks) * 0.20))
             buildWeeks = max(1, Int(Double(totalWeeks) * 0.30))
         case .halfMarathon:
+            taperWeeks = max(1, Int(Double(totalWeeks) * 0.10))
             peakWeeks  = max(1, Int(Double(totalWeeks) * 0.15))
             buildWeeks = max(1, Int(Double(totalWeeks) * 0.35))
+        case .marathon:
+            taperWeeks = max(2, Int(Double(totalWeeks) * 0.12))
+            peakWeeks  = max(2, Int(Double(totalWeeks) * 0.18))
+            buildWeeks = max(1, Int(Double(totalWeeks) * 0.30))
         }
         let baseWeeks = totalWeeks - taperWeeks - peakWeeks - buildWeeks
 
@@ -247,12 +254,14 @@ struct TrainingPlanService {
 
     private func weekQualityTypes(phase: TrainingPhase, raceType: RaceType) -> [WorkoutType] {
         switch (phase, raceType) {
-        case (.base, _):           return [.tempo]
-        case (.build, .fiveK):    return [.interval, .tempo]
-        case (.build, .halfMarathon): return [.tempo, .interval]
-        case (.peak, _):           return [.interval, .tempo]
-        case (.taper, _):          return [.tempo]
-        default:                   return []
+        case (.base, _):                  return [.tempo]
+        case (.build, .fiveK):            return [.interval, .tempo]
+        case (.build, .halfMarathon):     return [.tempo, .interval]
+        case (.build, .marathon):         return [.tempo, .tempo]
+        case (.peak, .marathon):          return [.tempo, .interval]
+        case (.peak, _):                  return [.interval, .tempo]
+        case (.taper, _):                 return [.tempo]
+        default:                          return []
         }
     }
 
@@ -278,6 +287,16 @@ struct TrainingPlanService {
                 recoverySeconds: 90,
                 recoveryType: .jog
             )]
+        case .marathon:
+            // 4 × 1200 m @ interval pace, 2 min jog recovery
+            return [WorkoutInterval(
+                repetitions: 4,
+                distanceMeters: 1_200,
+                durationSeconds: nil,
+                targetPaceSecondsPerKm: paces.interval,
+                recoverySeconds: 120,
+                recoveryType: .jog
+            )]
         }
     }
 
@@ -287,6 +306,8 @@ struct TrainingPlanService {
             return "6 × 800 m @ interval pace with 90 s jog recovery. Hard but controlled."
         case .halfMarathon:
             return "5 × 1000 m @ interval pace with 90 s jog recovery."
+        case .marathon:
+            return "4 × 1200 m @ interval pace with 2 min jog recovery."
         }
     }
 }
