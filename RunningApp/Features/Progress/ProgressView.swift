@@ -12,6 +12,14 @@ struct ProgressDashboardView: View {
     @Environment(AppSettings.self) private var appSettings
     @State private var selectedRange: ChartRange = .threeMonths
 
+    // Chart selection state
+    @State private var selectedVolumeDate: Date? = nil
+    @State private var selectedPaceDate: Date? = nil
+    @State private var selectedPredictionDate: Date? = nil
+    @State private var selectedHRDate: Date? = nil
+    @State private var selectedElevationDate: Date? = nil
+    @State private var selectedVO2Date: Date? = nil
+
     enum ChartRange: String, CaseIterable {
         case month = "1M"
         case threeMonths = "3M"
@@ -74,6 +82,14 @@ struct ProgressDashboardView: View {
             }
             .navigationTitle("Progress")
         }
+        .onChange(of: selectedRange) {
+            selectedVolumeDate = nil
+            selectedPaceDate = nil
+            selectedPredictionDate = nil
+            selectedHRDate = nil
+            selectedElevationDate = nil
+            selectedVO2Date = nil
+        }
     }
 
     // MARK: Range picker
@@ -90,12 +106,32 @@ struct ProgressDashboardView: View {
     private var weeklyVolumeChart: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("WEEKLY VOLUME").font(.sectionHeader).foregroundStyle(.secondary)
-            Chart(weeklyBuckets, id: \.week) { bucket in
-                BarMark(
-                    x: .value("Week", bucket.week, unit: .weekOfYear),
-                    y: .value(appSettings.unitPreference.distanceLabel, bucket.distanceValue)
-                )
-                .foregroundStyle(.brand)
+            Chart {
+                ForEach(weeklyBuckets, id: \.week) { bucket in
+                    BarMark(
+                        x: .value("Week", bucket.week, unit: .weekOfYear),
+                        y: .value(appSettings.unitPreference.distanceLabel, bucket.distanceValue)
+                    )
+                    .foregroundStyle(.brand)
+                }
+                if let selected = selectedVolumeDate, let bucket = closestWeekBucket(to: selected) {
+                    RuleMark(x: .value("Week", bucket.week))
+                        .foregroundStyle(.secondary.opacity(0.4))
+                        .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
+                        .annotation(
+                            position: .top,
+                            overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
+                        ) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(bucket.week, format: .dateTime.month(.abbreviated).day())
+                                    .font(.caption2).foregroundStyle(.secondary)
+                                Text(String(format: "%.1f %@", bucket.distanceValue, appSettings.unitPreference.distanceLabel))
+                                    .font(.caption).bold()
+                            }
+                            .padding(.horizontal, 8).padding(.vertical, 5)
+                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                        }
+                }
             }
             .frame(height: 160)
             .chartXAxis {
@@ -103,25 +139,51 @@ struct ProgressDashboardView: View {
                     AxisValueLabel(format: .dateTime.month(.abbreviated))
                 }
             }
+            .chartXSelection(value: $selectedVolumeDate)
         }
     }
 
     // MARK: Pace trend chart
 
     private var paceProgressChart: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let paceWorkouts = filteredWorkouts.filter { $0.averagePaceSecondsPerKm > 0 }
+        return VStack(alignment: .leading, spacing: 8) {
             Text("AVERAGE PACE").font(.sectionHeader).foregroundStyle(.secondary)
-            Chart(filteredWorkouts.filter { $0.averagePaceSecondsPerKm > 0 }) { workout in
-                LineMark(
-                    x: .value("Date", workout.date),
-                    y: .value("sec/km", workout.averagePaceSecondsPerKm)
-                )
-                .foregroundStyle(.brand)
-                PointMark(
-                    x: .value("Date", workout.date),
-                    y: .value("sec/km", workout.averagePaceSecondsPerKm)
-                )
-                .foregroundStyle(.brand)
+            Chart {
+                ForEach(paceWorkouts) { workout in
+                    LineMark(
+                        x: .value("Date", workout.date),
+                        y: .value("sec/km", workout.averagePaceSecondsPerKm)
+                    )
+                    .foregroundStyle(.brand)
+                    PointMark(
+                        x: .value("Date", workout.date),
+                        y: .value("sec/km", workout.averagePaceSecondsPerKm)
+                    )
+                    .foregroundStyle(.brand)
+                    .symbolSize(
+                        selectedPaceDate.flatMap { closestWorkout(to: $0, in: paceWorkouts) }?.id == workout.id ? 80 : 36
+                    )
+                }
+                if let selected = selectedPaceDate,
+                   let workout = closestWorkout(to: selected, in: paceWorkouts) {
+                    RuleMark(x: .value("Date", workout.date))
+                        .foregroundStyle(.secondary.opacity(0.4))
+                        .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
+                        .annotation(
+                            position: .top,
+                            overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
+                        ) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(workout.date, format: .dateTime.month(.abbreviated).day())
+                                    .font(.caption2).foregroundStyle(.secondary)
+                                Text(workout.averagePaceSecondsPerKm.paceString(unit: appSettings.unitPreference))
+                                    .font(.caption).bold()
+                            }
+                            .padding(.horizontal, 8).padding(.vertical, 5)
+                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                        }
+                }
             }
             .frame(height: 140)
             .chartYAxis {
@@ -134,6 +196,7 @@ struct ProgressDashboardView: View {
                     }
                 }
             }
+            .chartXSelection(value: $selectedPaceDate)
             Text("Lower = faster")
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -152,18 +215,42 @@ struct ProgressDashboardView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 8)
             } else {
-                Chart(pacePredictionPoints) { point in
-                    LineMark(
-                        x: .value("Date", point.date),
-                        y: .value("Predicted Pace", point.predictedPaceSecondsPerKm)
-                    )
-                    .foregroundStyle(.brand)
-                    .interpolationMethod(.catmullRom)
-                    PointMark(
-                        x: .value("Date", point.date),
-                        y: .value("Predicted Pace", point.predictedPaceSecondsPerKm)
-                    )
-                    .foregroundStyle(.brand)
+                Chart {
+                    ForEach(pacePredictionPoints) { point in
+                        LineMark(
+                            x: .value("Date", point.date),
+                            y: .value("Predicted Pace", point.predictedPaceSecondsPerKm)
+                        )
+                        .foregroundStyle(.brand)
+                        .interpolationMethod(.catmullRom)
+                        PointMark(
+                            x: .value("Date", point.date),
+                            y: .value("Predicted Pace", point.predictedPaceSecondsPerKm)
+                        )
+                        .foregroundStyle(.brand)
+                        .symbolSize(
+                            selectedPredictionDate.flatMap { closestPredictionPoint(to: $0) }?.id == point.id ? 80 : 36
+                        )
+                    }
+                    if let selected = selectedPredictionDate,
+                       let point = closestPredictionPoint(to: selected) {
+                        RuleMark(x: .value("Date", point.date))
+                            .foregroundStyle(.secondary.opacity(0.4))
+                            .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
+                            .annotation(
+                                position: .top,
+                                overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
+                            ) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(point.date, format: .dateTime.month(.abbreviated).day())
+                                        .font(.caption2).foregroundStyle(.secondary)
+                                    Text(point.predictedPaceSecondsPerKm.paceString(unit: appSettings.unitPreference))
+                                        .font(.caption).bold()
+                                }
+                                .padding(.horizontal, 8).padding(.vertical, 5)
+                                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                            }
+                    }
                 }
                 .frame(height: 140)
                 .chartYScale(domain: .automatic(includesZero: false))
@@ -182,6 +269,7 @@ struct ProgressDashboardView: View {
                         AxisValueLabel(format: .dateTime.month(.abbreviated))
                     }
                 }
+                .chartXSelection(value: $selectedPredictionDate)
                 Text("Lower = faster")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -228,17 +316,42 @@ struct ProgressDashboardView: View {
             if withHR.isEmpty {
                 emptyDataPlaceholder("No heart rate data in this period")
             } else {
-                Chart(withHR) { workout in
-                    LineMark(
-                        x: .value("Date", workout.date),
-                        y: .value("bpm", workout.averageHeartRate ?? 0)
-                    )
-                    .foregroundStyle(.zoneInterval)
-                    PointMark(
-                        x: .value("Date", workout.date),
-                        y: .value("bpm", workout.averageHeartRate ?? 0)
-                    )
-                    .foregroundStyle(.zoneInterval)
+                Chart {
+                    ForEach(withHR) { workout in
+                        LineMark(
+                            x: .value("Date", workout.date),
+                            y: .value("bpm", workout.averageHeartRate ?? 0)
+                        )
+                        .foregroundStyle(.zoneInterval)
+                        PointMark(
+                            x: .value("Date", workout.date),
+                            y: .value("bpm", workout.averageHeartRate ?? 0)
+                        )
+                        .foregroundStyle(.zoneInterval)
+                        .symbolSize(
+                            selectedHRDate.flatMap { closestWorkout(to: $0, in: withHR) }?.id == workout.id ? 80 : 36
+                        )
+                    }
+                    if let selected = selectedHRDate,
+                       let workout = closestWorkout(to: selected, in: withHR),
+                       let hr = workout.averageHeartRate {
+                        RuleMark(x: .value("Date", workout.date))
+                            .foregroundStyle(.secondary.opacity(0.4))
+                            .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
+                            .annotation(
+                                position: .top,
+                                overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
+                            ) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(workout.date, format: .dateTime.month(.abbreviated).day())
+                                        .font(.caption2).foregroundStyle(.secondary)
+                                    Text("\(Int(hr)) bpm")
+                                        .font(.caption).bold()
+                                }
+                                .padding(.horizontal, 8).padding(.vertical, 5)
+                                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                            }
+                    }
                 }
                 .frame(height: 140)
                 .chartXAxis {
@@ -247,6 +360,7 @@ struct ProgressDashboardView: View {
                     }
                 }
                 .chartYAxisLabel("bpm")
+                .chartXSelection(value: $selectedHRDate)
             }
         }
     }
@@ -260,12 +374,34 @@ struct ProgressDashboardView: View {
             if withElev.isEmpty {
                 emptyDataPlaceholder("No elevation data in this period")
             } else {
-                Chart(withElev) { workout in
-                    BarMark(
-                        x: .value("Date", workout.date, unit: .day),
-                        y: .value(elevationUnit, elevationDisplay(workout.elevationGainMeters ?? 0))
-                    )
-                    .foregroundStyle(Color.success)
+                Chart {
+                    ForEach(withElev) { workout in
+                        BarMark(
+                            x: .value("Date", workout.date, unit: .day),
+                            y: .value(elevationUnit, elevationDisplay(workout.elevationGainMeters ?? 0))
+                        )
+                        .foregroundStyle(Color.success)
+                    }
+                    if let selected = selectedElevationDate,
+                       let workout = closestWorkout(to: selected, in: withElev),
+                       let gain = workout.elevationGainMeters {
+                        RuleMark(x: .value("Date", workout.date))
+                            .foregroundStyle(.secondary.opacity(0.4))
+                            .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
+                            .annotation(
+                                position: .top,
+                                overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
+                            ) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(workout.date, format: .dateTime.month(.abbreviated).day())
+                                        .font(.caption2).foregroundStyle(.secondary)
+                                    Text(String(format: "+%.0f %@", elevationDisplay(gain), elevationUnit))
+                                        .font(.caption).bold()
+                                }
+                                .padding(.horizontal, 8).padding(.vertical, 5)
+                                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                            }
+                    }
                 }
                 .frame(height: 140)
                 .chartXAxis {
@@ -274,6 +410,7 @@ struct ProgressDashboardView: View {
                     }
                 }
                 .chartYAxisLabel(elevationUnit)
+                .chartXSelection(value: $selectedElevationDate)
             }
         }
     }
@@ -286,17 +423,41 @@ struct ProgressDashboardView: View {
             if vo2Points.isEmpty {
                 emptyDataPlaceholder("Not enough run data in this period")
             } else {
-                Chart(vo2Points) { point in
-                    LineMark(
-                        x: .value("Date", point.date),
-                        y: .value("VDOT", point.vdot)
-                    )
-                    .foregroundStyle(.brandSecondary)
-                    PointMark(
-                        x: .value("Date", point.date),
-                        y: .value("VDOT", point.vdot)
-                    )
-                    .foregroundStyle(.brandSecondary)
+                Chart {
+                    ForEach(vo2Points) { point in
+                        LineMark(
+                            x: .value("Date", point.date),
+                            y: .value("VDOT", point.vdot)
+                        )
+                        .foregroundStyle(.brandSecondary)
+                        PointMark(
+                            x: .value("Date", point.date),
+                            y: .value("VDOT", point.vdot)
+                        )
+                        .foregroundStyle(.brandSecondary)
+                        .symbolSize(
+                            selectedVO2Date.flatMap { closestVO2Point(to: $0) }?.id == point.id ? 80 : 36
+                        )
+                    }
+                    if let selected = selectedVO2Date,
+                       let point = closestVO2Point(to: selected) {
+                        RuleMark(x: .value("Date", point.date))
+                            .foregroundStyle(.secondary.opacity(0.4))
+                            .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
+                            .annotation(
+                                position: .top,
+                                overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
+                            ) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(point.date, format: .dateTime.month(.abbreviated).day())
+                                        .font(.caption2).foregroundStyle(.secondary)
+                                    Text(String(format: "%.1f VDOT", point.vdot))
+                                        .font(.caption).bold()
+                                }
+                                .padding(.horizontal, 8).padding(.vertical, 5)
+                                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                            }
+                    }
                 }
                 .frame(height: 140)
                 .chartXAxis {
@@ -304,6 +465,7 @@ struct ProgressDashboardView: View {
                         AxisValueLabel(format: .dateTime.month(.abbreviated))
                     }
                 }
+                .chartXSelection(value: $selectedVO2Date)
                 Text("Higher = better fitness")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -422,6 +584,26 @@ struct ProgressDashboardView: View {
         else { return "--:--" }
         return (pace * (raceDistance / 1_000)).durationString
     }
+
+    // MARK: Selection helpers
+
+    private func closestWorkout(to date: Date, in list: [RunWorkout]) -> RunWorkout? {
+        list.min(by: { abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date)) })
+    }
+
+    private func closestWeekBucket(to date: Date) -> WeekBucket? {
+        weeklyBuckets.min(by: { abs($0.week.timeIntervalSince(date)) < abs($1.week.timeIntervalSince(date)) })
+    }
+
+    private func closestPredictionPoint(to date: Date) -> PacePredictionPoint? {
+        pacePredictionPoints.min(by: { abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date)) })
+    }
+
+    private func closestVO2Point(to date: Date) -> VO2Point? {
+        vo2Points.min(by: { abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date)) })
+    }
+
+    // MARK: Weekly buckets
 
     private struct WeekBucket: Identifiable {
         let id = UUID()
