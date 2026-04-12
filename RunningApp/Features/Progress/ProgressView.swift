@@ -28,9 +28,31 @@ struct ProgressDashboardView: View {
         }
     }
 
+    private struct VO2Point: Identifiable {
+        let id = UUID()
+        let date: Date
+        let vdot: Double
+    }
+
     private var filteredWorkouts: [RunWorkout] {
         let cutoff = Date().addingTimeInterval(-Double(selectedRange.days) * 86_400)
         return workouts.filter { $0.date >= cutoff }
+    }
+
+    private var vo2Points: [VO2Point] {
+        filteredWorkouts.compactMap { w in
+            guard w.distanceMeters >= 400, w.durationSeconds > 0 else { return nil }
+            let v = PaceCalculatorService.vdot(distanceMeters: w.distanceMeters, timeSeconds: w.durationSeconds)
+            return v > 0 ? VO2Point(date: w.date, vdot: v) : nil
+        }
+    }
+
+    private var elevationUnit: String {
+        appSettings.unitPreference == .metric ? "m" : "ft"
+    }
+
+    private func elevationDisplay(_ meters: Double) -> Double {
+        appSettings.unitPreference == .metric ? meters : meters * 3.28084
     }
 
     var body: some View {
@@ -42,6 +64,9 @@ struct ProgressDashboardView: View {
                     paceProgressChart
                     racePacePredictionChart
                     racePaceSummaryCard
+                    heartRateTrendChart
+                    elevationTrendChart
+                    vo2MaxTrendChart
                     totalStatsSummary
                 }
                 .padding()
@@ -194,6 +219,98 @@ struct ProgressDashboardView: View {
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
     }
 
+    // MARK: Heart rate trend chart
+
+    private var heartRateTrendChart: some View {
+        let withHR = filteredWorkouts.filter { $0.averageHeartRate != nil }
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("AVERAGE HEART RATE").font(.sectionHeader).foregroundStyle(.secondary)
+            if withHR.isEmpty {
+                emptyDataPlaceholder("No heart rate data in this period")
+            } else {
+                Chart(withHR) { workout in
+                    LineMark(
+                        x: .value("Date", workout.date),
+                        y: .value("bpm", workout.averageHeartRate ?? 0)
+                    )
+                    .foregroundStyle(.zoneInterval)
+                    PointMark(
+                        x: .value("Date", workout.date),
+                        y: .value("bpm", workout.averageHeartRate ?? 0)
+                    )
+                    .foregroundStyle(.zoneInterval)
+                }
+                .frame(height: 140)
+                .chartXAxis {
+                    AxisMarks(values: .stride(by: .month)) {
+                        AxisValueLabel(format: .dateTime.month(.abbreviated))
+                    }
+                }
+                .chartYAxisLabel("bpm")
+            }
+        }
+    }
+
+    // MARK: Elevation trend chart
+
+    private var elevationTrendChart: some View {
+        let withElev = filteredWorkouts.filter { ($0.elevationGainMeters ?? 0) > 0 }
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("ELEVATION GAIN").font(.sectionHeader).foregroundStyle(.secondary)
+            if withElev.isEmpty {
+                emptyDataPlaceholder("No elevation data in this period")
+            } else {
+                Chart(withElev) { workout in
+                    BarMark(
+                        x: .value("Date", workout.date, unit: .day),
+                        y: .value(elevationUnit, elevationDisplay(workout.elevationGainMeters ?? 0))
+                    )
+                    .foregroundStyle(Color.success)
+                }
+                .frame(height: 140)
+                .chartXAxis {
+                    AxisMarks(values: .stride(by: .month)) {
+                        AxisValueLabel(format: .dateTime.month(.abbreviated))
+                    }
+                }
+                .chartYAxisLabel(elevationUnit)
+            }
+        }
+    }
+
+    // MARK: VO₂ max trend chart
+
+    private var vo2MaxTrendChart: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("ESTIMATED VO₂ MAX").font(.sectionHeader).foregroundStyle(.secondary)
+            if vo2Points.isEmpty {
+                emptyDataPlaceholder("Not enough run data in this period")
+            } else {
+                Chart(vo2Points) { point in
+                    LineMark(
+                        x: .value("Date", point.date),
+                        y: .value("VDOT", point.vdot)
+                    )
+                    .foregroundStyle(.brandSecondary)
+                    PointMark(
+                        x: .value("Date", point.date),
+                        y: .value("VDOT", point.vdot)
+                    )
+                    .foregroundStyle(.brandSecondary)
+                }
+                .frame(height: 140)
+                .chartXAxis {
+                    AxisMarks(values: .stride(by: .month)) {
+                        AxisValueLabel(format: .dateTime.month(.abbreviated))
+                    }
+                }
+                Text("Higher = better fitness")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
     // MARK: Summary stats
 
     private var totalStatsSummary: some View {
@@ -202,12 +319,37 @@ struct ProgressDashboardView: View {
         let avgPace = runs.isEmpty ? 0
             : runs.reduce(0) { $0 + $1.averagePaceSecondsPerKm } / Double(runs.count)
 
-        return LazyVGrid(columns: [.init(.flexible()), .init(.flexible()), .init(.flexible())], spacing: 16) {
+        let hrValues = runs.compactMap(\.averageHeartRate)
+        let avgHR: Double? = hrValues.isEmpty ? nil : hrValues.reduce(0, +) / Double(hrValues.count)
+
+        let elevValues = runs.compactMap(\.elevationGainMeters).filter { $0 > 0 }
+        let avgElev: Double? = elevValues.isEmpty ? nil : elevValues.reduce(0, +) / Double(elevValues.count)
+
+        let avgVO2: Double? = vo2Points.isEmpty ? nil
+            : vo2Points.reduce(0) { $0 + $1.vdot } / Double(vo2Points.count)
+
+        return LazyVGrid(columns: [.init(.flexible()), .init(.flexible())], spacing: 16) {
             summaryCell(value: "\(runs.count)", label: "Runs")
-            summaryCell(value: totalMeters.distanceString(unit: appSettings.unitPreference), label: "Distance")
+            summaryCell(value: totalMeters.distanceString(unit: appSettings.unitPreference), label: "Total Distance")
             summaryCell(
                 value: avgPace > 0 ? avgPace.paceString(unit: appSettings.unitPreference) : "--",
                 label: "Avg Pace"
+            )
+            summaryCell(
+                value: avgHR.map { "\(Int($0)) bpm" } ?? "--",
+                label: "Avg Heart Rate"
+            )
+            summaryCell(
+                value: avgElev.map {
+                    appSettings.unitPreference == .metric
+                        ? String(format: "%.0f m", $0)
+                        : String(format: "%.0f ft", $0 * 3.28084)
+                } ?? "--",
+                label: "Avg Elevation"
+            )
+            summaryCell(
+                value: avgVO2.map { String(format: "%.1f", $0) } ?? "--",
+                label: "Avg VO₂ Max"
             )
         }
     }
@@ -220,6 +362,14 @@ struct ProgressDashboardView: View {
         .frame(maxWidth: .infinity)
         .padding()
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func emptyDataPlaceholder(_ message: String) -> some View {
+        Text(message)
+            .font(.bodyRegular)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .frame(height: 60)
     }
 
     // MARK: Data helpers
