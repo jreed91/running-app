@@ -22,7 +22,8 @@ struct OnboardingView: View {
             fitnessStep.tag(2)
             scheduleStep.tag(3)
             locationStep.tag(4)
-            healthKitStep.tag(5)
+            notificationsStep.tag(5)
+            healthKitStep.tag(6)
         }
         .tabViewStyle(.page(indexDisplayMode: .always))
         .animation(.easeInOut, value: step)
@@ -132,6 +133,35 @@ struct OnboardingView: View {
             Button("Enable Location") {
                 locationManager.requestWhenInUseAuthorization()
                 withAnimation { step += 1 }
+            }
+            .buttonStyle(.borderedProminent)
+            .frame(maxWidth: .infinity)
+            .padding()
+        }
+    }
+
+    private var notificationsStep: some View {
+        VStack(spacing: 24) {
+            Spacer()
+            Image(systemName: "bell.fill")
+                .font(.system(size: 56))
+                .foregroundStyle(.orange)
+            Text("Stay on Track")
+                .font(.metricMedium)
+            Text("Get reminders before each scheduled workout so you never miss a training session.")
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal)
+            Spacer()
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .safeAreaInset(edge: .bottom) {
+            Button("Enable Notifications") {
+                Task {
+                    try? await NotificationService.shared.requestAuthorization()
+                    withAnimation { step += 1 }
+                }
             }
             .buttonStyle(.borderedProminent)
             .frame(maxWidth: .infinity)
