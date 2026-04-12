@@ -48,8 +48,6 @@ targets:
       path: RunningApp/Resources/RunningApp.entitlements
       properties:
         com.apple.developer.healthkit: true
-        com.apple.developer.healthkit.access:
-          - health-records
 
     info:
       path: RunningApp/Resources/Info.plist
