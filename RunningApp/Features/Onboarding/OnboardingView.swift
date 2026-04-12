@@ -23,7 +23,7 @@ struct OnboardingView: View {
 
     private enum OnboardingStep: CaseIterable {
         case name, unitPreference, goalRace, goalPace, fitnessLevel, schedule,
-             location, locationWaiting, notifications, notificationsWaiting, healthKit
+             location, locationWaiting, notifications, notificationsWaiting, healthKit, finish
     }
 
     var body: some View {
@@ -59,9 +59,17 @@ struct OnboardingView: View {
             steps.append(.notificationsWaiting)
         }
 
-        // HealthKit step is always last — it triggers plan creation.
-        // requestAuthorization is a no-op if the user has already responded.
-        steps.append(.healthKit)
+        // Only ask for HealthKit if the user hasn't already granted access.
+        if HKHealthStore.isHealthDataAvailable() {
+            let hkStore = HKHealthStore()
+            let status = hkStore.authorizationStatus(for: HKObjectType.workoutType())
+            if status != .sharingAuthorized {
+                steps.append(.healthKit)
+            }
+        }
+
+        // Finish step is always last — it triggers plan creation.
+        steps.append(.finish)
 
         visibleSteps = steps
     }
@@ -107,7 +115,18 @@ struct OnboardingView: View {
             .buttonStyle(.borderedProminent)
         case .healthKit:
             Button {
-                Task { await requestHealthKitThenCreatePlan() }
+                Task {
+                    try? await container.healthKitRepository.requestAuthorization()
+                    withAnimation { stepIndex += 1 }
+                }
+            } label: {
+                Text("Connect Health").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+        case .finish:
+            Button {
+                isCreatingPlan = true
+                createProfileAndPlan()
             } label: {
                 Group {
                     if isCreatingPlan { ProgressView() } else { Text("Start Training") }
@@ -135,6 +154,7 @@ struct OnboardingView: View {
         case .notifications:        notificationsStep
         case .notificationsWaiting: notificationsWaitingStep
         case .healthKit:            healthKitStep
+        case .finish:               finishStep
         }
     }
 
@@ -363,6 +383,24 @@ struct OnboardingView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    private var finishStep: some View {
+        VStack(spacing: 24) {
+            Spacer()
+            Image(systemName: "figure.run")
+                .font(.system(size: 56))
+                .foregroundStyle(.green)
+            Text("You're all set!")
+                .font(.metricMedium)
+            Text("Your personalised training plan is ready. Time to start running.")
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal)
+            Spacer()
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
     private func nextButton(enabled: Bool) -> some View {
         Button { withAnimation { stepIndex += 1 } } label: {
             Text("Next").frame(maxWidth: .infinity)
@@ -372,12 +410,6 @@ struct OnboardingView: View {
     }
 
     // MARK: - Actions
-
-    private func requestHealthKitThenCreatePlan() async {
-        isCreatingPlan = true
-        try? await container.healthKitRepository.requestAuthorization()
-        createProfileAndPlan()
-    }
 
     private func createProfileAndPlan() {
         let paceSecondsRaw = Double(goalPaceMinutes * 60 + goalPaceSeconds)
