@@ -11,10 +11,25 @@ final class AppSettings {
         }
     }
 
+    var iCloudSyncEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(iCloudSyncEnabled, forKey: Self.iCloudSyncKey)
+        }
+    }
+
     private static let unitPreferenceKey = "unitPreference"
+    // Internal so AppContainer can read the same key before AppSettings is created.
+    static let iCloudSyncKey = "iCloudSyncEnabled"
 
     init() {
         let raw = UserDefaults.standard.string(forKey: Self.unitPreferenceKey) ?? ""
         self.unitPreference = UnitPreference(rawValue: raw) ?? .metric
+
+        // Default to true (sync on) when the key has never been set.
+        if UserDefaults.standard.object(forKey: Self.iCloudSyncKey) != nil {
+            self.iCloudSyncEnabled = UserDefaults.standard.bool(forKey: Self.iCloudSyncKey)
+        } else {
+            self.iCloudSyncEnabled = true
+        }
     }
 }

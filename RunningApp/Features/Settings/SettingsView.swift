@@ -7,6 +7,7 @@ struct SettingsView: View {
     @Query private var profiles: [UserProfile]
 
     @State private var showResetConfirmation = false
+    @State private var showSyncRestartNote = false
     #if DEBUG
     @Query(
         filter: #Predicate<TrainingPlan> { $0.isActive },
@@ -26,6 +27,7 @@ struct SettingsView: View {
                     profileSection(profile: profile)
                 }
                 unitsSection
+                iCloudSection
                 appleHealthSection
                 notificationsSection
                 aboutSection
@@ -67,6 +69,25 @@ struct SettingsView: View {
                 }
             }
             .pickerStyle(.segmented)
+        }
+    }
+
+    private var iCloudSection: some View {
+        Section {
+            Toggle("iCloud Sync", isOn: Bindable(appSettings).iCloudSyncEnabled)
+                .tint(.blue)
+                .onChange(of: appSettings.iCloudSyncEnabled) { _, _ in
+                    showSyncRestartNote = true
+                }
+            if showSyncRestartNote {
+                Text("Restart the app for this change to take effect.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        } header: {
+            Text("iCloud")
+        } footer: {
+            Text("When enabled, workouts and training plans sync across all your devices signed into the same iCloud account.")
         }
     }
 

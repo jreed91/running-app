@@ -13,6 +13,7 @@ struct OnboardingView: View {
     @State private var goalMinutes = 25.0
     @State private var step = 0
     @State private var isCreatingPlan = false
+    @State private var iCloudSyncEnabled = true
     @State private var locationManager = CLLocationManager()
 
     var body: some View {
@@ -23,6 +24,7 @@ struct OnboardingView: View {
             scheduleStep.tag(3)
             locationStep.tag(4)
             healthKitStep.tag(5)
+            iCloudSyncStep.tag(6)
         }
         .tabViewStyle(.page(indexDisplayMode: .always))
         .animation(.easeInOut, value: step)
@@ -130,8 +132,40 @@ struct OnboardingView: View {
                 .foregroundStyle(.secondary)
                 .padding(.horizontal)
             Spacer()
+            Button("Enable Health Access") {
+                Task { try? await container.healthKitRepository.requestAuthorization() }
+                withAnimation { step += 1 }
+            }
+            .buttonStyle(.borderedProminent)
+            Button("Skip") {
+                withAnimation { step += 1 }
+            }
+            .foregroundStyle(.secondary)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var iCloudSyncStep: some View {
+        VStack(spacing: 24) {
+            Spacer()
+            Image(systemName: "icloud.fill")
+                .font(.system(size: 56))
+                .foregroundStyle(.blue)
+            Text("iCloud Sync")
+                .font(.metricMedium)
+            Text("Keep your workouts and training plans up to date across all your iPhone and iPad devices automatically.")
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal)
+            Toggle("Sync with iCloud", isOn: $iCloudSyncEnabled)
+                .padding(.horizontal)
+                .tint(.blue)
+            Spacer()
             Button {
-                Task { await requestHealthKitThenCreatePlan() }
+                UserDefaults.standard.set(iCloudSyncEnabled, forKey: AppSettings.iCloudSyncKey)
+                isCreatingPlan = true
+                createProfileAndPlan()
             } label: {
                 Group {
                     if isCreatingPlan {
@@ -156,13 +190,6 @@ struct OnboardingView: View {
     }
 
     // MARK: Actions
-
-    private func requestHealthKitThenCreatePlan() async {
-        isCreatingPlan = true
-        // Request HealthKit access; proceed regardless of whether it's granted
-        try? await container.healthKitRepository.requestAuthorization()
-        createProfileAndPlan()
-    }
 
     private func createProfileAndPlan() {
         let profile = UserProfile(
