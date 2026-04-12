@@ -52,7 +52,7 @@ struct SettingsView: View {
                 Button("Delete everything", role: .destructive) { resetAll() }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("This removes your profile, all workouts, and training plans.")
+                Text("This removes your profile, all workouts, training plans, and saved routes.")
             }
         }
     }
@@ -257,6 +257,7 @@ struct SettingsView: View {
         try? context.delete(model: RunWorkout.self)
         try? context.delete(model: TrainingPlan.self)
         try? context.delete(model: UserProfile.self)
+        try? context.delete(model: SavedRoute.self)
         try? context.save()
     }
 }
