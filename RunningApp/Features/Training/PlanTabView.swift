@@ -235,11 +235,18 @@ private struct PaceInsightsCard: View {
         return timeDiff > 0 ? "exclamationmark.circle.fill" : "checkmark.circle.fill"
     }
 
+    /// Whether the computed VDOT falls within a realistic human range (~20–85).
+    /// Outside this range the goal time stored on the plan is unreliable and
+    /// training paces should not be shown.
+    private var isVDOTReliable: Bool {
+        (20...85).contains(currentVDOT)
+    }
+
     private func paceRangeString(_ range: ClosedRange<Double>) -> String {
         func fmt(_ secs: Double) -> String {
-            let converted = appSettings.unitPreference == .imperial ? secs * 1.60934 : secs
-            let total = Int(converted)
-            return String(format: "%d:%02d", total / 60, total % 60)
+            guard secs > 0 && secs.isFinite else { return "--:--" }
+            return secs.paceString(unit: appSettings.unitPreference)
+                .replacingOccurrences(of: " \(appSettings.unitPreference.paceLabel)", with: "")
         }
         return "\(fmt(range.lowerBound)) – \(fmt(range.upperBound)) \(appSettings.unitPreference.paceLabel)"
     }
@@ -251,7 +258,7 @@ private struct PaceInsightsCard: View {
                     Text("Estimated Finish")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Text(estimatedTime.durationString)
+                    Text(isVDOTReliable ? estimatedTime.durationString : "--:--")
                         .font(.metricSmall)
                 }
                 Spacer()
@@ -265,24 +272,39 @@ private struct PaceInsightsCard: View {
             }
 
             HStack(spacing: 6) {
-                Image(systemName: statusIcon)
-                    .foregroundStyle(statusColor)
-                Text(statusText)
-                    .font(.caption)
-                    .foregroundStyle(statusColor)
-                if completedRuns.isEmpty {
-                    Text("· Based on goal time")
+                if isVDOTReliable {
+                    Image(systemName: statusIcon)
+                        .foregroundStyle(statusColor)
+                    Text(statusText)
                         .font(.caption)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(statusColor)
+                    if completedRuns.isEmpty {
+                        Text("· Based on goal time")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                } else {
+                    Image(systemName: "waveform.path.ecg")
+                        .foregroundStyle(.secondary)
+                    Text(completedRuns.isEmpty ? "Log a run to calibrate paces" : "Analyzing current pace…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
 
             Divider()
 
             VStack(spacing: 10) {
-                PaceRow(label: "Easy", value: paceRangeString(trainingPaces.easyRange))
-                PaceRow(label: "Tempo", value: trainingPaces.threshold.paceString(unit: appSettings.unitPreference))
-                PaceRow(label: "Interval", value: trainingPaces.interval.paceString(unit: appSettings.unitPreference))
+                if isVDOTReliable {
+                    PaceRow(label: "Easy", value: paceRangeString(trainingPaces.easyRange))
+                    PaceRow(label: "Tempo", value: trainingPaces.threshold.paceString(unit: appSettings.unitPreference))
+                    PaceRow(label: "Interval", value: trainingPaces.interval.paceString(unit: appSettings.unitPreference))
+                } else {
+                    Text("Analyzing current pace…")
+                        .font(.bodyRegular)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
         }
         .padding()
