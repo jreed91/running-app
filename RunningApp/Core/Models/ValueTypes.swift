@@ -104,4 +104,6 @@ struct GeneratedRoute: Sendable {
     var distanceMeters: Double
     /// Estimated running duration in seconds (at an average pace of ~6 min/km).
     var durationSeconds: Double
+    /// Short human-readable label distinguishing this option, e.g. "Option A" or "Heading North".
+    var label: String
 }

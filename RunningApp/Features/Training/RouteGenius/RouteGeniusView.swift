@@ -33,9 +33,9 @@ struct RouteGeniusView: View {
                         errorCard(error)
                     }
 
-                    if let route = viewModel.generatedRoute,
+                    if !viewModel.routeOptions.isEmpty,
                        let coord = viewModel.startCoordinate {
-                        routeResultSection(route: route, startCoord: coord)
+                        routeOptionsSection(startCoord: coord)
                     }
                 }
                 .padding()
@@ -213,17 +213,20 @@ struct RouteGeniusView: View {
 
     private var generateButton: some View {
         Button {
-            Task { await viewModel.generateRoute() }
+            Task { await viewModel.generateRouteOptions() }
         } label: {
-            Label("Generate Route", systemImage: "wand.and.stars")
-                .font(.bodyStrong)
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(
-                    viewModel.canGenerate ? Color.brand : Color.secondary.opacity(0.3),
-                    in: RoundedRectangle(cornerRadius: 14)
-                )
-                .foregroundStyle(viewModel.canGenerate ? .white : .secondary)
+            Label(
+                viewModel.routeOptions.isEmpty ? "Generate Routes" : "Regenerate",
+                systemImage: viewModel.routeOptions.isEmpty ? "wand.and.stars" : "arrow.clockwise"
+            )
+            .font(.bodyStrong)
+            .frame(maxWidth: .infinity)
+            .padding()
+            .background(
+                viewModel.canGenerate ? Color.brand : Color.secondary.opacity(0.3),
+                in: RoundedRectangle(cornerRadius: 14)
+            )
+            .foregroundStyle(viewModel.canGenerate ? .white : .secondary)
         }
         .disabled(!viewModel.canGenerate)
         .animation(.easeInOut(duration: 0.2), value: viewModel.canGenerate)
@@ -253,73 +256,65 @@ struct RouteGeniusView: View {
         .background(.warning.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
     }
 
-    // MARK: Route result
+    // MARK: Route options
 
     @ViewBuilder
-    private func routeResultSection(route: GeneratedRoute, startCoord: CLLocationCoordinate2D) -> some View {
-        VStack(spacing: 16) {
-            // Stats bar
-            HStack {
-                RouteStatPill(
-                    icon: "arrow.triangle.swap",
-                    value: viewModel.formattedDistance(route.distanceMeters),
-                    label: "Distance"
-                )
-                Spacer()
-                RouteStatPill(
-                    icon: "clock",
-                    value: viewModel.formattedDuration(route.durationSeconds),
-                    label: "Est. Time"
-                )
-                Spacer()
-                RouteStatPill(
-                    icon: viewModel.routeType.systemImage,
-                    value: viewModel.routeType.displayName,
-                    label: "Type"
-                )
-            }
-            .padding()
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
+    private func routeOptionsSection(startCoord: CLLocationCoordinate2D) -> some View {
+        VStack(spacing: 12) {
+            Text("CHOOSE A ROUTE")
+                .font(.sectionHeader)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-            // Map
+            ForEach(Array(viewModel.routeOptions.enumerated()), id: \.offset) { index, route in
+                RouteOptionCard(
+                    route: route,
+                    startCoord: startCoord,
+                    isSelected: viewModel.selectedRouteIndex == index,
+                    viewModel: viewModel
+                ) {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        viewModel.selectedRouteIndex = index
+                    }
+                }
+            }
+
+            if let route = viewModel.selectedRoute {
+                selectedRouteDetail(route: route, startCoord: startCoord)
+            }
+        }
+    }
+
+    // MARK: Selected route detail
+
+    @ViewBuilder
+    private func selectedRouteDetail(route: GeneratedRoute, startCoord: CLLocationCoordinate2D) -> some View {
+        VStack(spacing: 16) {
             RouteMapView(
                 coordinates: route.coordinates.map(\.clCoordinate),
                 startCoordinate: startCoord
             )
             .frame(height: 280)
             .clipShape(RoundedRectangle(cornerRadius: 16))
+            .transition(.opacity.combined(with: .scale(scale: 0.97)))
 
-            // Action buttons
-            HStack(spacing: 12) {
-                Button {
-                    Task { await viewModel.generateRoute() }
-                } label: {
-                    Label("Regenerate", systemImage: "arrow.clockwise")
-                        .font(.bodyRegular)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
-                        .foregroundStyle(.primary)
-                }
-
-                Button {
-                    routeNameInput = ""
-                    showSaveSheet = true
-                } label: {
-                    Label("Save Route", systemImage: "bookmark")
-                        .font(.bodyStrong)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(.brand, in: RoundedRectangle(cornerRadius: 12))
-                        .foregroundStyle(.white)
-                }
+            Button {
+                routeNameInput = ""
+                showSaveSheet = true
+            } label: {
+                Label("Save This Route", systemImage: "bookmark")
+                    .font(.bodyStrong)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(.brand, in: RoundedRectangle(cornerRadius: 14))
+                    .foregroundStyle(.white)
             }
 
-            // Turn-by-turn steps
             if !route.steps.isEmpty {
                 TurnByTurnList(steps: route.steps, viewModel: viewModel)
             }
         }
+        .animation(.easeInOut(duration: 0.25), value: viewModel.selectedRouteIndex)
     }
 
     // MARK: Save route sheet
@@ -360,6 +355,67 @@ struct RouteGeniusView: View {
             }
         }
         .presentationDetents([.medium])
+    }
+}
+
+// MARK: - RouteOptionCard
+
+private struct RouteOptionCard: View {
+    let route: GeneratedRoute
+    let startCoord: CLLocationCoordinate2D
+    let isSelected: Bool
+    let viewModel: RouteGeniusViewModel
+    let onSelect: () -> Void
+
+    var body: some View {
+        Button(action: onSelect) {
+            VStack(alignment: .leading, spacing: 10) {
+                // Header row
+                HStack {
+                    Text(route.label)
+                        .font(.bodyStrong)
+                        .foregroundStyle(isSelected ? .brand : .primary)
+
+                    Spacer()
+
+                    if isSelected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.brand)
+                            .transition(.scale.combined(with: .opacity))
+                    }
+                }
+
+                // Mini map thumbnail
+                RouteMapView(
+                    coordinates: route.coordinates.map(\.clCoordinate),
+                    startCoordinate: startCoord
+                )
+                .frame(height: 120)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .allowsHitTesting(false)
+
+                // Stats
+                HStack(spacing: 16) {
+                    Label(viewModel.formattedDistance(route.distanceMeters), systemImage: "arrow.triangle.swap")
+                    Label(viewModel.formattedDuration(route.durationSeconds), systemImage: "clock")
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+            .padding(12)
+            .background(
+                isSelected
+                    ? Color.brand.opacity(0.08)
+                    : Color.surfaceSecondary,
+                in: RoundedRectangle(cornerRadius: 14)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(isSelected ? Color.brand : Color.clear, lineWidth: 2)
+            )
+            .animation(.easeInOut(duration: 0.2), value: isSelected)
+        }
+        .buttonStyle(.plain)
     }
 }
 
