@@ -50,7 +50,7 @@ struct TrainingPlanService {
                 phase: phase,
                 targetDistanceKm: targetKm
             )
-            week.workouts = buildWorkouts(
+            let workouts = buildWorkouts(
                 weekStart: weekStart,
                 runDays: profile.weeklyRunDays,
                 dayOffsets: effectiveDayOffsets,
@@ -59,6 +59,25 @@ struct TrainingPlanService {
                 raceType: profile.goalRace,
                 targetKm: targetKm
             )
+            // Auto-apply structured warmup/work/cooldown to all quality and long-run sessions.
+            // Uses profile-derived VDOT with no history (onTrack defaults) so the plan is
+            // immediately structured. Users can re-adapt later via the detail view to
+            // personalise based on their actual run history.
+            for workout in workouts {
+                guard workout.workoutType != .easy,
+                      workout.workoutType != .rest,
+                      workout.workoutType != .crossTraining else { continue }
+                let adapted = adaptWorkout(scheduled: workout, history: [], profile: profile)
+                workout.structureData        = adapted.structureData
+                workout.targetDistanceMeters = adapted.targetDistanceMeters
+                workout.targetPaceLowerBound = adapted.targetPaceLowerBound
+                workout.targetPaceUpperBound = adapted.targetPaceUpperBound
+                workout.notes                = adapted.notes
+                if !adapted.intervals.isEmpty {
+                    workout.intervals = adapted.intervals
+                }
+            }
+            week.workouts = workouts
             plan.weeks.append(week)
         }
         return plan

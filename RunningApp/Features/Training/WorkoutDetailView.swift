@@ -37,9 +37,7 @@ struct WorkoutDetailView: View {
         .navigationTitle(workout.workoutType.displayName)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if let profile = profiles.first,
-               !workout.isCompleted,
-               workout.workoutStructure == nil {
+            if let profile = profiles.first, !workout.isCompleted {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
                         Task { await adaptThisWorkout(profile: profile) }
@@ -76,7 +74,14 @@ struct WorkoutDetailView: View {
         if !adapted.intervals.isEmpty {
             workout.intervals = adapted.intervals
         }
+        // Clear the old WorkoutKit plan ID so the next sync re-schedules this workout
+        // with the updated structure (warmup/work/cooldown goals).
+        workout.healthKitPlanID = nil
         try? context.save()
+        // Immediately re-sync this workout's plan to WorkoutKit with the new structure.
+        if let plan = workout.week?.plan {
+            try? await container.healthKitRepository.syncWorkoutPlans(for: plan)
+        }
     }
 
     // MARK: - Structured workout timeline
