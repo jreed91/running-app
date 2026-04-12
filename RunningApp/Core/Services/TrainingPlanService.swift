@@ -310,4 +310,384 @@ struct TrainingPlanService {
             return "4 × 1200 m @ interval pace with 2 min jog recovery."
         }
     }
+
+    // MARK: - Smart Workout Adaptation
+
+    /// Returns a new ``ScheduledWorkout`` whose structure, pace targets, and volume have
+    /// been adapted to the runner's recent performance history.
+    ///
+    /// For `.rest` and `.crossTraining` workouts, the original is returned unchanged.
+    /// The returned object is a fresh instance; the caller should copy its fields back onto the
+    /// persisted workout rather than inserting it into the SwiftData context.
+    func adaptWorkout(
+        scheduled: ScheduledWorkout,
+        history: [RunWorkout],
+        profile: UserProfile
+    ) -> ScheduledWorkout {
+        guard scheduled.workoutType != .rest,
+              scheduled.workoutType != .crossTraining else {
+            return scheduled
+        }
+
+        let analytics = WorkoutAnalyticsService()
+        let snap = analytics.snapshot(from: history, profile: profile)
+        let effectiveVDOT = snap.currentVDOT ?? estimatedVDOT(from: profile)
+        let paces = PaceCalculatorService.trainingPaces(forVDOT: effectiveVDOT)
+
+        switch scheduled.workoutType {
+        case .interval:
+            return adaptIntervalWorkout(scheduled: scheduled, paces: paces, snap: snap)
+        case .tempo:
+            return adaptTempoWorkout(scheduled: scheduled, paces: paces, snap: snap)
+        case .longRun:
+            return adaptLongRunWorkout(scheduled: scheduled, paces: paces, snap: snap)
+        case .easy:
+            return adaptEasyWorkout(scheduled: scheduled, paces: paces)
+        default:
+            return scheduled
+        }
+    }
+
+    // MARK: Interval adaptation
+
+    private func adaptIntervalWorkout(
+        scheduled: ScheduledWorkout,
+        paces: TrainingPaces,
+        snap: PerformanceSnapshot
+    ) -> ScheduledWorkout {
+        let existing = scheduled.intervals.first
+        let baseReps     = existing?.repetitions          ?? 5
+        let baseDist     = existing?.distanceMeters       ?? 800
+        let baseRecovery = existing?.recoverySeconds      ?? 90
+        let basePace     = existing?.targetPaceSecondsPerKm ?? paces.interval
+
+        let adaptedReps: Int
+        let adaptedPace: Double
+        switch snap.performanceTrend {
+        case .improving:
+            adaptedReps = min(baseReps + 1, baseReps + 2)
+            adaptedPace = max(basePace - 2, paces.repetition)
+        case .onTrack:
+            adaptedReps = baseReps
+            adaptedPace = basePace
+        case .struggling:
+            adaptedReps = max(baseReps - 1, 3)
+            adaptedPace = basePace + 3
+        }
+
+        let warmupDist: Double   = snap.performanceTrend == .struggling ? 1_500 : 1_000
+        let cooldownDist: Double = snap.performanceTrend == .struggling ?   500 : 1_000
+
+        let warmup = WorkoutSegment(
+            distanceMeters: warmupDist,
+            durationSeconds: nil,
+            targetPaceSecondsPerKm: paces.easyRange.upperBound,
+            label: "Warm-up"
+        )
+        let workSegment = WorkoutSegment(
+            distanceMeters: baseDist,
+            durationSeconds: nil,
+            targetPaceSecondsPerKm: adaptedPace,
+            label: "Interval"
+        )
+        let recoverySegment = WorkoutSegment(
+            distanceMeters: nil,
+            durationSeconds: baseRecovery,
+            targetPaceSecondsPerKm: nil,
+            label: "Recovery jog"
+        )
+        let intervalSet = WorkoutSet(
+            repetitions: adaptedReps,
+            workSegment: workSegment,
+            recoverySegment: recoverySegment,
+            label: intervalSetLabel(distanceMeters: baseDist, paces: paces, adaptedPace: adaptedPace)
+        )
+        let cooldown = WorkoutSegment(
+            distanceMeters: cooldownDist,
+            durationSeconds: nil,
+            targetPaceSecondsPerKm: paces.easyRange.upperBound,
+            label: "Cool-down"
+        )
+
+        let totalWorkDist    = Double(adaptedReps) * baseDist
+        let totalRecovery    = Double(adaptedReps) * baseRecovery
+        let totalDist        = warmupDist + totalWorkDist + cooldownDist
+        let warmupDuration   = warmupDist   / 1_000 * paces.easyRange.upperBound
+        let workDuration     = totalWorkDist / 1_000 * adaptedPace
+        let cooldownDuration = cooldownDist / 1_000 * paces.easyRange.upperBound
+        let totalDuration    = warmupDuration + workDuration + totalRecovery + cooldownDuration
+
+        let structure = WorkoutStructure(
+            warmup: warmup,
+            mainSets: [intervalSet],
+            cooldown: cooldown,
+            totalEstimatedDistanceMeters: totalDist,
+            totalEstimatedDurationSeconds: totalDuration
+        )
+
+        let adapted = ScheduledWorkout(
+            scheduledDate: scheduled.scheduledDate,
+            workoutType: .interval,
+            targetDistanceMeters: totalDist,
+            targetPaceLowerBound: adaptedPace - 5,
+            targetPaceUpperBound: adaptedPace + 5,
+            notes: adaptedIntervalNote(
+                reps: adaptedReps,
+                distanceMeters: baseDist,
+                pace: adaptedPace,
+                recoverySeconds: baseRecovery,
+                trend: snap.performanceTrend
+            )
+        )
+        adapted.week = scheduled.week
+        adapted.workoutStructure = structure
+        // Preserve flat intervals for backward compat (Watch / widgets)
+        adapted.intervals = [WorkoutInterval(
+            repetitions: adaptedReps,
+            distanceMeters: baseDist,
+            durationSeconds: nil,
+            targetPaceSecondsPerKm: adaptedPace,
+            recoverySeconds: baseRecovery,
+            recoveryType: existing?.recoveryType ?? .jog
+        )]
+        return adapted
+    }
+
+    // MARK: Tempo adaptation
+
+    private func adaptTempoWorkout(
+        scheduled: ScheduledWorkout,
+        paces: TrainingPaces,
+        snap: PerformanceSnapshot
+    ) -> ScheduledWorkout {
+        let totalDist = scheduled.targetDistanceMeters ?? 5_000
+
+        let warmupFraction: Double = snap.performanceTrend == .improving ? 0.10 : 0.15
+        let warmupDist   = totalDist * warmupFraction
+        let cooldownDist = totalDist * 0.10
+        let workDist     = totalDist - warmupDist - cooldownDist
+
+        let adaptedTempoPace: Double
+        switch snap.performanceTrend {
+        case .improving:  adaptedTempoPace = paces.threshold - 3
+        case .onTrack:    adaptedTempoPace = paces.threshold
+        case .struggling: adaptedTempoPace = paces.threshold + 5
+        }
+
+        let warmup = WorkoutSegment(
+            distanceMeters: warmupDist,
+            durationSeconds: nil,
+            targetPaceSecondsPerKm: paces.easyRange.upperBound,
+            label: "Warm-up"
+        )
+        let tempoSet = WorkoutSet(
+            repetitions: 1,
+            workSegment: WorkoutSegment(
+                distanceMeters: workDist,
+                durationSeconds: nil,
+                targetPaceSecondsPerKm: adaptedTempoPace,
+                label: "Tempo"
+            ),
+            recoverySegment: WorkoutSegment(
+                distanceMeters: nil,
+                durationSeconds: nil,
+                targetPaceSecondsPerKm: nil,
+                label: ""
+            ),
+            label: "Tempo Block"
+        )
+        let cooldown = WorkoutSegment(
+            distanceMeters: cooldownDist,
+            durationSeconds: nil,
+            targetPaceSecondsPerKm: paces.easyRange.upperBound,
+            label: "Cool-down"
+        )
+
+        let warmupDuration   = warmupDist   / 1_000 * paces.easyRange.upperBound
+        let workDuration     = workDist     / 1_000 * adaptedTempoPace
+        let cooldownDuration = cooldownDist / 1_000 * paces.easyRange.upperBound
+        let totalDuration    = warmupDuration + workDuration + cooldownDuration
+
+        let structure = WorkoutStructure(
+            warmup: warmup,
+            mainSets: [tempoSet],
+            cooldown: cooldown,
+            totalEstimatedDistanceMeters: totalDist,
+            totalEstimatedDurationSeconds: totalDuration
+        )
+
+        let adapted = ScheduledWorkout(
+            scheduledDate: scheduled.scheduledDate,
+            workoutType: .tempo,
+            targetDistanceMeters: totalDist,
+            targetPaceLowerBound: adaptedTempoPace - 5,
+            targetPaceUpperBound: adaptedTempoPace + 5,
+            notes: adaptedTempoNote(
+                totalKm: totalDist / 1_000,
+                workKm: workDist / 1_000,
+                pace: adaptedTempoPace,
+                trend: snap.performanceTrend
+            )
+        )
+        adapted.week = scheduled.week
+        adapted.workoutStructure = structure
+        return adapted
+    }
+
+    // MARK: Long run adaptation
+
+    private func adaptLongRunWorkout(
+        scheduled: ScheduledWorkout,
+        paces: TrainingPaces,
+        snap: PerformanceSnapshot
+    ) -> ScheduledWorkout {
+        let baseDist = scheduled.targetDistanceMeters ?? 12_000
+        let adaptedDist: Double = snap.performanceTrend == .struggling
+            ? baseDist * 0.90
+            : baseDist
+
+        let warmupDist   = adaptedDist * 0.15
+        let workDist     = adaptedDist * 0.75
+        let cooldownDist = adaptedDist * 0.10
+        let midEasyPace  = (paces.easyRange.lowerBound + paces.easyRange.upperBound) / 2
+
+        let warmup = WorkoutSegment(
+            distanceMeters: warmupDist,
+            durationSeconds: nil,
+            targetPaceSecondsPerKm: paces.easyRange.upperBound,
+            label: "Easy start"
+        )
+        let mainSet = WorkoutSet(
+            repetitions: 1,
+            workSegment: WorkoutSegment(
+                distanceMeters: workDist,
+                durationSeconds: nil,
+                targetPaceSecondsPerKm: midEasyPace,
+                label: "Steady easy"
+            ),
+            recoverySegment: WorkoutSegment(
+                distanceMeters: nil,
+                durationSeconds: nil,
+                targetPaceSecondsPerKm: nil,
+                label: ""
+            ),
+            label: "Long Run"
+        )
+        let cooldown = WorkoutSegment(
+            distanceMeters: cooldownDist,
+            durationSeconds: nil,
+            targetPaceSecondsPerKm: paces.easyRange.lowerBound,
+            label: "Finish strong"
+        )
+
+        let totalDuration = adaptedDist / 1_000 * midEasyPace
+
+        let structure = WorkoutStructure(
+            warmup: warmup,
+            mainSets: [mainSet],
+            cooldown: cooldown,
+            totalEstimatedDistanceMeters: adaptedDist,
+            totalEstimatedDurationSeconds: totalDuration
+        )
+
+        let adapted = ScheduledWorkout(
+            scheduledDate: scheduled.scheduledDate,
+            workoutType: .longRun,
+            targetDistanceMeters: adaptedDist,
+            targetPaceLowerBound: paces.easyRange.lowerBound,
+            targetPaceUpperBound: paces.easyRange.upperBound,
+            notes: adaptedLongRunNote(km: adaptedDist / 1_000, pace: midEasyPace, trend: snap.performanceTrend)
+        )
+        adapted.week = scheduled.week
+        adapted.workoutStructure = structure
+        return adapted
+    }
+
+    // MARK: Easy adaptation
+
+    private func adaptEasyWorkout(
+        scheduled: ScheduledWorkout,
+        paces: TrainingPaces
+    ) -> ScheduledWorkout {
+        let adapted = ScheduledWorkout(
+            scheduledDate: scheduled.scheduledDate,
+            workoutType: .easy,
+            targetDistanceMeters: scheduled.targetDistanceMeters,
+            targetPaceLowerBound: paces.easyRange.lowerBound,
+            targetPaceUpperBound: paces.easyRange.upperBound,
+            notes: scheduled.notes ?? "Conversational effort – you should be able to speak in sentences."
+        )
+        adapted.week = scheduled.week
+        return adapted
+    }
+
+    // MARK: Adaptation note generators
+
+    private func adaptedIntervalNote(
+        reps: Int,
+        distanceMeters: Double,
+        pace: Double,
+        recoverySeconds: Double,
+        trend: PerformanceTrend
+    ) -> String {
+        let distStr = distanceMeters >= 1_000
+            ? String(format: "%.1f km", distanceMeters / 1_000)
+            : String(format: "%.0f m", distanceMeters)
+        let paceStr = pace.paceString
+        let recStr  = recoverySeconds >= 60
+            ? String(format: "%.0f min", recoverySeconds / 60)
+            : String(format: "%.0f s", recoverySeconds)
+        let trendNote: String
+        switch trend {
+        case .improving:  trendNote = "Volume increased – you've been hitting your targets."
+        case .onTrack:    trendNote = "Maintain current effort."
+        case .struggling: trendNote = "Volume reduced – focus on quality over quantity."
+        }
+        return "\(reps) × \(distStr) @ \(paceStr) with \(recStr) jog recovery. \(trendNote)"
+    }
+
+    private func adaptedTempoNote(
+        totalKm: Double,
+        workKm: Double,
+        pace: Double,
+        trend: PerformanceTrend
+    ) -> String {
+        let trendNote: String
+        switch trend {
+        case .improving:  trendNote = "Pace tightened – you're ready for it."
+        case .onTrack:    trendNote = "Hold comfortably hard effort throughout."
+        case .struggling: trendNote = "Pace eased – focus on consistent effort, not time."
+        }
+        return String(format: "%.1f km total: warm-up, %.1f km tempo @ %@, cool-down. %@",
+                      totalKm, workKm, pace.paceString, trendNote)
+    }
+
+    private func adaptedLongRunNote(km: Double, pace: Double, trend: PerformanceTrend) -> String {
+        let trendNote: String
+        switch trend {
+        case .improving:  trendNote = "Full distance – aim for a slight negative split."
+        case .onTrack:    trendNote = "Keep it conversational throughout."
+        case .struggling: trendNote = "Distance trimmed slightly – prioritise recovery."
+        }
+        return String(format: "%.1f km easy @ ~%@. %@", km, pace.paceString, trendNote)
+    }
+
+    private func intervalSetLabel(
+        distanceMeters: Double,
+        paces: TrainingPaces,
+        adaptedPace: Double
+    ) -> String {
+        let zone: String
+        if adaptedPace <= paces.interval + 5 {
+            zone = "VO2max"
+        } else if adaptedPace <= paces.threshold + 5 {
+            zone = "Threshold"
+        } else {
+            zone = "Tempo"
+        }
+        let distStr = distanceMeters >= 1_000
+            ? String(format: "%.0f km", distanceMeters / 1_000)
+            : String(format: "%.0f m", distanceMeters)
+        return "\(zone) Intervals (\(distStr))"
+    }
 }
