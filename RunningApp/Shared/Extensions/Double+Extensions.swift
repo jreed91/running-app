@@ -3,23 +3,23 @@ import Foundation
 extension Double {
     // MARK: Pace formatting
 
-    /// Formats seconds-per-km into "M:SS /km", e.g. "5:30 /km".
+    /// Formats seconds-per-km into "M:SS min/km", e.g. "5:30 min/km".
     var paceString: String {
-        guard self > 0 && self.isFinite else { return "--:-- /km" }
+        guard self > 0 && self.isFinite else { return "--:-- min/km" }
         let totalSeconds = Int(self)
         let minutes = totalSeconds / 60
         let seconds = totalSeconds % 60
-        return String(format: "%d:%02d /km", minutes, seconds)
+        return String(format: "%d:%02d min/km", minutes, seconds)
     }
 
-    /// Formats seconds-per-km into "M:SS /mi".
+    /// Formats seconds-per-km into "M:SS min/mi".
     var paceStringImperial: String {
-        guard self > 0 && self.isFinite else { return "--:-- /mi" }
+        guard self > 0 && self.isFinite else { return "--:-- min/mi" }
         let secsPerMile = self * 1.60934
         let totalSeconds = Int(secsPerMile)
         let minutes = totalSeconds / 60
         let seconds = totalSeconds % 60
-        return String(format: "%d:%02d /mi", minutes, seconds)
+        return String(format: "%d:%02d min/mi", minutes, seconds)
     }
 
     // MARK: Distance formatting

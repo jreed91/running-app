@@ -125,8 +125,8 @@ enum UnitPreference: String, CaseIterable, Sendable {
 
     var paceLabel: String {
         switch self {
-        case .metric: return "/km"
-        case .imperial: return "/mi"
+        case .metric: return "min/km"
+        case .imperial: return "min/mi"
         }
     }
 }

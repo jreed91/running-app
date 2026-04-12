@@ -185,7 +185,7 @@ struct WorkoutDetailView: View {
                     Text("\(interval.repetitions) ×")
                         .font(.bodyStrong)
                     if let dist = interval.distanceMeters {
-                        Text(String(format: "%.0f m", dist))
+                        Text(dist.distanceString(unit: appSettings.unitPreference))
                     }
                     Spacer()
                     if let pace = interval.targetPaceSecondsPerKm {
