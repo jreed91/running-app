@@ -6,6 +6,9 @@ struct ProgressDashboardView: View {
     @Query(sort: [SortDescriptor(\RunWorkout.date)])
     private var workouts: [RunWorkout]
 
+    @Query private var profiles: [UserProfile]
+    private var profile: UserProfile? { profiles.first }
+
     @Environment(AppSettings.self) private var appSettings
     @State private var selectedRange: ChartRange = .threeMonths
 
@@ -59,6 +62,8 @@ struct ProgressDashboardView: View {
                     rangePicker
                     weeklyVolumeChart
                     paceProgressChart
+                    racePacePredictionChart
+                    racePaceSummaryCard
                     heartRateTrendChart
                     elevationTrendChart
                     vo2MaxTrendChart
@@ -133,6 +138,85 @@ struct ProgressDashboardView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+    }
+
+    // MARK: Predicted race pace chart
+
+    private var racePacePredictionChart: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("PREDICTED RACE PACE").font(.sectionHeader).foregroundStyle(.secondary)
+            if pacePredictionPoints.isEmpty {
+                Text("Log at least 2 runs of 1.5 km+ to see a prediction.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 8)
+            } else {
+                Chart(pacePredictionPoints) { point in
+                    LineMark(
+                        x: .value("Date", point.date),
+                        y: .value("Predicted Pace", point.predictedPaceSecondsPerKm)
+                    )
+                    .foregroundStyle(.brand)
+                    .interpolationMethod(.catmullRom)
+                    PointMark(
+                        x: .value("Date", point.date),
+                        y: .value("Predicted Pace", point.predictedPaceSecondsPerKm)
+                    )
+                    .foregroundStyle(.brand)
+                }
+                .frame(height: 140)
+                .chartYScale(domain: .automatic(includesZero: false))
+                .chartYAxis {
+                    AxisMarks { value in
+                        AxisValueLabel {
+                            if let secs = value.as(Double.self) {
+                                Text(secs.paceString(unit: appSettings.unitPreference)
+                                    .replacingOccurrences(of: " \(appSettings.unitPreference.paceLabel)", with: ""))
+                            }
+                        }
+                    }
+                }
+                .chartXAxis {
+                    AxisMarks(values: .stride(by: .month)) {
+                        AxisValueLabel(format: .dateTime.month(.abbreviated))
+                    }
+                }
+                Text("Lower = faster")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    // MARK: Race fitness summary card
+
+    private var racePaceSummaryCard: some View {
+        let trend = paceTrend
+        let raceName = profile?.goalRace.displayName ?? "Race"
+        return VStack(alignment: .leading, spacing: 12) {
+            Text("RACE FITNESS SUMMARY").font(.sectionHeader).foregroundStyle(.secondary)
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Predicted \(raceName)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(currentPredictedFinishTime)
+                        .font(.metricSmall)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text("Fitness Trend")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(trend.label)
+                        .font(.bodyStrong)
+                        .foregroundStyle(trend.color)
+                }
+            }
+        }
+        .padding()
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
     }
 
     // MARK: Heart rate trend chart
@@ -289,6 +373,55 @@ struct ProgressDashboardView: View {
     }
 
     // MARK: Data helpers
+
+    private struct PacePredictionPoint: Identifiable {
+        let id = UUID()
+        let date: Date
+        let predictedPaceSecondsPerKm: Double
+    }
+
+    private var pacePredictionPoints: [PacePredictionPoint] {
+        guard let raceDistance = profile?.goalRace.distanceMeters else { return [] }
+        return filteredWorkouts.compactMap { workout in
+            guard let pace = PaceCalculatorService.predictedRacePaceSecondsPerKm(
+                workoutDistanceMeters: workout.distanceMeters,
+                workoutDurationSeconds: workout.durationSeconds,
+                raceDistanceMeters: raceDistance
+            ) else { return nil }
+            return PacePredictionPoint(date: workout.date, predictedPaceSecondsPerKm: pace)
+        }
+        .sorted { $0.date < $1.date }
+    }
+
+    private var paceTrend: (label: String, color: Color) {
+        guard pacePredictionPoints.count >= 3 else {
+            return ("Not enough data", .secondary)
+        }
+        let rawPoints = pacePredictionPoints.map {
+            (x: $0.date.timeIntervalSinceReferenceDate, y: $0.predictedPaceSecondsPerKm)
+        }
+        guard let slopePerSecond = PaceCalculatorService.linearRegressionSlope(rawPoints) else {
+            return ("Stable", .secondary)
+        }
+        let slopePerWeek = slopePerSecond * 7 * 86_400
+        switch slopePerWeek {
+        case ..<(-1.0): return ("Improving", Color.green)
+        case 1.0...:    return ("Declining", Color.red)
+        default:        return ("Stable", Color.orange)
+        }
+    }
+
+    private var currentPredictedFinishTime: String {
+        guard let raceDistance = profile?.goalRace.distanceMeters,
+              let mostRecent = filteredWorkouts.last(where: { $0.distanceMeters >= 1_500 }),
+              let pace = PaceCalculatorService.predictedRacePaceSecondsPerKm(
+                  workoutDistanceMeters: mostRecent.distanceMeters,
+                  workoutDurationSeconds: mostRecent.durationSeconds,
+                  raceDistanceMeters: raceDistance
+              )
+        else { return "--:--" }
+        return (pace * (raceDistance / 1_000)).durationString
+    }
 
     private struct WeekBucket: Identifiable {
         let id = UUID()

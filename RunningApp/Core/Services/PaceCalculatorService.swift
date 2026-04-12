@@ -84,6 +84,37 @@ enum PaceCalculatorService {
         return trainingPaces(forVDOT: v)
     }
 
+    // MARK: Race pace prediction
+
+    /// Returns predicted race pace (sec/km) for `raceDistanceMeters`, derived
+    /// from a single workout's distance and duration via VDOT. Returns nil if
+    /// the workout is too short (< 1.5 km), duration is invalid, or VDOT is degenerate.
+    static func predictedRacePaceSecondsPerKm(
+        workoutDistanceMeters: Double,
+        workoutDurationSeconds: Double,
+        raceDistanceMeters: Double
+    ) -> Double? {
+        guard workoutDistanceMeters >= 1_500, workoutDurationSeconds > 0 else { return nil }
+        let v = vdot(distanceMeters: workoutDistanceMeters, timeSeconds: workoutDurationSeconds)
+        guard v > 0, v.isFinite else { return nil }
+        let predictedSeconds = predictedTime(vdot: v, distanceMeters: raceDistanceMeters)
+        return predictedSeconds / (raceDistanceMeters / 1_000)
+    }
+
+    /// OLS slope for an array of (x, y) pairs. Returns nil for fewer than 2 points
+    /// or zero x-variance. When x is `timeIntervalSinceReferenceDate`, slope is in
+    /// y-units per second.
+    static func linearRegressionSlope(_ points: [(x: Double, y: Double)]) -> Double? {
+        guard points.count >= 2 else { return nil }
+        let n = Double(points.count)
+        let xMean = points.reduce(0) { $0 + $1.x } / n
+        let yMean = points.reduce(0) { $0 + $1.y } / n
+        let sxy = points.reduce(0) { $0 + ($1.x - xMean) * ($1.y - yMean) }
+        let sxx = points.reduce(0) { $0 + ($1.x - xMean) * ($1.x - xMean) }
+        guard sxx > 0 else { return nil }
+        return sxy / sxx
+    }
+
     // MARK: Helpers
 
     /// Seconds-per-km pace at a given fraction of VDOT.
