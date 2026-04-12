@@ -103,6 +103,22 @@ enum RecoveryType: String, Codable, Sendable {
     case standing
 }
 
+// MARK: - RouteType
+
+enum RouteType: String, Codable, CaseIterable, Sendable {
+    case loop = "Loop"
+    case outAndBack = "Out & Back"
+
+    var displayName: String { rawValue }
+
+    var systemImage: String {
+        switch self {
+        case .loop:       return "arrow.trianglehead.2.clockwise"
+        case .outAndBack: return "arrow.left.arrow.right"
+        }
+    }
+}
+
 // MARK: - UnitPreference
 
 enum UnitPreference: String, CaseIterable, Sendable {

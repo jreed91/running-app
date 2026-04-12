@@ -77,3 +77,31 @@ struct WorkoutStructure: Codable, Hashable, Sendable {
     var totalEstimatedDistanceMeters: Double
     var totalEstimatedDurationSeconds: Double
 }
+
+// MARK: - RouteStep
+
+/// A single turn-by-turn navigation step returned by the route generation service.
+struct RouteStep: Codable, Hashable, Sendable {
+    /// Human-readable direction instruction, e.g. "Turn left onto Oak Street".
+    var instruction: String
+    /// Street or path name for this step.
+    var name: String
+    /// Distance covered in this step, in metres.
+    var distanceMeters: Double
+    /// Estimated duration of this step, in seconds.
+    var durationSeconds: Double
+}
+
+// MARK: - GeneratedRoute
+
+/// A route returned by ``RouteGeniusService`` before it is persisted as a ``SavedRoute``.
+struct GeneratedRoute: Sendable {
+    /// Ordered coordinate path for the full route.
+    var coordinates: [Coordinate]
+    /// Turn-by-turn steps for the full route.
+    var steps: [RouteStep]
+    /// Actual route distance in metres (may differ from requested distance by ±10%).
+    var distanceMeters: Double
+    /// Estimated running duration in seconds (at an average pace of ~6 min/km).
+    var durationSeconds: Double
+}

@@ -19,6 +19,7 @@ final class AppContainer: ObservableObject {
     let workoutRepository: WorkoutRepositoryProtocol
     let planRepository: PlanRepositoryProtocol
     let healthKitRepository: HealthKitRepositoryProtocol
+    let routeRepository: RouteRepositoryProtocol
 
     // MARK: Services
 
@@ -26,6 +27,7 @@ final class AppContainer: ObservableObject {
     let workoutTrackerService: WorkoutTrackerService
     let notificationService: NotificationService
     let workoutAnalyticsService: WorkoutAnalyticsService
+    let routeGeniusService: RouteGeniusService
 
     // MARK: Init
 
@@ -35,7 +37,8 @@ final class AppContainer: ObservableObject {
             RunWorkout.self,
             TrainingPlan.self,
             TrainingWeek.self,
-            ScheduledWorkout.self
+            ScheduledWorkout.self,
+            SavedRoute.self
         ])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
         let container: ModelContainer
@@ -51,11 +54,24 @@ final class AppContainer: ObservableObject {
         self.workoutRepository = WorkoutRepository(context: context)
         self.planRepository = PlanRepository(context: context)
         self.healthKitRepository = HealthKitRepository()
+        self.routeRepository = RouteRepository(context: context)
 
         self.trainingPlanService = TrainingPlanService()
         self.workoutTrackerService = WorkoutTrackerService()
         self.notificationService = NotificationService.shared
         self.workoutAnalyticsService = WorkoutAnalyticsService()
+        self.routeGeniusService = RouteGeniusService(apiKey: RouteGeniusService.loadAPIKey())
+    }
+
+    // MARK: - Route Genius
+
+    /// Creates a fresh ``RouteGeniusViewModel`` wired to the container's service and repository.
+    func makeRouteGeniusViewModel(unitPreference: UnitPreference) -> RouteGeniusViewModel {
+        RouteGeniusViewModel(
+            service: routeGeniusService,
+            repository: routeRepository,
+            unitPreference: unitPreference
+        )
     }
 
     // MARK: - Workout adaptation
