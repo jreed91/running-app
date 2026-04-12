@@ -124,7 +124,7 @@ enum PaceCalculatorService {
         typicalDuration: Double
     ) -> Double {
         let speed = speedForFraction(fraction, vdot: vdot, duration: typicalDuration)
-        return 1_000 / speed   // m/min → sec/km
+        return 60_000 / speed   // m/min → sec/km
     }
 
     private static func paceRange(
