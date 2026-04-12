@@ -17,7 +17,8 @@ struct TrainingPlanService {
         profile: UserProfile,
         startDate: Date,
         numberOfWeeks: Int,
-        runDayIndices: [Int] = []
+        runDayIndices: [Int] = [],
+        unitPreference: UnitPreference = .metric
     ) -> TrainingPlan {
         let endDate = startDate.adding(weeks: numberOfWeeks)
         let plan = TrainingPlan(
@@ -57,7 +58,8 @@ struct TrainingPlanService {
                 phase: phase,
                 paces: paces,
                 raceType: profile.goalRace,
-                targetKm: targetKm
+                targetKm: targetKm,
+                unitPreference: unitPreference
             )
             // Auto-apply structured warmup/work/cooldown to all quality and long-run sessions.
             // Uses profile-derived VDOT with no history (onTrack defaults) so the plan is
@@ -67,7 +69,7 @@ struct TrainingPlanService {
                 guard workout.workoutType != .easy,
                       workout.workoutType != .rest,
                       workout.workoutType != .crossTraining else { continue }
-                let adapted = adaptWorkout(scheduled: workout, history: [], profile: profile)
+                let adapted = adaptWorkout(scheduled: workout, history: [], profile: profile, unitPreference: unitPreference)
                 workout.structureData        = adapted.structureData
                 workout.targetDistanceMeters = adapted.targetDistanceMeters
                 workout.targetPaceLowerBound = adapted.targetPaceLowerBound
@@ -167,7 +169,8 @@ struct TrainingPlanService {
         phase: TrainingPhase,
         paces: TrainingPaces,
         raceType: RaceType,
-        targetKm: Double
+        targetKm: Double,
+        unitPreference: UnitPreference
     ) -> [ScheduledWorkout] {
         let days = dayOffsets ?? runDayOffsets(count: runDays)
         var workouts: [ScheduledWorkout] = []
@@ -192,7 +195,8 @@ struct TrainingPlanService {
                     type: qualityTypes[slotIndex],
                     targetKm: targetKm * 0.15,
                     paces: paces,
-                    raceType: raceType
+                    raceType: raceType,
+                    unitPreference: unitPreference
                 ))
                 continue
             }
@@ -234,7 +238,8 @@ struct TrainingPlanService {
         type: WorkoutType,
         targetKm: Double,
         paces: TrainingPaces,
-        raceType: RaceType
+        raceType: RaceType,
+        unitPreference: UnitPreference
     ) -> ScheduledWorkout {
         switch type {
         case .tempo:
@@ -253,7 +258,7 @@ struct TrainingPlanService {
                 targetDistanceMeters: nil,
                 targetPaceLowerBound: paces.interval - 5,
                 targetPaceUpperBound: paces.interval + 5,
-                notes: intervalNote(raceType: raceType)
+                notes: intervalNote(raceType: raceType, unitPreference: unitPreference)
             )
             workout.intervals = defaultIntervals(raceType: raceType, paces: paces)
             return workout
@@ -319,14 +324,38 @@ struct TrainingPlanService {
         }
     }
 
-    private func intervalNote(raceType: RaceType) -> String {
+    private func intervalNote(raceType: RaceType, unitPreference: UnitPreference) -> String {
         switch raceType {
         case .fiveK:
-            return "6 × 800 m @ interval pace with 90 s jog recovery. Hard but controlled."
+            return "6 × \(shortDistanceString(800, unit: unitPreference)) @ interval pace with 90 s jog recovery. Hard but controlled."
         case .halfMarathon:
-            return "5 × 1000 m @ interval pace with 90 s jog recovery."
+            return "5 × \(shortDistanceString(1_000, unit: unitPreference)) @ interval pace with 90 s jog recovery."
         case .marathon:
-            return "4 × 1200 m @ interval pace with 2 min jog recovery."
+            return "4 × \(shortDistanceString(1_200, unit: unitPreference)) @ interval pace with 2 min jog recovery."
+        }
+    }
+
+    /// Formats meters as a short distance string using the user's unit preference.
+    /// Sub-mile distances use meters (metric) or yards (imperial); longer distances use km or mi.
+    private func shortDistanceString(_ meters: Double, unit: UnitPreference) -> String {
+        switch unit {
+        case .metric:
+            return meters >= 1_000
+                ? String(format: "%.1f km", meters / 1_000)
+                : String(format: "%.0f m", meters)
+        case .imperial:
+            let miles = meters / 1_609.344
+            return miles >= 1.0
+                ? String(format: "%.1f mi", miles)
+                : String(format: "%.0f yd", meters * 1.09361)
+        }
+    }
+
+    /// Formats a kilometre value as a distance string using the user's unit preference.
+    private func kmString(_ km: Double, unit: UnitPreference) -> String {
+        switch unit {
+        case .metric:  return String(format: "%.1f km", km)
+        case .imperial: return String(format: "%.1f mi", km / 1.60934)
         }
     }
 
@@ -341,7 +370,8 @@ struct TrainingPlanService {
     func adaptWorkout(
         scheduled: ScheduledWorkout,
         history: [RunWorkout],
-        profile: UserProfile
+        profile: UserProfile,
+        unitPreference: UnitPreference = .metric
     ) -> ScheduledWorkout {
         guard scheduled.workoutType != .rest,
               scheduled.workoutType != .crossTraining else {
@@ -355,11 +385,11 @@ struct TrainingPlanService {
 
         switch scheduled.workoutType {
         case .interval:
-            return adaptIntervalWorkout(scheduled: scheduled, paces: paces, snap: snap)
+            return adaptIntervalWorkout(scheduled: scheduled, paces: paces, snap: snap, unitPreference: unitPreference)
         case .tempo:
-            return adaptTempoWorkout(scheduled: scheduled, paces: paces, snap: snap)
+            return adaptTempoWorkout(scheduled: scheduled, paces: paces, snap: snap, unitPreference: unitPreference)
         case .longRun:
-            return adaptLongRunWorkout(scheduled: scheduled, paces: paces, snap: snap)
+            return adaptLongRunWorkout(scheduled: scheduled, paces: paces, snap: snap, unitPreference: unitPreference)
         case .easy:
             return adaptEasyWorkout(scheduled: scheduled, paces: paces)
         default:
@@ -372,7 +402,8 @@ struct TrainingPlanService {
     private func adaptIntervalWorkout(
         scheduled: ScheduledWorkout,
         paces: TrainingPaces,
-        snap: PerformanceSnapshot
+        snap: PerformanceSnapshot,
+        unitPreference: UnitPreference
     ) -> ScheduledWorkout {
         let existing = scheduled.intervals.first
         let baseReps     = existing?.repetitions          ?? 5
@@ -419,7 +450,7 @@ struct TrainingPlanService {
             repetitions: adaptedReps,
             workSegment: workSegment,
             recoverySegment: recoverySegment,
-            label: intervalSetLabel(distanceMeters: baseDist, paces: paces, adaptedPace: adaptedPace)
+            label: intervalSetLabel(distanceMeters: baseDist, paces: paces, adaptedPace: adaptedPace, unitPreference: unitPreference)
         )
         let cooldown = WorkoutSegment(
             distanceMeters: cooldownDist,
@@ -455,7 +486,8 @@ struct TrainingPlanService {
                 distanceMeters: baseDist,
                 pace: adaptedPace,
                 recoverySeconds: baseRecovery,
-                trend: snap.performanceTrend
+                trend: snap.performanceTrend,
+                unitPreference: unitPreference
             )
         )
         adapted.week = scheduled.week
@@ -477,7 +509,8 @@ struct TrainingPlanService {
     private func adaptTempoWorkout(
         scheduled: ScheduledWorkout,
         paces: TrainingPaces,
-        snap: PerformanceSnapshot
+        snap: PerformanceSnapshot,
+        unitPreference: UnitPreference
     ) -> ScheduledWorkout {
         let totalDist = scheduled.targetDistanceMeters ?? 5_000
 
@@ -545,7 +578,8 @@ struct TrainingPlanService {
                 totalKm: totalDist / 1_000,
                 workKm: workDist / 1_000,
                 pace: adaptedTempoPace,
-                trend: snap.performanceTrend
+                trend: snap.performanceTrend,
+                unitPreference: unitPreference
             )
         )
         adapted.week = scheduled.week
@@ -558,7 +592,8 @@ struct TrainingPlanService {
     private func adaptLongRunWorkout(
         scheduled: ScheduledWorkout,
         paces: TrainingPaces,
-        snap: PerformanceSnapshot
+        snap: PerformanceSnapshot,
+        unitPreference: UnitPreference
     ) -> ScheduledWorkout {
         let baseDist = scheduled.targetDistanceMeters ?? 12_000
         let adaptedDist: Double = snap.performanceTrend == .struggling
@@ -615,7 +650,7 @@ struct TrainingPlanService {
             targetDistanceMeters: adaptedDist,
             targetPaceLowerBound: paces.easyRange.lowerBound,
             targetPaceUpperBound: paces.easyRange.upperBound,
-            notes: adaptedLongRunNote(km: adaptedDist / 1_000, pace: midEasyPace, trend: snap.performanceTrend)
+            notes: adaptedLongRunNote(km: adaptedDist / 1_000, pace: midEasyPace, trend: snap.performanceTrend, unitPreference: unitPreference)
         )
         adapted.week = scheduled.week
         adapted.workoutStructure = structure
@@ -647,12 +682,11 @@ struct TrainingPlanService {
         distanceMeters: Double,
         pace: Double,
         recoverySeconds: Double,
-        trend: PerformanceTrend
+        trend: PerformanceTrend,
+        unitPreference: UnitPreference
     ) -> String {
-        let distStr = distanceMeters >= 1_000
-            ? String(format: "%.1f km", distanceMeters / 1_000)
-            : String(format: "%.0f m", distanceMeters)
-        let paceStr = pace.paceString
+        let distStr = shortDistanceString(distanceMeters, unit: unitPreference)
+        let paceStr = pace.paceString(unit: unitPreference)
         let recStr  = recoverySeconds >= 60
             ? String(format: "%.0f min", recoverySeconds / 60)
             : String(format: "%.0f s", recoverySeconds)
@@ -669,7 +703,8 @@ struct TrainingPlanService {
         totalKm: Double,
         workKm: Double,
         pace: Double,
-        trend: PerformanceTrend
+        trend: PerformanceTrend,
+        unitPreference: UnitPreference
     ) -> String {
         let trendNote: String
         switch trend {
@@ -677,24 +712,26 @@ struct TrainingPlanService {
         case .onTrack:    trendNote = "Hold comfortably hard effort throughout."
         case .struggling: trendNote = "Pace eased – focus on consistent effort, not time."
         }
-        return String(format: "%.1f km total: warm-up, %.1f km tempo @ %@, cool-down. %@",
-                      totalKm, workKm, pace.paceString, trendNote)
+        let totalStr = kmString(totalKm, unit: unitPreference)
+        let workStr  = kmString(workKm, unit: unitPreference)
+        return "\(totalStr) total: warm-up, \(workStr) tempo @ \(pace.paceString(unit: unitPreference)), cool-down. \(trendNote)"
     }
 
-    private func adaptedLongRunNote(km: Double, pace: Double, trend: PerformanceTrend) -> String {
+    private func adaptedLongRunNote(km: Double, pace: Double, trend: PerformanceTrend, unitPreference: UnitPreference) -> String {
         let trendNote: String
         switch trend {
         case .improving:  trendNote = "Full distance – aim for a slight negative split."
         case .onTrack:    trendNote = "Keep it conversational throughout."
         case .struggling: trendNote = "Distance trimmed slightly – prioritise recovery."
         }
-        return String(format: "%.1f km easy @ ~%@. %@", km, pace.paceString, trendNote)
+        return "\(kmString(km, unit: unitPreference)) easy @ ~\(pace.paceString(unit: unitPreference)). \(trendNote)"
     }
 
     private func intervalSetLabel(
         distanceMeters: Double,
         paces: TrainingPaces,
-        adaptedPace: Double
+        adaptedPace: Double,
+        unitPreference: UnitPreference
     ) -> String {
         let zone: String
         if adaptedPace <= paces.interval + 5 {
@@ -704,9 +741,6 @@ struct TrainingPlanService {
         } else {
             zone = "Tempo"
         }
-        let distStr = distanceMeters >= 1_000
-            ? String(format: "%.0f km", distanceMeters / 1_000)
-            : String(format: "%.0f m", distanceMeters)
-        return "\(zone) Intervals (\(distStr))"
+        return "\(zone) Intervals (\(shortDistanceString(distanceMeters, unit: unitPreference)))"
     }
 }
