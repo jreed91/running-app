@@ -28,7 +28,7 @@ final class AppContainer: ObservableObject {
 
     // MARK: Init
 
-    init() {
+    init(inMemory: Bool = false) {
         let schema = Schema([
             UserProfile.self,
             RunWorkout.self,
@@ -36,7 +36,16 @@ final class AppContainer: ObservableObject {
             TrainingWeek.self,
             ScheduledWorkout.self
         ])
-        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+        let config: ModelConfiguration
+        if inMemory {
+            config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        } else {
+            config = ModelConfiguration(
+                schema: schema,
+                isStoredInMemoryOnly: false,
+                cloudKitDatabase: .automatic
+            )
+        }
         let container: ModelContainer
         do {
             container = try ModelContainer(for: schema, configurations: [config])
@@ -60,8 +69,7 @@ final class AppContainer: ObservableObject {
 
     /// In-memory container for SwiftUI previews and unit tests.
     static func preview() -> AppContainer {
-        let container = AppContainer()
-        return container
+        AppContainer(inMemory: true)
     }
 }
 
@@ -71,7 +79,7 @@ import SwiftUI
 
 private struct AppContainerKey: EnvironmentKey {
     nonisolated(unsafe) static let defaultValue: AppContainer = MainActor.assumeIsolated {
-        AppContainer()
+        AppContainer(inMemory: true)
     }
 }
 
