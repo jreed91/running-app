@@ -40,7 +40,7 @@ targets:
         INFOPLIST_FILE: RunningApp/Resources/Info.plist
         TARGETED_DEVICE_FAMILY: "1"         # iPhone only
         CODE_SIGN_STYLE: Automatic
-        DEVELOPMENT_TEAM: "Jacob Reed"                # set your team ID here
+        DEVELOPMENT_TEAM: ""                # set your team ID here
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
 
@@ -84,7 +84,7 @@ targets:
         INFOPLIST_FILE: WatchApp/Info.plist
         TARGETED_DEVICE_FAMILY: "4"
         CODE_SIGN_STYLE: Automatic
-        DEVELOPMENT_TEAM: "Jacob Reed"
+        DEVELOPMENT_TEAM: ""
 
     info:
       path: WatchApp/Info.plist
@@ -106,7 +106,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.runningapp.app.tests
         CODE_SIGN_STYLE: Automatic
-        DEVELOPMENT_TEAM: "Jacob Reed"
+        DEVELOPMENT_TEAM: ""
 
     dependencies:
       - target: RunningApp
@@ -124,7 +124,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.runningapp.app.uitests
         CODE_SIGN_STYLE: Automatic
-        DEVELOPMENT_TEAM: "Jacob Reed"
+        DEVELOPMENT_TEAM: ""
         TEST_TARGET_NAME: RunningApp
 
     dependencies:
