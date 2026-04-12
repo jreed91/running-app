@@ -12,6 +12,7 @@ struct OnboardingView: View {
     @State private var name = ""
     @State private var goalRace: RaceType = .fiveK
     @State private var fitnessLevel: FitnessLevel = .beginner
+    @State private var gender: Gender = .preferNotToShare
     @State private var weeklyRunDays = 3
     @State private var goalPaceMinutes = 5
     @State private var goalPaceSeconds = 30
@@ -22,7 +23,7 @@ struct OnboardingView: View {
     @FocusState private var isNameFocused: Bool
 
     private enum OnboardingStep: CaseIterable {
-        case name, goalRace, goalPace, fitnessLevel, schedule, location, notifications, healthKit
+        case name, gender, goalRace, goalPace, fitnessLevel, schedule, location, notifications, healthKit
     }
 
     var body: some View {
@@ -45,7 +46,7 @@ struct OnboardingView: View {
     // MARK: - Permission-aware step list
 
     private func buildVisibleSteps() async {
-        var steps: [OnboardingStep] = [.name, .goalRace, .goalPace, .fitnessLevel, .schedule]
+        var steps: [OnboardingStep] = [.name, .gender, .goalRace, .goalPace, .fitnessLevel, .schedule]
 
         if locationManager.authorizationStatus == .notDetermined {
             steps.append(.location)
@@ -71,7 +72,7 @@ struct OnboardingView: View {
         switch current {
         case .name:
             nextButton(enabled: !name.trimmingCharacters(in: .whitespaces).isEmpty)
-        case .goalRace, .goalPace, .fitnessLevel:
+        case .gender, .goalRace, .goalPace, .fitnessLevel:
             nextButton(enabled: true)
         case .schedule:
             nextButton(enabled: weeklyRunDays >= 2)
@@ -113,6 +114,7 @@ struct OnboardingView: View {
     private func stepView(for step: OnboardingStep) -> some View {
         switch step {
         case .name:       nameStep
+        case .gender:     genderStep
         case .goalRace:   goalStep
         case .goalPace:   goalPaceStep
         case .fitnessLevel: fitnessStep
@@ -150,6 +152,47 @@ struct OnboardingView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
         .onTapGesture { isNameFocused = false }
+    }
+
+    private var genderStep: some View {
+        VStack(spacing: 24) {
+            Spacer()
+            Text("What is your gender?")
+                .font(.metricMedium)
+            Text("Used to personalise your training paces")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            VStack(spacing: 12) {
+                ForEach(Gender.allCases, id: \.self) { option in
+                    Button {
+                        gender = option
+                    } label: {
+                        HStack {
+                            Text(option.displayName)
+                            Spacer()
+                            if gender == option {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(.tint)
+                            }
+                        }
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(gender == option ? Color.accentColor.opacity(0.1) : Color(.secondarySystemBackground))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(gender == option ? Color.accentColor : .clear, lineWidth: 1.5)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal)
+            Spacer()
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var goalStep: some View {
@@ -314,7 +357,8 @@ struct OnboardingView: View {
             goalRace: goalRace,
             goalFinishTime: goalFinishTime,
             weeklyRunDays: weeklyRunDays,
-            fitnessLevel: fitnessLevel
+            fitnessLevel: fitnessLevel,
+            gender: gender
         )
         context.insert(profile)
 
