@@ -43,7 +43,9 @@ final class RouteGeniusViewModel {
     // MARK: Current location
 
     var currentCoordinate: CLLocationCoordinate2D?
-    private var locationTask: Task<Void, Never>?
+    // nonisolated(unsafe) lets deinit cancel the task without a MainActor hop.
+    // Task.cancel() is thread-safe so this is sound.
+    nonisolated(unsafe) private var locationTask: Task<Void, Never>?
 
     // MARK: Saved routes
 
