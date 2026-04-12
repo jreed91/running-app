@@ -5,6 +5,7 @@ import SwiftData
 
 struct PlanTabView: View {
     @Environment(AppSettings.self) private var appSettings
+    @Environment(\.appContainer) private var container
 
     @Query(filter: #Predicate<TrainingPlan> { $0.isActive == true })
     private var activePlans: [TrainingPlan]
@@ -12,6 +13,7 @@ struct PlanTabView: View {
     @Query private var profiles: [UserProfile]
 
     @State private var showNewPlanSheet = false
+    @State private var showRouteGenius = false
 
     private var activePlan: TrainingPlan? { activePlans.first }
 
@@ -36,6 +38,10 @@ struct PlanTabView: View {
                                 .padding()
                                 .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
                                 .foregroundStyle(.primary)
+                            }
+
+                            RouteGeniusCard {
+                                showRouteGenius = true
                             }
 
                             Text("PACE INSIGHTS")
@@ -81,6 +87,51 @@ struct PlanTabView: View {
             .sheet(isPresented: $showNewPlanSheet) {
                 PlanSetupView()
             }
+            .sheet(isPresented: $showRouteGenius) {
+                RouteGeniusView(
+                    viewModel: container.makeRouteGeniusViewModel(
+                        unitPreference: appSettings.unitPreference
+                    )
+                )
+            }
+        }
+    }
+}
+
+// MARK: - Route Genius Card
+
+private struct RouteGeniusCard: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.brand.opacity(0.12))
+                        .frame(width: 44, height: 44)
+                    Image(systemName: "wand.and.stars")
+                        .font(.title3)
+                        .foregroundStyle(.brand)
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Route Genius")
+                        .font(.bodyStrong)
+                        .foregroundStyle(.primary)
+                    Text("Generate a custom running route")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+            .padding()
+            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
         }
     }
 }
