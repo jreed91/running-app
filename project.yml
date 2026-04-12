@@ -86,6 +86,11 @@ targets:
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: "VMNPGK3Q29"
 
+    entitlements:
+      path: WatchApp/RunningAppWatch.entitlements
+      properties:
+        com.apple.developer.healthkit: true
+
     info:
       path: WatchApp/Info.plist
       properties:
