@@ -92,6 +92,6 @@ extension SavedRoute {
 
     /// Convenience accessor for the starting coordinate.
     var startCoordinate: Coordinate {
-        Coordinate(latitude: startLatitude, longitude: startLongitude)
+        Coordinate(CLLocationCoordinate2D(latitude: startLatitude, longitude: startLongitude))
     }
 }
