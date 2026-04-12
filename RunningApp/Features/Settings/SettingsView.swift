@@ -26,6 +26,7 @@ struct SettingsView: View {
                     profileSection(profile: profile)
                 }
                 unitsSection
+                routeGeniusSection
                 appleHealthSection
                 notificationsSection
                 aboutSection
@@ -67,6 +68,18 @@ struct SettingsView: View {
                 }
             }
             .pickerStyle(.segmented)
+        }
+    }
+
+    private var routeGeniusSection: some View {
+        Section {
+            SecureField("Paste your ORS token here", text: Bindable(appSettings).orsAPIKey)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+        } header: {
+            Text("Route Genius")
+        } footer: {
+            Text("Get a free API key at openrouteservice.org (2,000 routes/day). The key is stored only on this device.")
         }
     }
 

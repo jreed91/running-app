@@ -51,22 +51,25 @@ final class RouteGeniusViewModel {
 
     var savedRoutes: [SavedRoute] = []
 
-    // MARK: Dependencies (internal so View can read unitPreference for labels)
+    // MARK: Dependencies
 
     private let service: RouteGeniusService
     private let repository: RouteRepositoryProtocol
-    let unitPreference: UnitPreference
+    /// Kept as a reference so the view can observe `unitPreference` and `orsAPIKey` reactively.
+    let appSettings: AppSettings
+
+    var unitPreference: UnitPreference { appSettings.unitPreference }
 
     // MARK: Init
 
     init(
         service: RouteGeniusService,
         repository: RouteRepositoryProtocol,
-        unitPreference: UnitPreference
+        appSettings: AppSettings
     ) {
         self.service = service
         self.repository = repository
-        self.unitPreference = unitPreference
+        self.appSettings = appSettings
         loadSavedRoutes()
         startLocationUpdates()
     }
@@ -148,7 +151,8 @@ final class RouteGeniusViewModel {
             generatedRoute = try await service.generateRoute(
                 start: coord,
                 distanceMeters: distance,
-                routeType: routeType
+                routeType: routeType,
+                apiKey: appSettings.orsAPIKey
             )
         } catch {
             errorMessage = error.localizedDescription
