@@ -130,12 +130,13 @@ struct OnboardingView: View {
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .safeAreaInset(edge: .bottom) {
-            Button("Enable Location") {
+            Button {
                 locationManager.requestWhenInUseAuthorization()
                 withAnimation { step += 1 }
+            } label: {
+                Text("Enable Location").frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
-            .frame(maxWidth: .infinity)
             .padding()
         }
     }
@@ -157,14 +158,15 @@ struct OnboardingView: View {
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .safeAreaInset(edge: .bottom) {
-            Button("Enable Notifications") {
+            Button {
                 Task {
                     try? await NotificationService.shared.requestAuthorization()
                     withAnimation { step += 1 }
                 }
+            } label: {
+                Text("Enable Notifications").frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
-            .frame(maxWidth: .infinity)
             .padding()
         }
     }
@@ -205,10 +207,11 @@ struct OnboardingView: View {
     }
 
     private func nextButton(enabled: Bool) -> some View {
-        Button("Next") { withAnimation { step += 1 } }
-            .buttonStyle(.borderedProminent)
-            .frame(maxWidth: .infinity)
-            .disabled(!enabled)
+        Button { withAnimation { step += 1 } } label: {
+            Text("Next").frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.borderedProminent)
+        .disabled(!enabled)
     }
 
     // MARK: Actions

@@ -1,5 +1,6 @@
 import Foundation
 import HealthKit
+import CoreLocation
 
 // MARK: - Protocol
 
@@ -35,7 +36,8 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
     private static let readTypes: Set<HKObjectType> = [
         HKObjectType.workoutType(),
         HKQuantityType(.distanceWalkingRunning),
-        HKQuantityType(.heartRate)
+        HKQuantityType(.heartRate),
+        HKSeriesType.workoutRoute()
     ]
 
     var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
@@ -134,6 +136,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
 
             let hrStats = try? await fetchHeartRateStats(for: hkWorkout)
             let elevation = elevationGain(from: hkWorkout)
+            let coordinates = await fetchRouteCoordinates(for: hkWorkout)
 
             let run = RunWorkout(
                 date: hkWorkout.startDate,
@@ -145,12 +148,46 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             run.maxHeartRate = hrStats?.max
             run.elevationGainMeters = elevation
             run.healthKitWorkoutID = hkID
+            if !coordinates.isEmpty { run.routeCoordinates = coordinates }
             result.append(run)
         }
         return result
     }
 
     // MARK: - HealthKit sample helpers
+
+    private func fetchRouteCoordinates(for workout: HKWorkout) async -> [Coordinate] {
+        let predicate = HKQuery.predicateForObjects(from: workout)
+
+        // Step 1: find the HKWorkoutRoute sample(s) for this workout
+        let routes: [HKWorkoutRoute] = await withCheckedContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: HKSeriesType.workoutRoute(),
+                predicate: predicate,
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: nil
+            ) { _, samples, _ in
+                continuation.resume(returning: (samples as? [HKWorkoutRoute]) ?? [])
+            }
+            store.execute(query)
+        }
+
+        guard let route = routes.first else { return [] }
+
+        // Step 2: stream CLLocation objects from the route
+        var coordinates: [Coordinate] = []
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            let routeQuery = HKWorkoutRouteQuery(route: route) { _, locations, done, _ in
+                if let locations {
+                    coordinates += locations.map { Coordinate($0.coordinate) }
+                }
+                if done { continuation.resume() }
+            }
+            store.execute(routeQuery)
+        }
+
+        return coordinates
+    }
 
     private func fetchHeartRateStats(for workout: HKWorkout) async throws -> (avg: Double?, max: Double?) {
         let hrType = HKQuantityType(.heartRate)
