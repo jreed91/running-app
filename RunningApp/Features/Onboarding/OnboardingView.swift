@@ -7,6 +7,7 @@ import HealthKit
 struct OnboardingView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.appContainer) private var container
+    @Environment(AppSettings.self) private var appSettings
 
     @State private var name = ""
     @State private var goalRace: RaceType = .fiveK
@@ -168,16 +169,17 @@ struct OnboardingView: View {
     }
 
     private var goalPaceStep: some View {
-        VStack(spacing: 24) {
+        let minutesRange = appSettings.unitPreference == .imperial ? 4...25 : 3...15
+        return VStack(spacing: 24) {
             Spacer()
             Text("What's your goal pace?")
                 .font(.metricMedium)
-            Text("per kilometre")
+            Text(appSettings.unitPreference.paceLabel)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             HStack(spacing: 0) {
                 Picker("Minutes", selection: $goalPaceMinutes) {
-                    ForEach(3...15, id: \.self) { Text("\($0)").tag($0) }
+                    ForEach(minutesRange, id: \.self) { Text("\($0)").tag($0) }
                 }
                 .pickerStyle(.wheel)
                 .frame(width: 80)
@@ -190,7 +192,7 @@ struct OnboardingView: View {
                 }
                 .pickerStyle(.wheel)
                 .frame(width: 80)
-                Text("/ km")
+                Text("/ \(appSettings.unitPreference.distanceLabel)")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .padding(.leading, 8)
@@ -301,7 +303,10 @@ struct OnboardingView: View {
     }
 
     private func createProfileAndPlan() {
-        let paceSecondsPerKm = Double(goalPaceMinutes * 60 + goalPaceSeconds)
+        let paceSecondsRaw = Double(goalPaceMinutes * 60 + goalPaceSeconds)
+        let paceSecondsPerKm = appSettings.unitPreference == .imperial
+            ? paceSecondsRaw / 1.60934
+            : paceSecondsRaw
         let distanceKm = goalRace.distanceMeters / 1_000
         let goalFinishTime = paceSecondsPerKm * distanceKm
         let profile = UserProfile(
