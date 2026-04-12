@@ -39,11 +39,20 @@ struct OnboardingView: View {
             TextField("Runner name", text: $name)
                 .textFieldStyle(.roundedBorder)
                 .padding(.horizontal)
+                .submitLabel(.next)
+                .onSubmit {
+                    if !name.trimmingCharacters(in: .whitespaces).isEmpty {
+                        withAnimation { step += 1 }
+                    }
+                }
             Spacer()
-            nextButton(enabled: !name.trimmingCharacters(in: .whitespaces).isEmpty)
         }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .safeAreaInset(edge: .bottom) {
+            nextButton(enabled: !name.trimmingCharacters(in: .whitespaces).isEmpty)
+                .padding()
+        }
     }
 
     private var goalStep: some View {
@@ -57,10 +66,13 @@ struct OnboardingView: View {
             .pickerStyle(.segmented)
             .padding(.horizontal)
             Spacer()
-            nextButton(enabled: true)
         }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .safeAreaInset(edge: .bottom) {
+            nextButton(enabled: true)
+                .padding()
+        }
     }
 
     private var fitnessStep: some View {
@@ -74,10 +86,13 @@ struct OnboardingView: View {
             .pickerStyle(.segmented)
             .padding(.horizontal)
             Spacer()
-            nextButton(enabled: true)
         }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .safeAreaInset(edge: .bottom) {
+            nextButton(enabled: true)
+                .padding()
+        }
     }
 
     private var scheduleStep: some View {
@@ -88,10 +103,13 @@ struct OnboardingView: View {
             Stepper("\(weeklyRunDays) days", value: $weeklyRunDays, in: 2...6)
                 .padding(.horizontal)
             Spacer()
-            nextButton(enabled: weeklyRunDays >= 2)
         }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .safeAreaInset(edge: .bottom) {
+            nextButton(enabled: weeklyRunDays >= 2)
+                .padding()
+        }
     }
 
     private var locationStep: some View {
@@ -107,14 +125,18 @@ struct OnboardingView: View {
                 .foregroundStyle(.secondary)
                 .padding(.horizontal)
             Spacer()
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .safeAreaInset(edge: .bottom) {
             Button("Enable Location") {
                 locationManager.requestWhenInUseAuthorization()
                 withAnimation { step += 1 }
             }
             .buttonStyle(.borderedProminent)
+            .frame(maxWidth: .infinity)
+            .padding()
         }
-        .padding()
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var healthKitStep: some View {
@@ -130,6 +152,10 @@ struct OnboardingView: View {
                 .foregroundStyle(.secondary)
                 .padding(.horizontal)
             Spacer()
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .safeAreaInset(edge: .bottom) {
             Button {
                 Task { await requestHealthKitThenCreatePlan() }
             } label: {
@@ -144,14 +170,14 @@ struct OnboardingView: View {
             }
             .buttonStyle(.borderedProminent)
             .disabled(isCreatingPlan)
+            .padding()
         }
-        .padding()
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func nextButton(enabled: Bool) -> some View {
         Button("Next") { withAnimation { step += 1 } }
             .buttonStyle(.borderedProminent)
+            .frame(maxWidth: .infinity)
             .disabled(!enabled)
     }
 

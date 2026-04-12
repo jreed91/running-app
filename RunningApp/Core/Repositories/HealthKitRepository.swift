@@ -29,16 +29,13 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
     private static let shareTypes: Set<HKSampleType> = [
         HKObjectType.workoutType(),
         HKQuantityType(.distanceWalkingRunning),
-        HKQuantityType(.activeEnergyBurned),
         HKQuantityType(.heartRate)
     ]
 
     private static let readTypes: Set<HKObjectType> = [
         HKObjectType.workoutType(),
         HKQuantityType(.distanceWalkingRunning),
-        HKQuantityType(.heartRate),
-        HKQuantityType(.activeEnergyBurned),
-        HKQuantityType(.vo2Max)
+        HKQuantityType(.heartRate)
     ]
 
     var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
