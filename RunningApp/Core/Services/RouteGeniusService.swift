@@ -46,28 +46,68 @@ struct RouteGeniusService: Sendable {
 
     // MARK: Public API
 
-    /// Generates a running route from `start` of approximately `distanceMeters`.
+    /// Generates three distinct route options in parallel.
     ///
-    /// - Parameters:
-    ///   - start: Starting GPS coordinate.
-    ///   - distanceMeters: Requested distance in metres (±10% tolerance).
-    ///   - routeType: `.loop` or `.outAndBack`.
-    ///   - apiKey: OpenRouteService API token (set once in Settings → Route Genius).
-    /// - Returns: A ``GeneratedRoute`` with decoded coordinates and turn-by-turn steps.
-    func generateRoute(
+    /// Loop routes use different ORS seeds; out-and-back routes head in three
+    /// compass directions (NE / SE / SW) so every option looks meaningfully different.
+    /// Options whose individual request fails are silently dropped; at least one must
+    /// succeed or ``RouteError/noRouteFound`` is thrown.
+    func generateRouteOptions(
         start: CLLocationCoordinate2D,
         distanceMeters: Double,
         routeType: RouteType,
         apiKey: String
-    ) async throws -> GeneratedRoute {
+    ) async throws -> [GeneratedRoute] {
         guard !apiKey.isEmpty else { throw RouteError.missingAPIKey }
 
-        switch routeType {
-        case .loop:
-            return try await generateLoop(start: start, distanceMeters: distanceMeters, apiKey: apiKey)
-        case .outAndBack:
-            return try await generateOutAndBack(start: start, distanceMeters: distanceMeters, apiKey: apiKey)
+        let results: [GeneratedRoute] = await withTaskGroup(of: GeneratedRoute?.self) { group in
+            switch routeType {
+            case .loop:
+                let configs: [(seed: Int, label: String)] = [
+                    (1,  "Option A"),
+                    (42, "Option B"),
+                    (99, "Option C")
+                ]
+                for cfg in configs {
+                    group.addTask {
+                        try? await self.generateLoop(
+                            start: start,
+                            distanceMeters: distanceMeters,
+                            apiKey: apiKey,
+                            seed: cfg.seed,
+                            label: cfg.label
+                        )
+                    }
+                }
+            case .outAndBack:
+                let configs: [(bearing: Double, label: String)] = [
+                    (45,  "Heading Northeast"),
+                    (135, "Heading Southeast"),
+                    (225, "Heading Southwest")
+                ]
+                for cfg in configs {
+                    group.addTask {
+                        try? await self.generateOutAndBack(
+                            start: start,
+                            distanceMeters: distanceMeters,
+                            apiKey: apiKey,
+                            bearing: cfg.bearing,
+                            label: cfg.label
+                        )
+                    }
+                }
+            }
+
+            var collected: [GeneratedRoute] = []
+            for await result in group {
+                if let route = result { collected.append(route) }
+            }
+            // Sort so Option A / NE always appears first regardless of which finished first.
+            return collected.sorted { $0.label < $1.label }
         }
+
+        guard !results.isEmpty else { throw RouteError.noRouteFound }
+        return results
     }
 
     // MARK: Loop generation
@@ -75,7 +115,9 @@ struct RouteGeniusService: Sendable {
     private func generateLoop(
         start: CLLocationCoordinate2D,
         distanceMeters: Double,
-        apiKey: String
+        apiKey: String,
+        seed: Int,
+        label: String
     ) async throws -> GeneratedRoute {
         let body: [String: Any] = [
             "coordinates": [[start.longitude, start.latitude]],
@@ -83,11 +125,11 @@ struct RouteGeniusService: Sendable {
                 "round_trip": [
                     "length": distanceMeters,
                     "points": 3,
-                    "seed": Int.random(in: 0...100)
+                    "seed": seed
                 ]
             ]
         ]
-        return try await fetchRoute(body: body, apiKey: apiKey)
+        return try await fetchRoute(body: body, apiKey: apiKey, label: label)
     }
 
     // MARK: Out-and-back generation
@@ -95,10 +137,10 @@ struct RouteGeniusService: Sendable {
     private func generateOutAndBack(
         start: CLLocationCoordinate2D,
         distanceMeters: Double,
-        apiKey: String
+        apiKey: String,
+        bearing: Double,
+        label: String
     ) async throws -> GeneratedRoute {
-        // Place the turnaround point at half the requested distance in a random bearing.
-        let bearing = Double.random(in: 0..<360)
         let midpoint = coordinate(from: start, bearing: bearing, distanceMeters: distanceMeters / 2)
 
         let body: [String: Any] = [
@@ -109,11 +151,10 @@ struct RouteGeniusService: Sendable {
         ]
 
         // Fetch the outward leg.
-        let outLeg = try await fetchRoute(body: body, apiKey: apiKey)
+        let outLeg = try await fetchRoute(body: body, apiKey: apiKey, label: label)
 
         // Build the return leg by reversing the outward coordinates.
         let returnCoords = Array(outLeg.coordinates.reversed())
-        // Return steps are the outward steps reversed with "(return)" appended.
         let returnSteps = outLeg.steps.reversed().map { step in
             RouteStep(
                 instruction: step.instruction + " (return)",
@@ -127,13 +168,14 @@ struct RouteGeniusService: Sendable {
             coordinates: outLeg.coordinates + returnCoords,
             steps: outLeg.steps + returnSteps,
             distanceMeters: outLeg.distanceMeters * 2,
-            durationSeconds: outLeg.durationSeconds * 2
+            durationSeconds: outLeg.durationSeconds * 2,
+            label: label
         )
     }
 
     // MARK: Network
 
-    private func fetchRoute(body: [String: Any], apiKey: String) async throws -> GeneratedRoute {
+    private func fetchRoute(body: [String: Any], apiKey: String, label: String) async throws -> GeneratedRoute {
         guard let url = URL(string: "\(baseURL)/v2/directions/foot-walking/json") else {
             throw RouteError.noRouteFound
         }
@@ -161,7 +203,7 @@ struct RouteGeniusService: Sendable {
         do {
             let response = try JSONDecoder().decode(ORSResponse.self, from: data)
             guard let route = response.routes.first else { throw RouteError.noRouteFound }
-            return try parse(route: route)
+            return try parse(route: route, label: label)
         } catch let error as RouteError {
             throw error
         } catch {
@@ -171,7 +213,7 @@ struct RouteGeniusService: Sendable {
 
     // MARK: Parsing
 
-    private func parse(route: ORSRoute) throws -> GeneratedRoute {
+    private func parse(route: ORSRoute, label: String) throws -> GeneratedRoute {
         let coordinates = decodePolyline(route.geometry)
         guard !coordinates.isEmpty else { throw RouteError.decodingError }
 
@@ -192,7 +234,8 @@ struct RouteGeniusService: Sendable {
             coordinates: coordinates.map { Coordinate($0) },
             steps: steps,
             distanceMeters: route.summary.distance,
-            durationSeconds: route.summary.duration
+            durationSeconds: route.summary.duration,
+            label: label
         )
     }
 

@@ -37,8 +37,14 @@ final class RouteGeniusViewModel {
     // MARK: State
 
     var isGenerating: Bool = false
-    var generatedRoute: GeneratedRoute?
+    var routeOptions: [GeneratedRoute] = []
+    var selectedRouteIndex: Int? = nil
     var errorMessage: String?
+
+    var selectedRoute: GeneratedRoute? {
+        guard let i = selectedRouteIndex, routeOptions.indices.contains(i) else { return nil }
+        return routeOptions[i]
+    }
 
     // MARK: Current location
 
@@ -141,19 +147,24 @@ final class RouteGeniusViewModel {
         startCoordinate != nil && requestedDistanceMeters != nil && !isGenerating
     }
 
-    func generateRoute() async {
+    var canSave: Bool { selectedRoute != nil }
+
+    func generateRouteOptions() async {
         guard let coord = startCoordinate, let distance = requestedDistanceMeters else { return }
         isGenerating = true
-        generatedRoute = nil
+        routeOptions = []
+        selectedRouteIndex = nil
         errorMessage = nil
 
         do {
-            generatedRoute = try await service.generateRoute(
+            routeOptions = try await service.generateRouteOptions(
                 start: coord,
                 distanceMeters: distance,
                 routeType: routeType,
                 apiKey: appSettings.orsAPIKey
             )
+            // Auto-select the first option so the map appears immediately.
+            if !routeOptions.isEmpty { selectedRouteIndex = 0 }
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -164,7 +175,7 @@ final class RouteGeniusViewModel {
     // MARK: Saving
 
     func saveRoute(name: String) {
-        guard let route = generatedRoute, let coord = startCoordinate else { return }
+        guard let route = selectedRoute, let coord = startCoordinate else { return }
 
         let finalName = name.trimmingCharacters(in: .whitespaces).isEmpty
             ? defaultRouteName
