@@ -28,9 +28,59 @@ struct OnboardingView: View {
         .tabViewStyle(.page(indexDisplayMode: .always))
         .animation(.easeInOut, value: step)
         .ignoresSafeArea(edges: .top)
+        .safeAreaInset(edge: .bottom) {
+            stepButton
+                .padding(.horizontal)
+                .padding(.bottom)
+        }
     }
 
-    // MARK: Steps
+    // MARK: - Step button
+
+    @ViewBuilder
+    private var stepButton: some View {
+        switch step {
+        case 0:
+            nextButton(enabled: !name.trimmingCharacters(in: .whitespaces).isEmpty)
+        case 1, 2:
+            nextButton(enabled: true)
+        case 3:
+            nextButton(enabled: weeklyRunDays >= 2)
+        case 4:
+            Button {
+                locationManager.requestWhenInUseAuthorization()
+                withAnimation { step += 1 }
+            } label: {
+                Text("Enable Location").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+        case 5:
+            Button {
+                Task {
+                    try? await NotificationService.shared.requestAuthorization()
+                    withAnimation { step += 1 }
+                }
+            } label: {
+                Text("Enable Notifications").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+        case 6:
+            Button {
+                Task { await requestHealthKitThenCreatePlan() }
+            } label: {
+                Group {
+                    if isCreatingPlan { ProgressView() } else { Text("Start Training") }
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(isCreatingPlan)
+        default:
+            EmptyView()
+        }
+    }
+
+    // MARK: - Steps
 
     private var nameStep: some View {
         VStack(spacing: 24) {
@@ -50,10 +100,6 @@ struct OnboardingView: View {
         }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .safeAreaInset(edge: .bottom) {
-            nextButton(enabled: !name.trimmingCharacters(in: .whitespaces).isEmpty)
-                .padding()
-        }
     }
 
     private var goalStep: some View {
@@ -70,10 +116,6 @@ struct OnboardingView: View {
         }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .safeAreaInset(edge: .bottom) {
-            nextButton(enabled: true)
-                .padding()
-        }
     }
 
     private var fitnessStep: some View {
@@ -90,10 +132,6 @@ struct OnboardingView: View {
         }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .safeAreaInset(edge: .bottom) {
-            nextButton(enabled: true)
-                .padding()
-        }
     }
 
     private var scheduleStep: some View {
@@ -107,10 +145,6 @@ struct OnboardingView: View {
         }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .safeAreaInset(edge: .bottom) {
-            nextButton(enabled: weeklyRunDays >= 2)
-                .padding()
-        }
     }
 
     private var locationStep: some View {
@@ -129,16 +163,6 @@ struct OnboardingView: View {
         }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .safeAreaInset(edge: .bottom) {
-            Button {
-                locationManager.requestWhenInUseAuthorization()
-                withAnimation { step += 1 }
-            } label: {
-                Text("Enable Location").frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .padding()
-        }
     }
 
     private var notificationsStep: some View {
@@ -157,18 +181,6 @@ struct OnboardingView: View {
         }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .safeAreaInset(edge: .bottom) {
-            Button {
-                Task {
-                    try? await NotificationService.shared.requestAuthorization()
-                    withAnimation { step += 1 }
-                }
-            } label: {
-                Text("Enable Notifications").frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .padding()
-        }
     }
 
     private var healthKitStep: some View {
@@ -187,23 +199,6 @@ struct OnboardingView: View {
         }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .safeAreaInset(edge: .bottom) {
-            Button {
-                Task { await requestHealthKitThenCreatePlan() }
-            } label: {
-                Group {
-                    if isCreatingPlan {
-                        ProgressView()
-                    } else {
-                        Text("Start Training")
-                    }
-                }
-                .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(isCreatingPlan)
-            .padding()
-        }
     }
 
     private func nextButton(enabled: Bool) -> some View {
@@ -214,11 +209,10 @@ struct OnboardingView: View {
         .disabled(!enabled)
     }
 
-    // MARK: Actions
+    // MARK: - Actions
 
     private func requestHealthKitThenCreatePlan() async {
         isCreatingPlan = true
-        // Request HealthKit access; proceed regardless of whether it's granted
         try? await container.healthKitRepository.requestAuthorization()
         createProfileAndPlan()
     }
