@@ -5,6 +5,7 @@ echo "--- Installing XcodeGen ---"
 brew install xcodegen
 
 echo "--- Generating Xcode project from project.yml ---"
+cd "$CI_PRIMARY_REPOSITORY_PATH"
 xcodegen generate
 
 echo "--- Project generation complete ---"
