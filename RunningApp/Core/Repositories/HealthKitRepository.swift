@@ -1,6 +1,7 @@
 import Foundation
 import HealthKit
 import CoreLocation
+import WorkoutKit
 
 // MARK: - Protocol
 
@@ -9,9 +10,10 @@ protocol HealthKitRepositoryProtocol: Sendable {
     func requestAuthorization() async throws
     @MainActor func save(_ workout: RunWorkout) async throws -> String
     func fetchWorkouts(from startDate: Date, to endDate: Date) async throws -> [HKWorkout]
-    /// Assigns a local tracking ID to each non-rest scheduled workout in the plan.
+    /// Schedules each non-rest future workout in the plan as a WorkoutKit composition
+    /// so it appears in the Apple Watch Workout app and the Fitness app.
     @MainActor func syncWorkoutPlans(for plan: TrainingPlan) async throws
-    /// Clears the local tracking IDs for every workout in the plan.
+    /// Removes all WorkoutKit scheduled compositions for the plan.
     @MainActor func removeWorkoutPlans(for plan: TrainingPlan) async throws
     /// Fetches running workouts from HealthKit, converts them to RunWorkout models,
     /// and skips any whose HK UUID is already in `existingIDs`.
@@ -66,23 +68,100 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         return hkWorkout.uuid.uuidString
     }
 
-    // MARK: - Workout plans (planned workouts)
+    // MARK: - Workout plans (WorkoutKit)
 
     @MainActor func syncWorkoutPlans(for plan: TrainingPlan) async throws {
+        let scheduler = WorkoutScheduler.shared
+
+        // Request authorization if not yet determined
+        if await scheduler.authorizationStatus == .notDetermined {
+            try await scheduler.requestAuthorization()
+        }
+        guard await scheduler.authorizationStatus == .sharingAuthorized else { return }
+
+        let now = Date()
         for week in plan.weeks {
-            for workout in week.workouts where workout.workoutType != .rest {
-                guard workout.healthKitPlanID == nil else { continue }
-                workout.healthKitPlanID = UUID().uuidString
+            for workout in week.workouts
+            where workout.workoutType != .rest
+               && !workout.isCompleted
+               && workout.scheduledDate > now
+               && workout.healthKitPlanID == nil
+            {
+                let composition = makeWorkoutComposition(for: workout)
+                let scheduled = try await scheduler.schedule(composition, date: workout.scheduledDate)
+                workout.healthKitPlanID = scheduled.id.uuidString
             }
         }
     }
 
     @MainActor func removeWorkoutPlans(for plan: TrainingPlan) async throws {
-        for week in plan.weeks {
-            for workout in week.workouts {
-                workout.healthKitPlanID = nil
+        let scheduler = WorkoutScheduler.shared
+        guard await scheduler.authorizationStatus == .sharingAuthorized else {
+            // Clear local IDs even if we can't reach WorkoutKit
+            plan.weeks.flatMap(\.workouts).forEach { $0.healthKitPlanID = nil }
+            return
+        }
+
+        let ids = Set(plan.weeks.flatMap(\.workouts).compactMap(\.healthKitPlanID))
+        guard !ids.isEmpty else { return }
+
+        let dates = plan.weeks.flatMap(\.workouts).map(\.scheduledDate)
+        if let earliest = dates.min(), let latest = dates.max() {
+            let scheduled = try await scheduler.scheduledCompositions(
+                from: earliest.addingTimeInterval(-86_400),
+                to: latest.addingTimeInterval(86_400)
+            )
+            for entry in scheduled where ids.contains(entry.id.uuidString) {
+                try await scheduler.remove(entry)
             }
         }
+
+        plan.weeks.flatMap(\.workouts).forEach { $0.healthKitPlanID = nil }
+    }
+
+    // MARK: - WorkoutKit composition builder
+
+    private func makeWorkoutComposition(for workout: ScheduledWorkout) -> WorkoutComposition {
+        let warmup = WarmupStep(goal: .open)
+        let cooldown = CooldownStep(goal: .open)
+        let blocks: [IntervalBlock]
+
+        if workout.workoutType == .interval && !workout.intervals.isEmpty {
+            // Build one block per interval definition
+            blocks = workout.intervals.map { interval in
+                let workGoal: WorkoutGoal
+                if let distance = interval.distanceMeters {
+                    workGoal = .distance(distance, .meters)
+                } else if let duration = interval.durationSeconds {
+                    workGoal = .time(duration, .seconds)
+                } else {
+                    workGoal = .open
+                }
+                let workStep = IntervalStep(purpose: .work, goal: workGoal)
+                let restStep = IntervalStep(
+                    purpose: .recovery,
+                    goal: .time(interval.recoverySeconds, .seconds)
+                )
+                return IntervalBlock(
+                    steps: [workStep, restStep],
+                    iterations: interval.repetitions
+                )
+            }
+        } else {
+            let goal: WorkoutGoal = workout.targetDistanceMeters
+                .map { .distance($0, .meters) } ?? .open
+            let workStep = IntervalStep(purpose: .work, goal: goal)
+            blocks = [IntervalBlock(steps: [workStep], iterations: 1)]
+        }
+
+        let activity = CustomWorkoutActivity(
+            displayName: workout.workoutType.displayName,
+            sport: .running,
+            warmup: warmup,
+            blocks: blocks,
+            cooldown: cooldown
+        )
+        return WorkoutComposition(activities: [activity])
     }
 
     // MARK: - Historical workout fetch

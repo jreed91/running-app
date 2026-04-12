@@ -48,6 +48,7 @@ targets:
       path: RunningApp/Resources/RunningApp.entitlements
       properties:
         com.apple.developer.healthkit: true
+        com.apple.developer.workout-information: true
 
     info:
       path: RunningApp/Resources/Info.plist
