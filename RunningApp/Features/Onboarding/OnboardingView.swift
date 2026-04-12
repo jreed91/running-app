@@ -265,7 +265,7 @@ struct OnboardingView: View {
         context.insert(profile)
 
         let startDate = Date().startOfWeek.adding(weeks: 1)
-        let numberOfWeeks = goalRace == .fiveK ? 8 : 12
+        let numberOfWeeks = goalRace.typicalWeeks.lowerBound
         let plan = container.trainingPlanService.generatePlan(
             profile: profile,
             startDate: startDate,
