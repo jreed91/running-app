@@ -1,7 +1,7 @@
 import Foundation
 import HealthKit
 import CoreLocation
-import WorkoutKit
+@preconcurrency import WorkoutKit
 
 // MARK: - Protocol
 
@@ -74,11 +74,11 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         guard WorkoutScheduler.isSupported else { return }
         let scheduler = WorkoutScheduler.shared
 
-        if scheduler.authorizationState == .notDetermined {
+        if await scheduler.authorizationState == .notDetermined {
             let state = await scheduler.requestAuthorization()
             guard state == .authorized else { return }
         }
-        guard scheduler.authorizationState == .authorized else { return }
+        guard await scheduler.authorizationState == .authorized else { return }
 
         let now = Date()
         for week in plan.weeks {
@@ -105,12 +105,13 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
 
         guard WorkoutScheduler.isSupported else { return }
         let scheduler = WorkoutScheduler.shared
-        guard scheduler.authorizationState == .authorized else { return }
+        guard await scheduler.authorizationState == .authorized else { return }
 
         let ids = Set(allWorkouts.compactMap(\.healthKitPlanID))
         guard !ids.isEmpty else { return }
 
-        for entry in scheduler.scheduledWorkouts where ids.contains(entry.plan.id.uuidString) {
+        let scheduled = await scheduler.scheduledWorkouts
+        for entry in scheduled where ids.contains(entry.plan.id.uuidString) {
             await scheduler.remove(entry.plan, at: entry.date)
         }
     }
