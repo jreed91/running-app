@@ -5,6 +5,7 @@ struct PlanSetupView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.appContainer) private var container
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppSettings.self) private var appSettings
 
     @Query private var profiles: [UserProfile]
 
@@ -214,7 +215,8 @@ struct PlanSetupView: View {
             profile: profile,
             startDate: startDate,
             numberOfWeeks: effectiveWeeks,
-            runDayIndices: sortedSelectedDays
+            runDayIndices: sortedSelectedDays,
+            unitPreference: appSettings.unitPreference
         )
         context.insert(plan)
         try? context.save()

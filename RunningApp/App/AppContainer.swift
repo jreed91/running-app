@@ -65,13 +65,15 @@ final class AppContainer: ObservableObject {
     func adaptedWorkout(
         scheduled: ScheduledWorkout,
         history: [RunWorkout],
-        profile: UserProfile
+        profile: UserProfile,
+        unitPreference: UnitPreference = .metric
     ) -> ScheduledWorkout {
         guard !history.isEmpty else { return scheduled }
         return trainingPlanService.adaptWorkout(
             scheduled: scheduled,
             history: history,
-            profile: profile
+            profile: profile,
+            unitPreference: unitPreference
         )
     }
 

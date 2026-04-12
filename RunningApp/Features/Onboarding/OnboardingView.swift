@@ -323,7 +323,8 @@ struct OnboardingView: View {
         let plan = container.trainingPlanService.generatePlan(
             profile: profile,
             startDate: startDate,
-            numberOfWeeks: numberOfWeeks
+            numberOfWeeks: numberOfWeeks,
+            unitPreference: appSettings.unitPreference
         )
         context.insert(plan)
         try? context.save()

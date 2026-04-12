@@ -63,7 +63,8 @@ struct WorkoutDetailView: View {
         let adapted = container.adaptedWorkout(
             scheduled: workout,
             history: Array(recentWorkouts.prefix(50)),
-            profile: profile
+            profile: profile,
+            unitPreference: appSettings.unitPreference
         )
         // Mutate the existing model in-place so SwiftData tracks the change
         workout.workoutStructure     = adapted.workoutStructure
