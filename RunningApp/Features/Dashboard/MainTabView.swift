@@ -7,7 +7,7 @@ struct MainTabView: View {
                 DashboardView()
             }
             Tab("Plan", systemImage: "calendar") {
-                TrainingPlanListView()
+                PlanTabView()
             }
             Tab("History", systemImage: "clock.arrow.circlepath") {
                 HistoryView()
