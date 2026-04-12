@@ -1,6 +1,8 @@
 import SwiftUI
 import SwiftData
 import CoreLocation
+import UserNotifications
+import HealthKit
 
 struct OnboardingView: View {
     @Environment(\.modelContext) private var context
@@ -11,60 +13,84 @@ struct OnboardingView: View {
     @State private var fitnessLevel: FitnessLevel = .beginner
     @State private var weeklyRunDays = 3
     @State private var goalMinutes = 25.0
-    @State private var step = 0
+    @State private var stepIndex = 0
     @State private var isCreatingPlan = false
     @State private var locationManager = CLLocationManager()
+    @State private var visibleSteps: [OnboardingStep] = OnboardingStep.allCases
+
+    private enum OnboardingStep: CaseIterable {
+        case name, goalRace, fitnessLevel, schedule, location, notifications, healthKit
+    }
 
     var body: some View {
-        TabView(selection: $step) {
-            nameStep.tag(0)
-            goalStep.tag(1)
-            fitnessStep.tag(2)
-            scheduleStep.tag(3)
-            locationStep.tag(4)
-            notificationsStep.tag(5)
-            healthKitStep.tag(6)
+        TabView(selection: $stepIndex) {
+            ForEach(Array(visibleSteps.enumerated()), id: \.offset) { index, stepCase in
+                stepView(for: stepCase).tag(index)
+            }
         }
         .tabViewStyle(.page(indexDisplayMode: .always))
-        .animation(.easeInOut, value: step)
+        .animation(.easeInOut, value: stepIndex)
         .ignoresSafeArea(edges: .top)
         .safeAreaInset(edge: .bottom) {
             stepButton
                 .padding(.horizontal)
                 .padding(.bottom)
         }
+        .task { await buildVisibleSteps() }
+    }
+
+    // MARK: - Permission-aware step list
+
+    private func buildVisibleSteps() async {
+        var steps: [OnboardingStep] = [.name, .goalRace, .fitnessLevel, .schedule]
+
+        if locationManager.authorizationStatus == .notDetermined {
+            steps.append(.location)
+        }
+
+        let notifStatus = await UNUserNotificationCenter.current().notificationSettings()
+        if notifStatus.authorizationStatus == .notDetermined {
+            steps.append(.notifications)
+        }
+
+        // HealthKit step is always last — it triggers plan creation.
+        // requestAuthorization is a no-op if the user has already responded.
+        steps.append(.healthKit)
+
+        visibleSteps = steps
     }
 
     // MARK: - Step button
 
     @ViewBuilder
     private var stepButton: some View {
-        switch step {
-        case 0:
+        let current = visibleSteps.indices.contains(stepIndex) ? visibleSteps[stepIndex] : .name
+        switch current {
+        case .name:
             nextButton(enabled: !name.trimmingCharacters(in: .whitespaces).isEmpty)
-        case 1, 2:
+        case .goalRace, .fitnessLevel:
             nextButton(enabled: true)
-        case 3:
+        case .schedule:
             nextButton(enabled: weeklyRunDays >= 2)
-        case 4:
+        case .location:
             Button {
                 locationManager.requestWhenInUseAuthorization()
-                withAnimation { step += 1 }
+                withAnimation { stepIndex += 1 }
             } label: {
                 Text("Enable Location").frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
-        case 5:
+        case .notifications:
             Button {
                 Task {
                     try? await NotificationService.shared.requestAuthorization()
-                    withAnimation { step += 1 }
+                    withAnimation { stepIndex += 1 }
                 }
             } label: {
                 Text("Enable Notifications").frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
-        case 6:
+        case .healthKit:
             Button {
                 Task { await requestHealthKitThenCreatePlan() }
             } label: {
@@ -75,12 +101,23 @@ struct OnboardingView: View {
             }
             .buttonStyle(.borderedProminent)
             .disabled(isCreatingPlan)
-        default:
-            EmptyView()
         }
     }
 
-    // MARK: - Steps
+    // MARK: - Step views
+
+    @ViewBuilder
+    private func stepView(for step: OnboardingStep) -> some View {
+        switch step {
+        case .name:       nameStep
+        case .goalRace:   goalStep
+        case .fitnessLevel: fitnessStep
+        case .schedule:   scheduleStep
+        case .location:   locationStep
+        case .notifications: notificationsStep
+        case .healthKit:  healthKitStep
+        }
+    }
 
     private var nameStep: some View {
         VStack(spacing: 24) {
@@ -93,7 +130,7 @@ struct OnboardingView: View {
                 .submitLabel(.next)
                 .onSubmit {
                     if !name.trimmingCharacters(in: .whitespaces).isEmpty {
-                        withAnimation { step += 1 }
+                        withAnimation { stepIndex += 1 }
                     }
                 }
             Spacer()
@@ -202,7 +239,7 @@ struct OnboardingView: View {
     }
 
     private func nextButton(enabled: Bool) -> some View {
-        Button { withAnimation { step += 1 } } label: {
+        Button { withAnimation { stepIndex += 1 } } label: {
             Text("Next").frame(maxWidth: .infinity)
         }
         .buttonStyle(.borderedProminent)
