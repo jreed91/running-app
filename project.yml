@@ -48,6 +48,7 @@ targets:
       path: RunningApp/Resources/RunningApp.entitlements
       properties:
         com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.background-delivery: true
 
     info:
       path: RunningApp/Resources/Info.plist
@@ -55,6 +56,7 @@ targets:
         CFBundleIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER)
         UIBackgroundModes:
           - location
+          - healthkit-background-delivery
         NSLocationWhenInUseUsageDescription: "RunningApp uses your location to track your route during a run."
         NSLocationAlwaysAndWhenInUseUsageDescription: "RunningApp uses your location in the background to continue tracking your route."
         NSHealthShareUsageDescription: "RunningApp reads your workout and heart-rate history to show training insights."

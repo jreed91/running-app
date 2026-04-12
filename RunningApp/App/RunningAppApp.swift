@@ -16,6 +16,9 @@ struct RunningAppApp: App {
                 .task {
                     try? await container.notificationService.requestAuthorization()
                 }
+                .task {
+                    await container.workoutSyncService.startObserving()
+                }
         }
     }
 }
