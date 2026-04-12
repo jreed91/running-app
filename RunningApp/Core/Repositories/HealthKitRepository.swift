@@ -71,13 +71,14 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
     // MARK: - Workout plans (WorkoutKit)
 
     @MainActor func syncWorkoutPlans(for plan: TrainingPlan) async throws {
+        guard WorkoutScheduler.isSupported else { return }
         let scheduler = WorkoutScheduler.shared
 
-        // Request authorization if not yet determined
-        if await scheduler.authorizationStatus == .notDetermined {
-            try await scheduler.requestAuthorization()
+        if scheduler.authorizationState == .notDetermined {
+            let state = await scheduler.requestAuthorization()
+            guard state == .authorized else { return }
         }
-        guard await scheduler.authorizationStatus == .sharingAuthorized else { return }
+        guard scheduler.authorizationState == .authorized else { return }
 
         let now = Date()
         for week in plan.weeks {
@@ -87,81 +88,74 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
                && workout.scheduledDate > now
                && workout.healthKitPlanID == nil
             {
-                let composition = makeWorkoutComposition(for: workout)
-                let scheduled = try await scheduler.schedule(composition, date: workout.scheduledDate)
-                workout.healthKitPlanID = scheduled.id.uuidString
+                let workoutPlan = makeWorkoutPlan(for: workout)
+                let dateComponents = Calendar.current.dateComponents(
+                    [.year, .month, .day, .hour, .minute],
+                    from: workout.scheduledDate
+                )
+                await scheduler.schedule(workoutPlan, at: dateComponents)
+                workout.healthKitPlanID = workoutPlan.id.uuidString
             }
         }
     }
 
     @MainActor func removeWorkoutPlans(for plan: TrainingPlan) async throws {
-        let scheduler = WorkoutScheduler.shared
-        guard await scheduler.authorizationStatus == .sharingAuthorized else {
-            // Clear local IDs even if we can't reach WorkoutKit
-            plan.weeks.flatMap(\.workouts).forEach { $0.healthKitPlanID = nil }
-            return
-        }
+        let allWorkouts = plan.weeks.flatMap(\.workouts)
+        defer { allWorkouts.forEach { $0.healthKitPlanID = nil } }
 
-        let ids = Set(plan.weeks.flatMap(\.workouts).compactMap(\.healthKitPlanID))
+        guard WorkoutScheduler.isSupported else { return }
+        let scheduler = WorkoutScheduler.shared
+        guard scheduler.authorizationState == .authorized else { return }
+
+        let ids = Set(allWorkouts.compactMap(\.healthKitPlanID))
         guard !ids.isEmpty else { return }
 
-        let dates = plan.weeks.flatMap(\.workouts).map(\.scheduledDate)
-        if let earliest = dates.min(), let latest = dates.max() {
-            let scheduled = try await scheduler.scheduledCompositions(
-                from: earliest.addingTimeInterval(-86_400),
-                to: latest.addingTimeInterval(86_400)
-            )
-            for entry in scheduled where ids.contains(entry.id.uuidString) {
-                try await scheduler.remove(entry)
-            }
+        for entry in scheduler.scheduledWorkouts where ids.contains(entry.plan.id.uuidString) {
+            await scheduler.remove(entry.plan, at: entry.date)
         }
-
-        plan.weeks.flatMap(\.workouts).forEach { $0.healthKitPlanID = nil }
     }
 
-    // MARK: - WorkoutKit composition builder
+    // MARK: - WorkoutKit plan builder
 
-    private func makeWorkoutComposition(for workout: ScheduledWorkout) -> WorkoutComposition {
-        let warmup = WarmupStep(goal: .open)
-        let cooldown = CooldownStep(goal: .open)
+    private func makeWorkoutPlan(for workout: ScheduledWorkout) -> WorkoutPlan {
+        let warmup = WorkoutStep(goal: .open, alert: nil)
+        let cooldown = WorkoutStep(goal: .open, alert: nil)
         let blocks: [IntervalBlock]
 
         if workout.workoutType == .interval && !workout.intervals.isEmpty {
-            // Build one block per interval definition
             blocks = workout.intervals.map { interval in
                 let workGoal: WorkoutGoal
                 if let distance = interval.distanceMeters {
-                    workGoal = .distance(distance, .meters)
+                    workGoal = .distance(distance, UnitLength.meters)
                 } else if let duration = interval.durationSeconds {
-                    workGoal = .time(duration, .seconds)
+                    workGoal = .time(duration, UnitDuration.seconds)
                 } else {
                     workGoal = .open
                 }
-                let workStep = IntervalStep(purpose: .work, goal: workGoal)
+                let workStep = IntervalStep(.work, goal: workGoal, alert: nil)
                 let restStep = IntervalStep(
-                    purpose: .recovery,
-                    goal: .time(interval.recoverySeconds, .seconds)
+                    .recovery,
+                    goal: .time(interval.recoverySeconds, UnitDuration.seconds),
+                    alert: nil
                 )
-                return IntervalBlock(
-                    steps: [workStep, restStep],
-                    iterations: interval.repetitions
-                )
+                return IntervalBlock(steps: [workStep, restStep], iterations: interval.repetitions)
             }
         } else {
             let goal: WorkoutGoal = workout.targetDistanceMeters
-                .map { .distance($0, .meters) } ?? .open
-            let workStep = IntervalStep(purpose: .work, goal: goal)
+                .map { .distance($0, UnitLength.meters) } ?? .open
+            let workStep = IntervalStep(.work, goal: goal, alert: nil)
             blocks = [IntervalBlock(steps: [workStep], iterations: 1)]
         }
 
-        let activity = CustomWorkoutActivity(
+        let customWorkout = CustomWorkout(
+            activity: .running,
+            location: .outdoor,
             displayName: workout.workoutType.displayName,
-            sport: .running,
             warmup: warmup,
             blocks: blocks,
             cooldown: cooldown
         )
-        return WorkoutComposition(activities: [activity])
+        return WorkoutPlan(.custom(customWorkout), id: UUID())
     }
 
     // MARK: - Historical workout fetch
