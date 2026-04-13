@@ -32,7 +32,7 @@ xcodebuild archive -scheme RunningApp -archivePath build/RunningApp.xcarchive
 
 The Xcode project is generated from **`project.yml`** using [XcodeGen](https://github.com/yonaskolb/XcodeGen). Edit `project.yml` to add targets, files, capabilities, or build settings — do **not** hand-edit the `.xcodeproj`.
 
-- **iOS / watchOS deployment target**: 26.0
+- **iOS deployment target**: 26.0
 - **Swift**: 6.0 with `SWIFT_STRICT_CONCURRENCY: complete`
 - **No third-party dependencies** — 100% Apple frameworks
 
@@ -67,7 +67,6 @@ Business logic (plan generation, pace calculations) lives in **Services** with n
 | `RunningApp/Core/Services/` | `TrainingPlanService`, `PaceCalculatorService`, `WorkoutTrackerService`, `NotificationService`, `WorkoutAnalyticsService` |
 | `RunningApp/Features/` | One folder per screen: `Dashboard`, `Training`, `ActiveRun`, `History`, `Progress`, `Settings`, `Onboarding` |
 | `RunningApp/Shared/` | Reusable `Components/`, `Extensions/`, `Theme/` |
-| `WatchApp/` | watchOS companion target |
 | `RunningAppTests/` | Unit tests using **Swift Testing** (`@Test`, `#expect`) |
 
 ---
