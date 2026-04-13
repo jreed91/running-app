@@ -63,6 +63,22 @@ enum FitnessLevel: String, Codable, CaseIterable, Sendable {
     }
 }
 
+// MARK: - Gender
+
+enum Gender: String, Codable, CaseIterable, Sendable {
+    case male               = "male"
+    case female             = "female"
+    case preferNotToShare   = "prefer_not_to_share"
+
+    var displayName: String {
+        switch self {
+        case .male:             return "Male"
+        case .female:           return "Female"
+        case .preferNotToShare: return "Prefer not to share"
+        }
+    }
+}
+
 // MARK: - WorkoutType
 
 enum WorkoutType: String, Codable, CaseIterable, Sendable {

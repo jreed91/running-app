@@ -150,12 +150,23 @@ struct TrainingPlanService {
         if let time5K = profile.currentEstimated5KTimeSeconds, time5K > 0 {
             return PaceCalculatorService.vdot(distanceMeters: 5_000, timeSeconds: time5K)
         }
-        // Fall back: derive a rough VDOT from fitness level
+        // Fall back: derive a rough VDOT from fitness level and gender.
+        // Female runners typically run ~14-15% slower at equivalent fitness levels,
+        // which maps to a meaningfully lower VDOT and appropriately easier training paces.
         let fallback5KSeconds: Double
-        switch profile.fitnessLevel {
-        case .beginner:     fallback5KSeconds = 35 * 60   // 35:00
-        case .intermediate: fallback5KSeconds = 27 * 60   // 27:00
-        case .advanced:     fallback5KSeconds = 21 * 60   // 21:00
+        switch profile.gender {
+        case .female:
+            switch profile.fitnessLevel {
+            case .beginner:     fallback5KSeconds = 40 * 60   // 40:00
+            case .intermediate: fallback5KSeconds = 31 * 60   // 31:00
+            case .advanced:     fallback5KSeconds = 24 * 60   // 24:00
+            }
+        case .male, .preferNotToShare:
+            switch profile.fitnessLevel {
+            case .beginner:     fallback5KSeconds = 35 * 60   // 35:00
+            case .intermediate: fallback5KSeconds = 27 * 60   // 27:00
+            case .advanced:     fallback5KSeconds = 21 * 60   // 21:00
+            }
         }
         return PaceCalculatorService.vdot(distanceMeters: 5_000, timeSeconds: fallback5KSeconds)
     }
