@@ -129,7 +129,8 @@ struct ProgressDashboardView: View {
                                     .font(.caption).bold()
                             }
                             .padding(.horizontal, 8).padding(.vertical, 5)
-                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                            .background(Color.surfacePrimary, in: RoundedRectangle(cornerRadius: 8))
+                            .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
                         }
                 }
             }
@@ -181,7 +182,8 @@ struct ProgressDashboardView: View {
                                     .font(.caption).bold()
                             }
                             .padding(.horizontal, 8).padding(.vertical, 5)
-                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                            .background(Color.surfacePrimary, in: RoundedRectangle(cornerRadius: 8))
+                            .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
                         }
                 }
             }
@@ -248,7 +250,8 @@ struct ProgressDashboardView: View {
                                         .font(.caption).bold()
                                 }
                                 .padding(.horizontal, 8).padding(.vertical, 5)
-                                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                                .background(Color.surfacePrimary, in: RoundedRectangle(cornerRadius: 8))
+                                .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
                             }
                     }
                 }
@@ -349,7 +352,8 @@ struct ProgressDashboardView: View {
                                         .font(.caption).bold()
                                 }
                                 .padding(.horizontal, 8).padding(.vertical, 5)
-                                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                                .background(Color.surfacePrimary, in: RoundedRectangle(cornerRadius: 8))
+                                .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
                             }
                     }
                 }
@@ -399,7 +403,8 @@ struct ProgressDashboardView: View {
                                         .font(.caption).bold()
                                 }
                                 .padding(.horizontal, 8).padding(.vertical, 5)
-                                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                                .background(Color.surfacePrimary, in: RoundedRectangle(cornerRadius: 8))
+                                .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
                             }
                     }
                 }
@@ -455,7 +460,8 @@ struct ProgressDashboardView: View {
                                         .font(.caption).bold()
                                 }
                                 .padding(.horizontal, 8).padding(.vertical, 5)
-                                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                                .background(Color.surfacePrimary, in: RoundedRectangle(cornerRadius: 8))
+                                .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
                             }
                     }
                 }
