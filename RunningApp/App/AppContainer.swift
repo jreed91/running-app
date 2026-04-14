@@ -101,6 +101,17 @@ final class AppContainer: ObservableObject {
         )
     }
 
+    // MARK: - Schedule management
+
+    /// Redistributes uncompleted future workouts to match the given run day indices.
+    func rescheduleWorkouts(
+        in plan: TrainingPlan,
+        newDayIndices: [Int],
+        profile: UserProfile?
+    ) {
+        trainingPlanService.applyNewRunDays(to: plan, newDayIndices: newDayIndices, profile: profile)
+    }
+
     // MARK: Preview support
 
     /// In-memory container for SwiftUI previews and unit tests.
