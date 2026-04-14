@@ -15,6 +15,7 @@ struct PlanDetailView: View {
     @State private var showRescheduleConfirmation = false
     @State private var selectedDays: Set<Int> = []
     @State private var workoutToEdit: ScheduledWorkout? = nil
+    @State private var weekToAddWorkout: TrainingWeek? = nil
 
     // MARK: - Derived state
 
@@ -44,7 +45,8 @@ struct PlanDetailView: View {
                     WeekCardView(
                         week: week,
                         onEditWorkout: { workout in workoutToEdit = workout },
-                        onDeleteWorkout: { workout in deleteWorkout(workout) }
+                        onDeleteWorkout: { workout in deleteWorkout(workout) },
+                        onAddWorkout: { week in weekToAddWorkout = week }
                     )
                 }
             }
@@ -90,6 +92,9 @@ struct PlanDetailView: View {
         }
         .sheet(item: $workoutToEdit) { workout in
             WorkoutEditView(workout: workout)
+        }
+        .sheet(item: $weekToAddWorkout) { week in
+            WorkoutEditView(week: week)
         }
         .onAppear {
             selectedDays = currentPlanDayIndices
@@ -157,6 +162,7 @@ struct WeekCardView: View {
     let week: TrainingWeek
     var onEditWorkout: (ScheduledWorkout) -> Void
     var onDeleteWorkout: (ScheduledWorkout) -> Void
+    var onAddWorkout: (TrainingWeek) -> Void
 
     @Environment(AppSettings.self) private var appSettings
     @State private var isExpanded = false
@@ -213,6 +219,17 @@ struct WeekCardView: View {
                     }
                     Divider().padding(.leading)
                 }
+                Button {
+                    onAddWorkout(week)
+                } label: {
+                    Label("Add Workout", systemImage: "plus")
+                        .font(.bodyRegular)
+                        .foregroundStyle(.brand)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal)
+                        .padding(.vertical, 12)
+                }
+                .buttonStyle(.plain)
             }
         }
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
