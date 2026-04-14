@@ -754,4 +754,51 @@ struct TrainingPlanService {
         }
         return "\(zone) Intervals (\(shortDistanceString(distanceMeters, unit: unitPreference)))"
     }
+
+    // MARK: - Schedule management
+
+    /// Redistributes uncompleted future workouts in `plan` to match `newDayIndices`.
+    ///
+    /// - For each week that has movable workouts, target dates are computed by adding
+    ///   each day offset to the week's `startDate`. Workouts are mapped 1-to-1 in order;
+    ///   if there are more workouts than selected days the extras are stacked on the last
+    ///   available day (they can be deleted individually via the Manage Plan UI).
+    /// - Completed workouts and rest-day workouts are left unchanged.
+    /// - Optionally updates `profile.preferredRunDayIndices` and `weeklyRunDays`.
+    func applyNewRunDays(
+        to plan: TrainingPlan,
+        newDayIndices: [Int],
+        profile: UserProfile?
+    ) {
+        let sorted = newDayIndices.sorted()
+        guard !sorted.isEmpty else { return }
+        let today = Calendar.current.startOfDay(for: Date())
+
+        for week in plan.weeks.sorted(by: { $0.weekNumber < $1.weekNumber }) {
+            // Collect uncompleted non-rest workouts that haven't happened yet
+            let movable = week.workouts
+                .filter { !$0.isCompleted && $0.workoutType != .rest && $0.scheduledDate > today }
+                .sorted { $0.scheduledDate < $1.scheduledDate }
+            guard !movable.isEmpty else { continue }
+
+            // Compute candidate target dates, excluding any that have already passed
+            let targets = sorted
+                .map { week.startDate.adding(days: $0) }
+                .filter { $0 > today }
+            guard !targets.isEmpty else { continue }
+
+            // Assign workouts to target dates; excess workouts land on the last slot
+            for (i, workout) in movable.enumerated() {
+                let targetIndex = min(i, targets.count - 1)
+                workout.scheduledDate = targets[targetIndex]
+            }
+        }
+
+        // Persist the new day preference on the profile
+        if let profile {
+            profile.preferredRunDayIndices = sorted
+            profile.weeklyRunDays = sorted.count
+            profile.updatedAt = Date()
+        }
+    }
 }

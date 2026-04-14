@@ -385,6 +385,7 @@ private struct PlanWeekSummaryRow: View {
     let week: TrainingWeek
     let currentWeekID: UUID?
     @Environment(AppSettings.self) private var appSettings
+    @State private var isExpanded = false
 
     private var isCurrentWeek: Bool { week.id == currentWeekID }
     private var isFutureWeek: Bool { week.startDate > Date() && !week.isCompleted }
@@ -398,49 +399,68 @@ private struct PlanWeekSummaryRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 14) {
-            statusIcon
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { isExpanded.toggle() }
+            } label: {
+                HStack(spacing: 14) {
+                    statusIcon
 
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Text("Week \(week.weekNumber)")
-                        .font(isCurrentWeek ? .bodyStrong : .bodyRegular)
-                    Text("·")
-                        .foregroundStyle(.tertiary)
-                    Text(week.phase.displayName)
-                        .font(.bodyRegular)
-                        .foregroundStyle(.secondary)
-                    if isCurrentWeek {
-                        Text("CURRENT")
-                            .font(.caption)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(.brand.opacity(0.15), in: Capsule())
-                            .foregroundStyle(.brand)
-                    } else if week.isCompleted {
-                        Text("DONE")
-                            .font(.caption)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(.success.opacity(0.15), in: Capsule())
-                            .foregroundStyle(.success)
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 6) {
+                            Text("Week \(week.weekNumber)")
+                                .font(isCurrentWeek ? .bodyStrong : .bodyRegular)
+                            Text("·")
+                                .foregroundStyle(.tertiary)
+                            Text(week.phase.displayName)
+                                .font(.bodyRegular)
+                                .foregroundStyle(.secondary)
+                            if isCurrentWeek {
+                                Text("CURRENT")
+                                    .font(.caption)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(.brand.opacity(0.15), in: Capsule())
+                                    .foregroundStyle(.brand)
+                            } else if week.isCompleted {
+                                Text("DONE")
+                                    .font(.caption)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(.success.opacity(0.15), in: Capsule())
+                                    .foregroundStyle(.success)
+                            }
+                        }
+
+                        HStack(spacing: 4) {
+                            Text("\(completedWorkouts)/\(totalWorkouts) workouts")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text("·")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                            distanceLabel
+                        }
                     }
-                }
 
-                HStack(spacing: 4) {
-                    Text("\(completedWorkouts)/\(totalWorkouts) workouts")
+                    Spacer()
+
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Text("·")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                    distanceLabel
+                }
+                .padding()
+            }
+            .buttonStyle(.plain)
+
+            if isExpanded {
+                Divider()
+                ForEach(week.workouts.sorted { $0.scheduledDate < $1.scheduledDate }) { workout in
+                    PlanWorkoutSummaryRow(workout: workout)
+                    Divider().padding(.leading, 44)
                 }
             }
-
-            Spacer()
         }
-        .padding()
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
         .opacity(isFutureWeek ? 0.65 : 1.0)
     }
@@ -480,6 +500,72 @@ private struct PlanWeekSummaryRow: View {
             Text("\(week.targetDistanceKm.distanceStringFromKm(unit: appSettings.unitPreference)) target")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
+        }
+    }
+}
+
+// MARK: - Plan Workout Summary Row
+
+private struct PlanWorkoutSummaryRow: View {
+    let workout: ScheduledWorkout
+    @Environment(AppSettings.self) private var appSettings
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Circle()
+                .fill(iconColor.opacity(0.2))
+                .frame(width: 8, height: 8)
+                .padding(.leading)
+
+            Image(systemName: iconName)
+                .font(.caption)
+                .foregroundStyle(iconColor)
+                .frame(width: 16)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(workout.workoutType.displayName)
+                    .font(.bodyRegular)
+                Text(workout.scheduledDate.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            if let dist = workout.targetDistanceMeters {
+                Text(dist.distanceString(unit: appSettings.unitPreference))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if workout.isCompleted {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.success)
+            }
+        }
+        .padding(.vertical, 8)
+        .padding(.trailing)
+    }
+
+    private var iconName: String {
+        switch workout.workoutType {
+        case .easy:          return "figure.run"
+        case .tempo:         return "gauge.with.needle"
+        case .interval:      return "repeat"
+        case .longRun:       return "arrow.right.to.line"
+        case .race:          return "trophy"
+        case .rest:          return "moon.zzz"
+        case .crossTraining: return "bicycle"
+        }
+    }
+
+    private var iconColor: Color {
+        switch workout.workoutType {
+        case .easy, .longRun:   return .zoneEasy
+        case .tempo:            return .zoneTempo
+        case .interval, .race:  return .zoneInterval
+        default:                return .secondary
         }
     }
 }
