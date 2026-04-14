@@ -65,6 +65,7 @@ targets:
         NSHealthUpdateUsageDescription: "RunningApp saves your completed runs to Apple Health."
         NSMotionUsageDescription: "RunningApp uses motion data to measure cadence during runs."
         UILaunchScreen: {}
+        ITSAppUsesNonExemptEncryption: false
 
   # ── Unit tests ────────────────────────────────────────────────────────────────
   RunningAppTests:
