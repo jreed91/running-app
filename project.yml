@@ -50,6 +50,10 @@ targets:
       properties:
         com.apple.developer.healthkit: true
         com.apple.developer.healthkit.background-delivery: true
+        com.apple.developer.icloud-container-identifiers:
+          - iCloud.com.jacobreedrunningapp
+        com.apple.developer.icloud-services:
+          - CloudKit
 
     info:
       path: RunningApp/Resources/Info.plist

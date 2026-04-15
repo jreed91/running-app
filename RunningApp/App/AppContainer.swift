@@ -33,7 +33,7 @@ final class AppContainer: ObservableObject {
 
     // MARK: Init
 
-    init() {
+    init(inMemory: Bool = false) {
         let schema = Schema([
             UserProfile.self,
             RunWorkout.self,
@@ -42,7 +42,30 @@ final class AppContainer: ObservableObject {
             ScheduledWorkout.self,
             SavedRoute.self
         ])
-        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+        let config: ModelConfiguration
+        if inMemory {
+            config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        } else {
+            // Read the preference set during onboarding / Settings.
+            // UserDefaults is checked directly here because AppSettings doesn't
+            // exist yet at the point AppContainer is initialized.
+            let syncEnabled: Bool
+            if UserDefaults.standard.object(forKey: AppSettings.iCloudSyncKey) != nil {
+                syncEnabled = UserDefaults.standard.bool(forKey: AppSettings.iCloudSyncKey)
+            } else {
+                syncEnabled = true   // first-launch default: sync on
+            }
+
+            if syncEnabled {
+                config = ModelConfiguration(
+                    schema: schema,
+                    isStoredInMemoryOnly: false,
+                    cloudKitDatabase: .automatic
+                )
+            } else {
+                config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+            }
+        }
         let container: ModelContainer
         do {
             container = try ModelContainer(for: schema, configurations: [config])
@@ -120,8 +143,7 @@ final class AppContainer: ObservableObject {
 
     /// In-memory container for SwiftUI previews and unit tests.
     static func preview() -> AppContainer {
-        let container = AppContainer()
-        return container
+        AppContainer(inMemory: true)
     }
 }
 
@@ -131,7 +153,7 @@ import SwiftUI
 
 private struct AppContainerKey: EnvironmentKey {
     nonisolated(unsafe) static let defaultValue: AppContainer = MainActor.assumeIsolated {
-        AppContainer()
+        AppContainer(inMemory: true)
     }
 }
 

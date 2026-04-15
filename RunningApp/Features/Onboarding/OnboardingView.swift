@@ -18,13 +18,15 @@ struct OnboardingView: View {
     @State private var goalPaceSeconds = 30
     @State private var stepIndex = 0
     @State private var isCreatingPlan = false
+    @State private var iCloudSyncEnabled = true
     @State private var locationManager = CLLocationManager()
     @State private var visibleSteps: [OnboardingStep] = OnboardingStep.allCases
     @FocusState private var isNameFocused: Bool
 
     private enum OnboardingStep: CaseIterable {
         case name, gender, unitPreference, goalRace, goalPace, fitnessLevel, schedule,
-             location, locationWaiting, notifications, notificationsWaiting, healthKit, finish
+             location, locationWaiting, notifications, notificationsWaiting, healthKit,
+             iCloudSync, finish
     }
 
     var body: some View {
@@ -69,6 +71,8 @@ struct OnboardingView: View {
             }
         }
 
+        // iCloud sync choice is always shown before the final step.
+        steps.append(.iCloudSync)
         // Finish step is always last — it triggers plan creation.
         steps.append(.finish)
 
@@ -124,6 +128,14 @@ struct OnboardingView: View {
                 Text("Connect Health").frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
+        case .iCloudSync:
+            Button {
+                UserDefaults.standard.set(iCloudSyncEnabled, forKey: AppSettings.iCloudSyncKey)
+                withAnimation { stepIndex += 1 }
+            } label: {
+                Text("Next").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
         case .finish:
             Button {
                 isCreatingPlan = true
@@ -156,6 +168,7 @@ struct OnboardingView: View {
         case .notifications:        notificationsStep
         case .notificationsWaiting: notificationsWaitingStep
         case .healthKit:            healthKitStep
+        case .iCloudSync:           iCloudSyncStep
         case .finish:               finishStep
         }
     }
@@ -420,6 +433,27 @@ struct OnboardingView: View {
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal)
+            Spacer()
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var iCloudSyncStep: some View {
+        VStack(spacing: 24) {
+            Spacer()
+            Image(systemName: "icloud.fill")
+                .font(.system(size: 56))
+                .foregroundStyle(.blue)
+            Text("iCloud Sync")
+                .font(.metricMedium)
+            Text("Keep your workouts and training plans up to date across all your iPhone and iPad devices automatically.")
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal)
+            Toggle("Sync with iCloud", isOn: $iCloudSyncEnabled)
+                .padding(.horizontal)
+                .tint(.blue)
             Spacer()
         }
         .padding()
