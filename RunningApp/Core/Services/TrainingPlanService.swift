@@ -792,6 +792,16 @@ struct TrainingPlanService {
                 let targetIndex = min(i, targets.count - 1)
                 workout.scheduledDate = targets[targetIndex]
             }
+
+            // If the user selected more days than there are movable workouts,
+            // create stub easy runs for the extra target dates so that
+            // currentPlanDayIndices reflects all selected days after the save.
+            if targets.count > movable.count {
+                for targetDate in targets.dropFirst(movable.count) {
+                    let stub = ScheduledWorkout(scheduledDate: targetDate, workoutType: .easy)
+                    week.workouts = (week.workouts ?? []) + [stub]
+                }
+            }
         }
 
         // Persist the new day preference on the profile
