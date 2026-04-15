@@ -90,8 +90,8 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         guard await scheduler.authorizationState == .authorized else { return }
 
         let now = Date()
-        for week in plan.weeks {
-            for workout in week.workouts
+        for week in plan.weeks ?? [] {
+            for workout in week.workouts ?? []
             where workout.workoutType != .rest
                && !workout.isCompleted
                && workout.scheduledDate > now
@@ -109,7 +109,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
     }
 
     @MainActor func removeWorkoutPlans(for plan: TrainingPlan) async throws {
-        let allWorkouts = plan.weeks.flatMap(\.workouts)
+        let allWorkouts = (plan.weeks ?? []).flatMap { $0.workouts ?? [] }
         defer { allWorkouts.forEach { $0.healthKitPlanID = nil } }
 
         guard WorkoutScheduler.isSupported else { return }

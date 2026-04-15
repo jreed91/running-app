@@ -340,8 +340,8 @@ enum DebugRunGenerator {
     /// or before `cutoff` as complete, backing each one with a fake ``RunWorkout``.
     static func completePlan(upTo cutoff: Date, plan: TrainingPlan, context: ModelContext) {
         let cal = Calendar.current
-        for week in plan.weeks {
-            for workout in week.workouts {
+        for week in plan.weeks ?? [] {
+            for workout in week.workouts ?? [] {
                 guard
                     !workout.isCompleted,
                     workout.workoutType != .rest,
@@ -360,8 +360,8 @@ enum DebugRunGenerator {
     /// Removes debug-tagged completions from `plan`, restoring those workouts
     /// to their incomplete state. Real (non-tagged) completions are left alone.
     static func resetPlanProgress(plan: TrainingPlan, context: ModelContext) {
-        for week in plan.weeks {
-            for workout in week.workouts where workout.isCompleted {
+        for week in plan.weeks ?? [] {
+            for workout in week.workouts ?? [] where workout.isCompleted {
                 guard let run = workout.completedWorkout, run.notes == tag else { continue }
                 context.delete(run)
                 workout.completedWorkout = nil

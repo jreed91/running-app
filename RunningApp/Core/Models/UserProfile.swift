@@ -3,19 +3,19 @@ import SwiftData
 
 @Model
 final class UserProfile {
-    var id: UUID
-    var name: String
-    var goalRace: RaceType
-    var goalFinishTime: TimeInterval      // seconds
-    var weeklyRunDays: Int
-    var fitnessLevel: FitnessLevel
-    var gender: Gender
+    var id: UUID = UUID()
+    var name: String = ""
+    var goalRace: RaceType = RaceType.fiveK
+    var goalFinishTime: TimeInterval = 0      // seconds
+    var weeklyRunDays: Int = 3
+    var fitnessLevel: FitnessLevel = FitnessLevel.beginner
+    var gender: Gender = Gender.preferNotToShare
     var currentEstimated5KTimeSeconds: Double?
     /// JSON-encoded `[Int]` backing store for preferred run weekdays.
     /// Access via the `preferredRunDayIndices` extension property — never persist `[Int]` directly.
     var preferredRunDayIndicesData: Data?
-    var createdAt: Date
-    var updatedAt: Date
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
 
     init(
         name: String,

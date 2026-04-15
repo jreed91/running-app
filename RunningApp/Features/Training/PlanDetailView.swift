@@ -24,8 +24,8 @@ struct PlanDetailView: View {
     private var currentPlanDayIndices: Set<Int> {
         let cal = Calendar.current
         return Set(
-            plan.weeks
-                .flatMap(\.workouts)
+            (plan.weeks ?? [])
+                .flatMap { $0.workouts ?? [] }
                 .filter { !$0.isCompleted && $0.workoutType != .rest && $0.scheduledDate > Date() }
                 .map { cal.component(.weekday, from: $0.scheduledDate) }
                 .map { ($0 + 5) % 7 } // Sun=1..Sat=7 → Mon=0..Sun=6
@@ -42,7 +42,7 @@ struct PlanDetailView: View {
         ScrollView {
             LazyVStack(spacing: 16) {
                 scheduleSection
-                ForEach(plan.weeks.sorted(by: { $0.weekNumber < $1.weekNumber })) { week in
+                ForEach((plan.weeks ?? []).sorted(by: { $0.weekNumber < $1.weekNumber })) { week in
                     WeekCardView(
                         week: week,
                         onEditWorkout: { workout in workoutToEdit = workout },
@@ -196,7 +196,7 @@ struct WeekCardView: View {
 
             if isExpanded {
                 Divider()
-                ForEach(week.workouts.sorted(by: { $0.scheduledDate < $1.scheduledDate })) { workout in
+                ForEach((week.workouts ?? []).sorted(by: { $0.scheduledDate < $1.scheduledDate })) { workout in
                     NavigationLink {
                         WorkoutDetailView(workout: workout)
                     } label: {

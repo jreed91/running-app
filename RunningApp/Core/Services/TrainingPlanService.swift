@@ -80,7 +80,7 @@ struct TrainingPlanService {
                 }
             }
             week.workouts = workouts
-            plan.weeks.append(week)
+            plan.weeks = (plan.weeks ?? []) + [week]
         }
         return plan
     }
@@ -774,9 +774,9 @@ struct TrainingPlanService {
         guard !sorted.isEmpty else { return }
         let today = Calendar.current.startOfDay(for: Date())
 
-        for week in plan.weeks.sorted(by: { $0.weekNumber < $1.weekNumber }) {
+        for week in (plan.weeks ?? []).sorted(by: { $0.weekNumber < $1.weekNumber }) {
             // Collect uncompleted non-rest workouts that haven't happened yet
-            let movable = week.workouts
+            let movable = (week.workouts ?? [])
                 .filter { !$0.isCompleted && $0.workoutType != .rest && $0.scheduledDate > today }
                 .sorted { $0.scheduledDate < $1.scheduledDate }
             guard !movable.isEmpty else { continue }

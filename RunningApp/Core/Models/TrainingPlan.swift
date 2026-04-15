@@ -3,31 +3,32 @@ import SwiftData
 
 @Model
 final class TrainingPlan {
-    var id: UUID
-    var targetRace: RaceType
-    var goalTimeSeconds: Double
-    var startDate: Date
-    var endDate: Date
-    var isActive: Bool
-    var createdAt: Date
+    var id: UUID = UUID()
+    var targetRace: RaceType = RaceType.fiveK
+    var goalTimeSeconds: Double = 0
+    var startDate: Date = Date()
+    var endDate: Date = Date()
+    var isActive: Bool = false
+    var createdAt: Date = Date()
 
     @Relationship(deleteRule: .cascade, inverse: \TrainingWeek.plan)
-    var weeks: [TrainingWeek] = []
+    var weeks: [TrainingWeek]? = []
 
     // MARK: Computed
 
-    var totalWeeks: Int { weeks.count }
+    var totalWeeks: Int { (weeks ?? []).count }
 
     var currentWeek: TrainingWeek? {
         let today = Date()
-        return weeks.first { $0.startDate <= today && $0.endDate >= today }
+        return (weeks ?? []).first { $0.startDate <= today && $0.endDate >= today }
     }
 
     /// 0.0 – 1.0 based on completed non-rest workouts.
     var progress: Double {
-        guard !weeks.isEmpty else { return 0 }
-        let completed = weeks.filter(\.isCompleted).count
-        return Double(completed) / Double(weeks.count)
+        let allWeeks = weeks ?? []
+        guard !allWeeks.isEmpty else { return 0 }
+        let completed = allWeeks.filter(\.isCompleted).count
+        return Double(completed) / Double(allWeeks.count)
     }
 
     init(

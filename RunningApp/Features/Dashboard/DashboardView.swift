@@ -110,15 +110,15 @@ struct WeekCalendarView: View {
 
     private var planWeekLabel: String? {
         guard let plan = activePlan else { return nil }
-        let match = plan.weeks.first { cal.isDate($0.startDate, inSameDayAs: weekStart) }
+        let match = (plan.weeks ?? []).first { cal.isDate($0.startDate, inSameDayAs: weekStart) }
         guard let week = match else { return nil }
         return "Week \(week.weekNumber) of \(plan.totalWeeks)"
     }
 
     private func workout(on date: Date) -> ScheduledWorkout? {
         guard let plan = activePlan else { return nil }
-        for week in plan.weeks {
-            for w in week.workouts where cal.isDate(w.scheduledDate, inSameDayAs: date) {
+        for week in plan.weeks ?? [] {
+            for w in week.workouts ?? [] where cal.isDate(w.scheduledDate, inSameDayAs: date) {
                 return w
             }
         }
@@ -329,8 +329,8 @@ struct DashboardView: View {
 
     private var workoutForSelectedDate: ScheduledWorkout? {
         guard let plan = activePlan else { return nil }
-        for week in plan.weeks {
-            for w in week.workouts
+        for week in plan.weeks ?? [] {
+            for w in week.workouts ?? []
             where Calendar.current.isDate(w.scheduledDate, inSameDayAs: selectedDate) {
                 return w.workoutType == .rest ? nil : w
             }
