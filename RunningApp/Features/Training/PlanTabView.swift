@@ -57,7 +57,7 @@ struct PlanTabView: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
 
                             LazyVStack(spacing: 10) {
-                                ForEach(plan.weeks.sorted { $0.weekNumber < $1.weekNumber }) { week in
+                                ForEach((plan.weeks ?? []).sorted { $0.weekNumber < $1.weekNumber }) { week in
                                     PlanWeekSummaryRow(
                                         week: week,
                                         currentWeekID: plan.currentWeek?.id
@@ -141,11 +141,11 @@ private struct PlanOverviewCard: View {
     @Environment(AppSettings.self) private var appSettings
 
     private var weeksCompleted: Int {
-        plan.weeks.filter(\.isCompleted).count
+        (plan.weeks ?? []).filter(\.isCompleted).count
     }
 
     private var totalCompletedDistanceKm: Double {
-        plan.weeks.reduce(0) { $0 + $1.completedDistanceKm }
+        (plan.weeks ?? []).reduce(0) { $0 + $1.completedDistanceKm }
     }
 
     private var raceIcon: String {
@@ -236,8 +236,8 @@ private struct PaceInsightsCard: View {
     @Environment(AppSettings.self) private var appSettings
 
     private var completedRuns: [RunWorkout] {
-        plan.weeks
-            .flatMap(\.workouts)
+        (plan.weeks ?? [])
+            .flatMap { $0.workouts ?? [] }
             .compactMap(\.completedWorkout)
             .filter { $0.distanceMeters >= 3_000 }
     }
@@ -391,11 +391,11 @@ private struct PlanWeekSummaryRow: View {
     private var isFutureWeek: Bool { week.startDate > Date() && !week.isCompleted }
 
     private var totalWorkouts: Int {
-        week.workouts.filter { $0.workoutType != .rest }.count
+        (week.workouts ?? []).filter { $0.workoutType != .rest }.count
     }
 
     private var completedWorkouts: Int {
-        week.workouts.filter { $0.workoutType != .rest && $0.isCompleted }.count
+        (week.workouts ?? []).filter { $0.workoutType != .rest && $0.isCompleted }.count
     }
 
     var body: some View {
@@ -455,7 +455,7 @@ private struct PlanWeekSummaryRow: View {
 
             if isExpanded {
                 Divider()
-                ForEach(week.workouts.sorted { $0.scheduledDate < $1.scheduledDate }) { workout in
+                ForEach((week.workouts ?? []).sorted { $0.scheduledDate < $1.scheduledDate }) { workout in
                     PlanWorkoutSummaryRow(workout: workout)
                     Divider().padding(.leading, 44)
                 }

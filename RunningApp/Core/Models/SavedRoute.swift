@@ -13,22 +13,22 @@ final class SavedRoute {
 
     // MARK: Scalar fields
 
-    var id: UUID
-    var name: String
-    var createdAt: Date
+    var id: UUID = UUID()
+    var name: String = ""
+    var createdAt: Date = Date()
     /// Route type chosen by the user (.loop or .outAndBack).
-    var routeType: RouteType
+    var routeType: RouteType = RouteType.loop
     /// Distance the user originally requested, in metres.
-    var requestedDistanceMeters: Double
+    var requestedDistanceMeters: Double = 0
     /// Actual route distance returned by the routing service, in metres.
-    var actualDistanceMeters: Double
+    var actualDistanceMeters: Double = 0
     /// Estimated running duration in seconds.
-    var estimatedDurationSeconds: Double
+    var estimatedDurationSeconds: Double = 0
 
     // MARK: Start coordinate (scalar to avoid another blob for a single point)
 
-    var startLatitude: Double
-    var startLongitude: Double
+    var startLatitude: Double = 0
+    var startLongitude: Double = 0
 
     // MARK: Large payload
 

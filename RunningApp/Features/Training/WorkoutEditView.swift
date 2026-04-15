@@ -213,7 +213,7 @@ struct WorkoutEditView: View {
                 notes: notesText.isEmpty ? nil : notesText
             )
             context.insert(newWorkout)
-            week.workouts.append(newWorkout)
+            week.workouts = (week.workouts ?? []) + [newWorkout]
             try? context.save()
         }
     }

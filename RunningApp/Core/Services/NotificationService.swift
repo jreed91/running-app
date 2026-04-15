@@ -58,8 +58,8 @@ final class NotificationService {
 
     /// Schedules reminders for all future workouts in a plan.
     func scheduleReminders(for plan: TrainingPlan, minutesBefore: Int = 60) async {
-        for week in plan.weeks {
-            for workout in week.workouts where !workout.isCompleted {
+        for week in plan.weeks ?? [] {
+            for workout in week.workouts ?? [] where !workout.isCompleted {
                 try? await scheduleReminder(for: workout, minutesBefore: minutesBefore)
             }
         }

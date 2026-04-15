@@ -3,15 +3,15 @@ import SwiftData
 
 @Model
 final class RunWorkout {
-    var id: UUID
-    var date: Date
-    var distanceMeters: Double
-    var durationSeconds: Double
-    var averagePaceSecondsPerKm: Double
+    var id: UUID = UUID()
+    var date: Date = Date()
+    var distanceMeters: Double = 0
+    var durationSeconds: Double = 0
+    var averagePaceSecondsPerKm: Double = 0
     var averageHeartRate: Double?
     var maxHeartRate: Double?
     var elevationGainMeters: Double?
-    var workoutType: WorkoutType
+    var workoutType: WorkoutType = WorkoutType.easy
     var notes: String?
 
     /// HealthKit workout UUID string, set after syncing.
@@ -22,6 +22,10 @@ final class RunWorkout {
 
     /// JSON-encoded `[Coordinate]`.
     var routeData: Data?
+
+    /// Back-reference to the ``ScheduledWorkout`` this run fulfilled, if any.
+    /// Required by CloudKit (every relationship must have an inverse).
+    var scheduledWorkout: ScheduledWorkout?
 
     // MARK: Computed helpers (not persisted)
 

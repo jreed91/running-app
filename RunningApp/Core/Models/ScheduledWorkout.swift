@@ -3,15 +3,15 @@ import SwiftData
 
 @Model
 final class ScheduledWorkout {
-    var id: UUID
-    var scheduledDate: Date
-    var workoutType: WorkoutType
+    var id: UUID = UUID()
+    var scheduledDate: Date = Date()
+    var workoutType: WorkoutType = WorkoutType.easy
     var targetDistanceMeters: Double?
     /// Lower bound of target pace range in seconds/km.
     var targetPaceLowerBound: Double?
     /// Upper bound of target pace range in seconds/km.
     var targetPaceUpperBound: Double?
-    var isCompleted: Bool
+    var isCompleted: Bool = false
     var notes: String?
 
     /// Local tracking ID assigned when this workout is synced via ``HealthKitRepository``.
@@ -26,7 +26,7 @@ final class ScheduledWorkout {
 
     var week: TrainingWeek?
 
-    @Relationship(deleteRule: .nullify)
+    @Relationship(deleteRule: .nullify, inverse: \RunWorkout.scheduledWorkout)
     var completedWorkout: RunWorkout?
 
     // MARK: Computed helpers

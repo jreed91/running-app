@@ -3,28 +3,28 @@ import SwiftData
 
 @Model
 final class TrainingWeek {
-    var id: UUID
-    var weekNumber: Int
-    var startDate: Date
-    var endDate: Date
-    var phase: TrainingPhase
-    var targetDistanceKm: Double
+    var id: UUID = UUID()
+    var weekNumber: Int = 0
+    var startDate: Date = Date()
+    var endDate: Date = Date()
+    var phase: TrainingPhase = TrainingPhase.base
+    var targetDistanceKm: Double = 0
 
     var plan: TrainingPlan?
 
     @Relationship(deleteRule: .cascade, inverse: \ScheduledWorkout.week)
-    var workouts: [ScheduledWorkout] = []
+    var workouts: [ScheduledWorkout]? = []
 
     // MARK: Computed
 
     var isCompleted: Bool {
-        let runWorkouts = workouts.filter { $0.workoutType != .rest }
+        let runWorkouts = (workouts ?? []).filter { $0.workoutType != .rest }
         guard !runWorkouts.isEmpty else { return false }
         return runWorkouts.allSatisfy(\.isCompleted)
     }
 
     var completedDistanceKm: Double {
-        workouts
+        (workouts ?? [])
             .compactMap(\.completedWorkout)
             .reduce(0) { $0 + $1.distanceMeters / 1_000 }
     }
