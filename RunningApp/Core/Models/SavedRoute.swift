@@ -30,12 +30,10 @@ final class SavedRoute {
     var startLatitude: Double
     var startLongitude: Double
 
-    // MARK: Large payload – external storage
+    // MARK: Large payload
 
-    @Attribute(.externalStorage)
     var coordinatesData: Data?
 
-    @Attribute(.externalStorage)
     var stepsData: Data?
 
     // MARK: Init
