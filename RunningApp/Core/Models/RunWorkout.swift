@@ -18,9 +18,11 @@ final class RunWorkout {
     var healthKitWorkoutID: String?
 
     /// JSON-encoded `[Split]`.
+    @Attribute(.externalStorage)
     var splitsData: Data?
 
     /// JSON-encoded `[Coordinate]`.
+    @Attribute(.externalStorage)
     var routeData: Data?
 
     // MARK: Computed helpers (not persisted)
