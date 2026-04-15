@@ -16,36 +16,42 @@ struct WorkoutEditView: View {
     @Environment(\.dismiss) private var dismiss
 
     private let mode: Mode
+    private let unitPreference: UnitPreference
     @State private var selectedType: WorkoutType
     @State private var selectedDate: Date
-    @State private var distanceKmText: String
+    @State private var distanceText: String
     @State private var paceLowerText: String
     @State private var paceUpperText: String
     @State private var notesText: String
 
     // MARK: - Inits
 
-    init(workout: ScheduledWorkout) {
+    init(workout: ScheduledWorkout, unitPreference: UnitPreference) {
         self.mode = .edit(workout)
+        self.unitPreference = unitPreference
         _selectedType = State(initialValue: workout.workoutType)
         _selectedDate = State(initialValue: workout.scheduledDate)
-        _distanceKmText = State(initialValue: workout.targetDistanceMeters.map {
-            String(format: "%.2f", $0 / 1_000)
+        _distanceText = State(initialValue: workout.targetDistanceMeters.map {
+            let display = unitPreference == .metric ? $0 / 1_000 : $0 / 1_609.344
+            return String(format: "%.2f", display)
         } ?? "")
         _paceLowerText = State(initialValue: workout.targetPaceLowerBound.map {
-            WorkoutEditView.secondsToMMSS($0)
+            let display = unitPreference == .metric ? $0 : $0 * 1.60934
+            return WorkoutEditView.secondsToMMSS(display)
         } ?? "")
         _paceUpperText = State(initialValue: workout.targetPaceUpperBound.map {
-            WorkoutEditView.secondsToMMSS($0)
+            let display = unitPreference == .metric ? $0 : $0 * 1.60934
+            return WorkoutEditView.secondsToMMSS(display)
         } ?? "")
         _notesText = State(initialValue: workout.notes ?? "")
     }
 
-    init(week: TrainingWeek) {
+    init(week: TrainingWeek, unitPreference: UnitPreference) {
         self.mode = .add(week)
+        self.unitPreference = unitPreference
         _selectedType = State(initialValue: .easy)
         _selectedDate = State(initialValue: week.startDate)
-        _distanceKmText = State(initialValue: "")
+        _distanceText = State(initialValue: "")
         _paceLowerText = State(initialValue: "")
         _paceUpperText = State(initialValue: "")
         _notesText = State(initialValue: "")
@@ -75,29 +81,32 @@ struct WorkoutEditView: View {
     // MARK: - Validation
 
     private var parsedDistanceMeters: Double? {
-        guard !distanceKmText.isEmpty, let km = Double(distanceKmText) else { return nil }
-        return km * 1_000
+        guard !distanceText.isEmpty, let value = Double(distanceText) else { return nil }
+        return unitPreference == .metric ? value * 1_000 : value * 1_609.344
     }
 
     private var parsedPaceLower: Double? {
-        paceLowerText.isEmpty ? nil : WorkoutEditView.mmssToSeconds(paceLowerText)
+        guard !paceLowerText.isEmpty, let secs = WorkoutEditView.mmssToSeconds(paceLowerText) else { return nil }
+        return unitPreference == .metric ? secs : secs / 1.60934
     }
 
     private var parsedPaceUpper: Double? {
-        paceUpperText.isEmpty ? nil : WorkoutEditView.mmssToSeconds(paceUpperText)
+        guard !paceUpperText.isEmpty, let secs = WorkoutEditView.mmssToSeconds(paceUpperText) else { return nil }
+        return unitPreference == .metric ? secs : secs / 1.60934
     }
 
     private var paceLowerInvalid: Bool {
-        !paceLowerText.isEmpty && parsedPaceLower == nil
+        !paceLowerText.isEmpty && WorkoutEditView.mmssToSeconds(paceLowerText) == nil
     }
 
     private var paceUpperInvalid: Bool {
-        !paceUpperText.isEmpty && parsedPaceUpper == nil
+        !paceUpperText.isEmpty && WorkoutEditView.mmssToSeconds(paceUpperText) == nil
     }
 
-    /// Lower bound = faster = smaller sec/km; inverted when the "faster" value is numerically larger.
+    /// Lower bound = faster = smaller value; inverted when the "faster" entry is numerically larger.
     private var paceRangeInverted: Bool {
-        guard let lo = parsedPaceLower, let hi = parsedPaceUpper else { return false }
+        guard let lo = WorkoutEditView.mmssToSeconds(paceLowerText),
+              let hi = WorkoutEditView.mmssToSeconds(paceUpperText) else { return false }
         return lo > hi
     }
 
@@ -129,8 +138,8 @@ struct WorkoutEditView: View {
                     )
                 }
 
-                Section("Distance (km)") {
-                    TextField("e.g. 10.5", text: $distanceKmText)
+                Section("Distance (\(unitPreference == .metric ? "km" : "mi"))") {
+                    TextField("e.g. 10.5", text: $distanceText)
                         .keyboardType(.decimalPad)
                 }
 
@@ -155,7 +164,7 @@ struct WorkoutEditView: View {
                             .foregroundStyle(.red)
                     }
                 } header: {
-                    Text("Target Pace /km")
+                    Text("Target Pace /\(unitPreference == .metric ? "km" : "mi")")
                 }
 
                 Section("Notes") {
