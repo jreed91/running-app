@@ -52,39 +52,47 @@ final class AppContainer: ObservableObject {
             syncEnabled = true   // first-launch default: sync on
         }
 
+        // Explicit container ID so every code path targets the same CloudKit store.
+        let ckContainerID = "iCloud.com.jacobreedrunningapp"
+
+        // Shared on-disk URL keeps the CloudKit store and any local-fallback store
+        // pointing at the same SQLite file. When CloudKit recovers, NSPersistentCloudKitContainer
+        // picks up records that were written during an outage and pushes them automatically.
+        let storeURL = URL.applicationSupportDirectory.appending(path: "RunningApp.store")
+
         let config: ModelConfiguration
         if inMemory {
             config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         } else if syncEnabled {
             config = ModelConfiguration(
                 schema: schema,
-                isStoredInMemoryOnly: false,
-                cloudKitDatabase: .automatic
+                url: storeURL,
+                cloudKitDatabase: .private(ckContainerID)
             )
         } else {
-            config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+            config = ModelConfiguration(schema: schema, url: storeURL)
         }
 
-        let localConfig = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+        // Fallback uses the SAME on-disk URL — data is never orphaned in a separate store.
+        let localConfig = ModelConfiguration(schema: schema, url: storeURL)
         let container: ModelContainer
         do {
             container = try ModelContainer(for: schema, configurations: [config])
-            print("[AppContainer v4] Store opened OK (syncEnabled=\(syncEnabled))")
+            print("[AppContainer v5] Store opened OK (syncEnabled=\(syncEnabled))")
         } catch let primaryError {
-            print("[AppContainer v4] Primary store failed: \(primaryError)")
+            print("[AppContainer v5] CloudKit store failed (\(primaryError)); falling back to local-only at same URL")
             guard !inMemory else {
-                // In-memory configs should never fail; if they do the schema is broken.
-                fatalError("[AppContainer v4] In-memory ModelContainer failed: \(primaryError)")
+                fatalError("[AppContainer v5] In-memory ModelContainer failed: \(primaryError)")
             }
 
-            // Tier 1 — local-only (skip CloudKit).
+            // Tier 1 — same file, CloudKit disabled. Records written here will be
+            // exported to CloudKit automatically once the container succeeds on a later launch.
             if let c = try? ModelContainer(for: schema, configurations: [localConfig]) {
                 container = c
-                print("[AppContainer v4] Tier1: local-only store OK")
+                print("[AppContainer v5] Tier1: local-only store OK (data will sync when CloudKit recovers)")
             } else {
-                // Tier 2 — delete the on-disk store and recreate.
-                let storeURL = localConfig.url
-                print("[AppContainer v4] Tier2: deleting store at \(storeURL.path)")
+                // Tier 2 — delete the on-disk store and recreate local-only.
+                print("[AppContainer v5] Tier2: deleting store at \(storeURL.path)")
                 for suffix in ["", "-shm", "-wal"] {
                     try? FileManager.default.removeItem(
                         at: URL(fileURLWithPath: storeURL.path + suffix)
@@ -93,11 +101,10 @@ final class AppContainer: ObservableObject {
 
                 if let c = try? ModelContainer(for: schema, configurations: [localConfig]) {
                     container = c
-                    print("[AppContainer v4] Tier2: fresh store created OK")
+                    print("[AppContainer v5] Tier2: fresh local store created OK")
                 } else {
-                    // Tier 3 — in-memory fallback; data won't persist this session
-                    // but the app will not crash.
-                    print("[AppContainer v4] Tier3: all persistent tiers failed — using in-memory store")
+                    // Tier 3 — in-memory; data won't persist but the app won't crash.
+                    print("[AppContainer v5] Tier3: all persistent tiers failed — using in-memory store")
                     let memConfig = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
                     // swiftlint:disable:next force_try
                     container = try! ModelContainer(for: schema, configurations: [memConfig])

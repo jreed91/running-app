@@ -7,12 +7,15 @@ struct RunSummaryView: View {
     let workout: RunWorkout
 
     @Environment(AppSettings.self) private var appSettings
+    @Environment(\.modelContext) private var context
+    @Environment(\.dismiss) private var dismiss
     @Query private var scheduledWorkouts: [ScheduledWorkout]
 
     // Chart selection state
     @State private var selectedSplitPaceKm: Int? = nil
     @State private var selectedSplitHRKm: Int? = nil
     @State private var selectedSplitElevKm: Int? = nil
+    @State private var showDeleteConfirmation = false
 
     private var matchedScheduled: ScheduledWorkout? {
         scheduledWorkouts.first { $0.completedWorkout?.id == workout.id }
@@ -62,6 +65,26 @@ struct RunSummaryView: View {
         }
         .navigationTitle(workout.workoutType.displayName)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .destructiveAction) {
+                Button(role: .destructive) {
+                    showDeleteConfirmation = true
+                } label: {
+                    Image(systemName: "trash")
+                }
+            }
+        }
+        .confirmationDialog("Delete this workout?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
+            Button("Delete", role: .destructive) {
+                workout.scheduledWorkout?.completedWorkout = nil
+                context.delete(workout)
+                try? context.save()
+                dismiss()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This workout will be permanently removed.")
+        }
     }
 
     // MARK: Route map

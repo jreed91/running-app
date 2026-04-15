@@ -32,6 +32,7 @@ struct HistoryView: View {
                         }
                     }
                 }
+                .onDelete(perform: deleteWorkouts)
 
                 if displayedWorkouts.count < allWorkouts.count {
                     HStack {
@@ -64,6 +65,18 @@ struct HistoryView: View {
                 await syncRecentHealthKitWorkouts()
             }
         }
+    }
+
+    // MARK: Delete
+
+    private func deleteWorkouts(at offsets: IndexSet) {
+        for index in offsets {
+            let workout = displayedWorkouts[index]
+            // Nullify the inverse relationship so CloudKit doesn't reject the delete.
+            workout.scheduledWorkout?.completedWorkout = nil
+            context.delete(workout)
+        }
+        try? context.save()
     }
 
     // MARK: Auto-sync
