@@ -69,19 +69,25 @@ final class AppContainer: ObservableObject {
         do {
             container = try ModelContainer(for: schema, configurations: [config])
         } catch {
-            // CloudKit-backed stores can fail when the iCloud container isn't
-            // provisioned or the device/simulator has no iCloud account.
-            // Retry with a local-only store so the app remains usable.
-            if syncEnabled && !inMemory {
-                let fallbackConfig = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-                do {
-                    container = try ModelContainer(for: schema, configurations: [fallbackConfig])
-                    print("[AppContainer] CloudKit store unavailable, using local-only store: \(error)")
-                } catch let fallbackError {
-                    fatalError("Failed to create SwiftData ModelContainer: \(fallbackError)")
-                }
+            guard !inMemory else {
+                fatalError("Failed to create in-memory SwiftData ModelContainer: \(error)")
+            }
+            // Tier 1: CloudKit unreachable — retry with a plain local-only store.
+            let localConfig = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+            if let recovered = try? ModelContainer(for: schema, configurations: [localConfig]) {
+                container = recovered
+                print("[AppContainer] CloudKit unavailable, using local-only store: \(error)")
             } else {
-                fatalError("Failed to create SwiftData ModelContainer: \(error)")
+                // Tier 2: The on-disk store itself is corrupted or has an
+                // incompatible schema (e.g. from a prior bad migration). Delete it
+                // and start fresh rather than crashing.
+                Self.destroyDefaultStore()
+                do {
+                    container = try ModelContainer(for: schema, configurations: [localConfig])
+                    print("[AppContainer] Corrupted store deleted and recreated: \(error)")
+                } catch let resetError {
+                    fatalError("Failed to create SwiftData ModelContainer: \(resetError)")
+                }
             }
         }
 
@@ -156,6 +162,18 @@ final class AppContainer: ObservableObject {
     /// In-memory container for SwiftUI previews and unit tests.
     static func preview() -> AppContainer {
         AppContainer(inMemory: true)
+    }
+
+    // MARK: - Store recovery
+
+    /// Deletes the default SwiftData SQLite store files so a fresh store can be created.
+    /// Called only when the existing store is unreadable (corrupted or incompatible schema).
+    private static func destroyDefaultStore() {
+        guard let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return }
+        for suffix in ["", "-shm", "-wal"] {
+            let url = base.appendingPathComponent("default.store\(suffix)")
+            try? FileManager.default.removeItem(at: url)
+        }
     }
 }
 
