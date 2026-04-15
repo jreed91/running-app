@@ -7,6 +7,9 @@ import CoreLocation
 
 protocol HealthKitRepositoryProtocol: Sendable {
     var isAvailable: Bool { get }
+    /// Returns `true` if the user has already granted HealthKit write access.
+    /// Does **not** prompt — reads existing authorization status only.
+    var isAuthorized: Bool { get }
     func requestAuthorization() async throws
     @MainActor func save(_ workout: RunWorkout) async throws -> String
     func fetchWorkouts(from startDate: Date, to endDate: Date) async throws -> [HKWorkout]
@@ -52,6 +55,11 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
     ]
 
     var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
+
+    var isAuthorized: Bool {
+        guard isAvailable else { return false }
+        return store.authorizationStatus(for: .workoutType()) == .sharingAuthorized
+    }
 
     func requestAuthorization() async throws {
         guard isAvailable else { return }

@@ -122,6 +122,7 @@ struct OnboardingView: View {
             Button {
                 Task {
                     try? await container.healthKitRepository.requestAuthorization()
+                    await container.workoutSyncService.startObserving()
                     withAnimation { stepIndex += 1 }
                 }
             } label: {

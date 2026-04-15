@@ -38,9 +38,8 @@ final class WorkoutSyncService {
     /// No-op if HealthKit is unavailable or the user denies authorization.
     /// Safe to call multiple times — HealthKit background delivery is idempotent.
     func startObserving() async {
-        guard healthKitRepository.isAvailable else { return }
+        guard healthKitRepository.isAvailable, healthKitRepository.isAuthorized else { return }
         do {
-            try await healthKitRepository.requestAuthorization()
             try await healthKitRepository.enableBackgroundDelivery()
         } catch {
             return
