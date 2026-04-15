@@ -8,6 +8,10 @@ struct SettingsView: View {
 
     @State private var showResetConfirmation = false
     @State private var showSyncRestartNote = false
+    @State private var editRace: RaceType = .fiveK
+    @State private var goalPaceMinutes: Int = 5
+    @State private var goalPaceSeconds: Int = 0
+    @State private var showPacePicker = false
     #if DEBUG
     @Query(
         filter: #Predicate<TrainingPlan> { $0.isActive },
@@ -28,6 +32,7 @@ struct SettingsView: View {
                 }
                 unitsSection
                 iCloudSection
+                routeGeniusSection
                 appleHealthSection
                 notificationsSection
                 aboutSection
@@ -37,6 +42,10 @@ struct SettingsView: View {
                 #endif
             }
             .navigationTitle("Settings")
+            .task(id: profile?.id) {
+                guard let p = profile else { return }
+                initPaceState(from: p)
+            }
             .confirmationDialog(
                 "Reset all data?",
                 isPresented: $showResetConfirmation,
@@ -45,7 +54,7 @@ struct SettingsView: View {
                 Button("Delete everything", role: .destructive) { resetAll() }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("This removes your profile, all workouts, and training plans.")
+                Text("This removes your profile, all workouts, training plans, and saved routes.")
             }
         }
     }
@@ -53,11 +62,59 @@ struct SettingsView: View {
     // MARK: Sections
 
     private func profileSection(profile: UserProfile) -> some View {
-        Section("Runner Profile") {
-            LabeledContent("Name", value: profile.name)
-            LabeledContent("Goal Race", value: profile.goalRace.displayName)
-            LabeledContent("Fitness Level", value: profile.fitnessLevel.displayName)
-            LabeledContent("Run Days / Week", value: "\(profile.weeklyRunDays)")
+        let minutesRange = appSettings.unitPreference == .imperial ? 4...25 : 3...15
+        return Section("Runner Profile") {
+            TextField("Name", text: Bindable(profile).name)
+
+            Picker("Gender", selection: Bindable(profile).gender) {
+                ForEach(Gender.allCases, id: \.self) { Text($0.displayName).tag($0) }
+            }
+
+            Picker("Goal Race", selection: $editRace) {
+                ForEach(RaceType.allCases, id: \.self) { Text($0.displayName).tag($0) }
+            }
+            .onChange(of: editRace) { savePaceToProfile(profile) }
+
+            LabeledContent("Goal Pace") {
+                Text(formattedPace)
+                    .foregroundStyle(showPacePicker ? .primary : .secondary)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture { withAnimation { showPacePicker.toggle() } }
+
+            if showPacePicker {
+                HStack(spacing: 0) {
+                    Picker("Minutes", selection: $goalPaceMinutes) {
+                        ForEach(minutesRange, id: \.self) { Text("\($0)").tag($0) }
+                    }
+                    .pickerStyle(.wheel)
+                    .frame(width: 80)
+                    .onChange(of: goalPaceMinutes) { savePaceToProfile(profile) }
+
+                    Text(":")
+                        .font(.title2.bold())
+
+                    Picker("Seconds", selection: $goalPaceSeconds) {
+                        ForEach(stride(from: 0, through: 55, by: 5).map { $0 }, id: \.self) {
+                            Text(String(format: "%02d", $0)).tag($0)
+                        }
+                    }
+                    .pickerStyle(.wheel)
+                    .frame(width: 80)
+                    .onChange(of: goalPaceSeconds) { savePaceToProfile(profile) }
+
+                    Text("/ \(appSettings.unitPreference.distanceLabel)")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .padding(.leading, 8)
+                }
+            }
+
+            Picker("Fitness Level", selection: Bindable(profile).fitnessLevel) {
+                ForEach(FitnessLevel.allCases, id: \.self) { Text($0.displayName).tag($0) }
+            }
+
+            Stepper("\(profile.weeklyRunDays) days / week", value: Bindable(profile).weeklyRunDays, in: 2...6)
         }
     }
 
@@ -88,6 +145,18 @@ struct SettingsView: View {
             Text("iCloud")
         } footer: {
             Text("When enabled, workouts and training plans sync across all your devices signed into the same iCloud account.")
+        }
+    }
+
+    private var routeGeniusSection: some View {
+        Section {
+            SecureField("Paste your ORS token here", text: Bindable(appSettings).orsAPIKey)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+        } header: {
+            Text("Route Genius")
+        } footer: {
+            Text("Get a free API key at openrouteservice.org (2,000 routes/day). The key is stored only on this device.")
         }
     }
 
@@ -176,12 +245,40 @@ struct SettingsView: View {
     }
     #endif
 
+    // MARK: Pace helpers
+
+    private var formattedPace: String {
+        "\(goalPaceMinutes):\(String(format: "%02d", goalPaceSeconds)) / \(appSettings.unitPreference.distanceLabel)"
+    }
+
+    private func initPaceState(from profile: UserProfile) {
+        editRace = profile.goalRace
+        let paceSecondsPerKm = profile.goalFinishTime / (profile.goalRace.distanceMeters / 1_000)
+        let displayPace = appSettings.unitPreference == .imperial
+            ? paceSecondsPerKm * 1.60934
+            : paceSecondsPerKm
+        goalPaceMinutes = max(3, min(25, Int(displayPace) / 60))
+        goalPaceSeconds = (Int(displayPace) % 60 / 5) * 5
+    }
+
+    private func savePaceToProfile(_ profile: UserProfile) {
+        let paceSecondsRaw = Double(goalPaceMinutes * 60 + goalPaceSeconds)
+        let paceSecondsPerKm = appSettings.unitPreference == .imperial
+            ? paceSecondsRaw / 1.60934
+            : paceSecondsRaw
+        profile.goalRace = editRace
+        profile.goalFinishTime = paceSecondsPerKm * (editRace.distanceMeters / 1_000)
+        profile.updatedAt = Date()
+        try? context.save()
+    }
+
     // MARK: Actions
 
     private func resetAll() {
         try? context.delete(model: RunWorkout.self)
         try? context.delete(model: TrainingPlan.self)
         try? context.delete(model: UserProfile.self)
+        try? context.delete(model: SavedRoute.self)
         try? context.save()
     }
 }

@@ -1,5 +1,7 @@
 import Foundation
 import HealthKit
+import CoreLocation
+@preconcurrency import WorkoutKit
 
 // MARK: - Protocol
 
@@ -8,9 +10,10 @@ protocol HealthKitRepositoryProtocol: Sendable {
     func requestAuthorization() async throws
     @MainActor func save(_ workout: RunWorkout) async throws -> String
     func fetchWorkouts(from startDate: Date, to endDate: Date) async throws -> [HKWorkout]
-    /// Assigns a local tracking ID to each non-rest scheduled workout in the plan.
+    /// Schedules each non-rest future workout in the plan as a WorkoutKit composition
+    /// so it appears in the Apple Watch Workout app and the Fitness app.
     @MainActor func syncWorkoutPlans(for plan: TrainingPlan) async throws
-    /// Clears the local tracking IDs for every workout in the plan.
+    /// Removes all WorkoutKit scheduled compositions for the plan.
     @MainActor func removeWorkoutPlans(for plan: TrainingPlan) async throws
     /// Fetches running workouts from HealthKit, converts them to RunWorkout models,
     /// and skips any whose HK UUID is already in `existingIDs`.
@@ -19,17 +22,25 @@ protocol HealthKitRepositoryProtocol: Sendable {
         to endDate: Date,
         existingIDs: Set<String>
     ) async throws -> [RunWorkout]
+    /// Enables HealthKit background delivery for running workouts at `.immediate` frequency.
+    /// Safe to call multiple times — HealthKit is idempotent.
+    func enableBackgroundDelivery() async throws
+    /// Registers a long-lived observer query that calls `handler` whenever new running
+    /// workouts are written to HealthKit. The handler is invoked on an arbitrary
+    /// background queue; callers are responsible for hopping to the appropriate actor.
+    func registerObserverQuery(handler: @escaping @Sendable () -> Void)
 }
 
 // MARK: - Live implementation
 
 final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendable {
     private let store = HKHealthStore()
+    // Retained so the observer is not deallocated after registration.
+    private var observerQuery: HKObserverQuery?
 
     private static let shareTypes: Set<HKSampleType> = [
         HKObjectType.workoutType(),
         HKQuantityType(.distanceWalkingRunning),
-        HKQuantityType(.activeEnergyBurned),
         HKQuantityType(.heartRate)
     ]
 
@@ -37,8 +48,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         HKObjectType.workoutType(),
         HKQuantityType(.distanceWalkingRunning),
         HKQuantityType(.heartRate),
-        HKQuantityType(.activeEnergyBurned),
-        HKQuantityType(.vo2Max)
+        HKSeriesType.workoutRoute()
     ]
 
     var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
@@ -67,23 +77,180 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         return hkWorkout.uuid.uuidString
     }
 
-    // MARK: - Workout plans (planned workouts)
+    // MARK: - Workout plans (WorkoutKit)
 
     @MainActor func syncWorkoutPlans(for plan: TrainingPlan) async throws {
+        guard WorkoutScheduler.isSupported else { return }
+        let scheduler = WorkoutScheduler.shared
+
+        if await scheduler.authorizationState == .notDetermined {
+            let state = await scheduler.requestAuthorization()
+            guard state == .authorized else { return }
+        }
+        guard await scheduler.authorizationState == .authorized else { return }
+
+        let now = Date()
         for week in plan.weeks {
-            for workout in week.workouts where workout.workoutType != .rest {
-                guard workout.healthKitPlanID == nil else { continue }
-                workout.healthKitPlanID = UUID().uuidString
+            for workout in week.workouts
+            where workout.workoutType != .rest
+               && !workout.isCompleted
+               && workout.scheduledDate > now
+               && workout.healthKitPlanID == nil
+            {
+                let workoutPlan = makeWorkoutPlan(for: workout)
+                let dateComponents = Calendar.current.dateComponents(
+                    [.year, .month, .day, .hour, .minute],
+                    from: workout.scheduledDate
+                )
+                await scheduler.schedule(workoutPlan, at: dateComponents)
+                workout.healthKitPlanID = workoutPlan.id.uuidString
             }
         }
     }
 
     @MainActor func removeWorkoutPlans(for plan: TrainingPlan) async throws {
-        for week in plan.weeks {
-            for workout in week.workouts {
-                workout.healthKitPlanID = nil
-            }
+        let allWorkouts = plan.weeks.flatMap(\.workouts)
+        defer { allWorkouts.forEach { $0.healthKitPlanID = nil } }
+
+        guard WorkoutScheduler.isSupported else { return }
+        let scheduler = WorkoutScheduler.shared
+        guard await scheduler.authorizationState == .authorized else { return }
+
+        let ids = Set(allWorkouts.compactMap(\.healthKitPlanID))
+        guard !ids.isEmpty else { return }
+
+        let scheduled = await scheduler.scheduledWorkouts
+        for entry in scheduled where ids.contains(entry.plan.id.uuidString) {
+            await scheduler.remove(entry.plan, at: entry.date)
         }
+    }
+
+    // MARK: - WorkoutKit plan builder
+
+    private func makeWorkoutPlan(for workout: ScheduledWorkout) -> WorkoutPlan {
+        let customWorkout: CustomWorkout
+        if let structure = workout.workoutStructure, !structure.mainSets.isEmpty {
+            customWorkout = makeCustomWorkout(from: structure, workout: workout)
+        } else {
+            customWorkout = makeCustomWorkoutLegacy(for: workout)
+        }
+        return WorkoutPlan(.custom(customWorkout), id: UUID())
+    }
+
+    /// Builds a ``CustomWorkout`` from a ``WorkoutStructure`` with precise distance/time goals.
+    private func makeCustomWorkout(
+        from structure: WorkoutStructure,
+        workout: ScheduledWorkout
+    ) -> CustomWorkout {
+        let warmupGoal: WorkoutGoal = structure.warmup.distanceMeters
+            .map { .distance($0, UnitLength.meters) } ?? .open
+        let warmupStep = WorkoutStep(goal: warmupGoal, alert: nil)
+
+        let blocks: [IntervalBlock] = structure.mainSets.map { set in
+            let workGoal: WorkoutGoal
+            if let dist = set.workSegment.distanceMeters {
+                workGoal = .distance(dist, UnitLength.meters)
+            } else if let dur = set.workSegment.durationSeconds {
+                workGoal = .time(dur, UnitDuration.seconds)
+            } else {
+                workGoal = .open
+            }
+            let workStep = IntervalStep(.work, goal: workGoal, alert: nil)
+
+            var steps: [IntervalStep] = [workStep]
+            if let recDur = set.recoverySegment.durationSeconds, recDur > 0 {
+                steps.append(IntervalStep(
+                    .recovery,
+                    goal: .time(recDur, UnitDuration.seconds),
+                    alert: nil
+                ))
+            } else if let recDist = set.recoverySegment.distanceMeters, recDist > 0 {
+                steps.append(IntervalStep(
+                    .recovery,
+                    goal: .distance(recDist, UnitLength.meters),
+                    alert: nil
+                ))
+            }
+
+            return IntervalBlock(steps: steps, iterations: set.repetitions)
+        }
+
+        let cooldownGoal: WorkoutGoal = structure.cooldown.distanceMeters
+            .map { .distance($0, UnitLength.meters) } ?? .open
+        let cooldownStep = WorkoutStep(goal: cooldownGoal, alert: nil)
+
+        return CustomWorkout(
+            activity: .running,
+            location: .outdoor,
+            displayName: workout.workoutType.displayName,
+            warmup: warmupStep,
+            blocks: blocks,
+            cooldown: cooldownStep
+        )
+    }
+
+    /// Legacy path for workouts without a ``WorkoutStructure`` (flat interval array).
+    private func makeCustomWorkoutLegacy(for workout: ScheduledWorkout) -> CustomWorkout {
+        let warmup   = WorkoutStep(goal: .open, alert: nil)
+        let cooldown = WorkoutStep(goal: .open, alert: nil)
+        let blocks: [IntervalBlock]
+
+        if workout.workoutType == .interval && !workout.intervals.isEmpty {
+            blocks = workout.intervals.map { interval in
+                let workGoal: WorkoutGoal
+                if let distance = interval.distanceMeters {
+                    workGoal = .distance(distance, UnitLength.meters)
+                } else if let duration = interval.durationSeconds {
+                    workGoal = .time(duration, UnitDuration.seconds)
+                } else {
+                    workGoal = .open
+                }
+                let workStep = IntervalStep(.work, goal: workGoal, alert: nil)
+                let restStep = IntervalStep(
+                    .recovery,
+                    goal: .time(interval.recoverySeconds, UnitDuration.seconds),
+                    alert: nil
+                )
+                return IntervalBlock(steps: [workStep, restStep], iterations: interval.repetitions)
+            }
+        } else {
+            let goal: WorkoutGoal = workout.targetDistanceMeters
+                .map { .distance($0, UnitLength.meters) } ?? .open
+            let workStep = IntervalStep(.work, goal: goal, alert: nil)
+            blocks = [IntervalBlock(steps: [workStep], iterations: 1)]
+        }
+
+        return CustomWorkout(
+            activity: .running,
+            location: .outdoor,
+            displayName: workout.workoutType.displayName,
+            warmup: warmup,
+            blocks: blocks,
+            cooldown: cooldown
+        )
+    }
+
+    // MARK: - Background delivery & observer
+
+    func enableBackgroundDelivery() async throws {
+        guard isAvailable else { return }
+        try await store.enableBackgroundDelivery(for: .workoutType(), frequency: .immediate)
+    }
+
+    func registerObserverQuery(handler: @escaping @Sendable () -> Void) {
+        guard isAvailable else { return }
+        let predicate = HKQuery.predicateForWorkouts(with: .running)
+        let query = HKObserverQuery(
+            sampleType: .workoutType(),
+            predicate: predicate
+        ) { _, completionHandler, error in
+            // completionHandler must always be called so iOS doesn't penalise the app.
+            defer { completionHandler() }
+            guard error == nil else { return }
+            handler()
+        }
+        observerQuery = query
+        store.execute(query)
     }
 
     // MARK: - Historical workout fetch
@@ -137,6 +304,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
 
             let hrStats = try? await fetchHeartRateStats(for: hkWorkout)
             let elevation = elevationGain(from: hkWorkout)
+            let coordinates = await fetchRouteCoordinates(for: hkWorkout)
 
             let run = RunWorkout(
                 date: hkWorkout.startDate,
@@ -148,12 +316,46 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             run.maxHeartRate = hrStats?.max
             run.elevationGainMeters = elevation
             run.healthKitWorkoutID = hkID
+            if !coordinates.isEmpty { run.routeCoordinates = coordinates }
             result.append(run)
         }
         return result
     }
 
     // MARK: - HealthKit sample helpers
+
+    private func fetchRouteCoordinates(for workout: HKWorkout) async -> [Coordinate] {
+        let predicate = HKQuery.predicateForObjects(from: workout)
+
+        // Step 1: find the HKWorkoutRoute sample(s) for this workout
+        let routes: [HKWorkoutRoute] = await withCheckedContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: HKSeriesType.workoutRoute(),
+                predicate: predicate,
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: nil
+            ) { _, samples, _ in
+                continuation.resume(returning: (samples as? [HKWorkoutRoute]) ?? [])
+            }
+            store.execute(query)
+        }
+
+        guard let route = routes.first else { return [] }
+
+        // Step 2: stream CLLocation objects from the route
+        var coordinates: [Coordinate] = []
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            let routeQuery = HKWorkoutRouteQuery(route: route) { _, locations, done, _ in
+                if let locations {
+                    coordinates += locations.map { Coordinate($0.coordinate) }
+                }
+                if done { continuation.resume() }
+            }
+            store.execute(routeQuery)
+        }
+
+        return coordinates
+    }
 
     private func fetchHeartRateStats(for workout: HKWorkout) async throws -> (avg: Double?, max: Double?) {
         let hrType = HKQuantityType(.heartRate)

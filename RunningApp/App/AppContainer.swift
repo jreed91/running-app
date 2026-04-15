@@ -19,12 +19,16 @@ final class AppContainer: ObservableObject {
     let workoutRepository: WorkoutRepositoryProtocol
     let planRepository: PlanRepositoryProtocol
     let healthKitRepository: HealthKitRepositoryProtocol
+    let routeRepository: RouteRepositoryProtocol
 
     // MARK: Services
 
     let trainingPlanService: TrainingPlanService
     let workoutTrackerService: WorkoutTrackerService
     let notificationService: NotificationService
+    let workoutAnalyticsService: WorkoutAnalyticsService
+    let routeGeniusService: RouteGeniusService
+    let workoutSyncService: WorkoutSyncService
 
     // MARK: Init
 
@@ -34,7 +38,8 @@ final class AppContainer: ObservableObject {
             RunWorkout.self,
             TrainingPlan.self,
             TrainingWeek.self,
-            ScheduledWorkout.self
+            ScheduledWorkout.self,
+            SavedRoute.self
         ])
         let config: ModelConfiguration
         if inMemory {
@@ -72,11 +77,62 @@ final class AppContainer: ObservableObject {
         let context = container.mainContext
         self.workoutRepository = WorkoutRepository(context: context)
         self.planRepository = PlanRepository(context: context)
-        self.healthKitRepository = HealthKitRepository()
+        let hkRepository = HealthKitRepository()
+        self.healthKitRepository = hkRepository
+        self.routeRepository = RouteRepository(context: context)
 
         self.trainingPlanService = TrainingPlanService()
         self.workoutTrackerService = WorkoutTrackerService()
-        self.notificationService = NotificationService.shared
+        let notifications = NotificationService.shared
+        self.notificationService = notifications
+        self.workoutAnalyticsService = WorkoutAnalyticsService()
+        self.routeGeniusService = RouteGeniusService()
+        self.workoutSyncService = WorkoutSyncService(
+            healthKitRepository: hkRepository,
+            notificationService: notifications,
+            context: context
+        )
+    }
+
+    // MARK: - Route Genius
+
+    /// Creates a fresh ``RouteGeniusViewModel`` wired to the container's service and repository.
+    func makeRouteGeniusViewModel(appSettings: AppSettings) -> RouteGeniusViewModel {
+        RouteGeniusViewModel(
+            service: routeGeniusService,
+            repository: routeRepository,
+            appSettings: appSettings
+        )
+    }
+
+    // MARK: - Workout adaptation
+
+    /// Returns an adapted ``ScheduledWorkout`` based on the runner's recent history.
+    /// If history is empty the original workout is returned unchanged.
+    func adaptedWorkout(
+        scheduled: ScheduledWorkout,
+        history: [RunWorkout],
+        profile: UserProfile,
+        unitPreference: UnitPreference = .metric
+    ) -> ScheduledWorkout {
+        guard !history.isEmpty else { return scheduled }
+        return trainingPlanService.adaptWorkout(
+            scheduled: scheduled,
+            history: history,
+            profile: profile,
+            unitPreference: unitPreference
+        )
+    }
+
+    // MARK: - Schedule management
+
+    /// Redistributes uncompleted future workouts to match the given run day indices.
+    func rescheduleWorkouts(
+        in plan: TrainingPlan,
+        newDayIndices: [Int],
+        profile: UserProfile?
+    ) {
+        trainingPlanService.applyNewRunDays(to: plan, newDayIndices: newDayIndices, profile: profile)
     }
 
     // MARK: Preview support

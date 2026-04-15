@@ -188,9 +188,34 @@ jobs:
             SKIP_INSTALL=NO \
             | xcbeautify --renderer github-actions
 
+      - name: Generate TestFlight notes
+        run: |
+          # Commits since last tag (fall back to last 20 if no tags exist).
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -n "$LAST_TAG" ]; then
+            RANGE="${LAST_TAG}..HEAD"
+          else
+            RANGE="HEAD~20..HEAD"
+          fi
+          COMMITS=$(git log "$RANGE" --pretty=format:"• %s" --no-merges 2>/dev/null || echo "")
+          [ -z "$COMMITS" ] && COMMITS="• $(git rev-parse --short HEAD)"
+          printf 'Build %s (%s)\n\nWhat'"'"'s changed:\n%s\n' \
+            "${{ github.run_number }}" \
+            "${{ github.ref_name }}" \
+            "$COMMITS" > testflight_notes.txt
+          echo "=== TestFlight Notes ==="
+          cat testflight_notes.txt
+
       - name: Upload archive
         uses: actions/upload-artifact@v4
         with:
           name: RunningApp-archive-${{ github.sha }}
           path: build/RunningApp.xcarchive
+          retention-days: 14
+
+      - name: Upload TestFlight notes
+        uses: actions/upload-artifact@v4
+        with:
+          name: testflight-notes-${{ github.sha }}
+          path: testflight_notes.txt
           retention-days: 14

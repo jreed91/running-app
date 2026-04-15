@@ -9,6 +9,7 @@ final class UserProfile {
     var goalFinishTime: TimeInterval      // seconds
     var weeklyRunDays: Int
     var fitnessLevel: FitnessLevel
+    var gender: Gender
     var currentEstimated5KTimeSeconds: Double?
     /// JSON-encoded `[Int]` backing store for preferred run weekdays.
     /// Access via the `preferredRunDayIndices` extension property — never persist `[Int]` directly.
@@ -22,6 +23,7 @@ final class UserProfile {
         goalFinishTime: TimeInterval,
         weeklyRunDays: Int,
         fitnessLevel: FitnessLevel,
+        gender: Gender = .preferNotToShare,
         currentEstimated5KTimeSeconds: Double? = nil,
         preferredRunDayIndices: [Int] = []
     ) {
@@ -31,6 +33,7 @@ final class UserProfile {
         self.goalFinishTime = goalFinishTime
         self.weeklyRunDays = weeklyRunDays
         self.fitnessLevel = fitnessLevel
+        self.gender = gender
         self.currentEstimated5KTimeSeconds = currentEstimated5KTimeSeconds
         self.preferredRunDayIndicesData = preferredRunDayIndices.isEmpty
             ? nil

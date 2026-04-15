@@ -5,20 +5,23 @@ import Foundation
 enum RaceType: String, Codable, CaseIterable, Sendable {
     case fiveK = "5K"
     case halfMarathon = "Half Marathon"
+    case marathon = "Marathon"
 
     var displayName: String { rawValue }
 
     var distanceMeters: Double {
         switch self {
-        case .fiveK: return 5_000
+        case .fiveK:        return 5_000
         case .halfMarathon: return 21_097.5
+        case .marathon:     return 42_195
         }
     }
 
     var typicalWeeks: ClosedRange<Int> {
         switch self {
-        case .fiveK: return 8...12
+        case .fiveK:        return 8...12
         case .halfMarathon: return 12...20
+        case .marathon:     return 16...24
         }
     }
 }
@@ -50,6 +53,28 @@ enum FitnessLevel: String, Codable, CaseIterable, Sendable {
             case .intermediate: return 40   // ~25 mi/wk
             case .advanced:     return 60   // ~37 mi/wk
             }
+        case .marathon:
+            switch self {
+            case .beginner:     return 40   // ~25 mi/wk
+            case .intermediate: return 55   // ~34 mi/wk
+            case .advanced:     return 80   // ~50 mi/wk
+            }
+        }
+    }
+}
+
+// MARK: - Gender
+
+enum Gender: String, Codable, CaseIterable, Sendable {
+    case male               = "male"
+    case female             = "female"
+    case preferNotToShare   = "prefer_not_to_share"
+
+    var displayName: String {
+        switch self {
+        case .male:             return "Male"
+        case .female:           return "Female"
+        case .preferNotToShare: return "Prefer not to share"
         }
     }
 }
@@ -94,6 +119,22 @@ enum RecoveryType: String, Codable, Sendable {
     case standing
 }
 
+// MARK: - RouteType
+
+enum RouteType: String, Codable, CaseIterable, Sendable {
+    case loop = "Loop"
+    case outAndBack = "Out & Back"
+
+    var displayName: String { rawValue }
+
+    var systemImage: String {
+        switch self {
+        case .loop:       return "arrow.trianglehead.2.clockwise"
+        case .outAndBack: return "arrow.left.arrow.right"
+        }
+    }
+}
+
 // MARK: - UnitPreference
 
 enum UnitPreference: String, CaseIterable, Sendable {
@@ -116,8 +157,8 @@ enum UnitPreference: String, CaseIterable, Sendable {
 
     var paceLabel: String {
         switch self {
-        case .metric: return "/km"
-        case .imperial: return "/mi"
+        case .metric: return "min/km"
+        case .imperial: return "min/mi"
         }
     }
 }

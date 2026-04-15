@@ -9,6 +9,11 @@ struct RunSummaryView: View {
     @Environment(AppSettings.self) private var appSettings
     @Query private var scheduledWorkouts: [ScheduledWorkout]
 
+    // Chart selection state
+    @State private var selectedSplitPaceKm: Int? = nil
+    @State private var selectedSplitHRKm: Int? = nil
+    @State private var selectedSplitElevKm: Int? = nil
+
     private var matchedScheduled: ScheduledWorkout? {
         scheduledWorkouts.first { $0.completedWorkout?.id == workout.id }
     }
@@ -33,6 +38,10 @@ struct RunSummaryView: View {
 
     private func elevationDisplay(_ meters: Double) -> Double {
         appSettings.unitPreference == .metric ? meters : meters * 3.28084
+    }
+
+    private func split(forKm km: Int) -> Split? {
+        workout.splits.first { $0.kilometer == km }
     }
 
     var body: some View {
@@ -120,12 +129,32 @@ struct RunSummaryView: View {
     private var splitPaceChart: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("SPLIT PACES").font(.sectionHeader).foregroundStyle(.secondary)
-            Chart(workout.splits, id: \.kilometer) { split in
-                BarMark(
-                    x: .value(appSettings.unitPreference.distanceLabel, split.kilometer),
-                    y: .value("Pace", split.paceSecondsPerKm)
-                )
-                .foregroundStyle(.brand)
+            Chart {
+                ForEach(workout.splits, id: \.kilometer) { split in
+                    BarMark(
+                        x: .value(appSettings.unitPreference.distanceLabel, split.kilometer),
+                        y: .value("Pace", split.paceSecondsPerKm)
+                    )
+                    .foregroundStyle(selectedSplitPaceKm == split.kilometer ? Color.brand : Color.brand.opacity(selectedSplitPaceKm == nil ? 1.0 : 0.5))
+                }
+                if let km = selectedSplitPaceKm, let split = split(forKm: km) {
+                    RuleMark(x: .value(appSettings.unitPreference.distanceLabel, km))
+                        .foregroundStyle(.secondary.opacity(0.4))
+                        .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
+                        .annotation(
+                            position: .top,
+                            overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
+                        ) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("\(appSettings.unitPreference.distanceLabel) \(km)")
+                                    .font(.caption2).foregroundStyle(.secondary)
+                                Text(split.paceSecondsPerKm.paceString(unit: appSettings.unitPreference))
+                                    .font(.caption).bold()
+                            }
+                            .padding(.horizontal, 8).padding(.vertical, 5)
+                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                        }
+                }
             }
             .frame(height: 120)
             .chartYAxis {
@@ -138,6 +167,7 @@ struct RunSummaryView: View {
                     }
                 }
             }
+            .chartXSelection(value: $selectedSplitPaceKm)
             Text("Lower = faster").font(.caption).foregroundStyle(.secondary)
         }
     }
@@ -145,22 +175,45 @@ struct RunSummaryView: View {
     // MARK: Split HR chart
 
     private var splitHRChart: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let hrSplits = workout.splits.filter { $0.heartRate != nil }
+        return VStack(alignment: .leading, spacing: 8) {
             Text("HEART RATE BY SPLIT").font(.sectionHeader).foregroundStyle(.secondary)
-            Chart(workout.splits.filter { $0.heartRate != nil }, id: \.kilometer) { split in
-                LineMark(
-                    x: .value(appSettings.unitPreference.distanceLabel, split.kilometer),
-                    y: .value("bpm", split.heartRate ?? 0)
-                )
-                .foregroundStyle(.zoneInterval)
-                PointMark(
-                    x: .value(appSettings.unitPreference.distanceLabel, split.kilometer),
-                    y: .value("bpm", split.heartRate ?? 0)
-                )
-                .foregroundStyle(.zoneInterval)
+            Chart {
+                ForEach(hrSplits, id: \.kilometer) { split in
+                    LineMark(
+                        x: .value(appSettings.unitPreference.distanceLabel, split.kilometer),
+                        y: .value("bpm", split.heartRate ?? 0)
+                    )
+                    .foregroundStyle(.zoneInterval)
+                    PointMark(
+                        x: .value(appSettings.unitPreference.distanceLabel, split.kilometer),
+                        y: .value("bpm", split.heartRate ?? 0)
+                    )
+                    .foregroundStyle(.zoneInterval)
+                    .symbolSize(selectedSplitHRKm == split.kilometer ? 80 : 36)
+                }
+                if let km = selectedSplitHRKm, let split = split(forKm: km), let hr = split.heartRate {
+                    RuleMark(x: .value(appSettings.unitPreference.distanceLabel, km))
+                        .foregroundStyle(.secondary.opacity(0.4))
+                        .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
+                        .annotation(
+                            position: .top,
+                            overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
+                        ) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("\(appSettings.unitPreference.distanceLabel) \(km)")
+                                    .font(.caption2).foregroundStyle(.secondary)
+                                Text("\(Int(hr)) bpm")
+                                    .font(.caption).bold()
+                            }
+                            .padding(.horizontal, 8).padding(.vertical, 5)
+                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                        }
+                }
             }
             .frame(height: 120)
             .chartYAxisLabel("bpm")
+            .chartXSelection(value: $selectedSplitHRKm)
         }
     }
 
@@ -169,15 +222,41 @@ struct RunSummaryView: View {
     private var splitElevationChart: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("ELEVATION BY SPLIT").font(.sectionHeader).foregroundStyle(.secondary)
-            Chart(workout.splits, id: \.kilometer) { split in
-                BarMark(
-                    x: .value(appSettings.unitPreference.distanceLabel, split.kilometer),
-                    y: .value(elevationUnit, elevationDisplay(split.elevationGainMeters))
-                )
-                .foregroundStyle(elevationDisplay(split.elevationGainMeters) >= 0 ? Color.success : Color.destructive)
+            Chart {
+                ForEach(workout.splits, id: \.kilometer) { split in
+                    let gain = elevationDisplay(split.elevationGainMeters)
+                    BarMark(
+                        x: .value(appSettings.unitPreference.distanceLabel, split.kilometer),
+                        y: .value(elevationUnit, gain)
+                    )
+                    .foregroundStyle(
+                        (gain >= 0 ? Color.success : Color.destructive)
+                            .opacity(selectedSplitElevKm == nil || selectedSplitElevKm == split.kilometer ? 1.0 : 0.5)
+                    )
+                }
+                if let km = selectedSplitElevKm, let split = split(forKm: km) {
+                    let gain = elevationDisplay(split.elevationGainMeters)
+                    RuleMark(x: .value(appSettings.unitPreference.distanceLabel, km))
+                        .foregroundStyle(.secondary.opacity(0.4))
+                        .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
+                        .annotation(
+                            position: .top,
+                            overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
+                        ) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("\(appSettings.unitPreference.distanceLabel) \(km)")
+                                    .font(.caption2).foregroundStyle(.secondary)
+                                Text("\(gain >= 0 ? "+" : "")\(Int(gain)) \(elevationUnit)")
+                                    .font(.caption).bold()
+                            }
+                            .padding(.horizontal, 8).padding(.vertical, 5)
+                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                        }
+                }
             }
             .frame(height: 100)
             .chartYAxisLabel(elevationUnit)
+            .chartXSelection(value: $selectedSplitElevKm)
         }
     }
 

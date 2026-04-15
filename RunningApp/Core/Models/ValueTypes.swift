@@ -40,3 +40,70 @@ struct WorkoutInterval: Codable, Hashable, Sendable {
     var recoverySeconds: Double
     var recoveryType: RecoveryType
 }
+
+// MARK: - WorkoutSegment
+
+/// A single continuous segment of a run (warm-up, work repeat, recovery, cool-down).
+struct WorkoutSegment: Codable, Hashable, Sendable {
+    /// Target distance in meters. Nil when segment is time-based or open.
+    var distanceMeters: Double?
+    /// Target duration in seconds. Nil when segment is distance-based or open.
+    var durationSeconds: Double?
+    /// Target pace in seconds/km. Nil for open/recovery segments.
+    var targetPaceSecondsPerKm: Double?
+    /// Human-readable label, e.g. "Warm-up", "Cool-down", "Recovery jog".
+    var label: String
+}
+
+// MARK: - WorkoutSet
+
+/// One repeated block: N repetitions of a work segment followed by a recovery segment.
+struct WorkoutSet: Codable, Hashable, Sendable {
+    var repetitions: Int
+    var workSegment: WorkoutSegment
+    var recoverySegment: WorkoutSegment
+    /// Human-readable label, e.g. "VO2max Intervals", "Tempo Block".
+    var label: String
+}
+
+// MARK: - WorkoutStructure
+
+/// Full structured representation of a workout with warm-up, main sets, and cool-down.
+/// Serialised to JSON and stored in ``ScheduledWorkout/structureData``.
+struct WorkoutStructure: Codable, Hashable, Sendable {
+    var warmup: WorkoutSegment
+    var mainSets: [WorkoutSet]
+    var cooldown: WorkoutSegment
+    var totalEstimatedDistanceMeters: Double
+    var totalEstimatedDurationSeconds: Double
+}
+
+// MARK: - RouteStep
+
+/// A single turn-by-turn navigation step returned by the route generation service.
+struct RouteStep: Codable, Hashable, Sendable {
+    /// Human-readable direction instruction, e.g. "Turn left onto Oak Street".
+    var instruction: String
+    /// Street or path name for this step.
+    var name: String
+    /// Distance covered in this step, in metres.
+    var distanceMeters: Double
+    /// Estimated duration of this step, in seconds.
+    var durationSeconds: Double
+}
+
+// MARK: - GeneratedRoute
+
+/// A route returned by ``RouteGeniusService`` before it is persisted as a ``SavedRoute``.
+struct GeneratedRoute: Sendable {
+    /// Ordered coordinate path for the full route.
+    var coordinates: [Coordinate]
+    /// Turn-by-turn steps for the full route.
+    var steps: [RouteStep]
+    /// Actual route distance in metres (may differ from requested distance by ±10%).
+    var distanceMeters: Double
+    /// Estimated running duration in seconds (at an average pace of ~6 min/km).
+    var durationSeconds: Double
+    /// Short human-readable label distinguishing this option, e.g. "Option A" or "Heading North".
+    var label: String
+}

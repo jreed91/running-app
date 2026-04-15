@@ -181,7 +181,7 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
 
             // Update current pace from a rolling 5-second average speed
             if location.speed > 0 {
-                currentPaceSecondsPerKm = 1_000 / (location.speed * 60)
+                currentPaceSecondsPerKm = 1_000 / location.speed
             }
 
             // Record a split every kilometre
