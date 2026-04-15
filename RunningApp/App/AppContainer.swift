@@ -42,35 +42,47 @@ final class AppContainer: ObservableObject {
             ScheduledWorkout.self,
             SavedRoute.self
         ])
+        // Read the preference set during onboarding / Settings.
+        // UserDefaults is checked directly here because AppSettings doesn't
+        // exist yet at the point AppContainer is initialized.
+        let syncEnabled: Bool
+        if UserDefaults.standard.object(forKey: AppSettings.iCloudSyncKey) != nil {
+            syncEnabled = UserDefaults.standard.bool(forKey: AppSettings.iCloudSyncKey)
+        } else {
+            syncEnabled = true   // first-launch default: sync on
+        }
+
         let config: ModelConfiguration
         if inMemory {
             config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        } else if syncEnabled {
+            config = ModelConfiguration(
+                schema: schema,
+                isStoredInMemoryOnly: false,
+                cloudKitDatabase: .automatic
+            )
         } else {
-            // Read the preference set during onboarding / Settings.
-            // UserDefaults is checked directly here because AppSettings doesn't
-            // exist yet at the point AppContainer is initialized.
-            let syncEnabled: Bool
-            if UserDefaults.standard.object(forKey: AppSettings.iCloudSyncKey) != nil {
-                syncEnabled = UserDefaults.standard.bool(forKey: AppSettings.iCloudSyncKey)
-            } else {
-                syncEnabled = true   // first-launch default: sync on
-            }
-
-            if syncEnabled {
-                config = ModelConfiguration(
-                    schema: schema,
-                    isStoredInMemoryOnly: false,
-                    cloudKitDatabase: .automatic
-                )
-            } else {
-                config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-            }
+            config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
         }
+
         let container: ModelContainer
         do {
             container = try ModelContainer(for: schema, configurations: [config])
         } catch {
-            fatalError("Failed to create SwiftData ModelContainer: \(error)")
+            // CloudKit-backed stores can fail when the iCloud container isn't
+            // provisioned or the device/simulator has no iCloud account.
+            // Retry with a local-only store so the app remains usable.
+            if syncEnabled && !inMemory {
+                let fallbackConfig = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+                do {
+                    container = try ModelContainer(for: schema, configurations: [fallbackConfig])
+                    print("[AppContainer] CloudKit store unavailable, using local-only store: \(error)")
+                } catch let fallbackError {
+                    fatalError("Failed to create SwiftData ModelContainer: \(fallbackError)")
+                }
+            } else {
+                fatalError("Failed to create SwiftData ModelContainer: \(error)")
+            }
         }
 
         self.modelContainer = container
