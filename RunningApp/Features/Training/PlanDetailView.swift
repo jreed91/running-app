@@ -23,13 +23,11 @@ struct PlanDetailView: View {
     /// Day indices (0=Mon … 6=Sun) inferred from uncompleted future workout dates.
     private var currentPlanDayIndices: Set<Int> {
         let cal = Calendar.current
-        return Set(
-            (plan.weeks ?? [])
-                .flatMap { $0.workouts ?? [] }
-                .filter { !$0.isCompleted && $0.workoutType != .rest && $0.scheduledDate > Date() }
-                .map { cal.component(.weekday, from: $0.scheduledDate) }
-                .map { ($0 + 5) % 7 } // Sun=1..Sat=7 → Mon=0..Sun=6
-        )
+        let now = Date()
+        let allWorkouts = (plan.weeks ?? []).flatMap { $0.workouts ?? [] }
+        let future = allWorkouts.filter { !$0.isCompleted && $0.workoutType != .rest && $0.scheduledDate > now }
+        let weekdays = future.map { cal.component(.weekday, from: $0.scheduledDate) }
+        return Set(weekdays.map { ($0 + 5) % 7 }) // Sun=1..Sat=7 → Mon=0..Sun=6
     }
 
     private var scheduleChanged: Bool {
