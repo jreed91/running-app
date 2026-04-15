@@ -69,29 +69,38 @@ final class AppContainer: ObservableObject {
         let container: ModelContainer
         do {
             container = try ModelContainer(for: schema, configurations: [config])
-        } catch {
+            print("[AppContainer v4] Store opened OK (syncEnabled=\(syncEnabled))")
+        } catch let primaryError {
+            print("[AppContainer v4] Primary store failed: \(primaryError)")
             guard !inMemory else {
-                fatalError("Failed to create in-memory SwiftData ModelContainer: \(error)")
+                // In-memory configs should never fail; if they do the schema is broken.
+                fatalError("[AppContainer v4] In-memory ModelContainer failed: \(primaryError)")
             }
-            // Tier 1: CloudKit unreachable — retry with a plain local-only store.
-            do {
-                container = try ModelContainer(for: schema, configurations: [localConfig])
-                print("[AppContainer] CloudKit unavailable, using local-only store: \(error)")
-            } catch {
-                // Tier 2: The on-disk store itself is corrupted or has an
-                // incompatible schema. Delete the exact files SwiftData uses
-                // (derived from localConfig.url) and start fresh.
+
+            // Tier 1 — local-only (skip CloudKit).
+            if let c = try? ModelContainer(for: schema, configurations: [localConfig]) {
+                container = c
+                print("[AppContainer v4] Tier1: local-only store OK")
+            } else {
+                // Tier 2 — delete the on-disk store and recreate.
                 let storeURL = localConfig.url
+                print("[AppContainer v4] Tier2: deleting store at \(storeURL.path)")
                 for suffix in ["", "-shm", "-wal"] {
                     try? FileManager.default.removeItem(
                         at: URL(fileURLWithPath: storeURL.path + suffix)
                     )
                 }
-                do {
-                    container = try ModelContainer(for: schema, configurations: [localConfig])
-                    print("[AppContainer] Store reset after corruption: \(error)")
-                } catch let resetError {
-                    fatalError("Failed to create SwiftData ModelContainer after reset: \(resetError)")
+
+                if let c = try? ModelContainer(for: schema, configurations: [localConfig]) {
+                    container = c
+                    print("[AppContainer v4] Tier2: fresh store created OK")
+                } else {
+                    // Tier 3 — in-memory fallback; data won't persist this session
+                    // but the app will not crash.
+                    print("[AppContainer v4] Tier3: all persistent tiers failed — using in-memory store")
+                    let memConfig = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+                    // swiftlint:disable:next force_try
+                    container = try! ModelContainer(for: schema, configurations: [memConfig])
                 }
             }
         }
