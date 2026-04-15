@@ -7,6 +7,7 @@ struct PlanDetailView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appContainer) private var container
+    @Environment(AppSettings.self) private var appSettings
 
     @Query private var profiles: [UserProfile]
     private var profile: UserProfile? { profiles.first }
@@ -91,10 +92,10 @@ struct PlanDetailView: View {
             Text("Uncompleted future workouts will be moved to your selected days. Completed workouts are unchanged.")
         }
         .sheet(item: $workoutToEdit) { workout in
-            WorkoutEditView(workout: workout)
+            WorkoutEditView(workout: workout, unitPreference: appSettings.unitPreference)
         }
         .sheet(item: $weekToAddWorkout) { week in
-            WorkoutEditView(week: week)
+            WorkoutEditView(week: week, unitPreference: appSettings.unitPreference)
         }
         .onAppear {
             selectedDays = currentPlanDayIndices
@@ -202,19 +203,18 @@ struct WeekCardView: View {
                         ScheduledWorkoutRow(workout: workout)
                     }
                     .buttonStyle(.plain)
-                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    .contextMenu {
                         if !workout.isCompleted {
-                            Button(role: .destructive) {
-                                onDeleteWorkout(workout)
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
                             Button {
                                 onEditWorkout(workout)
                             } label: {
                                 Label("Edit", systemImage: "pencil")
                             }
-                            .tint(.brand)
+                            Button(role: .destructive) {
+                                onDeleteWorkout(workout)
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
                         }
                     }
                     Divider().padding(.leading)
