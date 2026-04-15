@@ -29,6 +29,7 @@ final class AppContainer: ObservableObject {
     let workoutAnalyticsService: WorkoutAnalyticsService
     let routeGeniusService: RouteGeniusService
     let workoutSyncService: WorkoutSyncService
+    let dataMigrationService: DataMigrationService
 
     // MARK: Init
 
@@ -69,6 +70,9 @@ final class AppContainer: ObservableObject {
             notificationService: notifications,
             context: context
         )
+
+        self.dataMigrationService = DataMigrationService()
+        self.dataMigrationService.runIfNeeded(context: context)
     }
 
     // MARK: - Route Genius
