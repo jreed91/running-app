@@ -8,6 +8,7 @@ struct ActiveRunView: View {
     @Environment(AppSettings.self) private var appSettings
 
     @Query private var profiles: [UserProfile]
+    @Query private var activePlans: [TrainingPlan]
     @State private var showFinishConfirmation = false
 
     private var tracker: WorkoutTrackerService { container.workoutTrackerService }
@@ -112,6 +113,18 @@ struct ActiveRunView: View {
         try? context.save()
         Task { @MainActor in
             try? await container.healthKitRepository.save(workout)
+        }
+        // Re-adapt all future scheduled workouts using the newly accumulated history.
+        // context.fetch includes the just-saved workout so analytics see it immediately.
+        if let profile = profiles.first, let plan = activePlans.first {
+            let allHistory = (try? context.fetch(FetchDescriptor<RunWorkout>())) ?? []
+            container.refreshPlanAfterWorkout(
+                plan: plan,
+                history: allHistory,
+                profile: profile,
+                unitPreference: appSettings.unitPreference
+            )
+            try? context.save()
         }
         dismiss()
     }

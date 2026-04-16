@@ -86,6 +86,81 @@ struct TrainingPlanServiceTests {
         #expect(hasTempo)
     }
 
+    // MARK: Easy run distribution
+
+    @Test("Easy run count per week matches expected value for any run-day configuration")
+    func easyRunCountByDayCount() {
+        // (runDays, numberOfWeeks, phaseFilter, expectedEasyRunsPerWeek)
+        // base phase has 1 quality type; build phase has 2 quality types
+        let cases: [(runDays: Int, weeks: Int, phase: TrainingPhase, expectedEasy: Int)] = [
+            (3, 4, .base,  1),  // quality + easy + long
+            (3, 8, .build, 0),  // quality + quality + long (no easy slot)
+            (4, 4, .base,  2),  // quality + easy + easy + long
+            (4, 8, .build, 1),  // quality + quality + easy + long
+            (5, 4, .base,  3),  // quality + easy × 3 + long
+            (5, 8, .build, 2),  // quality × 2 + easy × 2 + long
+        ]
+        for c in cases {
+            let profile = makeProfile(race: .fiveK, runDays: c.runDays)
+            let plan = service.generatePlan(profile: profile, startDate: .now, numberOfWeeks: c.weeks)
+            let targetWeeks = plan.weeks.filter { $0.phase == c.phase }
+            guard !targetWeeks.isEmpty else { continue }
+            for week in targetWeeks {
+                let easyCount = week.workouts.filter { $0.workoutType == .easy }.count
+                #expect(
+                    easyCount == c.expectedEasy,
+                    "\(c.runDays)-day \(c.phase) week: expected \(c.expectedEasy) easy run(s), got \(easyCount)"
+                )
+            }
+        }
+    }
+
+    @Test("Easy runs in the same week have equal target distances for 3–6 run days")
+    func easyRunDistancesAreBalanced() {
+        for runDays in 3...6 {
+            let profile = makeProfile(race: .halfMarathon, runDays: runDays)
+            let plan = service.generatePlan(profile: profile, startDate: .now, numberOfWeeks: 8)
+            for week in plan.weeks {
+                let dists = week.workouts
+                    .filter { $0.workoutType == .easy }
+                    .compactMap { $0.targetDistanceMeters }
+                guard dists.count >= 2 else { continue }
+                let first = dists[0]
+                for dist in dists.dropFirst() {
+                    #expect(
+                        abs(dist - first) < 1,
+                        "\(runDays)-day week: easy run distances unequal — \(dists)"
+                    )
+                }
+            }
+        }
+    }
+
+    @Test("refreshPaces tightens pace targets when runner's profile improves")
+    func refreshPacesUpdatesPaceTargets() {
+        let slowProfile = makeProfile(race: .fiveK, runDays: 4, time5KSeconds: 25 * 60)
+        let plan = service.generatePlan(profile: slowProfile, startDate: .now, numberOfWeeks: 8)
+
+        let originalTempo = plan.weeks
+            .flatMap { $0.workouts }
+            .first(where: { $0.workoutType == .tempo })?
+            .targetPaceLowerBound
+
+        // Refresh with a faster-runner profile (20-min 5K → higher VDOT → faster paces)
+        let fastProfile = makeProfile(race: .fiveK, runDays: 4, time5KSeconds: 20 * 60)
+        service.refreshPaces(plan: plan, history: [], profile: fastProfile)
+
+        let updatedTempo = plan.weeks
+            .flatMap { $0.workouts }
+            .first(where: { $0.workoutType == .tempo && !$0.isCompleted })?
+            .targetPaceLowerBound
+
+        guard let old = originalTempo, let new = updatedTempo else {
+            Issue.record("Could not find a tempo workout in the plan"); return
+        }
+        #expect(new < old, "Faster profile should yield a lower (faster) tempo pace lower bound")
+    }
+
     // MARK: Target distance
 
     @Test("Target distance decreases in taper week vs peak week")

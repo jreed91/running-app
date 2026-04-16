@@ -189,6 +189,18 @@ struct TrainingPlanService {
         // Determine quality session types for the week
         let qualityTypes = weekQualityTypes(phase: phase, raceType: raceType)
 
+        // Pre-calculate volume distribution so every easy run gets an equal share of
+        // whatever weekly km remains after the long run and quality sessions are budgeted.
+        // qualitySlots: quality sessions that fit (all slots except the long-run slot)
+        // easySlots:    remaining slots after quality + long run
+        let qualitySlots = min(qualityTypes.count, max(0, days.count - 1))
+        let easySlots    = max(0, days.count - qualitySlots - 1)
+        let totalQualityFraction = 0.15 * Double(qualitySlots)
+        let easyFractionEach = easySlots > 0
+            ? max(0.0, 1.0 - 0.35 - totalQualityFraction) / Double(easySlots)
+            : 0.0
+        let easyKmEach = targetKm * easyFractionEach
+
         for (slotIndex, dayOffset) in days.enumerated() {
             let date = weekStart.adding(days: dayOffset)
 
@@ -200,7 +212,7 @@ struct TrainingPlanService {
             }
 
             // Insert a quality session if the slot index matches
-            if slotIndex < qualityTypes.count {
+            if slotIndex < qualitySlots {
                 workouts.append(qualityWorkout(
                     date: date,
                     type: qualityTypes[slotIndex],
@@ -212,9 +224,8 @@ struct TrainingPlanService {
                 continue
             }
 
-            // Remaining days → easy runs
-            let easyKm = targetKm * 0.20 / Double(max(1, runDays - days.count))
-            workouts.append(easyWorkout(date: date, km: easyKm, paces: paces))
+            // Remaining days → easy runs with equally distributed volume
+            workouts.append(easyWorkout(date: date, km: easyKmEach, paces: paces))
         }
 
         return workouts
@@ -753,6 +764,44 @@ struct TrainingPlanService {
             zone = "Tempo"
         }
         return "\(zone) Intervals (\(shortDistanceString(distanceMeters, unit: unitPreference)))"
+    }
+
+    // MARK: - Continuous pace refresh
+
+    /// Re-derives training paces from the runner's completed history and updates every
+    /// future uncompleted workout in `plan`.
+    ///
+    /// Call this after each completed run so workout targets stay aligned with the
+    /// runner's current fitness for any number of weekly run days. Uses
+    /// ``WorkoutAnalyticsService/snapshot(from:profile:)`` for a live VDOT when sufficient
+    /// history exists; falls back to ``estimatedVDOT(from:)`` otherwise.
+    func refreshPaces(
+        plan: TrainingPlan,
+        history: [RunWorkout],
+        profile: UserProfile,
+        unitPreference: UnitPreference = .metric
+    ) {
+        let today = Calendar.current.startOfDay(for: Date())
+        for week in plan.weeks ?? [] {
+            for workout in week.workouts ?? [] {
+                guard !workout.isCompleted,
+                      workout.scheduledDate > today else { continue }
+                let adapted = adaptWorkout(
+                    scheduled: workout,
+                    history: history,
+                    profile: profile,
+                    unitPreference: unitPreference
+                )
+                workout.workoutStructure     = adapted.workoutStructure
+                workout.targetDistanceMeters = adapted.targetDistanceMeters
+                workout.targetPaceLowerBound = adapted.targetPaceLowerBound
+                workout.targetPaceUpperBound = adapted.targetPaceUpperBound
+                workout.notes                = adapted.notes
+                if !adapted.intervals.isEmpty {
+                    workout.intervals = adapted.intervals
+                }
+            }
+        }
     }
 
     // MARK: - Schedule management

@@ -167,6 +167,25 @@ final class AppContainer: ObservableObject {
         )
     }
 
+    // MARK: - Continuous plan refresh
+
+    /// Re-derives training paces from recent history and updates all future uncompleted
+    /// workouts in the plan. Call this after the user completes any run so workout
+    /// targets stay aligned with their current VDOT for any number of weekly run days.
+    func refreshPlanAfterWorkout(
+        plan: TrainingPlan,
+        history: [RunWorkout],
+        profile: UserProfile,
+        unitPreference: UnitPreference = .metric
+    ) {
+        trainingPlanService.refreshPaces(
+            plan: plan,
+            history: history,
+            profile: profile,
+            unitPreference: unitPreference
+        )
+    }
+
     // MARK: - Schedule management
 
     /// Redistributes uncompleted future workouts to match the given run day indices.
