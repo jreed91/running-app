@@ -846,8 +846,22 @@ struct TrainingPlanService {
             // create stub easy runs for the extra target dates so that
             // currentPlanDayIndices reflects all selected days after the save.
             if targets.count > movable.count {
+                let paces: TrainingPaces? = profile.map { p in
+                    PaceCalculatorService.trainingPaces(forVDOT: estimatedVDOT(from: p))
+                }
+                let totalMovableKm = movable.reduce(0.0) { $0 + ($1.targetDistanceMeters ?? 0) / 1_000 }
+                let stubCount = Double(targets.count - movable.count)
+                let remainingKm = week.targetDistanceKm - totalMovableKm
+                let stubKm = remainingKm > 0 ? remainingKm / stubCount : 5.0
                 for targetDate in targets.dropFirst(movable.count) {
-                    let stub = ScheduledWorkout(scheduledDate: targetDate, workoutType: .easy)
+                    let stub = ScheduledWorkout(
+                        scheduledDate: targetDate,
+                        workoutType: .easy,
+                        targetDistanceMeters: stubKm * 1_000,
+                        targetPaceLowerBound: paces?.easyRange.lowerBound,
+                        targetPaceUpperBound: paces?.easyRange.upperBound,
+                        notes: "Conversational effort – you should be able to speak in sentences."
+                    )
                     week.workouts = (week.workouts ?? []) + [stub]
                 }
             }
