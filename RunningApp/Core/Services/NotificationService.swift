@@ -67,11 +67,11 @@ final class NotificationService {
 
     /// Fires an immediate local notification when a run is automatically synced from Apple Health.
     /// Silently skipped if the user has not granted notification permission.
-    func notifyNewRunSynced(_ workout: RunWorkout) async throws {
+    func notifyNewRunSynced(_ workout: RunWorkout, unit: UnitPreference = .metric) async throws {
         guard await isAuthorized else { return }
         let content = UNMutableNotificationContent()
         content.title = "Run Synced"
-        content.body  = syncedRunBody(for: workout)
+        content.body  = syncedRunBody(for: workout, unit: unit)
         content.sound = .default
         content.categoryIdentifier = Category.syncedRun
         // nil trigger → fires immediately
@@ -95,10 +95,10 @@ final class NotificationService {
 
     // MARK: Private
 
-    private func syncedRunBody(for workout: RunWorkout) -> String {
-        let km = String(format: "%.1f", workout.distanceMeters / 1_000)
-        let pace = workout.averagePaceSecondsPerKm.paceString
-        return "\(workout.workoutType.displayName) · \(km) km · \(pace)"
+    private func syncedRunBody(for workout: RunWorkout, unit: UnitPreference) -> String {
+        let distance = workout.distanceMeters.distanceString(unit: unit)
+        let pace = workout.averagePaceSecondsPerKm.paceString(unit: unit)
+        return "\(workout.workoutType.displayName) · \(distance) · \(pace)"
     }
 
     private func reminderBody(for workout: ScheduledWorkout, minutesBefore: Int) -> String {
