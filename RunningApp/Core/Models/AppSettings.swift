@@ -23,7 +23,8 @@ final class AppSettings {
         }
     }
 
-    private static let unitPreferenceKey = "unitPreference"
+    // Internal so services can read the same key before AppSettings is created.
+    static let unitPreferenceKey = "unitPreference"
     private static let orsAPIKeyKey      = "orsAPIKey"
     // Internal so AppContainer can read the same key before AppSettings is created.
     static let iCloudSyncKey = "iCloudSyncEnabled"
