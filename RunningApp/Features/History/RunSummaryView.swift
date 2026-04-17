@@ -35,14 +35,6 @@ struct RunSummaryView: View {
         workout.splits.contains { $0.elevationGainMeters != 0 }
     }
 
-    private var elevationUnit: String {
-        appSettings.unitPreference == .metric ? "m" : "ft"
-    }
-
-    private func elevationDisplay(_ meters: Double) -> Double {
-        appSettings.unitPreference == .metric ? meters : meters * 3.28084
-    }
-
     private func split(forKm km: Int) -> Split? {
         workout.splits.first { $0.kilometer == km }
     }
@@ -125,9 +117,7 @@ struct RunSummaryView: View {
             }
             if let gain = workout.elevationGainMeters {
                 statCell(
-                    value: appSettings.unitPreference == .metric
-                        ? String(format: "+%.0f m", gain)
-                        : String(format: "+%.0f ft", gain * 3.28084),
+                    value: "+\(Int(gain.elevationValue(unit: appSettings.unitPreference))) \(appSettings.unitPreference.elevationLabel)",
                     label: "Elevation"
                 )
             }
@@ -247,10 +237,10 @@ struct RunSummaryView: View {
             Text("ELEVATION BY SPLIT").font(.sectionHeader).foregroundStyle(.secondary)
             Chart {
                 ForEach(workout.splits, id: \.kilometer) { split in
-                    let gain = elevationDisplay(split.elevationGainMeters)
+                    let gain = split.elevationGainMeters.elevationValue(unit: appSettings.unitPreference)
                     BarMark(
                         x: .value(appSettings.unitPreference.distanceLabel, split.kilometer),
-                        y: .value(elevationUnit, gain)
+                        y: .value(appSettings.unitPreference.elevationLabel, gain)
                     )
                     .foregroundStyle(
                         (gain >= 0 ? Color.success : Color.destructive)
@@ -258,7 +248,7 @@ struct RunSummaryView: View {
                     )
                 }
                 if let km = selectedSplitElevKm, let split = split(forKm: km) {
-                    let gain = elevationDisplay(split.elevationGainMeters)
+                    let gain = split.elevationGainMeters.elevationValue(unit: appSettings.unitPreference)
                     RuleMark(x: .value(appSettings.unitPreference.distanceLabel, km))
                         .foregroundStyle(.secondary.opacity(0.4))
                         .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
@@ -269,7 +259,7 @@ struct RunSummaryView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("\(appSettings.unitPreference.distanceLabel) \(km)")
                                     .font(.caption2).foregroundStyle(.secondary)
-                                Text("\(gain >= 0 ? "+" : "")\(Int(gain)) \(elevationUnit)")
+                                Text("\(gain >= 0 ? "+" : "")\(Int(gain)) \(appSettings.unitPreference.elevationLabel)")
                                     .font(.caption).bold()
                             }
                             .padding(.horizontal, 8).padding(.vertical, 5)
@@ -278,7 +268,7 @@ struct RunSummaryView: View {
                 }
             }
             .frame(height: 100)
-            .chartYAxisLabel(elevationUnit)
+            .chartYAxisLabel(appSettings.unitPreference.elevationLabel)
             .chartXSelection(value: $selectedSplitElevKm)
         }
     }
@@ -337,8 +327,8 @@ struct RunSummaryView: View {
     @ViewBuilder
     private func elevationCell(_ meters: Double) -> some View {
         if meters != 0 {
-            let g = elevationDisplay(meters)
-            Text("\(g >= 0 ? "+" : "")\(Int(g))\(elevationUnit)")
+            let g = meters.elevationValue(unit: appSettings.unitPreference)
+            Text("\(g >= 0 ? "+" : "")\(Int(g))\(appSettings.unitPreference.elevationLabel)")
                 .foregroundStyle(g >= 0 ? Color.success : Color.destructive)
         } else {
             Text("—").foregroundStyle(.secondary)

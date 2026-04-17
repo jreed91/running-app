@@ -373,14 +373,6 @@ struct TrainingPlanService {
         }
     }
 
-    /// Formats a kilometre value as a distance string using the user's unit preference.
-    private func kmString(_ km: Double, unit: UnitPreference) -> String {
-        switch unit {
-        case .metric:  return String(format: "%.1f km", km)
-        case .imperial: return String(format: "%.1f mi", km / 1.60934)
-        }
-    }
-
     // MARK: - Smart Workout Adaptation
 
     /// Returns a new ``ScheduledWorkout`` whose structure, pace targets, and volume have
@@ -734,8 +726,8 @@ struct TrainingPlanService {
         case .onTrack:    trendNote = "Hold comfortably hard effort throughout."
         case .struggling: trendNote = "Pace eased – focus on consistent effort, not time."
         }
-        let totalStr = kmString(totalKm, unit: unitPreference)
-        let workStr  = kmString(workKm, unit: unitPreference)
+        let totalStr = totalKm.distanceStringFromKm(unit: unitPreference)
+        let workStr  = workKm.distanceStringFromKm(unit: unitPreference)
         return "\(totalStr) total: warm-up, \(workStr) tempo @ \(pace.paceString(unit: unitPreference)), cool-down. \(trendNote)"
     }
 
@@ -746,7 +738,7 @@ struct TrainingPlanService {
         case .onTrack:    trendNote = "Keep it conversational throughout."
         case .struggling: trendNote = "Distance trimmed slightly – prioritise recovery."
         }
-        return "\(kmString(km, unit: unitPreference)) easy @ ~\(pace.paceString(unit: unitPreference)). \(trendNote)"
+        return "\(km.distanceStringFromKm(unit: unitPreference)) easy @ ~\(pace.paceString(unit: unitPreference)). \(trendNote)"
     }
 
     private func intervalSetLabel(

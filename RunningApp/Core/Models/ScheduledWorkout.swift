@@ -32,13 +32,8 @@ final class ScheduledWorkout {
     // MARK: Computed helpers
 
     var intervals: [WorkoutInterval] {
-        get {
-            guard let data = intervalsData else { return [] }
-            return (try? JSONDecoder().decode([WorkoutInterval].self, from: data)) ?? []
-        }
-        set {
-            intervalsData = try? JSONEncoder().encode(newValue)
-        }
+        get { intervalsData?.decode([WorkoutInterval].self) ?? [] }
+        set { intervalsData = .encoded(newValue) }
     }
 
     var targetPaceRange: ClosedRange<Double>? {
@@ -47,13 +42,8 @@ final class ScheduledWorkout {
     }
 
     var workoutStructure: WorkoutStructure? {
-        get {
-            guard let data = structureData else { return nil }
-            return try? JSONDecoder().decode(WorkoutStructure.self, from: data)
-        }
-        set {
-            structureData = try? JSONEncoder().encode(newValue)
-        }
+        get { structureData?.decode(WorkoutStructure.self) }
+        set { structureData = newValue.flatMap { Data.encoded($0) } }
     }
 
     init(

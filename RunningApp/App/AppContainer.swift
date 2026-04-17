@@ -103,11 +103,14 @@ final class AppContainer: ObservableObject {
                     container = c
                     print("[AppContainer v5] Tier2: fresh local store created OK")
                 } else {
-                    // Tier 3 — in-memory; data won't persist but the app won't crash.
+                    // Tier 3 — in-memory; data won't persist but the app won't crash on launch.
                     print("[AppContainer v5] Tier3: all persistent tiers failed — using in-memory store")
                     let memConfig = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-                    // swiftlint:disable:next force_try
-                    container = try! ModelContainer(for: schema, configurations: [memConfig])
+                    do {
+                        container = try ModelContainer(for: schema, configurations: [memConfig])
+                    } catch let tier3Error {
+                        fatalError("[AppContainer] In-memory ModelContainer failed — SwiftData is broken on this device: \(tier3Error)")
+                    }
                 }
             }
         }

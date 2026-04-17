@@ -30,23 +30,13 @@ final class RunWorkout {
     // MARK: Computed helpers (not persisted)
 
     var splits: [Split] {
-        get {
-            guard let data = splitsData else { return [] }
-            return (try? JSONDecoder().decode([Split].self, from: data)) ?? []
-        }
-        set {
-            splitsData = try? JSONEncoder().encode(newValue)
-        }
+        get { splitsData?.decode([Split].self) ?? [] }
+        set { splitsData = .encoded(newValue) }
     }
 
     var routeCoordinates: [Coordinate] {
-        get {
-            guard let data = routeData else { return [] }
-            return (try? JSONDecoder().decode([Coordinate].self, from: data)) ?? []
-        }
-        set {
-            routeData = try? JSONEncoder().encode(newValue)
-        }
+        get { routeData?.decode([Coordinate].self) ?? [] }
+        set { routeData = .encoded(newValue) }
     }
 
     init(

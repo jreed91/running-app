@@ -513,13 +513,13 @@ private struct PlanWorkoutSummaryRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Circle()
-                .fill(iconColor.opacity(0.2))
+                .fill(workout.workoutType.color.opacity(0.2))
                 .frame(width: 8, height: 8)
                 .padding(.leading)
 
-            Image(systemName: iconName)
+            Image(systemName: workout.workoutType.icon)
                 .font(.caption)
-                .foregroundStyle(iconColor)
+                .foregroundStyle(workout.workoutType.color)
                 .frame(width: 16)
 
             VStack(alignment: .leading, spacing: 1) {
@@ -548,24 +548,4 @@ private struct PlanWorkoutSummaryRow: View {
         .padding(.trailing)
     }
 
-    private var iconName: String {
-        switch workout.workoutType {
-        case .easy:          return "figure.run"
-        case .tempo:         return "gauge.with.needle"
-        case .interval:      return "repeat"
-        case .longRun:       return "arrow.right.to.line"
-        case .race:          return "trophy"
-        case .rest:          return "moon.zzz"
-        case .crossTraining: return "bicycle"
-        }
-    }
-
-    private var iconColor: Color {
-        switch workout.workoutType {
-        case .easy, .longRun:   return .zoneEasy
-        case .tempo:            return .zoneTempo
-        case .interval, .race:  return .zoneInterval
-        default:                return .secondary
-        }
-    }
 }

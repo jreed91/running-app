@@ -55,14 +55,6 @@ struct ProgressDashboardView: View {
         }
     }
 
-    private var elevationUnit: String {
-        appSettings.unitPreference == .metric ? "m" : "ft"
-    }
-
-    private func elevationDisplay(_ meters: Double) -> Double {
-        appSettings.unitPreference == .metric ? meters : meters * 3.28084
-    }
-
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -115,23 +107,16 @@ struct ProgressDashboardView: View {
                     .foregroundStyle(.brand)
                 }
                 if let selected = selectedVolumeDate, let bucket = closestWeekBucket(to: selected) {
-                    RuleMark(x: .value("Week", bucket.week))
-                        .foregroundStyle(.secondary.opacity(0.4))
-                        .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
-                        .annotation(
-                            position: .top,
-                            overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
-                        ) {
+                    selectionRule(x: .value("Week", bucket.week)) {
+                        tooltipContainer {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(bucket.week, format: .dateTime.month(.abbreviated).day())
                                     .font(.caption2).foregroundStyle(.secondary)
                                 Text(String(format: "%.1f %@", bucket.distanceValue, appSettings.unitPreference.distanceLabel))
                                     .font(.caption).bold()
                             }
-                            .padding(.horizontal, 8).padding(.vertical, 5)
-                            .background(Color.surfacePrimary, in: RoundedRectangle(cornerRadius: 8))
-                            .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
                         }
+                    }
                 }
             }
             .frame(height: 160)
@@ -168,23 +153,16 @@ struct ProgressDashboardView: View {
                 }
                 if let selected = selectedPaceDate,
                    let workout = closestWorkout(to: selected, in: paceWorkouts) {
-                    RuleMark(x: .value("Date", workout.date))
-                        .foregroundStyle(.secondary.opacity(0.4))
-                        .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
-                        .annotation(
-                            position: .top,
-                            overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
-                        ) {
+                    selectionRule(x: .value("Date", workout.date)) {
+                        tooltipContainer {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(workout.date, format: .dateTime.month(.abbreviated).day())
                                     .font(.caption2).foregroundStyle(.secondary)
                                 Text(workout.averagePaceSecondsPerKm.paceString(unit: appSettings.unitPreference))
                                     .font(.caption).bold()
                             }
-                            .padding(.horizontal, 8).padding(.vertical, 5)
-                            .background(Color.surfacePrimary, in: RoundedRectangle(cornerRadius: 8))
-                            .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
                         }
+                    }
                 }
             }
             .frame(height: 140)
@@ -236,23 +214,16 @@ struct ProgressDashboardView: View {
                     }
                     if let selected = selectedPredictionDate,
                        let point = closestPredictionPoint(to: selected) {
-                        RuleMark(x: .value("Date", point.date))
-                            .foregroundStyle(.secondary.opacity(0.4))
-                            .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
-                            .annotation(
-                                position: .top,
-                                overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
-                            ) {
+                        selectionRule(x: .value("Date", point.date)) {
+                            tooltipContainer {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(point.date, format: .dateTime.month(.abbreviated).day())
                                         .font(.caption2).foregroundStyle(.secondary)
                                     Text(point.predictedPaceSecondsPerKm.paceString(unit: appSettings.unitPreference))
                                         .font(.caption).bold()
                                 }
-                                .padding(.horizontal, 8).padding(.vertical, 5)
-                                .background(Color.surfacePrimary, in: RoundedRectangle(cornerRadius: 8))
-                                .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
                             }
+                        }
                     }
                 }
                 .frame(height: 140)
@@ -338,23 +309,16 @@ struct ProgressDashboardView: View {
                     if let selected = selectedHRDate,
                        let workout = closestWorkout(to: selected, in: withHR),
                        let hr = workout.averageHeartRate {
-                        RuleMark(x: .value("Date", workout.date))
-                            .foregroundStyle(.secondary.opacity(0.4))
-                            .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
-                            .annotation(
-                                position: .top,
-                                overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
-                            ) {
+                        selectionRule(x: .value("Date", workout.date)) {
+                            tooltipContainer {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(workout.date, format: .dateTime.month(.abbreviated).day())
                                         .font(.caption2).foregroundStyle(.secondary)
                                     Text("\(Int(hr)) bpm")
                                         .font(.caption).bold()
                                 }
-                                .padding(.horizontal, 8).padding(.vertical, 5)
-                                .background(Color.surfacePrimary, in: RoundedRectangle(cornerRadius: 8))
-                                .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
                             }
+                        }
                     }
                 }
                 .frame(height: 140)
@@ -382,30 +346,23 @@ struct ProgressDashboardView: View {
                     ForEach(withElev) { workout in
                         BarMark(
                             x: .value("Date", workout.date, unit: .day),
-                            y: .value(elevationUnit, elevationDisplay(workout.elevationGainMeters ?? 0))
+                            y: .value(appSettings.unitPreference.elevationLabel, (workout.elevationGainMeters ?? 0).elevationValue(unit: appSettings.unitPreference))
                         )
                         .foregroundStyle(Color.success)
                     }
                     if let selected = selectedElevationDate,
                        let workout = closestWorkout(to: selected, in: withElev),
                        let gain = workout.elevationGainMeters {
-                        RuleMark(x: .value("Date", workout.date))
-                            .foregroundStyle(.secondary.opacity(0.4))
-                            .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
-                            .annotation(
-                                position: .top,
-                                overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
-                            ) {
+                        selectionRule(x: .value("Date", workout.date)) {
+                            tooltipContainer {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(workout.date, format: .dateTime.month(.abbreviated).day())
                                         .font(.caption2).foregroundStyle(.secondary)
-                                    Text(String(format: "+%.0f %@", elevationDisplay(gain), elevationUnit))
+                                    Text(String(format: "+%.0f %@", gain.elevationValue(unit: appSettings.unitPreference), appSettings.unitPreference.elevationLabel))
                                         .font(.caption).bold()
                                 }
-                                .padding(.horizontal, 8).padding(.vertical, 5)
-                                .background(Color.surfacePrimary, in: RoundedRectangle(cornerRadius: 8))
-                                .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
                             }
+                        }
                     }
                 }
                 .frame(height: 140)
@@ -414,7 +371,7 @@ struct ProgressDashboardView: View {
                         AxisValueLabel(format: .dateTime.month(.abbreviated))
                     }
                 }
-                .chartYAxisLabel(elevationUnit)
+                .chartYAxisLabel(appSettings.unitPreference.elevationLabel)
                 .chartXSelection(value: $selectedElevationDate)
             }
         }
@@ -446,23 +403,16 @@ struct ProgressDashboardView: View {
                     }
                     if let selected = selectedVO2Date,
                        let point = closestVO2Point(to: selected) {
-                        RuleMark(x: .value("Date", point.date))
-                            .foregroundStyle(.secondary.opacity(0.4))
-                            .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
-                            .annotation(
-                                position: .top,
-                                overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
-                            ) {
+                        selectionRule(x: .value("Date", point.date)) {
+                            tooltipContainer {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(point.date, format: .dateTime.month(.abbreviated).day())
                                         .font(.caption2).foregroundStyle(.secondary)
                                     Text(String(format: "%.1f VDOT", point.vdot))
                                         .font(.caption).bold()
                                 }
-                                .padding(.horizontal, 8).padding(.vertical, 5)
-                                .background(Color.surfacePrimary, in: RoundedRectangle(cornerRadius: 8))
-                                .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
                             }
+                        }
                     }
                 }
                 .frame(height: 140)
@@ -508,11 +458,7 @@ struct ProgressDashboardView: View {
                 label: "Avg Heart Rate"
             )
             summaryCell(
-                value: avgElev.map {
-                    appSettings.unitPreference == .metric
-                        ? String(format: "%.0f m", $0)
-                        : String(format: "%.0f ft", $0 * 3.28084)
-                } ?? "--",
+                value: avgElev.map { $0.elevationString(unit: appSettings.unitPreference) } ?? "--",
                 label: "Avg Elevation"
             )
             summaryCell(
@@ -607,6 +553,30 @@ struct ProgressDashboardView: View {
 
     private func closestVO2Point(to date: Date) -> VO2Point? {
         vo2Points.min(by: { abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date)) })
+    }
+
+    // MARK: Chart annotation helpers
+
+    @ChartContentBuilder
+    private func selectionRule<X: Plottable, Label: View>(
+        x: PlottableValue<X>,
+        @ViewBuilder label: () -> Label
+    ) -> some ChartContent {
+        RuleMark(x: x)
+            .foregroundStyle(.secondary.opacity(0.4))
+            .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
+            .annotation(
+                position: .top,
+                overflowResolution: .init(x: .fit(to: .chart), y: .disabled),
+                content: label
+            )
+    }
+
+    private func tooltipContainer<C: View>(@ViewBuilder content: () -> C) -> some View {
+        content()
+            .padding(.horizontal, 8).padding(.vertical, 5)
+            .background(Color.surfacePrimary, in: RoundedRectangle(cornerRadius: 8))
+            .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
     }
 
     // MARK: Weekly buckets

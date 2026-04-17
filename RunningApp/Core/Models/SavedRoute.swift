@@ -69,24 +69,14 @@ extension SavedRoute {
 
     /// Decode/encode the route path as ``Coordinate`` array.
     var coordinates: [Coordinate] {
-        get {
-            guard let data = coordinatesData else { return [] }
-            return (try? JSONDecoder().decode([Coordinate].self, from: data)) ?? []
-        }
-        set {
-            coordinatesData = try? JSONEncoder().encode(newValue)
-        }
+        get { coordinatesData?.decode([Coordinate].self) ?? [] }
+        set { coordinatesData = .encoded(newValue) }
     }
 
     /// Decode/encode the turn-by-turn step list.
     var steps: [RouteStep] {
-        get {
-            guard let data = stepsData else { return [] }
-            return (try? JSONDecoder().decode([RouteStep].self, from: data)) ?? []
-        }
-        set {
-            stepsData = try? JSONEncoder().encode(newValue)
-        }
+        get { stepsData?.decode([RouteStep].self) ?? [] }
+        set { stepsData = .encoded(newValue) }
     }
 
     /// Convenience accessor for the starting coordinate.

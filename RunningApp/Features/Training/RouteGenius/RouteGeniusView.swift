@@ -489,7 +489,7 @@ private struct TurnByTurnList: View {
 
 // MARK: - TurnByTurnRow
 
-private struct TurnByTurnRow: View {
+struct TurnByTurnRow: View {
     let step: RouteStep
     let index: Int
     let viewModel: RouteGeniusViewModel
