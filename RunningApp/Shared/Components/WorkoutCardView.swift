@@ -42,31 +42,10 @@ struct WorkoutCardView: View {
     private var typeIcon: some View {
         ZStack {
             Circle()
-                .fill(iconColor.opacity(0.15))
+                .fill(workout.workoutType.color.opacity(0.15))
                 .frame(width: 44, height: 44)
-            Image(systemName: iconName)
-                .foregroundStyle(iconColor)
-        }
-    }
-
-    private var iconName: String {
-        switch workout.workoutType {
-        case .easy:         return "figure.run"
-        case .tempo:        return "gauge.with.needle"
-        case .interval:     return "repeat"
-        case .longRun:      return "arrow.right.to.line"
-        case .race:         return "trophy"
-        case .rest:         return "moon.zzz"
-        case .crossTraining: return "bicycle"
-        }
-    }
-
-    private var iconColor: Color {
-        switch workout.workoutType {
-        case .easy, .longRun: return .zoneEasy
-        case .tempo:          return .zoneTempo
-        case .interval, .race: return .zoneInterval
-        default:              return .secondary
+            Image(systemName: workout.workoutType.icon)
+                .foregroundStyle(workout.workoutType.color)
         }
     }
 }

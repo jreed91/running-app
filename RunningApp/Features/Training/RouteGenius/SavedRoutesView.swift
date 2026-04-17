@@ -156,30 +156,7 @@ struct SavedRouteDetailView: View {
 
             VStack(spacing: 0) {
                 ForEach(Array(route.steps.enumerated()), id: \.offset) { index, step in
-                    HStack(alignment: .top, spacing: 14) {
-                        ZStack {
-                            Circle()
-                                .fill(index == 0 ? Color.brand : Color.secondary.opacity(0.15))
-                                .frame(width: 28, height: 28)
-                            Text("\(index + 1)")
-                                .font(.caption.bold())
-                                .foregroundStyle(index == 0 ? .white : .secondary)
-                        }
-
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(step.instruction).font(.bodyRegular)
-                            Text(step.name).font(.caption).foregroundStyle(.secondary)
-                        }
-
-                        Spacer()
-
-                        Text(viewModel.formattedDistance(step.distanceMeters))
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
-
+                    TurnByTurnRow(step: step, index: index, viewModel: viewModel)
                     if index < route.steps.count - 1 {
                         Divider().padding(.leading, 48)
                     }

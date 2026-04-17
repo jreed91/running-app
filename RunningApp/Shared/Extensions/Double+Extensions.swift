@@ -83,4 +83,19 @@ extension Double {
             return String(format: "%.0f mi", self / 1.60934)
         }
     }
+
+    // MARK: Elevation formatting
+
+    /// Converts metres to the user's preferred elevation unit (metres or feet).
+    func elevationValue(unit: UnitPreference) -> Double {
+        unit == .metric ? self : self * 3.28084
+    }
+
+    /// Formats metres as an elevation string including the unit label, e.g. "42 m" or "138 ft".
+    func elevationString(unit: UnitPreference) -> String {
+        switch unit {
+        case .metric:   return String(format: "%.0f m", self)
+        case .imperial: return String(format: "%.0f ft", self * 3.28084)
+        }
+    }
 }

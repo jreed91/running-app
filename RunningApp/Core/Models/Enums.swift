@@ -161,4 +161,11 @@ enum UnitPreference: String, CaseIterable, Sendable {
         case .imperial: return "min/mi"
         }
     }
+
+    var elevationLabel: String {
+        switch self {
+        case .metric:   return "m"
+        case .imperial: return "ft"
+        }
+    }
 }

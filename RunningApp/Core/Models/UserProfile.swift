@@ -37,7 +37,7 @@ final class UserProfile {
         self.currentEstimated5KTimeSeconds = currentEstimated5KTimeSeconds
         self.preferredRunDayIndicesData = preferredRunDayIndices.isEmpty
             ? nil
-            : try? JSONEncoder().encode(preferredRunDayIndices)
+            : .encoded(preferredRunDayIndices)
         self.createdAt = Date()
         self.updatedAt = Date()
     }
@@ -50,14 +50,7 @@ extension UserProfile {
     /// Weekday indices (0 = Monday … 6 = Sunday) the user prefers to run.
     /// Empty means "spread evenly based on weeklyRunDays".
     var preferredRunDayIndices: [Int] {
-        get {
-            guard let data = preferredRunDayIndicesData else { return [] }
-            return (try? JSONDecoder().decode([Int].self, from: data)) ?? []
-        }
-        set {
-            preferredRunDayIndicesData = newValue.isEmpty
-                ? nil
-                : try? JSONEncoder().encode(newValue)
-        }
+        get { preferredRunDayIndicesData?.decode([Int].self) ?? [] }
+        set { preferredRunDayIndicesData = newValue.isEmpty ? nil : .encoded(newValue) }
     }
 }
