@@ -3,7 +3,7 @@ import SwiftData
 
 @Model
 final class RunWorkout {
-    #Index<RunWorkout>([\.id], [\.date], [\.workoutType])
+    #Index<RunWorkout>([\.id], [\.date])
 
     var id: UUID = UUID()
     var date: Date = Date()
