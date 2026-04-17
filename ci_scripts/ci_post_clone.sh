@@ -1,6 +1,10 @@
 #!/bin/sh
 set -e
 
+# Xcode Cloud agents are Apple Silicon; /bin/sh doesn't source profile so
+# Homebrew isn't in PATH by default. Add both ARM and Intel locations.
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+
 echo "--- Installing XcodeGen ---"
 brew install xcodegen
 
