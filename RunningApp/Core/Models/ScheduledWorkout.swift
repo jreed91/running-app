@@ -3,6 +3,8 @@ import SwiftData
 
 @Model
 final class ScheduledWorkout {
+    #Index<ScheduledWorkout>([\.id], [\.scheduledDate], [\.isCompleted])
+
     var id: UUID = UUID()
     var scheduledDate: Date = Date()
     var workoutType: WorkoutType = WorkoutType.easy

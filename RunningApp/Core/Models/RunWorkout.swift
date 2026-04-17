@@ -3,6 +3,8 @@ import SwiftData
 
 @Model
 final class RunWorkout {
+    #Index<RunWorkout>([\.id], [\.date], [\.workoutType])
+
     var id: UUID = UUID()
     var date: Date = Date()
     var distanceMeters: Double = 0
