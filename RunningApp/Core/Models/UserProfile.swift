@@ -3,6 +3,8 @@ import SwiftData
 
 @Model
 final class UserProfile {
+    #Index<UserProfile>([\.id], [\.createdAt], [\.updatedAt])
+
     var id: UUID = UUID()
     var name: String = ""
     var goalRace: RaceType = RaceType.fiveK
