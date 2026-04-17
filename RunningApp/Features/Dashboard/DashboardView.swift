@@ -3,11 +3,6 @@ import SwiftData
 
 // MARK: - WeekCalendarView
 
-/// Persistent horizontal week-strip calendar.
-///
-/// Displays seven day cells with colour-coded workout indicator dots
-/// sourced from the active training plan. Tapping a day updates
-/// ``selectedDate``; the left/right chevrons navigate by week.
 struct WeekCalendarView: View {
     let activePlan: TrainingPlan?
     @Binding var selectedDate: Date
@@ -36,8 +31,6 @@ struct WeekCalendarView: View {
         }
     }
 
-    // MARK: Header
-
     private var headerRow: some View {
         HStack {
             Text(monthRangeLabel)
@@ -54,8 +47,6 @@ struct WeekCalendarView: View {
         .padding(.top, 12)
         .padding(.bottom, 6)
     }
-
-    // MARK: Day strip
 
     private var dayStrip: some View {
         HStack(spacing: 0) {
@@ -97,8 +88,6 @@ struct WeekCalendarView: View {
         }
     }
 
-    // MARK: Helpers
-
     private var monthRangeLabel: String {
         let end = weekStart.adding(days: 6)
         if cal.component(.month, from: weekStart) == cal.component(.month, from: end) {
@@ -139,34 +128,37 @@ private struct DayCell: View {
     var body: some View {
         VStack(spacing: 4) {
             Text(date.formatted(.dateTime.weekday(.narrow)))
-                .font(.system(size: 11, weight: .medium))
+                .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(isToday ? .brand : .secondary)
 
             ZStack {
                 Circle()
                     .fill(circleBackground)
-                    .frame(width: 34, height: 34)
+                    .frame(width: 32, height: 32)
                 Text(date.formatted(.dateTime.day()))
-                    .font(.system(size: 15, weight: isToday || isSelected ? .semibold : .regular))
+                    .font(.system(size: 15, weight: isToday || isSelected ? .bold : .regular))
                     .foregroundStyle(numberForeground)
             }
 
-            indicator
-                .frame(width: 6, height: 6)
+            indicatorArea
+                .frame(height: 10)
         }
         .padding(.vertical, 4)
     }
 
     @ViewBuilder
-    private var indicator: some View {
+    private var indicatorArea: some View {
         if let w = workout, w.workoutType != .rest {
             if w.isCompleted {
                 Image(systemName: "checkmark")
                     .font(.system(size: 7, weight: .bold))
                     .foregroundStyle(dotColor(for: w.workoutType))
             } else {
-                Circle()
+                // Long run gets a wider pill indicator
+                let isLong = w.workoutType == .longRun
+                RoundedRectangle(cornerRadius: 3)
                     .fill(dotColor(for: w.workoutType))
+                    .frame(width: isLong ? 12 : 6, height: 6)
             }
         } else {
             Color.clear
@@ -191,6 +183,35 @@ private struct DayCell: View {
         case .tempo:                return .zoneTempo
         case .interval, .race:      return .zoneInterval
         case .rest, .crossTraining: return Color.secondary
+        }
+    }
+}
+
+// MARK: - WeeklyLoadBar
+
+private struct WeeklyLoadBar: View {
+    let fraction: CGFloat    // 0–1
+    let color: Color
+    let isActive: Bool       // today (no bar yet)
+
+    var body: some View {
+        GeometryReader { geo in
+            VStack(spacing: 0) {
+                Spacer()
+                if isActive {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Color.brand)
+                        .frame(height: 3)
+                } else if fraction > 0 {
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(color.opacity(0.9))
+                        .frame(height: geo.size.height * fraction)
+                } else {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Color.secondary.opacity(0.2))
+                        .frame(height: 3)
+                }
+            }
         }
     }
 }
@@ -222,14 +243,16 @@ struct DashboardView: View {
                 Divider()
 
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
+                    VStack(alignment: .leading, spacing: 16) {
                         weekSummaryCard
                         selectedDaySection
                         startRunButton
                     }
-                    .padding()
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 16)
                 }
             }
+            .background(Color.surfacePrimary)
             .navigationTitle("Today")
             .navigationBarTitleDisplayMode(.inline)
             .fullScreenCover(isPresented: $showActiveRun) {
@@ -238,34 +261,93 @@ struct DashboardView: View {
         }
     }
 
-    // MARK: Subviews
+    // MARK: - Week Summary Card
 
     private var weekSummaryCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("THIS WEEK")
+        VStack(alignment: .leading, spacing: 12) {
+            Text("This Week")
                 .font(.sectionHeader)
                 .foregroundStyle(.secondary)
-            HStack(spacing: 24) {
+
+            HStack(spacing: 0) {
                 statItem(value: weekDistanceString, label: "Distance")
+                Spacer()
                 statItem(value: weekRunCountString, label: "Runs")
-                if let plan = activePlan, let week = plan.currentWeek {
+                Spacer()
+                if let plan = activePlan, let week = plan.currentWeek,
+                   week.targetDistanceKm > 0 {
+                    let pct = min(week.completedDistanceKm / week.targetDistanceKm, 1.0)
                     statItem(
-                        value: String(format: "%.0f%%", week.completedDistanceKm / week.targetDistanceKm * 100),
-                        label: "Plan"
+                        value: String(format: "%.0f%%", pct * 100),
+                        label: "Plan",
+                        color: .brand
                     )
+                    Spacer()
+                    // Progress ring
+                    let pct2 = min(
+                        (activePlan?.currentWeek?.completedDistanceKm ?? 0) /
+                        max(activePlan?.currentWeek?.targetDistanceKm ?? 1, 1), 1.0
+                    )
+                    ProgressRingView(progress: pct2, size: 44, lineWidth: 5, color: .brand)
                 }
             }
+
+            // Weekly load mini bar chart
+            weeklyLoadChart
         }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
+        .padding(16)
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 20))
+        .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
     }
 
+    private var weeklyLoadChart: some View {
+        let today = Date()
+        let cal = Calendar.current
+        let monday = today.startOfWeek
+
+        // Build 7-day bars based on actual run data this week
+        let bars: [(fraction: CGFloat, color: Color, isActive: Bool)] = (0..<7).map { offset in
+            let day = monday.adding(days: offset)
+            let isToday = cal.isDateInToday(day)
+            let isFuture = day > today && !isToday
+
+            if isFuture { return (0, .clear, false) }
+
+            let dist = recentWorkouts
+                .filter { cal.isDate($0.date, inSameDayAs: day) }
+                .reduce(0.0) { $0 + $1.distanceMeters }
+
+            // Color by dominant workout type that day
+            let workout = workoutOnDay(day)
+            let color: Color
+            switch workout?.workoutType {
+            case .tempo:                color = .zoneTempo
+            case .interval, .race:      color = .zoneInterval
+            default:                    color = .zoneEasy
+            }
+
+            // Normalize: 15km = full bar
+            let fraction = CGFloat(min(dist / 15_000, 1.0))
+            return (fraction, color, isToday && dist == 0)
+        }
+
+        return HStack(alignment: .bottom, spacing: 6) {
+            ForEach(0..<bars.count, id: \.self) { i in
+                WeeklyLoadBar(fraction: bars[i].fraction, color: bars[i].color, isActive: bars[i].isActive)
+            }
+        }
+        .frame(height: 28)
+        .padding(.top, 4)
+    }
+
+    // MARK: - Selected Day Section
+
     private var selectedDaySection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             Text(selectedDayLabel)
                 .font(.sectionHeader)
                 .foregroundStyle(.secondary)
+                .padding(.horizontal, 4)
 
             if let workout = workoutForSelectedDate {
                 NavigationLink {
@@ -279,52 +361,105 @@ struct DashboardView: View {
                     Button {
                         showActiveRun = true
                     } label: {
-                        Label("Start This Workout", systemImage: "play.fill")
-                            .frame(maxWidth: .infinity)
+                        HStack(spacing: 10) {
+                            StrideIcon(name: .play, size: 18, color: .white, strokeWeight: 2.2)
+                            Text("Start This Workout")
+                                .font(.system(size: 17, weight: .bold))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
+                    .foregroundStyle(.white)
+                    .background(
+                        RoundedRectangle(cornerRadius: 18)
+                            .fill(Color.brand)
+                            .shadow(color: Color.brand.opacity(0.4), radius: 14, y: 6)
+                    )
+                    .buttonStyle(.plain)
                 }
             } else {
-                HStack(spacing: 12) {
-                    Image(systemName: "moon.stars")
-                        .foregroundStyle(.secondary)
-                    Text("Rest day – recovery is part of training.")
-                        .foregroundStyle(.secondary)
-                }
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
+                restDayCard
             }
         }
     }
+
+    private var restDayCard: some View {
+        HStack(spacing: 14) {
+            ZStack {
+                Circle()
+                    .fill(Color.zoneEasy.opacity(0.15))
+                    .frame(width: 48, height: 48)
+                StrideIcon(name: .moon, size: 22, color: .zoneEasy, strokeWeight: 2.2)
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Rest day")
+                    .font(.bodyStrong)
+                Text("Recovery is part of training.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .padding(18)
+        .background(
+            RoundedRectangle(cornerRadius: 18)
+                .fill(
+                    LinearGradient(
+                        colors: [Color.zoneEasy.opacity(0.12), Color.zoneEasy.opacity(0.04)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18)
+                        .strokeBorder(Color.zoneEasy.opacity(0.2), lineWidth: 0.5)
+                )
+        )
+    }
+
+    // MARK: - Free Run Button
 
     private var startRunButton: some View {
         Button {
             showActiveRun = true
         } label: {
-            Label("Start a Free Run", systemImage: "figure.run")
-                .frame(maxWidth: .infinity)
+            HStack(spacing: 10) {
+                StrideIcon(name: .run, size: 20, color: .brand, strokeWeight: 2.0)
+                Text("Start a Free Run")
+                    .font(.bodyStrong)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
         }
-        .buttonStyle(.bordered)
-        .controlSize(.large)
+        .foregroundStyle(.brand)
+        .background(
+            RoundedRectangle(cornerRadius: 18)
+                .fill(Color.brand.opacity(0.1))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18)
+                        .strokeBorder(Color.brand.opacity(0.3), lineWidth: 1)
+                )
+        )
+        .buttonStyle(.plain)
     }
 
-    private func statItem(value: String, label: String) -> some View {
+    // MARK: - Helpers
+
+    private func statItem(value: String, label: String, color: Color = .primary) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(value).font(.metricSmall)
-            Text(label).font(.caption).foregroundStyle(.secondary)
+            Text(value)
+                .font(.metricSmall)
+                .foregroundStyle(color)
+            Text(label)
+                .font(.captionStrong)
+                .foregroundStyle(.secondary)
         }
     }
-
-    // MARK: Computed
 
     private var selectedDayLabel: String {
-        if Calendar.current.isDateInToday(selectedDate) { return "TODAY" }
-        if Calendar.current.isDateInTomorrow(selectedDate) { return "TOMORROW" }
-        return selectedDate
-            .formatted(.dateTime.weekday(.wide).month().day())
-            .uppercased()
+        if Calendar.current.isDateInToday(selectedDate) { return "Today" }
+        if Calendar.current.isDateInTomorrow(selectedDate) { return "Tomorrow" }
+        return selectedDate.formatted(.dateTime.weekday(.wide).month().day())
     }
 
     private var workoutForSelectedDate: ScheduledWorkout? {
@@ -333,6 +468,17 @@ struct DashboardView: View {
             for w in week.workouts ?? []
             where Calendar.current.isDate(w.scheduledDate, inSameDayAs: selectedDate) {
                 return w.workoutType == .rest ? nil : w
+            }
+        }
+        return nil
+    }
+
+    private func workoutOnDay(_ date: Date) -> ScheduledWorkout? {
+        guard let plan = activePlan else { return nil }
+        let cal = Calendar.current
+        for week in plan.weeks ?? [] {
+            for w in week.workouts ?? [] where cal.isDate(w.scheduledDate, inSameDayAs: date) {
+                return w
             }
         }
         return nil
@@ -350,5 +496,27 @@ struct DashboardView: View {
         let monday = Date().startOfWeek
         let count = recentWorkouts.filter { $0.date >= monday }.count
         return "\(count)"
+    }
+}
+
+// MARK: - ProgressRingView
+
+private struct ProgressRingView: View {
+    let progress: Double
+    let size: CGFloat
+    let lineWidth: CGFloat
+    let color: Color
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(color.opacity(0.15), lineWidth: lineWidth)
+            Circle()
+                .trim(from: 0, to: progress)
+                .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+                .animation(.easeInOut(duration: 0.4), value: progress)
+        }
+        .frame(width: size, height: size)
     }
 }

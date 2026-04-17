@@ -18,62 +18,50 @@ struct ActiveRunView: View {
         return PaceCalculatorService.trainingPaces(from5KTimeSeconds: time)
     }
 
+    private var currentZone: PaceZone {
+        guard let paces = trainingPaces, tracker.currentPaceSecondsPerKm > 0 else { return .easy }
+        return PaceZone.zone(for: tracker.currentPaceSecondsPerKm, using: paces)
+    }
+
+    private var zoneColor: Color { currentZone.color }
+
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            // Full-bleed zone-color gradient backdrop
+            LinearGradient(
+                stops: [
+                    .init(color: zoneColor, location: 0),
+                    .init(color: zoneColor.mix(with: .black, by: 0.45), location: 0.55),
+                    .init(color: zoneColor.mix(with: .black, by: 0.72), location: 1),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+            .animation(.easeInOut(duration: 0.6), value: currentZone.rawValue)
 
-            VStack(spacing: 32) {
-                // Primary metrics
-                VStack(spacing: 8) {
-                    metricBlock(
-                        value: tracker.distanceMeters.distanceString(unit: appSettings.unitPreference),
-                        label: "DISTANCE"
-                    )
-                    HStack(spacing: 48) {
-                        metricBlock(
-                            value: tracker.elapsedSeconds.durationString,
-                            label: "TIME"
-                        )
-                        metricBlock(
-                            value: tracker.currentPaceSecondsPerKm.paceString(unit: appSettings.unitPreference),
-                            label: "PACE"
-                        )
-                        if let hr = tracker.currentHeartRate {
-                            metricBlock(value: "\(Int(hr))", label: "BPM")
-                        }
-                    }
-                }
-                .foregroundStyle(.white)
+            // Radial highlight at top
+            RadialGradient(
+                colors: [Color.white.opacity(0.18), Color.clear],
+                center: .init(x: 0.25, y: 0.08),
+                startRadius: 0,
+                endRadius: 220
+            )
+            .ignoresSafeArea()
 
-                // Pace zone indicator
+            VStack(spacing: 0) {
+                topBar
+                zoneLabel
+                heroPace
                 if let paces = trainingPaces, tracker.trackingState == .active {
-                    PaceZoneIndicator(
-                        currentPace: tracker.currentPaceSecondsPerKm,
-                        paces: paces
-                    )
+                    paceMeter(paces: paces)
+                        .padding(.horizontal, 22)
+                        .padding(.top, 22)
                 }
-
+                metricsGrid
                 Spacer()
-
-                // Controls
-                HStack(spacing: 40) {
-                    if tracker.trackingState == .active {
-                        controlButton(icon: "pause.fill", color: .orange) {
-                            tracker.pauseWorkout()
-                        }
-                    } else if tracker.trackingState == .paused {
-                        controlButton(icon: "play.fill", color: .green) {
-                            tracker.resumeWorkout()
-                        }
-                    }
-
-                    controlButton(icon: "stop.fill", color: .red) {
-                        showFinishConfirmation = true
-                    }
-                }
-                .padding(.bottom, 48)
+                controls
             }
-            .padding()
         }
         .onAppear {
             if tracker.trackingState == .idle {
@@ -86,26 +74,263 @@ struct ActiveRunView: View {
         }
     }
 
-    // MARK: Subviews
+    // MARK: - Top bar
 
-    private func metricBlock(value: String, label: String) -> some View {
+    private var topBar: some View {
+        HStack {
+            glassPill {
+                StrideIcon(name: .lock, size: 14, color: .white, strokeWeight: 2.2)
+                Text("Lock")
+                    .font(.system(size: 12, weight: .bold))
+                    .kerning(0.5)
+            }
+            Spacer()
+            glassPill {
+                Circle()
+                    .fill(.white)
+                    .frame(width: 8, height: 8)
+                    .overlay(Circle().strokeBorder(.white.opacity(0.35), lineWidth: 4))
+                Text("REC")
+                    .font(.system(size: 13, weight: .bold, design: .monospaced))
+                    .kerning(1)
+            }
+        }
+        .padding(.horizontal, 22)
+        .padding(.top, 56)
+        .foregroundStyle(.white)
+    }
+
+    // MARK: - Zone label pill
+
+    private var zoneLabel: some View {
+        HStack(spacing: 8) {
+            StrideIcon(name: currentZone.strideIcon, size: 14, color: .white, strokeWeight: 2.4)
+            Text("\(currentZone.rawValue.uppercased()) ZONE")
+                .font(.system(size: 12, weight: .bold))
+                .kerning(1.4)
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 7)
+        .background(.ultraThinMaterial, in: Capsule())
+        .overlay(Capsule().strokeBorder(.white.opacity(0.3), lineWidth: 0.5))
+        .padding(.top, 28)
+        .animation(.easeInOut(duration: 0.3), value: currentZone.rawValue)
+    }
+
+    // MARK: - Hero pace display
+
+    private var heroPace: some View {
         VStack(spacing: 4) {
-            Text(value).font(.metricLarge)
-            Text(label).font(.sectionHeader).foregroundStyle(.secondary)
-        }
-    }
-
-    private func controlButton(icon: String, color: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 28, weight: .bold))
+            Text(tracker.currentPaceSecondsPerKm.paceString(unit: appSettings.unitPreference))
+                .font(.metricHero)
                 .foregroundStyle(.white)
-                .frame(width: 72, height: 72)
-                .background(color, in: Circle())
+                .shadow(color: .black.opacity(0.15), radius: 12, y: 4)
+                .contentTransition(.numericText())
+                .animation(.linear(duration: 0.2), value: tracker.currentPaceSecondsPerKm)
+
+            Text("CURRENT PACE · MIN/KM")
+                .font(.system(size: 11, weight: .bold))
+                .kerning(2)
+                .foregroundStyle(.white.opacity(0.8))
+        }
+        .padding(.top, 16)
+    }
+
+    // MARK: - Pace meter
+
+    private func paceMeter(paces: TrainingPaces) -> some View {
+        let current = tracker.currentPaceSecondsPerKm
+        let low = paces.easyRange.lowerBound
+        let high = paces.easyRange.upperBound
+        let rangeMin = low - 60.0
+        let rangeMax = high + 60.0
+        let pct = rangeMax > rangeMin
+            ? CGFloat((current - rangeMin) / (rangeMax - rangeMin)).clamped(to: 0...1)
+            : 0.5
+        let lowPct = CGFloat((low - rangeMin) / (rangeMax - rangeMin)).clamped(to: 0...1)
+        let highPct = CGFloat((high - rangeMin) / (rangeMax - rangeMin)).clamped(to: 0...1)
+
+        return VStack(spacing: 8) {
+            HStack {
+                Text("slower")
+                Spacer()
+                Text("target")
+                Spacer()
+                Text("faster")
+            }
+            .font(.system(size: 10, weight: .bold))
+            .kerning(1.2)
+            .foregroundStyle(.white.opacity(0.65))
+
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    // Track
+                    Capsule()
+                        .fill(.black.opacity(0.25))
+                        .frame(height: 10)
+
+                    // Target band
+                    let bandX = geo.size.width * lowPct
+                    let bandW = geo.size.width * (highPct - lowPct)
+                    Capsule()
+                        .fill(.white.opacity(0.85))
+                        .shadow(color: .white.opacity(0.35), radius: 6)
+                        .frame(width: max(bandW, 8), height: 10)
+                        .offset(x: bandX)
+
+                    // Marker
+                    Circle()
+                        .fill(.white)
+                        .frame(width: 20, height: 20)
+                        .shadow(color: .black.opacity(0.35), radius: 4, y: 2)
+                        .overlay(Circle().strokeBorder(.black.opacity(0.08), lineWidth: 3))
+                        .offset(x: geo.size.width * pct - 10)
+                        .animation(.linear(duration: 0.2), value: pct)
+                }
+                .frame(height: 10)
+                .frame(maxHeight: .infinity, alignment: .center)
+            }
+            .frame(height: 20)
         }
     }
 
-    // MARK: Actions
+    // MARK: - Metrics grid
+
+    private var metricsGrid: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 14) {
+            metricCell(
+                value: tracker.distanceMeters.distanceString(unit: appSettings.unitPreference),
+                label: "Distance"
+            )
+            metricCell(
+                value: tracker.elapsedSeconds.durationString,
+                label: "Time"
+            )
+            if let hr = tracker.currentHeartRate {
+                metricCell(value: "\(Int(hr))", unit: "bpm", label: "Heart Rate")
+            } else {
+                metricCell(value: "--", label: "Heart Rate")
+            }
+            metricCell(value: "--", unit: "spm", label: "Cadence")
+            metricCell(value: "--", unit: "m", label: "Elev Gain")
+            metricCell(value: "1", label: "Lap")
+        }
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 22)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22)
+                        .strokeBorder(.white.opacity(0.12), lineWidth: 0.5)
+                )
+        )
+        .padding(.horizontal, 16)
+        .padding(.top, 26)
+    }
+
+    private func metricCell(value: String, unit: String? = nil, label: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(alignment: .lastTextBaseline, spacing: 3) {
+                Text(value)
+                    .font(.metricSmall)
+                    .foregroundStyle(.white)
+                    .contentTransition(.numericText())
+                if let unit {
+                    Text(unit)
+                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.65))
+                }
+            }
+            Text(label.uppercased())
+                .font(.system(size: 9, weight: .bold))
+                .kerning(1.2)
+                .foregroundStyle(.white.opacity(0.55))
+        }
+    }
+
+    // MARK: - Controls
+
+    private var controls: some View {
+        HStack(spacing: 22) {
+            glassControlButton(size: 64) {
+                StrideIcon(name: .flag, size: 22, color: .white, strokeWeight: 2.2)
+            }
+
+            // Primary pause/play
+            if tracker.trackingState == .active {
+                filledControlButton(size: 84, tintColor: zoneColor) {
+                    tracker.pauseWorkout()
+                } label: {
+                    StrideIcon(name: .pause, size: 28, color: zoneColor, strokeWeight: 2.2)
+                }
+            } else if tracker.trackingState == .paused {
+                filledControlButton(size: 84, tintColor: zoneColor) {
+                    tracker.resumeWorkout()
+                } label: {
+                    StrideIcon(name: .play, size: 28, color: zoneColor, strokeWeight: 2.2)
+                }
+            } else {
+                glassControlButton(size: 84) {
+                    StrideIcon(name: .pause, size: 28, color: .white, strokeWeight: 2.2)
+                }
+            }
+
+            glassControlButton(size: 64) {
+                StrideIcon(name: .stop, size: 22, color: .white, strokeWeight: 2.2)
+            }
+            .onTapGesture { showFinishConfirmation = true }
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 40)
+    }
+
+    // MARK: - Control button helpers
+
+    @ViewBuilder
+    private func glassControlButton<Label: View>(size: CGFloat, @ViewBuilder label: () -> Label) -> some View {
+        ZStack {
+            Circle()
+                .fill(.ultraThinMaterial)
+                .overlay(Circle().strokeBorder(.white.opacity(0.28), lineWidth: 0.5))
+                .frame(width: size, height: size)
+            label()
+        }
+    }
+
+    @ViewBuilder
+    private func filledControlButton<Label: View>(
+        size: CGFloat,
+        tintColor: Color,
+        action: @escaping () -> Void,
+        @ViewBuilder label: () -> Label
+    ) -> some View {
+        Button(action: action) {
+            ZStack {
+                Circle()
+                    .fill(.white)
+                    .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
+                    .overlay(Circle().strokeBorder(.white.opacity(0.7), lineWidth: 0.5))
+                    .frame(width: size, height: size)
+                label()
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Glass pill helper
+
+    @ViewBuilder
+    private func glassPill<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        HStack(spacing: 6) { content() }
+            .font(.system(size: 12, weight: .semibold))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(.ultraThinMaterial, in: Capsule())
+            .overlay(Capsule().strokeBorder(.white.opacity(0.28), lineWidth: 0.5))
+    }
+
+    // MARK: - Actions
 
     private func finishAndSave() {
         guard let workout = tracker.finishWorkout() else { dismiss(); return }
@@ -114,8 +339,6 @@ struct ActiveRunView: View {
         Task { @MainActor in
             try? await container.healthKitRepository.save(workout)
         }
-        // Re-adapt all future scheduled workouts using the newly accumulated history.
-        // context.fetch includes the just-saved workout so analytics see it immediately.
         if let profile = profiles.first, let plan = activePlans.first {
             let allHistory = (try? context.fetch(FetchDescriptor<RunWorkout>())) ?? []
             container.refreshPlanAfterWorkout(
@@ -127,5 +350,33 @@ struct ActiveRunView: View {
             try? context.save()
         }
         dismiss()
+    }
+}
+
+// MARK: - Comparable+clamped
+
+private extension Comparable {
+    func clamped(to range: ClosedRange<Self>) -> Self {
+        max(range.lowerBound, min(self, range.upperBound))
+    }
+}
+
+// MARK: - Color+mix
+
+private extension Color {
+    func mix(with other: Color, by amount: Double) -> Color {
+        let a = amount.clamped(to: 0...1)
+        // Blend via UIColor for correctness
+        let ui1 = UIColor(self)
+        let ui2 = UIColor(other)
+        var r1: CGFloat = 0, g1: CGFloat = 0, b1: CGFloat = 0, a1: CGFloat = 0
+        var r2: CGFloat = 0, g2: CGFloat = 0, b2: CGFloat = 0, a2: CGFloat = 0
+        ui1.getRed(&r1, green: &g1, blue: &b1, alpha: &a1)
+        ui2.getRed(&r2, green: &g2, blue: &b2, alpha: &a2)
+        return Color(
+            red: r1 + (r2 - r1) * a,
+            green: g1 + (g2 - g1) * a,
+            blue: b1 + (b2 - b1) * a
+        )
     }
 }
