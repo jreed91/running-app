@@ -3,8 +3,14 @@ import SwiftData
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var context
+    @Environment(\.appContainer) private var container
     @Environment(AppSettings.self) private var appSettings
     @Query private var profiles: [UserProfile]
+    @Query(
+        filter: #Predicate<TrainingPlan> { $0.isActive },
+        sort: \TrainingPlan.createdAt, order: .reverse
+    )
+    private var activePlans: [TrainingPlan]
 
     @State private var showResetConfirmation = false
     @State private var showSyncRestartNote = false
@@ -13,11 +19,6 @@ struct SettingsView: View {
     @State private var goalPaceSeconds: Int = 0
     @State private var showPacePicker = false
     #if DEBUG
-    @Query(
-        filter: #Predicate<TrainingPlan> { $0.isActive },
-        sort: \TrainingPlan.createdAt, order: .reverse
-    )
-    private var activePlans: [TrainingPlan]
     @State private var seedWeeks = 8
     @State private var completionCutoff = Date()
     #endif
@@ -173,11 +174,23 @@ struct SettingsView: View {
     }
 
     private var notificationsSection: some View {
-        Section("Notifications") {
-            NavigationLink("Workout Reminders") {
-                Text("Notification preferences coming soon.")
-                    .foregroundStyle(.secondary)
-            }
+        Section {
+            Toggle("Morning Reminder (8 AM)", isOn: Bindable(appSettings).morningReminderEnabled)
+                .tint(.blue)
+                .onChange(of: appSettings.morningReminderEnabled) { _, enabled in
+                    guard let plan = activePlans.first else { return }
+                    Task {
+                        if enabled {
+                            await container.notificationService.scheduleMorningReminders(for: plan)
+                        } else {
+                            await container.notificationService.cancelAllMorningReminders()
+                        }
+                    }
+                }
+        } header: {
+            Text("Notifications")
+        } footer: {
+            Text("Sends a reminder at 8:00 AM on days you have a planned workout.")
         }
     }
 

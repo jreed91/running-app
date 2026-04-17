@@ -23,11 +23,18 @@ final class AppSettings {
         }
     }
 
+    var morningReminderEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(morningReminderEnabled, forKey: Self.morningReminderKey)
+        }
+    }
+
     // Internal so services can read the same key before AppSettings is created.
     static let unitPreferenceKey = "unitPreference"
     private static let orsAPIKeyKey      = "orsAPIKey"
     // Internal so AppContainer can read the same key before AppSettings is created.
     static let iCloudSyncKey = "iCloudSyncEnabled"
+    static let morningReminderKey = "morningReminderEnabled"
 
     init() {
         let raw = UserDefaults.standard.string(forKey: Self.unitPreferenceKey) ?? ""
@@ -39,6 +46,13 @@ final class AppSettings {
             self.iCloudSyncEnabled = UserDefaults.standard.bool(forKey: Self.iCloudSyncKey)
         } else {
             self.iCloudSyncEnabled = true
+        }
+
+        // Default to true (reminders on) when the key has never been set.
+        if UserDefaults.standard.object(forKey: Self.morningReminderKey) != nil {
+            self.morningReminderEnabled = UserDefaults.standard.bool(forKey: Self.morningReminderKey)
+        } else {
+            self.morningReminderEnabled = true
         }
     }
 }

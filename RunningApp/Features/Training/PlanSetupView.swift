@@ -223,6 +223,9 @@ struct PlanSetupView: View {
 
         Task {
             await container.notificationService.scheduleReminders(for: plan)
+            if appSettings.morningReminderEnabled {
+                await container.notificationService.scheduleMorningReminders(for: plan)
+            }
             try? await container.healthKitRepository.syncWorkoutPlans(for: plan)
             try? context.save()
             isGenerating = false
