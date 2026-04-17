@@ -12,12 +12,12 @@ enum PaceZone: String {
 
     var color: Color {
         switch self {
-        case .recovery: .blue
-        case .easy:     .zoneEasy
-        case .marathon: .teal
-        case .tempo:    .zoneTempo
-        case .interval: .zoneInterval
-        case .maxEffort: .destructive
+        case .recovery:  .zoneRecovery
+        case .easy:      .zoneEasy
+        case .marathon:  .zoneMarathon
+        case .tempo:     .zoneTempo
+        case .interval:  .zoneInterval
+        case .maxEffort: .zoneMax
         }
     }
 
@@ -29,6 +29,17 @@ enum PaceZone: String {
         case .tempo:     "gauge.medium"
         case .interval:  "bolt.fill"
         case .maxEffort: "flame.fill"
+        }
+    }
+
+    var strideIcon: StrideIconName {
+        switch self {
+        case .recovery:  return .tortoise
+        case .easy:      return .walk
+        case .marathon:  return .run
+        case .tempo:     return .tempo
+        case .interval:  return .bolt
+        case .maxEffort: return .flame
         }
     }
 }
@@ -71,9 +82,7 @@ struct PaceZoneIndicator: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: zone.systemImage)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(zone.color)
+            StrideIcon(name: zone.strideIcon, size: 18, color: zone.color, strokeWeight: 2.0)
 
             Text(zone.rawValue.uppercased())
                 .font(.sectionHeader)
