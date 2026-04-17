@@ -3,6 +3,8 @@ import SwiftData
 
 @Model
 final class TrainingPlan {
+    #Index<TrainingPlan>([\.id], [\.createdAt], [\.isActive], [\.startDate])
+
     var id: UUID = UUID()
     var targetRace: RaceType = RaceType.fiveK
     var goalTimeSeconds: Double = 0

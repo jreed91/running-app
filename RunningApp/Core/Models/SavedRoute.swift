@@ -10,6 +10,7 @@ import SwiftData
 /// SwiftData external storage so that large arrays stay off the row store.
 @Model
 final class SavedRoute {
+    #Index<SavedRoute>([\.id], [\.createdAt])
 
     // MARK: Scalar fields
 

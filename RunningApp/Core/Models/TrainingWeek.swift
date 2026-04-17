@@ -3,6 +3,8 @@ import SwiftData
 
 @Model
 final class TrainingWeek {
+    #Index<TrainingWeek>([\.id], [\.startDate], [\.weekNumber])
+
     var id: UUID = UUID()
     var weekNumber: Int = 0
     var startDate: Date = Date()
