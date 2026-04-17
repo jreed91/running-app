@@ -17,6 +17,13 @@ final class NotificationService {
         static let syncedRun       = "SYNCED_RUN"
     }
 
+    // Notification identifier helpers
+    private enum NotificationID {
+        static func morning(_ workout: ScheduledWorkout) -> String {
+            "morning-\(workout.id.uuidString)"
+        }
+    }
+
     // MARK: Authorization
 
     func requestAuthorization() async throws {
@@ -63,6 +70,53 @@ final class NotificationService {
                 try? await scheduleReminder(for: workout, minutesBefore: minutesBefore)
             }
         }
+    }
+
+    /// Schedules an 8 AM morning reminder on the day of a planned workout.
+    func scheduleMorningReminder(for workout: ScheduledWorkout) async throws {
+        guard workout.workoutType != .rest else { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = "Workout today"
+        content.body = "You have a \(workout.workoutType.displayName) workout scheduled today. Lace up!"
+        content.sound = .default
+        content.categoryIdentifier = Category.workoutReminder
+
+        var components = Calendar.current.dateComponents([.year, .month, .day], from: workout.scheduledDate)
+        components.hour = 8
+        components.minute = 0
+
+        guard
+            let fireDate = Calendar.current.date(from: components),
+            fireDate > Date()
+        else { return }
+
+        let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+        let request = UNNotificationRequest(
+            identifier: NotificationID.morning(workout),
+            content: content,
+            trigger: trigger
+        )
+        try await center.add(request)
+    }
+
+    /// Schedules 8 AM morning reminders for all future non-rest workouts in a plan.
+    func scheduleMorningReminders(for plan: TrainingPlan) async {
+        for week in plan.weeks ?? [] {
+            for workout in week.workouts ?? [] where !workout.isCompleted {
+                try? await scheduleMorningReminder(for: workout)
+            }
+        }
+    }
+
+    func cancelMorningReminder(for workout: ScheduledWorkout) {
+        center.removePendingNotificationRequests(withIdentifiers: [NotificationID.morning(workout)])
+    }
+
+    func cancelAllMorningReminders() async {
+        let pending = await center.pendingNotificationRequests()
+        let ids = pending.filter { $0.identifier.hasPrefix("morning-") }.map(\.identifier)
+        center.removePendingNotificationRequests(withIdentifiers: ids)
     }
 
     /// Fires an immediate local notification when a run is automatically synced from Apple Health.
