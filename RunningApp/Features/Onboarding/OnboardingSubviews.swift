@@ -378,23 +378,21 @@ struct OBPermissionRow: View {
             Group {
                 if isActive {
                     ProgressView().tint(tint)
-                        .frame(width: 51, height: 31)
-                } else {
-                    // iOS-style toggle
-                    ZStack(alignment: isOn ? .trailing : .leading) {
-                        Capsule()
-                            .fill(isOn ? Color.success : Color.secondary.opacity(0.25))
-                            .frame(width: 51, height: 31)
-                        Circle()
-                            .fill(Color.white)
-                            .shadow(color: .black.opacity(0.15), radius: 3, y: 1)
-                            .frame(width: 27, height: 27)
-                            .padding(2)
+                        .frame(width: 28, height: 28)
+                } else if isOn {
+                    ZStack {
+                        Circle().fill(Color.success)
+                            .frame(width: 28, height: 28)
+                        StrideIcon(name: .check, size: 13, color: .white, strokeWeight: 3)
                     }
-                    .animation(.easeInOut(duration: 0.25), value: isOn)
+                } else {
+                    Circle()
+                        .strokeBorder(Color.secondary.opacity(0.3), lineWidth: 1.5)
+                        .frame(width: 28, height: 28)
                 }
             }
             .animation(.easeInOut(duration: 0.2), value: isActive)
+            .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isOn)
         }
         .padding(.vertical, 12)
     }
