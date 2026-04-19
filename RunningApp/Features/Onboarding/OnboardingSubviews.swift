@@ -228,6 +228,8 @@ struct OBRaceCard: View {
     let isSelected: Bool
     let onSelect: () -> Void
 
+    @Environment(AppSettings.self) private var appSettings
+
     private var color: Color {
         switch race {
         case .fiveK: return .zoneInterval
@@ -243,10 +245,11 @@ struct OBRaceCard: View {
         }
     }
     private var distanceLabel: String {
+        let isImperial = appSettings.unitPreference == .imperial
         switch race {
-        case .fiveK: return "5.0 km"
-        case .halfMarathon: return "21.1 km"
-        case .marathon: return "42.2 km"
+        case .fiveK:         return isImperial ? "3.1 mi"  : "5.0 km"
+        case .halfMarathon:  return isImperial ? "13.1 mi" : "21.1 km"
+        case .marathon:      return isImperial ? "26.2 mi" : "42.2 km"
         }
     }
     private var desc: String {
@@ -294,6 +297,8 @@ struct OBLevelRow: View {
     let isSelected: Bool
     let onSelect: () -> Void
 
+    @Environment(AppSettings.self) private var appSettings
+
     private var desc: String {
         switch level {
         case .beginner: return "New to running or returning"
@@ -309,7 +314,13 @@ struct OBLevelRow: View {
                     Text(level.displayName).font(.bodyStrong)
                     Text(desc)
                         .font(.caption).foregroundStyle(.secondary)
-                    Text(String(format: "%.0f km/wk base", level.startingWeeklyKm(for: race)))
+                    Text({
+                        let km = level.startingWeeklyKm(for: race)
+                        if appSettings.unitPreference == .imperial {
+                            return String(format: "%.0f mi/wk base", km * 0.621371)
+                        }
+                        return String(format: "%.0f km/wk base", km)
+                    }())
                         .font(.system(size: 12, weight: .semibold, design: .monospaced))
                         .foregroundStyle(.secondary)
                 }
@@ -427,6 +438,8 @@ struct OBReady: View {
     let isCreatingPlan: Bool
     let onViewPlan: () -> Void
 
+    @Environment(AppSettings.self) private var appSettings
+
     private let brandGradient = LinearGradient(
         stops: [
             .init(color: Color(red: 1.0, green: 0.42, blue: 0.133), location: 0),
@@ -486,7 +499,12 @@ struct OBReady: View {
                         HStack(spacing: 10) {
                             OBStatBox(value: "\(planWeeks)", label: "WEEKS")
                             OBStatBox(value: "\(estimatedWorkouts)", label: "WORKOUTS")
-                            OBStatBox(value: "\(estimatedKm) km", label: "TOTAL")
+                            OBStatBox(value: {
+                                if appSettings.unitPreference == .imperial {
+                                    return "\(Int((Double(estimatedKm) * 0.621371).rounded())) mi"
+                                }
+                                return "\(estimatedKm) km"
+                            }(), label: "TOTAL")
                         }
 
                         Spacer().frame(height: 22)
