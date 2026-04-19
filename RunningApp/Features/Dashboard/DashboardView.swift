@@ -82,7 +82,7 @@ struct WeekCalendarView: View {
             withAnimation(.easeInOut(duration: 0.2)) { action() }
         } label: {
             let iconName: StrideIconName = systemImage == "chevron.left" ? .chevronLeft : .chevronRight
-            StrideIcon(name: iconName, size: 13, color: .init(.secondary), strokeWeight: 2)
+            StrideIcon(name: iconName, size: 13, color: .secondary, strokeWeight: 2)
                 .frame(width: 28, height: 44)
         }
     }
