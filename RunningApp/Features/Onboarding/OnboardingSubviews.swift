@@ -131,6 +131,7 @@ struct OBShell<Content: View>: View {
     let title: String
     let subtitle: String
     let ctaLabel: String
+    var ctaEnabled: Bool = true
     let onBack: () -> Void
     let onCTA: () -> Void
     @ViewBuilder let content: () -> Content
@@ -207,11 +208,13 @@ struct OBShell<Content: View>: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
-                .background(Color.brand, in: RoundedRectangle(cornerRadius: 18))
-                .shadow(color: Color.brand.opacity(0.4), radius: 12, y: 6)
+                .background(Color.brand.opacity(ctaEnabled ? 1 : 0.5),
+                            in: RoundedRectangle(cornerRadius: 18))
+                .shadow(color: Color.brand.opacity(ctaEnabled ? 0.4 : 0), radius: 12, y: 6)
             }
             .foregroundStyle(.white)
             .buttonStyle(.plain)
+            .disabled(!ctaEnabled)
             .padding(.horizontal, 20)
             .padding(.bottom, 44)
         }
@@ -355,32 +358,43 @@ struct OBPermissionRow: View {
     let desc: String
     let tint: Color
     let isOn: Bool
+    var isActive: Bool = false
 
     var body: some View {
         HStack(spacing: 14) {
             ZStack {
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(tint.opacity(0.15))
+                    .fill(tint.opacity(isActive ? 0.25 : 0.15))
                     .frame(width: 40, height: 40)
                 StrideIcon(name: icon, size: 20, color: tint, strokeWeight: 2.2)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(label).font(.bodyStrong)
-                Text(desc).font(.caption).foregroundStyle(.secondary)
+                Text(isActive ? "Requesting access…" : desc)
+                    .font(.caption).foregroundStyle(isActive ? tint : .secondary)
+                    .animation(.easeInOut(duration: 0.2), value: isActive)
             }
             Spacer()
-            // iOS-style toggle
-            ZStack(alignment: isOn ? .trailing : .leading) {
-                Capsule()
-                    .fill(isOn ? Color.success : Color.secondary.opacity(0.25))
-                    .frame(width: 51, height: 31)
-                Circle()
-                    .fill(Color.white)
-                    .shadow(color: .black.opacity(0.15), radius: 3, y: 1)
-                    .frame(width: 27, height: 27)
-                    .padding(2)
+            Group {
+                if isActive {
+                    ProgressView().tint(tint)
+                        .frame(width: 51, height: 31)
+                } else {
+                    // iOS-style toggle
+                    ZStack(alignment: isOn ? .trailing : .leading) {
+                        Capsule()
+                            .fill(isOn ? Color.success : Color.secondary.opacity(0.25))
+                            .frame(width: 51, height: 31)
+                        Circle()
+                            .fill(Color.white)
+                            .shadow(color: .black.opacity(0.15), radius: 3, y: 1)
+                            .frame(width: 27, height: 27)
+                            .padding(2)
+                    }
+                    .animation(.easeInOut(duration: 0.25), value: isOn)
+                }
             }
-            .animation(.easeInOut(duration: 0.2), value: isOn)
+            .animation(.easeInOut(duration: 0.2), value: isActive)
         }
         .padding(.vertical, 12)
     }

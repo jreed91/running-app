@@ -28,6 +28,11 @@ struct OnboardingView: View {
     @State private var notificationsEnabled = false
     @State private var healthEnabled = false
 
+    // Sequential permission flow
+    @State private var permRowsVisible: [Bool] = [false, false, false]
+    @State private var isRequestingPermissions = false
+    @State private var activePermission: Int? = nil
+
     @State private var isCreatingPlan = false
 
     private let locationManager = CLLocationManager()
@@ -109,7 +114,14 @@ struct OnboardingView: View {
         case 6:
             OBShell(stepIndex: 5, total: totalSteps, kicker: "Step 6 · Access",
                     title: "A few permissions.", subtitle: "Grant these so Stride can track your runs and keep your plan in sync.",
-                    ctaLabel: "Enable & Continue", onBack: retreat, onCTA: { requestPermissions(); advance() }) {
+                    ctaLabel: isRequestingPermissions ? "Requesting…" : "Enable & Continue",
+                    ctaEnabled: !isRequestingPermissions,
+                    onBack: retreat,
+                    onCTA: {
+                        guard !isRequestingPermissions else { return }
+                        isRequestingPermissions = true
+                        Task { await requestPermissionsSequentially() }
+                    }) {
                 permissionsContent
             }
         default:
@@ -325,16 +337,37 @@ struct OnboardingView: View {
         VStack(spacing: 16) {
             VStack(spacing: 0) {
                 OBPermissionRow(icon: .heart, label: "Apple Health",
-                                desc: "Read runs, heart rate, workouts", tint: .destructive, isOn: healthEnabled)
+                                desc: "Read runs, heart rate, workouts",
+                                tint: .destructive, isOn: healthEnabled,
+                                isActive: activePermission == 0)
+                    .opacity(permRowsVisible[0] ? 1 : 0)
+                    .offset(y: permRowsVisible[0] ? 0 : 14)
+
                 Divider().padding(.leading, 68)
+                    .opacity(permRowsVisible[1] ? 1 : 0)
+
                 OBPermissionRow(icon: .location, label: "Location",
-                                desc: "GPS tracking during runs", tint: .zoneEasy, isOn: locationEnabled)
+                                desc: "GPS tracking during runs",
+                                tint: .zoneEasy, isOn: locationEnabled,
+                                isActive: activePermission == 1)
+                    .opacity(permRowsVisible[1] ? 1 : 0)
+                    .offset(y: permRowsVisible[1] ? 0 : 14)
+
                 Divider().padding(.leading, 68)
+                    .opacity(permRowsVisible[2] ? 1 : 0)
+
                 OBPermissionRow(icon: .bell, label: "Notifications",
-                                desc: "Workout reminders, plan updates", tint: .zoneTempo, isOn: notificationsEnabled)
+                                desc: "Workout reminders, plan updates",
+                                tint: .zoneTempo, isOn: notificationsEnabled,
+                                isActive: activePermission == 2)
+                    .opacity(permRowsVisible[2] ? 1 : 0)
+                    .offset(y: permRowsVisible[2] ? 0 : 14)
             }
             .padding(16)
             .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 20))
+            .animation(.spring(response: 0.45, dampingFraction: 0.82), value: permRowsVisible[0])
+            .animation(.spring(response: 0.45, dampingFraction: 0.82), value: permRowsVisible[1])
+            .animation(.spring(response: 0.45, dampingFraction: 0.82), value: permRowsVisible[2])
 
             HStack(spacing: 10) {
                 StrideIcon(name: .lock, size: 16, color: .secondary)
@@ -343,6 +376,27 @@ struct OnboardingView: View {
             }
             .padding(14)
             .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))
+            .opacity(permRowsVisible[2] ? 1 : 0)
+            .animation(.easeOut(duration: 0.3).delay(0.1), value: permRowsVisible[2])
+        }
+        .task {
+            await checkExistingPermissions()
+
+            // All permissions already granted — skip this step automatically
+            if healthEnabled && locationEnabled && notificationsEnabled {
+                advance()
+                return
+            }
+
+            // Stagger in only the rows that still need action (already-granted
+            // rows appear immediately as "on"; pending rows animate in)
+            permRowsVisible = [false, false, false]
+            try? await Task.sleep(nanoseconds: 200_000_000)
+            permRowsVisible[0] = true
+            try? await Task.sleep(nanoseconds: 260_000_000)
+            permRowsVisible[1] = true
+            try? await Task.sleep(nanoseconds: 260_000_000)
+            permRowsVisible[2] = true
         }
     }
 
@@ -380,20 +434,62 @@ struct OnboardingView: View {
 
     // MARK: - Permissions
 
-    private func requestPermissions() {
-        locationManager.requestWhenInUseAuthorization()
-        locationEnabled = true
-        Task {
-            try? await NotificationService.shared.requestAuthorization()
-            await MainActor.run { notificationsEnabled = true }
+    /// Pre-populate enabled flags from actual system authorization status.
+    private func checkExistingPermissions() async {
+        // Location
+        let locStatus = locationManager.authorizationStatus
+        if locStatus == .authorizedWhenInUse || locStatus == .authorizedAlways {
+            locationEnabled = true
         }
+        // Notifications
+        let notifSettings = await UNUserNotificationCenter.current().notificationSettings()
+        if notifSettings.authorizationStatus == .authorized ||
+           notifSettings.authorizationStatus == .provisional {
+            notificationsEnabled = true
+        }
+        // HealthKit authorization status for reading is opaque; treat as granted
+        // if the store has already been authorized for any write type.
         if HKHealthStore.isHealthDataAvailable() {
-            Task {
-                try? await container.healthKitRepository.requestAuthorization()
-                await container.workoutSyncService.startObserving()
-                await MainActor.run { healthEnabled = true }
+            let store = HKHealthStore()
+            if let distType = HKQuantityType.quantityType(forIdentifier: .distanceWalkingRunning),
+               store.authorizationStatus(for: distType) == .sharingAuthorized {
+                healthEnabled = true
             }
         }
+    }
+
+    private func requestPermissionsSequentially() async {
+        // 1. HealthKit (skip if already granted)
+        if !healthEnabled {
+            activePermission = 0
+            if HKHealthStore.isHealthDataAvailable() {
+                try? await container.healthKitRepository.requestAuthorization()
+                await container.workoutSyncService.startObserving()
+            }
+            withAnimation { healthEnabled = true }
+            try? await Task.sleep(nanoseconds: 600_000_000)
+        }
+
+        // 2. Location (skip if already granted)
+        if !locationEnabled {
+            activePermission = 1
+            locationManager.requestWhenInUseAuthorization()
+            try? await Task.sleep(nanoseconds: 1_800_000_000)   // time for system dialog
+            withAnimation { locationEnabled = true }
+            try? await Task.sleep(nanoseconds: 600_000_000)
+        }
+
+        // 3. Notifications (skip if already granted)
+        if !notificationsEnabled {
+            activePermission = 2
+            try? await NotificationService.shared.requestAuthorization()
+            withAnimation { notificationsEnabled = true }
+            try? await Task.sleep(nanoseconds: 600_000_000)
+        }
+
+        activePermission = nil
+        isRequestingPermissions = false
+        advance()
     }
 
     // MARK: - Create profile and plan
