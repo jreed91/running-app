@@ -1,7 +1,13 @@
 import SwiftUI
 
+private struct TabBarHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 88
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
 struct MainTabView: View {
     @State private var selectedTab: Tab = .home
+    @State private var tabBarHeight: CGFloat = 88
 
     enum Tab: String, CaseIterable {
         case home     = "Home"
@@ -43,10 +49,19 @@ struct MainTabView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                Color.clear.frame(height: tabBarHeight)
+            }
 
             glassTabBar
+                .background(
+                    GeometryReader { geo in
+                        Color.clear.preference(key: TabBarHeightKey.self, value: geo.size.height)
+                    }
+                )
         }
         .ignoresSafeArea(edges: .bottom)
+        .onPreferenceChange(TabBarHeightKey.self) { tabBarHeight = $0 }
     }
 
     private var glassTabBar: some View {
