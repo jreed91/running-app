@@ -66,22 +66,26 @@ struct StrideIcon: View {
         switch name {
         case .run:
             // Head
-            var head = Path(ellipseIn: CGRect(x: 14.3, y: 2.3, width: 4.4, height: 4.4))
-            ctx.fill(head, with: .foreground)
-            // Body
-            var body = Path()
-            body.move(to: CGPoint(x: 6, y: 21))
-            body.addLine(to: CGPoint(x: 10, y: 16))
-            body.addLine(to: CGPoint(x: 13, y: 14))
-            body.addLine(to: CGPoint(x: 11, y: 11))
-            body.addLine(to: CGPoint(x: 15, y: 7))
-            body.addLine(to: CGPoint(x: 18, y: 10))
-            body.addLine(to: CGPoint(x: 21, y: 11))
-            ctx.stroke(body, with: .foreground, style: stroke)
-            var arm = Path()
-            arm.move(to: CGPoint(x: 8, y: 12))
-            arm.addLine(to: CGPoint(x: 6, y: 15))
-            ctx.stroke(arm, with: .foreground, style: stroke)
+            ctx.fill(Path(ellipseIn: CGRect(x: 13.3, y: 1.8, width: 4.4, height: 4.4)), with: .foreground)
+            // Back leg → torso → front arm (one continuous stroke)
+            var main = Path()
+            main.move(to: CGPoint(x: 5,    y: 21))    // back foot
+            main.addLine(to: CGPoint(x: 8,    y: 17))   // back shin
+            main.addLine(to: CGPoint(x: 11,   y: 13))   // hip
+            main.addLine(to: CGPoint(x: 13.5, y: 8))    // torso to shoulder
+            main.addLine(to: CGPoint(x: 17.5, y: 11.5)) // front arm swing
+            ctx.stroke(main, with: .foreground, style: stroke)
+            // Front leg (knee lifted, bent)
+            var frontLeg = Path()
+            frontLeg.move(to: CGPoint(x: 11,   y: 13))  // hip
+            frontLeg.addLine(to: CGPoint(x: 14.5, y: 17)) // front thigh
+            frontLeg.addLine(to: CGPoint(x: 13,   y: 21)) // front shin / foot
+            ctx.stroke(frontLeg, with: .foreground, style: stroke)
+            // Back arm (swings upward)
+            var backArm = Path()
+            backArm.move(to: CGPoint(x: 13,   y: 9.5))
+            backArm.addLine(to: CGPoint(x: 10, y: 7))
+            ctx.stroke(backArm, with: .foreground, style: stroke)
 
         case .walk:
             var head = Path(ellipseIn: CGRect(x: 11, y: 2, width: 4, height: 4))

@@ -1,13 +1,7 @@
 import SwiftUI
 
-private struct TabBarHeightKey: PreferenceKey {
-    static let defaultValue: CGFloat = 88
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
-}
-
 struct MainTabView: View {
     @State private var selectedTab: Tab = .home
-    @State private var tabBarHeight: CGFloat = 88
 
     enum Tab: String, CaseIterable {
         case home     = "Home"
@@ -38,30 +32,23 @@ struct MainTabView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            Group {
-                switch selectedTab {
-                case .home:     DashboardView()
-                case .plan:     PlanTabView()
-                case .history:  HistoryView()
-                case .progress: ProgressDashboardView()
-                case .settings: SettingsView()
-                }
+        Group {
+            switch selectedTab {
+            case .home:     DashboardView()
+            case .plan:     PlanTabView()
+            case .history:  HistoryView()
+            case .progress: ProgressDashboardView()
+            case .settings: SettingsView()
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                Color.clear.frame(height: tabBarHeight)
-            }
-
-            glassTabBar
-                .background(
-                    GeometryReader { geo in
-                        Color.clear.preference(key: TabBarHeightKey.self, value: geo.size.height)
-                    }
-                )
         }
-        .ignoresSafeArea(edges: .bottom)
-        .onPreferenceChange(TabBarHeightKey.self) { tabBarHeight = $0 }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            // Using the actual tab bar as the safeAreaInset content lets SwiftUI
+            // automatically wire up ScrollView content insets to exactly this height.
+            // .ignoresSafeArea lets the bar extend into the home-indicator region.
+            glassTabBar
+                .ignoresSafeArea(edges: .bottom)
+        }
     }
 
     private var glassTabBar: some View {
