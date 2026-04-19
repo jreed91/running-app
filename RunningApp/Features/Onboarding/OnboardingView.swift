@@ -31,7 +31,7 @@ struct OnboardingView: View {
     @State private var isCreatingPlan = false
 
     private let locationManager = CLLocationManager()
-    private let totalSteps = 5
+    private let totalSteps = 6
 
     // MARK: - Computed
 
@@ -83,25 +83,31 @@ struct OnboardingView: View {
                 goalContent
             }
         case 2:
-            OBShell(stepIndex: 1, total: totalSteps, kicker: "Step 2 · Level",
+            OBShell(stepIndex: 1, total: totalSteps, kicker: "Step 2 · Units",
+                    title: "Kilometres or miles?", subtitle: "Choose how distances and paces are shown throughout the app.",
+                    ctaLabel: "Continue", onBack: retreat, onCTA: advance) {
+                unitsContent
+            }
+        case 3:
+            OBShell(stepIndex: 2, total: totalSteps, kicker: "Step 3 · Level",
                     title: "Where are you now?", subtitle: "Be honest — plans scale up from here. No ego lifts allowed.",
                     ctaLabel: "Continue", onBack: retreat, onCTA: advance) {
                 levelContent
             }
-        case 3:
-            OBShell(stepIndex: 2, total: totalSteps, kicker: "Step 3 · Pace",
+        case 4:
+            OBShell(stepIndex: 3, total: totalSteps, kicker: "Step 4 · Pace",
                     title: "Your recent 5K time?", subtitle: "Your VDOT — and every training pace — comes from this number.",
                     ctaLabel: "Continue", onBack: retreat, onCTA: advance) {
                 timeContent
             }
-        case 4:
-            OBShell(stepIndex: 3, total: totalSteps, kicker: "Step 4 · Schedule",
+        case 5:
+            OBShell(stepIndex: 4, total: totalSteps, kicker: "Step 5 · Schedule",
                     title: "When can you run?", subtitle: "Pick the days you'll train. We'll build your plan around them.",
                     ctaLabel: "Continue", onBack: retreat, onCTA: advance) {
                 scheduleContent
             }
-        case 5:
-            OBShell(stepIndex: 4, total: totalSteps, kicker: "Step 5 · Access",
+        case 6:
+            OBShell(stepIndex: 5, total: totalSteps, kicker: "Step 6 · Access",
                     title: "A few permissions.", subtitle: "Grant these so Stride can track your runs and keep your plan in sync.",
                     ctaLabel: "Enable & Continue", onBack: retreat, onCTA: { requestPermissions(); advance() }) {
                 permissionsContent
@@ -124,6 +130,52 @@ struct OnboardingView: View {
         VStack(spacing: 10) {
             ForEach(RaceType.allCases, id: \.self) { race in
                 OBRaceCard(race: race, isSelected: goalRace == race) { goalRace = race }
+            }
+        }
+    }
+
+    // MARK: - Units content
+
+    private var unitsContent: some View {
+        VStack(spacing: 10) {
+            ForEach(UnitPreference.allCases, id: \.self) { unit in
+                Button { appSettings.unitPreference = unit } label: {
+                    HStack(spacing: 16) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.brand.opacity(appSettings.unitPreference == unit ? 0.15 : 0.06))
+                                .frame(width: 48, height: 48)
+                            StrideIcon(name: .ruler, size: 22,
+                                       color: appSettings.unitPreference == unit ? .brand : .secondary,
+                                       strokeWeight: 2.0)
+                        }
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(unit.displayName)
+                                .font(.bodyStrong)
+                                .foregroundStyle(.primary)
+                            Text(unit == .metric ? "Distances in km · Pace in min/km" : "Distances in miles · Pace in min/mi")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        OBRadio(isSelected: appSettings.unitPreference == unit)
+                    }
+                    .padding(16)
+                    .background(
+                        appSettings.unitPreference == unit
+                            ? Color.brand.opacity(0.06)
+                            : Color.surfaceSecondary,
+                        in: RoundedRectangle(cornerRadius: 16)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .strokeBorder(
+                                appSettings.unitPreference == unit ? Color.brand.opacity(0.4) : Color.clear,
+                                lineWidth: 1.5
+                            )
+                    )
+                }
+                .buttonStyle(.plain)
             }
         }
     }
@@ -183,7 +235,7 @@ struct OnboardingView: View {
 
             // Training paces
             VStack(alignment: .leading, spacing: 10) {
-                Text("YOUR TRAINING PACES (MIN/KM)")
+                Text("YOUR TRAINING PACES (\(appSettings.unitPreference.paceLabel.uppercased()))")
                     .font(.sectionHeader)
                     .foregroundStyle(.secondary)
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
@@ -302,8 +354,9 @@ struct OnboardingView: View {
 
     // MARK: - Pace label helpers
 
-    private func shortPace(_ s: Double) -> String {
-        guard s > 0, s.isFinite else { return "--:--" }
+    private func shortPace(_ secsPerKm: Double) -> String {
+        guard secsPerKm > 0, secsPerKm.isFinite else { return "--:--" }
+        let s = appSettings.unitPreference == .imperial ? secsPerKm * 1.60934 : secsPerKm
         return String(format: "%d:%02d", Int(s) / 60, Int(s) % 60)
     }
     private var easyLabel: String {
