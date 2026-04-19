@@ -1,0 +1,473 @@
+import SwiftUI
+import SwiftData
+
+struct NewPlanOnboardingView: View {
+    @Environment(\.modelContext) private var context
+    @Environment(\.appContainer) private var container
+    @Environment(\.dismiss) private var dismiss
+    @Environment(AppSettings.self) private var appSettings
+
+    @Query private var profiles: [UserProfile]
+
+    // Navigation
+    @State private var step = 0
+    @State private var goingForward = true
+
+    // Step 1 – Race
+    @State private var goalRace: RaceType = .halfMarathon
+
+    // Step 2 – Fitness
+    @State private var fitnessLevel: FitnessLevel = .intermediate
+
+    // Step 3 – 5K time
+    @State private var fiveKMinutes = 25
+    @State private var fiveKSeconds = 0
+
+    // Step 4 – Duration
+    private enum ScheduleMode: String, CaseIterable {
+        case weeks = "Weeks"
+        case endDate = "End Date"
+    }
+    @State private var scheduleMode: ScheduleMode = .weeks
+    @State private var selectedWeeks = 12
+    @State private var startDate = Date().startOfWeek.adding(days: 7)
+    @State private var targetEndDate = Date().startOfWeek.adding(days: 7).adding(weeks: 12)
+
+    // Step 5 – Schedule days
+    @State private var selectedDays: Set<Int> = [0, 2, 4, 5]
+
+    @State private var isCreatingPlan = false
+
+    private let totalSteps = 5
+
+    private var profile: UserProfile? { profiles.first }
+
+    // MARK: - Computed
+
+    private var fiveKTimeSeconds: Double { Double(fiveKMinutes * 60 + fiveKSeconds) }
+
+    private var vdotValue: Double {
+        PaceCalculatorService.vdot(distanceMeters: 5_000, timeSeconds: fiveKTimeSeconds)
+    }
+
+    private var paces: TrainingPaces {
+        PaceCalculatorService.trainingPaces(forVDOT: vdotValue)
+    }
+
+    private var weekRange: ClosedRange<Int> { goalRace.typicalWeeks }
+
+    private var computedEndDate: Date { startDate.adding(weeks: selectedWeeks) }
+
+    private var computedWeeks: Int {
+        let days = Calendar.current.dateComponents(
+            [.day], from: startDate, to: targetEndDate
+        ).day ?? 0
+        return max(weekRange.lowerBound, min(weekRange.upperBound, days / 7))
+    }
+
+    private var effectiveWeeks: Int {
+        scheduleMode == .weeks ? selectedWeeks : computedWeeks
+    }
+
+    private var estimatedWorkouts: Int { effectiveWeeks * max(selectedDays.count, 3) }
+
+    private var estimatedKm: Int {
+        let base = fitnessLevel.startingWeeklyKm(for: goalRace)
+        return Int((base + base * 1.8) / 2 * Double(effectiveWeeks))
+    }
+
+    private var minEndDate: Date { startDate.adding(weeks: weekRange.lowerBound) }
+    private var maxEndDate: Date { startDate.adding(weeks: weekRange.upperBound) }
+
+    // MARK: - Body
+
+    var body: some View {
+        ZStack {
+            currentStep
+                .id(step)
+                .transition(.asymmetric(
+                    insertion: .move(edge: goingForward ? .trailing : .leading).combined(with: .opacity),
+                    removal: .move(edge: goingForward ? .leading : .trailing).combined(with: .opacity)
+                ))
+        }
+        .animation(.easeInOut(duration: 0.3), value: step)
+        .ignoresSafeArea()
+        .onAppear { loadFromProfile() }
+    }
+
+    @ViewBuilder
+    private var currentStep: some View {
+        switch step {
+        case 0:
+            OBShell(
+                stepIndex: 0, total: totalSteps,
+                kicker: "Step 1 · Goal",
+                title: "Pick your race.",
+                subtitle: "What are you training for? You can change this anytime.",
+                ctaLabel: "Continue",
+                onBack: { dismiss() },
+                onCTA: advance
+            ) { raceContent }
+
+        case 1:
+            OBShell(
+                stepIndex: 1, total: totalSteps,
+                kicker: "Step 2 · Fitness",
+                title: "Where are you now?",
+                subtitle: "Be honest — plans scale up from here. No ego lifts allowed.",
+                ctaLabel: "Continue",
+                onBack: retreat,
+                onCTA: advance
+            ) { levelContent }
+
+        case 2:
+            OBShell(
+                stepIndex: 2, total: totalSteps,
+                kicker: "Step 3 · Pace",
+                title: "Your recent 5K time?",
+                subtitle: "Your VDOT — and every training pace — comes from this number.",
+                ctaLabel: "Continue",
+                onBack: retreat,
+                onCTA: advance
+            ) { timeContent }
+
+        case 3:
+            OBShell(
+                stepIndex: 3, total: totalSteps,
+                kicker: "Step 4 · Duration",
+                title: "How long to train?",
+                subtitle: "Choose a plan length that suits your schedule and race date.",
+                ctaLabel: "Continue",
+                onBack: retreat,
+                onCTA: advance
+            ) { durationContent }
+
+        case 4:
+            OBShell(
+                stepIndex: 4, total: totalSteps,
+                kicker: "Step 5 · Schedule",
+                title: "When can you run?",
+                subtitle: "Pick the days you'll train. We'll build your plan around them.",
+                ctaLabel: "Build My Plan",
+                onBack: retreat,
+                onCTA: { guard !selectedDays.isEmpty else { return }; advance() }
+            ) { scheduleContent }
+
+        default:
+            OBReady(
+                goalRace: goalRace,
+                planWeeks: effectiveWeeks,
+                estimatedWorkouts: estimatedWorkouts,
+                estimatedKm: estimatedKm,
+                isCreatingPlan: isCreatingPlan,
+                onViewPlan: {
+                    guard !isCreatingPlan else { return }
+                    isCreatingPlan = true
+                    generatePlan()
+                }
+            )
+        }
+    }
+
+    // MARK: - Navigation
+
+    private func advance() { goingForward = true; withAnimation { step += 1 } }
+    private func retreat() { goingForward = false; withAnimation { step -= 1 } }
+
+    // MARK: - Step content
+
+    private var raceContent: some View {
+        VStack(spacing: 10) {
+            ForEach(RaceType.allCases, id: \.self) { race in
+                OBRaceCard(race: race, isSelected: goalRace == race) {
+                    goalRace = race
+                    clampWeeks()
+                }
+            }
+        }
+    }
+
+    private var levelContent: some View {
+        VStack(spacing: 10) {
+            ForEach(FitnessLevel.allCases, id: \.self) { level in
+                OBLevelRow(level: level, race: goalRace, isSelected: fitnessLevel == level) {
+                    fitnessLevel = level
+                }
+            }
+        }
+    }
+
+    private var timeContent: some View {
+        VStack(spacing: 18) {
+            VStack(spacing: 12) {
+                Text("5K FINISH TIME")
+                    .font(.sectionHeader)
+                    .foregroundStyle(.secondary)
+
+                HStack(spacing: 0) {
+                    Picker("Minutes", selection: $fiveKMinutes) {
+                        ForEach(14...59, id: \.self) {
+                            Text(String(format: "%02d", $0)).tag($0)
+                        }
+                    }
+                    .pickerStyle(.wheel)
+                    .frame(width: 80)
+
+                    Text(":")
+                        .font(.system(size: 48, weight: .bold, design: .monospaced))
+                        .foregroundStyle(.brand)
+
+                    Picker("Seconds", selection: $fiveKSeconds) {
+                        ForEach(stride(from: 0, through: 55, by: 5).map { $0 }, id: \.self) {
+                            Text(String(format: "%02d", $0)).tag($0)
+                        }
+                    }
+                    .pickerStyle(.wheel)
+                    .frame(width: 80)
+                }
+
+                HStack(spacing: 6) {
+                    Text(String(format: "VDOT %.0f", vdotValue))
+                        .font(.system(size: 13, weight: .bold, design: .monospaced))
+                        .foregroundStyle(.brand)
+                    Text("·").foregroundStyle(.secondary)
+                    Text(vdotLabel)
+                        .font(.captionStrong)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 7)
+                .background(Color.brand.opacity(0.1), in: Capsule())
+            }
+            .padding(20)
+            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 20))
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text("YOUR TRAINING PACES (\(appSettings.unitPreference.paceLabel.uppercased()))")
+                    .font(.sectionHeader)
+                    .foregroundStyle(.secondary)
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                    OBPaceCell(zone: "Easy", color: .zoneEasy, pace: easyLabel)
+                    OBPaceCell(zone: "Marathon", color: .zoneMarathon, pace: marathonLabel)
+                    OBPaceCell(zone: "Tempo", color: .zoneTempo, pace: tempoLabel)
+                    OBPaceCell(zone: "Interval", color: .zoneInterval, pace: intervalLabel)
+                }
+            }
+
+            HStack(spacing: 10) {
+                StrideIcon(name: .timer, size: 16, color: .secondary)
+                Text("Don't know your 5K time? Estimate from a recent run or use your current fitness level as a guide.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(14)
+            .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))
+        }
+    }
+
+    private var durationContent: some View {
+        VStack(spacing: 16) {
+            VStack(spacing: 14) {
+                Picker("Set by", selection: $scheduleMode) {
+                    ForEach(ScheduleMode.allCases, id: \.self) { mode in
+                        Text(mode.rawValue).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: scheduleMode) { _, _ in recalibrateDates() }
+
+                if scheduleMode == .weeks {
+                    Stepper("\(selectedWeeks) weeks", value: $selectedWeeks, in: weekRange)
+                        .onChange(of: selectedWeeks) { _, _ in targetEndDate = computedEndDate }
+                    LabeledContent("End date") {
+                        Text(computedEndDate, style: .date)
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    DatePicker(
+                        "End date",
+                        selection: $targetEndDate,
+                        in: minEndDate...maxEndDate,
+                        displayedComponents: .date
+                    )
+                    LabeledContent("Duration") {
+                        Text("\(computedWeeks) weeks")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Divider()
+
+                DatePicker("Start date", selection: $startDate, displayedComponents: .date)
+                    .onChange(of: startDate) { _, _ in recalibrateDates() }
+            }
+            .padding(16)
+            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 20))
+
+            HStack(spacing: 10) {
+                StrideIcon(name: .calendar, size: 16, color: .secondary)
+                Text("\(goalRace.typicalWeeks.lowerBound)–\(goalRace.typicalWeeks.upperBound) weeks recommended for \(goalRace.displayName).")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(14)
+            .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))
+        }
+    }
+
+    private var scheduleContent: some View {
+        VStack(spacing: 16) {
+            VStack(spacing: 12) {
+                HStack(spacing: 6) {
+                    ForEach(0..<7, id: \.self) { i in
+                        let dayLabels = ["M", "T", "W", "T", "F", "S", "S"]
+                        let isOn = selectedDays.contains(i)
+                        Button {
+                            if isOn { selectedDays.remove(i) } else { selectedDays.insert(i) }
+                        } label: {
+                            Text(dayLabels[i])
+                                .font(.system(size: 17, weight: .bold))
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 52)
+                                .background(
+                                    isOn ? Color.brand : Color.surfaceTertiary,
+                                    in: RoundedRectangle(cornerRadius: 14)
+                                )
+                                .foregroundStyle(isOn ? Color.white : Color.secondary)
+                                .shadow(color: isOn ? Color.brand.opacity(0.4) : .clear, radius: 8, y: 3)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                HStack(spacing: 10) {
+                    Text("\(selectedDays.count)")
+                        .font(.system(size: 22, weight: .bold, design: .monospaced))
+                        .foregroundStyle(.brand)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Days per week").font(.captionStrong)
+                        Text(recommendedDaysLabel).font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .background(Color.brand.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+            }
+            .padding(16)
+            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 20))
+
+            if selectedDays.isEmpty {
+                HStack(spacing: 10) {
+                    StrideIcon(name: .flag, size: 16, color: .destructive)
+                    Text("Select at least one run day to continue.")
+                        .font(.caption)
+                        .foregroundStyle(.destructive)
+                }
+                .padding(14)
+                .background(Color.destructive.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))
+            }
+        }
+    }
+
+    // MARK: - Helpers
+
+    private var vdotLabel: String {
+        switch vdotValue {
+        case ..<30: return "beginner"
+        case 30..<40: return "base fitness"
+        case 40..<50: return "good intermediate"
+        case 50..<60: return "advanced"
+        default: return "elite"
+        }
+    }
+
+    private var recommendedDaysLabel: String {
+        switch goalRace {
+        case .fiveK: return "Recommended for 5K"
+        case .halfMarathon: return "Recommended for Half Marathon"
+        case .marathon: return "Recommended for Marathon"
+        }
+    }
+
+    private func shortPace(_ secsPerKm: Double) -> String {
+        guard secsPerKm > 0, secsPerKm.isFinite else { return "--:--" }
+        let s = appSettings.unitPreference == .imperial ? secsPerKm * 1.60934 : secsPerKm
+        return String(format: "%d:%02d", Int(s) / 60, Int(s) % 60)
+    }
+
+    private var easyLabel: String {
+        "\(shortPace(paces.easyRange.lowerBound))–\(shortPace(paces.easyRange.upperBound))"
+    }
+    private var marathonLabel: String { shortPace(paces.marathon) }
+    private var tempoLabel: String { shortPace(paces.threshold) }
+    private var intervalLabel: String { shortPace(paces.interval) }
+
+    private func loadFromProfile() {
+        guard let profile else { return }
+        goalRace = profile.goalRace
+        fitnessLevel = profile.fitnessLevel
+        if !profile.preferredRunDayIndices.isEmpty {
+            selectedDays = Set(profile.preferredRunDayIndices)
+        }
+        if let t = profile.currentEstimated5KTimeSeconds, t > 0 {
+            fiveKMinutes = Int(t) / 60
+            let rem = Int(t) % 60
+            fiveKSeconds = (rem / 5) * 5
+        }
+        clampWeeks()
+    }
+
+    private func clampWeeks() {
+        selectedWeeks = max(weekRange.lowerBound, min(weekRange.upperBound, selectedWeeks))
+        recalibrateDates()
+    }
+
+    private func recalibrateDates() {
+        if scheduleMode == .weeks {
+            targetEndDate = computedEndDate
+        } else {
+            if targetEndDate < minEndDate { targetEndDate = minEndDate }
+            if targetEndDate > maxEndDate { targetEndDate = maxEndDate }
+        }
+    }
+
+    // MARK: - Plan generation
+
+    private func generatePlan() {
+        guard let profile else { return }
+
+        let sortedDays = selectedDays.sorted()
+
+        profile.goalRace = goalRace
+        profile.fitnessLevel = fitnessLevel
+        profile.weeklyRunDays = sortedDays.count
+        profile.preferredRunDayIndices = sortedDays
+        profile.currentEstimated5KTimeSeconds = fiveKTimeSeconds
+        profile.updatedAt = Date()
+
+        let existing = (try? context.fetch(FetchDescriptor<TrainingPlan>())) ?? []
+        existing.forEach { $0.isActive = false }
+
+        let plan = container.trainingPlanService.generatePlan(
+            profile: profile,
+            startDate: startDate,
+            numberOfWeeks: effectiveWeeks,
+            runDayIndices: sortedDays,
+            unitPreference: appSettings.unitPreference
+        )
+        context.insert(plan)
+        try? context.save()
+
+        Task {
+            await container.notificationService.scheduleReminders(for: plan)
+            if appSettings.morningReminderEnabled {
+                await container.notificationService.scheduleMorningReminders(for: plan)
+            }
+            try? await container.healthKitRepository.syncWorkoutPlans(for: plan)
+            try? context.save()
+            isCreatingPlan = false
+            dismiss()
+        }
+    }
+}

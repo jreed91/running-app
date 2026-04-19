@@ -84,7 +84,7 @@ struct PlanTabView: View {
                 }
             }
             .sheet(isPresented: $showNewPlanSheet) {
-                PlanSetupView()
+                NewPlanOnboardingView()
             }
             .sheet(isPresented: $showRouteGenius) {
                 RouteGeniusView(
