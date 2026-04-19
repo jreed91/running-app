@@ -133,6 +133,13 @@ enum RouteType: String, Codable, CaseIterable, Sendable {
         case .outAndBack: return "arrow.left.arrow.right"
         }
     }
+
+    var strideIcon: StrideIconName {
+        switch self {
+        case .loop:       return .run
+        case .outAndBack: return .ruler
+        }
+    }
 }
 
 // MARK: - UnitPreference

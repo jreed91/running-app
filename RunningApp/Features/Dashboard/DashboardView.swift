@@ -149,9 +149,7 @@ private struct DayCell: View {
     private var indicatorArea: some View {
         if let w = workout, w.workoutType != .rest {
             if w.isCompleted {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 7, weight: .bold))
-                    .foregroundStyle(dotColor(for: w.workoutType))
+                StrideIcon(name: .check, size: 8, color: dotColor(for: w.workoutType), strokeWeight: 2.5)
             } else {
                 // Long run gets a wider pill indicator
                 let isLong = w.workoutType == .longRun
