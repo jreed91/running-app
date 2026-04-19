@@ -388,7 +388,7 @@ struct OBPermissionRow: View {
 
 // MARK: - OBRadio
 
-private struct OBRadio: View {
+struct OBRadio: View {
     let isSelected: Bool
     let color: Color
 
