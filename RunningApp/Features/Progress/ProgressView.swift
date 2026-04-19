@@ -12,7 +12,6 @@ struct ProgressDashboardView: View {
     @Environment(AppSettings.self) private var appSettings
     @State private var selectedRange: ChartRange = .threeMonths
 
-    // Chart selection state
     @State private var selectedVolumeDate: Date? = nil
     @State private var selectedPaceDate: Date? = nil
     @State private var selectedPredictionDate: Date? = nil
@@ -58,7 +57,8 @@ struct ProgressDashboardView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 16) {
+                    summaryHeader
                     rangePicker
                     weeklyVolumeChart
                     paceProgressChart
@@ -67,11 +67,12 @@ struct ProgressDashboardView: View {
                     heartRateTrendChart
                     elevationTrendChart
                     vo2MaxTrendChart
-                    totalStatsSummary
+                    periodSummaryCard
                 }
                 .padding()
                 .frame(maxWidth: .infinity)
             }
+            .background(Color.surfacePrimary)
             .navigationTitle("Progress")
         }
         .onChange(of: selectedRange) {
@@ -84,27 +85,93 @@ struct ProgressDashboardView: View {
         }
     }
 
-    // MARK: Range picker
+    // MARK: - Summary header
 
-    private var rangePicker: some View {
-        Picker("Range", selection: $selectedRange) {
-            ForEach(ChartRange.allCases, id: \.self) { Text($0.rawValue) }
+    private var summaryHeader: some View {
+        HStack(spacing: 0) {
+            summaryStatCell(
+                value: "\(filteredWorkouts.count)",
+                label: "Runs"
+            )
+            Divider().frame(height: 40)
+            summaryStatCell(
+                value: filteredWorkouts.reduce(0) { $0 + $1.distanceMeters }
+                    .distanceString(unit: appSettings.unitPreference),
+                label: "Distance"
+            )
+            Divider().frame(height: 40)
+            summaryStatCell(
+                value: vo2Points.last.map { String(format: "%.0f", $0.vdot) } ?? "--",
+                label: "VDOT"
+            )
         }
-        .pickerStyle(.segmented)
+        .padding(16)
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
     }
 
-    // MARK: Weekly volume chart
+    private func summaryStatCell(value: String, label: String) -> some View {
+        VStack(spacing: 2) {
+            Text(value)
+                .font(.system(size: 22, weight: .bold, design: .monospaced))
+                .foregroundStyle(.primary)
+                .minimumScaleFactor(0.7)
+                .lineLimit(1)
+            Text(label)
+                .font(.captionStrong)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Range picker
+
+    private var rangePicker: some View {
+        HStack(spacing: 4) {
+            ForEach(ChartRange.allCases, id: \.self) { range in
+                Button { selectedRange = range } label: {
+                    Text(range.rawValue)
+                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 9)
+                        .background(
+                            selectedRange == range ? Color.brand : Color.clear,
+                            in: RoundedRectangle(cornerRadius: 10)
+                        )
+                        .foregroundStyle(selectedRange == range ? .white : .secondary)
+                }
+                .buttonStyle(.plain)
+                .animation(.easeInOut(duration: 0.15), value: selectedRange)
+            }
+        }
+        .padding(4)
+        .background(Color.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    // MARK: - Chart card wrapper
+
+    private func chartCard<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .font(.sectionHeader)
+                .foregroundStyle(.secondary)
+            content()
+        }
+        .padding(16)
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    // MARK: - Weekly volume chart
 
     private var weeklyVolumeChart: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("WEEKLY VOLUME").font(.sectionHeader).foregroundStyle(.secondary)
+        chartCard("WEEKLY VOLUME") {
             Chart {
                 ForEach(weeklyBuckets, id: \.week) { bucket in
                     BarMark(
                         x: .value("Week", bucket.week, unit: .weekOfYear),
                         y: .value(appSettings.unitPreference.distanceLabel, bucket.distanceValue)
                     )
-                    .foregroundStyle(.brand)
+                    .foregroundStyle(Color.brand.gradient)
+                    .cornerRadius(4)
                 }
                 if let selected = selectedVolumeDate, let bucket = closestWeekBucket(to: selected) {
                     selectionRule(x: .value("Week", bucket.week)) {
@@ -129,71 +196,70 @@ struct ProgressDashboardView: View {
         }
     }
 
-    // MARK: Pace trend chart
+    // MARK: - Pace trend chart
 
     private var paceProgressChart: some View {
         let paceWorkouts = filteredWorkouts.filter { $0.averagePaceSecondsPerKm > 0 }
-        return VStack(alignment: .leading, spacing: 8) {
-            Text("AVERAGE PACE").font(.sectionHeader).foregroundStyle(.secondary)
-            Chart {
-                ForEach(paceWorkouts) { workout in
-                    LineMark(
-                        x: .value("Date", workout.date),
-                        y: .value("sec/km", workout.averagePaceSecondsPerKm)
-                    )
-                    .foregroundStyle(.brand)
-                    PointMark(
-                        x: .value("Date", workout.date),
-                        y: .value("sec/km", workout.averagePaceSecondsPerKm)
-                    )
-                    .foregroundStyle(.brand)
-                    .symbolSize(
-                        selectedPaceDate.flatMap { closestWorkout(to: $0, in: paceWorkouts) }?.id == workout.id ? 80 : 36
-                    )
-                }
-                if let selected = selectedPaceDate,
-                   let workout = closestWorkout(to: selected, in: paceWorkouts) {
-                    selectionRule(x: .value("Date", workout.date)) {
-                        tooltipContainer {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(workout.date, format: .dateTime.month(.abbreviated).day())
-                                    .font(.caption2).foregroundStyle(.secondary)
-                                Text(workout.averagePaceSecondsPerKm.paceString(unit: appSettings.unitPreference))
-                                    .font(.caption).bold()
+        return chartCard("AVERAGE PACE") {
+            if paceWorkouts.isEmpty {
+                emptyDataPlaceholder("No pace data in this period")
+            } else {
+                Chart {
+                    ForEach(paceWorkouts) { workout in
+                        LineMark(
+                            x: .value("Date", workout.date),
+                            y: .value("sec/km", workout.averagePaceSecondsPerKm)
+                        )
+                        .foregroundStyle(Color.brand)
+                        .interpolationMethod(.catmullRom)
+                        PointMark(
+                            x: .value("Date", workout.date),
+                            y: .value("sec/km", workout.averagePaceSecondsPerKm)
+                        )
+                        .foregroundStyle(Color.brand)
+                        .symbolSize(
+                            selectedPaceDate.flatMap { closestWorkout(to: $0, in: paceWorkouts) }?.id == workout.id ? 80 : 36
+                        )
+                    }
+                    if let selected = selectedPaceDate,
+                       let workout = closestWorkout(to: selected, in: paceWorkouts) {
+                        selectionRule(x: .value("Date", workout.date)) {
+                            tooltipContainer {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(workout.date, format: .dateTime.month(.abbreviated).day())
+                                        .font(.caption2).foregroundStyle(.secondary)
+                                    Text(workout.averagePaceSecondsPerKm.paceString(unit: appSettings.unitPreference))
+                                        .font(.caption).bold()
+                                }
                             }
                         }
                     }
                 }
-            }
-            .frame(height: 140)
-            .chartYAxis {
-                AxisMarks { value in
-                    AxisValueLabel {
-                        if let secs = value.as(Double.self) {
-                            Text(secs.paceString(unit: appSettings.unitPreference)
-                                .replacingOccurrences(of: " \(appSettings.unitPreference.paceLabel)", with: ""))
+                .frame(height: 140)
+                .chartYAxis {
+                    AxisMarks { value in
+                        AxisValueLabel {
+                            if let secs = value.as(Double.self) {
+                                Text(secs.paceString(unit: appSettings.unitPreference)
+                                    .replacingOccurrences(of: " \(appSettings.unitPreference.paceLabel)", with: ""))
+                            }
                         }
                     }
                 }
+                .chartXSelection(value: $selectedPaceDate)
+                Text("Lower is faster")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-            .chartXSelection(value: $selectedPaceDate)
-            Text("Lower = faster")
-                .font(.caption)
-                .foregroundStyle(.secondary)
         }
     }
 
-    // MARK: Predicted race pace chart
+    // MARK: - Predicted race pace chart
 
     private var racePacePredictionChart: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("PREDICTED RACE PACE").font(.sectionHeader).foregroundStyle(.secondary)
+        chartCard("PREDICTED RACE PACE") {
             if pacePredictionPoints.isEmpty {
-                Text("Log at least 2 runs of 1.5 km+ to see a prediction.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 8)
+                emptyDataPlaceholder("Log at least 2 runs of 1.5 km+ to see a prediction.")
             } else {
                 Chart {
                     ForEach(pacePredictionPoints) { point in
@@ -201,13 +267,13 @@ struct ProgressDashboardView: View {
                             x: .value("Date", point.date),
                             y: .value("Predicted Pace", point.predictedPaceSecondsPerKm)
                         )
-                        .foregroundStyle(.brand)
+                        .foregroundStyle(Color.brand)
                         .interpolationMethod(.catmullRom)
                         PointMark(
                             x: .value("Date", point.date),
                             y: .value("Predicted Pace", point.predictedPaceSecondsPerKm)
                         )
-                        .foregroundStyle(.brand)
+                        .foregroundStyle(Color.brand)
                         .symbolSize(
                             selectedPredictionDate.flatMap { closestPredictionPoint(to: $0) }?.id == point.id ? 80 : 36
                         )
@@ -244,49 +310,51 @@ struct ProgressDashboardView: View {
                     }
                 }
                 .chartXSelection(value: $selectedPredictionDate)
-                Text("Lower = faster")
+                Text("Lower is faster")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
     }
 
-    // MARK: Race fitness summary card
+    // MARK: - Race fitness card
 
     private var racePaceSummaryCard: some View {
         let trend = paceTrend
         let raceName = profile?.goalRace.displayName ?? "Race"
         return VStack(alignment: .leading, spacing: 12) {
-            Text("RACE FITNESS SUMMARY").font(.sectionHeader).foregroundStyle(.secondary)
-            HStack(alignment: .top) {
+            Text("RACE FITNESS").font(.sectionHeader).foregroundStyle(.secondary)
+            HStack(alignment: .top, spacing: 0) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Predicted \(raceName)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(.caption).foregroundStyle(.secondary)
                     Text(currentPredictedFinishTime)
                         .font(.metricSmall)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 VStack(alignment: .trailing, spacing: 4) {
-                    Text("Fitness Trend")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(trend.label)
-                        .font(.bodyStrong)
-                        .foregroundStyle(trend.color)
+                    Text("Trend")
+                        .font(.caption).foregroundStyle(.secondary)
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(trend.color)
+                            .frame(width: 8, height: 8)
+                        Text(trend.label)
+                            .font(.bodyStrong)
+                            .foregroundStyle(trend.color)
+                    }
                 }
             }
         }
-        .padding()
+        .padding(16)
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
     }
 
-    // MARK: Heart rate trend chart
+    // MARK: - Heart rate trend chart
 
     private var heartRateTrendChart: some View {
         let withHR = filteredWorkouts.filter { $0.averageHeartRate != nil }
-        return VStack(alignment: .leading, spacing: 8) {
-            Text("AVERAGE HEART RATE").font(.sectionHeader).foregroundStyle(.secondary)
+        return chartCard("AVERAGE HEART RATE") {
             if withHR.isEmpty {
                 emptyDataPlaceholder("No heart rate data in this period")
             } else {
@@ -296,12 +364,13 @@ struct ProgressDashboardView: View {
                             x: .value("Date", workout.date),
                             y: .value("bpm", workout.averageHeartRate ?? 0)
                         )
-                        .foregroundStyle(.zoneInterval)
+                        .foregroundStyle(Color.zoneInterval)
+                        .interpolationMethod(.catmullRom)
                         PointMark(
                             x: .value("Date", workout.date),
                             y: .value("bpm", workout.averageHeartRate ?? 0)
                         )
-                        .foregroundStyle(.zoneInterval)
+                        .foregroundStyle(Color.zoneInterval)
                         .symbolSize(
                             selectedHRDate.flatMap { closestWorkout(to: $0, in: withHR) }?.id == workout.id ? 80 : 36
                         )
@@ -333,12 +402,11 @@ struct ProgressDashboardView: View {
         }
     }
 
-    // MARK: Elevation trend chart
+    // MARK: - Elevation trend chart
 
     private var elevationTrendChart: some View {
         let withElev = filteredWorkouts.filter { ($0.elevationGainMeters ?? 0) > 0 }
-        return VStack(alignment: .leading, spacing: 8) {
-            Text("ELEVATION GAIN").font(.sectionHeader).foregroundStyle(.secondary)
+        return chartCard("ELEVATION GAIN") {
             if withElev.isEmpty {
                 emptyDataPlaceholder("No elevation data in this period")
             } else {
@@ -346,9 +414,11 @@ struct ProgressDashboardView: View {
                     ForEach(withElev) { workout in
                         BarMark(
                             x: .value("Date", workout.date, unit: .day),
-                            y: .value(appSettings.unitPreference.elevationLabel, (workout.elevationGainMeters ?? 0).elevationValue(unit: appSettings.unitPreference))
+                            y: .value(appSettings.unitPreference.elevationLabel,
+                                      (workout.elevationGainMeters ?? 0).elevationValue(unit: appSettings.unitPreference))
                         )
-                        .foregroundStyle(Color.success)
+                        .foregroundStyle(Color.success.gradient)
+                        .cornerRadius(3)
                     }
                     if let selected = selectedElevationDate,
                        let workout = closestWorkout(to: selected, in: withElev),
@@ -377,11 +447,10 @@ struct ProgressDashboardView: View {
         }
     }
 
-    // MARK: VO₂ max trend chart
+    // MARK: - VO₂ max trend chart
 
     private var vo2MaxTrendChart: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("ESTIMATED VO₂ MAX").font(.sectionHeader).foregroundStyle(.secondary)
+        chartCard("ESTIMATED VO₂ MAX") {
             if vo2Points.isEmpty {
                 emptyDataPlaceholder("Not enough run data in this period")
             } else {
@@ -391,12 +460,13 @@ struct ProgressDashboardView: View {
                             x: .value("Date", point.date),
                             y: .value("VDOT", point.vdot)
                         )
-                        .foregroundStyle(.brandSecondary)
+                        .foregroundStyle(Color.brandSecondary)
+                        .interpolationMethod(.catmullRom)
                         PointMark(
                             x: .value("Date", point.date),
                             y: .value("VDOT", point.vdot)
                         )
-                        .foregroundStyle(.brandSecondary)
+                        .foregroundStyle(Color.brandSecondary)
                         .symbolSize(
                             selectedVO2Date.flatMap { closestVO2Point(to: $0) }?.id == point.id ? 80 : 36
                         )
@@ -422,71 +492,78 @@ struct ProgressDashboardView: View {
                     }
                 }
                 .chartXSelection(value: $selectedVO2Date)
-                Text("Higher = better fitness")
+                Text("Higher is better fitness")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
     }
 
-    // MARK: Summary stats
+    // MARK: - Period summary card
 
-    private var totalStatsSummary: some View {
+    private var periodSummaryCard: some View {
         let runs = filteredWorkouts
         let totalMeters = runs.reduce(0) { $0 + $1.distanceMeters }
-        let avgPace = runs.isEmpty ? 0
+        let avgPace = runs.isEmpty ? 0.0
             : runs.reduce(0) { $0 + $1.averagePaceSecondsPerKm } / Double(runs.count)
-
         let hrValues = runs.compactMap(\.averageHeartRate)
         let avgHR: Double? = hrValues.isEmpty ? nil : hrValues.reduce(0, +) / Double(hrValues.count)
-
         let elevValues = runs.compactMap(\.elevationGainMeters).filter { $0 > 0 }
         let avgElev: Double? = elevValues.isEmpty ? nil : elevValues.reduce(0, +) / Double(elevValues.count)
-
         let avgVO2: Double? = vo2Points.isEmpty ? nil
             : vo2Points.reduce(0) { $0 + $1.vdot } / Double(vo2Points.count)
 
-        return LazyVGrid(columns: [.init(.flexible()), .init(.flexible())], spacing: 16) {
-            summaryCell(value: "\(runs.count)", label: "Runs")
-            summaryCell(value: totalMeters.distanceString(unit: appSettings.unitPreference), label: "Total Distance")
-            summaryCell(
-                value: avgPace > 0 ? avgPace.paceString(unit: appSettings.unitPreference) : "--",
-                label: "Avg Pace"
-            )
-            summaryCell(
-                value: avgHR.map { "\(Int($0)) bpm" } ?? "--",
-                label: "Avg Heart Rate"
-            )
-            summaryCell(
-                value: avgElev.map { $0.elevationString(unit: appSettings.unitPreference) } ?? "--",
-                label: "Avg Elevation"
-            )
-            summaryCell(
-                value: avgVO2.map { String(format: "%.1f", $0) } ?? "--",
-                label: "Avg VO₂ Max"
-            )
+        return chartCard("PERIOD SUMMARY") {
+            LazyVGrid(columns: [.init(.flexible()), .init(.flexible())], spacing: 10) {
+                summaryCell(value: "\(runs.count)", label: "Runs")
+                summaryCell(value: totalMeters.distanceString(unit: appSettings.unitPreference), label: "Total Distance")
+                summaryCell(
+                    value: avgPace > 0 ? avgPace.paceString(unit: appSettings.unitPreference) : "--",
+                    label: "Avg Pace"
+                )
+                summaryCell(
+                    value: avgHR.map { "\(Int($0)) bpm" } ?? "--",
+                    label: "Avg Heart Rate"
+                )
+                summaryCell(
+                    value: avgElev.map { $0.elevationString(unit: appSettings.unitPreference) } ?? "--",
+                    label: "Avg Elevation"
+                )
+                summaryCell(
+                    value: avgVO2.map { String(format: "%.1f", $0) } ?? "--",
+                    label: "Avg VO₂ Max"
+                )
+            }
         }
     }
 
     private func summaryCell(value: String, label: String) -> some View {
         VStack(spacing: 4) {
-            Text(value).font(.metricSmall)
-            Text(label).font(.caption).foregroundStyle(.secondary)
+            Text(value)
+                .font(.system(size: 16, weight: .bold, design: .monospaced))
+                .minimumScaleFactor(0.7)
+                .lineLimit(1)
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
-        .padding()
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
+        .padding(12)
+        .background(Color.surfaceTertiary, in: RoundedRectangle(cornerRadius: 10))
     }
 
     private func emptyDataPlaceholder(_ message: String) -> some View {
-        Text(message)
-            .font(.bodyRegular)
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, alignment: .center)
-            .frame(height: 60)
+        HStack(spacing: 10) {
+            StrideIcon(name: .chart, size: 16, color: .secondary, strokeWeight: 1.8)
+            Text(message)
+                .font(.bodyRegular)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: 60)
     }
 
-    // MARK: Data helpers
+    // MARK: - Data helpers
 
     private struct PacePredictionPoint: Identifiable {
         let id = UUID()
@@ -519,9 +596,9 @@ struct ProgressDashboardView: View {
         }
         let slopePerWeek = slopePerSecond * 7 * 86_400
         switch slopePerWeek {
-        case ..<(-1.0): return ("Improving", Color.green)
-        case 1.0...:    return ("Declining", Color.red)
-        default:        return ("Stable", Color.orange)
+        case ..<(-1.0): return ("Improving", Color.success)
+        case 1.0...:    return ("Declining", Color.destructive)
+        default:        return ("Stable", Color.warning)
         }
     }
 
@@ -537,7 +614,7 @@ struct ProgressDashboardView: View {
         return (pace * (raceDistance / 1_000)).durationString
     }
 
-    // MARK: Selection helpers
+    // MARK: - Selection helpers
 
     private func closestWorkout(to date: Date, in list: [RunWorkout]) -> RunWorkout? {
         list.min(by: { abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date)) })
@@ -555,7 +632,7 @@ struct ProgressDashboardView: View {
         vo2Points.min(by: { abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date)) })
     }
 
-    // MARK: Chart annotation helpers
+    // MARK: - Chart annotation helpers
 
     @ChartContentBuilder
     private func selectionRule<X: Plottable, Label: View>(
@@ -563,7 +640,7 @@ struct ProgressDashboardView: View {
         @ViewBuilder label: () -> Label
     ) -> some ChartContent {
         RuleMark(x: x)
-            .foregroundStyle(.secondary.opacity(0.4))
+            .foregroundStyle(Color.secondary.opacity(0.4))
             .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
             .annotation(
                 position: .top,
@@ -579,7 +656,7 @@ struct ProgressDashboardView: View {
             .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
     }
 
-    // MARK: Weekly buckets
+    // MARK: - Weekly buckets
 
     private struct WeekBucket: Identifiable {
         let id = UUID()
