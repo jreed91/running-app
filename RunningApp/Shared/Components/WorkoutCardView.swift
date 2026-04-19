@@ -18,9 +18,7 @@ struct WorkoutCardView: View {
                             Circle()
                                 .fill(Color.success)
                                 .frame(width: 16, height: 16)
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundStyle(.white)
+                            StrideIcon(name: .check, size: 9, color: .white, strokeWeight: 3)
                         }
                     }
                 }
@@ -50,9 +48,7 @@ struct WorkoutCardView: View {
             }
 
             Spacer()
-            Image(systemName: "chevron.right")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.tertiary)
+            StrideIcon(name: .chevronRight, size: 12, color: .init(.tertiary), strokeWeight: 2)
         }
         .padding(16)
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))

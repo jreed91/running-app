@@ -117,30 +117,35 @@ struct WorkoutRowView: View {
     @Environment(AppSettings.self) private var appSettings
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: workout.workoutType == .longRun ? "figure.run.circle.fill" : "figure.run")
-                .font(.title2)
-                .foregroundStyle(.brand)
-                .frame(width: 40)
+        HStack(spacing: 14) {
+            ZStack {
+                Circle()
+                    .fill(workout.workoutType.color.opacity(0.15))
+                    .frame(width: 44, height: 44)
+                StrideIcon(name: workout.workoutType.strideIcon, size: 22,
+                           color: workout.workoutType.color, strokeWeight: 2.0)
+            }
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(workout.workoutType.displayName)
                     .font(.bodyStrong)
-                Text(workout.date, style: .date)
+                Text(workout.date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             Spacer()
 
-            VStack(alignment: .trailing, spacing: 2) {
+            VStack(alignment: .trailing, spacing: 3) {
                 Text(workout.distanceMeters.distanceString(unit: appSettings.unitPreference))
-                    .font(.bodyStrong)
-                Text(workout.averagePaceSecondsPerKm.paceString(unit: appSettings.unitPreference))
-                    .font(.caption)
+                    .font(.system(size: 15, weight: .semibold, design: .monospaced))
+                Text(workout.averagePaceSecondsPerKm.paceString(unit: appSettings.unitPreference)
+                    .replacingOccurrences(of: " min/km", with: "")
+                    .replacingOccurrences(of: " min/mi", with: ""))
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 6)
     }
 }
