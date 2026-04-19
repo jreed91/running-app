@@ -130,11 +130,12 @@ struct WorkoutDetailView: View {
     }
 
     private func summaryChip(label: String, systemImage: String) -> some View {
-        Label(label, systemImage: systemImage)
-            .font(.caption)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
+        Text(label)
+            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
             .background(.surfaceTertiary, in: Capsule())
+            .foregroundStyle(.secondary)
     }
 
     private var connectorLine: some View {
@@ -151,18 +152,47 @@ struct WorkoutDetailView: View {
     // MARK: - Legacy sections
 
     private var headerSection: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(workout.workoutType.displayName)
-                    .font(.metricSmall)
-                Text(workout.scheduledDate, style: .date)
-                    .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 0) {
+            // Zone-color hero band
+            HStack(spacing: 16) {
+                ZStack {
+                    Circle()
+                        .fill(workout.workoutType.color.opacity(0.22))
+                        .frame(width: 56, height: 56)
+                    StrideIcon(name: workout.workoutType.strideIcon, size: 28,
+                               color: workout.workoutType.color, strokeWeight: 2.0)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Text(workout.workoutType.displayName)
+                            .font(.system(size: 22, weight: .bold))
+                        if workout.isCompleted {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.success)
+                                    .frame(width: 20, height: 20)
+                                StrideIcon(name: .check, size: 11, color: .white, strokeWeight: 3)
+                            }
+                        }
+                    }
+                    Text(workout.scheduledDate.formatted(.dateTime.weekday(.wide).month(.wide).day()))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
             }
-            Spacer()
-            if workout.isCompleted {
-                Label("Done", systemImage: "checkmark.circle.fill")
-                    .foregroundStyle(.success)
-            }
+            .padding(18)
+            .background(
+                LinearGradient(
+                    colors: [workout.workoutType.color.opacity(0.12), workout.workoutType.color.opacity(0.03)],
+                    startPoint: .topLeading, endPoint: .bottomTrailing
+                ),
+                in: RoundedRectangle(cornerRadius: 18)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 18)
+                    .strokeBorder(workout.workoutType.color.opacity(0.18), lineWidth: 0.5)
+            )
         }
     }
 

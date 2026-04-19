@@ -81,9 +81,8 @@ struct WeekCalendarView: View {
         Button {
             withAnimation(.easeInOut(duration: 0.2)) { action() }
         } label: {
-            Image(systemName: systemImage)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.secondary)
+            let iconName: StrideIconName = systemImage == "chevron.left" ? .chevronLeft : .chevronRight
+            StrideIcon(name: iconName, size: 13, color: .init(.secondary), strokeWeight: 2)
                 .frame(width: 28, height: 44)
         }
     }
@@ -424,21 +423,18 @@ struct DashboardView: View {
             showActiveRun = true
         } label: {
             HStack(spacing: 10) {
-                StrideIcon(name: .run, size: 20, color: .brand, strokeWeight: 2.0)
+                StrideIcon(name: .run, size: 20, color: .white, strokeWeight: 2.0)
                 Text("Start a Free Run")
-                    .font(.bodyStrong)
+                    .font(.system(size: 17, weight: .bold))
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
         }
-        .foregroundStyle(.brand)
+        .foregroundStyle(.white)
         .background(
             RoundedRectangle(cornerRadius: 18)
-                .fill(Color.brand.opacity(0.1))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18)
-                        .strokeBorder(Color.brand.opacity(0.3), lineWidth: 1)
-                )
+                .fill(Color.brand)
+                .shadow(color: Color.brand.opacity(0.4), radius: 14, y: 6)
         )
         .buttonStyle(.plain)
     }

@@ -148,40 +148,53 @@ private struct PlanOverviewCard: View {
         (plan.weeks ?? []).reduce(0) { $0 + $1.completedDistanceKm }
     }
 
-    private var raceIcon: String {
+    private var raceStrideIcon: StrideIconName {
         switch plan.targetRace {
-        case .fiveK: return "figure.run"
-        case .halfMarathon, .marathon: return "figure.run.circle"
+        case .fiveK: return .bolt
+        case .halfMarathon: return .tempo
+        case .marathon: return .run
         }
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .top) {
+            // Header row: race icon + title + goal
+            HStack(alignment: .top, spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(Color.brand.opacity(0.12))
+                        .frame(width: 52, height: 52)
+                    StrideIcon(name: raceStrideIcon, size: 26, color: .brand, strokeWeight: 2.0)
+                }
                 VStack(alignment: .leading, spacing: 4) {
                     Text(plan.targetRace.displayName)
-                        .font(.metricSmall)
-                    Text("Goal: \(plan.goalTimeSeconds.durationString) · \(plan.totalWeeks) weeks")
-                        .font(.bodyRegular)
+                        .font(.system(size: 20, weight: .bold))
+                    Text("Goal \(plan.goalTimeSeconds.durationString)  ·  \(plan.totalWeeks) weeks")
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Image(systemName: raceIcon)
-                    .font(.title)
+                Text("\(Int(plan.progress * 100))%")
+                    .font(.system(size: 22, weight: .bold, design: .monospaced))
                     .foregroundStyle(.brand)
             }
 
-            VStack(spacing: 4) {
-                ProgressView(value: plan.progress)
-                    .tint(.brand)
+            // Progress track
+            VStack(spacing: 6) {
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Color.brand.opacity(0.12)).frame(height: 6)
+                        Capsule().fill(Color.brand)
+                            .frame(width: geo.size.width * plan.progress, height: 6)
+                    }
+                }
+                .frame(height: 6)
                 HStack {
                     Text("Week \(weeksCompleted) of \(plan.totalWeeks)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(.caption).foregroundStyle(.secondary)
                     Spacer()
-                    Text("\(Int(plan.progress * 100))% complete")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    Text(plan.endDate.formatted(.dateTime.month(.abbreviated).day().year()))
+                        .font(.caption).foregroundStyle(.secondary)
                 }
             }
 
@@ -445,9 +458,9 @@ private struct PlanWeekSummaryRow: View {
 
                     Spacer()
 
-                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    StrideIcon(name: .chevronDown, size: 12, color: .secondary, strokeWeight: 2)
+                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                        .animation(.easeInOut(duration: 0.2), value: isExpanded)
                 }
                 .padding()
             }
@@ -468,17 +481,19 @@ private struct PlanWeekSummaryRow: View {
     @ViewBuilder
     private var statusIcon: some View {
         if week.isCompleted {
-            Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(.success)
-                .font(.title3)
+            ZStack {
+                Circle().fill(Color.success).frame(width: 24, height: 24)
+                StrideIcon(name: .check, size: 12, color: .white, strokeWeight: 3)
+            }
         } else if isCurrentWeek {
-            Image(systemName: "circle.fill")
-                .foregroundStyle(.brand)
-                .font(.title3)
+            ZStack {
+                Circle().fill(Color.brand).frame(width: 24, height: 24)
+                Circle().fill(Color.white).frame(width: 8, height: 8)
+            }
         } else {
-            Image(systemName: "circle")
-                .foregroundStyle(.tertiary)
-                .font(.title3)
+            Circle()
+                .strokeBorder(Color.secondary.opacity(0.3), lineWidth: 2)
+                .frame(width: 24, height: 24)
         }
     }
 
@@ -512,15 +527,14 @@ private struct PlanWorkoutSummaryRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Circle()
-                .fill(workout.workoutType.color.opacity(0.2))
-                .frame(width: 8, height: 8)
-                .padding(.leading)
-
-            Image(systemName: workout.workoutType.icon)
-                .font(.caption)
-                .foregroundStyle(workout.workoutType.color)
-                .frame(width: 16)
+            ZStack {
+                Circle()
+                    .fill(workout.workoutType.color.opacity(0.15))
+                    .frame(width: 32, height: 32)
+                StrideIcon(name: workout.workoutType.strideIcon, size: 15,
+                           color: workout.workoutType.color, strokeWeight: 1.8)
+            }
+            .padding(.leading, 4)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(workout.workoutType.displayName)
@@ -534,14 +548,17 @@ private struct PlanWorkoutSummaryRow: View {
 
             if let dist = workout.targetDistanceMeters {
                 Text(dist.distanceString(unit: appSettings.unitPreference))
-                    .font(.caption)
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
                     .foregroundStyle(.secondary)
             }
 
             if workout.isCompleted {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.caption)
-                    .foregroundStyle(.success)
+                ZStack {
+                    Circle()
+                        .fill(Color.success)
+                        .frame(width: 18, height: 18)
+                    StrideIcon(name: .check, size: 9, color: .white, strokeWeight: 3)
+                }
             }
         }
         .padding(.vertical, 8)
