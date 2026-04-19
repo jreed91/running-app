@@ -139,45 +139,39 @@ struct OnboardingView: View {
     private var unitsContent: some View {
         VStack(spacing: 10) {
             ForEach(UnitPreference.allCases, id: \.self) { unit in
-                Button { appSettings.unitPreference = unit } label: {
-                    HStack(spacing: 16) {
-                        ZStack {
-                            Circle()
-                                .fill(Color.brand.opacity(appSettings.unitPreference == unit ? 0.15 : 0.06))
-                                .frame(width: 48, height: 48)
-                            StrideIcon(name: .ruler, size: 22,
-                                       color: appSettings.unitPreference == unit ? .brand : .secondary,
-                                       strokeWeight: 2.0)
-                        }
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(unit.displayName)
-                                .font(.bodyStrong)
-                                .foregroundStyle(.primary)
-                            Text(unit == .metric ? "Distances in km · Pace in min/km" : "Distances in miles · Pace in min/mi")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        OBRadio(isSelected: appSettings.unitPreference == unit)
-                    }
-                    .padding(16)
-                    .background(
-                        appSettings.unitPreference == unit
-                            ? Color.brand.opacity(0.06)
-                            : Color.surfaceSecondary,
-                        in: RoundedRectangle(cornerRadius: 16)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .strokeBorder(
-                                appSettings.unitPreference == unit ? Color.brand.opacity(0.4) : Color.clear,
-                                lineWidth: 1.5
-                            )
-                    )
-                }
-                .buttonStyle(.plain)
+                unitCard(unit, isSelected: appSettings.unitPreference == unit)
             }
         }
+    }
+
+    private func unitCard(_ unit: UnitPreference, isSelected: Bool) -> some View {
+        let iconColor: Color = isSelected ? .brand : .secondary
+        let circleFill = Color.brand.opacity(isSelected ? 0.15 : 0.06)
+        let bgColor: Color = isSelected ? Color.brand.opacity(0.06) : Color.surfaceSecondary
+        let borderColor: Color = isSelected ? Color.brand.opacity(0.4) : Color.clear
+        let subtitle = unit == .metric ? "Distances in km · Pace in min/km" : "Distances in miles · Pace in min/mi"
+
+        return Button { appSettings.unitPreference = unit } label: {
+            HStack(spacing: 16) {
+                ZStack {
+                    Circle().fill(circleFill).frame(width: 48, height: 48)
+                    StrideIcon(name: .ruler, size: 22, color: iconColor, strokeWeight: 2.0)
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(unit.displayName).font(.bodyStrong).foregroundStyle(.primary)
+                    Text(subtitle).font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                OBRadio(isSelected: isSelected, color: .brand)
+            }
+            .padding(16)
+            .background(bgColor, in: RoundedRectangle(cornerRadius: 16))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .strokeBorder(borderColor, lineWidth: 1.5)
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Level content
