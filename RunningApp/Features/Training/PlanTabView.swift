@@ -31,9 +31,8 @@ struct PlanTabView: View {
                                 HStack {
                                     Label("Manage Plan", systemImage: "slider.horizontal.3")
                                     Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .font(.caption)
-                                        .foregroundStyle(.tertiary)
+                                    StrideIcon(name: .chevronRight, size: 12,
+                                               color: Color.secondary.opacity(0.5), strokeWeight: 2)
                                 }
                                 .padding()
                                 .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
@@ -108,9 +107,7 @@ private struct RouteGeniusCard: View {
                     RoundedRectangle(cornerRadius: 10)
                         .fill(Color.brand.opacity(0.12))
                         .frame(width: 44, height: 44)
-                    Image(systemName: "wand.and.stars")
-                        .font(.title3)
-                        .foregroundStyle(.brand)
+                    StrideIcon(name: .bolt, size: 22, color: .brand, strokeWeight: 2.0)
                 }
 
                 VStack(alignment: .leading, spacing: 3) {
@@ -124,9 +121,8 @@ private struct RouteGeniusCard: View {
 
                 Spacer()
 
-                Image(systemName: "chevron.right")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
+                StrideIcon(name: .chevronRight, size: 12,
+                           color: Color.secondary.opacity(0.5), strokeWeight: 2)
             }
             .padding()
             .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
@@ -292,9 +288,16 @@ private struct PaceInsightsCard: View {
         return timeDiff > 0 ? "\(formatted) behind goal" : "\(formatted) ahead of goal"
     }
 
-    private var statusIcon: String {
-        if abs(timeDiff) < 30 { return "checkmark.circle.fill" }
-        return timeDiff > 0 ? "exclamationmark.circle.fill" : "checkmark.circle.fill"
+    @ViewBuilder
+    private var statusIconView: some View {
+        if timeDiff > 0 && abs(timeDiff) >= 30 {
+            StrideIcon(name: .flag, size: 14, color: statusColor, strokeWeight: 2)
+        } else {
+            ZStack {
+                Circle().fill(statusColor).frame(width: 16, height: 16)
+                StrideIcon(name: .check, size: 8, color: .white, strokeWeight: 2.5)
+            }
+        }
     }
 
     /// Whether the computed VDOT falls within a realistic human range (~20–85).
@@ -335,19 +338,17 @@ private struct PaceInsightsCard: View {
 
             HStack(spacing: 6) {
                 if isVDOTReliable {
-                    Image(systemName: statusIcon)
-                        .foregroundStyle(statusColor)
+                    statusIconView
                     Text(statusText)
                         .font(.caption)
                         .foregroundStyle(statusColor)
                     if completedRuns.isEmpty {
                         Text("· Based on goal time")
                             .font(.caption)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(Color.secondary.opacity(0.6))
                     }
                 } else {
-                    Image(systemName: "waveform.path.ecg")
-                        .foregroundStyle(.secondary)
+                    StrideIcon(name: .chart, size: 14, color: .secondary, strokeWeight: 1.8)
                     Text(completedRuns.isEmpty ? "Log a run to calibrate paces" : "Analyzing current pace…")
                         .font(.caption)
                         .foregroundStyle(.secondary)

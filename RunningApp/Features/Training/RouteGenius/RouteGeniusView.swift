@@ -186,7 +186,10 @@ struct RouteGeniusView: View {
 
             if let selected = viewModel.selectedMapItem {
                 HStack(spacing: 6) {
-                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.success)
+                    ZStack {
+                        Circle().fill(Color.success).frame(width: 16, height: 16)
+                        StrideIcon(name: .check, size: 8, color: .white, strokeWeight: 2.5)
+                    }
                     Text(selected.name ?? "Selected location")
                         .font(.caption).foregroundStyle(.secondary)
                 }
@@ -200,7 +203,10 @@ struct RouteGeniusView: View {
     private var currentLocationStatus: some View {
         HStack(spacing: 6) {
             if viewModel.currentCoordinate != nil {
-                Image(systemName: "checkmark.circle.fill").foregroundStyle(.success)
+                ZStack {
+                    Circle().fill(Color.success).frame(width: 16, height: 16)
+                    StrideIcon(name: .check, size: 8, color: .white, strokeWeight: 2.5)
+                }
                 Text("Location acquired").font(.caption).foregroundStyle(.secondary)
             } else {
                 ProgressView().scaleEffect(0.7)
@@ -248,7 +254,7 @@ struct RouteGeniusView: View {
 
     private func errorCard(_ message: String) -> some View {
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.warning)
+            StrideIcon(name: .flag, size: 16, color: .warning, strokeWeight: 2)
             Text(message).font(.bodyRegular).foregroundStyle(.secondary)
         }
         .padding()
@@ -322,9 +328,12 @@ struct RouteGeniusView: View {
     private var saveRouteSheet: some View {
         NavigationStack {
             VStack(spacing: 20) {
-                Image(systemName: "bookmark.fill")
-                    .font(.largeTitle)
-                    .foregroundStyle(.brand)
+                ZStack {
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color.brand.opacity(0.12))
+                        .frame(width: 64, height: 64)
+                    StrideIcon(name: .flag, size: 28, color: .brand, strokeWeight: 2.0)
+                }
 
                 Text("Name Your Route")
                     .font(.title2.bold())
@@ -379,9 +388,11 @@ private struct RouteOptionCard: View {
                     Spacer()
 
                     if isSelected {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(.brand)
-                            .transition(.scale.combined(with: .opacity))
+                        ZStack {
+                            Circle().fill(Color.brand).frame(width: 20, height: 20)
+                            StrideIcon(name: .check, size: 10, color: .white, strokeWeight: 2.5)
+                        }
+                        .transition(.scale.combined(with: .opacity))
                     }
                 }
 
@@ -429,7 +440,8 @@ private struct RouteTypeButton: View {
     var body: some View {
         Button(action: action) {
             VStack(spacing: 6) {
-                Image(systemName: type.systemImage).font(.title3)
+                StrideIcon(name: type.strideIcon, size: 22,
+                           color: isSelected ? .white : .primary, strokeWeight: 2.0)
                 Text(type.displayName).font(.caption)
             }
             .frame(maxWidth: .infinity)
@@ -447,13 +459,13 @@ private struct RouteTypeButton: View {
 // MARK: - RouteStatPill
 
 private struct RouteStatPill: View {
-    let icon: String
+    let icon: StrideIconName
     let value: String
     let label: String
 
     var body: some View {
         VStack(spacing: 4) {
-            Image(systemName: icon).font(.caption).foregroundStyle(.brand)
+            StrideIcon(name: icon, size: 14, color: .brand, strokeWeight: 2.0)
             Text(value).font(.bodyStrong).minimumScaleFactor(0.7).lineLimit(1)
             Text(label).font(.caption2).foregroundStyle(.secondary)
         }

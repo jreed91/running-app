@@ -72,9 +72,7 @@ private struct SavedRouteRow: View {
                 RoundedRectangle(cornerRadius: 10)
                     .fill(Color.brand.opacity(0.12))
                     .frame(width: 44, height: 44)
-                Image(systemName: route.routeType.systemImage)
-                    .font(.title3)
-                    .foregroundStyle(.brand)
+                StrideIcon(name: route.routeType.strideIcon, size: 22, color: .brand, strokeWeight: 2.0)
             }
 
             VStack(alignment: .leading, spacing: 4) {

@@ -182,11 +182,14 @@ struct WeekCardView: View {
                     }
                     Spacer()
                     if week.isCompleted {
-                        Image(systemName: "checkmark.circle.fill").foregroundStyle(.success)
+                        ZStack {
+                            Circle().fill(Color.success).frame(width: 20, height: 20)
+                            StrideIcon(name: .check, size: 10, color: .white, strokeWeight: 3)
+                        }
                     }
-                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    StrideIcon(name: .chevronDown, size: 12, color: .secondary, strokeWeight: 2)
+                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                        .animation(.easeInOut(duration: 0.2), value: isExpanded)
                 }
                 .padding()
             }
@@ -261,9 +264,7 @@ struct ScheduledWorkoutRow: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Image(systemName: "chevron.right")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+            StrideIcon(name: .chevronRight, size: 10, color: Color.secondary.opacity(0.5), strokeWeight: 2)
                 .padding(.trailing)
         }
         .padding(.vertical, 10)

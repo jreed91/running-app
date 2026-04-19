@@ -28,9 +28,7 @@ struct RouteMapView: View {
                     Circle()
                         .fill(.brand)
                         .frame(width: 36, height: 36)
-                    Image(systemName: "figure.run")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(.white)
+                    StrideIcon(name: .run, size: 18, color: .white, strokeWeight: 2.2)
                 }
             }
         }
