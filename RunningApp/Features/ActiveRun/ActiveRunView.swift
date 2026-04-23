@@ -27,25 +27,36 @@ struct ActiveRunView: View {
 
     var body: some View {
         ZStack {
-            // Full-bleed zone-color gradient backdrop
-            LinearGradient(
-                stops: [
-                    .init(color: zoneColor, location: 0),
-                    .init(color: zoneColor.mix(with: .black, by: 0.45), location: 0.55),
-                    .init(color: zoneColor.mix(with: .black, by: 0.72), location: 1),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
+            // Full-bleed zone-color radial gradient backdrop
+            // (emanates from the top — matches design spec 130% × 70% at 50% 0%)
+            GeometryReader { geo in
+                RadialGradient(
+                    stops: [
+                        .init(color: zoneColor, location: 0),
+                        .init(color: zoneColor.mix(with: .black, by: 0.25), location: 0.55),
+                        .init(color: zoneColor.mix(with: .black, by: 0.55), location: 1.0),
+                    ],
+                    center: .init(x: 0.5, y: 0),
+                    startRadius: 0,
+                    endRadius: max(geo.size.width * 1.3, geo.size.height * 0.9)
+                )
+            }
             .ignoresSafeArea()
             .animation(.easeInOut(duration: 0.6), value: currentZone.rawValue)
 
-            // Radial highlight at top
+            // Soft texture overlay — subtle highlight + lowlight for depth
             RadialGradient(
-                colors: [Color.white.opacity(0.18), Color.clear],
-                center: .init(x: 0.25, y: 0.08),
+                colors: [Color.white.opacity(0.10), Color.clear],
+                center: .init(x: 0.20, y: 0.10),
                 startRadius: 0,
-                endRadius: 220
+                endRadius: 260
+            )
+            .ignoresSafeArea()
+            RadialGradient(
+                colors: [Color.black.opacity(0.18), Color.clear],
+                center: .init(x: 0.80, y: 0.95),
+                startRadius: 0,
+                endRadius: 320
             )
             .ignoresSafeArea()
 
@@ -121,20 +132,28 @@ struct ActiveRunView: View {
     // MARK: - Hero pace display
 
     private var heroPace: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 6) {
             Text(tracker.currentPaceSecondsPerKm.paceString(unit: appSettings.unitPreference))
                 .font(.metricHero)
+                .kerning(-4.8)                       // -0.04em at 120pt
+                .lineSpacing(-12)
+                .minimumScaleFactor(0.6)
+                .lineLimit(1)
                 .foregroundStyle(.white)
-                .shadow(color: .black.opacity(0.15), radius: 12, y: 4)
+                .shadow(color: .black.opacity(0.15), radius: 15, y: 4)
                 .contentTransition(.numericText())
                 .animation(.linear(duration: 0.2), value: tracker.currentPaceSecondsPerKm)
 
-            Text("CURRENT PACE · MIN/KM")
-                .font(.system(size: 11, weight: .bold))
-                .kerning(2)
-                .foregroundStyle(.white.opacity(0.8))
+            Text("CURRENT PACE · \(paceUnitLabel.uppercased())")
+                .font(.system(size: 12, weight: .bold))
+                .kerning(2.2)
+                .foregroundStyle(.white.opacity(0.85))
         }
-        .padding(.top, 16)
+        .padding(.top, 18)
+    }
+
+    private var paceUnitLabel: String {
+        appSettings.unitPreference.paceLabel    // "min/km" or "min/mi"
     }
 
     // MARK: - Pace meter

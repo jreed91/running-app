@@ -104,29 +104,50 @@ private struct RouteGeniusCard: View {
         Button(action: action) {
             HStack(spacing: 14) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color.brand.opacity(0.12))
-                        .frame(width: 44, height: 44)
-                    StrideIcon(name: .bolt, size: 22, color: .brand, strokeWeight: 2.0)
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(
+                            LinearGradient(
+                                colors: [.brand, .destructive],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 48, height: 48)
+                        .shadow(color: Color.brand.opacity(0.35), radius: 10, y: 3)
+                    StrideIcon(name: .bolt, size: 22, color: .white, strokeWeight: 2.2)
                 }
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Route Genius")
-                        .font(.bodyStrong)
-                        .foregroundStyle(.primary)
-                    Text("Generate a custom running route")
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundStyle(.brand)
+                    Text("AI-generated route matched to today's distance & elevation.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .lineLimit(2)
                 }
 
-                Spacer()
+                Spacer(minLength: 8)
 
-                StrideIcon(name: .chevronRight, size: 12,
-                           color: Color.secondary.opacity(0.5), strokeWeight: 2)
+                StrideIcon(name: .chevronRight, size: 12, color: .brand, strokeWeight: 2.4)
             }
-            .padding()
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 18)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.brand.opacity(0.10), Color.destructive.opacity(0.04)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18)
+                            .strokeBorder(Color.brand.opacity(0.2), lineWidth: 0.5)
+                    )
+            )
         }
+        .buttonStyle(.plain)
     }
 }
 
@@ -175,24 +196,8 @@ private struct PlanOverviewCard: View {
                     .foregroundStyle(.brand)
             }
 
-            // Progress track
-            VStack(spacing: 6) {
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(Color.brand.opacity(0.12)).frame(height: 6)
-                        Capsule().fill(Color.brand)
-                            .frame(width: geo.size.width * plan.progress, height: 6)
-                    }
-                }
-                .frame(height: 6)
-                HStack {
-                    Text("Week \(weeksCompleted) of \(plan.totalWeeks)")
-                        .font(.caption).foregroundStyle(.secondary)
-                    Spacer()
-                    Text(plan.endDate.formatted(.dateTime.month(.abbreviated).day().year()))
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-            }
+            // Phase progress bar with Base / Build / Peak / Taper labels
+            PhaseProgressBar(plan: plan)
 
             Divider()
 
@@ -215,6 +220,82 @@ private struct PlanOverviewCard: View {
         }
         .padding()
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
+    }
+}
+
+// MARK: - Phase Progress Bar
+
+private struct PhaseProgressBar: View {
+    let plan: TrainingPlan
+
+    private var weeks: [TrainingWeek] {
+        (plan.weeks ?? []).sorted { $0.weekNumber < $1.weekNumber }
+    }
+
+    /// Cumulative fraction (0–1) at which each phase transition occurs.
+    /// Returns up to three fractions for Base→Build, Build→Peak, Peak→Taper.
+    private var phaseTransitions: [CGFloat] {
+        guard !weeks.isEmpty else { return [] }
+        let total = CGFloat(weeks.count)
+        var transitions: [CGFloat] = []
+        let ordered: [TrainingPhase] = [.base, .build, .peak]
+        for phase in ordered {
+            let through = weeks.filter { orderIndex(of: $0.phase) <= orderIndex(of: phase) }.count
+            let fraction = CGFloat(through) / total
+            if fraction > 0, fraction < 1 { transitions.append(fraction) }
+        }
+        return transitions
+    }
+
+    private func orderIndex(of phase: TrainingPhase) -> Int {
+        switch phase {
+        case .base:  return 0
+        case .build: return 1
+        case .peak:  return 2
+        case .taper: return 3
+        }
+    }
+
+    private var currentPhase: TrainingPhase {
+        plan.currentWeek?.phase ?? weeks.first?.phase ?? .base
+    }
+
+    var body: some View {
+        VStack(spacing: 6) {
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.secondary.opacity(0.16))
+                        .frame(height: 10)
+
+                    Capsule()
+                        .fill(Color.brand)
+                        .frame(
+                            width: max(geo.size.width * CGFloat(plan.progress), plan.progress > 0 ? 6 : 0),
+                            height: 10
+                        )
+                        .shadow(color: Color.brand.opacity(0.55), radius: 6)
+
+                    ForEach(phaseTransitions, id: \.self) { p in
+                        Rectangle()
+                            .fill(Color.primary.opacity(0.12))
+                            .frame(width: 1, height: 10)
+                            .offset(x: geo.size.width * p)
+                    }
+                }
+            }
+            .frame(height: 10)
+
+            HStack {
+                ForEach([TrainingPhase.base, .build, .peak, .taper], id: \.self) { phase in
+                    Text(phase.displayName.uppercased())
+                        .font(.system(size: 11, weight: phase == currentPhase ? .bold : .semibold))
+                        .kerning(0.8)
+                        .foregroundStyle(phase == currentPhase ? Color.brand : .tertiary)
+                    if phase != .taper { Spacer() }
+                }
+            }
+        }
     }
 }
 
@@ -308,12 +389,17 @@ private struct PaceInsightsCard: View {
     }
 
     private func paceRangeString(_ range: ClosedRange<Double>) -> String {
-        func fmt(_ secs: Double) -> String {
-            guard secs > 0 && secs.isFinite else { return "--:--" }
-            return secs.paceString(unit: appSettings.unitPreference)
-                .replacingOccurrences(of: " \(appSettings.unitPreference.paceLabel)", with: "")
-        }
-        return "\(fmt(range.lowerBound)) – \(fmt(range.upperBound)) \(appSettings.unitPreference.paceLabel)"
+        "\(stripUnit(range.lowerBound)) – \(stripUnit(range.upperBound))"
+    }
+
+    private func paceString(_ secs: Double) -> String {
+        stripUnit(secs)
+    }
+
+    private func stripUnit(_ secs: Double) -> String {
+        guard secs > 0 && secs.isFinite else { return "--:--" }
+        return secs.paceString(unit: appSettings.unitPreference)
+            .replacingOccurrences(of: " \(appSettings.unitPreference.paceLabel)", with: "")
     }
 
     var body: some View {
@@ -357,11 +443,18 @@ private struct PaceInsightsCard: View {
 
             Divider()
 
-            VStack(spacing: 10) {
+            VStack(spacing: 12) {
                 if isVDOTReliable {
-                    PaceRow(label: "Easy", value: paceRangeString(trainingPaces.easyRange))
-                    PaceRow(label: "Tempo", value: trainingPaces.threshold.paceString(unit: appSettings.unitPreference))
-                    PaceRow(label: "Interval", value: trainingPaces.interval.paceString(unit: appSettings.unitPreference))
+                    PaceRow(label: "Easy",       zone: .easy,
+                            value: paceRangeString(trainingPaces.easyRange))
+                    PaceRow(label: "Marathon",   zone: .marathon,
+                            value: paceString(trainingPaces.marathon))
+                    PaceRow(label: "Tempo",      zone: .tempo,
+                            value: paceString(trainingPaces.threshold))
+                    PaceRow(label: "Interval",   zone: .interval,
+                            value: paceString(trainingPaces.interval))
+                    PaceRow(label: "Repetition", zone: .maxEffort,
+                            value: paceString(trainingPaces.repetition))
                 } else {
                     Text("Analyzing current pace…")
                         .font(.bodyRegular)
@@ -379,16 +472,29 @@ private struct PaceInsightsCard: View {
 
 private struct PaceRow: View {
     let label: String
+    let zone: PaceZone
     let value: String
+    @Environment(AppSettings.self) private var appSettings
 
     var body: some View {
-        HStack {
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(zone.color)
+                .frame(width: 3, height: 22)
+
             Text(label)
-                .font(.bodyRegular)
-                .foregroundStyle(.secondary)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(.primary)
+
             Spacer()
-            Text(value)
-                .font(.bodyStrong)
+
+            HStack(alignment: .lastTextBaseline, spacing: 4) {
+                Text(value)
+                    .font(.system(size: 15, weight: .semibold, design: .monospaced))
+                Text(appSettings.unitPreference.paceLabel)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 }

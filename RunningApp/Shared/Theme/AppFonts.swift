@@ -21,7 +21,8 @@ extension Font {
 
     // MARK: Legacy metric aliases (kept for existing call sites)
 
-    static let metricHero   = Font.metricXL
+    /// 120pt bold — Active Run HUD current-pace display, per design spec.
+    static let metricHero   = Font.system(size: 120, weight: .bold, design: .monospaced)
     static let metricLarge  = Font.system(size: 56, weight: .bold,     design: .monospaced)
     static let metricMedium = Font.system(size: 36, weight: .bold,     design: .monospaced)
     static let metricSmall  = Font.metricS
