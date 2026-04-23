@@ -8,12 +8,12 @@ extension Color {
 
     // MARK: Pace Zones
 
-    static let zoneRecovery  = Color("ZoneRecovery")  // sky blue-cyan
-    static let zoneEasy      = Color("ZoneEasy")       // blue
+    static let zoneRecovery  = Color("ZoneRecovery")  // system blue
+    static let zoneEasy      = Color("ZoneEasy")       // sky blue
     static let zoneMarathon  = Color("ZoneMarathon")   // teal
-    static let zoneTempo     = Color("ZoneTempo")      // yellow-orange
+    static let zoneTempo     = Color("ZoneTempo")      // amber
     static let zoneInterval  = Color("ZoneInterval")   // red
-    static let zoneMax       = Color("ZoneMax")        // pink-red
+    static let zoneMax       = Color("ZoneMax")        // deep red
 
     // MARK: Backgrounds
 
