@@ -291,7 +291,7 @@ private struct PhaseProgressBar: View {
                     Text(phase.displayName.uppercased())
                         .font(.system(size: 11, weight: phase == currentPhase ? .bold : .semibold))
                         .kerning(0.8)
-                        .foregroundStyle(phase == currentPhase ? Color.brand : .tertiary)
+                        .foregroundStyle(phase == currentPhase ? Color.brand : Color.secondary.opacity(0.55))
                     if phase != .taper { Spacer() }
                 }
             }
