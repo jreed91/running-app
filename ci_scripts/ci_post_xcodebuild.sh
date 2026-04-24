@@ -37,7 +37,8 @@ COMMITS=$(git log "$RANGE" --pretty=format:"• %s" --no-merges 2>/dev/null || e
 
 NOTES="Build ${CI_BUILD_NUMBER:-local} (${CI_BRANCH:-unknown})
 
-What's changed:
+Testing instructions:
+Verify the changes from these commits:
 ${COMMITS}"
 
 # ── Write to the file Xcode Cloud reads for TestFlight notes ─────────────────
