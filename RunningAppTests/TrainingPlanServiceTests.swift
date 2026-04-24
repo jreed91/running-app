@@ -103,7 +103,7 @@ struct TrainingPlanServiceTests {
         // base phase has 1 quality type; build phase has 2 quality types
         let cases: [(runDays: Int, weeks: Int, phase: TrainingPhase, expectedEasy: Int)] = [
             (3, 4, .base,  1),  // quality + easy + long
-            (3, 8, .build, 0),  // quality + quality + long (no easy slot)
+            (3, 8, .build, 1),  // quality + easy + long (quality capped for sustainability)
             (4, 4, .base,  2),  // quality + easy + easy + long
             (4, 8, .build, 1),  // quality + quality + easy + long
             (5, 4, .base,  3),  // quality + easy × 3 + long
@@ -122,6 +122,54 @@ struct TrainingPlanServiceTests {
                 )
             }
         }
+    }
+
+    @Test("3-day weeks never schedule more than one quality session")
+    func threeDayWeeksCapQualitySessions() {
+        let profile = makeProfile(race: .fiveK, runDays: 3)
+        let plan = service.generatePlan(profile: profile, startDate: .now, numberOfWeeks: 10)
+        for week in plan.weeks {
+            let qualityCount = week.workouts.filter(\.workoutType.isQualitySession).count
+            #expect(qualityCount <= 1, "Week \(week.weekNumber) has \(qualityCount) quality sessions")
+        }
+    }
+
+    @Test("When 5K estimate is missing, goal time still influences derived paces")
+    func goalTimeInfluencesPaceFallback() {
+        let conservative = UserProfile(
+            name: "Conservative Goal",
+            goalRace: .halfMarathon,
+            goalFinishTime: 140 * 60,
+            weeklyRunDays: 4,
+            fitnessLevel: .intermediate,
+            currentEstimated5KTimeSeconds: nil
+        )
+        let aggressive = UserProfile(
+            name: "Aggressive Goal",
+            goalRace: .halfMarathon,
+            goalFinishTime: 110 * 60,
+            weeklyRunDays: 4,
+            fitnessLevel: .intermediate,
+            currentEstimated5KTimeSeconds: nil
+        )
+
+        let slowPlan = service.generatePlan(profile: conservative, startDate: .now, numberOfWeeks: 12)
+        let fastPlan = service.generatePlan(profile: aggressive, startDate: .now, numberOfWeeks: 12)
+
+        let slowTempo = slowPlan.weeks
+            .flatMap(\.workouts)
+            .first(where: { $0.workoutType == .tempo })?
+            .targetPaceLowerBound
+        let fastTempo = fastPlan.weeks
+            .flatMap(\.workouts)
+            .first(where: { $0.workoutType == .tempo })?
+            .targetPaceLowerBound
+
+        guard let slowTempo, let fastTempo else {
+            Issue.record("Could not find comparable tempo workouts")
+            return
+        }
+        #expect(fastTempo < slowTempo, "Faster goal should produce faster tempo target pace")
     }
 
     @Test("Easy runs in the same week have equal target distances for 3–6 run days")
