@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import AuthenticationServices
+import CloudKit
 
 // MARK: - OBWelcome
 
@@ -100,7 +101,8 @@ struct OBWelcomeBack: View {
 
     let onStartFresh: () -> Void
 
-    @State private var timedOut = false
+    @State private var showRecoveryActions = false
+    @State private var iCloudIssue: String?
 
     init(onStartFresh: @escaping () -> Void) {
         self.onStartFresh = onStartFresh
@@ -129,24 +131,32 @@ struct OBWelcomeBack: View {
                 StrideAppMark(size: 120)
                 Spacer(minLength: 40)
 
-                if timedOut && !hasData {
-                    Text("NO DATA FOUND.")
+                if showRecoveryActions && !hasData {
+                    Text("STILL RESTORING.")
                         .font(.system(size: 11, weight: .bold))
                         .kerning(1.8)
                         .foregroundStyle(.secondary)
                     Spacer().frame(height: 10)
-                    Text("No training data\nwas found.")
+                    Text("Still restoring\nyour training data.")
                         .font(.system(size: 34, weight: .heavy))
                         .kerning(-0.95)
                         .multilineTextAlignment(.center)
                         .foregroundStyle(.primary)
                     Spacer().frame(height: 14)
-                    Text("Your iCloud account is signed in but no existing plan was found. You can start a new one.")
+                    Text("iCloud restore can take a while after reinstalling. Keep this screen open, or start fresh and we'll keep syncing in the background.")
                         .font(.bodyRegular)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 12)
                         .lineSpacing(2)
+                    if let iCloudIssue {
+                        Spacer().frame(height: 12)
+                        Text(iCloudIssue)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 12)
+                    }
                 } else {
                     Text("WELCOME BACK.")
                         .font(.system(size: 11, weight: .bold))
@@ -191,7 +201,7 @@ struct OBWelcomeBack: View {
                     }
                     .foregroundStyle(.white)
                     .buttonStyle(.plain)
-                } else if timedOut {
+                } else if showRecoveryActions {
                     Button(action: onStartFresh) {
                         Text("Start fresh")
                             .font(.system(size: 17, weight: .bold))
@@ -207,8 +217,35 @@ struct OBWelcomeBack: View {
             .padding(.bottom, 44)
         }
         .task {
-            try? await Task.sleep(for: .seconds(15))
-            if !hasData { timedOut = true }
+            await checkICloudStatus()
+            // CloudKit can take a while to hydrate after app reinstall/sign-in.
+            // Avoid showing a false "no data found" error too early.
+            try? await Task.sleep(for: .seconds(45))
+            if !hasData { showRecoveryActions = true }
+        }
+    }
+
+    private func checkICloudStatus() async {
+        let container = CKContainer(identifier: "iCloud.com.jacobreedrunningapp")
+        let status = await withCheckedContinuation { (continuation: CheckedContinuation<CKAccountStatus, Never>) in
+            container.accountStatus { status, _ in
+                continuation.resume(returning: status)
+            }
+        }
+
+        switch status {
+        case .available:
+            iCloudIssue = nil
+        case .noAccount:
+            iCloudIssue = "iCloud is not signed in on this device. Your previous plans are stored in iCloud."
+        case .restricted:
+            iCloudIssue = "iCloud access is restricted on this device, so previous plans can't be restored yet."
+        case .couldNotDetermine:
+            iCloudIssue = "iCloud status couldn't be verified right now. Check your network and iCloud settings."
+        case .temporarilyUnavailable:
+            iCloudIssue = "iCloud is temporarily unavailable. Please keep this screen open and try again in a moment."
+        @unknown default:
+            iCloudIssue = "Unable to verify iCloud status. Check iCloud settings and network, then try again."
         }
     }
 }
