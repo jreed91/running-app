@@ -5,119 +5,82 @@ import SwiftUI
 struct OBWelcome: View {
     let onStart: () -> Void
 
-    private let brandGradient = LinearGradient(
-        stops: [
-            .init(color: Color(red: 1.0, green: 0.42, blue: 0.133), location: 0),
-            .init(color: Color(red: 0.878, green: 0.263, blue: 0.102), location: 1),
-        ],
-        startPoint: UnitPoint(x: 0.1, y: 0),
-        endPoint: UnitPoint(x: 0.9, y: 1)
-    )
-
     var body: some View {
         ZStack(alignment: .bottom) {
-            brandGradient.ignoresSafeArea()
-            RadialGradient(colors: [.white.opacity(0.18), .clear],
-                           center: .init(x: 0.1, y: 0.05), startRadius: 0, endRadius: 280)
-                .ignoresSafeArea()
+            // Radial ember tint from the top on the app surface — matches
+            // `radial-gradient(ellipse at top, brand*26, bg 55%)` from the design.
+            GeometryReader { geo in
+                ZStack {
+                    Color.surfacePrimary
+                    RadialGradient(
+                        colors: [Color.brand.opacity(0.22), .clear],
+                        center: .top,
+                        startRadius: 0,
+                        endRadius: max(geo.size.width, geo.size.height) * 0.85
+                    )
+                }
+            }
+            .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Spacer().frame(height: 72)
+                Spacer().frame(height: 90)
 
-                        // App mark
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 20)
-                                .fill(.white.opacity(0.18))
-                                .overlay(RoundedRectangle(cornerRadius: 20)
-                                    .strokeBorder(.white.opacity(0.3), lineWidth: 0.5))
-                                .frame(width: 84, height: 84)
-                            StrideIcon(name: .run, size: 44, color: .white, strokeWeight: 2.0)
-                        }
+                // Centered app icon mark
+                StrideAppMark(size: 120)
 
-                        Spacer().frame(height: 28)
+                Spacer(minLength: 40)
 
-                        Text("WELCOME TO STRIDE")
-                            .font(.system(size: 13, weight: .bold))
-                            .kerning(1.8)
-                            .foregroundStyle(.white.opacity(0.85))
+                Text("WELCOME TO STRIDE.")
+                    .font(.system(size: 11, weight: .bold))
+                    .kerning(1.8)
+                    .foregroundStyle(.brand)
 
-                        Spacer().frame(height: 10)
+                Spacer().frame(height: 10)
 
-                        Text("Train for your\nnext finish line.")
-                            .font(.system(size: 44, weight: .heavy))
-                            .kerning(-1.5)
-                            .foregroundStyle(.white)
-                            .lineSpacing(2)
+                Text("Training plans that\nadapt to your pace.")
+                    .font(.system(size: 34, weight: .heavy))
+                    .kerning(-0.95)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.primary)
+                    .lineSpacing(-4)
 
-                        Spacer().frame(height: 20)
+                Spacer().frame(height: 14)
 
-                        Text("Adaptive plans for 5K, Half, and Marathon — built around the pace you run today.")
-                            .font(.bodyRegular)
-                            .foregroundStyle(.white.opacity(0.82))
-                            .lineSpacing(3)
+                Text("VDOT-based pace zones. Adaptive weekly plans. Built for iPhone and Apple Watch.")
+                    .font(.bodyRegular)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 12)
+                    .lineSpacing(2)
 
-                        Spacer().frame(height: 36)
+                Spacer(minLength: 30)
 
-                        VStack(spacing: 14) {
-                            OBFeatureRow(icon: .chart, title: "VDOT-based pacing",
-                                         sub: "Training paces from your 5K time")
-                            OBFeatureRow(icon: .calendar, title: "Adaptive plans",
-                                         sub: "80/20 easy/quality, progressive build")
-                            OBFeatureRow(icon: .heart, title: "Syncs with HealthKit",
-                                         sub: "Pulls runs, tracks workouts")
-                        }
-
-                        Spacer().frame(height: 120)
-                    }
-                    .padding(.horizontal, 28)
-                }
-
-                // CTA pinned at bottom
+                // Primary CTA — matches OnbFooter spec from design
                 Button(action: onStart) {
                     HStack(spacing: 10) {
-                        Text("Get Started")
-                            .font(.system(size: 17, weight: .bold))
-                        StrideIcon(name: .chevronRight, size: 14, color: .brand, strokeWeight: 2.6)
+                        Text("Get started").font(.system(size: 17, weight: .bold))
+                        StrideIcon(name: .chevronRight, size: 15, color: .white, strokeWeight: 2.6)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
-                    .background(Color.white, in: RoundedRectangle(cornerRadius: 18))
-                    .shadow(color: .black.opacity(0.2), radius: 16, y: 8)
+                    .background(Color.brand, in: RoundedRectangle(cornerRadius: 18))
+                    .shadow(color: Color.brand.opacity(0.5), radius: 14, y: 8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18)
+                            .strokeBorder(.white.opacity(0.2), lineWidth: 0.5)
+                    )
                 }
-                .foregroundStyle(Color.brand)
+                .foregroundStyle(.white)
                 .buttonStyle(.plain)
-                .padding(.horizontal, 20)
-                .padding(.bottom, 44)
-            }
-        }
-        .foregroundStyle(.white)
-    }
-}
 
-// MARK: - OBFeatureRow
+                Text("Already have an account? Sign in")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 10)
 
-private struct OBFeatureRow: View {
-    let icon: StrideIconName
-    let title: String
-    let sub: String
-
-    var body: some View {
-        HStack(spacing: 14) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(.white.opacity(0.16))
-                    .overlay(RoundedRectangle(cornerRadius: 12)
-                        .strokeBorder(.white.opacity(0.3), lineWidth: 0.5))
-                    .frame(width: 40, height: 40)
-                StrideIcon(name: icon, size: 20, color: .white, strokeWeight: 2.2)
+                Spacer().frame(height: 34)
             }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.bodyStrong).foregroundStyle(.white)
-                Text(sub).font(.caption).foregroundStyle(.white.opacity(0.72))
-            }
-            Spacer()
+            .padding(.horizontal, 24)
         }
     }
 }
@@ -440,108 +403,78 @@ struct OBReady: View {
 
     @Environment(AppSettings.self) private var appSettings
 
-    private let brandGradient = LinearGradient(
-        stops: [
-            .init(color: Color(red: 1.0, green: 0.42, blue: 0.133), location: 0),
-            .init(color: Color(red: 0.878, green: 0.263, blue: 0.102), location: 1),
-        ],
-        startPoint: UnitPoint(x: 0.1, y: 0),
-        endPoint: UnitPoint(x: 0.9, y: 1)
-    )
-
-    private let phaseColors: [(String, Color, Double)] = [
-        ("Base", .zoneEasy, 0.375),
-        ("Build", .zoneTempo, 0.313),
-        ("Peak", .brand, 0.188),
-        ("Taper", .zoneInterval, 0.124),
-    ]
+    /// Estimated peak weekly mileage for the chart's y-axis.
+    private var peakMiles: Int {
+        let peakKm = Double(estimatedKm) / Double(max(planWeeks, 1)) * 1.40
+        return appSettings.unitPreference == .imperial
+            ? max(1, Int((peakKm * 0.621371).rounded()))
+            : max(1, Int(peakKm.rounded()))
+    }
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            brandGradient.ignoresSafeArea()
-            RadialGradient(colors: [.white.opacity(0.18), .clear],
-                           center: .init(x: 0.1, y: 0.05), startRadius: 0, endRadius: 280)
-                .ignoresSafeArea()
+            Color.surfacePrimary.ignoresSafeArea()
 
             VStack(spacing: 0) {
+                // Chrome: progress bar at 100% with 7/7 counter
+                Spacer().frame(height: 54)
+                HStack(spacing: 14) {
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Color.secondary.opacity(0.18)).frame(height: 4)
+                            Capsule().fill(Color.brand).frame(height: 4)
+                                .frame(width: geo.size.width)
+                        }
+                    }
+                    .frame(height: 4)
+                    Text("7/7")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .padding(.bottom, 22)
+
                 ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Spacer().frame(height: 72)
-
-                        // Checkmark circle
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 24)
-                                .fill(.white.opacity(0.18))
-                                .overlay(RoundedRectangle(cornerRadius: 24)
-                                    .strokeBorder(.white.opacity(0.3), lineWidth: 0.5))
-                                .frame(width: 96, height: 96)
-                            StrideIcon(name: .check, size: 44, color: .white, strokeWeight: 2.6)
+                    VStack(alignment: .leading, spacing: 16) {
+                        // Header
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("YOUR PLAN")
+                                .font(.system(size: 11, weight: .bold))
+                                .kerning(1.6)
+                                .foregroundStyle(.brand)
+                            Text("\(planWeeks)-week \(goalRace.displayName) plan\nbuilt for you.")
+                                .font(.system(size: 28, weight: .heavy))
+                                .kerning(-0.7)
+                                .foregroundStyle(.primary)
+                                .lineSpacing(-2)
                         }
+                        .padding(.horizontal, 20)
 
-                        Spacer().frame(height: 24)
-
-                        Text("YOUR PLAN IS READY")
-                            .font(.system(size: 13, weight: .bold))
-                            .kerning(1.8)
-                            .foregroundStyle(.white.opacity(0.85))
-
-                        Spacer().frame(height: 10)
-
-                        Text("\(planWeeks) weeks to your\n\(goalRace.displayName).")
-                            .font(.system(size: 40, weight: .heavy))
-                            .kerning(-1.5)
-                            .foregroundStyle(.white)
-                            .lineSpacing(2)
-
-                        Spacer().frame(height: 24)
-
-                        // Stat boxes
-                        HStack(spacing: 10) {
-                            OBStatBox(value: "\(planWeeks)", label: "WEEKS")
-                            OBStatBox(value: "\(estimatedWorkouts)", label: "WORKOUTS")
-                            OBStatBox(value: {
-                                if appSettings.unitPreference == .imperial {
-                                    return "\(Int((Double(estimatedKm) * 0.621371).rounded())) mi"
-                                }
-                                return "\(estimatedKm) km"
-                            }(), label: "TOTAL")
+                        // Summary card
+                        HStack(spacing: 0) {
+                            OBSummaryStat(label: "WEEKS", value: "\(planWeeks)")
+                            Rectangle().fill(Color.secondary.opacity(0.2)).frame(width: 1, height: 36)
+                            OBSummaryStat(label: "WORKOUTS", value: "\(estimatedWorkouts)")
+                            Rectangle().fill(Color.secondary.opacity(0.2)).frame(width: 1, height: 36)
+                            OBSummaryStat(
+                                label: appSettings.unitPreference == .imperial ? "TOTAL MI" : "TOTAL KM",
+                                value: appSettings.unitPreference == .imperial
+                                    ? "\(Int((Double(estimatedKm) * 0.621371).rounded()))"
+                                    : "\(estimatedKm)"
+                            )
                         }
+                        .padding(16)
+                        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 18))
+                        .padding(.horizontal, 16)
 
-                        Spacer().frame(height: 22)
-
-                        // Phase bar card
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("PHASES")
-                                .font(.sectionHeader)
-                                .foregroundStyle(.white.opacity(0.72))
-
-                            GeometryReader { geo in
-                                HStack(spacing: 0) {
-                                    ForEach(phaseColors, id: \.0) { _, color, fraction in
-                                        color.frame(width: geo.size.width * fraction)
-                                    }
-                                }
-                                .clipShape(Capsule())
-                            }
-                            .frame(height: 12)
-
-                            HStack {
-                                ForEach(phaseColors, id: \.0) { name, _, fraction in
-                                    Text("\(name) · \(Int(Double(planWeeks) * fraction))w")
-                                        .font(.system(size: 11, weight: .semibold))
-                                        .foregroundStyle(.white.opacity(0.8))
-                                    if name != "Taper" { Spacer() }
-                                }
-                            }
-                        }
-                        .padding(18)
-                        .background(.black.opacity(0.18), in: RoundedRectangle(cornerRadius: 18))
-                        .overlay(RoundedRectangle(cornerRadius: 18)
-                            .strokeBorder(.white.opacity(0.14), lineWidth: 0.5))
+                        // Weekly mileage chart
+                        WeeklyMileageChart(planWeeks: planWeeks, goalRace: goalRace, peakMiles: peakMiles, unit: appSettings.unitPreference)
+                            .padding(.horizontal, 16)
 
                         Spacer().frame(height: 120)
                     }
-                    .padding(.horizontal, 28)
+                    .padding(.top, 8)
                 }
             }
 
@@ -549,48 +482,152 @@ struct OBReady: View {
             Button(action: onViewPlan) {
                 Group {
                     if isCreatingPlan {
-                        ProgressView().tint(Color.brand)
+                        ProgressView().tint(.white)
                     } else {
                         HStack(spacing: 10) {
-                            Text("View My Plan").font(.system(size: 17, weight: .bold))
-                            StrideIcon(name: .chevronRight, size: 14, color: .brand, strokeWeight: 2.6)
+                            Text("Start training").font(.system(size: 17, weight: .bold))
+                            StrideIcon(name: .chevronRight, size: 15, color: .white, strokeWeight: 2.6)
                         }
                     }
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
-                .background(Color.white, in: RoundedRectangle(cornerRadius: 18))
-                .shadow(color: .black.opacity(0.2), radius: 16, y: 8)
+                .background(Color.brand, in: RoundedRectangle(cornerRadius: 18))
+                .shadow(color: Color.brand.opacity(0.5), radius: 14, y: 8)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18)
+                        .strokeBorder(.white.opacity(0.2), lineWidth: 0.5)
+                )
             }
-            .foregroundStyle(Color.brand)
+            .foregroundStyle(.white)
             .buttonStyle(.plain)
             .disabled(isCreatingPlan)
             .padding(.horizontal, 20)
             .padding(.bottom, 44)
         }
-        .foregroundStyle(.white)
     }
 }
 
-// MARK: - OBStatBox
+// MARK: - OBSummaryStat
 
-private struct OBStatBox: View {
-    let value: String
+private struct OBSummaryStat: View {
     let label: String
+    let value: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(value)
-                .font(.system(size: 24, weight: .bold, design: .monospaced))
-                .foregroundStyle(.white)
+        VStack(spacing: 6) {
             Text(label)
-                .font(.sectionHeader)
-                .foregroundStyle(.white.opacity(0.72))
+                .font(.system(size: 11, weight: .semibold))
+                .kerning(0.6)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.system(size: 22, weight: .bold, design: .monospaced))
+                .kerning(-0.5)
+                .foregroundStyle(.primary)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16)
-            .strokeBorder(.white.opacity(0.2), lineWidth: 0.5))
+        .frame(maxWidth: .infinity)
+    }
+}
+
+// MARK: - WeeklyMileageChart
+
+private struct WeeklyMileageChart: View {
+    let planWeeks: Int
+    let goalRace: RaceType
+    let peakMiles: Int
+    let unit: UnitPreference
+
+    /// Bars: (week number, mileage, phase).
+    private var bars: [(n: Int, mi: Int, phase: TrainingPhase)] {
+        guard planWeeks > 0 else { return [] }
+        let phases = phaseSchedule(for: planWeeks)
+        let peak = Double(peakMiles)
+        return (0..<planWeeks).map { i in
+            let phase = phases[i]
+            let fraction: Double = {
+                let progress = Double(i) / Double(max(planWeeks - 1, 1))
+                switch phase {
+                case .base:  return 0.5 + progress * 0.25
+                case .build: return 0.75 + progress * 0.20
+                case .peak:  return 1.00
+                case .taper: return 0.45
+                }
+            }()
+            // Cutback every 4th week in base/build.
+            let cutback = ((i + 1) % 4 == 0 && (phase == .base || phase == .build)) ? 0.75 : 1.0
+            return (i + 1, max(1, Int((peak * fraction * cutback).rounded())), phase)
+        }
+    }
+
+    private func phaseSchedule(for weeks: Int) -> [TrainingPhase] {
+        let base = max(weeks * 3 / 8, 1)
+        let build = max(weeks * 2 / 8, 1)
+        let peak = max(weeks * 2 / 8, 1)
+        let taperStart = weeks - 1
+        return (0..<weeks).map { i in
+            if i >= taperStart { return .taper }
+            if i < base { return .base }
+            if i < base + build { return .build }
+            if i < base + build + peak { return .peak }
+            return .taper
+        }
+    }
+
+    private func phaseColor(_ phase: TrainingPhase) -> Color {
+        switch phase {
+        case .base:  return .zoneEasy
+        case .build: return .zoneTempo
+        case .peak:  return .zoneInterval
+        case .taper: return .zoneMarathon
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("WEEKLY \(unit == .imperial ? "MILEAGE" : "KILOMETRES")")
+                .font(.system(size: 11, weight: .bold))
+                .kerning(1.2)
+                .foregroundStyle(.secondary)
+
+            HStack(alignment: .bottom, spacing: 6) {
+                ForEach(bars, id: \.n) { bar in
+                    VStack(spacing: 4) {
+                        Text("\(bar.mi)")
+                            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(phaseColor(bar.phase))
+                            .frame(height: max(6, CGFloat(bar.mi) / CGFloat(peakMiles) * 72))
+                        Text("W\(bar.n)")
+                            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(Color.secondary.opacity(0.6))
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            .frame(height: 104)
+
+            // Legend
+            HStack(spacing: 12) {
+                ForEach([
+                    ("Base",  Color.zoneEasy),
+                    ("Build", Color.zoneTempo),
+                    ("Peak",  Color.zoneInterval),
+                    ("Taper", Color.zoneMarathon),
+                ], id: \.0) { name, color in
+                    HStack(spacing: 5) {
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(color)
+                            .frame(width: 8, height: 8)
+                        Text(name)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .padding(.top, 4)
+        }
+        .padding(16)
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 18))
     }
 }
