@@ -34,7 +34,7 @@ struct TrainingPlanService {
         let baseKm = profile.fitnessLevel.startingWeeklyKm(for: profile.goalRace)
 
         // Prefer explicit indices; fall back to even distribution from profile
-        let effectiveDayOffsets: [Int]? = runDayIndices.isEmpty ? nil : runDayIndices.sorted()
+        let effectiveDayOffsets: [Int]? = runDayIndices.isEmpty ? nil : sanitizeDayOffsets(runDayIndices)
 
         for (index, phase) in phases.enumerated() {
             let weekStart = startDate.adding(weeks: index)
@@ -154,9 +154,36 @@ struct TrainingPlanService {
         if let time5K = profile.currentEstimated5KTimeSeconds, time5K > 0 {
             return PaceCalculatorService.vdot(distanceMeters: 5_000, timeSeconds: time5K)
         }
-        // Fall back: derive a rough VDOT from fitness level and gender.
-        // Female runners typically run ~14-15% slower at equivalent fitness levels,
-        // which maps to a meaningfully lower VDOT and appropriately easier training paces.
+        let baseline = baselineVDOT(from: profile)
+        guard profile.goalFinishTime > 0 else { return baseline }
+
+        // Use goal race/time as a directional signal while keeping the outcome bounded
+        // by a fitness-level prior to avoid over-prescribing intensity from optimistic goals.
+        let goalVDOT = PaceCalculatorService.vdot(
+            distanceMeters: profile.goalRace.distanceMeters,
+            timeSeconds: profile.goalFinishTime
+        )
+        guard goalVDOT.isFinite, goalVDOT > 0 else { return baseline }
+
+        let blendWeight: Double
+        let maxDelta: Double
+        switch profile.fitnessLevel {
+        case .beginner:
+            blendWeight = 0.20
+            maxDelta = 5.0
+        case .intermediate:
+            blendWeight = 0.35
+            maxDelta = 7.0
+        case .advanced:
+            blendWeight = 0.50
+            maxDelta = 9.0
+        }
+        let blended = baseline * (1.0 - blendWeight) + goalVDOT * blendWeight
+        return min(max(blended, baseline - maxDelta), baseline + maxDelta)
+    }
+
+    /// Derive a rough baseline VDOT from fitness level and gender.
+    private func baselineVDOT(from profile: UserProfile) -> Double {
         let fallback5KSeconds: Double
         switch profile.gender {
         case .female:
@@ -197,7 +224,8 @@ struct TrainingPlanService {
         // whatever weekly km remains after the long run and quality sessions are budgeted.
         // qualitySlots: quality sessions that fit (all slots except the long-run slot)
         // easySlots:    remaining slots after quality + long run
-        let qualitySlots = min(qualityTypes.count, max(0, days.count - 1))
+        let qualityCap = qualitySessionCap(runDays: days.count, phase: phase, raceType: raceType)
+        let qualitySlots = min(qualityTypes.count, min(max(0, days.count - 1), qualityCap))
         let easySlots    = max(0, days.count - qualitySlots - 1)
         let totalQualityFraction = 0.15 * Double(qualitySlots)
         let easyFractionEach = easySlots > 0
@@ -300,6 +328,20 @@ struct TrainingPlanService {
         guard count > 0 && count <= 7 else { return [] }
         let step = 7.0 / Double(count)
         return (0..<count).map { Int(Double($0) * step) }
+    }
+
+    /// Normalizes run-day offsets into unique Mon-Sun indices.
+    private func sanitizeDayOffsets(_ offsets: [Int]) -> [Int] {
+        Array(Set(offsets.filter { (0...6).contains($0) })).sorted()
+    }
+
+    /// Caps weekly quality frequency to keep plans sustainable at lower run-day counts.
+    /// 3 days/week: max 1 quality + 1 long run.
+    /// 4+ days/week: up to 2 quality sessions in peak/build phases.
+    private func qualitySessionCap(runDays: Int, phase: TrainingPhase, raceType: RaceType) -> Int {
+        if runDays <= 3 { return 1 }
+        if runDays == 4 && raceType == .marathon && phase == .build { return 1 }
+        return 2
     }
 
     private func weekQualityTypes(phase: TrainingPhase, raceType: RaceType) -> [WorkoutType] {
