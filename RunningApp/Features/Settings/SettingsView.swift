@@ -1,10 +1,12 @@
 import SwiftUI
 import SwiftData
+import AuthenticationServices
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.appContainer) private var container
     @Environment(AppSettings.self) private var appSettings
+    @Environment(AuthService.self) private var authService
     @Query private var profiles: [UserProfile]
     @Query(
         filter: #Predicate<TrainingPlan> { $0.isActive },
@@ -26,6 +28,7 @@ struct SettingsView: View {
             ScrollView {
                 VStack(spacing: 20) {
                     if let profile { profileHeaderCard(profile) }
+                    accountCard
                     unitsCard
                     if let profile { trainingCard(profile) }
                     appCard
@@ -98,6 +101,42 @@ struct SettingsView: View {
             RoundedRectangle(cornerRadius: 20)
                 .strokeBorder(Color.brand.opacity(0.15), lineWidth: 0.5)
         )
+    }
+
+    // MARK: - Account card
+
+    private var accountCard: some View {
+        settingsSection("Account") {
+            if authService.isSignedIn {
+                settingsRow(icon: .check, iconColor: .success, title: "Signed in with Apple") {
+                    Button("Sign out") { authService.signOut() }
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .buttonStyle(.plain)
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 10) {
+                    settingsRow(icon: .lock, iconColor: .secondary, title: "Apple Account") {
+                        EmptyView()
+                    }
+                    SignInWithAppleButton(.signIn) { request in
+                        request.requestedScopes = []
+                    } onCompletion: { result in
+                        if case .success(let auth) = result,
+                           let credential = auth.credential as? ASAuthorizationAppleIDCredential {
+                            Task { @MainActor in
+                                authService.handleSignIn(userID: credential.user)
+                            }
+                        }
+                    }
+                    .signInWithAppleButtonStyle(.black)
+                    .frame(height: 44)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 12)
+                }
+            }
+        }
     }
 
     // MARK: - Units card

@@ -10,10 +10,12 @@ struct OnboardingView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.appContainer) private var container
     @Environment(AppSettings.self) private var appSettings
+    @Environment(AuthService.self) private var authService
 
     // Navigation
     @State private var step = 0
     @State private var goingForward = true
+    @State private var showWelcomeBack = false
 
     // Step data
     @State private var goalRace: RaceType = .halfMarathon
@@ -80,7 +82,11 @@ struct OnboardingView: View {
     private var currentStep: some View {
         switch step {
         case 0:
-            OBWelcome(onStart: advance)
+            if showWelcomeBack {
+                OBWelcomeBack(onStartFresh: handleStartFresh)
+            } else {
+                OBWelcome(onStart: advance, onSignIn: handleSignIn)
+            }
         case 1:
             OBShell(stepIndex: 0, total: totalSteps, kicker: "Step 1 · Goal",
                     title: "Pick your goal.", subtitle: "Choose a race or maintain fitness. You can change this anytime.",
@@ -491,6 +497,19 @@ struct OnboardingView: View {
         activePermission = nil
         isRequestingPermissions = false
         advance()
+    }
+
+    // MARK: - Sign in with Apple
+
+    private func handleSignIn(_ userID: String) {
+        authService.handleSignIn(userID: userID)
+        authService.welcomeBackPending = true
+        showWelcomeBack = true
+    }
+
+    private func handleStartFresh() {
+        authService.welcomeBackPending = false
+        showWelcomeBack = false
     }
 
     // MARK: - Create profile and plan
