@@ -101,6 +101,11 @@ struct OBWelcomeBack: View {
 
     @State private var timedOut = false
 
+    init(onStartFresh: @escaping () -> Void) {
+        self.onStartFresh = onStartFresh
+        _profiles = Query()
+    }
+
     private var hasData: Bool { !profiles.isEmpty }
 
     var body: some View {
