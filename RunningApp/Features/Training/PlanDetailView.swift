@@ -13,33 +13,14 @@ struct PlanDetailView: View {
     private var profile: UserProfile? { profiles.first }
 
     @State private var showDeleteConfirmation = false
-    @State private var showRescheduleConfirmation = false
-    @State private var selectedDays: Set<Int> = []
     @State private var workoutToEdit: ScheduledWorkout? = nil
     @State private var weekToAddWorkout: TrainingWeek? = nil
-
-    // MARK: - Derived state
-
-    /// Day indices (0=Mon … 6=Sun) inferred from uncompleted future workout dates.
-    private var currentPlanDayIndices: Set<Int> {
-        let cal = Calendar.current
-        let now = Date()
-        let allWorkouts = (plan.weeks ?? []).flatMap { $0.workouts ?? [] }
-        let future = allWorkouts.filter { !$0.isCompleted && $0.workoutType != .rest && $0.scheduledDate > now }
-        let weekdays = future.map { cal.component(.weekday, from: $0.scheduledDate) }
-        return Set(weekdays.map { ($0 + 5) % 7 }) // Sun=1..Sat=7 → Mon=0..Sun=6
-    }
-
-    private var scheduleChanged: Bool {
-        !selectedDays.isEmpty && selectedDays != currentPlanDayIndices
-    }
 
     // MARK: - Body
 
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 16) {
-                scheduleSection
                 ForEach((plan.weeks ?? []).sorted(by: { $0.weekNumber < $1.weekNumber })) { week in
                     WeekCardView(
                         week: week,
@@ -77,76 +58,15 @@ struct PlanDetailView: View {
         } message: {
             Text("This will permanently remove all \(plan.totalWeeks) weeks and scheduled workouts.")
         }
-        .confirmationDialog(
-            "Apply new schedule?",
-            isPresented: $showRescheduleConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Apply to Future Weeks") {
-                applyReschedule()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Uncompleted future workouts will be moved to your selected days. Completed workouts are unchanged.")
-        }
         .sheet(item: $workoutToEdit) { workout in
             WorkoutEditView(workout: workout, unitPreference: appSettings.unitPreference)
         }
         .sheet(item: $weekToAddWorkout) { week in
             WorkoutEditView(week: week, unitPreference: appSettings.unitPreference)
         }
-        .onAppear {
-            selectedDays = currentPlanDayIndices
-        }
-    }
-
-    // MARK: - Schedule section
-
-    private var scheduleSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Run Days")
-                    .font(.bodyStrong)
-                Spacer()
-                Text("\(selectedDays.count) day\(selectedDays.count == 1 ? "" : "s") / week")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            DayOfWeekPicker(selectedDays: $selectedDays)
-
-            if scheduleChanged {
-                Button {
-                    showRescheduleConfirmation = true
-                } label: {
-                    Text("Apply to Future Weeks")
-                        .font(.bodyStrong)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(.brand, in: RoundedRectangle(cornerRadius: 10))
-                        .foregroundStyle(.white)
-                }
-                .buttonStyle(.plain)
-                .transition(.opacity.combined(with: .move(edge: .top)))
-            }
-        }
-        .padding()
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
-        .animation(.easeInOut(duration: 0.2), value: scheduleChanged)
     }
 
     // MARK: - Helpers
-
-    private func applyReschedule() {
-        container.rescheduleWorkouts(
-            in: plan,
-            newDayIndices: selectedDays.sorted(),
-            profile: profile,
-            context: context
-        )
-        try? context.save()
-        selectedDays = currentPlanDayIndices
-    }
 
     private func deleteWorkout(_ workout: ScheduledWorkout) {
         guard !workout.isCompleted else { return }
