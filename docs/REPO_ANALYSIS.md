@@ -167,11 +167,11 @@ This repository has a strong foundation: clear domain modeling, sensible service
 ## 7) Prioritized roadmap
 
 ## Next 2 weeks (high ROI)
-1. Add root `README.md` and contributor setup guide.
-2. Add `RunningApp/Resources/Secrets.plist` to `.gitignore` and CI secret-scan check.
-3. Implement HTTP status handling + richer errors in `RouteGeniusService`.
-4. Replace startup/migration `print` logging with OSLog.
-5. Add tests for `RouteGeniusService` and `DataMigrationService`.
+- [x] Add root `README.md` and contributor setup guide.
+- [x] Add `RunningApp/Resources/Secrets.plist` to `.gitignore` and CI secret-scan check. *(gitignore done; CI secret-scan still pending)*  
+- [x] Implement HTTP status handling + richer errors in `RouteGeniusService`.
+- [ ] Replace startup/migration `print` logging with OSLog.
+- [~] Add tests for `RouteGeniusService` and `DataMigrationService`. *(RouteGenius tests added; DataMigration tests still pending)*
 
 ## Next 4–8 weeks
 1. Expand UI test suite across key user journeys.
@@ -192,4 +192,3 @@ This repository has a strong foundation: clear domain modeling, sensible service
 - **Quality:** unit/UI test counts and coverage trend.
 - **Velocity:** average CI duration, PR cycle time.
 - **Security hygiene:** zero secret leaks in repo history and PR scanning.
-
