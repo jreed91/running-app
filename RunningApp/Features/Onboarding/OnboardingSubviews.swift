@@ -100,7 +100,7 @@ struct OBWelcomeBack: View {
 
     let onStartFresh: () -> Void
 
-    @State private var timedOut = false
+    @State private var showRecoveryActions = false
 
     init(onStartFresh: @escaping () -> Void) {
         self.onStartFresh = onStartFresh
@@ -129,19 +129,19 @@ struct OBWelcomeBack: View {
                 StrideAppMark(size: 120)
                 Spacer(minLength: 40)
 
-                if timedOut && !hasData {
-                    Text("NO DATA FOUND.")
+                if showRecoveryActions && !hasData {
+                    Text("STILL RESTORING.")
                         .font(.system(size: 11, weight: .bold))
                         .kerning(1.8)
                         .foregroundStyle(.secondary)
                     Spacer().frame(height: 10)
-                    Text("No training data\nwas found.")
+                    Text("Still restoring\nyour training data.")
                         .font(.system(size: 34, weight: .heavy))
                         .kerning(-0.95)
                         .multilineTextAlignment(.center)
                         .foregroundStyle(.primary)
                     Spacer().frame(height: 14)
-                    Text("Your iCloud account is signed in but no existing plan was found. You can start a new one.")
+                    Text("iCloud restore can take a while after reinstalling. Keep this screen open, or start fresh and we'll keep syncing in the background.")
                         .font(.bodyRegular)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -191,7 +191,7 @@ struct OBWelcomeBack: View {
                     }
                     .foregroundStyle(.white)
                     .buttonStyle(.plain)
-                } else if timedOut {
+                } else if showRecoveryActions {
                     Button(action: onStartFresh) {
                         Text("Start fresh")
                             .font(.system(size: 17, weight: .bold))
@@ -207,8 +207,10 @@ struct OBWelcomeBack: View {
             .padding(.bottom, 44)
         }
         .task {
-            try? await Task.sleep(for: .seconds(15))
-            if !hasData { timedOut = true }
+            // CloudKit can take a while to hydrate after app reinstall/sign-in.
+            // Avoid showing a false "no data found" error too early.
+            try? await Task.sleep(for: .seconds(45))
+            if !hasData { showRecoveryActions = true }
         }
     }
 }
