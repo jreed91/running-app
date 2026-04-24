@@ -516,5 +516,15 @@ struct OnboardingView: View {
         )
         context.insert(plan)
         try? context.save()
+
+        Task {
+            await container.notificationService.scheduleReminders(for: plan)
+            if appSettings.morningReminderEnabled {
+                await container.notificationService.scheduleMorningReminders(for: plan)
+            }
+            try? await container.healthKitRepository.syncWorkoutPlans(for: plan)
+            try? context.save()
+            isCreatingPlan = false
+        }
     }
 }
