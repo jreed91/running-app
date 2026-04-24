@@ -23,3 +23,6 @@ TestResults/
 
 # Generated per-build by ci_post_xcodebuild.sh for Xcode Cloud TestFlight notes
 TestFlight/
+
+# Local API keys (copied from Secrets.plist.example for Route Genius)
+RunningApp/Resources/Secrets.plist

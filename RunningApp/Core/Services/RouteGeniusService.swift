@@ -17,6 +17,11 @@ struct RouteGeniusService: Sendable {
 
     enum RouteError: LocalizedError {
         case missingAPIKey
+        case invalidResponse
+        case unauthorized
+        case rateLimited
+        case serverError(Int)
+        case httpError(Int)
         case networkError(Error)
         case noRouteFound
         case decodingError
@@ -25,6 +30,16 @@ struct RouteGeniusService: Sendable {
             switch self {
             case .missingAPIKey:
                 return "ORS API key not configured. See Secrets.plist.example."
+            case .invalidResponse:
+                return "Unexpected response from routing service."
+            case .unauthorized:
+                return "Invalid ORS API key. Check Secrets.plist and try again."
+            case .rateLimited:
+                return "Route service quota exceeded. Please try again later."
+            case .serverError(let statusCode):
+                return "Routing service is temporarily unavailable (HTTP \(statusCode))."
+            case .httpError(let statusCode):
+                return "Routing service returned an unexpected error (HTTP \(statusCode))."
             case .networkError(let error):
                 return "Network error: \(error.localizedDescription)"
             case .noRouteFound:
@@ -40,8 +55,15 @@ struct RouteGeniusService: Sendable {
     private let baseURL = "https://api.openrouteservice.org"
     private let session: URLSession
 
-    init(session: URLSession = .shared) {
-        self.session = session
+    init(session: URLSession? = nil) {
+        if let session {
+            self.session = session
+            return
+        }
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest = 20
+        config.timeoutIntervalForResource = 30
+        self.session = URLSession(configuration: config)
     }
 
     // MARK: Public API
@@ -60,7 +82,7 @@ struct RouteGeniusService: Sendable {
     ) async throws -> [GeneratedRoute] {
         guard !apiKey.isEmpty else { throw RouteError.missingAPIKey }
 
-        let results: [GeneratedRoute] = await withTaskGroup(of: GeneratedRoute?.self) { group in
+        let groupResults: ([GeneratedRoute], [RouteError]) = await withTaskGroup(of: Result<GeneratedRoute, RouteError>.self) { group in
             switch routeType {
             case .loop:
                 let configs: [(seed: Int, label: String)] = [
@@ -70,13 +92,20 @@ struct RouteGeniusService: Sendable {
                 ]
                 for cfg in configs {
                     group.addTask {
-                        try? await self.generateLoop(
-                            start: start,
-                            distanceMeters: distanceMeters,
-                            apiKey: apiKey,
-                            seed: cfg.seed,
-                            label: cfg.label
-                        )
+                        do {
+                            let route = try await self.generateLoop(
+                                start: start,
+                                distanceMeters: distanceMeters,
+                                apiKey: apiKey,
+                                seed: cfg.seed,
+                                label: cfg.label
+                            )
+                            return .success(route)
+                        } catch let routeError as RouteError {
+                            return .failure(routeError)
+                        } catch {
+                            return .failure(.networkError(error))
+                        }
                     }
                 }
             case .outAndBack:
@@ -87,26 +116,42 @@ struct RouteGeniusService: Sendable {
                 ]
                 for cfg in configs {
                     group.addTask {
-                        try? await self.generateOutAndBack(
-                            start: start,
-                            distanceMeters: distanceMeters,
-                            apiKey: apiKey,
-                            bearing: cfg.bearing,
-                            label: cfg.label
-                        )
+                        do {
+                            let route = try await self.generateOutAndBack(
+                                start: start,
+                                distanceMeters: distanceMeters,
+                                apiKey: apiKey,
+                                bearing: cfg.bearing,
+                                label: cfg.label
+                            )
+                            return .success(route)
+                        } catch let routeError as RouteError {
+                            return .failure(routeError)
+                        } catch {
+                            return .failure(.networkError(error))
+                        }
                     }
                 }
             }
 
             var collected: [GeneratedRoute] = []
+            var failures: [RouteError] = []
             for await result in group {
-                if let route = result { collected.append(route) }
+                switch result {
+                case .success(let route):
+                    collected.append(route)
+                case .failure(let error):
+                    failures.append(error)
+                }
             }
             // Sort so Option A / NE always appears first regardless of which finished first.
-            return collected.sorted { $0.label < $1.label }
+            return (collected.sorted { $0.label < $1.label }, failures)
         }
 
-        guard !results.isEmpty else { throw RouteError.noRouteFound }
+        let (results, failures) = groupResults
+        guard !results.isEmpty else {
+            throw failures.first ?? RouteError.noRouteFound
+        }
         return results
     }
 
@@ -194,8 +239,25 @@ struct RouteGeniusService: Sendable {
 
         let data: Data
         do {
-            let (responseData, _) = try await session.data(for: request)
+            let (responseData, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                throw RouteError.invalidResponse
+            }
+            switch http.statusCode {
+            case 200...299:
+                break
+            case 401, 403:
+                throw RouteError.unauthorized
+            case 429:
+                throw RouteError.rateLimited
+            case 500...599:
+                throw RouteError.serverError(http.statusCode)
+            default:
+                throw RouteError.httpError(http.statusCode)
+            }
             data = responseData
+        } catch let error as RouteError {
+            throw error
         } catch {
             throw RouteError.networkError(error)
         }
@@ -346,4 +408,3 @@ private struct ORSStep: Decodable {
         case instruction, name, distance, duration, type
     }
 }
-
