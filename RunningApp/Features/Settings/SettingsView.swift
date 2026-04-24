@@ -14,10 +14,6 @@ struct SettingsView: View {
 
     @State private var showResetConfirmation = false
     @State private var showSyncRestartNote = false
-    @State private var editRace: RaceType = .fiveK
-    @State private var goalPaceMinutes: Int = 5
-    @State private var goalPaceSeconds: Int = 0
-    @State private var showPacePicker = false
     #if DEBUG
     @State private var seedWeeks = 8
     @State private var completionCutoff = Date()
@@ -45,10 +41,6 @@ struct SettingsView: View {
             }
             .background(Color.surfacePrimary)
             .navigationTitle("Settings")
-            .task(id: profile?.id) {
-                guard let p = profile else { return }
-                initPaceState(from: p)
-            }
             .confirmationDialog(
                 "Reset all data?",
                 isPresented: $showResetConfirmation,
@@ -142,81 +134,12 @@ struct SettingsView: View {
     // MARK: - Training card
 
     private func trainingCard(_ profile: UserProfile) -> some View {
-        let minutesRange = appSettings.unitPreference == .imperial ? 4...25 : 3...15
-        return settingsSection("Runner Profile") {
+        settingsSection("Runner Profile") {
             settingsRow(icon: .run, iconColor: .brand, title: "Name") {
                 TextField("Your name", text: Bindable(profile).name)
                     .multilineTextAlignment(.trailing)
                     .font(.bodyRegular)
                     .foregroundStyle(.secondary)
-            }
-            rowDivider
-            settingsRow(icon: .trophy, iconColor: .zoneInterval, title: "Goal Race") {
-                Picker("", selection: $editRace) {
-                    ForEach(RaceType.allCases, id: \.self) { Text($0.displayName).tag($0) }
-                }
-                .labelsHidden()
-                .onChange(of: editRace) { savePaceToProfile(profile) }
-            }
-            rowDivider
-            settingsRow(icon: .bolt, iconColor: .zoneTempo, title: "Fitness Level") {
-                Picker("", selection: Bindable(profile).fitnessLevel) {
-                    ForEach(FitnessLevel.allCases, id: \.self) { Text($0.displayName).tag($0) }
-                }
-                .labelsHidden()
-            }
-            rowDivider
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) { showPacePicker.toggle() }
-            } label: {
-                settingsRow(icon: .timer, iconColor: .zoneEasy, title: "Goal Pace") {
-                    Text(formattedPace)
-                        .font(.system(size: 14, weight: .medium, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                    StrideIcon(name: .chevronDown, size: 12, color: .secondary, strokeWeight: 2)
-                        .rotationEffect(.degrees(showPacePicker ? 180 : 0))
-                        .animation(.easeInOut(duration: 0.2), value: showPacePicker)
-                }
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.primary)
-            if showPacePicker {
-                HStack(spacing: 0) {
-                    Picker("Minutes", selection: $goalPaceMinutes) {
-                        ForEach(minutesRange, id: \.self) { Text("\($0)").tag($0) }
-                    }
-                    .pickerStyle(.wheel)
-                    .frame(width: 80)
-                    .onChange(of: goalPaceMinutes) { savePaceToProfile(profile) }
-                    Text(":")
-                        .font(.title2.bold())
-                    Picker("Seconds", selection: $goalPaceSeconds) {
-                        ForEach(stride(from: 0, through: 55, by: 5).map { $0 }, id: \.self) {
-                            Text(String(format: "%02d", $0)).tag($0)
-                        }
-                    }
-                    .pickerStyle(.wheel)
-                    .frame(width: 80)
-                    .onChange(of: goalPaceSeconds) { savePaceToProfile(profile) }
-                    Text("/ \(appSettings.unitPreference.distanceLabel)")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .padding(.leading, 8)
-                }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 8)
-                .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .top)))
-            }
-            rowDivider
-            settingsRow(icon: .calendar, iconColor: .brand, title: "Days per week") {
-                HStack(spacing: 10) {
-                    Text("\(profile.weeklyRunDays)")
-                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                        .frame(minWidth: 20)
-                    Stepper("", value: Bindable(profile).weeklyRunDays, in: 2...6)
-                        .labelsHidden()
-                }
             }
             rowDivider
             settingsRow(icon: .heart, iconColor: .destructive, title: "Gender") {
@@ -452,33 +375,6 @@ struct SettingsView: View {
 
     private var rowDivider: some View {
         Divider().padding(.leading, 62)
-    }
-
-    // MARK: - Pace helpers
-
-    private var formattedPace: String {
-        "\(goalPaceMinutes):\(String(format: "%02d", goalPaceSeconds)) / \(appSettings.unitPreference.distanceLabel)"
-    }
-
-    private func initPaceState(from profile: UserProfile) {
-        editRace = profile.goalRace
-        let paceSecondsPerKm = profile.goalFinishTime / (profile.goalRace.distanceMeters / 1_000)
-        let displayPace = appSettings.unitPreference == .imperial
-            ? paceSecondsPerKm * 1.60934
-            : paceSecondsPerKm
-        goalPaceMinutes = max(3, min(25, Int(displayPace) / 60))
-        goalPaceSeconds = (Int(displayPace) % 60 / 5) * 5
-    }
-
-    private func savePaceToProfile(_ profile: UserProfile) {
-        let paceSecondsRaw = Double(goalPaceMinutes * 60 + goalPaceSeconds)
-        let paceSecondsPerKm = appSettings.unitPreference == .imperial
-            ? paceSecondsRaw / 1.60934
-            : paceSecondsRaw
-        profile.goalRace = editRace
-        profile.goalFinishTime = paceSecondsPerKm * (editRace.distanceMeters / 1_000)
-        profile.updatedAt = Date()
-        try? context.save()
     }
 
     // MARK: - Actions

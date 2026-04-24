@@ -141,10 +141,10 @@ struct PlanDetailView: View {
         container.rescheduleWorkouts(
             in: plan,
             newDayIndices: selectedDays.sorted(),
-            profile: profile
+            profile: profile,
+            context: context
         )
         try? context.save()
-        // Sync selectedDays to reflect the updated plan state
         selectedDays = currentPlanDayIndices
     }
 
