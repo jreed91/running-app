@@ -23,3 +23,6 @@ TestResults/
 
 # Generated per-build by ci_post_xcodebuild.sh for Xcode Cloud TestFlight notes
 TestFlight/
+
+# Local secrets (never commit)
+RunningApp/Resources/Secrets.plist
