@@ -192,12 +192,17 @@ final class AppContainer: ObservableObject {
     // MARK: - Schedule management
 
     /// Redistributes uncompleted future workouts to match the given run day indices.
+    /// Excess workouts that no longer fit the new schedule are deleted from the context.
     func rescheduleWorkouts(
         in plan: TrainingPlan,
         newDayIndices: [Int],
-        profile: UserProfile?
+        profile: UserProfile?,
+        context: ModelContext
     ) {
-        trainingPlanService.applyNewRunDays(to: plan, newDayIndices: newDayIndices, profile: profile)
+        let toDelete = trainingPlanService.applyNewRunDays(to: plan, newDayIndices: newDayIndices, profile: profile)
+        for workout in toDelete {
+            context.delete(workout)
+        }
     }
 
     // MARK: Preview support

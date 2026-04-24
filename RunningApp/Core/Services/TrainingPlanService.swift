@@ -800,43 +800,45 @@ struct TrainingPlanService {
 
     /// Redistributes uncompleted future workouts in `plan` to match `newDayIndices`.
     ///
-    /// - For each week that has movable workouts, target dates are computed by adding
-    ///   each day offset to the week's `startDate`. Workouts are mapped 1-to-1 in order;
-    ///   if there are more workouts than selected days the extras are stacked on the last
-    ///   available day (they can be deleted individually via the Manage Plan UI).
-    /// - Completed workouts and rest-day workouts are left unchanged.
-    /// - Optionally updates `profile.preferredRunDayIndices` and `weeklyRunDays`.
+    /// Workouts are assigned 1-to-1 to target dates (one per day, no stacking).
+    /// Any excess workouts (more workouts than selected days) are returned for the
+    /// caller to delete. If more days are selected than there are workouts, stub
+    /// easy runs are created for the extra slots.
+    ///
+    /// - Returns: Workouts that no longer fit the new schedule and should be deleted.
+    @discardableResult
     func applyNewRunDays(
         to plan: TrainingPlan,
         newDayIndices: [Int],
         profile: UserProfile?
-    ) {
+    ) -> [ScheduledWorkout] {
         let sorted = newDayIndices.sorted()
-        guard !sorted.isEmpty else { return }
+        guard !sorted.isEmpty else { return [] }
         let today = Calendar.current.startOfDay(for: Date())
+        var toDelete: [ScheduledWorkout] = []
 
         for week in (plan.weeks ?? []).sorted(by: { $0.weekNumber < $1.weekNumber }) {
-            // Collect uncompleted non-rest workouts that haven't happened yet
             let movable = (week.workouts ?? [])
                 .filter { !$0.isCompleted && $0.workoutType != .rest && $0.scheduledDate > today }
                 .sorted { $0.scheduledDate < $1.scheduledDate }
             guard !movable.isEmpty else { continue }
 
-            // Compute candidate target dates, excluding any that have already passed
             let targets = sorted
                 .map { week.startDate.adding(days: $0) }
                 .filter { $0 > today }
             guard !targets.isEmpty else { continue }
 
-            // Assign workouts to target dates; excess workouts land on the last slot
-            for (i, workout) in movable.enumerated() {
-                let targetIndex = min(i, targets.count - 1)
-                workout.scheduledDate = targets[targetIndex]
+            // Assign workouts 1-to-1 — never place two workouts on the same day.
+            let assignCount = min(movable.count, targets.count)
+            for i in 0..<assignCount {
+                movable[i].scheduledDate = targets[i]
+            }
+            // Collect excess workouts so the caller can delete them.
+            for i in assignCount..<movable.count {
+                toDelete.append(movable[i])
             }
 
-            // If the user selected more days than there are movable workouts,
-            // create stub easy runs for the extra target dates so that
-            // currentPlanDayIndices reflects all selected days after the save.
+            // If more days selected than workouts, fill extra slots with stub easy runs.
             if targets.count > movable.count {
                 let paces: TrainingPaces? = profile.map { p in
                     PaceCalculatorService.trainingPaces(forVDOT: estimatedVDOT(from: p))
@@ -859,11 +861,12 @@ struct TrainingPlanService {
             }
         }
 
-        // Persist the new day preference on the profile
         if let profile {
             profile.preferredRunDayIndices = sorted
             profile.weeklyRunDays = sorted.count
             profile.updatedAt = Date()
         }
+
+        return toDelete
     }
 }

@@ -512,6 +512,7 @@ struct OnboardingView: View {
             profile: profile,
             startDate: Date().startOfWeek.adding(weeks: 1),
             numberOfWeeks: planWeeks,
+            runDayIndices: selectedDays.sorted(),
             unitPreference: appSettings.unitPreference
         )
         context.insert(plan)
