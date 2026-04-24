@@ -515,6 +515,15 @@ struct OnboardingView: View {
     // MARK: - Create profile and plan
 
     private func createProfileAndPlan() {
+        // CloudKit may have delivered the user's existing profile while they were
+        // going through onboarding. If so, skip creation entirely — ContentView's
+        // @Query will detect the non-empty profile list and switch to MainTabView.
+        let check = FetchDescriptor<UserProfile>()
+        if let existing = try? context.fetch(check), !existing.isEmpty {
+            isCreatingPlan = false
+            return
+        }
+
         let v = PaceCalculatorService.vdot(distanceMeters: 5_000, timeSeconds: fiveKTimeSeconds)
         let goalFinishTime = PaceCalculatorService.predictedTime(vdot: v, distanceMeters: goalRace.distanceMeters)
         let profile = UserProfile(

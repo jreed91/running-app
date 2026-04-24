@@ -101,7 +101,6 @@ struct OBWelcomeBack: View {
 
     let onStartFresh: () -> Void
 
-    @State private var showRecoveryActions = false
     @State private var iCloudIssue: String?
 
     init(onStartFresh: @escaping () -> Void) {
@@ -131,19 +130,20 @@ struct OBWelcomeBack: View {
                 StrideAppMark(size: 120)
                 Spacer(minLength: 40)
 
-                if showRecoveryActions && !hasData {
-                    Text("STILL RESTORING.")
-                        .font(.system(size: 11, weight: .bold))
-                        .kerning(1.8)
-                        .foregroundStyle(.secondary)
-                    Spacer().frame(height: 10)
-                    Text("Still restoring\nyour training data.")
-                        .font(.system(size: 34, weight: .heavy))
-                        .kerning(-0.95)
-                        .multilineTextAlignment(.center)
-                        .foregroundStyle(.primary)
-                    Spacer().frame(height: 14)
-                    Text("iCloud restore can take a while after reinstalling. Keep this screen open, or start fresh and we'll keep syncing in the background.")
+                Text("WELCOME BACK.")
+                    .font(.system(size: 11, weight: .bold))
+                    .kerning(1.8)
+                    .foregroundStyle(.brand)
+                Spacer().frame(height: 10)
+                Text(hasData ? "Your training plan\nis ready." : "Checking\niCloud…")
+                    .font(.system(size: 34, weight: .heavy))
+                    .kerning(-0.95)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.primary)
+                    .animation(.easeInOut(duration: 0.3), value: hasData)
+                Spacer().frame(height: 14)
+                if !hasData {
+                    Text("Looking for your training data in iCloud.\nThis can take a few minutes on a new device.")
                         .font(.bodyRegular)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -157,34 +157,15 @@ struct OBWelcomeBack: View {
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 12)
                     }
-                } else {
-                    Text("WELCOME BACK.")
-                        .font(.system(size: 11, weight: .bold))
-                        .kerning(1.8)
-                        .foregroundStyle(.brand)
-                    Spacer().frame(height: 10)
-                    Text(hasData ? "Your training plan\nis ready." : "Restoring your\ntraining data…")
-                        .font(.system(size: 34, weight: .heavy))
-                        .kerning(-0.95)
-                        .multilineTextAlignment(.center)
-                        .foregroundStyle(.primary)
-                    Spacer().frame(height: 14)
-                    if !hasData {
-                        Text("Syncing from iCloud. This only takes a moment.")
-                            .font(.bodyRegular)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 12)
-                        Spacer().frame(height: 24)
-                        ProgressView().tint(.brand).scaleEffect(1.2)
-                    }
+                    Spacer().frame(height: 28)
+                    ProgressView().tint(.brand).scaleEffect(1.2)
                 }
 
                 Spacer(minLength: 30)
             }
             .padding(.horizontal, 24)
 
-            VStack(spacing: 0) {
+            VStack(spacing: 14) {
                 if hasData {
                     Button {
                         authService.welcomeBackPending = false
@@ -201,28 +182,19 @@ struct OBWelcomeBack: View {
                     }
                     .foregroundStyle(.white)
                     .buttonStyle(.plain)
-                } else if showRecoveryActions {
-                    Button(action: onStartFresh) {
-                        Text("Start fresh")
-                            .font(.system(size: 17, weight: .bold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-                            .background(Color.brand, in: RoundedRectangle(cornerRadius: 18))
-                    }
-                    .foregroundStyle(.white)
-                    .buttonStyle(.plain)
                 }
+
+                Button(action: onStartFresh) {
+                    Text("Start fresh instead")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 44)
         }
-        .task {
-            await checkICloudStatus()
-            // CloudKit can take a while to hydrate after app reinstall/sign-in.
-            // Avoid showing a false "no data found" error too early.
-            try? await Task.sleep(for: .seconds(45))
-            if !hasData { showRecoveryActions = true }
-        }
+        .task { await checkICloudStatus() }
     }
 
     private func checkICloudStatus() async {
@@ -232,7 +204,6 @@ struct OBWelcomeBack: View {
                 continuation.resume(returning: status)
             }
         }
-
         switch status {
         case .available:
             iCloudIssue = nil
