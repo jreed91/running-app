@@ -86,6 +86,15 @@ struct TrainingPlanServiceTests {
         #expect(hasTempo)
     }
 
+    @Test("Maintain fitness plan supports non-race training blocks")
+    func maintainFitnessPlanHasBalancedWork() {
+        let profile = makeProfile(race: .maintainFitness, runDays: 4)
+        let plan = service.generatePlan(profile: profile, startDate: .now, numberOfWeeks: 10)
+        let workouts = plan.weeks.flatMap(\.workouts)
+        #expect(workouts.contains { $0.workoutType == .tempo })
+        #expect(workouts.contains { $0.workoutType == .longRun })
+    }
+
     // MARK: Easy run distribution
 
     @Test("Easy run count per week matches expected value for any run-day configuration")

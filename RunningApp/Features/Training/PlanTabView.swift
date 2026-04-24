@@ -167,6 +167,7 @@ private struct PlanOverviewCard: View {
 
     private var raceStrideIcon: StrideIconName {
         switch plan.targetRace {
+        case .maintainFitness: return .heart
         case .fiveK: return .bolt
         case .halfMarathon: return .tempo
         case .marathon: return .run

@@ -98,6 +98,10 @@ struct TrainingPlanService {
         let peakWeeks: Int
         let buildWeeks: Int
         switch raceType {
+        case .maintainFitness:
+            taperWeeks = max(1, Int(Double(totalWeeks) * 0.10))
+            peakWeeks  = max(1, Int(Double(totalWeeks) * 0.15))
+            buildWeeks = max(1, Int(Double(totalWeeks) * 0.25))
         case .fiveK:
             taperWeeks = max(1, Int(Double(totalWeeks) * 0.10))
             peakWeeks  = max(1, Int(Double(totalWeeks) * 0.20))
@@ -300,6 +304,10 @@ struct TrainingPlanService {
 
     private func weekQualityTypes(phase: TrainingPhase, raceType: RaceType) -> [WorkoutType] {
         switch (phase, raceType) {
+        case (.base, .maintainFitness):    return [.tempo]
+        case (.build, .maintainFitness):   return [.tempo]
+        case (.peak, .maintainFitness):    return [.tempo, .interval]
+        case (.taper, .maintainFitness):   return [.tempo]
         case (.base, _):                  return [.tempo]
         case (.build, .fiveK):            return [.interval, .tempo]
         case (.build, .halfMarathon):     return [.tempo, .interval]
@@ -313,6 +321,16 @@ struct TrainingPlanService {
 
     private func defaultIntervals(raceType: RaceType, paces: TrainingPaces) -> [WorkoutInterval] {
         switch raceType {
+        case .maintainFitness:
+            // 5 × 3 min @ interval pace, 90 s jog recovery
+            return [WorkoutInterval(
+                repetitions: 5,
+                distanceMeters: nil,
+                durationSeconds: 180,
+                targetPaceSecondsPerKm: paces.interval,
+                recoverySeconds: 90,
+                recoveryType: .jog
+            )]
         case .fiveK:
             // 6 × 800 m @ interval pace, 90 s jog recovery
             return [WorkoutInterval(
@@ -348,6 +366,8 @@ struct TrainingPlanService {
 
     private func intervalNote(raceType: RaceType, unitPreference: UnitPreference) -> String {
         switch raceType {
+        case .maintainFitness:
+            return "5 × 3 min @ interval pace with 90 s jog recovery."
         case .fiveK:
             return "6 × \(shortDistanceString(800, unit: unitPreference)) @ interval pace with 90 s jog recovery. Hard but controlled."
         case .halfMarathon:
