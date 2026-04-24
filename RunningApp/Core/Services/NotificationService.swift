@@ -4,10 +4,11 @@ import UserNotifications
 // MARK: - NotificationService
 
 @MainActor
-final class NotificationService {
+final class NotificationService: NSObject {
 
     static let shared = NotificationService()
-    private init() {
+    private override init() {
+        super.init()
         center.delegate = self
     }
 
