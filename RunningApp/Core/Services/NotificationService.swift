@@ -7,7 +7,9 @@ import UserNotifications
 final class NotificationService {
 
     static let shared = NotificationService()
-    private init() {}
+    private init() {
+        center.delegate = self
+    }
 
     private let center = UNUserNotificationCenter.current()
 
@@ -85,6 +87,7 @@ final class NotificationService {
         var components = Calendar.current.dateComponents([.year, .month, .day], from: workout.scheduledDate)
         components.hour = 8
         components.minute = 0
+        components.second = 0
 
         guard
             let fireDate = Calendar.current.date(from: components),
@@ -161,5 +164,19 @@ final class NotificationService {
             return "Your \(type) workout starts now. Lace up!"
         }
         return "Your \(type) workout is in \(minutesBefore) min. Get ready!"
+    }
+}
+
+// MARK: - UNUserNotificationCenterDelegate
+
+extension NotificationService: UNUserNotificationCenterDelegate {
+    // Called when a notification arrives while the app is in the foreground.
+    // Without this, immediate notifications (synced run, nil trigger) are silently dropped.
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound, .badge])
     }
 }
