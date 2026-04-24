@@ -3,6 +3,7 @@ import Foundation
 // MARK: - RaceType
 
 enum RaceType: String, Codable, CaseIterable, Sendable {
+    case maintainFitness = "Maintain Fitness"
     case fiveK = "5K"
     case halfMarathon = "Half Marathon"
     case marathon = "Marathon"
@@ -11,6 +12,7 @@ enum RaceType: String, Codable, CaseIterable, Sendable {
 
     var distanceMeters: Double {
         switch self {
+        case .maintainFitness: return 10_000
         case .fiveK:        return 5_000
         case .halfMarathon: return 21_097.5
         case .marathon:     return 42_195
@@ -19,6 +21,7 @@ enum RaceType: String, Codable, CaseIterable, Sendable {
 
     var typicalWeeks: ClosedRange<Int> {
         switch self {
+        case .maintainFitness: return 6...16
         case .fiveK:        return 8...12
         case .halfMarathon: return 12...20
         case .marathon:     return 16...24
@@ -41,6 +44,12 @@ enum FitnessLevel: String, Codable, CaseIterable, Sendable {
     /// race-specific adaptations require less overall mileage and more speed work.
     func startingWeeklyKm(for raceType: RaceType) -> Double {
         switch raceType {
+        case .maintainFitness:
+            switch self {
+            case .beginner:     return 18
+            case .intermediate: return 30
+            case .advanced:     return 45
+            }
         case .fiveK:
             switch self {
             case .beginner:     return 15   // ~9 mi/wk start, ~14 mi/wk peak

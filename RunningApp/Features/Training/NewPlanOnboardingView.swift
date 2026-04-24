@@ -102,8 +102,8 @@ struct NewPlanOnboardingView: View {
             OBShell(
                 stepIndex: 0, total: totalSteps,
                 kicker: "Step 1 · Goal",
-                title: "Pick your race.",
-                subtitle: "What are you training for? You can change this anytime.",
+                title: "Pick your goal.",
+                subtitle: "Choose a race or maintain fitness. You can change this anytime.",
                 ctaLabel: "Continue",
                 onBack: { dismiss() },
                 onCTA: advance
@@ -384,6 +384,7 @@ struct NewPlanOnboardingView: View {
 
     private var recommendedDaysLabel: String {
         switch goalRace {
+        case .maintainFitness: return "Recommended for Maintain Fitness"
         case .fiveK: return "Recommended for 5K"
         case .halfMarathon: return "Recommended for Half Marathon"
         case .marathon: return "Recommended for Marathon"

@@ -83,7 +83,7 @@ struct PlanSetupView: View {
 
     private var goalSection: some View {
         Section("Goal") {
-            Picker("Race", selection: $goalRace) {
+            Picker("Goal", selection: $goalRace) {
                 ForEach(RaceType.allCases, id: \.self) { race in
                     Text(race.displayName).tag(race)
                 }
@@ -233,4 +233,3 @@ struct PlanSetupView: View {
         }
     }
 }
-

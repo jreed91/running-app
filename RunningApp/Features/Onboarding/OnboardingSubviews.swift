@@ -195,6 +195,7 @@ struct OBRaceCard: View {
 
     private var color: Color {
         switch race {
+        case .maintainFitness: return .brand
         case .fiveK: return .zoneInterval
         case .halfMarathon: return .zoneTempo
         case .marathon: return .zoneEasy
@@ -202,6 +203,7 @@ struct OBRaceCard: View {
     }
     private var icon: StrideIconName {
         switch race {
+        case .maintainFitness: return .heart
         case .fiveK: return .bolt
         case .halfMarathon: return .tempo
         case .marathon: return .run
@@ -210,6 +212,7 @@ struct OBRaceCard: View {
     private var distanceLabel: String {
         let isImperial = appSettings.unitPreference == .imperial
         switch race {
+        case .maintainFitness: return isImperial ? "No race target" : "No race target"
         case .fiveK:         return isImperial ? "3.1 mi"  : "5.0 km"
         case .halfMarathon:  return isImperial ? "13.1 mi" : "21.1 km"
         case .marathon:      return isImperial ? "26.2 mi" : "42.2 km"
@@ -217,6 +220,7 @@ struct OBRaceCard: View {
     }
     private var desc: String {
         switch race {
+        case .maintainFitness: return "Balanced fitness, no race block"
         case .fiveK: return "Fast, speed-focused plans"
         case .halfMarathon: return "Endurance with tempo work"
         case .marathon: return "Long-run focused, biggest build"

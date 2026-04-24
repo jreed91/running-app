@@ -83,7 +83,7 @@ struct OnboardingView: View {
             OBWelcome(onStart: advance)
         case 1:
             OBShell(stepIndex: 0, total: totalSteps, kicker: "Step 1 · Goal",
-                    title: "Pick a race.", subtitle: "What are you training for? You can change this anytime.",
+                    title: "Pick your goal.", subtitle: "Choose a race or maintain fitness. You can change this anytime.",
                     ctaLabel: "Continue", onBack: retreat, onCTA: advance) {
                 goalContent
             }
@@ -426,6 +426,7 @@ struct OnboardingView: View {
 
     private var recommendedDaysLabel: String {
         switch goalRace {
+        case .maintainFitness: return "Recommended for Maintain Fitness"
         case .fiveK: return "Recommended for 5K"
         case .halfMarathon: return "Recommended for Half Marathon"
         case .marathon: return "Recommended for Marathon"
