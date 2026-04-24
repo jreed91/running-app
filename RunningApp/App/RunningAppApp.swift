@@ -6,15 +6,18 @@ struct RunningAppApp: App {
 
     @StateObject private var container = AppContainer()
     @State private var appSettings = AppSettings()
+    @State private var authService = AuthService()
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environment(\.appContainer, container)
                 .environment(appSettings)
+                .environment(authService)
                 .modelContainer(container.modelContainer)
                 .task {
                     await container.workoutSyncService.startObserving()
+                    await authService.checkCredentialState()
                 }
         }
     }
@@ -23,12 +26,14 @@ struct RunningAppApp: App {
 // MARK: - Root view
 
 /// Switches between onboarding and the main tab bar.
+/// `welcomeBackPending` keeps OnboardingView visible while the returning-user
+/// screen is displayed, even after CloudKit delivers the user's profiles.
 struct ContentView: View {
-    @Environment(\.modelContext) private var context
+    @Environment(AuthService.self) private var authService
     @Query private var profiles: [UserProfile]
 
     var body: some View {
-        if profiles.isEmpty {
+        if profiles.isEmpty || authService.welcomeBackPending {
             OnboardingView()
         } else {
             MainTabView()

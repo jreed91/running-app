@@ -1,14 +1,14 @@
 import SwiftUI
+import AuthenticationServices
 
 // MARK: - OBWelcome
 
 struct OBWelcome: View {
     let onStart: () -> Void
+    let onSignIn: (String) -> Void
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            // Radial ember tint from the top on the app surface — matches
-            // `radial-gradient(ellipse at top, brand*26, bg 55%)` from the design.
             GeometryReader { geo in
                 ZStack {
                     Color.surfacePrimary
@@ -25,7 +25,6 @@ struct OBWelcome: View {
             VStack(spacing: 0) {
                 Spacer().frame(height: 90)
 
-                // Centered app icon mark
                 StrideAppMark(size: 120)
 
                 Spacer(minLength: 40)
@@ -55,7 +54,6 @@ struct OBWelcome: View {
 
                 Spacer(minLength: 30)
 
-                // Primary CTA — matches OnbFooter spec from design
                 Button(action: onStart) {
                     HStack(spacing: 10) {
                         Text("Get started").font(.system(size: 17, weight: .bold))
@@ -73,14 +71,138 @@ struct OBWelcome: View {
                 .foregroundStyle(.white)
                 .buttonStyle(.plain)
 
-                Text("Already have an account? Sign in")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .padding(.top, 10)
+                SignInWithAppleButton(.signIn) { request in
+                    request.requestedScopes = []
+                } onCompletion: { result in
+                    if case .success(let auth) = result,
+                       let credential = auth.credential as? ASAuthorizationAppleIDCredential {
+                        Task { @MainActor in onSignIn(credential.user) }
+                    }
+                }
+                .signInWithAppleButtonStyle(.black)
+                .frame(height: 50)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .padding(.top, 12)
 
                 Spacer().frame(height: 34)
             }
             .padding(.horizontal, 24)
+        }
+    }
+}
+
+// MARK: - OBWelcomeBack
+
+struct OBWelcomeBack: View {
+    @Environment(AuthService.self) private var authService
+    @Query private var profiles: [UserProfile]
+
+    let onStartFresh: () -> Void
+
+    @State private var timedOut = false
+
+    private var hasData: Bool { !profiles.isEmpty }
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            GeometryReader { geo in
+                ZStack {
+                    Color.surfacePrimary
+                    RadialGradient(
+                        colors: [Color.brand.opacity(0.22), .clear],
+                        center: .top,
+                        startRadius: 0,
+                        endRadius: max(geo.size.width, geo.size.height) * 0.85
+                    )
+                }
+            }
+            .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                Spacer().frame(height: 90)
+                StrideAppMark(size: 120)
+                Spacer(minLength: 40)
+
+                if timedOut && !hasData {
+                    Text("NO DATA FOUND.")
+                        .font(.system(size: 11, weight: .bold))
+                        .kerning(1.8)
+                        .foregroundStyle(.secondary)
+                    Spacer().frame(height: 10)
+                    Text("No training data\nwas found.")
+                        .font(.system(size: 34, weight: .heavy))
+                        .kerning(-0.95)
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.primary)
+                    Spacer().frame(height: 14)
+                    Text("Your iCloud account is signed in but no existing plan was found. You can start a new one.")
+                        .font(.bodyRegular)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 12)
+                        .lineSpacing(2)
+                } else {
+                    Text("WELCOME BACK.")
+                        .font(.system(size: 11, weight: .bold))
+                        .kerning(1.8)
+                        .foregroundStyle(.brand)
+                    Spacer().frame(height: 10)
+                    Text(hasData ? "Your training plan\nis ready." : "Restoring your\ntraining data…")
+                        .font(.system(size: 34, weight: .heavy))
+                        .kerning(-0.95)
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.primary)
+                    Spacer().frame(height: 14)
+                    if !hasData {
+                        Text("Syncing from iCloud. This only takes a moment.")
+                            .font(.bodyRegular)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 12)
+                        Spacer().frame(height: 24)
+                        ProgressView().tint(.brand).scaleEffect(1.2)
+                    }
+                }
+
+                Spacer(minLength: 30)
+            }
+            .padding(.horizontal, 24)
+
+            VStack(spacing: 0) {
+                if hasData {
+                    Button {
+                        authService.welcomeBackPending = false
+                    } label: {
+                        HStack(spacing: 10) {
+                            Text("Continue to Dashboard").font(.system(size: 17, weight: .bold))
+                            StrideIcon(name: .chevronRight, size: 15, color: .white, strokeWeight: 2.6)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(Color.brand, in: RoundedRectangle(cornerRadius: 18))
+                        .shadow(color: Color.brand.opacity(0.5), radius: 14, y: 8)
+                        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(.white.opacity(0.2), lineWidth: 0.5))
+                    }
+                    .foregroundStyle(.white)
+                    .buttonStyle(.plain)
+                } else if timedOut {
+                    Button(action: onStartFresh) {
+                        Text("Start fresh")
+                            .font(.system(size: 17, weight: .bold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(Color.brand, in: RoundedRectangle(cornerRadius: 18))
+                    }
+                    .foregroundStyle(.white)
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 44)
+        }
+        .task {
+            try? await Task.sleep(for: .seconds(15))
+            if !hasData { timedOut = true }
         }
     }
 }
