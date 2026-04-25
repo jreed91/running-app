@@ -25,4 +25,4 @@ TestResults/
 TestFlight/
 
 # Local secrets (never commit)
-RunningApp/Resources/Secrets.plist
+Stride/Resources/Secrets.plist
