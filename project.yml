@@ -23,6 +23,11 @@ settings:
     Release:
       SWIFT_OPTIMIZATION_LEVEL: "-O"
 
+packages:
+  Pulse:
+    url: https://github.com/kean/Pulse.git
+    from: 5.2.1
+
 targets:
 
   # ── iOS app ──────────────────────────────────────────────────────────────────
@@ -61,6 +66,10 @@ targets:
 
     dependencies:
       - sdk: WeatherKit.framework
+      - package: Pulse
+        product: PulseProxy
+      - package: Pulse
+        product: PulseUI
 
     info:
       path: RunningApp/Resources/Info.plist

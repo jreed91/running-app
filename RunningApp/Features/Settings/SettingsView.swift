@@ -1,6 +1,9 @@
 import SwiftUI
 import SwiftData
 import AuthenticationServices
+#if canImport(PulseUI)
+import PulseUI
+#endif
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var context
@@ -16,6 +19,7 @@ struct SettingsView: View {
 
     @State private var showResetConfirmation = false
     @State private var showSyncRestartNote = false
+    @State private var showPulseConsole = false
     #if DEBUG
     @State private var seedWeeks = 8
     @State private var completionCutoff = Date()
@@ -277,7 +281,25 @@ struct SettingsView: View {
                     .font(.system(size: 14, weight: .medium, design: .monospaced))
                     .foregroundStyle(.secondary)
             }
+            #if canImport(PulseUI)
+            if DataMigrationService.isTestFlight {
+                rowDivider
+                Button {
+                    showPulseConsole = true
+                } label: {
+                    settingsRow(icon: .history, iconColor: .brand, title: "Pulse Console") {
+                        StrideIcon(name: .chevronRight, size: 12,
+                                   color: Color.secondary.opacity(0.5), strokeWeight: 2)
+                    }
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.primary)
+            }
+            #endif
         }
+        #if canImport(PulseUI)
+        .sheet(isPresented: $showPulseConsole) { NavigationStack { ConsoleView() } }
+        #endif
     }
 
     // MARK: - Danger card

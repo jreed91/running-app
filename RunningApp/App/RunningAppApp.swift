@@ -16,6 +16,7 @@ struct RunningAppApp: App {
                 .environment(authService)
                 .modelContainer(container.modelContainer)
                 .task {
+                    PulseIntegrationService.activateIfNeeded()
                     await container.workoutSyncService.startObserving()
                     await authService.checkCredentialState()
                 }
