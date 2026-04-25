@@ -149,6 +149,15 @@ struct WorkoutRowView: View {
                     .replacingOccurrences(of: " min/mi", with: ""))
                     .font(.system(size: 12, weight: .medium, design: .monospaced))
                     .foregroundStyle(.secondary)
+                if let w = workout.weather {
+                    HStack(spacing: 3) {
+                        Image(systemName: w.conditionSymbol)
+                            .symbolRenderingMode(.multicolor)
+                        Text(w.temperatureString(unit: appSettings.unitPreference))
+                    }
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                }
             }
         }
         .padding(.vertical, 6)

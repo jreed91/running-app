@@ -94,6 +94,27 @@ struct WorkoutWeather: Codable, Hashable, Sendable {
     var conditionSymbol: String
     /// Human-readable weather condition (e.g. "Partly Cloudy").
     var conditionDescription: String
+
+    func temperatureString(unit: UnitPreference) -> String {
+        switch unit {
+        case .metric:   return String(format: "%.0f°C", temperatureCelsius)
+        case .imperial: return String(format: "%.0f°F", temperatureCelsius * 9 / 5 + 32)
+        }
+    }
+
+    func feelsLikeString(unit: UnitPreference) -> String {
+        switch unit {
+        case .metric:   return String(format: "%.0f°C", feelsLikeCelsius)
+        case .imperial: return String(format: "%.0f°F", feelsLikeCelsius * 9 / 5 + 32)
+        }
+    }
+
+    func windString(unit: UnitPreference) -> String {
+        switch unit {
+        case .metric:   return String(format: "%.0f km/h", windSpeedKmh)
+        case .imperial: return String(format: "%.0f mph", windSpeedKmh * 0.621371)
+        }
+    }
 }
 
 // MARK: - RouteStep
