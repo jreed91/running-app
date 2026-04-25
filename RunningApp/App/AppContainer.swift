@@ -1,4 +1,5 @@
 import Foundation
+import CoreData
 import SwiftData
 
 // MARK: - AppContainer
@@ -31,6 +32,7 @@ final class AppContainer: ObservableObject {
     let workoutSyncService: WorkoutSyncService
     let dataMigrationService: DataMigrationService
     let weatherService: WeatherService
+    private var cloudKitEventObserver: NSObjectProtocol?
 
     // MARK: Init
 
@@ -137,6 +139,7 @@ final class AppContainer: ObservableObject {
 
         self.dataMigrationService = DataMigrationService()
         self.dataMigrationService.runIfNeeded(context: context)
+        self.configureCloudKitDiagnostics(syncEnabled: syncEnabled)
     }
 
     // MARK: - Weather
@@ -219,6 +222,54 @@ final class AppContainer: ObservableObject {
     /// In-memory container for SwiftUI previews and unit tests.
     static func preview() -> AppContainer {
         AppContainer(inMemory: true)
+    }
+
+    // MARK: - CloudKit diagnostics
+
+    /// Logs CloudKit import/export lifecycle events from the underlying
+    /// `NSPersistentCloudKitContainer` so we can confirm records are
+    /// being pushed and pulled during development.
+    private func configureCloudKitDiagnostics(syncEnabled: Bool) {
+        guard syncEnabled else {
+            print("[CloudKit] Diagnostics disabled because iCloud sync is OFF in settings")
+            return
+        }
+
+        cloudKitEventObserver = NotificationCenter.default.addObserver(
+            forName: NSPersistentCloudKitContainer.eventChangedNotification,
+            object: nil,
+            queue: .main
+        ) { note in
+            guard let event = note.userInfo?[NSPersistentCloudKitContainer.eventNotificationUserInfoKey]
+                as? NSPersistentCloudKitContainer.Event else {
+                return
+            }
+
+            let eventType: String
+            switch event.type {
+            case .setup: eventType = "setup"
+            case .import: eventType = "import"
+            case .export: eventType = "export"
+            @unknown default: eventType = "unknown"
+            }
+
+            let status: String
+            if event.endDate == nil {
+                status = "started"
+            } else if let error = event.error {
+                status = "failed (\(error.localizedDescription))"
+            } else {
+                status = "finished"
+            }
+
+            print("[CloudKit] Event \(event.identifier) \(eventType) \(status)")
+        }
+    }
+
+    deinit {
+        if let cloudKitEventObserver {
+            NotificationCenter.default.removeObserver(cloudKitEventObserver)
+        }
     }
 
 }
