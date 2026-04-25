@@ -30,6 +30,12 @@
 	<string>RunningApp uses your location to track your route during a run.</string>
 	<key>NSMotionUsageDescription</key>
 	<string>RunningApp uses motion data to measure cadence during runs.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Network usage required only for development and TestFlight diagnostics.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_pulse._tcp</string>
+	</array>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>
