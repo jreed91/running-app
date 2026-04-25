@@ -75,7 +75,7 @@ final class DataMigrationService {
         func attempt<T: PersistentModel>(_ type: T.Type) {
             do { try context.delete(model: type) } catch {
                 failed = true
-                print("[DataMigrationService] Failed to delete \(type): \(error)")
+                AppLogger.log("Failed to delete \(type): \(error)", label: "DataMigrationService", level: .error)
             }
         }
 
@@ -91,7 +91,7 @@ final class DataMigrationService {
         do {
             try context.save()
         } catch {
-            print("[DataMigrationService] Failed to save after cleanup: \(error)")
+            AppLogger.log("Failed to save after cleanup: \(error)", label: "DataMigrationService", level: .error)
         }
     }
 }

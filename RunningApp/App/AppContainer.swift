@@ -77,9 +77,9 @@ final class AppContainer: ObservableObject {
         let container: ModelContainer
         do {
             container = try ModelContainer(for: schema, configurations: [config])
-            print("[AppContainer v5] Store opened OK (syncEnabled=\(syncEnabled), cloudKitEnabled=\(cloudKitEnabled))")
+            AppLogger.log("Store opened OK (syncEnabled=\(syncEnabled), cloudKitEnabled=\(cloudKitEnabled))", label: "AppContainer", level: .info)
         } catch let primaryError {
-            print("[AppContainer v5] CloudKit store failed (\(primaryError)); falling back to local-only at same URL")
+            AppLogger.log("CloudKit store failed (\(primaryError)); falling back to local-only at same URL", label: "AppContainer", level: .error)
             guard !inMemory else {
                 fatalError("[AppContainer v5] In-memory ModelContainer failed: \(primaryError)")
             }
@@ -88,10 +88,10 @@ final class AppContainer: ObservableObject {
             // exported to CloudKit automatically once the container succeeds on a later launch.
             if let c = try? ModelContainer(for: schema, configurations: [localConfig]) {
                 container = c
-                print("[AppContainer v5] Tier1: local-only store OK (data will sync when CloudKit recovers)")
+                AppLogger.log("Tier1: local-only store OK (data will sync when CloudKit recovers)", label: "AppContainer", level: .notice)
             } else {
                 // Tier 2 — delete the on-disk store and recreate local-only.
-                print("[AppContainer v5] Tier2: deleting store at \(storeURL.path)")
+                AppLogger.log("Tier2: deleting store at \(storeURL.path)", label: "AppContainer", level: .warning)
                 for suffix in ["", "-shm", "-wal"] {
                     try? FileManager.default.removeItem(
                         at: URL(fileURLWithPath: storeURL.path + suffix)
@@ -100,10 +100,10 @@ final class AppContainer: ObservableObject {
 
                 if let c = try? ModelContainer(for: schema, configurations: [localConfig]) {
                     container = c
-                    print("[AppContainer v5] Tier2: fresh local store created OK")
+                    AppLogger.log("Tier2: fresh local store created OK", label: "AppContainer", level: .notice)
                 } else {
                     // Tier 3 — in-memory; data won't persist but the app won't crash on launch.
-                    print("[AppContainer v5] Tier3: all persistent tiers failed — using in-memory store")
+                    AppLogger.log("Tier3: all persistent tiers failed — using in-memory store", label: "AppContainer", level: .critical)
                     let memConfig = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
                     do {
                         container = try ModelContainer(for: schema, configurations: [memConfig])
@@ -147,7 +147,7 @@ final class AppContainer: ObservableObject {
         guard syncEnabled, !inMemory else { return false }
 
         #if targetEnvironment(simulator)
-        print("[AppContainer v5] CloudKit disabled in simulator; using local SwiftData store")
+        AppLogger.log("CloudKit disabled in simulator; using local SwiftData store", label: "AppContainer", level: .debug)
         return false
         #else
         return true
@@ -243,7 +243,7 @@ final class AppContainer: ObservableObject {
     /// being pushed and pulled during development.
     private func configureCloudKitDiagnostics(cloudKitEnabled: Bool) {
         guard cloudKitEnabled else {
-            print("[CloudKit] Diagnostics disabled because CloudKit store is not active")
+            AppLogger.log("Diagnostics disabled because CloudKit store is not active", label: "CloudKit", level: .debug)
             return
         }
 
@@ -287,7 +287,7 @@ final class AppContainer: ObservableObject {
             status = "finished"
         }
 
-        print("[CloudKit] Event \(event.identifier) \(eventType) \(status)")
+        AppLogger.log("Event \(event.identifier) \(eventType) \(status)", label: "CloudKit", level: .info)
     }
 
 }

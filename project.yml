@@ -88,6 +88,9 @@ targets:
         NSHealthShareUsageDescription: "RunningApp reads your workout and heart-rate history to show training insights."
         NSHealthUpdateUsageDescription: "RunningApp saves your completed runs to Apple Health."
         NSMotionUsageDescription: "RunningApp uses motion data to measure cadence during runs."
+        NSLocalNetworkUsageDescription: "Network usage required only for development and TestFlight diagnostics."
+        NSBonjourServices:
+          - _pulse._tcp
         UILaunchScreen: {}
         ITSAppUsesNonExemptEncryption: false
 

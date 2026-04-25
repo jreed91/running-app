@@ -294,6 +294,6 @@ extension WorkoutTrackerService: CLLocationManagerDelegate {
         didFailWithError error: Error
     ) {
         // Non-fatal – location updates will resume on next fix
-        print("[WorkoutTrackerService] Location error: \(error.localizedDescription)")
+        AppLogger.log("Location error: \(error.localizedDescription)", label: "WorkoutTrackerService", level: .error)
     }
 }
