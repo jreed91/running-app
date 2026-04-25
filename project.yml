@@ -67,6 +67,8 @@ targets:
     dependencies:
       - sdk: WeatherKit.framework
       - package: Pulse
+        product: Pulse
+      - package: Pulse
         product: PulseProxy
       - package: Pulse
         product: PulseUI
@@ -101,6 +103,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.jacobreedrunningapp.tests
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: "VMNPGK3Q29"
+        GENERATE_INFOPLIST_FILE: YES
 
     dependencies:
       - target: RunningApp
@@ -120,6 +123,7 @@ targets:
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: "VMNPGK3Q29"
         TEST_TARGET_NAME: RunningApp
+        GENERATE_INFOPLIST_FILE: YES
 
     dependencies:
       - target: RunningApp
