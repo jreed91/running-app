@@ -26,6 +26,22 @@ struct SettingsView: View {
     #endif
 
     private var profile: UserProfile? { profiles.first }
+    private var persistenceStatusText: String {
+        switch container.persistenceMode {
+        case .cloudKit:
+            "CloudKit"
+        case .inMemory:
+            "In-Memory"
+        case .localOnly:
+            "Local Only"
+        case .localFallback:
+            "Local Fallback"
+        case .recreatedLocalFallback:
+            "Recreated Local Store"
+        case .emergencyInMemory:
+            "Emergency In-Memory"
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -208,6 +224,19 @@ struct SettingsView: View {
             }
             if showSyncRestartNote {
                 Text("Restart the app for this change to take effect.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, 62)
+                    .padding(.bottom, 10)
+            }
+            rowDivider
+            settingsRow(icon: .check, iconColor: .brand, title: "Active Store") {
+                Text(persistenceStatusText)
+                    .font(.bodyRegular)
+                    .foregroundStyle(.secondary)
+            }
+            if appSettings.iCloudSyncEnabled {
+                Text("Verify CloudKit on-device in Pulse Console: look for `CloudKit` `setup`, `export`, and `import` events.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .padding(.leading, 62)
