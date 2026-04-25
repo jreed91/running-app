@@ -29,6 +29,9 @@ final class RunWorkout {
     /// Required by CloudKit (every relationship must have an inverse).
     var scheduledWorkout: ScheduledWorkout?
 
+    /// JSON-encoded ``WorkoutWeather``.
+    var weatherData: Data?
+
     // MARK: Computed helpers (not persisted)
 
     var splits: [Split] {
@@ -39,6 +42,11 @@ final class RunWorkout {
     var routeCoordinates: [Coordinate] {
         get { routeData?.decode([Coordinate].self) ?? [] }
         set { routeData = .encoded(newValue) }
+    }
+
+    var weather: WorkoutWeather? {
+        get { weatherData?.decode(WorkoutWeather.self) }
+        set { weatherData = newValue.flatMap { .encoded($0) } }
     }
 
     init(

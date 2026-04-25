@@ -103,6 +103,11 @@ struct HistoryView: View {
             }
             if !newWorkouts.isEmpty {
                 try context.save()
+                for workout in newWorkouts {
+                    if let coordinate = workout.routeCoordinates.first {
+                        await container.attachWeather(to: workout, coordinate: coordinate)
+                    }
+                }
             }
         } catch {
             // Silent failure — background sync shouldn't interrupt the user

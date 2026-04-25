@@ -78,6 +78,24 @@ struct WorkoutStructure: Codable, Hashable, Sendable {
     var totalEstimatedDurationSeconds: Double
 }
 
+// MARK: - WorkoutWeather
+
+/// Weather conditions recorded at the start of a run.
+struct WorkoutWeather: Codable, Hashable, Sendable {
+    /// Ambient temperature in Celsius.
+    var temperatureCelsius: Double
+    /// Apparent ("feels like") temperature in Celsius.
+    var feelsLikeCelsius: Double
+    /// Relative humidity as a percentage (0–100).
+    var humidityPercent: Double
+    /// Wind speed in km/h.
+    var windSpeedKmh: Double
+    /// SF Symbol name for the weather condition (e.g. "sun.max.fill").
+    var conditionSymbol: String
+    /// Human-readable weather condition (e.g. "Partly Cloudy").
+    var conditionDescription: String
+}
+
 // MARK: - RouteStep
 
 /// A single turn-by-turn navigation step returned by the route generation service.

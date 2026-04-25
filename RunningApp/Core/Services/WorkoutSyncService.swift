@@ -18,6 +18,7 @@ final class WorkoutSyncService {
 
     private let healthKitRepository: HealthKitRepositoryProtocol
     private let notificationService: NotificationService
+    private let weatherService: WeatherService
     private let context: ModelContext
 
     // MARK: Init
@@ -25,10 +26,12 @@ final class WorkoutSyncService {
     init(
         healthKitRepository: HealthKitRepositoryProtocol,
         notificationService: NotificationService,
+        weatherService: WeatherService,
         context: ModelContext
     ) {
         self.healthKitRepository = healthKitRepository
         self.notificationService = notificationService
+        self.weatherService = weatherService
         self.context = context
     }
 
@@ -91,9 +94,21 @@ final class WorkoutSyncService {
             return
         }
 
+        for workout in newWorkouts {
+            if let coordinate = workout.routeCoordinates.first {
+                await attachWeather(to: workout, coordinate: coordinate)
+            }
+        }
+
         let unit = AppSettings.syncedUnitPreference()
         for workout in newWorkouts {
             try? await notificationService.notifyNewRunSynced(workout, unit: unit)
         }
+    }
+
+    private func attachWeather(to workout: RunWorkout, coordinate: Coordinate) async {
+        guard let summary = await weatherService.fetchWeather(at: coordinate, date: workout.date) else { return }
+        workout.weather = summary
+        try? context.save()
     }
 }

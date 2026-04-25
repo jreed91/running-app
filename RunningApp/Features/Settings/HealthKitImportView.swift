@@ -125,6 +125,11 @@ struct HealthKitImportView: View {
             }
             if !newWorkouts.isEmpty {
                 try context.save()
+                for workout in newWorkouts {
+                    if let coordinate = workout.routeCoordinates.first {
+                        await container.attachWeather(to: workout, coordinate: coordinate)
+                    }
+                }
             }
 
             importState = .done(imported: newWorkouts.count, skipped: skipped)

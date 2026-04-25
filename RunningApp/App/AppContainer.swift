@@ -30,6 +30,7 @@ final class AppContainer: ObservableObject {
     let routeGeniusService: RouteGeniusService
     let workoutSyncService: WorkoutSyncService
     let dataMigrationService: DataMigrationService
+    let weatherService: WeatherService
 
     // MARK: Init
 
@@ -125,14 +126,27 @@ final class AppContainer: ObservableObject {
         self.notificationService = notifications
         self.workoutAnalyticsService = WorkoutAnalyticsService()
         self.routeGeniusService = RouteGeniusService()
+        let weather = WeatherService()
+        self.weatherService = weather
         self.workoutSyncService = WorkoutSyncService(
             healthKitRepository: hkRepository,
             notificationService: notifications,
+            weatherService: weather,
             context: context
         )
 
         self.dataMigrationService = DataMigrationService()
         self.dataMigrationService.runIfNeeded(context: context)
+    }
+
+    // MARK: - Weather
+
+    /// Fetches weather for the given coordinate and attaches it to the workout, then saves.
+    /// Silently no-ops if WeatherKit is unavailable or the workout has no coordinate.
+    func attachWeather(to workout: RunWorkout, coordinate: Coordinate) async {
+        guard let summary = await weatherService.fetchWeather(at: coordinate, date: workout.date) else { return }
+        workout.weather = summary
+        try? modelContainer.mainContext.save()
     }
 
     // MARK: - Route Genius
