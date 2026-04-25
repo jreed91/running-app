@@ -281,6 +281,7 @@ struct OBWelcomeBack: View {
     ///    fires once CloudKit has finished pulling the current set of changes.
     /// 3. A 60s fallback timeout — defensive for devices where the notification
     ///    never arrives (e.g. CloudKit container failed to initialise).
+    @MainActor
     private func waitForInitialSync() async {
         guard appSettings.iCloudSyncEnabled else {
             try? await Task.sleep(nanoseconds: 1_500_000_000)
@@ -288,32 +289,49 @@ struct OBWelcomeBack: View {
             return
         }
 
-        await withTaskGroup(of: Void.self) { group in
-            group.addTask { @MainActor in
-                for await note in NotificationCenter.default.notifications(
-                    named: NSPersistentCloudKitContainer.eventChangedNotification
-                ) {
-                    guard
-                        let event = note.userInfo?[
-                            NSPersistentCloudKitContainer.eventNotificationUserInfoKey
-                        ] as? NSPersistentCloudKitContainer.Event,
-                        event.type == .import,
-                        event.endDate != nil
-                    else { continue }
-                    return
-                }
-            }
-            group.addTask {
-                try? await Task.sleep(nanoseconds: 60_000_000_000)
-            }
-            await group.next()
-            group.cancelAll()
-        }
+        _ = await waitForCloudKitImportEvent(timeoutNanoseconds: 60_000_000_000)
 
         // Give @Query a moment to publish any freshly imported profiles
         // before we make the empty-store decision.
         try? await Task.sleep(nanoseconds: 1_000_000_000)
         initialSyncFinished = true
+    }
+
+    @MainActor
+    private func waitForCloudKitImportEvent(timeoutNanoseconds: UInt64) async -> Bool {
+        await withCheckedContinuation { continuation in
+            var didResume = false
+            var observer: NSObjectProtocol?
+
+            func finish(_ didImport: Bool) {
+                guard !didResume else { return }
+                didResume = true
+                if let observer {
+                    NotificationCenter.default.removeObserver(observer)
+                }
+                continuation.resume(returning: didImport)
+            }
+
+            observer = NotificationCenter.default.addObserver(
+                forName: NSPersistentCloudKitContainer.eventChangedNotification,
+                object: nil,
+                queue: .main
+            ) { note in
+                guard
+                    let event = note.userInfo?[
+                        NSPersistentCloudKitContainer.eventNotificationUserInfoKey
+                    ] as? NSPersistentCloudKitContainer.Event,
+                    event.type == .import,
+                    event.endDate != nil
+                else { return }
+                finish(true)
+            }
+
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: timeoutNanoseconds)
+                finish(false)
+            }
+        }
     }
 }
 
