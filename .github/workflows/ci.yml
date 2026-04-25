@@ -51,6 +51,9 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
+      - name: Resolve Swift packages
+        run: xcodebuild -resolvePackageDependencies -project RunningApp.xcodeproj -scheme "$SCHEME"
+
       - name: Cache DerivedData
         uses: actions/cache@v4
         with:
@@ -132,6 +135,9 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
+      - name: Resolve Swift packages
+        run: xcodebuild -resolvePackageDependencies -project RunningApp.xcodeproj -scheme "$SCHEME"
+
       - name: Cache DerivedData
         uses: actions/cache@v4
         with:
@@ -168,6 +174,9 @@ jobs:
 
       - name: Generate Xcode project
         run: xcodegen generate
+
+      - name: Resolve Swift packages
+        run: xcodebuild -resolvePackageDependencies -project RunningApp.xcodeproj -scheme "$SCHEME"
 
       - name: Cache DerivedData
         uses: actions/cache@v4
