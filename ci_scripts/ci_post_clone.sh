@@ -19,7 +19,8 @@ sed -i '' "s/CURRENT_PROJECT_VERSION: .*/CURRENT_PROJECT_VERSION: $BUILD_NUMBER/
 
 xcodegen generate
 
-echo "--- Resolving Swift package dependencies ---"
-xcodebuild -resolvePackageDependencies -project RunningApp.xcodeproj -scheme RunningApp
+echo "--- Installing resolved Swift package pins ---"
+mkdir -p RunningApp.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
+cp ci_scripts/Package.resolved RunningApp.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 
 echo "--- Project generation complete ---"
