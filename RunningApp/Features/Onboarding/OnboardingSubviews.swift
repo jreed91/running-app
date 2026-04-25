@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 import AuthenticationServices
 import CloudKit
+import CoreData
 
 // MARK: - OBWelcome
 
@@ -117,11 +118,17 @@ struct OBWelcome: View {
 
 struct OBWelcomeBack: View {
     @Environment(AuthService.self) private var authService
+    @Environment(AppSettings.self) private var appSettings
     @Query private var profiles: [UserProfile]
 
     let onStartFresh: () -> Void
 
     @State private var iCloudIssue: String?
+    // Set true once we have a definitive signal that CloudKit's initial
+    // import has run. Combined with `hasData` below, an empty store after
+    // this point means the user is new (or has no iCloud data) and should
+    // proceed with regular onboarding rather than waiting forever.
+    @State private var initialSyncFinished = false
 
     init(onStartFresh: @escaping () -> Void) {
         self.onStartFresh = onStartFresh
@@ -215,6 +222,16 @@ struct OBWelcomeBack: View {
             .padding(.bottom, 44)
         }
         .task { await checkICloudStatus() }
+        .task { await waitForInitialSync() }
+        .onChange(of: initialSyncFinished) { _, finished in
+            // Once CloudKit has had a chance to deliver any existing data, an
+            // empty profile list means this Apple ID has nothing to restore
+            // (new user, or no prior install). Send them into normal onboarding
+            // instead of leaving them stranded on the spinner.
+            if finished, !hasData {
+                onStartFresh()
+            }
+        }
     }
 
     private func checkICloudStatus() async {
@@ -229,15 +246,74 @@ struct OBWelcomeBack: View {
             iCloudIssue = nil
         case .noAccount:
             iCloudIssue = "iCloud is not signed in on this device. Your previous plans are stored in iCloud."
+            scheduleUnavailableICloudTransition()
         case .restricted:
             iCloudIssue = "iCloud access is restricted on this device, so previous plans can't be restored yet."
+            scheduleUnavailableICloudTransition()
         case .couldNotDetermine:
             iCloudIssue = "iCloud status couldn't be verified right now. Check your network and iCloud settings."
+            scheduleUnavailableICloudTransition()
         case .temporarilyUnavailable:
             iCloudIssue = "iCloud is temporarily unavailable. Please keep this screen open and try again in a moment."
         @unknown default:
             iCloudIssue = "Unable to verify iCloud status. Check iCloud settings and network, then try again."
+            scheduleUnavailableICloudTransition()
         }
+    }
+
+    /// CloudKit can't deliver records when the account isn't usable. Give the
+    /// user a few seconds to read the diagnostic, then advance so they aren't
+    /// stuck staring at "Checking iCloud…" indefinitely.
+    private func scheduleUnavailableICloudTransition() {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 6_000_000_000)
+            initialSyncFinished = true
+        }
+    }
+
+    /// Waits for a definitive "initial sync done" signal so we can tell new
+    /// users apart from returning users whose data is still arriving.
+    ///
+    /// Three possible signals, whichever comes first wins:
+    /// 1. iCloud sync is disabled — nothing will ever sync, so transition right away.
+    /// 2. `NSPersistentCloudKitContainer` posts an import event with `endDate` set —
+    ///    SwiftData uses NSPersistentCloudKitContainer under the hood, so this
+    ///    fires once CloudKit has finished pulling the current set of changes.
+    /// 3. A 60s fallback timeout — defensive for devices where the notification
+    ///    never arrives (e.g. CloudKit container failed to initialise).
+    private func waitForInitialSync() async {
+        guard appSettings.iCloudSyncEnabled else {
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            initialSyncFinished = true
+            return
+        }
+
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { @MainActor in
+                for await note in NotificationCenter.default.notifications(
+                    named: NSPersistentCloudKitContainer.eventChangedNotification
+                ) {
+                    guard
+                        let event = note.userInfo?[
+                            NSPersistentCloudKitContainer.eventNotificationUserInfoKey
+                        ] as? NSPersistentCloudKitContainer.Event,
+                        event.type == .import,
+                        event.endDate != nil
+                    else { continue }
+                    return
+                }
+            }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: 60_000_000_000)
+            }
+            await group.next()
+            group.cancelAll()
+        }
+
+        // Give @Query a moment to publish any freshly imported profiles
+        // before we make the empty-store decision.
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        initialSyncFinished = true
     }
 }
 
