@@ -1,4 +1,4 @@
-# RunningApp Repository Analysis (April 24, 2026)
+# Stride Repository Analysis (April 24, 2026)
 
 ## Executive summary
 
@@ -49,13 +49,13 @@ This repository has a strong foundation: clear domain modeling, sensible service
 ## 2) Security, secrets, and compliance
 
 ### Gap 2.1 — `Secrets.plist` is documented but not gitignored
-- The example file instructs contributors to create `RunningApp/Resources/Secrets.plist`, but `.gitignore` does not exclude that path.
+- The example file instructs contributors to create `Stride/Resources/Secrets.plist`, but `.gitignore` does not exclude that path.
 
 **Risk**
 - Accidental API key commits are likely.
 
 **Improvements**
-- Add `RunningApp/Resources/Secrets.plist` to `.gitignore`.
+- Add `Stride/Resources/Secrets.plist` to `.gitignore`.
 - Optionally add a pre-commit hook or CI check to fail builds if a real key is committed.
 
 ### Gap 2.2 — Limited network hardening in route API client
@@ -168,7 +168,7 @@ This repository has a strong foundation: clear domain modeling, sensible service
 
 ## Next 2 weeks (high ROI)
 - [x] Add root `README.md` and contributor setup guide.
-- [x] Add `RunningApp/Resources/Secrets.plist` to `.gitignore` and CI secret-scan check. *(gitignore done; CI secret-scan still pending)*  
+- [x] Add `Stride/Resources/Secrets.plist` to `.gitignore` and CI secret-scan check. *(gitignore done; CI secret-scan still pending)*  
 - [x] Implement HTTP status handling + richer errors in `RouteGeniusService`.
 - [ ] Replace startup/migration `print` logging with OSLog.
 - [~] Add tests for `RouteGeniusService` and `DataMigrationService`. *(RouteGenius tests added; DataMigration tests still pending)*

@@ -1,6 +1,6 @@
 import XCTest
 
-final class RunningAppUITests: XCTestCase {
+final class StrideUITests: XCTestCase {
 
     private var app: XCUIApplication!
 

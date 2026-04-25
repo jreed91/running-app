@@ -1,9 +1,9 @@
 included:
-  - RunningApp
+  - Stride
   - WatchApp
 
 excluded:
-  - RunningApp/Resources
+  - Stride/Resources
 
 opt_in_rules:
   - array_init

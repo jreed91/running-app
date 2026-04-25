@@ -71,12 +71,12 @@ final class AppContainer: ObservableObject {
         let syncEnabled = syncEnabledOverride ?? AppSettings.syncedICloudEnabled()
 
         // Explicit container ID so every code path targets the same CloudKit store.
-        let ckContainerID = "iCloud.com.jacobreedrunningapp"
+        let ckContainerID = "iCloud.com.running.stride"
 
         // Shared on-disk URL keeps the CloudKit store and any local-fallback store
         // pointing at the same SQLite file. When CloudKit recovers, NSPersistentCloudKitContainer
         // picks up records that were written during an outage and pushes them automatically.
-        let storeURL = storeURLOverride ?? URL.applicationSupportDirectory.appending(path: "RunningApp.store")
+        let storeURL = storeURLOverride ?? URL.applicationSupportDirectory.appending(path: "Stride.store")
 
         let cloudKitEnabled = forceCloudKit ?? Self.shouldUseCloudKit(syncEnabled: syncEnabled, inMemory: inMemory)
 

@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import RunningApp
+@testable import Stride
 
 struct TrainingPlanServiceTests {
 

@@ -1,4 +1,4 @@
-# RunningApp
+# Stride
 
 A SwiftUI running coach app that creates adaptive training plans, tracks workouts, and generates routes.
 
@@ -9,21 +9,21 @@ A SwiftUI running coach app that creates adaptive training plans, tracks workout
    ```bash
    xcodegen generate
    ```
-3. Open `RunningApp.xcodeproj` and run the `RunningApp` scheme.
+3. Open `Stride.xcodeproj` and run the `Stride` scheme.
 
 ### Secrets
 
 Route generation requires an OpenRouteService API key:
 
-1. Copy `RunningApp/Resources/Secrets.plist.example` to `RunningApp/Resources/Secrets.plist`.
+1. Copy `Stride/Resources/Secrets.plist.example` to `Stride/Resources/Secrets.plist`.
 2. Set `ORSAPIKey` to your token.
 
 ## Architecture overview
 
-- `RunningApp/App/AppContainer.swift`: composition root for repositories + services.
-- `RunningApp/Core/Models`: domain models (`UserProfile`, `TrainingPlan`, `ScheduledWorkout`, etc.).
-- `RunningApp/Core/Services`: business logic (plan generation, analytics, migration, routes).
-- `RunningApp/Features`: SwiftUI feature modules and view models.
+- `Stride/App/AppContainer.swift`: composition root for repositories + services.
+- `Stride/Core/Models`: domain models (`UserProfile`, `TrainingPlan`, `ScheduledWorkout`, etc.).
+- `Stride/Core/Services`: business logic (plan generation, analytics, migration, routes).
+- `Stride/Features`: SwiftUI feature modules and view models.
 
 ## Testing
 
@@ -31,7 +31,7 @@ Run unit tests from Xcode, or with `xcodebuild`:
 
 ```bash
 xcodebuild test \
-  -scheme RunningApp \
+  -scheme Stride \
   -destination 'platform=iOS Simulator,name=iPhone 16'
 ```
 

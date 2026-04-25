@@ -1,7 +1,7 @@
 import Testing
 import Foundation
 import CoreLocation
-@testable import RunningApp
+@testable import Stride
 
 struct RouteGeniusServiceTests {
 

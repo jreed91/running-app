@@ -15,13 +15,13 @@ A fully native iOS app built with Swift that replicates the core functionality o
 xcodegen generate
 
 # Run unit tests
-xcodebuild test -scheme RunningApp -destination 'platform=iOS Simulator,name=iPhone 17'
+xcodebuild test -scheme Stride -destination 'platform=iOS Simulator,name=iPhone 17'
 
 # Run a single test class
-xcodebuild test -scheme RunningApp -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:RunningAppTests/PaceCalculatorTests
+xcodebuild test -scheme Stride -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:StrideTests/PaceCalculatorTests
 
 # Build for release
-xcodebuild archive -scheme RunningApp -archivePath build/RunningApp.xcarchive
+xcodebuild archive -scheme Stride -archivePath build/Stride.xcarchive
 ```
 
 > GPS and HealthKit features require a **physical device**. The simulator supports build/test for pure logic.
@@ -51,7 +51,7 @@ View (SwiftUI)
         └── Service (pure Swift, injected)
 ```
 
-**`AppContainer`** (`RunningApp/App/AppContainer.swift`) is the single DI root, created once at launch and injected via SwiftUI's `Environment` as `.appContainer`. It owns the `ModelContainer`, all repositories, and all services.
+**`AppContainer`** (`Stride/App/AppContainer.swift`) is the single DI root, created once at launch and injected via SwiftUI's `Environment` as `.appContainer`. It owns the `ModelContainer`, all repositories, and all services.
 
 Business logic (plan generation, pace calculations) lives in **Services** with no UI dependencies, keeping them unit-testable.
 
@@ -61,13 +61,13 @@ Business logic (plan generation, pace calculations) lives in **Services** with n
 
 | Path | Contents |
 |---|---|
-| `RunningApp/App/` | `@main` entry point, `AppContainer` (DI root) |
-| `RunningApp/Core/Models/` | SwiftData `@Model` classes, `Enums.swift`, `ValueTypes.swift` |
-| `RunningApp/Core/Repositories/` | SwiftData + HealthKit CRUD via protocols |
-| `RunningApp/Core/Services/` | `TrainingPlanService`, `PaceCalculatorService`, `WorkoutTrackerService`, `NotificationService`, `WorkoutAnalyticsService` |
-| `RunningApp/Features/` | One folder per screen: `Dashboard`, `Training`, `ActiveRun`, `History`, `Progress`, `Settings`, `Onboarding` |
-| `RunningApp/Shared/` | Reusable `Components/`, `Extensions/`, `Theme/` |
-| `RunningAppTests/` | Unit tests using **Swift Testing** (`@Test`, `#expect`) |
+| `Stride/App/` | `@main` entry point, `AppContainer` (DI root) |
+| `Stride/Core/Models/` | SwiftData `@Model` classes, `Enums.swift`, `ValueTypes.swift` |
+| `Stride/Core/Repositories/` | SwiftData + HealthKit CRUD via protocols |
+| `Stride/Core/Services/` | `TrainingPlanService`, `PaceCalculatorService`, `WorkoutTrackerService`, `NotificationService`, `WorkoutAnalyticsService` |
+| `Stride/Features/` | One folder per screen: `Dashboard`, `Training`, `ActiveRun`, `History`, `Progress`, `Settings`, `Onboarding` |
+| `Stride/Shared/` | Reusable `Components/`, `Extensions/`, `Theme/` |
+| `StrideTests/` | Unit tests using **Swift Testing** (`@Test`, `#expect`) |
 
 ---
 
@@ -108,7 +108,7 @@ func testName() {
 }
 ```
 
-Test files live in `RunningAppTests/`. Coverage focuses on `PaceCalculatorService` (VDOT math, pace ordering, round-trips) and `TrainingPlanService` (plan structure, phase ordering, volume progression).
+Test files live in `StrideTests/`. Coverage focuses on `PaceCalculatorService` (VDOT math, pace ordering, round-trips) and `TrainingPlanService` (plan structure, phase ordering, volume progression).
 
 ---
 

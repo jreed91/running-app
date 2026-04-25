@@ -1,5 +1,5 @@
 import Testing
-@testable import RunningApp
+@testable import Stride
 
 // MARK: - VDOT / pace calculation tests
 

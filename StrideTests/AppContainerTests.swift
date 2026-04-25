@@ -1,7 +1,7 @@
 import Foundation
 import SwiftData
 import Testing
-@testable import RunningApp
+@testable import Stride
 
 @MainActor
 struct AppContainerTests {
