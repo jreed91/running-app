@@ -37,6 +37,8 @@ struct OnboardingView: View {
 
     @State private var isCreatingPlan = false
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     private let locationManager = CLLocationManager()
     private let totalSteps = 6
 
@@ -74,7 +76,7 @@ struct OnboardingView: View {
                     removal: .move(edge: goingForward ? .leading : .trailing).combined(with: .opacity)
                 ))
         }
-        .animation(.easeInOut(duration: 0.3), value: step)
+        .adaptiveAnimation(AppAnimation.bouncy, value: step)
         .ignoresSafeArea()
     }
 
@@ -139,8 +141,14 @@ struct OnboardingView: View {
 
     // MARK: - Navigation
 
-    private func advance() { goingForward = true; withAnimation { step += 1 } }
-    private func retreat() { goingForward = false; withAnimation { step -= 1 } }
+    private func advance() {
+        goingForward = true
+        withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : AppAnimation.bouncy) { step += 1 }
+    }
+    private func retreat() {
+        goingForward = false
+        withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : AppAnimation.bouncy) { step -= 1 }
+    }
 
     // MARK: - Goal content
 
@@ -281,7 +289,9 @@ struct OnboardingView: View {
                         let labels = ["M","T","W","T","F","S","S"]
                         let isOn = selectedDays.contains(i)
                         Button {
-                            if isOn { selectedDays.remove(i) } else { selectedDays.insert(i) }
+                            withAnimation(AppAnimation.snappy) {
+                                if isOn { selectedDays.remove(i) } else { selectedDays.insert(i) }
+                            }
                         } label: {
                             Text(labels[i])
                                 .font(.system(size: 17, weight: .bold))
@@ -291,7 +301,7 @@ struct OnboardingView: View {
                                 .foregroundStyle(isOn ? Color.white : Color.secondary)
                                 .shadow(color: isOn ? Color.brand.opacity(0.4) : .clear, radius: 8, y: 3)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(BouncyButtonStyle())
                     }
                 }
                 // Days per week pill
@@ -371,9 +381,9 @@ struct OnboardingView: View {
             }
             .padding(16)
             .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 20))
-            .animation(.spring(response: 0.45, dampingFraction: 0.82), value: permRowsVisible[0])
-            .animation(.spring(response: 0.45, dampingFraction: 0.82), value: permRowsVisible[1])
-            .animation(.spring(response: 0.45, dampingFraction: 0.82), value: permRowsVisible[2])
+            .adaptiveAnimation(AppAnimation.bouncy, value: permRowsVisible[0])
+            .adaptiveAnimation(AppAnimation.bouncy, value: permRowsVisible[1])
+            .adaptiveAnimation(AppAnimation.bouncy, value: permRowsVisible[2])
 
             HStack(spacing: 10) {
                 StrideIcon(name: .lock, size: 16, color: .secondary)
