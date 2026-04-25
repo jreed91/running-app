@@ -54,6 +54,19 @@ struct ContentView: View {
         .task { deduplicate() }
         .onChange(of: profiles.count) { _, _ in deduplicate() }
         .onChange(of: activePlans.count) { _, _ in deduplicate() }
+        // When the user already has a saved Apple ID but no local SwiftData records yet
+        // (e.g. fresh install, reinstall), skip regular onboarding and go straight to the
+        // CloudKit-restore screen so they don't accidentally create a duplicate profile.
+        .task {
+            if authService.isSignedIn && profiles.isEmpty {
+                authService.welcomeBackPending = true
+            }
+        }
+        .onChange(of: authService.isSignedIn) { _, isSignedIn in
+            if isSignedIn && profiles.isEmpty {
+                authService.welcomeBackPending = true
+            }
+        }
     }
 
     /// Removes duplicate profiles and active plans introduced by CloudKit sync

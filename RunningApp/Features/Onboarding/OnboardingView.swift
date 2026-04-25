@@ -15,7 +15,6 @@ struct OnboardingView: View {
     // Navigation
     @State private var step = 0
     @State private var goingForward = true
-    @State private var showWelcomeBack = false
 
     // Step data
     @State private var goalRace: RaceType = .halfMarathon
@@ -82,7 +81,7 @@ struct OnboardingView: View {
     private var currentStep: some View {
         switch step {
         case 0:
-            if showWelcomeBack {
+            if authService.welcomeBackPending {
                 OBWelcomeBack(onStartFresh: handleStartFresh)
             } else {
                 OBWelcome(onStart: advance, onSignIn: handleSignIn)
@@ -504,12 +503,10 @@ struct OnboardingView: View {
     private func handleSignIn(_ userID: String) {
         authService.handleSignIn(userID: userID)
         authService.welcomeBackPending = true
-        showWelcomeBack = true
     }
 
     private func handleStartFresh() {
         authService.welcomeBackPending = false
-        showWelcomeBack = false
     }
 
     // MARK: - Create profile and plan
