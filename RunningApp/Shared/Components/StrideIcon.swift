@@ -66,41 +66,41 @@ struct StrideIcon: View {
         switch name {
         case .run:
             // Head
-            ctx.fill(Path(ellipseIn: CGRect(x: 13.3, y: 1.8, width: 4.4, height: 4.4)), with: .foreground)
+            ctx.fill(Path(ellipseIn: CGRect(x: 13, y: 2, width: 4, height: 4)), with: .foreground)
             // Back leg → torso → front arm (one continuous stroke)
             var main = Path()
-            main.move(to: CGPoint(x: 5,    y: 21))    // back foot
-            main.addLine(to: CGPoint(x: 8,    y: 17))   // back shin
-            main.addLine(to: CGPoint(x: 11,   y: 13))   // hip
-            main.addLine(to: CGPoint(x: 13.5, y: 8))    // torso to shoulder
-            main.addLine(to: CGPoint(x: 17.5, y: 11.5)) // front arm swing
+            main.move(to: CGPoint(x: 5,    y: 20))    // back foot
+            main.addLine(to: CGPoint(x: 8,    y: 16))   // back shin
+            main.addLine(to: CGPoint(x: 11,   y: 12))   // hip
+            main.addLine(to: CGPoint(x: 13.5, y: 7.5))  // torso to shoulder
+            main.addLine(to: CGPoint(x: 17.5, y: 11))   // front arm swing
             ctx.stroke(main, with: .foreground, style: stroke)
             // Front leg (knee lifted, bent)
             var frontLeg = Path()
-            frontLeg.move(to: CGPoint(x: 11,   y: 13))  // hip
-            frontLeg.addLine(to: CGPoint(x: 14.5, y: 17)) // front thigh
-            frontLeg.addLine(to: CGPoint(x: 13,   y: 21)) // front shin / foot
+            frontLeg.move(to: CGPoint(x: 11,   y: 12))   // hip
+            frontLeg.addLine(to: CGPoint(x: 14.5, y: 16)) // front thigh
+            frontLeg.addLine(to: CGPoint(x: 13,   y: 20)) // front foot
             ctx.stroke(frontLeg, with: .foreground, style: stroke)
             // Back arm (swings upward)
             var backArm = Path()
-            backArm.move(to: CGPoint(x: 13,   y: 9.5))
-            backArm.addLine(to: CGPoint(x: 10, y: 7))
+            backArm.move(to: CGPoint(x: 13,   y: 9))
+            backArm.addLine(to: CGPoint(x: 10, y: 6.5))
             ctx.stroke(backArm, with: .foreground, style: stroke)
 
         case .walk:
             var head = Path(ellipseIn: CGRect(x: 11, y: 2, width: 4, height: 4))
             ctx.fill(head, with: .foreground)
             var body = Path()
-            body.move(to: CGPoint(x: 8, y: 22))
-            body.addLine(to: CGPoint(x: 11, y: 15))
-            body.addLine(to: CGPoint(x: 13, y: 12))
-            body.addLine(to: CGPoint(x: 15, y: 15))
-            body.addLine(to: CGPoint(x: 16, y: 19))
-            body.addLine(to: CGPoint(x: 19, y: 22))
+            body.move(to: CGPoint(x: 8,  y: 20.5)) // back foot
+            body.addLine(to: CGPoint(x: 11, y: 14))
+            body.addLine(to: CGPoint(x: 13, y: 11))
+            body.addLine(to: CGPoint(x: 15, y: 14))
+            body.addLine(to: CGPoint(x: 16, y: 18))
+            body.addLine(to: CGPoint(x: 19, y: 20.5)) // front foot
             ctx.stroke(body, with: .foreground, style: stroke)
             var arm = Path()
-            arm.move(to: CGPoint(x: 6, y: 15))
-            arm.addLine(to: CGPoint(x: 9, y: 13))
+            arm.move(to: CGPoint(x: 6, y: 14))
+            arm.addLine(to: CGPoint(x: 9, y: 12))
             ctx.stroke(arm, with: .foreground, style: stroke)
 
         case .tempo:
