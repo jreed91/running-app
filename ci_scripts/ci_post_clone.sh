@@ -19,4 +19,7 @@ sed -i '' "s/CURRENT_PROJECT_VERSION: .*/CURRENT_PROJECT_VERSION: $BUILD_NUMBER/
 
 xcodegen generate
 
+echo "--- Resolving Swift package dependencies ---"
+xcodebuild -resolvePackageDependencies -project RunningApp.xcodeproj -scheme RunningApp
+
 echo "--- Project generation complete ---"
