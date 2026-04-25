@@ -1,4 +1,5 @@
 import Foundation
+import CloudKit
 import CoreData
 import SwiftData
 
@@ -309,15 +310,69 @@ final class AppContainer: ObservableObject {
         }
 
         let status: String
+        let logLevel: AppLogger.Level
         if event.endDate == nil {
             status = "started"
+            logLevel = .debug
         } else if let error = event.error {
             status = "failed (\(error.localizedDescription))"
+            logLevel = .error
         } else {
             status = "finished"
+            logLevel = .info
         }
 
-        AppLogger.log("Event \(event.identifier) \(eventType) \(status)", label: "CloudKit", level: .info)
+        AppLogger.log("Event \(event.identifier) \(eventType) \(status)", label: "CloudKit", level: logLevel)
+
+        guard let error = event.error else { return }
+        for line in Self.cloudKitErrorDiagnosticLines(error, path: "event.error") {
+            AppLogger.log(line, label: "CloudKit", level: .error)
+        }
+    }
+
+    nonisolated private static func cloudKitErrorDiagnosticLines(_ error: Error, path: String) -> [String] {
+        let nsError = error as NSError
+        var lines = [
+            "\(path): domain=\(nsError.domain) code=\(nsError.code) desc=\(nsError.localizedDescription)"
+        ]
+
+        if let failureReason = nsError.localizedFailureReason, !failureReason.isEmpty {
+            lines.append("\(path): failureReason=\(failureReason)")
+        }
+        if let recoverySuggestion = nsError.localizedRecoverySuggestion, !recoverySuggestion.isEmpty {
+            lines.append("\(path): recoverySuggestion=\(recoverySuggestion)")
+        }
+
+        if nsError.domain == CKError.errorDomain {
+            if let ckCode = CKError.Code(rawValue: nsError.code) {
+                lines.append("\(path): ckCode=\(ckCode)")
+            }
+            if let requestID = nsError.userInfo[CKErrorRequestUUIDKey] as? String {
+                lines.append("\(path): requestUUID=\(requestID)")
+            }
+        }
+
+        if let partialErrors = nsError.userInfo[CKPartialErrorsByItemIDKey] as? [AnyHashable: Any], !partialErrors.isEmpty {
+            lines.append("\(path): partialErrors.count=\(partialErrors.count)")
+            for (itemID, value) in partialErrors.sorted(by: { "\($0.key)" < "\($1.key)" }) {
+                guard let nestedError = value as? NSError else {
+                    lines.append("\(path): partial[\(itemID)]=\(String(describing: value))")
+                    continue
+                }
+                lines.append(
+                    contentsOf: cloudKitErrorDiagnosticLines(
+                        nestedError,
+                        path: "\(path).partial[\(itemID)]"
+                    )
+                )
+            }
+        }
+
+        if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? NSError {
+            lines.append(contentsOf: cloudKitErrorDiagnosticLines(underlying, path: "\(path).underlying"))
+        }
+
+        return lines
     }
 
 }
