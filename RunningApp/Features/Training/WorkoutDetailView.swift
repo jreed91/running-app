@@ -11,6 +11,7 @@ struct WorkoutDetailView: View {
     @Query(sort: \RunWorkout.date, order: .reverse) private var recentWorkouts: [RunWorkout]
     @Query private var profiles: [UserProfile]
     @State private var isAdapting = false
+    @State private var isSyncingLocation = false
 
     var body: some View {
         ScrollView {
@@ -80,6 +81,22 @@ struct WorkoutDetailView: View {
         workout.healthKitPlanID = nil
         try? context.save()
         // Immediately re-sync this workout's plan to WorkoutKit with the new structure.
+        if let plan = workout.week?.plan {
+            try? await container.healthKitRepository.syncWorkoutPlans(for: plan)
+        }
+    }
+
+    // MARK: - Location toggle
+
+    @MainActor
+    private func changeLocation(to location: WorkoutLocation) async {
+        guard !workout.isCompleted else { return }
+        isSyncingLocation = true
+        defer { isSyncingLocation = false }
+        workout.workoutLocation = location
+        // Clear the stale WorkoutKit plan so the next sync reschedules with the new location.
+        workout.healthKitPlanID = nil
+        try? context.save()
         if let plan = workout.week?.plan {
             try? await container.healthKitRepository.syncWorkoutPlans(for: plan)
         }
@@ -181,19 +198,73 @@ struct WorkoutDetailView: View {
                 }
                 Spacer()
             }
-            .padding(18)
-            .background(
-                LinearGradient(
-                    colors: [workout.workoutType.color.opacity(0.12), workout.workoutType.color.opacity(0.03)],
-                    startPoint: .topLeading, endPoint: .bottomTrailing
-                ),
-                in: RoundedRectangle(cornerRadius: 18)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 18)
-                    .strokeBorder(workout.workoutType.color.opacity(0.18), lineWidth: 0.5)
-            )
+            .padding([.horizontal, .top], 18)
+            .padding(.bottom, 12)
+
+            // Indoor / outdoor toggle
+            if !workout.isCompleted {
+                locationPicker
+                    .padding(.horizontal, 18)
+                    .padding(.bottom, 18)
+            }
         }
+        .background(
+            LinearGradient(
+                colors: [workout.workoutType.color.opacity(0.12), workout.workoutType.color.opacity(0.03)],
+                startPoint: .topLeading, endPoint: .bottomTrailing
+            ),
+            in: RoundedRectangle(cornerRadius: 18)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18)
+                .strokeBorder(workout.workoutType.color.opacity(0.18), lineWidth: 0.5)
+        )
+    }
+
+    private var locationPicker: some View {
+        HStack(spacing: 0) {
+            ForEach(WorkoutLocation.allCases, id: \.self) { location in
+                Button {
+                    guard workout.workoutLocation != location else { return }
+                    Task { await changeLocation(to: location) }
+                } label: {
+                    HStack(spacing: 6) {
+                        if isSyncingLocation && workout.workoutLocation == location {
+                            ProgressView().controlSize(.mini)
+                        } else {
+                            Image(systemName: location.systemImage)
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        Text(location.displayName)
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        workout.workoutLocation == location
+                            ? workout.workoutType.color.opacity(0.18)
+                            : Color.clear
+                    )
+                    .foregroundStyle(
+                        workout.workoutLocation == location
+                            ? workout.workoutType.color
+                            : Color.secondary
+                    )
+                }
+                .buttonStyle(.plain)
+                .animation(.easeInOut(duration: 0.18), value: workout.workoutLocation)
+
+                if location != WorkoutLocation.allCases.last {
+                    Divider().frame(height: 24)
+                }
+            }
+        }
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(workout.workoutType.color.opacity(0.15), lineWidth: 0.5)
+        )
     }
 
     private func paceSection(range: ClosedRange<Double>) -> some View {
