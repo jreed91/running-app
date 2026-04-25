@@ -465,6 +465,9 @@ struct NewPlanOnboardingView: View {
             if appSettings.morningReminderEnabled {
                 await container.notificationService.scheduleMorningReminders(for: plan)
             }
+            for previous in existing {
+                try? await container.healthKitRepository.removeWorkoutPlans(for: previous)
+            }
             try? await container.healthKitRepository.syncWorkoutPlans(for: plan)
             try? context.save()
             isCreatingPlan = false
