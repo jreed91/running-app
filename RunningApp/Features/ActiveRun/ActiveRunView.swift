@@ -411,6 +411,11 @@ struct ActiveRunView: View {
         Task { @MainActor in
             try? await container.healthKitRepository.save(workout)
         }
+        if let coordinate = tracker.coordinates.first {
+            Task {
+                await container.attachWeather(to: workout, coordinate: coordinate)
+            }
+        }
         if let profile = profiles.first, let plan = activePlans.first {
             let allHistory = (try? context.fetch(FetchDescriptor<RunWorkout>())) ?? []
             container.refreshPlanAfterWorkout(

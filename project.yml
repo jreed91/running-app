@@ -57,6 +57,10 @@ targets:
           - iCloud.com.jacobreedrunningapp
         com.apple.developer.icloud-services:
           - CloudKit
+        com.apple.developer.weatherkit: true
+
+    dependencies:
+      - sdk: WeatherKit.framework
 
     info:
       path: RunningApp/Resources/Info.plist
