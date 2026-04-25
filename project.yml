@@ -62,6 +62,8 @@ targets:
           - iCloud.com.jacobreedrunningapp
         com.apple.developer.icloud-services:
           - CloudKit
+        com.apple.developer.ubiquity-kvstore-identifier:
+          - $(TeamIdentifierPrefix)$(CFBundleIdentifier)
         com.apple.developer.weatherkit: true
 
     dependencies:
@@ -81,6 +83,7 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UIBackgroundModes:
           - location
+          - remote-notification
         NSLocationWhenInUseUsageDescription: "RunningApp uses your location to track your route during a run."
         NSLocationAlwaysAndWhenInUseUsageDescription: "RunningApp uses your location in the background to continue tracking your route."
         NSHealthShareUsageDescription: "RunningApp reads your workout and heart-rate history to show training insights."
