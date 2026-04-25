@@ -7,11 +7,14 @@ final class UserProfile {
 
     var id: UUID = UUID()
     var name: String = ""
-    var goalRace: RaceType = RaceType.fiveK
+    /// Raw-backed storage for `goalRace` to keep CloudKit fields primitive.
+    var goalRaceRaw: String = RaceType.fiveK.rawValue
     var goalFinishTime: TimeInterval = 0      // seconds
     var weeklyRunDays: Int = 3
-    var fitnessLevel: FitnessLevel = FitnessLevel.beginner
-    var gender: Gender = Gender.preferNotToShare
+    /// Raw-backed storage for `fitnessLevel` to keep CloudKit fields primitive.
+    var fitnessLevelRaw: String = FitnessLevel.beginner.rawValue
+    /// Raw-backed storage for `gender` to keep CloudKit fields primitive.
+    var genderRaw: String = Gender.preferNotToShare.rawValue
     var currentEstimated5KTimeSeconds: Double?
     /// JSON-encoded `[Int]` backing store for preferred run weekdays.
     /// Access via the `preferredRunDayIndices` extension property — never persist `[Int]` directly.
@@ -31,11 +34,11 @@ final class UserProfile {
     ) {
         self.id = UUID()
         self.name = name
-        self.goalRace = goalRace
+        self.goalRaceRaw = goalRace.rawValue
         self.goalFinishTime = goalFinishTime
         self.weeklyRunDays = weeklyRunDays
-        self.fitnessLevel = fitnessLevel
-        self.gender = gender
+        self.fitnessLevelRaw = fitnessLevel.rawValue
+        self.genderRaw = gender.rawValue
         self.currentEstimated5KTimeSeconds = currentEstimated5KTimeSeconds
         self.preferredRunDayIndicesData = preferredRunDayIndices.isEmpty
             ? nil
@@ -49,6 +52,21 @@ final class UserProfile {
 // Defined in an extension so @Model does not treat these as persistent attributes.
 
 extension UserProfile {
+    var goalRace: RaceType {
+        get { RaceType(rawValue: goalRaceRaw) ?? .fiveK }
+        set { goalRaceRaw = newValue.rawValue }
+    }
+
+    var fitnessLevel: FitnessLevel {
+        get { FitnessLevel(rawValue: fitnessLevelRaw) ?? .beginner }
+        set { fitnessLevelRaw = newValue.rawValue }
+    }
+
+    var gender: Gender {
+        get { Gender(rawValue: genderRaw) ?? .preferNotToShare }
+        set { genderRaw = newValue.rawValue }
+    }
+
     /// Weekday indices (0 = Monday … 6 = Sunday) the user prefers to run.
     /// Empty means "spread evenly based on weeklyRunDays".
     var preferredRunDayIndices: [Int] {

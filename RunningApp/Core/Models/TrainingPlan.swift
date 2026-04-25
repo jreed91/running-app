@@ -6,7 +6,8 @@ final class TrainingPlan {
     #Index<TrainingPlan>([\.id], [\.createdAt], [\.isActive], [\.startDate])
 
     var id: UUID = UUID()
-    var targetRace: RaceType = RaceType.fiveK
+    /// Raw-backed storage for `targetRace` to keep CloudKit fields primitive.
+    var targetRaceRaw: String = RaceType.fiveK.rawValue
     var goalTimeSeconds: Double = 0
     var startDate: Date = Date()
     var endDate: Date = Date()
@@ -40,11 +41,16 @@ final class TrainingPlan {
         endDate: Date
     ) {
         self.id = UUID()
-        self.targetRace = targetRace
+        self.targetRaceRaw = targetRace.rawValue
         self.goalTimeSeconds = goalTimeSeconds
         self.startDate = startDate
         self.endDate = endDate
         self.isActive = true
         self.createdAt = Date()
+    }
+
+    var targetRace: RaceType {
+        get { RaceType(rawValue: targetRaceRaw) ?? .fiveK }
+        set { targetRaceRaw = newValue.rawValue }
     }
 }

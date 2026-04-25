@@ -7,8 +7,10 @@ final class ScheduledWorkout {
 
     var id: UUID = UUID()
     var scheduledDate: Date = Date()
-    var workoutType: WorkoutType = WorkoutType.easy
-    var workoutLocation: WorkoutLocation = WorkoutLocation.outdoor
+    /// Raw-backed storage for `workoutType` to keep CloudKit fields primitive.
+    var workoutTypeRaw: String = WorkoutType.easy.rawValue
+    /// Raw-backed storage for `workoutLocation` to keep CloudKit fields primitive.
+    var workoutLocationRaw: String = WorkoutLocation.outdoor.rawValue
     var targetDistanceMeters: Double?
     /// Lower bound of target pace range in seconds/km.
     var targetPaceLowerBound: Double?
@@ -47,6 +49,16 @@ final class ScheduledWorkout {
     var workoutStructure: WorkoutStructure? {
         get { structureData?.decode(WorkoutStructure.self) }
         set { structureData = newValue.flatMap { Data.encoded($0) } }
+    }
+
+    var workoutType: WorkoutType {
+        get { WorkoutType(rawValue: workoutTypeRaw) ?? .easy }
+        set { workoutTypeRaw = newValue.rawValue }
+    }
+
+    var workoutLocation: WorkoutLocation {
+        get { WorkoutLocation(rawValue: workoutLocationRaw) ?? .outdoor }
+        set { workoutLocationRaw = newValue.rawValue }
     }
 
     init(
