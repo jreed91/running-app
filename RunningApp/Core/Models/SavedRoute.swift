@@ -17,8 +17,8 @@ final class SavedRoute {
     var id: UUID = UUID()
     var name: String = ""
     var createdAt: Date = Date()
-    /// Route type chosen by the user (.loop or .outAndBack).
-    var routeType: RouteType = RouteType.loop
+    /// Raw-backed storage for `routeType` to keep CloudKit fields primitive.
+    var routeTypeRaw: String = RouteType.loop.rawValue
     /// Distance the user originally requested, in metres.
     var requestedDistanceMeters: Double = 0
     /// Actual route distance returned by the routing service, in metres.
@@ -53,7 +53,7 @@ final class SavedRoute {
         self.id = UUID()
         self.name = name
         self.createdAt = Date()
-        self.routeType = routeType
+        self.routeTypeRaw = routeType.rawValue
         self.requestedDistanceMeters = requestedDistanceMeters
         self.actualDistanceMeters = actualDistanceMeters
         self.estimatedDurationSeconds = estimatedDurationSeconds
@@ -83,5 +83,10 @@ extension SavedRoute {
     /// Convenience accessor for the starting coordinate.
     var startCoordinate: Coordinate {
         Coordinate(CLLocationCoordinate2D(latitude: startLatitude, longitude: startLongitude))
+    }
+
+    var routeType: RouteType {
+        get { RouteType(rawValue: routeTypeRaw) ?? .loop }
+        set { routeTypeRaw = newValue.rawValue }
     }
 }

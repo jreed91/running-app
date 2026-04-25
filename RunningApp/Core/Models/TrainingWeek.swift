@@ -9,7 +9,8 @@ final class TrainingWeek {
     var weekNumber: Int = 0
     var startDate: Date = Date()
     var endDate: Date = Date()
-    var phase: TrainingPhase = TrainingPhase.base
+    /// Raw-backed storage for `phase` to keep CloudKit fields primitive.
+    var phaseRaw: String = TrainingPhase.base.rawValue
     var targetDistanceKm: Double = 0
 
     var plan: TrainingPlan?
@@ -41,7 +42,12 @@ final class TrainingWeek {
         self.weekNumber = weekNumber
         self.startDate = startDate
         self.endDate = startDate.adding(days: 6)
-        self.phase = phase
+        self.phaseRaw = phase.rawValue
         self.targetDistanceKm = targetDistanceKm
+    }
+
+    var phase: TrainingPhase {
+        get { TrainingPhase(rawValue: phaseRaw) ?? .base }
+        set { phaseRaw = newValue.rawValue }
     }
 }

@@ -13,8 +13,10 @@ final class RunWorkout {
     var averageHeartRate: Double?
     var maxHeartRate: Double?
     var elevationGainMeters: Double?
-    var workoutType: WorkoutType = WorkoutType.easy
-    var workoutLocation: WorkoutLocation = WorkoutLocation.outdoor
+    /// Raw-backed storage for `workoutType` to keep CloudKit fields primitive.
+    var workoutTypeRaw: String = WorkoutType.easy.rawValue
+    /// Raw-backed storage for `workoutLocation` to keep CloudKit fields primitive.
+    var workoutLocationRaw: String = WorkoutLocation.outdoor.rawValue
     var notes: String?
 
     /// HealthKit workout UUID string, set after syncing.
@@ -48,6 +50,16 @@ final class RunWorkout {
     var weather: WorkoutWeather? {
         get { weatherData?.decode(WorkoutWeather.self) }
         set { weatherData = newValue.flatMap { .encoded($0) } }
+    }
+
+    var workoutType: WorkoutType {
+        get { WorkoutType(rawValue: workoutTypeRaw) ?? .easy }
+        set { workoutTypeRaw = newValue.rawValue }
+    }
+
+    var workoutLocation: WorkoutLocation {
+        get { WorkoutLocation(rawValue: workoutLocationRaw) ?? .outdoor }
+        set { workoutLocationRaw = newValue.rawValue }
     }
 
     init(
