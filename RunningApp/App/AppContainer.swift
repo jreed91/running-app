@@ -32,7 +32,6 @@ final class AppContainer: ObservableObject {
     let workoutSyncService: WorkoutSyncService
     let dataMigrationService: DataMigrationService
     let weatherService: WeatherService
-    private var cloudKitEventObserver: NSObjectProtocol?
 
     // MARK: Init
 
@@ -235,41 +234,47 @@ final class AppContainer: ObservableObject {
             return
         }
 
-        cloudKitEventObserver = NotificationCenter.default.addObserver(
-            forName: NSPersistentCloudKitContainer.eventChangedNotification,
-            object: nil,
-            queue: .main
-        ) { note in
-            guard let event = note.userInfo?[NSPersistentCloudKitContainer.eventNotificationUserInfoKey]
-                as? NSPersistentCloudKitContainer.Event else {
-                return
-            }
-
-            let eventType: String
-            switch event.type {
-            case .setup: eventType = "setup"
-            case .import: eventType = "import"
-            case .export: eventType = "export"
-            @unknown default: eventType = "unknown"
-            }
-
-            let status: String
-            if event.endDate == nil {
-                status = "started"
-            } else if let error = event.error {
-                status = "failed (\(error.localizedDescription))"
-            } else {
-                status = "finished"
-            }
-
-            print("[CloudKit] Event \(event.identifier) \(eventType) \(status)")
-        }
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleCloudKitEventChanged(_:)),
+            name: NSPersistentCloudKitContainer.eventChangedNotification,
+            object: nil
+        )
     }
 
     deinit {
-        if let cloudKitEventObserver {
-            NotificationCenter.default.removeObserver(cloudKitEventObserver)
+        NotificationCenter.default.removeObserver(
+            self,
+            name: NSPersistentCloudKitContainer.eventChangedNotification,
+            object: nil
+        )
+    }
+
+    @objc
+    private func handleCloudKitEventChanged(_ note: Notification) {
+        guard let event = note.userInfo?[NSPersistentCloudKitContainer.eventNotificationUserInfoKey]
+            as? NSPersistentCloudKitContainer.Event else {
+            return
         }
+
+        let eventType: String
+        switch event.type {
+        case .setup: eventType = "setup"
+        case .import: eventType = "import"
+        case .export: eventType = "export"
+        @unknown default: eventType = "unknown"
+        }
+
+        let status: String
+        if event.endDate == nil {
+            status = "started"
+        } else if let error = event.error {
+            status = "failed (\(error.localizedDescription))"
+        } else {
+            status = "finished"
+        }
+
+        print("[CloudKit] Event \(event.identifier) \(eventType) \(status)")
     }
 
 }
