@@ -347,10 +347,8 @@ final class AppContainer: ObservableObject {
             if let ckCode = CKError.Code(rawValue: nsError.code) {
                 lines.append("\(path): ckCode=\(ckCode)")
             }
-            if let requestUUIDEntry = nsError.userInfo.first(where: { entry in
-                String(describing: entry.key).localizedCaseInsensitiveContains("uuid")
-            }), let requestID = requestUUIDEntry.value as? String {
-                lines.append("\(path): \(requestUUIDEntry.key)=\(requestID)")
+            if let requestID = nsError.userInfo[CKErrorRequestUUIDKey] as? String {
+                lines.append("\(path): requestUUID=\(requestID)")
             }
         }
 
