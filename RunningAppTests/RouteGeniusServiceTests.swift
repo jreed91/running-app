@@ -45,13 +45,18 @@ struct RouteGeniusServiceTests {
 
         let service = RouteGeniusService(session: Self.mockSession)
 
-        await #expect(throws: RouteGeniusService.RouteError.unauthorized) {
-            try await service.generateRouteOptions(
+        do {
+            _ = try await service.generateRouteOptions(
                 start: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
                 distanceMeters: 5_000,
                 routeType: .loop,
                 apiKey: "bad-key"
             )
+            Issue.record("Expected unauthorized error")
+        } catch RouteGeniusService.RouteError.unauthorized {
+            // Expected.
+        } catch {
+            Issue.record("Unexpected error: \(error)")
         }
     }
 
@@ -69,13 +74,18 @@ struct RouteGeniusServiceTests {
 
         let service = RouteGeniusService(session: Self.mockSession)
 
-        await #expect(throws: RouteGeniusService.RouteError.rateLimited) {
-            try await service.generateRouteOptions(
+        do {
+            _ = try await service.generateRouteOptions(
                 start: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
                 distanceMeters: 5_000,
                 routeType: .loop,
                 apiKey: "test-key"
             )
+            Issue.record("Expected rate-limited error")
+        } catch RouteGeniusService.RouteError.rateLimited {
+            // Expected.
+        } catch {
+            Issue.record("Unexpected error: \(error)")
         }
     }
 

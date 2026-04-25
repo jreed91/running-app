@@ -6,6 +6,18 @@ struct TrainingPlanServiceTests {
 
     private let service = TrainingPlanService()
 
+    private func weeks(in plan: TrainingPlan) -> [TrainingWeek] {
+        (plan.weeks ?? []).sorted { $0.weekNumber < $1.weekNumber }
+    }
+
+    private func workouts(in week: TrainingWeek) -> [ScheduledWorkout] {
+        (week.workouts ?? []).sorted { $0.scheduledDate < $1.scheduledDate }
+    }
+
+    private func workouts(in plan: TrainingPlan) -> [ScheduledWorkout] {
+        weeks(in: plan).flatMap { workouts(in: $0) }
+    }
+
     private func makeProfile(
         race: RaceType = .fiveK,
         fitnessLevel: FitnessLevel = .intermediate,
@@ -28,15 +40,15 @@ struct TrainingPlanServiceTests {
     func planWeekCount() {
         let profile = makeProfile()
         let plan = service.generatePlan(profile: profile, startDate: .now, numberOfWeeks: 10)
-        #expect(plan.weeks.count == 10)
+        #expect(weeks(in: plan).count == 10)
     }
 
     @Test("Each week has at least one workout")
     func weeksHaveWorkouts() {
         let profile = makeProfile()
         let plan = service.generatePlan(profile: profile, startDate: .now, numberOfWeeks: 8)
-        for week in plan.weeks {
-            #expect(!week.workouts.isEmpty, "Week \(week.weekNumber) has no workouts")
+        for week in weeks(in: plan) {
+            #expect(!workouts(in: week).isEmpty, "Week \(week.weekNumber) has no workouts")
         }
     }
 
@@ -44,15 +56,15 @@ struct TrainingPlanServiceTests {
     func planEndsTaper() {
         let profile = makeProfile()
         let plan = service.generatePlan(profile: profile, startDate: .now, numberOfWeeks: 10)
-        #expect(plan.weeks.last?.phase == .taper)
+        #expect(weeks(in: plan).last?.phase == .taper)
     }
 
     @Test("Each week contains a long run")
     func weeksContainLongRun() {
         let profile = makeProfile(runDays: 4)
         let plan = service.generatePlan(profile: profile, startDate: .now, numberOfWeeks: 8)
-        for week in plan.weeks {
-            let hasLongRun = week.workouts.contains { $0.workoutType == .longRun }
+        for week in weeks(in: plan) {
+            let hasLongRun = workouts(in: week).contains { $0.workoutType == .longRun }
             #expect(hasLongRun, "Week \(week.weekNumber) missing long run")
         }
     }
@@ -63,8 +75,9 @@ struct TrainingPlanServiceTests {
     func workoutCount() {
         let profile = makeProfile(runDays: 3)
         let plan = service.generatePlan(profile: profile, startDate: .now, numberOfWeeks: 8)
-        for week in plan.weeks {
-            #expect(week.workouts.count == 3, "Week \(week.weekNumber): expected 3 workouts, got \(week.workouts.count)")
+        for week in weeks(in: plan) {
+            let weekWorkouts = workouts(in: week)
+            #expect(weekWorkouts.count == 3, "Week \(week.weekNumber): expected 3 workouts, got \(weekWorkouts.count)")
         }
     }
 
@@ -74,7 +87,7 @@ struct TrainingPlanServiceTests {
     func fiveKPlanHasIntervals() {
         let profile = makeProfile(race: .fiveK, runDays: 4)
         let plan = service.generatePlan(profile: profile, startDate: .now, numberOfWeeks: 10)
-        let hasIntervals = plan.weeks.flatMap(\.workouts).contains { $0.workoutType == .interval }
+        let hasIntervals = workouts(in: plan).contains { $0.workoutType == .interval }
         #expect(hasIntervals)
     }
 
@@ -82,7 +95,7 @@ struct TrainingPlanServiceTests {
     func halfMarathonPlanHasTempo() {
         let profile = makeProfile(race: .halfMarathon, runDays: 4)
         let plan = service.generatePlan(profile: profile, startDate: .now, numberOfWeeks: 14)
-        let hasTempo = plan.weeks.flatMap(\.workouts).contains { $0.workoutType == .tempo }
+        let hasTempo = workouts(in: plan).contains { $0.workoutType == .tempo }
         #expect(hasTempo)
     }
 
@@ -90,9 +103,9 @@ struct TrainingPlanServiceTests {
     func maintainFitnessPlanHasBalancedWork() {
         let profile = makeProfile(race: .maintainFitness, runDays: 4)
         let plan = service.generatePlan(profile: profile, startDate: .now, numberOfWeeks: 10)
-        let workouts = plan.weeks.flatMap(\.workouts)
-        #expect(workouts.contains { $0.workoutType == .tempo })
-        #expect(workouts.contains { $0.workoutType == .longRun })
+        let planWorkouts = workouts(in: plan)
+        #expect(planWorkouts.contains { $0.workoutType == .tempo })
+        #expect(planWorkouts.contains { $0.workoutType == .longRun })
     }
 
     // MARK: Easy run distribution
@@ -112,10 +125,10 @@ struct TrainingPlanServiceTests {
         for c in cases {
             let profile = makeProfile(race: .fiveK, runDays: c.runDays)
             let plan = service.generatePlan(profile: profile, startDate: .now, numberOfWeeks: c.weeks)
-            let targetWeeks = plan.weeks.filter { $0.phase == c.phase }
+            let targetWeeks = weeks(in: plan).filter { $0.phase == c.phase }
             guard !targetWeeks.isEmpty else { continue }
             for week in targetWeeks {
-                let easyCount = week.workouts.filter { $0.workoutType == .easy }.count
+                let easyCount = workouts(in: week).filter { $0.workoutType == .easy }.count
                 #expect(
                     easyCount == c.expectedEasy,
                     "\(c.runDays)-day \(c.phase) week: expected \(c.expectedEasy) easy run(s), got \(easyCount)"
@@ -128,8 +141,8 @@ struct TrainingPlanServiceTests {
     func threeDayWeeksCapQualitySessions() {
         let profile = makeProfile(race: .fiveK, runDays: 3)
         let plan = service.generatePlan(profile: profile, startDate: .now, numberOfWeeks: 10)
-        for week in plan.weeks {
-            let qualityCount = week.workouts.filter(\.workoutType.isQualitySession).count
+        for week in weeks(in: plan) {
+            let qualityCount = workouts(in: week).filter(\.workoutType.isQualitySession).count
             #expect(qualityCount <= 1, "Week \(week.weekNumber) has \(qualityCount) quality sessions")
         }
     }
@@ -156,12 +169,10 @@ struct TrainingPlanServiceTests {
         let slowPlan = service.generatePlan(profile: conservative, startDate: .now, numberOfWeeks: 12)
         let fastPlan = service.generatePlan(profile: aggressive, startDate: .now, numberOfWeeks: 12)
 
-        let slowTempo = slowPlan.weeks
-            .flatMap(\.workouts)
+        let slowTempo = workouts(in: slowPlan)
             .first(where: { $0.workoutType == .tempo })?
             .targetPaceLowerBound
-        let fastTempo = fastPlan.weeks
-            .flatMap(\.workouts)
+        let fastTempo = workouts(in: fastPlan)
             .first(where: { $0.workoutType == .tempo })?
             .targetPaceLowerBound
 
@@ -177,8 +188,8 @@ struct TrainingPlanServiceTests {
         for runDays in 3...6 {
             let profile = makeProfile(race: .halfMarathon, runDays: runDays)
             let plan = service.generatePlan(profile: profile, startDate: .now, numberOfWeeks: 8)
-            for week in plan.weeks {
-                let dists = week.workouts
+            for week in weeks(in: plan) {
+                let dists = workouts(in: week)
                     .filter { $0.workoutType == .easy }
                     .compactMap { $0.targetDistanceMeters }
                 guard dists.count >= 2 else { continue }
@@ -198,8 +209,7 @@ struct TrainingPlanServiceTests {
         let slowProfile = makeProfile(race: .fiveK, runDays: 4, time5KSeconds: 25 * 60)
         let plan = service.generatePlan(profile: slowProfile, startDate: .now, numberOfWeeks: 8)
 
-        let originalTempo = plan.weeks
-            .flatMap { $0.workouts }
+        let originalTempo = workouts(in: plan)
             .first(where: { $0.workoutType == .tempo })?
             .targetPaceLowerBound
 
@@ -207,8 +217,7 @@ struct TrainingPlanServiceTests {
         let fastProfile = makeProfile(race: .fiveK, runDays: 4, time5KSeconds: 20 * 60)
         service.refreshPaces(plan: plan, history: [], profile: fastProfile)
 
-        let updatedTempo = plan.weeks
-            .flatMap { $0.workouts }
+        let updatedTempo = workouts(in: plan)
             .first(where: { $0.workoutType == .tempo && !$0.isCompleted })?
             .targetPaceLowerBound
 
@@ -224,8 +233,8 @@ struct TrainingPlanServiceTests {
     func taperReducesVolume() {
         let profile = makeProfile(runDays: 4)
         let plan = service.generatePlan(profile: profile, startDate: .now, numberOfWeeks: 10)
-        let peakWeeks = plan.weeks.filter { $0.phase == .peak }
-        let taperWeeks = plan.weeks.filter { $0.phase == .taper }
+        let peakWeeks = weeks(in: plan).filter { $0.phase == .peak }
+        let taperWeeks = weeks(in: plan).filter { $0.phase == .taper }
         guard let peakKm = peakWeeks.first?.targetDistanceKm,
               let taperKm = taperWeeks.first?.targetDistanceKm else {
             Issue.record("Missing peak or taper week")
