@@ -264,7 +264,7 @@ final class AppContainer: ObservableObject {
     }
 
     @objc
-    private func handleCloudKitEventChanged(_ note: Notification) {
+    nonisolated private func handleCloudKitEventChanged(_ note: Notification) {
         guard let event = note.userInfo?[NSPersistentCloudKitContainer.eventNotificationUserInfoKey]
             as? NSPersistentCloudKitContainer.Event else {
             return
