@@ -195,14 +195,14 @@ struct SettingsView: View {
     private func trainingCard(_ profile: UserProfile) -> some View {
         settingsSection("Runner Profile") {
             settingsRow(icon: .run, iconColor: .brand, title: "Name") {
-                TextField("Your name", text: Bindable(profile).name)
+                TextField("Your name", text: profileNameBinding(for: profile))
                     .multilineTextAlignment(.trailing)
                     .font(.bodyRegular)
                     .foregroundStyle(.secondary)
             }
             rowDivider
             settingsRow(icon: .heart, iconColor: .destructive, title: "Gender") {
-                Picker("", selection: Bindable(profile).gender) {
+                Picker("", selection: profileGenderBinding(for: profile)) {
                     ForEach(Gender.allCases, id: \.self) { Text($0.displayName).tag($0) }
                 }
                 .labelsHidden()
@@ -468,6 +468,33 @@ struct SettingsView: View {
     }
 
     // MARK: - Actions
+
+    private func profileNameBinding(for profile: UserProfile) -> Binding<String> {
+        Binding(
+            get: { profile.name },
+            set: { newValue in
+                guard profile.name != newValue else { return }
+                profile.name = newValue
+                persistProfileEdit(profile)
+            }
+        )
+    }
+
+    private func profileGenderBinding(for profile: UserProfile) -> Binding<Gender> {
+        Binding(
+            get: { profile.gender },
+            set: { newValue in
+                guard profile.gender != newValue else { return }
+                profile.gender = newValue
+                persistProfileEdit(profile)
+            }
+        )
+    }
+
+    private func persistProfileEdit(_ profile: UserProfile) {
+        profile.updatedAt = Date()
+        try? context.save()
+    }
 
     private func resetAll() {
         try? context.delete(model: RunWorkout.self)
