@@ -12,7 +12,7 @@ final class AuthService {
     private(set) var appleUserID: String?
     var welcomeBackPending: Bool = false
 
-    private static let keychainService = "com.jacobreedrunningapp"
+    private static let keychainService = "com.running.stride"
     private static let keychainAccount = "appleUserID"
 
     init() {

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Generate RunningApp / Stride app icon PNGs.
+Generate Stride app icon PNGs.
 
 Design from Stride Design System (app-icon.jsx):
   Background: diagonal linear gradient #FFA056 → #FF6B22 → #D23A12
@@ -11,7 +11,7 @@ Design from Stride Design System (app-icon.jsx):
 """
 import struct, zlib, os, math
 
-OUTDIR = "RunningApp/Resources/Assets.xcassets/AppIcon.appiconset"
+OUTDIR = "Stride/Resources/Assets.xcassets/AppIcon.appiconset"
 
 # ── PNG encoder ───────────────────────────────────────────────────────────────
 

@@ -61,7 +61,7 @@ enum PulseIntegrationService {
 
     private static func configureNetworkLogger() {
         NetworkLogger.shared = NetworkLogger {
-            $0.label = "RunningApp"
+            $0.label = "Stride"
             $0.sensitiveHeaders = [
                 "Authorization",
                 "Cookie",

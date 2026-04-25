@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 
 @main
-struct RunningAppApp: App {
+struct StrideApp: App {
 
     @StateObject private var container = AppContainer()
     @State private var appSettings = AppSettings()

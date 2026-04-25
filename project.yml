@@ -1,7 +1,7 @@
-name: RunningApp
+name: Stride
 
 options:
-  bundleIdPrefix: com.jacobreedrunningapp
+  bundleIdPrefix: com.running.stride
   deploymentTarget:
     iOS: "26.0"
   xcodeVersion: "26.4"
@@ -31,35 +31,35 @@ packages:
 targets:
 
   # ── iOS app ──────────────────────────────────────────────────────────────────
-  RunningApp:
+  Stride:
     type: application
     platform: iOS
     deploymentTarget: "26.0"
 
     sources:
-      - path: RunningApp
+      - path: Stride
 
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.jacobreedrunningapp
-        PRODUCT_NAME: RunningApp
-        INFOPLIST_FILE: RunningApp/Resources/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.running.stride
+        PRODUCT_NAME: Stride
+        INFOPLIST_FILE: Stride/Resources/Info.plist
         TARGETED_DEVICE_FAMILY: "1"         # iPhone only
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: "VMNPGK3Q29"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
-        CLOUDKIT_CONTAINER_IDENTIFIER: iCloud.com.jacobreedrunningapp
+        CLOUDKIT_CONTAINER_IDENTIFIER: iCloud.com.running.stride
 
     entitlements:
-      path: RunningApp/Resources/RunningApp.entitlements
+      path: Stride/Resources/Stride.entitlements
       properties:
         com.apple.developer.applesignin:
           - Default
         com.apple.developer.healthkit: true
         com.apple.developer.healthkit.background-delivery: true
         com.apple.developer.icloud-container-identifiers:
-          - iCloud.com.jacobreedrunningapp
+          - iCloud.com.running.stride
         com.apple.developer.icloud-services:
           - CloudKit
         com.apple.developer.ubiquity-kvstore-identifier: $(TeamIdentifierPrefix)$(CFBundleIdentifier)
@@ -75,7 +75,7 @@ targets:
         product: PulseUI
 
     info:
-      path: RunningApp/Resources/Info.plist
+      path: Stride/Resources/Info.plist
       properties:
         CFBundleIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER)
         CFBundleShortVersionString: $(MARKETING_VERSION)
@@ -83,11 +83,11 @@ targets:
         UIBackgroundModes:
           - location
           - remote-notification
-        NSLocationWhenInUseUsageDescription: "RunningApp uses your location to track your route during a run."
-        NSLocationAlwaysAndWhenInUseUsageDescription: "RunningApp uses your location in the background to continue tracking your route."
-        NSHealthShareUsageDescription: "RunningApp reads your workout and heart-rate history to show training insights."
-        NSHealthUpdateUsageDescription: "RunningApp saves your completed runs to Apple Health."
-        NSMotionUsageDescription: "RunningApp uses motion data to measure cadence during runs."
+        NSLocationWhenInUseUsageDescription: "Stride uses your location to track your route during a run."
+        NSLocationAlwaysAndWhenInUseUsageDescription: "Stride uses your location in the background to continue tracking your route."
+        NSHealthShareUsageDescription: "Stride reads your workout and heart-rate history to show training insights."
+        NSHealthUpdateUsageDescription: "Stride saves your completed runs to Apple Health."
+        NSMotionUsageDescription: "Stride uses motion data to measure cadence during runs."
         NSLocalNetworkUsageDescription: "Network usage required only for development and TestFlight diagnostics."
         NSBonjourServices:
           - _pulse._tcp
@@ -95,62 +95,62 @@ targets:
         ITSAppUsesNonExemptEncryption: false
 
   # ── Unit tests ────────────────────────────────────────────────────────────────
-  RunningAppTests:
+  StrideTests:
     type: bundle.unit-test
     platform: iOS
     deploymentTarget: "26.0"
 
     sources:
-      - RunningAppTests
+      - StrideTests
 
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.jacobreedrunningapp.tests
+        PRODUCT_BUNDLE_IDENTIFIER: com.running.stride.tests
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: "VMNPGK3Q29"
         GENERATE_INFOPLIST_FILE: YES
 
     dependencies:
-      - target: RunningApp
+      - target: Stride
 
   # ── UI tests ──────────────────────────────────────────────────────────────────
-  RunningAppUITests:
+  StrideUITests:
     type: bundle.ui-testing
     platform: iOS
     deploymentTarget: "26.0"
 
     sources:
-      - RunningAppUITests
+      - StrideUITests
 
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.jacobreedrunningapp.uitests
+        PRODUCT_BUNDLE_IDENTIFIER: com.running.stride.uitests
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: "VMNPGK3Q29"
-        TEST_TARGET_NAME: RunningApp
+        TEST_TARGET_NAME: Stride
         GENERATE_INFOPLIST_FILE: YES
 
     dependencies:
-      - target: RunningApp
+      - target: Stride
 
 # ── Schemes ───────────────────────────────────────────────────────────────────
 schemes:
-  RunningApp:
+  Stride:
     build:
       targets:
-        RunningApp: all
-        RunningAppTests: [test]
-        RunningAppUITests: [test]
+        Stride: all
+        StrideTests: [test]
+        StrideUITests: [test]
     run:
       config: Debug
       askForAppToLaunch: false
     test:
       config: Debug
       targets:
-        - name: RunningAppTests
+        - name: StrideTests
           parallelizable: true
           randomExecutionOrder: true
-        - name: RunningAppUITests
+        - name: StrideUITests
           parallelizable: false
           randomExecutionOrder: false
     profile:

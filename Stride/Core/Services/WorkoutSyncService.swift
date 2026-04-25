@@ -8,7 +8,7 @@ import SwiftData
 ///
 /// Lifecycle:
 ///   1. Created by `AppContainer` at launch.
-///   2. `startObserving()` is called once from `RunningAppApp` via `.task`.
+///   2. `startObserving()` is called once from `StrideApp` via `.task`.
 ///   3. iOS then wakes the app (even in the background) whenever new running
 ///      workouts arrive in HealthKit, triggering an import + notification.
 @MainActor

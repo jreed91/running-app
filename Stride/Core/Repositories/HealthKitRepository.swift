@@ -81,7 +81,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             totalEnergyBurned: nil,
             totalDistance: HKQuantity(unit: .meter(), doubleValue: workout.distanceMeters),
             metadata: [
-                "RunningAppWorkoutID": workout.id.uuidString,
+                "StrideWorkoutID": workout.id.uuidString,
                 HKMetadataKeyIndoorWorkout: isIndoor
             ]
         )

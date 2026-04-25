@@ -4,7 +4,7 @@ This app disables CloudKit on the simulator, so real save/retrieve validation mu
 
 ## Preconditions
 
-- Build a device-signed app with the `iCloud.com.jacobreedrunningapp` container enabled.
+- Build a device-signed app with the `iCloud.com.running.stride` container enabled.
 - Use two physical iPhones signed into the same Apple ID.
 - In the app, confirm `Settings > App > iCloud Sync` is enabled.
 - In the app, confirm `Settings > App > Active Store` shows `CloudKit`.

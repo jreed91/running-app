@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  SCHEME: RunningApp
+  SCHEME: Stride
   SIMULATOR: iPhone 17
   IOS_VERSION: "26.4"
 
@@ -53,8 +53,8 @@ jobs:
 
       - name: Install Swift package pins
         run: |
-          mkdir -p RunningApp.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
-          cp ci_scripts/Package.resolved RunningApp.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+          mkdir -p Stride.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
+          cp ci_scripts/Package.resolved Stride.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 
       - name: Cache DerivedData
         uses: actions/cache@v4
@@ -95,7 +95,7 @@ jobs:
             -scheme "$SCHEME" \
             -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
             -derivedDataPath ~/Library/Developer/Xcode/DerivedData \
-            -only-testing:RunningAppTests \
+            -only-testing:StrideTests \
             -resultBundlePath TestResults/unit.xcresult \
             CODE_SIGNING_ALLOWED=NO \
             | xcbeautify --renderer github-actions
@@ -106,7 +106,7 @@ jobs:
             -scheme "$SCHEME" \
             -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
             -derivedDataPath ~/Library/Developer/Xcode/DerivedData \
-            -only-testing:RunningAppUITests \
+            -only-testing:StrideUITests \
             -resultBundlePath TestResults/ui.xcresult \
             CODE_SIGNING_ALLOWED=NO \
             | xcbeautify --renderer github-actions
@@ -139,8 +139,8 @@ jobs:
 
       - name: Install Swift package pins
         run: |
-          mkdir -p RunningApp.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
-          cp ci_scripts/Package.resolved RunningApp.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+          mkdir -p Stride.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
+          cp ci_scripts/Package.resolved Stride.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 
       - name: Cache DerivedData
         uses: actions/cache@v4
@@ -181,8 +181,8 @@ jobs:
 
       - name: Install Swift package pins
         run: |
-          mkdir -p RunningApp.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
-          cp ci_scripts/Package.resolved RunningApp.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+          mkdir -p Stride.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
+          cp ci_scripts/Package.resolved Stride.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 
       - name: Cache DerivedData
         uses: actions/cache@v4
@@ -197,7 +197,7 @@ jobs:
           xcodebuild archive \
             -scheme "$SCHEME" \
             -destination "generic/platform=iOS" \
-            -archivePath build/RunningApp.xcarchive \
+            -archivePath build/Stride.xcarchive \
             -derivedDataPath ~/Library/Developer/Xcode/DerivedData \
             CODE_SIGNING_ALLOWED=NO \
             SKIP_INSTALL=NO \
@@ -224,8 +224,8 @@ jobs:
       - name: Upload archive
         uses: actions/upload-artifact@v4
         with:
-          name: RunningApp-archive-${{ github.sha }}
-          path: build/RunningApp.xcarchive
+          name: Stride-archive-${{ github.sha }}
+          path: build/Stride.xcarchive
           retention-days: 14
 
       - name: Upload TestFlight notes

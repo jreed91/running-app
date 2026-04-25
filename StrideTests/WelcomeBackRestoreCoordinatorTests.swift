@@ -1,7 +1,7 @@
 import CloudKit
 import Foundation
 import Testing
-@testable import RunningApp
+@testable import Stride
 
 struct WelcomeBackRestoreCoordinatorTests {
 
