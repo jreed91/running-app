@@ -45,12 +45,7 @@ final class AppContainer: ObservableObject {
         // Read the preference set during onboarding / Settings.
         // UserDefaults is checked directly here because AppSettings doesn't
         // exist yet at the point AppContainer is initialized.
-        let syncEnabled: Bool
-        if UserDefaults.standard.object(forKey: AppSettings.iCloudSyncKey) != nil {
-            syncEnabled = UserDefaults.standard.bool(forKey: AppSettings.iCloudSyncKey)
-        } else {
-            syncEnabled = true   // first-launch default: sync on
-        }
+        let syncEnabled = AppSettings.syncedICloudEnabled()
 
         // Explicit container ID so every code path targets the same CloudKit store.
         let ckContainerID = "iCloud.com.jacobreedrunningapp"

@@ -91,8 +91,7 @@ final class WorkoutSyncService {
             return
         }
 
-        let unitRaw = UserDefaults.standard.string(forKey: AppSettings.unitPreferenceKey) ?? ""
-        let unit = UnitPreference(rawValue: unitRaw) ?? .metric
+        let unit = AppSettings.syncedUnitPreference()
         for workout in newWorkouts {
             try? await notificationService.notifyNewRunSynced(workout, unit: unit)
         }
