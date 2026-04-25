@@ -25,7 +25,7 @@ struct WeekCalendarView: View {
         .onChange(of: selectedDate) { _, newDate in
             let target = newDate.startOfWeek
             guard !cal.isDate(target, inSameDayAs: weekStart) else { return }
-            withAnimation(.easeInOut(duration: 0.2)) {
+            withAnimation(AppAnimation.bouncy) {
                 weekStart = target
             }
         }
@@ -64,7 +64,7 @@ struct WeekCalendarView: View {
                 .frame(maxWidth: .infinity)
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    withAnimation(.easeInOut(duration: 0.15)) {
+                    withAnimation(AppAnimation.bouncy) {
                         selectedDate = date
                     }
                 }
@@ -79,7 +79,7 @@ struct WeekCalendarView: View {
 
     private func navChevron(systemImage: String, action: @escaping () -> Void) -> some View {
         Button {
-            withAnimation(.easeInOut(duration: 0.2)) { action() }
+            withAnimation(AppAnimation.bouncy) { action() }
         } label: {
             let iconName: StrideIconName = systemImage == "chevron.left" ? .chevronLeft : .chevronRight
             StrideIcon(name: iconName, size: 13, color: .secondary, strokeWeight: 2)
@@ -134,9 +134,11 @@ private struct DayCell: View {
                 Circle()
                     .fill(circleBackground)
                     .frame(width: 32, height: 32)
+                    .adaptiveAnimation(AppAnimation.snappy, value: isSelected)
                 Text(date.formatted(.dateTime.day()))
                     .font(.system(size: 15, weight: isToday || isSelected ? .bold : .regular))
                     .foregroundStyle(numberForeground)
+                    .adaptiveAnimation(AppAnimation.snappy, value: isSelected)
             }
 
             indicatorArea
@@ -226,8 +228,12 @@ struct DashboardView: View {
     private var recentWorkouts: [RunWorkout]
 
     @Environment(AppSettings.self) private var appSettings
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showActiveRun = false
     @State private var selectedDate = Date()
+
+    @Namespace private var workoutCardNamespace
+    @State private var dashboardAppeared = false
 
     private var activePlan: TrainingPlan? { activePlans.first }
 
@@ -242,12 +248,22 @@ struct DashboardView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
                         weekSummaryCard
+                            .opacity(dashboardAppeared ? 1 : 0)
+                            .offset(y: dashboardAppeared ? 0 : 20)
+                            .adaptiveAnimation(AppAnimation.entrance.delay(0.05), value: dashboardAppeared)
                         selectedDaySection
+                            .opacity(dashboardAppeared ? 1 : 0)
+                            .offset(y: dashboardAppeared ? 0 : 20)
+                            .adaptiveAnimation(AppAnimation.entrance.delay(0.12), value: dashboardAppeared)
                         startRunButton
+                            .opacity(dashboardAppeared ? 1 : 0)
+                            .offset(y: dashboardAppeared ? 0 : 16)
+                            .adaptiveAnimation(AppAnimation.entrance.delay(0.18), value: dashboardAppeared)
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 16)
                 }
+                .task { dashboardAppeared = true }
             }
             .background(Color.surfacePrimary)
             .navigationTitle("Today")
@@ -345,12 +361,16 @@ struct DashboardView: View {
                 .font(.sectionHeader)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 4)
+                .adaptiveAnimation(AppAnimation.bouncy, value: selectedDate)
 
+            Group {
             if let workout = workoutForSelectedDate {
                 NavigationLink {
                     WorkoutDetailView(workout: workout)
+                        .navigationTransition(.zoom(sourceID: workout.persistentModelID, in: workoutCardNamespace))
                 } label: {
                     WorkoutCardView(workout: workout)
+                        .matchedTransitionSource(id: workout.persistentModelID, in: workoutCardNamespace)
                 }
                 .buttonStyle(.plain)
 
@@ -377,6 +397,13 @@ struct DashboardView: View {
             } else {
                 restDayCard
             }
+            }
+            .id(selectedDate)
+            .transition(.asymmetric(
+                insertion: .move(edge: .bottom).combined(with: .opacity),
+                removal: .opacity
+            ))
+            .adaptiveAnimation(AppAnimation.bouncy, value: selectedDate)
         }
     }
 
@@ -509,7 +536,7 @@ private struct ProgressRingView: View {
                 .trim(from: 0, to: progress)
                 .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                 .rotationEffect(.degrees(-90))
-                .animation(.easeInOut(duration: 0.4), value: progress)
+                .adaptiveAnimation(AppAnimation.gentle, value: progress)
         }
         .frame(width: size, height: size)
     }

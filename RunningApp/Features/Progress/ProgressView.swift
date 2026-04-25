@@ -19,6 +19,9 @@ struct ProgressDashboardView: View {
     @State private var selectedElevationDate: Date? = nil
     @State private var selectedVO2Date: Date? = nil
 
+    @Namespace private var rangeNamespace
+    @State private var progressAppeared = false
+
     enum ChartRange: String, CaseIterable {
         case month = "1M"
         case threeMonths = "3M"
@@ -59,18 +62,49 @@ struct ProgressDashboardView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     summaryHeader
+                        .opacity(progressAppeared ? 1 : 0)
+                        .scaleEffect(progressAppeared ? 1 : 0.94, anchor: .top)
+                        .adaptiveAnimation(AppAnimation.entrance.delay(0.05), value: progressAppeared)
                     rangePicker
+                        .opacity(progressAppeared ? 1 : 0)
+                        .offset(y: progressAppeared ? 0 : 10)
+                        .adaptiveAnimation(AppAnimation.entrance.delay(0.10), value: progressAppeared)
                     weeklyVolumeChart
+                        .opacity(progressAppeared ? 1 : 0)
+                        .offset(y: progressAppeared ? 0 : 18)
+                        .adaptiveAnimation(AppAnimation.entrance.delay(0.15), value: progressAppeared)
                     paceProgressChart
+                        .opacity(progressAppeared ? 1 : 0)
+                        .offset(y: progressAppeared ? 0 : 18)
+                        .adaptiveAnimation(AppAnimation.entrance.delay(0.20), value: progressAppeared)
                     racePacePredictionChart
+                        .opacity(progressAppeared ? 1 : 0)
+                        .offset(y: progressAppeared ? 0 : 18)
+                        .adaptiveAnimation(AppAnimation.entrance.delay(0.25), value: progressAppeared)
                     racePaceSummaryCard
+                        .opacity(progressAppeared ? 1 : 0)
+                        .offset(y: progressAppeared ? 0 : 18)
+                        .adaptiveAnimation(AppAnimation.entrance.delay(0.30), value: progressAppeared)
                     heartRateTrendChart
+                        .opacity(progressAppeared ? 1 : 0)
+                        .offset(y: progressAppeared ? 0 : 18)
+                        .adaptiveAnimation(AppAnimation.entrance.delay(0.35), value: progressAppeared)
                     elevationTrendChart
+                        .opacity(progressAppeared ? 1 : 0)
+                        .offset(y: progressAppeared ? 0 : 18)
+                        .adaptiveAnimation(AppAnimation.entrance.delay(0.40), value: progressAppeared)
                     vo2MaxTrendChart
+                        .opacity(progressAppeared ? 1 : 0)
+                        .offset(y: progressAppeared ? 0 : 18)
+                        .adaptiveAnimation(AppAnimation.entrance.delay(0.45), value: progressAppeared)
                     periodSummaryCard
+                        .opacity(progressAppeared ? 1 : 0)
+                        .offset(y: progressAppeared ? 0 : 18)
+                        .adaptiveAnimation(AppAnimation.entrance.delay(0.50), value: progressAppeared)
                 }
                 .padding()
                 .frame(maxWidth: .infinity)
+                .task { progressAppeared = true }
             }
             .background(Color.surfacePrimary)
             .navigationTitle("Progress")
@@ -82,6 +116,11 @@ struct ProgressDashboardView: View {
             selectedHRDate = nil
             selectedElevationDate = nil
             selectedVO2Date = nil
+            progressAppeared = false
+            Task {
+                try? await Task.sleep(for: .milliseconds(30))
+                progressAppeared = true
+            }
         }
     }
 
@@ -128,19 +167,24 @@ struct ProgressDashboardView: View {
     private var rangePicker: some View {
         HStack(spacing: 4) {
             ForEach(ChartRange.allCases, id: \.self) { range in
-                Button { selectedRange = range } label: {
+                Button {
+                    withAnimation(AppAnimation.bouncy) { selectedRange = range }
+                } label: {
                     Text(range.rawValue)
                         .font(.system(size: 14, weight: .semibold, design: .monospaced))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 9)
-                        .background(
-                            selectedRange == range ? Color.brand : Color.clear,
-                            in: RoundedRectangle(cornerRadius: 10)
-                        )
+                        .background {
+                            if selectedRange == range {
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(Color.brand)
+                                    .matchedGeometryEffect(id: "rangePill", in: rangeNamespace)
+                            }
+                        }
                         .foregroundStyle(selectedRange == range ? .white : .secondary)
+                        .adaptiveAnimation(AppAnimation.bouncy, value: selectedRange)
                 }
-                .buttonStyle(.plain)
-                .animation(.easeInOut(duration: 0.15), value: selectedRange)
+                .buttonStyle(BouncyButtonStyle())
             }
         }
         .padding(4)

@@ -9,6 +9,8 @@ struct OBWelcome: View {
     let onStart: () -> Void
     let onSignIn: (String) -> Void
 
+    @State private var appeared = false
+
     var body: some View {
         ZStack(alignment: .bottom) {
             GeometryReader { geo in
@@ -28,6 +30,9 @@ struct OBWelcome: View {
                 Spacer().frame(height: 90)
 
                 StrideAppMark(size: 120)
+                    .scaleEffect(appeared ? 1 : 0.55)
+                    .opacity(appeared ? 1 : 0)
+                    .adaptiveAnimation(AppAnimation.entrance, value: appeared)
 
                 Spacer(minLength: 40)
 
@@ -35,6 +40,9 @@ struct OBWelcome: View {
                     .font(.system(size: 11, weight: .bold))
                     .kerning(1.8)
                     .foregroundStyle(.brand)
+                    .opacity(appeared ? 1 : 0)
+                    .offset(y: appeared ? 0 : 10)
+                    .adaptiveAnimation(AppAnimation.entrance.delay(0.08), value: appeared)
 
                 Spacer().frame(height: 10)
 
@@ -44,6 +52,9 @@ struct OBWelcome: View {
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.primary)
                     .lineSpacing(-4)
+                    .opacity(appeared ? 1 : 0)
+                    .offset(y: appeared ? 0 : 16)
+                    .adaptiveAnimation(AppAnimation.entrance.delay(0.14), value: appeared)
 
                 Spacer().frame(height: 14)
 
@@ -53,6 +64,9 @@ struct OBWelcome: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 12)
                     .lineSpacing(2)
+                    .opacity(appeared ? 1 : 0)
+                    .offset(y: appeared ? 0 : 14)
+                    .adaptiveAnimation(AppAnimation.entrance.delay(0.20), value: appeared)
 
                 Spacer(minLength: 30)
 
@@ -71,7 +85,10 @@ struct OBWelcome: View {
                     )
                 }
                 .foregroundStyle(.white)
-                .buttonStyle(.plain)
+                .buttonStyle(BouncyButtonStyle())
+                .opacity(appeared ? 1 : 0)
+                .offset(y: appeared ? 0 : 18)
+                .adaptiveAnimation(AppAnimation.entrance.delay(0.28), value: appeared)
 
                 SignInWithAppleButton(.signIn) { request in
                     request.requestedScopes = []
@@ -85,11 +102,14 @@ struct OBWelcome: View {
                 .frame(height: 50)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
                 .padding(.top, 12)
+                .opacity(appeared ? 1 : 0)
+                .adaptiveAnimation(AppAnimation.entrance.delay(0.34), value: appeared)
 
                 Spacer().frame(height: 34)
             }
             .padding(.horizontal, 24)
         }
+        .onAppear { appeared = true }
     }
 }
 
@@ -260,7 +280,7 @@ struct OBShell<Content: View>: View {
                                 Capsule().fill(Color.brand)
                                     .frame(width: geo.size.width * CGFloat(stepIndex + 1) / CGFloat(total),
                                            height: 4)
-                                    .animation(.easeInOut(duration: 0.3), value: stepIndex)
+                                    .adaptiveAnimation(AppAnimation.bouncy, value: stepIndex)
                             }
                         }
                         .frame(height: 4)
@@ -388,7 +408,7 @@ struct OBRaceCard: View {
             .overlay(RoundedRectangle(cornerRadius: 18)
                 .strokeBorder(isSelected ? color : Color.clear, lineWidth: 2))
         }
-        .buttonStyle(.plain).foregroundStyle(.primary)
+        .buttonStyle(BouncyButtonStyle()).foregroundStyle(.primary)
     }
 }
 
@@ -435,7 +455,7 @@ struct OBLevelRow: View {
             .overlay(RoundedRectangle(cornerRadius: 16)
                 .strokeBorder(isSelected ? Color.brand : Color.clear, lineWidth: 2))
         }
-        .buttonStyle(.plain).foregroundStyle(.primary)
+        .buttonStyle(BouncyButtonStyle()).foregroundStyle(.primary)
     }
 }
 
@@ -525,9 +545,12 @@ struct OBRadio: View {
                 .frame(width: 22, height: 22)
             if isSelected {
                 Circle().fill(color).frame(width: 22, height: 22)
+                    .transition(.scale(scale: 0.4).combined(with: .opacity))
                 StrideIcon(name: .check, size: 12, color: .white, strokeWeight: 3)
+                    .transition(.scale(scale: 0.4).combined(with: .opacity))
             }
         }
+        .adaptiveAnimation(AppAnimation.snappy, value: isSelected)
     }
 }
 
@@ -677,6 +700,8 @@ private struct WeeklyMileageChart: View {
     let peakMiles: Int
     let unit: UnitPreference
 
+    @State private var barsVisible = false
+
     /// Bars: (week number, mileage, phase).
     private var bars: [(n: Int, mi: Int, phase: TrainingPhase)] {
         guard planWeeks > 0 else { return [] }
@@ -730,14 +755,16 @@ private struct WeeklyMileageChart: View {
                 .foregroundStyle(.secondary)
 
             HStack(alignment: .bottom, spacing: 6) {
-                ForEach(bars, id: \.n) { bar in
+                ForEach(Array(bars.enumerated()), id: \.element.n) { index, bar in
                     VStack(spacing: 4) {
                         Text("\(bar.mi)")
                             .font(.system(size: 9, weight: .semibold, design: .monospaced))
                             .foregroundStyle(.secondary)
+                            .opacity(barsVisible ? 1 : 0)
                         RoundedRectangle(cornerRadius: 3)
                             .fill(phaseColor(bar.phase))
-                            .frame(height: max(6, CGFloat(bar.mi) / CGFloat(peakMiles) * 72))
+                            .frame(height: barsVisible ? max(6, CGFloat(bar.mi) / CGFloat(peakMiles) * 72) : 2)
+                            .animation(AppAnimation.bouncy.delay(Double(index) * 0.04), value: barsVisible)
                         Text("W\(bar.n)")
                             .font(.system(size: 9, weight: .semibold, design: .monospaced))
                             .foregroundStyle(Color.secondary.opacity(0.6))
@@ -746,6 +773,7 @@ private struct WeeklyMileageChart: View {
                 }
             }
             .frame(height: 104)
+            .task { barsVisible = true }
 
             // Legend
             HStack(spacing: 12) {

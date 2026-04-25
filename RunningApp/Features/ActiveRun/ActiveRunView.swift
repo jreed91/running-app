@@ -10,6 +10,12 @@ struct ActiveRunView: View {
     @Query private var profiles: [UserProfile]
     @Query private var activePlans: [TrainingPlan]
     @State private var showFinishConfirmation = false
+    @State private var recPulse = false
+    @State private var heartPulse = false
+    @State private var controlsAppeared = false
+    @State private var metricsAppeared = false
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var tracker: WorkoutTrackerService { container.workoutTrackerService }
 
@@ -42,7 +48,7 @@ struct ActiveRunView: View {
                 )
             }
             .ignoresSafeArea()
-            .animation(.easeInOut(duration: 0.6), value: currentZone.rawValue)
+            .adaptiveAnimation(AppAnimation.gentle, value: currentZone.rawValue)
 
             // Soft texture overlay — subtle highlight + lowlight for depth
             RadialGradient(
@@ -78,6 +84,12 @@ struct ActiveRunView: View {
             if tracker.trackingState == .idle {
                 tracker.startWorkout(type: .easy)
             }
+            metricsAppeared = true
+            controlsAppeared = true
+            if !reduceMotion {
+                recPulse = true
+                heartPulse = true
+            }
         }
         .confirmationDialog("Finish workout?", isPresented: $showFinishConfirmation, titleVisibility: .visible) {
             Button("Finish", role: .destructive) { finishAndSave() }
@@ -101,6 +113,12 @@ struct ActiveRunView: View {
                     .fill(.white)
                     .frame(width: 8, height: 8)
                     .overlay(Circle().strokeBorder(.white.opacity(0.35), lineWidth: 4))
+                    .scaleEffect(recPulse ? 1.35 : 1.0)
+                    .opacity(recPulse ? 0.45 : 1.0)
+                    .animation(
+                        reduceMotion ? .default : .easeInOut(duration: 0.85).repeatForever(autoreverses: true),
+                        value: recPulse
+                    )
                 Text("REC")
                     .font(.system(size: 13, weight: .bold, design: .monospaced))
                     .kerning(1)
@@ -126,7 +144,7 @@ struct ActiveRunView: View {
         .background(.ultraThinMaterial, in: Capsule())
         .overlay(Capsule().strokeBorder(.white.opacity(0.3), lineWidth: 0.5))
         .padding(.top, 28)
-        .animation(.easeInOut(duration: 0.3), value: currentZone.rawValue)
+        .adaptiveAnimation(AppAnimation.bouncy, value: currentZone.rawValue)
     }
 
     // MARK: - Hero pace display
@@ -227,7 +245,7 @@ struct ActiveRunView: View {
                 label: "Time"
             )
             if let hr = tracker.currentHeartRate {
-                metricCell(value: "\(Int(hr))", unit: "bpm", label: "Heart Rate")
+                heartRateCell(bpm: Int(hr))
             } else {
                 metricCell(value: "--", label: "Heart Rate")
             }
@@ -246,6 +264,32 @@ struct ActiveRunView: View {
         )
         .padding(.horizontal, 16)
         .padding(.top, 26)
+        .opacity(metricsAppeared ? 1 : 0)
+        .scaleEffect(metricsAppeared ? 1 : 0.92)
+        .adaptiveAnimation(AppAnimation.entrance.delay(0.1), value: metricsAppeared)
+    }
+
+    private func heartRateCell(bpm: Int) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(alignment: .lastTextBaseline, spacing: 3) {
+                Text("\(bpm)")
+                    .font(.metricSmall)
+                    .foregroundStyle(.white)
+                    .contentTransition(.numericText())
+                    .scaleEffect(heartPulse ? 1.06 : 1.0, anchor: .bottomLeading)
+                    .animation(
+                        reduceMotion ? .default : .easeInOut(duration: 0.75).repeatForever(autoreverses: true),
+                        value: heartPulse
+                    )
+                Text("bpm")
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.65))
+            }
+            Text("HEART RATE")
+                .font(.system(size: 9, weight: .bold))
+                .kerning(1.2)
+                .foregroundStyle(.white.opacity(0.55))
+        }
     }
 
     private func metricCell(value: String, unit: String? = nil, label: String) -> some View {
@@ -277,23 +321,29 @@ struct ActiveRunView: View {
             }
 
             // Primary pause/play
-            if tracker.trackingState == .active {
-                filledControlButton(size: 84, tintColor: zoneColor) {
-                    tracker.pauseWorkout()
-                } label: {
-                    StrideIcon(name: .pause, size: 28, color: zoneColor, strokeWeight: 2.2)
-                }
-            } else if tracker.trackingState == .paused {
-                filledControlButton(size: 84, tintColor: zoneColor) {
-                    tracker.resumeWorkout()
-                } label: {
-                    StrideIcon(name: .play, size: 28, color: zoneColor, strokeWeight: 2.2)
-                }
-            } else {
-                glassControlButton(size: 84) {
-                    StrideIcon(name: .pause, size: 28, color: .white, strokeWeight: 2.2)
+            Group {
+                if tracker.trackingState == .active {
+                    filledControlButton(size: 84, tintColor: zoneColor) {
+                        tracker.pauseWorkout()
+                    } label: {
+                        StrideIcon(name: .pause, size: 28, color: zoneColor, strokeWeight: 2.2)
+                    }
+                    .transition(.scale(scale: 0.7).combined(with: .opacity))
+                } else if tracker.trackingState == .paused {
+                    filledControlButton(size: 84, tintColor: zoneColor) {
+                        tracker.resumeWorkout()
+                    } label: {
+                        StrideIcon(name: .play, size: 28, color: zoneColor, strokeWeight: 2.2)
+                    }
+                    .transition(.scale(scale: 0.7).combined(with: .opacity))
+                } else {
+                    glassControlButton(size: 84) {
+                        StrideIcon(name: .pause, size: 28, color: .white, strokeWeight: 2.2)
+                    }
+                    .transition(.scale(scale: 0.7).combined(with: .opacity))
                 }
             }
+            .adaptiveAnimation(AppAnimation.bouncy, value: tracker.trackingState == .active)
 
             glassControlButton(size: 64) {
                 StrideIcon(name: .stop, size: 22, color: .white, strokeWeight: 2.2)
@@ -302,6 +352,9 @@ struct ActiveRunView: View {
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 40)
+        .opacity(controlsAppeared ? 1 : 0)
+        .offset(y: controlsAppeared ? 0 : 30)
+        .adaptiveAnimation(AppAnimation.entrance.delay(0.2), value: controlsAppeared)
     }
 
     // MARK: - Control button helpers
