@@ -1,11 +1,13 @@
 import Foundation
 
 #if canImport(PulseProxy)
+import Pulse
 import PulseProxy
 #endif
 
 /// Enables Pulse only for TestFlight builds so beta testers can capture
 /// and share network logs without exposing diagnostics in App Store releases.
+@MainActor
 enum PulseIntegrationService {
 
     private static let hasEnabledKey = "PulseIntegrationService.hasEnabled"
