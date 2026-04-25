@@ -517,6 +517,10 @@ struct OnboardingView: View {
 
     private func handleStartFresh() {
         authService.welcomeBackPending = false
+        // Skip past OBWelcome — the user has already authenticated, and
+        // returning them to the sign-in screen would just risk a loop back
+        // into OBWelcomeBack if they tap Sign in with Apple again.
+        if step == 0 { advance() }
     }
 
     // MARK: - Create profile and plan
