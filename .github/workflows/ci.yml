@@ -51,8 +51,10 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
-      - name: Resolve Swift packages
-        run: xcodebuild -resolvePackageDependencies -project RunningApp.xcodeproj -scheme "$SCHEME"
+      - name: Install Swift package pins
+        run: |
+          mkdir -p RunningApp.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
+          cp ci_scripts/Package.resolved RunningApp.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 
       - name: Cache DerivedData
         uses: actions/cache@v4
@@ -135,8 +137,10 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
-      - name: Resolve Swift packages
-        run: xcodebuild -resolvePackageDependencies -project RunningApp.xcodeproj -scheme "$SCHEME"
+      - name: Install Swift package pins
+        run: |
+          mkdir -p RunningApp.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
+          cp ci_scripts/Package.resolved RunningApp.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 
       - name: Cache DerivedData
         uses: actions/cache@v4
@@ -175,8 +179,10 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
-      - name: Resolve Swift packages
-        run: xcodebuild -resolvePackageDependencies -project RunningApp.xcodeproj -scheme "$SCHEME"
+      - name: Install Swift package pins
+        run: |
+          mkdir -p RunningApp.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
+          cp ci_scripts/Package.resolved RunningApp.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 
       - name: Cache DerivedData
         uses: actions/cache@v4
