@@ -8,6 +8,7 @@ final class ScheduledWorkout {
     var id: UUID = UUID()
     var scheduledDate: Date = Date()
     var workoutType: WorkoutType = WorkoutType.easy
+    var workoutLocation: WorkoutLocation = WorkoutLocation.outdoor
     var targetDistanceMeters: Double?
     /// Lower bound of target pace range in seconds/km.
     var targetPaceLowerBound: Double?

@@ -193,7 +193,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
 
         return CustomWorkout(
             activity: .running,
-            location: .outdoor,
+            location: workout.workoutLocation == .indoor ? .indoor : .outdoor,
             displayName: workout.workoutType.displayName,
             warmup: warmupStep,
             blocks: blocks,
@@ -234,7 +234,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
 
         return CustomWorkout(
             activity: .running,
-            location: .outdoor,
+            location: workout.workoutLocation == .indoor ? .indoor : .outdoor,
             displayName: workout.workoutType.displayName,
             warmup: warmup,
             blocks: blocks,
