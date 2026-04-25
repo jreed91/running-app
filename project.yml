@@ -62,8 +62,7 @@ targets:
           - iCloud.com.jacobreedrunningapp
         com.apple.developer.icloud-services:
           - CloudKit
-        com.apple.developer.ubiquity-kvstore-identifier:
-          - $(TeamIdentifierPrefix)$(CFBundleIdentifier)
+        com.apple.developer.ubiquity-kvstore-identifier: $(TeamIdentifierPrefix)$(CFBundleIdentifier)
         com.apple.developer.weatherkit: true
 
     dependencies:
