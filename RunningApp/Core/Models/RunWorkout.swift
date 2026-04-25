@@ -14,6 +14,7 @@ final class RunWorkout {
     var maxHeartRate: Double?
     var elevationGainMeters: Double?
     var workoutType: WorkoutType = WorkoutType.easy
+    var workoutLocation: WorkoutLocation = WorkoutLocation.outdoor
     var notes: String?
 
     /// HealthKit workout UUID string, set after syncing.
@@ -53,7 +54,8 @@ final class RunWorkout {
         date: Date = Date(),
         distanceMeters: Double,
         durationSeconds: Double,
-        workoutType: WorkoutType = .easy
+        workoutType: WorkoutType = .easy,
+        workoutLocation: WorkoutLocation = .outdoor
     ) {
         self.id = UUID()
         self.date = date
@@ -63,5 +65,6 @@ final class RunWorkout {
             ? (durationSeconds / distanceMeters * 1_000)
             : 0
         self.workoutType = workoutType
+        self.workoutLocation = workoutLocation
     }
 }
