@@ -4,6 +4,27 @@ import AuthenticationServices
 import CloudKit
 import CoreData
 
+@MainActor
+private final class CloudKitImportWaitState {
+    var didResume = false
+    var observer: NSObjectProtocol?
+    var timeoutTimer: Timer?
+    var continuation: CheckedContinuation<Bool, Never>?
+
+    func finish(_ didImport: Bool) {
+        guard !didResume else { return }
+        didResume = true
+        if let observer {
+            NotificationCenter.default.removeObserver(observer)
+            self.observer = nil
+        }
+        timeoutTimer?.invalidate()
+        timeoutTimer = nil
+        continuation?.resume(returning: didImport)
+        continuation = nil
+    }
+}
+
 // MARK: - OBWelcome
 
 struct OBWelcome: View {
@@ -122,6 +143,7 @@ struct OBWelcomeBack: View {
     @Query private var profiles: [UserProfile]
 
     let onStartFresh: () -> Void
+    private let restoreCoordinator = WelcomeBackRestoreCoordinator()
 
     @State private var iCloudIssue: String?
     // Set true once we have a definitive signal that CloudKit's initial
@@ -228,7 +250,7 @@ struct OBWelcomeBack: View {
             // empty profile list means this Apple ID has nothing to restore
             // (new user, or no prior install). Send them into normal onboarding
             // instead of leaving them stranded on the spinner.
-            if finished, !hasData {
+            if restoreCoordinator.shouldStartFresh(initialSyncFinished: finished, hasData: hasData) {
                 onStartFresh()
             }
         }
@@ -241,22 +263,9 @@ struct OBWelcomeBack: View {
                 continuation.resume(returning: status)
             }
         }
-        switch status {
-        case .available:
-            iCloudIssue = nil
-        case .noAccount:
-            iCloudIssue = "iCloud is not signed in on this device. Your previous plans are stored in iCloud."
-            scheduleUnavailableICloudTransition()
-        case .restricted:
-            iCloudIssue = "iCloud access is restricted on this device, so previous plans can't be restored yet."
-            scheduleUnavailableICloudTransition()
-        case .couldNotDetermine:
-            iCloudIssue = "iCloud status couldn't be verified right now. Check your network and iCloud settings."
-            scheduleUnavailableICloudTransition()
-        case .temporarilyUnavailable:
-            iCloudIssue = "iCloud is temporarily unavailable. Please keep this screen open and try again in a moment."
-        @unknown default:
-            iCloudIssue = "Unable to verify iCloud status. Check iCloud settings and network, then try again."
+        let presentation = restoreCoordinator.presentation(for: status)
+        iCloudIssue = presentation.issueMessage
+        if presentation.shouldAutoTransition {
             scheduleUnavailableICloudTransition()
         }
     }
@@ -266,7 +275,7 @@ struct OBWelcomeBack: View {
     /// stuck staring at "Checking iCloud…" indefinitely.
     private func scheduleUnavailableICloudTransition() {
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 6_000_000_000)
+            await restoreCoordinator.waitBeforeAutoTransition()
             initialSyncFinished = true
         }
     }
@@ -283,36 +292,20 @@ struct OBWelcomeBack: View {
     ///    never arrives (e.g. CloudKit container failed to initialise).
     @MainActor
     private func waitForInitialSync() async {
-        guard appSettings.iCloudSyncEnabled else {
-            try? await Task.sleep(nanoseconds: 1_500_000_000)
-            initialSyncFinished = true
-            return
-        }
-
-        _ = await waitForCloudKitImportEvent(timeoutNanoseconds: 60_000_000_000)
-
-        // Give @Query a moment to publish any freshly imported profiles
-        // before we make the empty-store decision.
-        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        await restoreCoordinator.waitForInitialSync(
+            iCloudSyncEnabled: appSettings.iCloudSyncEnabled,
+            waitForImport: waitForCloudKitImportEvent(timeoutNanoseconds:)
+        )
         initialSyncFinished = true
     }
 
     @MainActor
     private func waitForCloudKitImportEvent(timeoutNanoseconds: UInt64) async -> Bool {
         await withCheckedContinuation { continuation in
-            var didResume = false
-            var observer: NSObjectProtocol?
+            let state = CloudKitImportWaitState()
+            state.continuation = continuation
 
-            func finish(_ didImport: Bool) {
-                guard !didResume else { return }
-                didResume = true
-                if let observer {
-                    NotificationCenter.default.removeObserver(observer)
-                }
-                continuation.resume(returning: didImport)
-            }
-
-            observer = NotificationCenter.default.addObserver(
+            state.observer = NotificationCenter.default.addObserver(
                 forName: NSPersistentCloudKitContainer.eventChangedNotification,
                 object: nil,
                 queue: .main
@@ -324,12 +317,15 @@ struct OBWelcomeBack: View {
                     event.type == .import,
                     event.endDate != nil
                 else { return }
-                finish(true)
+                Task { @MainActor in
+                    state.finish(true)
+                }
             }
 
-            Task { @MainActor in
-                try? await Task.sleep(nanoseconds: timeoutNanoseconds)
-                finish(false)
+            state.timeoutTimer = Timer.scheduledTimer(withTimeInterval: Double(timeoutNanoseconds) / 1_000_000_000, repeats: false) { _ in
+                Task { @MainActor in
+                    state.finish(false)
+                }
             }
         }
     }

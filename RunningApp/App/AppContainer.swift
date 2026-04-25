@@ -11,9 +11,19 @@ import SwiftData
 @MainActor
 final class AppContainer: ObservableObject {
 
+    enum PersistenceMode: Equatable {
+        case cloudKit
+        case inMemory
+        case localOnly
+        case localFallback
+        case recreatedLocalFallback
+        case emergencyInMemory
+    }
+
     // MARK: SwiftData
 
     let modelContainer: ModelContainer
+    let persistenceMode: PersistenceMode
 
     // MARK: Repositories
 
@@ -35,7 +45,17 @@ final class AppContainer: ObservableObject {
 
     // MARK: Init
 
-    init(inMemory: Bool = false) {
+    init(
+        inMemory: Bool = false,
+        syncEnabledOverride: Bool? = nil,
+        forceCloudKit: Bool? = nil,
+        storeURLOverride: URL? = nil,
+        modelContainerFactory: (Schema, [ModelConfiguration]) throws -> ModelContainer = {
+            try ModelContainer(for: $0, configurations: $1)
+        }
+    ) {
+        PulseIntegrationService.activateIfNeeded()
+
         let schema = Schema([
             UserProfile.self,
             RunWorkout.self,
@@ -47,7 +67,7 @@ final class AppContainer: ObservableObject {
         // Read the preference set during onboarding / Settings.
         // UserDefaults is checked directly here because AppSettings doesn't
         // exist yet at the point AppContainer is initialized.
-        let syncEnabled = AppSettings.syncedICloudEnabled()
+        let syncEnabled = syncEnabledOverride ?? AppSettings.syncedICloudEnabled()
 
         // Explicit container ID so every code path targets the same CloudKit store.
         let ckContainerID = "iCloud.com.jacobreedrunningapp"
@@ -55,9 +75,9 @@ final class AppContainer: ObservableObject {
         // Shared on-disk URL keeps the CloudKit store and any local-fallback store
         // pointing at the same SQLite file. When CloudKit recovers, NSPersistentCloudKitContainer
         // picks up records that were written during an outage and pushes them automatically.
-        let storeURL = URL.applicationSupportDirectory.appending(path: "RunningApp.store")
+        let storeURL = storeURLOverride ?? URL.applicationSupportDirectory.appending(path: "RunningApp.store")
 
-        let cloudKitEnabled = Self.shouldUseCloudKit(syncEnabled: syncEnabled, inMemory: inMemory)
+        let cloudKitEnabled = forceCloudKit ?? Self.shouldUseCloudKit(syncEnabled: syncEnabled, inMemory: inMemory)
 
         let config: ModelConfiguration
         if inMemory {
@@ -75,8 +95,14 @@ final class AppContainer: ObservableObject {
         // Fallback uses the SAME on-disk URL — data is never orphaned in a separate store.
         let localConfig = ModelConfiguration(schema: schema, url: storeURL)
         let container: ModelContainer
+        let persistenceMode: PersistenceMode
         do {
-            container = try ModelContainer(for: schema, configurations: [config])
+            container = try modelContainerFactory(schema, [config])
+            if inMemory {
+                persistenceMode = .inMemory
+            } else {
+                persistenceMode = cloudKitEnabled ? .cloudKit : .localOnly
+            }
             AppLogger.log("Store opened OK (syncEnabled=\(syncEnabled), cloudKitEnabled=\(cloudKitEnabled))", label: "AppContainer", level: .info)
         } catch let primaryError {
             AppLogger.log("CloudKit store failed (\(primaryError)); falling back to local-only at same URL", label: "AppContainer", level: .error)
@@ -86,8 +112,9 @@ final class AppContainer: ObservableObject {
 
             // Tier 1 — same file, CloudKit disabled. Records written here will be
             // exported to CloudKit automatically once the container succeeds on a later launch.
-            if let c = try? ModelContainer(for: schema, configurations: [localConfig]) {
+            if let c = try? modelContainerFactory(schema, [localConfig]) {
                 container = c
+                persistenceMode = .localFallback
                 AppLogger.log("Tier1: local-only store OK (data will sync when CloudKit recovers)", label: "AppContainer", level: .notice)
             } else {
                 // Tier 2 — delete the on-disk store and recreate local-only.
@@ -98,15 +125,17 @@ final class AppContainer: ObservableObject {
                     )
                 }
 
-                if let c = try? ModelContainer(for: schema, configurations: [localConfig]) {
+                if let c = try? modelContainerFactory(schema, [localConfig]) {
                     container = c
+                    persistenceMode = .recreatedLocalFallback
                     AppLogger.log("Tier2: fresh local store created OK", label: "AppContainer", level: .notice)
                 } else {
                     // Tier 3 — in-memory; data won't persist but the app won't crash on launch.
                     AppLogger.log("Tier3: all persistent tiers failed — using in-memory store", label: "AppContainer", level: .critical)
                     let memConfig = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
                     do {
-                        container = try ModelContainer(for: schema, configurations: [memConfig])
+                        container = try modelContainerFactory(schema, [memConfig])
+                        persistenceMode = .emergencyInMemory
                     } catch let tier3Error {
                         fatalError("[AppContainer] In-memory ModelContainer failed — SwiftData is broken on this device: \(tier3Error)")
                     }
@@ -115,6 +144,7 @@ final class AppContainer: ObservableObject {
         }
 
         self.modelContainer = container
+        self.persistenceMode = persistenceMode
 
         let context = container.mainContext
         self.workoutRepository = WorkoutRepository(context: context)
