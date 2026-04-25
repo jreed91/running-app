@@ -1,7 +1,9 @@
 import Foundation
 
-#if canImport(PulseProxy)
+#if canImport(Pulse)
 import Pulse
+#endif
+#if canImport(PulseProxy)
 import PulseProxy
 #endif
 
@@ -14,6 +16,15 @@ enum PulseIntegrationService {
 
     static func activateIfNeeded() {
         guard DataMigrationService.isTestFlight else { return }
+
+        #if canImport(Pulse)
+        RemoteLogger.shared.isAutomaticConnectionEnabled = true
+        LoggerStore.shared.storeMessage(
+            label: "pulse",
+            level: .notice,
+            message: "Pulse integration enabled for TestFlight build"
+        )
+        #endif
 
         #if canImport(PulseProxy)
         // Keep this idempotent because app launch tasks can run multiple times.
