@@ -72,6 +72,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
     // MARK: - Completed workout
 
     @MainActor func save(_ workout: RunWorkout) async throws -> String {
+        let isIndoor = workout.workoutLocation == .indoor
         let hkWorkout = HKWorkout(
             activityType: .running,
             start: workout.date,
@@ -79,7 +80,10 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             duration: workout.durationSeconds,
             totalEnergyBurned: nil,
             totalDistance: HKQuantity(unit: .meter(), doubleValue: workout.distanceMeters),
-            metadata: ["RunningAppWorkoutID": workout.id.uuidString]
+            metadata: [
+                "RunningAppWorkoutID": workout.id.uuidString,
+                HKMetadataKeyIndoorWorkout: isIndoor
+            ]
         )
         try await store.save(hkWorkout)
         return hkWorkout.uuid.uuidString
@@ -247,12 +251,11 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
 
     func registerObserverQuery(handler: @escaping @Sendable () -> Void) {
         guard isAvailable else { return }
-        let predicate = HKQuery.predicateForWorkouts(with: .running)
+        // Observe all running workouts (outdoor and treadmill share the .running activity type)
         let query = HKObserverQuery(
             sampleType: .workoutType(),
-            predicate: predicate
+            predicate: nil
         ) { _, completionHandler, error in
-            // completionHandler must always be called so iOS doesn't penalise the app.
             defer { completionHandler() }
             guard error == nil else { return }
             handler()
@@ -264,12 +267,13 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
     // MARK: - Historical workout fetch
 
     func fetchWorkouts(from startDate: Date, to endDate: Date) async throws -> [HKWorkout] {
-        let runningPredicate = HKQuery.predicateForWorkouts(with: .running)
+        // Fetch both outdoor and indoor (treadmill) running workouts
+        let outdoorPredicate = HKQuery.predicateForWorkouts(with: .running)
         let datePredicate = HKQuery.predicateForSamples(
             withStart: startDate, end: endDate, options: .strictStartDate
         )
         let compound = NSCompoundPredicate(
-            andPredicateWithSubpredicates: [runningPredicate, datePredicate]
+            andPredicateWithSubpredicates: [outdoorPredicate, datePredicate]
         )
         return try await withCheckedThrowingContinuation { continuation in
             let query = HKSampleQuery(
@@ -314,11 +318,13 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             let elevation = elevationGain(from: hkWorkout)
             let coordinates = await fetchRouteCoordinates(for: hkWorkout)
 
+            let isIndoor = (hkWorkout.metadata?[HKMetadataKeyIndoorWorkout] as? Bool) ?? false
             let run = RunWorkout(
                 date: hkWorkout.startDate,
                 distanceMeters: distanceMeters,
                 durationSeconds: hkWorkout.duration,
-                workoutType: inferWorkoutType(distanceMeters: distanceMeters, durationSeconds: hkWorkout.duration)
+                workoutType: inferWorkoutType(distanceMeters: distanceMeters, durationSeconds: hkWorkout.duration),
+                workoutLocation: isIndoor ? .indoor : .outdoor
             )
             run.averageHeartRate = hrStats?.avg
             run.maxHeartRate = hrStats?.max

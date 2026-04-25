@@ -1,5 +1,6 @@
 import Foundation
 import CoreLocation
+import CoreMotion
 import Combine
 import HealthKit
 
@@ -14,18 +15,20 @@ enum TrackingState: Equatable, Sendable {
 
 // MARK: - WorkoutTrackerService
 
-/// Manages a live GPS run session.
+/// Manages a live run session, supporting both outdoor (GPS) and indoor (pedometer) modes.
 ///
 /// Call order:
-///  1. `startWorkout(type:)`
-///  2. `pauseWorkout()` / `resumeWorkout()` as needed
-///  3. `finishWorkout()` → returns the completed `RunWorkout`
+///  1. `setLocation(_:)` — optional, defaults to `.outdoor`
+///  2. `startWorkout(type:)`
+///  3. `pauseWorkout()` / `resumeWorkout()` as needed
+///  4. `finishWorkout()` → returns the completed `RunWorkout`
 @MainActor
 final class WorkoutTrackerService: NSObject, ObservableObject {
 
     // MARK: Published state
 
     @Published private(set) var trackingState: TrackingState = .idle
+    @Published private(set) var workoutLocation: WorkoutLocation = .outdoor
     @Published private(set) var elapsedSeconds: Double = 0
     @Published private(set) var distanceMeters: Double = 0
     @Published private(set) var currentPaceSecondsPerKm: Double = 0
@@ -48,7 +51,16 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
     private var hrQuery: HKAnchoredObjectQuery?
     private var hrSamples: [Double] = []
 
+    private let pedometer = CMPedometer()
+    private var pedometerActive = false
+
     // MARK: Public API
+
+    /// Set the workout location before calling `startWorkout`. No-op once a workout is active.
+    func setLocation(_ location: WorkoutLocation) {
+        guard trackingState == .idle else { return }
+        workoutLocation = location
+    }
 
     func startWorkout(type: WorkoutType) {
         guard trackingState == .idle else { return }
@@ -56,32 +68,49 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
         startDate = Date()
         reset()
         trackingState = .active
-        configureLocationManager()
-        locationManager.startUpdatingLocation()
         startTimer()
         startHeartRateQuery(from: startDate)
+
+        if workoutLocation == .outdoor {
+            configureLocationManager()
+            locationManager.startUpdatingLocation()
+        } else {
+            startPedometerUpdates()
+        }
     }
 
     func pauseWorkout() {
         guard trackingState == .active else { return }
         trackingState = .paused
         timer?.invalidate()
-        locationManager.stopUpdatingLocation()
+        if workoutLocation == .outdoor {
+            locationManager.stopUpdatingLocation()
+        } else {
+            stopPedometerUpdates()
+        }
         if let q = hrQuery { hkStore.stop(q) }
     }
 
     func resumeWorkout() {
         guard trackingState == .paused else { return }
         trackingState = .active
-        locationManager.startUpdatingLocation()
         startTimer()
         startHeartRateQuery(from: Date())
+        if workoutLocation == .outdoor {
+            locationManager.startUpdatingLocation()
+        } else {
+            startPedometerUpdates()
+        }
     }
 
     func finishWorkout() -> RunWorkout? {
         guard trackingState == .active || trackingState == .paused else { return nil }
         timer?.invalidate()
-        locationManager.stopUpdatingLocation()
+        if workoutLocation == .outdoor {
+            locationManager.stopUpdatingLocation()
+        } else {
+            stopPedometerUpdates()
+        }
         if let q = hrQuery { hkStore.stop(q); hrQuery = nil }
         trackingState = .finished
 
@@ -89,7 +118,8 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
             date: startDate,
             distanceMeters: distanceMeters,
             durationSeconds: elapsedSeconds,
-            workoutType: workoutType
+            workoutType: workoutType,
+            workoutLocation: workoutLocation
         )
         workout.routeCoordinates = coordinates
         workout.splits = splits
@@ -111,7 +141,49 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
         hrSamples = []
         lastLocation = nil
         lastSplitDistance = 0
+        pedometerActive = false
     }
+
+    // MARK: - Pedometer (indoor)
+
+    private func startPedometerUpdates() {
+        guard CMPedometer.isDistanceAvailable(), !pedometerActive else { return }
+        pedometerActive = true
+        pedometer.startUpdates(from: startDate) { [weak self] data, error in
+            guard let data, error == nil else { return }
+            let meters = data.distance?.doubleValue ?? 0
+            Task { @MainActor [weak self] in
+                guard let self, self.trackingState == .active else { return }
+                self.distanceMeters = meters
+                if self.elapsedSeconds > 0 {
+                    self.currentPaceSecondsPerKm = self.elapsedSeconds / meters * 1_000
+                }
+                self.updateSplitsForIndoor()
+            }
+        }
+    }
+
+    private func stopPedometerUpdates() {
+        pedometer.stopUpdates()
+        pedometerActive = false
+    }
+
+    private func updateSplitsForIndoor() {
+        let kmCovered = Int(distanceMeters / 1_000)
+        let lastKmCovered = Int(lastSplitDistance / 1_000)
+        guard kmCovered > lastKmCovered else { return }
+        let split = Split(
+            kilometer: kmCovered,
+            paceSecondsPerKm: currentPaceSecondsPerKm,
+            heartRate: currentHeartRate,
+            elevationGainMeters: 0,
+            cumulativeDistanceMeters: distanceMeters
+        )
+        splits.append(split)
+        lastSplitDistance = distanceMeters
+    }
+
+    // MARK: - Heart rate
 
     private func startHeartRateQuery(from startDate: Date) {
         guard HKHealthStore.isHealthDataAvailable() else { return }
@@ -148,12 +220,16 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
         }
     }
 
+    // MARK: - Timer
+
     private func startTimer() {
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             guard let self, self.trackingState == .active else { return }
             Task { @MainActor in self.elapsedSeconds += 1 }
         }
     }
+
+    // MARK: - GPS (outdoor)
 
     private func configureLocationManager() {
         locationManager.delegate = self
@@ -179,7 +255,6 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
 
             distanceMeters += delta
 
-            // Update current pace from a rolling 5-second average speed
             if location.speed > 0 {
                 currentPaceSecondsPerKm = 1_000 / location.speed
             }

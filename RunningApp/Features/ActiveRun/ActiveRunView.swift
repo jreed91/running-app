@@ -14,6 +14,7 @@ struct ActiveRunView: View {
     @State private var heartPulse = false
     @State private var controlsAppeared = false
     @State private var metricsAppeared = false
+    @State private var selectedLocation: WorkoutLocation = .outdoor
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -81,9 +82,6 @@ struct ActiveRunView: View {
             }
         }
         .onAppear {
-            if tracker.trackingState == .idle {
-                tracker.startWorkout(type: .easy)
-            }
             metricsAppeared = true
             controlsAppeared = true
             if !reduceMotion {
@@ -101,32 +99,59 @@ struct ActiveRunView: View {
 
     private var topBar: some View {
         HStack {
-            glassPill {
-                StrideIcon(name: .lock, size: 14, color: .white, strokeWeight: 2.2)
-                Text("Lock")
-                    .font(.system(size: 12, weight: .bold))
-                    .kerning(0.5)
-            }
+            // Indoor / outdoor toggle — only interactive before the workout starts
+            locationToggle
+
             Spacer()
-            glassPill {
-                Circle()
-                    .fill(.white)
-                    .frame(width: 8, height: 8)
-                    .overlay(Circle().strokeBorder(.white.opacity(0.35), lineWidth: 4))
-                    .scaleEffect(recPulse ? 1.35 : 1.0)
-                    .opacity(recPulse ? 0.45 : 1.0)
-                    .animation(
-                        reduceMotion ? .default : .easeInOut(duration: 0.85).repeatForever(autoreverses: true),
-                        value: recPulse
-                    )
-                Text("REC")
-                    .font(.system(size: 13, weight: .bold, design: .monospaced))
-                    .kerning(1)
+
+            if tracker.trackingState == .active || tracker.trackingState == .paused {
+                glassPill {
+                    Circle()
+                        .fill(.white)
+                        .frame(width: 8, height: 8)
+                        .overlay(Circle().strokeBorder(.white.opacity(0.35), lineWidth: 4))
+                        .scaleEffect(recPulse ? 1.35 : 1.0)
+                        .opacity(recPulse ? 0.45 : 1.0)
+                        .animation(
+                            reduceMotion ? .default : .easeInOut(duration: 0.85).repeatForever(autoreverses: true),
+                            value: recPulse
+                        )
+                    Text("REC")
+                        .font(.system(size: 13, weight: .bold, design: .monospaced))
+                        .kerning(1)
+                }
+            } else {
+                glassPill {
+                    StrideIcon(name: .lock, size: 14, color: .white, strokeWeight: 2.2)
+                    Text("Lock")
+                        .font(.system(size: 12, weight: .bold))
+                        .kerning(0.5)
+                }
             }
         }
         .padding(.horizontal, 22)
         .padding(.top, 56)
         .foregroundStyle(.white)
+    }
+
+    private var locationToggle: some View {
+        let isIdle = tracker.trackingState == .idle
+        return Button {
+            guard isIdle else { return }
+            selectedLocation = selectedLocation == .outdoor ? .indoor : .outdoor
+            tracker.setLocation(selectedLocation)
+        } label: {
+            glassPill {
+                Image(systemName: selectedLocation.systemImage)
+                    .font(.system(size: 13, weight: .semibold))
+                Text(selectedLocation.displayName)
+                    .font(.system(size: 12, weight: .bold))
+                    .kerning(0.5)
+            }
+            .opacity(isIdle ? 1.0 : 0.55)
+        }
+        .buttonStyle(.plain)
+        .adaptiveAnimation(AppAnimation.gentle, value: selectedLocation.rawValue)
     }
 
     // MARK: - Zone label pill
@@ -337,8 +362,11 @@ struct ActiveRunView: View {
                     }
                     .transition(.scale(scale: 0.7).combined(with: .opacity))
                 } else {
-                    glassControlButton(size: 84) {
-                        StrideIcon(name: .pause, size: 28, color: .white, strokeWeight: 2.2)
+                    filledControlButton(size: 84, tintColor: zoneColor) {
+                        tracker.setLocation(selectedLocation)
+                        tracker.startWorkout(type: .easy)
+                    } label: {
+                        StrideIcon(name: .play, size: 28, color: zoneColor, strokeWeight: 2.2)
                     }
                     .transition(.scale(scale: 0.7).combined(with: .opacity))
                 }

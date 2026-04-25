@@ -151,6 +151,22 @@ enum RouteType: String, Codable, CaseIterable, Sendable {
     }
 }
 
+// MARK: - WorkoutLocation
+
+enum WorkoutLocation: String, Codable, CaseIterable, Sendable {
+    case outdoor = "Outdoor"
+    case indoor = "Indoor"
+
+    var displayName: String { rawValue }
+
+    var systemImage: String {
+        switch self {
+        case .outdoor: return "figure.run"
+        case .indoor:  return "house.fill"
+        }
+    }
+}
+
 // MARK: - UnitPreference
 
 enum UnitPreference: String, CaseIterable, Sendable {
