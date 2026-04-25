@@ -33,8 +33,9 @@ struct ContentView: View {
     @Environment(\.modelContext) private var context
     @Environment(AuthService.self) private var authService
 
-    // Sorted oldest-first so dedup always keeps the record with the most history.
-    @Query(sort: \UserProfile.createdAt, order: .forward)
+    // Sorted newest-first to bias the UI toward the most recently updated profile
+    // while launch-time dedup resolves any duplicates delivered by CloudKit.
+    @Query(sort: \UserProfile.updatedAt, order: .reverse)
     private var profiles: [UserProfile]
 
     // Sorted newest-first so dedup keeps the most current active plan.
@@ -71,18 +72,43 @@ struct ContentView: View {
     }
 
     /// Removes duplicate profiles and active plans introduced by CloudKit sync
-    /// racing with local onboarding. Keeps the oldest profile (most history) and
-    /// the newest active plan (most current training block).
+    /// racing with local onboarding. Keeps the most recently updated profile and
+    /// the newest active plan.
     private func deduplicate() {
-        // Profiles: oldest-first → drop everything after index 0
-        if profiles.count > 1 {
-            profiles.dropFirst().forEach { context.delete($0) }
-            try? context.save()
-        }
+        try? ProfileRestoreDeduplicator.deduplicate(profiles, in: context)
         // Active plans: newest-first → drop everything after index 0
         if activePlans.count > 1 {
             activePlans.dropFirst().forEach { context.delete($0) }
             try? context.save()
         }
+    }
+}
+
+enum ProfileRestoreDeduplicator {
+    static func preferredProfile(from profiles: [UserProfile]) -> UserProfile? {
+        profiles.max(by: isLessPreferred)
+    }
+
+    @MainActor
+    static func deduplicate(_ profiles: [UserProfile], in context: ModelContext) throws {
+        guard profiles.count > 1, let winner = preferredProfile(from: profiles) else { return }
+
+        for profile in profiles where profile.persistentModelID != winner.persistentModelID {
+            context.delete(profile)
+        }
+
+        try context.save()
+    }
+
+    private static func isLessPreferred(_ lhs: UserProfile, _ rhs: UserProfile) -> Bool {
+        if lhs.updatedAt != rhs.updatedAt {
+            return lhs.updatedAt < rhs.updatedAt
+        }
+
+        if lhs.createdAt != rhs.createdAt {
+            return lhs.createdAt < rhs.createdAt
+        }
+
+        return lhs.id.uuidString < rhs.id.uuidString
     }
 }
