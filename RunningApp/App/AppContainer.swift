@@ -57,10 +57,12 @@ final class AppContainer: ObservableObject {
         // picks up records that were written during an outage and pushes them automatically.
         let storeURL = URL.applicationSupportDirectory.appending(path: "RunningApp.store")
 
+        let cloudKitEnabled = Self.shouldUseCloudKit(syncEnabled: syncEnabled, inMemory: inMemory)
+
         let config: ModelConfiguration
         if inMemory {
             config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-        } else if syncEnabled {
+        } else if cloudKitEnabled {
             config = ModelConfiguration(
                 schema: schema,
                 url: storeURL,
@@ -75,7 +77,7 @@ final class AppContainer: ObservableObject {
         let container: ModelContainer
         do {
             container = try ModelContainer(for: schema, configurations: [config])
-            print("[AppContainer v5] Store opened OK (syncEnabled=\(syncEnabled))")
+            print("[AppContainer v5] Store opened OK (syncEnabled=\(syncEnabled), cloudKitEnabled=\(cloudKitEnabled))")
         } catch let primaryError {
             print("[AppContainer v5] CloudKit store failed (\(primaryError)); falling back to local-only at same URL")
             guard !inMemory else {
@@ -138,7 +140,18 @@ final class AppContainer: ObservableObject {
 
         self.dataMigrationService = DataMigrationService()
         self.dataMigrationService.runIfNeeded(context: context)
-        self.configureCloudKitDiagnostics(syncEnabled: syncEnabled)
+        self.configureCloudKitDiagnostics(cloudKitEnabled: cloudKitEnabled)
+    }
+
+    private static func shouldUseCloudKit(syncEnabled: Bool, inMemory: Bool) -> Bool {
+        guard syncEnabled, !inMemory else { return false }
+
+        #if targetEnvironment(simulator)
+        print("[AppContainer v5] CloudKit disabled in simulator; using local SwiftData store")
+        return false
+        #else
+        return true
+        #endif
     }
 
     // MARK: - Weather
@@ -228,9 +241,9 @@ final class AppContainer: ObservableObject {
     /// Logs CloudKit import/export lifecycle events from the underlying
     /// `NSPersistentCloudKitContainer` so we can confirm records are
     /// being pushed and pulled during development.
-    private func configureCloudKitDiagnostics(syncEnabled: Bool) {
-        guard syncEnabled else {
-            print("[CloudKit] Diagnostics disabled because iCloud sync is OFF in settings")
+    private func configureCloudKitDiagnostics(cloudKitEnabled: Bool) {
+        guard cloudKitEnabled else {
+            print("[CloudKit] Diagnostics disabled because CloudKit store is not active")
             return
         }
 
@@ -292,6 +305,6 @@ private struct AppContainerKey: EnvironmentKey {
 extension EnvironmentValues {
     var appContainer: AppContainer {
         get { self[AppContainerKey.self] }
-        set { self[AppContainerKey.self] = newValue }
+        set { self[AppContainerKey.self] }
     }
 }
