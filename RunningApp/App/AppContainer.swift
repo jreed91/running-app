@@ -305,6 +305,6 @@ private struct AppContainerKey: EnvironmentKey {
 extension EnvironmentValues {
     var appContainer: AppContainer {
         get { self[AppContainerKey.self] }
-        set { self[AppContainerKey.self] }
+        set { self[AppContainerKey.self] = newValue }
     }
 }
