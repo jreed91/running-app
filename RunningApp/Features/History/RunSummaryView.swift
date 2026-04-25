@@ -44,6 +44,7 @@ struct RunSummaryView: View {
             VStack(spacing: 20) {
                 routeMap
                 statsGrid
+                weatherSection
                 performanceFeedbackSection
                 if !workout.splits.isEmpty {
                     splitPaceChart
@@ -135,6 +136,57 @@ struct RunSummaryView: View {
         .frame(maxWidth: .infinity)
         .padding()
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    // MARK: Weather section
+
+    @ViewBuilder
+    private var weatherSection: some View {
+        if let w = workout.weather {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("CONDITIONS")
+                    .font(.sectionHeader)
+                    .foregroundStyle(.secondary)
+
+                HStack(spacing: 0) {
+                    // Icon + condition description
+                    VStack(spacing: 6) {
+                        Image(systemName: w.conditionSymbol)
+                            .font(.system(size: 32))
+                            .symbolRenderingMode(.multicolor)
+                        Text(w.conditionDescription)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+
+                    Divider().frame(height: 56)
+
+                    // Temperature
+                    VStack(spacing: 4) {
+                        Text(w.temperatureString(unit: appSettings.unitPreference))
+                            .font(.metricSmall)
+                        Text("Feels \(w.feelsLikeString(unit: appSettings.unitPreference))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+
+                    Divider().frame(height: 56)
+
+                    // Humidity + wind
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("\(Int(w.humidityPercent))%", systemImage: "humidity")
+                        Label(w.windString(unit: appSettings.unitPreference), systemImage: "wind")
+                    }
+                    .font(.caption)
+                    .frame(maxWidth: .infinity)
+                }
+                .padding()
+                .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
+            }
+        }
     }
 
     // MARK: Split pace chart
