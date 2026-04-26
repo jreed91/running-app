@@ -8,16 +8,22 @@ final class UserProfile {
     var id: UUID = UUID()
     var name: String = ""
     /// Raw-backed storage for `goalRace` to keep CloudKit fields primitive.
-    @Attribute(originalName: "goalRace")
     var goalRaceRaw: String = RaceType.fiveK.rawValue
     var goalFinishTime: TimeInterval = 0      // seconds
     var weeklyRunDays: Int = 3
     /// Raw-backed storage for `fitnessLevel` to keep CloudKit fields primitive.
-    @Attribute(originalName: "fitnessLevel")
     var fitnessLevelRaw: String = FitnessLevel.beginner.rawValue
     /// Raw-backed storage for `gender` to keep CloudKit fields primitive.
-    @Attribute(originalName: "gender")
     var genderRaw: String = Gender.preferNotToShare.rawValue
+    /// Absorbs the old CloudKit `gender` field so migration can recover it.
+    @Attribute(originalName: "gender")
+    var genderLegacy: String? = nil
+    /// Absorbs the old CloudKit `goalRace` field so migration can recover it.
+    @Attribute(originalName: "goalRace")
+    var goalRaceLegacy: String? = nil
+    /// Absorbs the old CloudKit `fitnessLevel` field so migration can recover it.
+    @Attribute(originalName: "fitnessLevel")
+    var fitnessLevelLegacy: String? = nil
     var currentEstimated5KTimeSeconds: Double?
     /// JSON-encoded `[Int]` backing store for preferred run weekdays.
     /// Access via the `preferredRunDayIndices` extension property — never persist `[Int]` directly.

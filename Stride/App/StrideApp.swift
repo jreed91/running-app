@@ -27,8 +27,11 @@ struct StrideApp: App {
 // MARK: - Root view
 
 /// Switches between onboarding and the main tab bar.
-/// `welcomeBackPending` keeps OnboardingView visible while the returning-user
-/// screen is displayed, even after CloudKit delivers the user's profiles.
+/// Navigation is driven solely by whether a UserProfile exists in the store.
+/// When CloudKit delivers a restored profile, `profiles.isEmpty` flips to false
+/// and the app transitions to MainTabView automatically — no button tap required.
+/// `welcomeBackPending` is still used by OnboardingView to choose between the
+/// "Welcome Back / Checking iCloud" screen and the standard new-user flow.
 struct ContentView: View {
     @Environment(\.modelContext) private var context
     @Environment(AuthService.self) private var authService
@@ -47,7 +50,7 @@ struct ContentView: View {
 
     var body: some View {
         Group {
-            if profiles.isEmpty || authService.welcomeBackPending {
+            if profiles.isEmpty {
                 OnboardingView()
             } else {
                 MainTabView()
@@ -71,10 +74,12 @@ struct ContentView: View {
         }
     }
 
-    /// Removes duplicate profiles and active plans introduced by CloudKit sync
-    /// racing with local onboarding. Keeps the most recently updated profile and
-    /// the newest active plan.
+    /// Removes duplicate profiles and active plans, and applies the one-time
+    /// legacy-field migration that recovers enum values corrupted by the
+    /// field-rename commit running without @Attribute(originalName:).
     private func deduplicate() {
+        ProfileRestoreDeduplicator.applyLegacyFields(profiles, in: context)
+        ProfileRestoreDeduplicator.applyLegacyFieldsToRelated(in: context)
         try? ProfileRestoreDeduplicator.deduplicate(profiles, in: context)
         // Active plans: newest-first → drop everything after index 0
         if activePlans.count > 1 {
@@ -87,6 +92,125 @@ struct ContentView: View {
 enum ProfileRestoreDeduplicator {
     static func preferredProfile(from profiles: [UserProfile]) -> UserProfile? {
         profiles.max(by: isLessPreferred)
+    }
+
+    /// Copies old CloudKit field values from `*Legacy` shadow properties into the
+    /// current `*Raw` fields whenever the current field still holds its default value.
+    /// Nils out the legacy property afterwards so the migration is self-clearing.
+    @MainActor
+    static func applyLegacyFields(_ profiles: [UserProfile], in context: ModelContext) {
+        var dirty = false
+        for profile in profiles {
+            if profile.genderRaw == Gender.preferNotToShare.rawValue,
+               let legacy = profile.genderLegacy,
+               legacy != Gender.preferNotToShare.rawValue {
+                profile.genderRaw = legacy
+                dirty = true
+            }
+            profile.genderLegacy = nil
+
+            if profile.goalRaceRaw == RaceType.fiveK.rawValue,
+               let legacy = profile.goalRaceLegacy,
+               legacy != RaceType.fiveK.rawValue {
+                profile.goalRaceRaw = legacy
+                dirty = true
+            }
+            profile.goalRaceLegacy = nil
+
+            if profile.fitnessLevelRaw == FitnessLevel.beginner.rawValue,
+               let legacy = profile.fitnessLevelLegacy,
+               legacy != FitnessLevel.beginner.rawValue {
+                profile.fitnessLevelRaw = legacy
+                dirty = true
+            }
+            profile.fitnessLevelLegacy = nil
+        }
+        if dirty { try? context.save() }
+    }
+
+    /// Applies the same legacy-field recovery to RunWorkout, ScheduledWorkout,
+    /// TrainingPlan, TrainingWeek, and SavedRoute.
+    @MainActor
+    static func applyLegacyFieldsToRelated(in context: ModelContext) {
+        var dirty = false
+
+        if let runs = try? context.fetch(FetchDescriptor<RunWorkout>()) {
+            for run in runs {
+                if run.workoutTypeRaw == WorkoutType.easy.rawValue,
+                   let legacy = run.workoutTypeLegacy,
+                   legacy != WorkoutType.easy.rawValue {
+                    run.workoutTypeRaw = legacy
+                    dirty = true
+                }
+                run.workoutTypeLegacy = nil
+
+                if run.workoutLocationRaw == WorkoutLocation.outdoor.rawValue,
+                   let legacy = run.workoutLocationLegacy,
+                   legacy != WorkoutLocation.outdoor.rawValue {
+                    run.workoutLocationRaw = legacy
+                    dirty = true
+                }
+                run.workoutLocationLegacy = nil
+            }
+        }
+
+        if let scheduled = try? context.fetch(FetchDescriptor<ScheduledWorkout>()) {
+            for workout in scheduled {
+                if workout.workoutTypeRaw == WorkoutType.easy.rawValue,
+                   let legacy = workout.workoutTypeLegacy,
+                   legacy != WorkoutType.easy.rawValue {
+                    workout.workoutTypeRaw = legacy
+                    dirty = true
+                }
+                workout.workoutTypeLegacy = nil
+
+                if workout.workoutLocationRaw == WorkoutLocation.outdoor.rawValue,
+                   let legacy = workout.workoutLocationLegacy,
+                   legacy != WorkoutLocation.outdoor.rawValue {
+                    workout.workoutLocationRaw = legacy
+                    dirty = true
+                }
+                workout.workoutLocationLegacy = nil
+            }
+        }
+
+        if let plans = try? context.fetch(FetchDescriptor<TrainingPlan>()) {
+            for plan in plans {
+                if plan.targetRaceRaw == RaceType.fiveK.rawValue,
+                   let legacy = plan.targetRaceLegacy,
+                   legacy != RaceType.fiveK.rawValue {
+                    plan.targetRaceRaw = legacy
+                    dirty = true
+                }
+                plan.targetRaceLegacy = nil
+            }
+        }
+
+        if let weeks = try? context.fetch(FetchDescriptor<TrainingWeek>()) {
+            for week in weeks {
+                if week.phaseRaw == TrainingPhase.base.rawValue,
+                   let legacy = week.phaseLegacy,
+                   legacy != TrainingPhase.base.rawValue {
+                    week.phaseRaw = legacy
+                    dirty = true
+                }
+                week.phaseLegacy = nil
+            }
+        }
+
+        if let routes = try? context.fetch(FetchDescriptor<SavedRoute>()) {
+            for route in routes {
+                if route.routeTypeRaw == RouteType.loop.rawValue,
+                   let legacy = route.routeTypeLegacy,
+                   legacy != RouteType.loop.rawValue {
+                    route.routeTypeRaw = legacy
+                    dirty = true
+                }
+                route.routeTypeLegacy = nil
+            }
+        }
+
+        if dirty { try? context.save() }
     }
 
     @MainActor
