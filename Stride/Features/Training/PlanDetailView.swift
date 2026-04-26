@@ -6,15 +6,8 @@ struct PlanDetailView: View {
 
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.appContainer) private var container
-    @Environment(AppSettings.self) private var appSettings
-
-    @Query private var profiles: [UserProfile]
-    private var profile: UserProfile? { profiles.first }
 
     @State private var showDeleteConfirmation = false
-    @State private var workoutToEdit: ScheduledWorkout? = nil
-    @State private var weekToAddWorkout: TrainingWeek? = nil
 
     // MARK: - Body
 
@@ -22,12 +15,7 @@ struct PlanDetailView: View {
         ScrollView {
             LazyVStack(spacing: 16) {
                 ForEach((plan.weeks ?? []).sorted(by: { $0.weekNumber < $1.weekNumber })) { week in
-                    WeekCardView(
-                        week: week,
-                        onEditWorkout: { workout in workoutToEdit = workout },
-                        onDeleteWorkout: { workout in deleteWorkout(workout) },
-                        onAddWorkout: { week in weekToAddWorkout = week }
-                    )
+                    WeekCardView(week: week)
                 }
             }
             .padding()
@@ -58,20 +46,6 @@ struct PlanDetailView: View {
         } message: {
             Text("This will permanently remove all \(plan.totalWeeks) weeks and scheduled workouts.")
         }
-        .sheet(item: $workoutToEdit) { workout in
-            WorkoutEditView(workout: workout, unitPreference: appSettings.unitPreference)
-        }
-        .sheet(item: $weekToAddWorkout) { week in
-            WorkoutEditView(week: week, unitPreference: appSettings.unitPreference)
-        }
-    }
-
-    // MARK: - Helpers
-
-    private func deleteWorkout(_ workout: ScheduledWorkout) {
-        guard !workout.isCompleted else { return }
-        context.delete(workout)
-        try? context.save()
     }
 }
 
@@ -79,9 +53,6 @@ struct PlanDetailView: View {
 
 struct WeekCardView: View {
     let week: TrainingWeek
-    var onEditWorkout: (ScheduledWorkout) -> Void
-    var onDeleteWorkout: (ScheduledWorkout) -> Void
-    var onAddWorkout: (TrainingWeek) -> Void
 
     @Environment(AppSettings.self) private var appSettings
     @State private var isExpanded = false
@@ -124,33 +95,8 @@ struct WeekCardView: View {
                         ScheduledWorkoutRow(workout: workout)
                     }
                     .buttonStyle(.plain)
-                    .contextMenu {
-                        if !workout.isCompleted {
-                            Button {
-                                onEditWorkout(workout)
-                            } label: {
-                                Label("Edit", systemImage: "pencil")
-                            }
-                            Button(role: .destructive) {
-                                onDeleteWorkout(workout)
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
-                        }
-                    }
                     Divider().padding(.leading)
                 }
-                Button {
-                    onAddWorkout(week)
-                } label: {
-                    Label("Add Workout", systemImage: "plus")
-                        .font(.bodyRegular)
-                        .foregroundStyle(.brand)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal)
-                        .padding(.vertical, 12)
-                }
-                .buttonStyle(.plain)
             }
         }
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
