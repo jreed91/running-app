@@ -337,7 +337,8 @@ struct RunSummaryView: View {
             profile: profiles.first,
             provider: appSettings.aiProvider,
             apiKey: appSettings.aiAPIKey,
-            modelOverride: appSettings.aiModelOverride
+            modelOverride: appSettings.aiModelOverride,
+            unitPreference: appSettings.unitPreference
         )
     }
 
