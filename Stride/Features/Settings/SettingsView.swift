@@ -54,6 +54,7 @@ struct SettingsView: View {
                     appCard
                     dataCard
                     routeGeniusCard
+                    aiCoachCard
                     aboutCard
                     dangerCard
                     #if DEBUG
@@ -307,6 +308,35 @@ struct SettingsView: View {
                 .padding(.horizontal, 16)
                 .padding(.bottom, 6)
             Text("Free key at openrouteservice.org · 2,000 routes/day · stored on-device only.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 14)
+        }
+    }
+
+
+    // MARK: - AI Coach card
+
+    private var aiCoachCard: some View {
+        settingsSection("AI Coach") {
+            settingsRow(icon: .bolt, iconColor: .zoneTempo, title: "AI Insights") {
+                Toggle("", isOn: Bindable(appSettings).aiInsightsEnabled)
+                    .labelsHidden()
+                    .tint(.brand)
+            }
+            rowDivider
+            settingsRow(icon: .lock, iconColor: .secondary, title: "AI API Key") {
+                EmptyView()
+            }
+            SecureField("Paste your key here", text: Bindable(appSettings).aiAPIKey)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .font(.system(size: 13, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 6)
+            Text("Your key stays on-device and is only used when AI Insights is enabled.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 16)
