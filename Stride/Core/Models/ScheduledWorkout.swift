@@ -8,11 +8,15 @@ final class ScheduledWorkout {
     var id: UUID = UUID()
     var scheduledDate: Date = Date()
     /// Raw-backed storage for `workoutType` to keep CloudKit fields primitive.
-    @Attribute(originalName: "workoutType")
     var workoutTypeRaw: String = WorkoutType.easy.rawValue
     /// Raw-backed storage for `workoutLocation` to keep CloudKit fields primitive.
-    @Attribute(originalName: "workoutLocation")
     var workoutLocationRaw: String = WorkoutLocation.outdoor.rawValue
+    /// Absorbs the old CloudKit `workoutType` field so migration can recover it.
+    @Attribute(originalName: "workoutType")
+    var workoutTypeLegacy: String? = nil
+    /// Absorbs the old CloudKit `workoutLocation` field so migration can recover it.
+    @Attribute(originalName: "workoutLocation")
+    var workoutLocationLegacy: String? = nil
     var targetDistanceMeters: Double?
     /// Lower bound of target pace range in seconds/km.
     var targetPaceLowerBound: Double?

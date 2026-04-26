@@ -18,8 +18,10 @@ final class SavedRoute {
     var name: String = ""
     var createdAt: Date = Date()
     /// Raw-backed storage for `routeType` to keep CloudKit fields primitive.
-    @Attribute(originalName: "routeType")
     var routeTypeRaw: String = RouteType.loop.rawValue
+    /// Absorbs the old CloudKit `routeType` field so migration can recover it.
+    @Attribute(originalName: "routeType")
+    var routeTypeLegacy: String? = nil
     /// Distance the user originally requested, in metres.
     var requestedDistanceMeters: Double = 0
     /// Actual route distance returned by the routing service, in metres.
