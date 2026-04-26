@@ -233,6 +233,29 @@ final class AppContainer: ObservableObject {
         ) ?? scheduled
     }
 
+    /// Returns AI-adapted workouts for a plan batch using a single provider request.
+    func adaptedWorkouts(
+        scheduled workouts: [ScheduledWorkout],
+        history: [RunWorkout],
+        profile: UserProfile,
+        provider: AIProvider,
+        apiKey: String,
+        modelOverride: String,
+        unitPreference: UnitPreference = .metric,
+        onChunk: @escaping @Sendable (String) -> Void = { _ in }
+    ) async -> [UUID: ScheduledWorkout] {
+        await aiCoachService.adaptScheduledWorkoutsWithProvider(
+            scheduled: workouts,
+            recentHistory: history,
+            profile: profile,
+            provider: provider,
+            apiKey: apiKey,
+            modelOverride: modelOverride,
+            unitPreference: unitPreference,
+            onChunk: onChunk
+        )
+    }
+
     // MARK: - Continuous plan refresh
 
     /// Re-derives training paces from recent history and updates all future uncompleted

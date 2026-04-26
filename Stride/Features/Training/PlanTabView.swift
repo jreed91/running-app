@@ -17,6 +17,7 @@ struct PlanTabView: View {
     @State private var showNewPlanSheet = false
     @State private var showRouteGenius = false
     @State private var isAdaptingPlan = false
+    @State private var smartAdaptProgress = SmartAdaptProgress.idle
 
     private var activePlan: TrainingPlan? { activePlans.first }
 
@@ -31,6 +32,7 @@ struct PlanTabView: View {
                             SmartAdaptPlanCard(
                                 workoutCount: remainingAdaptableWorkouts(in: plan).count,
                                 isAdapting: isAdaptingPlan,
+                                progress: smartAdaptProgress,
                                 unavailableReason: smartAdaptUnavailableReason(for: plan)
                             ) {
                                 Task { await adaptRemainingWorkouts(in: plan) }
@@ -98,6 +100,7 @@ struct PlanTabView: View {
             .filter {
                 !$0.isCompleted
                     && $0.workoutType != .rest
+                    && $0.workoutType != .race
                     && $0.workoutType != .crossTraining
                     && $0.scheduledDate >= today
             }
@@ -129,21 +132,58 @@ struct PlanTabView: View {
         }
 
         isAdaptingPlan = true
-        defer { isAdaptingPlan = false }
+        smartAdaptProgress = .starting
+        defer {
+            isAdaptingPlan = false
+            smartAdaptProgress.finishIfNeeded()
+        }
 
-        let workoutsToAdapt = uniqueRemainingWorkoutsAfterDeletingSameDayDuplicates(in: plan)
+        let removedBefore = removeSameDayDuplicateWorkouts(in: plan)
+        let workoutsToAdapt = remainingAdaptableWorkouts(in: plan)
+        smartAdaptProgress = SmartAdaptProgress(
+            currentMessage: removedBefore > 0
+                ? "Removed \(removedBefore) duplicate same-day workout\(removedBefore == 1 ? "" : "s")."
+                : "Preparing \(workoutsToAdapt.count) workout\(workoutsToAdapt.count == 1 ? "" : "s") for adaptation.",
+            completedCount: 0,
+            totalCount: workoutsToAdapt.count,
+            updates: []
+        )
+        try? context.save()
         try? await container.healthKitRepository.removeWorkoutPlans(for: plan)
 
-        for workout in workoutsToAdapt {
-            let adapted = await container.adaptedWorkout(
-                scheduled: workout,
-                history: Array(recentWorkouts.prefix(50)),
-                profile: profile,
-                provider: appSettings.aiProvider,
-                apiKey: appSettings.aiAPIKey,
-                modelOverride: appSettings.aiModelOverride,
-                unitPreference: appSettings.unitPreference
-            )
+        smartAdaptProgress.currentMessage = "Streaming coach response..."
+        let adaptedByID = await container.adaptedWorkouts(
+            scheduled: workoutsToAdapt,
+            history: Array(recentWorkouts.prefix(50)),
+            profile: profile,
+            provider: appSettings.aiProvider,
+            apiKey: appSettings.aiAPIKey,
+            modelOverride: appSettings.aiModelOverride,
+            unitPreference: appSettings.unitPreference,
+            onChunk: { chunk in
+                Task { @MainActor in
+                    appendSmartAdaptStreamChunk(chunk)
+                }
+            }
+        )
+
+        guard !adaptedByID.isEmpty else {
+            smartAdaptProgress.currentMessage = "The coach response could not be applied. Check your API key, model, and network connection."
+            return
+        }
+
+        for (index, workout) in workoutsToAdapt.enumerated() {
+            guard let adapted = adaptedByID[workout.id] else {
+                smartAdaptProgress.updates.insert(
+                    SmartAdaptProgress.Update(
+                        title: workoutLabel(workout),
+                        message: "No adaptation was returned for this workout, so it was left unchanged."
+                    ),
+                    at: 0
+                )
+                smartAdaptProgress.completedCount = index + 1
+                continue
+            }
 
             workout.workoutType = adapted.workoutType
             workout.workoutStructure = adapted.workoutStructure
@@ -153,34 +193,132 @@ struct PlanTabView: View {
             workout.notes = adapted.notes
             workout.intervals = adapted.intervals
             workout.healthKitPlanID = nil
+
+            let response = adapted.notes?.trimmingCharacters(in: .whitespacesAndNewlines)
+            smartAdaptProgress.completedCount = index + 1
+            smartAdaptProgress.currentMessage = response?.isEmpty == false
+                ? response!
+                : "Updated \(workoutLabel(workout))."
+            smartAdaptProgress.updates.insert(
+                SmartAdaptProgress.Update(
+                    title: workoutLabel(workout),
+                    message: smartAdaptProgress.currentMessage
+                ),
+                at: 0
+            )
+            smartAdaptProgress.updates = Array(smartAdaptProgress.updates.prefix(4))
+
+            let removedAfter = removeSameDayDuplicateWorkouts(in: plan)
+            if removedAfter > 0 {
+                smartAdaptProgress.updates.insert(
+                    SmartAdaptProgress.Update(
+                        title: "Schedule cleanup",
+                        message: "Removed \(removedAfter) same-day duplicate workout\(removedAfter == 1 ? "" : "s")."
+                    ),
+                    at: 0
+                )
+            }
+            try? context.save()
         }
 
-        try? context.save()
         try? await container.healthKitRepository.syncWorkoutPlans(for: plan)
+        smartAdaptProgress.currentMessage = "Plan updated and synced."
     }
 
     @MainActor
-    private func uniqueRemainingWorkoutsAfterDeletingSameDayDuplicates(in plan: TrainingPlan) -> [ScheduledWorkout] {
-        let calendar = Calendar.current
-        var keptWorkouts: [ScheduledWorkout] = []
+    private func appendSmartAdaptStreamChunk(_ chunk: String) {
+        smartAdaptProgress.streamedResponse += chunk
+        smartAdaptProgress.currentMessage = "Streaming coach response..."
+    }
 
-        for workout in remainingAdaptableWorkouts(in: plan) {
-            if keptWorkouts.contains(where: { calendar.isDate($0.scheduledDate, inSameDayAs: workout.scheduledDate) }) {
-                context.delete(workout)
-            } else {
-                keptWorkouts.append(workout)
+    private func workoutLabel(_ workout: ScheduledWorkout) -> String {
+        "\(workout.workoutType.displayName) on \(workout.scheduledDate.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))"
+    }
+
+    @MainActor
+    @discardableResult
+    private func removeSameDayDuplicateWorkouts(in plan: TrainingPlan) -> Int {
+        let calendar = Calendar.current
+        var removed = 0
+
+        for week in plan.weeks ?? [] {
+            let grouped = Dictionary(grouping: week.workouts ?? []) {
+                calendar.startOfDay(for: $0.scheduledDate)
+            }
+            for sameDayWorkouts in grouped.values where sameDayWorkouts.count > 1 {
+                let kept = sameDayWorkouts.sorted(by: duplicatePreference).first
+                for workout in sameDayWorkouts where workout.id != kept?.id {
+                    context.delete(workout)
+                    removed += 1
+                }
+            }
+            week.workouts = (week.workouts ?? []).filter { workout in
+                !grouped.values.contains { sameDayWorkouts in
+                    sameDayWorkouts.count > 1
+                        && sameDayWorkouts.contains { $0.id == workout.id }
+                        && sameDayWorkouts.sorted(by: duplicatePreference).first?.id != workout.id
+                }
             }
         }
 
-        return keptWorkouts
+        return removed
+    }
+
+    private func duplicatePreference(_ lhs: ScheduledWorkout, _ rhs: ScheduledWorkout) -> Bool {
+        duplicatePriority(lhs) < duplicatePriority(rhs)
+    }
+
+    private func duplicatePriority(_ workout: ScheduledWorkout) -> Int {
+        if workout.isCompleted { return 0 }
+        switch workout.workoutType {
+        case .race: return 1
+        case .longRun: return 2
+        case .tempo, .interval: return 3
+        case .easy: return 4
+        case .crossTraining: return 5
+        case .rest: return 6
+        }
     }
 }
 
 // MARK: - Smart Adapt Card
 
+private struct SmartAdaptProgress: Equatable {
+    struct Update: Identifiable, Equatable {
+        let id = UUID()
+        let title: String
+        let message: String
+    }
+
+    var currentMessage: String
+    var completedCount: Int
+    var totalCount: Int
+    var updates: [Update]
+    var streamedResponse: String = ""
+
+    static let idle = SmartAdaptProgress(currentMessage: "", completedCount: 0, totalCount: 0, updates: [], streamedResponse: "")
+    static let starting = SmartAdaptProgress(currentMessage: "Preparing plan...", completedCount: 0, totalCount: 0, updates: [], streamedResponse: "")
+
+    var fractionCompleted: Double? {
+        guard totalCount > 0 else { return nil }
+        return Double(completedCount) / Double(totalCount)
+    }
+
+    mutating func finishIfNeeded() {
+        guard totalCount > 0 else {
+            self = .idle
+            return
+        }
+        if completedCount >= totalCount {
+            currentMessage = "Plan updated."
+        }
+    }
+}
+
 private struct SmartAdaptPlanCard: View {
     let workoutCount: Int
     let isAdapting: Bool
+    let progress: SmartAdaptProgress
     let unavailableReason: String?
     let action: () -> Void
 
@@ -239,6 +377,49 @@ private struct SmartAdaptPlanCard: View {
                 Text(unavailableReason)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+
+            if isAdapting {
+                VStack(alignment: .leading, spacing: 8) {
+                    if let value = progress.fractionCompleted {
+                        ProgressView(value: value)
+                            .tint(.brand)
+                    } else {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+
+                    Text(progress.currentMessage)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    if !progress.streamedResponse.isEmpty {
+                        Text(progress.streamedResponse)
+                            .font(.system(size: 11, weight: .regular, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(8)
+                            .textSelection(.enabled)
+                            .padding(10)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 10))
+                    }
+
+                    ForEach(progress.updates) { update in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(update.title)
+                                .font(.captionStrong)
+                                .foregroundStyle(.primary)
+                            Text(update.message)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(3)
+                        }
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 10))
+                    }
+                }
+                .padding(.top, 4)
             }
         }
     }

@@ -55,6 +55,44 @@ struct AIWorkoutAdaptationResponse: Codable, Sendable {
     }
 }
 
+struct AIWorkoutPlanAdaptationResponse: Codable, Sendable {
+    let adaptations: [AIWorkoutPlanAdaptation]
+}
+
+struct AIWorkoutPlanAdaptation: Codable, Sendable {
+    let workoutID: String
+    let workoutType: String
+    let targetDistanceMeters: Double?
+    let targetPaceLowerBound: Double?
+    let targetPaceUpperBound: Double?
+    let explanation: String
+    let intervals: [AIWorkoutAdaptationInterval]
+    let workoutStructure: AIWorkoutStructure
+
+    enum CodingKeys: String, CodingKey {
+        case workoutID = "workout_id"
+        case workoutType = "workout_type"
+        case targetDistanceMeters = "target_distance_meters"
+        case targetPaceLowerBound = "target_pace_lower_bound"
+        case targetPaceUpperBound = "target_pace_upper_bound"
+        case explanation
+        case intervals
+        case workoutStructure = "workout_structure"
+    }
+
+    var adaptation: AIWorkoutAdaptationResponse {
+        AIWorkoutAdaptationResponse(
+            workoutType: workoutType,
+            targetDistanceMeters: targetDistanceMeters,
+            targetPaceLowerBound: targetPaceLowerBound,
+            targetPaceUpperBound: targetPaceUpperBound,
+            explanation: explanation,
+            intervals: intervals,
+            workoutStructure: workoutStructure
+        )
+    }
+}
+
 struct AIWorkoutAdaptationInterval: Codable, Sendable {
     let repetitions: Int
     let distanceMeters: Double?
@@ -262,6 +300,63 @@ struct AICoachService: Sendable {
         }
     }
 
+    @MainActor
+    func adaptScheduledWorkoutsWithProvider(
+        scheduled workouts: [ScheduledWorkout],
+        recentHistory: [RunWorkout],
+        profile: UserProfile,
+        provider: AIProvider,
+        apiKey: String,
+        modelOverride: String,
+        unitPreference: UnitPreference = .metric,
+        onChunk: @escaping @Sendable (String) -> Void = { _ in }
+    ) async -> [UUID: ScheduledWorkout] {
+        let adaptableWorkouts = workouts.filter {
+            $0.workoutType != .rest
+                && $0.workoutType != .race
+                && $0.workoutType != .crossTraining
+        }
+        guard !adaptableWorkouts.isEmpty else { return [:] }
+
+        let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedKey.isEmpty else { return [:] }
+
+        let selectedModel = modelOverride.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? provider.defaultModel
+            : modelOverride
+
+        do {
+            let response = try await integrationService.generateWorkoutPlanAdaptation(
+                provider: provider,
+                apiKey: trimmedKey,
+                model: selectedModel,
+                adaptationContext: makePlanAdaptationContext(
+                    scheduled: adaptableWorkouts,
+                    recentHistory: recentHistory,
+                    profile: profile,
+                    unitPreference: unitPreference
+                ),
+                onChunk: onChunk
+            )
+            guard let structured = Self.parseWorkoutPlanAdaptationResponse(response) else {
+                return [:]
+            }
+
+            var adaptedByID: [UUID: ScheduledWorkout] = [:]
+            for item in structured.adaptations {
+                guard let id = UUID(uuidString: item.workoutID),
+                      let original = adaptableWorkouts.first(where: { $0.id == id }),
+                      let adapted = makeScheduledWorkout(from: item.adaptation, scheduled: original) else {
+                    continue
+                }
+                adaptedByID[id] = adapted
+            }
+            return adaptedByID
+        } catch {
+            return [:]
+        }
+    }
+
     static func parseWorkoutAdaptationResponse(_ text: String) -> AIWorkoutAdaptationResponse? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let candidates = [
@@ -275,6 +370,28 @@ struct AICoachService: Sendable {
             guard let data = candidate.data(using: .utf8),
                   let decoded = try? decoder.decode(AIWorkoutAdaptationResponse.self, from: data),
                   isValidAdaptation(decoded) else {
+                continue
+            }
+            return decoded
+        }
+
+        return nil
+    }
+
+    static func parseWorkoutPlanAdaptationResponse(_ text: String) -> AIWorkoutPlanAdaptationResponse? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let candidates = [
+            trimmed,
+            extractFencedJSON(from: trimmed),
+            extractJSONObject(from: trimmed)
+        ].compactMap(\.self)
+
+        let decoder = JSONDecoder()
+        for candidate in candidates {
+            guard let data = candidate.data(using: .utf8),
+                  let decoded = try? decoder.decode(AIWorkoutPlanAdaptationResponse.self, from: data),
+                  !decoded.adaptations.isEmpty,
+                  decoded.adaptations.allSatisfy({ UUID(uuidString: $0.workoutID) != nil && isValidAdaptation($0.adaptation) }) else {
                 continue
             }
             return decoded
@@ -501,6 +618,33 @@ struct AICoachService: Sendable {
 
         Recent completed runs:
         \(recent.isEmpty ? "No recent completed runs." : recent)
+        """
+    }
+
+    @MainActor
+    private func makePlanAdaptationContext(
+        scheduled workouts: [ScheduledWorkout],
+        recentHistory: [RunWorkout],
+        profile: UserProfile,
+        unitPreference: UnitPreference
+    ) -> String {
+        let workoutContexts = workouts.map { workout in
+            """
+            Workout ID: \(workout.id.uuidString)
+            \(makeAdaptationContext(
+                scheduled: workout,
+                recentHistory: recentHistory,
+                profile: profile,
+                unitPreference: unitPreference
+            ))
+            """
+        }.joined(separator: "\n\n---\n\n")
+
+        return """
+        Adapt these \(workouts.count) scheduled workouts as one coordinated plan update.
+        Preserve the exact workout IDs so Stride can apply your response.
+
+        \(workoutContexts)
         """
     }
 

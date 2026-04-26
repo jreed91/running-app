@@ -112,6 +112,66 @@ struct AICoachServiceTests {
         #expect(parsed.workoutStructure.mainSets.first?.label == "Controlled intervals")
     }
 
+    @Test("Parses batched workout adaptation JSON")
+    func parsesWorkoutPlanAdaptationResponse() throws {
+        let workoutID = "11111111-1111-1111-1111-111111111111"
+        let response = """
+        {
+          "adaptations": [
+            {
+              "workout_id": "\(workoutID)",
+              "workout_type": "Tempo",
+              "target_distance_meters": 6000,
+              "target_pace_lower_bound": 320,
+              "target_pace_upper_bound": 335,
+              "explanation": "Kept this as tempo but trimmed the work block because recent runs show late fatigue.",
+              "intervals": [],
+              "workout_structure": {
+                "warmup": {
+                  "distance_meters": 1000,
+                  "duration_seconds": null,
+                  "target_pace_seconds_per_km": 390,
+                  "label": "Warm-up"
+                },
+                "main_sets": [
+                  {
+                    "repetitions": 1,
+                    "work_segment": {
+                      "distance_meters": 4000,
+                      "duration_seconds": null,
+                      "target_pace_seconds_per_km": 328,
+                      "label": "Tempo"
+                    },
+                    "recovery_segment": {
+                      "distance_meters": null,
+                      "duration_seconds": null,
+                      "target_pace_seconds_per_km": null,
+                      "label": ""
+                    },
+                    "label": "Tempo Block"
+                  }
+                ],
+                "cooldown": {
+                  "distance_meters": 1000,
+                  "duration_seconds": null,
+                  "target_pace_seconds_per_km": 390,
+                  "label": "Cool-down"
+                },
+                "total_estimated_distance_meters": 6000,
+                "total_estimated_duration_seconds": 2100
+              }
+            }
+          ]
+        }
+        """
+
+        let parsed = try #require(AICoachService.parseWorkoutPlanAdaptationResponse(response))
+
+        #expect(parsed.adaptations.first?.workoutID == workoutID)
+        #expect(parsed.adaptations.first?.workoutType == "Tempo")
+        #expect(parsed.adaptations.first?.workoutStructure.totalEstimatedDistanceMeters == 6000)
+    }
+
     @Test("Rejects workout adaptation without explanation")
     func rejectsWorkoutAdaptationWithoutExplanation() {
         let response = """
