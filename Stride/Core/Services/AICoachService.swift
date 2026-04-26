@@ -192,7 +192,7 @@ struct AICoachService: Sendable {
         let splitSection = splits.isEmpty ? "No split data." : splits
 
         let recent = recentHistory.prefix(5).map { run in
-            "\(run.date.formatted(date: .abbreviated, time: .omitted)) • \(run.workoutType.displayName) • \(run.distanceMeters / 1000, specifier: "%.1f") km • \(run.averagePaceSecondsPerKm.paceString(unit: .metric))"
+            "\(run.date.formatted(date: .abbreviated, time: .omitted)) • \(run.workoutType.displayName) • \((run.distanceMeters / 1000).formatted(.number.precision(.fractionLength(1)))) km • \(run.averagePaceSecondsPerKm.paceString(unit: .metric))"
         }.joined(separator: "\n")
         let recentSection = recent.isEmpty ? "No recent runs." : recent
 
