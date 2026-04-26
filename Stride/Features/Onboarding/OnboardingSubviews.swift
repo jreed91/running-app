@@ -246,12 +246,17 @@ struct OBWelcomeBack: View {
         .task { await checkICloudStatus() }
         .task { await waitForInitialSync() }
         .onChange(of: initialSyncFinished) { _, finished in
-            // Once CloudKit has had a chance to deliver any existing data, an
-            // empty profile list means this Apple ID has nothing to restore
-            // (new user, or no prior install). Send them into normal onboarding
-            // instead of leaving them stranded on the spinner.
-            if restoreCoordinator.shouldStartFresh(initialSyncFinished: finished, hasData: hasData) {
-                onStartFresh()
+            guard finished else { return }
+            // CloudKit imports arrive in batches; the first completed-import event
+            // fires `initialSyncFinished` but the UserProfile record may still be
+            // in a later batch. Wait an additional 3 seconds so any remaining
+            // batches can land in the store and surface through @Query before we
+            // decide there is nothing to restore.
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                if restoreCoordinator.shouldStartFresh(initialSyncFinished: true, hasData: hasData) {
+                    onStartFresh()
+                }
             }
         }
     }
