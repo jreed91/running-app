@@ -32,9 +32,9 @@ enum AIIntegrationError: Error {
 }
 
 struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
-    private let session: URLSession
+    private let session: any StrideURLSessionProtocol
 
-    init(session: URLSession = .shared) {
+    init(session: any StrideURLSessionProtocol = PulseIntegrationService.makeURLSession()) {
         self.session = session
     }
 
@@ -241,27 +241,67 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.httpBody = try JSONEncoder().encode(body)
 
-        let (bytes, response) = try await session.bytes(for: request)
-        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            throw AIIntegrationError.invalidResponse
+        var message = ""
+        var responseData = Data()
+        var response: URLResponse?
+        var didStorePulseRequest = false
+
+        do {
+            let (bytes, urlResponse) = try await session.bytes(for: request, delegate: nil)
+            response = urlResponse
+            guard let http = urlResponse as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+                didStorePulseRequest = true
+                PulseIntegrationService.storeCompletedNetworkRequest(
+                    request,
+                    response: urlResponse,
+                    error: AIIntegrationError.invalidResponse,
+                    data: responseData,
+                    label: "AI",
+                    taskDescription: "OpenAI plan adaptation stream"
+                )
+                throw AIIntegrationError.invalidResponse
+            }
+
+            for try await line in bytes.lines {
+                responseData.append(Data((line + "\n").utf8))
+                guard line.hasPrefix("data:") else { continue }
+                let payload = line
+                    .dropFirst("data:".count)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if payload == "[DONE]" { break }
+                guard let data = payload.data(using: .utf8),
+                      let chunk = try? JSONDecoder().decode(OpenAIStreamChunk.self, from: data),
+                      let text = chunk.choices.first?.delta.content,
+                      !text.isEmpty else {
+                    continue
+                }
+                message += text
+                onChunk(text)
+            }
+
+            PulseIntegrationService.storeCompletedNetworkRequest(
+                request,
+                response: urlResponse,
+                error: nil,
+                data: responseData,
+                label: "AI",
+                taskDescription: "OpenAI plan adaptation stream"
+            )
+            didStorePulseRequest = true
+        } catch {
+            if !didStorePulseRequest {
+                PulseIntegrationService.storeCompletedNetworkRequest(
+                    request,
+                    response: response,
+                    error: error,
+                    data: responseData,
+                    label: "AI",
+                    taskDescription: "OpenAI plan adaptation stream"
+                )
+            }
+            throw error
         }
 
-        var message = ""
-        for try await line in bytes.lines {
-            guard line.hasPrefix("data:") else { continue }
-            let payload = line
-                .dropFirst("data:".count)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            if payload == "[DONE]" { break }
-            guard let data = payload.data(using: .utf8),
-                  let chunk = try? JSONDecoder().decode(OpenAIStreamChunk.self, from: data),
-                  let text = chunk.choices.first?.delta.content,
-                  !text.isEmpty else {
-                continue
-            }
-            message += text
-            onChunk(text)
-        }
         let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             throw AIIntegrationError.emptyMessage
@@ -322,26 +362,66 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
         request.httpBody = try JSONEncoder().encode(body)
 
-        let (bytes, response) = try await session.bytes(for: request)
-        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            throw AIIntegrationError.invalidResponse
+        var message = ""
+        var responseData = Data()
+        var response: URLResponse?
+        var didStorePulseRequest = false
+
+        do {
+            let (bytes, urlResponse) = try await session.bytes(for: request, delegate: nil)
+            response = urlResponse
+            guard let http = urlResponse as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+                didStorePulseRequest = true
+                PulseIntegrationService.storeCompletedNetworkRequest(
+                    request,
+                    response: urlResponse,
+                    error: AIIntegrationError.invalidResponse,
+                    data: responseData,
+                    label: "AI",
+                    taskDescription: "Anthropic plan adaptation stream"
+                )
+                throw AIIntegrationError.invalidResponse
+            }
+
+            for try await line in bytes.lines {
+                responseData.append(Data((line + "\n").utf8))
+                guard line.hasPrefix("data:") else { continue }
+                let payload = line
+                    .dropFirst("data:".count)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                guard let data = payload.data(using: .utf8),
+                      let event = try? JSONDecoder().decode(AnthropicStreamEvent.self, from: data),
+                      let text = event.delta?.text,
+                      !text.isEmpty else {
+                    continue
+                }
+                message += text
+                onChunk(text)
+            }
+
+            PulseIntegrationService.storeCompletedNetworkRequest(
+                request,
+                response: urlResponse,
+                error: nil,
+                data: responseData,
+                label: "AI",
+                taskDescription: "Anthropic plan adaptation stream"
+            )
+            didStorePulseRequest = true
+        } catch {
+            if !didStorePulseRequest {
+                PulseIntegrationService.storeCompletedNetworkRequest(
+                    request,
+                    response: response,
+                    error: error,
+                    data: responseData,
+                    label: "AI",
+                    taskDescription: "Anthropic plan adaptation stream"
+                )
+            }
+            throw error
         }
 
-        var message = ""
-        for try await line in bytes.lines {
-            guard line.hasPrefix("data:") else { continue }
-            let payload = line
-                .dropFirst("data:".count)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            guard let data = payload.data(using: .utf8),
-                  let event = try? JSONDecoder().decode(AnthropicStreamEvent.self, from: data),
-                  let text = event.delta?.text,
-                  !text.isEmpty else {
-                continue
-            }
-            message += text
-            onChunk(text)
-        }
         let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw AIIntegrationError.emptyMessage }
         return trimmed
@@ -475,6 +555,9 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
         Return only valid JSON. Do not include markdown, prose before the JSON, code fences, or extra keys.
         Use this exact schema:
         {
+          "summary": [
+            "One short user-facing sentence describing a meaningful plan change"
+          ],
           "adaptations": [
             {
               "workout_id": "UUID copied exactly from the workout context",
@@ -523,6 +606,9 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
         }
 
         Rules:
+        - Put summary before adaptations.
+        - Include 1 to 4 summary strings.
+        - Make summary user-facing and specific, such as reduced volume, softened intensity, preserved long runs, or kept a workout unchanged.
         - Include exactly one adaptation for every workout_id in the context.
         - Copy each workout_id exactly.
         - Choose workout_type from Easy, Tempo, Interval, or Long Run.

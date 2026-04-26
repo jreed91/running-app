@@ -18,6 +18,7 @@ struct PlanTabView: View {
     @State private var showRouteGenius = false
     @State private var isAdaptingPlan = false
     @State private var smartAdaptProgress = SmartAdaptProgress.idle
+    @State private var smartAdaptStreamBuffer = ""
 
     private var activePlan: TrainingPlan? { activePlans.first }
 
@@ -133,9 +134,11 @@ struct PlanTabView: View {
 
         isAdaptingPlan = true
         smartAdaptProgress = .starting
+        smartAdaptStreamBuffer = ""
         defer {
             isAdaptingPlan = false
             smartAdaptProgress.finishIfNeeded()
+            smartAdaptStreamBuffer = ""
         }
 
         let removedBefore = removeSameDayDuplicateWorkouts(in: plan)
@@ -162,7 +165,7 @@ struct PlanTabView: View {
             unitPreference: appSettings.unitPreference,
             onChunk: { chunk in
                 Task { @MainActor in
-                    appendSmartAdaptStreamChunk(chunk)
+                    appendSmartAdaptSummaryChunk(chunk)
                 }
             }
         )
@@ -226,9 +229,64 @@ struct PlanTabView: View {
     }
 
     @MainActor
-    private func appendSmartAdaptStreamChunk(_ chunk: String) {
-        smartAdaptProgress.streamedResponse += chunk
-        smartAdaptProgress.currentMessage = "Streaming coach response..."
+    private func appendSmartAdaptSummaryChunk(_ chunk: String) {
+        smartAdaptStreamBuffer += chunk
+        let summaries = extractStreamingSummaries(from: smartAdaptStreamBuffer)
+        guard !summaries.isEmpty else {
+            smartAdaptProgress.currentMessage = "Reading coach summary..."
+            return
+        }
+
+        smartAdaptProgress.streamingSummaries = Array(summaries.prefix(4))
+        smartAdaptProgress.currentMessage = summaries.last ?? "Reviewing plan changes..."
+    }
+
+    private func extractStreamingSummaries(from text: String) -> [String] {
+        guard let keyRange = text.range(of: "\"summary\""),
+              let arrayStart = text[keyRange.upperBound...].firstIndex(of: "[") else {
+            return []
+        }
+
+        var summaries: [String] = []
+        var current = ""
+        var isInsideString = false
+        var isEscaping = false
+        var index = text.index(after: arrayStart)
+
+        while index < text.endIndex {
+            let character = text[index]
+
+            if isInsideString {
+                if isEscaping {
+                    switch character {
+                    case "n": current.append("\n")
+                    case "r": current.append("\r")
+                    case "t": current.append("\t")
+                    default: current.append(character)
+                    }
+                    isEscaping = false
+                } else if character == "\\" {
+                    isEscaping = true
+                } else if character == "\"" {
+                    let summary = current.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !summary.isEmpty {
+                        summaries.append(summary)
+                    }
+                    current = ""
+                    isInsideString = false
+                } else {
+                    current.append(character)
+                }
+            } else if character == "\"" {
+                isInsideString = true
+            } else if character == "]" {
+                break
+            }
+
+            text.formIndex(after: &index)
+        }
+
+        return summaries
     }
 
     private func workoutLabel(_ workout: ScheduledWorkout) -> String {
@@ -294,10 +352,10 @@ private struct SmartAdaptProgress: Equatable {
     var completedCount: Int
     var totalCount: Int
     var updates: [Update]
-    var streamedResponse: String = ""
+    var streamingSummaries: [String] = []
 
-    static let idle = SmartAdaptProgress(currentMessage: "", completedCount: 0, totalCount: 0, updates: [], streamedResponse: "")
-    static let starting = SmartAdaptProgress(currentMessage: "Preparing plan...", completedCount: 0, totalCount: 0, updates: [], streamedResponse: "")
+    static let idle = SmartAdaptProgress(currentMessage: "", completedCount: 0, totalCount: 0, updates: [])
+    static let starting = SmartAdaptProgress(currentMessage: "Preparing plan...", completedCount: 0, totalCount: 0, updates: [])
 
     var fractionCompleted: Double? {
         guard totalCount > 0 else { return nil }
@@ -393,15 +451,28 @@ private struct SmartAdaptPlanCard: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
-                    if !progress.streamedResponse.isEmpty {
-                        Text(progress.streamedResponse)
-                            .font(.system(size: 11, weight: .regular, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(8)
-                            .textSelection(.enabled)
-                            .padding(10)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 10))
+                    if !progress.streamingSummaries.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Live summary")
+                                .font(.captionStrong)
+                                .foregroundStyle(.primary)
+
+                            ForEach(progress.streamingSummaries, id: \.self) { summary in
+                                HStack(alignment: .top, spacing: 6) {
+                                    Circle()
+                                        .fill(Color.brand)
+                                        .frame(width: 5, height: 5)
+                                        .padding(.top, 6)
+                                    Text(summary)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(3)
+                                }
+                            }
+                        }
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 10))
                     }
 
                     ForEach(progress.updates) { update in

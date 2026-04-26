@@ -2,6 +2,24 @@ import Foundation
 
 #if canImport(Pulse)
 import Pulse
+typealias StrideURLSessionProtocol = Pulse.URLSessionProtocol
+#else
+protocol StrideURLSessionProtocol: Sendable {
+    func data(for request: URLRequest, delegate: (any URLSessionTaskDelegate)?) async throws -> (Data, URLResponse)
+    func bytes(for request: URLRequest, delegate: (any URLSessionTaskDelegate)?) async throws -> (URLSession.AsyncBytes, URLResponse)
+}
+
+extension StrideURLSessionProtocol {
+    func data(for request: URLRequest) async throws -> (Data, URLResponse) {
+        try await data(for: request, delegate: nil)
+    }
+
+    func bytes(for request: URLRequest) async throws -> (URLSession.AsyncBytes, URLResponse) {
+        try await bytes(for: request, delegate: nil)
+    }
+}
+
+extension URLSession: StrideURLSessionProtocol {}
 #endif
 #if canImport(PulseUI)
 import PulseUI
@@ -22,18 +40,46 @@ enum PulseIntegrationService {
         #endif
     }
 
-    #if canImport(Pulse)
-    static func makeURLSession(configuration: URLSessionConfiguration = .default) -> any URLSessionProtocol {
+    static func makeURLSession(configuration: URLSessionConfiguration = .default) -> any StrideURLSessionProtocol {
+        #if canImport(Pulse)
         guard isDiagnosticsEnabled else {
             return URLSession(configuration: configuration)
         }
         return URLSessionProxy(configuration: configuration)
+        #else
+        return URLSession(configuration: configuration)
+        #endif
     }
-    #else
-    static func makeURLSession(configuration: URLSessionConfiguration = .default) -> URLSession {
-        URLSession(configuration: configuration)
+
+    static func makeNetworkLoggingDelegate() -> (any URLSessionTaskDelegate)? {
+        #if canImport(Pulse)
+        guard isDiagnosticsEnabled else { return nil }
+        return URLSessionProxyDelegate(logger: .shared)
+        #else
+        return nil
+        #endif
     }
-    #endif
+
+    static func storeCompletedNetworkRequest(
+        _ request: URLRequest,
+        response: URLResponse?,
+        error: Error?,
+        data: Data?,
+        label: String,
+        taskDescription: String
+    ) {
+        #if canImport(Pulse)
+        guard isDiagnosticsEnabled else { return }
+        LoggerStore.shared.storeRequest(
+            request,
+            response: response,
+            error: error,
+            data: data,
+            label: label,
+            taskDescription: taskDescription
+        )
+        #endif
+    }
 
     @MainActor
     static func activateIfNeeded() {

@@ -56,9 +56,9 @@ struct RouteGeniusService: Sendable {
     // MARK: Configuration
 
     private let baseURL = "https://api.openrouteservice.org"
-    private let session: URLSession
+    private let session: any StrideURLSessionProtocol
 
-    init(session: URLSession = .shared) {
+    init(session: any StrideURLSessionProtocol = PulseIntegrationService.makeURLSession()) {
         self.session = session
     }
 

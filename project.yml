@@ -82,6 +82,7 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UIBackgroundModes:
           - location
+          - processing
           - remote-notification
         NSLocationWhenInUseUsageDescription: "Stride uses your location to track your route during a run."
         NSLocationAlwaysAndWhenInUseUsageDescription: "Stride uses your location in the background to continue tracking your route."
