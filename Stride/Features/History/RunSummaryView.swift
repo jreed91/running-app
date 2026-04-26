@@ -210,7 +210,7 @@ struct RunSummaryView: View {
         if appSettings.aiInsightsEnabled {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Label(“AI COACH”, systemImage: “sparkles”)
+                    Label("AI COACH", systemImage: "sparkles")
                         .font(.sectionHeader)
                         .foregroundStyle(.secondary)
                     Spacer()
@@ -219,7 +219,7 @@ struct RunSummaryView: View {
                             await loadAIInsight()
                         }
                     } label: {
-                        Label(aiInsight == nil ? “Load Insights” : “Refresh”, systemImage: “sparkles”)
+                        Label(aiInsight == nil ? "Load Insights" : "Refresh", systemImage: "sparkles")
                             .font(.caption.weight(.semibold))
                     }
                     .buttonStyle(.borderedProminent)
@@ -231,7 +231,7 @@ struct RunSummaryView: View {
                     aiCoachSkeletonSection
                 } else if let aiInsight {
                     HStack(spacing: 8) {
-                        Image(systemName: aiInsight.apiReady ? “checkmark.seal.fill” : “info.circle.fill”)
+                        Image(systemName: aiInsight.apiReady ? "checkmark.seal.fill" : "info.circle.fill")
                             .foregroundStyle(aiInsight.apiReady ? .success : .secondary)
                         Text(normalizedMarkdownText(aiInsight.headline))
                             .font(.caption.weight(.semibold))
@@ -242,7 +242,7 @@ struct RunSummaryView: View {
                     .background(.surfaceTertiary, in: Capsule())
 
                     VStack(alignment: .leading, spacing: 8) {
-                        Label(“Key Takeaway”, systemImage: “waveform.path.ecg”)
+                        Label("Key Takeaway", systemImage: "waveform.path.ecg")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
                         Text(normalizedMarkdownText(aiInsight.summary))
@@ -255,7 +255,7 @@ struct RunSummaryView: View {
 
                     if !aiInsight.actionItems.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
-                            Label(“Action Plan”, systemImage: “checklist”)
+                            Label("Action Plan", systemImage: "checklist")
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(.secondary)
                             ForEach(aiInsight.actionItems, id: \.self) { action in
@@ -264,11 +264,11 @@ struct RunSummaryView: View {
                         }
                     } else if !aiInsight.focusAreas.isEmpty {
                         VStack(alignment: .leading, spacing: 6) {
-                            Label(“Action Plan”, systemImage: “checklist”)
+                            Label("Action Plan", systemImage: "checklist")
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(.secondary)
                             ForEach(aiInsight.focusAreas.map(normalizedMarkdownText), id: \.self) { suggestion in
-                                Label(suggestion, systemImage: “checkmark.circle.fill”)
+                                Label(suggestion, systemImage: "checkmark.circle.fill")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -276,7 +276,7 @@ struct RunSummaryView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 6) {
-                        Label(“Next Session”, systemImage: “figure.run”)
+                        Label("Next Session", systemImage: "figure.run")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
                         Text(normalizedMarkdownText(aiInsight.nextWorkoutSuggestion))
@@ -294,8 +294,8 @@ struct RunSummaryView: View {
                     .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
                 } else {
                     Text(hasAIKey
-                         ? “Tap \u{201C}Load Insights\u{201D} to fetch AI coaching feedback for this workout.”
-                         : “Add your AI API key in Settings to load cloud AI workout analysis.”)
+                         ? "Tap \u{201C}Load Insights\u{201D} to fetch AI coaching feedback for this workout."
+                         : "Add your AI API key in Settings to load cloud AI workout analysis.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
