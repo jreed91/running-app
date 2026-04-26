@@ -507,6 +507,58 @@ struct OBRaceCard: View {
     }
 }
 
+// MARK: - OBRaceDetailsCard
+
+struct OBRaceDetailsCard: View {
+    @Binding var raceName: String
+    @Binding var raceDate: Date
+
+    let race: RaceType
+    let minimumDate: Date
+
+    private var trimmedRaceName: String {
+        raceName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                StrideIcon(name: .flag, size: 18, color: .brand)
+                Text("GOAL RACE")
+                    .font(.sectionHeader)
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Race name")
+                    .font(.captionStrong)
+                    .foregroundStyle(.secondary)
+                TextField("Austin \(race.displayName)", text: $raceName)
+                    .textInputAutocapitalization(.words)
+                    .submitLabel(.done)
+                    .font(.bodyRegular)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .background(.surfaceTertiary, in: RoundedRectangle(cornerRadius: 12))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .strokeBorder(trimmedRaceName.isEmpty ? Color.destructive.opacity(0.35) : Color.clear)
+                    )
+            }
+
+            DatePicker(
+                "Race date",
+                selection: $raceDate,
+                in: minimumDate...,
+                displayedComponents: .date
+            )
+            .font(.bodyStrong)
+        }
+        .padding(16)
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 18))
+    }
+}
+
 // MARK: - OBLevelRow
 
 struct OBLevelRow: View {

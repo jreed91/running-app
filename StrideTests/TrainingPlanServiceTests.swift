@@ -34,6 +34,10 @@ struct TrainingPlanServiceTests {
         )
     }
 
+    private func date(_ year: Int, _ month: Int, _ day: Int) -> Date {
+        Calendar.current.date(from: DateComponents(year: year, month: month, day: day)) ?? .now
+    }
+
     // MARK: Plan structure
 
     @Test("Generated plan has the requested number of weeks")
@@ -106,6 +110,75 @@ struct TrainingPlanServiceTests {
         let planWorkouts = workouts(in: plan)
         #expect(planWorkouts.contains { $0.workoutType == .tempo })
         #expect(planWorkouts.contains { $0.workoutType == .longRun })
+        #expect(plan.raceName == nil)
+        #expect(plan.raceDate == nil)
+    }
+
+    @Test("Race plan ends on the selected race date")
+    func racePlanEndDateMatchesRaceDate() {
+        let profile = makeProfile(race: .halfMarathon, runDays: 4)
+        let raceDate = date(2026, 4, 19)
+        let plan = service.generateRacePlan(
+            profile: profile,
+            startDate: date(2026, 1, 5),
+            raceDate: raceDate,
+            raceName: "Austin Half",
+            runDayIndices: [0, 2, 4, 5]
+        )
+
+        #expect(Calendar.current.isDate(plan.endDate, inSameDayAs: raceDate))
+        #expect(Calendar.current.isDate(plan.raceDate ?? .distantPast, inSameDayAs: raceDate))
+        #expect(plan.raceName == "Austin Half")
+    }
+
+    @Test("Race plan schedules final race workout on exact race day")
+    func racePlanFinalWorkoutIsRaceDay() {
+        let profile = makeProfile(race: .marathon, runDays: 4)
+        let raceDate = date(2026, 10, 11)
+        let plan = service.generateRacePlan(
+            profile: profile,
+            startDate: date(2026, 6, 15),
+            raceDate: raceDate,
+            raceName: "Chicago Marathon",
+            runDayIndices: [0, 2, 4, 5]
+        )
+        let finalWorkout = workouts(in: plan).last
+
+        #expect(finalWorkout?.workoutType == .race)
+        #expect(finalWorkout.map { Calendar.current.isDate($0.scheduledDate, inSameDayAs: raceDate) } == true)
+    }
+
+    @Test("Race plan schedules race day even when weekday is not selected")
+    func racePlanAllowsRaceDayOutsideTrainingDays() {
+        let profile = makeProfile(race: .fiveK, runDays: 2)
+        let raceDate = date(2026, 2, 18) // Wednesday
+        let plan = service.generateRacePlan(
+            profile: profile,
+            startDate: date(2026, 1, 5),
+            raceDate: raceDate,
+            raceName: "Midweek 5K",
+            runDayIndices: [0, 4]
+        )
+
+        let raceWorkout = workouts(in: plan).first {
+            $0.workoutType == .race && Calendar.current.isDate($0.scheduledDate, inSameDayAs: raceDate)
+        }
+        #expect(raceWorkout != nil)
+    }
+
+    @Test("Race workout target distance matches selected race")
+    func raceWorkoutDistanceMatchesRaceType() {
+        let profile = makeProfile(race: .halfMarathon, runDays: 4)
+        let plan = service.generateRacePlan(
+            profile: profile,
+            startDate: date(2026, 1, 5),
+            raceDate: date(2026, 4, 19),
+            raceName: "Austin Half",
+            runDayIndices: [0, 2, 4, 5]
+        )
+        let raceWorkout = workouts(in: plan).first { $0.workoutType == .race }
+
+        #expect(raceWorkout?.targetDistanceMeters == RaceType.halfMarathon.distanceMeters)
     }
 
     // MARK: Easy run distribution

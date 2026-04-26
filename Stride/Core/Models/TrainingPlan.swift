@@ -12,6 +12,8 @@ final class TrainingPlan {
     @Attribute(originalName: "targetRace")
     var targetRaceLegacy: String? = nil
     var goalTimeSeconds: Double = 0
+    var raceName: String?
+    var raceDate: Date?
     var startDate: Date = Date()
     var endDate: Date = Date()
     var isActive: Bool = false
@@ -40,12 +42,16 @@ final class TrainingPlan {
     init(
         targetRace: RaceType,
         goalTimeSeconds: Double,
+        raceName: String? = nil,
+        raceDate: Date? = nil,
         startDate: Date,
         endDate: Date
     ) {
         self.id = UUID()
         self.targetRaceRaw = targetRace.rawValue
         self.goalTimeSeconds = goalTimeSeconds
+        self.raceName = raceName
+        self.raceDate = raceDate
         self.startDate = startDate
         self.endDate = endDate
         self.isActive = true

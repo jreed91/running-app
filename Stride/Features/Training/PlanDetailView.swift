@@ -9,6 +9,12 @@ struct PlanDetailView: View {
 
     @State private var showDeleteConfirmation = false
 
+    private var planTitle: String {
+        plan.raceName?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            ? plan.raceName!
+            : plan.targetRace.displayName
+    }
+
     // MARK: - Body
 
     var body: some View {
@@ -21,7 +27,7 @@ struct PlanDetailView: View {
             .padding()
             .frame(maxWidth: .infinity)
         }
-        .navigationTitle("\(plan.targetRace.displayName) Plan")
+        .navigationTitle("\(planTitle) Plan")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .destructiveAction) {

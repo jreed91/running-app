@@ -10,6 +10,8 @@ final class UserProfile {
     /// Raw-backed storage for `goalRace` to keep CloudKit fields primitive.
     var goalRaceRaw: String = RaceType.fiveK.rawValue
     var goalFinishTime: TimeInterval = 0      // seconds
+    var raceName: String?
+    var raceDate: Date?
     var weeklyRunDays: Int = 3
     /// Raw-backed storage for `fitnessLevel` to keep CloudKit fields primitive.
     var fitnessLevelRaw: String = FitnessLevel.beginner.rawValue
@@ -35,6 +37,8 @@ final class UserProfile {
         name: String,
         goalRace: RaceType,
         goalFinishTime: TimeInterval,
+        raceName: String? = nil,
+        raceDate: Date? = nil,
         weeklyRunDays: Int,
         fitnessLevel: FitnessLevel,
         gender: Gender = .preferNotToShare,
@@ -45,6 +49,8 @@ final class UserProfile {
         self.name = name
         self.goalRaceRaw = goalRace.rawValue
         self.goalFinishTime = goalFinishTime
+        self.raceName = raceName
+        self.raceDate = raceDate
         self.weeklyRunDays = weeklyRunDays
         self.fitnessLevelRaw = fitnessLevel.rawValue
         self.genderRaw = gender.rawValue

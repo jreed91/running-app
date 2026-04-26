@@ -20,10 +20,64 @@ struct TrainingPlanService {
         runDayIndices: [Int] = [],
         unitPreference: UnitPreference = .metric
     ) -> TrainingPlan {
-        let endDate = startDate.adding(weeks: numberOfWeeks)
+        generatePlan(
+            profile: profile,
+            startDate: startDate,
+            numberOfWeeks: numberOfWeeks,
+            endDate: startDate.adding(weeks: numberOfWeeks),
+            raceName: nil,
+            raceDate: nil,
+            runDayIndices: runDayIndices,
+            unitPreference: unitPreference
+        )
+    }
+
+    /// Builds a race-specific plan that ends on the exact goal race date.
+    func generateRacePlan(
+        profile: UserProfile,
+        startDate: Date,
+        raceDate: Date,
+        raceName: String,
+        runDayIndices: [Int] = [],
+        unitPreference: UnitPreference = .metric
+    ) -> TrainingPlan {
+        guard profile.goalRace.isGoalRace else {
+            return generatePlan(
+                profile: profile,
+                startDate: startDate,
+                numberOfWeeks: profile.goalRace.typicalWeeks.lowerBound,
+                runDayIndices: runDayIndices,
+                unitPreference: unitPreference
+            )
+        }
+        let numberOfWeeks = weeksThroughRaceDate(startDate: startDate, raceDate: raceDate)
+        return generatePlan(
+            profile: profile,
+            startDate: startDate.startOfDay,
+            numberOfWeeks: numberOfWeeks,
+            endDate: raceDate.startOfDay,
+            raceName: raceName,
+            raceDate: raceDate.startOfDay,
+            runDayIndices: runDayIndices,
+            unitPreference: unitPreference
+        )
+    }
+
+    private func generatePlan(
+        profile: UserProfile,
+        startDate: Date,
+        numberOfWeeks: Int,
+        endDate: Date,
+        raceName: String?,
+        raceDate: Date?,
+        runDayIndices: [Int],
+        unitPreference: UnitPreference
+    ) -> TrainingPlan {
         let plan = TrainingPlan(
             targetRace: profile.goalRace,
             goalTimeSeconds: profile.goalFinishTime,
+            raceName: raceName,
+            raceDate: raceDate,
             startDate: startDate,
             endDate: endDate
         )
@@ -61,13 +115,28 @@ struct TrainingPlanService {
                 targetKm: targetKm,
                 unitPreference: unitPreference
             )
+            let weekWorkouts: [ScheduledWorkout]
+            if let raceDate,
+               profile.goalRace != .maintainFitness,
+               index == phases.count - 1 {
+                weekWorkouts = workoutsForRaceWeek(
+                    workouts,
+                    raceDate: raceDate,
+                    raceType: profile.goalRace,
+                    raceName: raceName,
+                    paces: paces
+                )
+            } else {
+                weekWorkouts = workouts
+            }
             // Auto-apply structured warmup/work/cooldown to all quality and long-run sessions.
             // Uses profile-derived VDOT with no history (onTrack defaults) so the plan is
             // immediately structured. Users can re-adapt later via the detail view to
             // personalise based on their actual run history.
-            for workout in workouts {
+            for workout in weekWorkouts {
                 guard workout.workoutType != .easy,
                       workout.workoutType != .rest,
+                      workout.workoutType != .race,
                       workout.workoutType != .crossTraining else { continue }
                 let adapted = adaptWorkout(scheduled: workout, history: [], profile: profile, unitPreference: unitPreference)
                 workout.structureData        = adapted.structureData
@@ -79,10 +148,61 @@ struct TrainingPlanService {
                     workout.intervals = adapted.intervals
                 }
             }
-            week.workouts = workouts
+            week.workouts = weekWorkouts
             plan.weeks = (plan.weeks ?? []) + [week]
         }
         return plan
+    }
+
+    private func weeksThroughRaceDate(startDate: Date, raceDate: Date) -> Int {
+        let start = startDate.startOfDay
+        let race = raceDate.startOfDay
+        let days = Calendar.current.dateComponents([.day], from: start, to: race).day ?? 0
+        return max(1, Int(ceil(Double(max(days, 0) + 1) / 7.0)))
+    }
+
+    private func workoutsForRaceWeek(
+        _ workouts: [ScheduledWorkout],
+        raceDate: Date,
+        raceType: RaceType,
+        raceName: String?,
+        paces: TrainingPaces
+    ) -> [ScheduledWorkout] {
+        let raceDay = raceDate.startOfDay
+        let trainingWorkouts = workouts.filter {
+            $0.scheduledDate.startOfDay < raceDay
+        }
+        return trainingWorkouts + [
+            raceWorkout(date: raceDay, raceType: raceType, raceName: raceName, paces: paces)
+        ]
+    }
+
+    private func raceWorkout(
+        date: Date,
+        raceType: RaceType,
+        raceName: String?,
+        paces: TrainingPaces
+    ) -> ScheduledWorkout {
+        let racePace = targetRacePace(for: raceType, paces: paces)
+        let displayName = raceName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let noteName = (displayName?.isEmpty == false ? displayName : nil) ?? raceType.displayName
+        return ScheduledWorkout(
+            scheduledDate: date.startOfDay,
+            workoutType: .race,
+            targetDistanceMeters: raceType.distanceMeters,
+            targetPaceLowerBound: racePace - 5,
+            targetPaceUpperBound: racePace + 5,
+            notes: "\(noteName) goal race. Trust the taper, start controlled, and race the final third."
+        )
+    }
+
+    private func targetRacePace(for raceType: RaceType, paces: TrainingPaces) -> Double {
+        switch raceType {
+        case .maintainFitness: return paces.easyRange.lowerBound
+        case .fiveK: return paces.interval
+        case .halfMarathon: return (paces.threshold + paces.marathon) / 2
+        case .marathon: return paces.marathon
+        }
     }
 
     // MARK: Phase schedule

@@ -16,6 +16,8 @@ struct PersistenceGraphTests {
             name: "Taylor",
             goalRace: .halfMarathon,
             goalFinishTime: 6_000,
+            raceName: "Austin Half",
+            raceDate: Date(timeIntervalSince1970: 1_785_024_000),
             weeklyRunDays: 4,
             fitnessLevel: .intermediate,
             gender: .female,
@@ -30,6 +32,8 @@ struct PersistenceGraphTests {
             numberOfWeeks: 6,
             runDayIndices: [0, 2, 5]
         )
+        plan.raceName = "Austin Half"
+        plan.raceDate = profile.raceDate
         try container.planRepository.save(plan)
 
         let route = SavedRoute(
@@ -84,6 +88,8 @@ struct PersistenceGraphTests {
             count += week.workouts?.count ?? 0
         }
         #expect(fetchedPlan.targetRace == .halfMarathon)
+        #expect(fetchedPlan.raceName == "Austin Half")
+        #expect(fetchedPlan.raceDate == Date(timeIntervalSince1970: 1_785_024_000))
         #expect(weeks.count == 6)
         #expect(totalScheduledWorkouts > 0)
         #expect(weeks.contains { !($0.workouts ?? []).isEmpty })
@@ -104,6 +110,8 @@ struct PersistenceGraphTests {
         let fetchedProfile = try #require(profiles.first)
         #expect(fetchedProfile.name == "Taylor")
         #expect(fetchedProfile.goalRace == .halfMarathon)
+        #expect(fetchedProfile.raceName == "Austin Half")
+        #expect(fetchedProfile.raceDate == Date(timeIntervalSince1970: 1_785_024_000))
         #expect(fetchedProfile.gender == .female)
         #expect(fetchedProfile.preferredRunDayIndices == [0, 2, 5])
     }

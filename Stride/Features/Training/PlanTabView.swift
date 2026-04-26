@@ -332,6 +332,11 @@ private struct PlanOverviewCard: View {
         }
     }
 
+    private var planTitle: String {
+        let trimmedName = plan.raceName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmedName?.isEmpty == false ? trimmedName! : plan.targetRace.displayName
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             // Header row: race icon + title + goal
@@ -343,7 +348,7 @@ private struct PlanOverviewCard: View {
                     StrideIcon(name: raceStrideIcon, size: 26, color: .brand, strokeWeight: 2.0)
                 }
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(plan.targetRace.displayName)
+                    Text(planTitle)
                         .font(.system(size: 20, weight: .bold))
                     Text("Goal \(plan.goalTimeSeconds.durationString)  ·  \(plan.totalWeeks) weeks")
                         .font(.caption)

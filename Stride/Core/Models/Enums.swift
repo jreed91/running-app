@@ -10,6 +10,10 @@ enum RaceType: String, Codable, CaseIterable, Sendable {
 
     var displayName: String { rawValue }
 
+    var isGoalRace: Bool {
+        self != .maintainFitness
+    }
+
     var distanceMeters: Double {
         switch self {
         case .maintainFitness: return 10_000

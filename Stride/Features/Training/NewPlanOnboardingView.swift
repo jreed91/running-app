@@ -15,6 +15,8 @@ struct NewPlanOnboardingView: View {
 
     // Step 1 – Race
     @State private var goalRace: RaceType = .halfMarathon
+    @State private var raceName = ""
+    @State private var raceDate = Date().startOfWeek.adding(weeks: 12)
 
     // Step 2 – Fitness
     @State private var fitnessLevel: FitnessLevel = .intermediate
@@ -66,7 +68,10 @@ struct NewPlanOnboardingView: View {
     }
 
     private var effectiveWeeks: Int {
-        scheduleMode == .weeks ? selectedWeeks : computedWeeks
+        if goalRace.isGoalRace {
+            return weeksThroughRaceDate(startDate: effectiveStartDate, raceDate: raceDate)
+        }
+        return scheduleMode == .weeks ? selectedWeeks : computedWeeks
     }
 
     private var estimatedWorkouts: Int { effectiveWeeks * max(selectedDays.count, 3) }
@@ -78,6 +83,13 @@ struct NewPlanOnboardingView: View {
 
     private var minEndDate: Date { startDate.adding(weeks: weekRange.lowerBound) }
     private var maxEndDate: Date { startDate.adding(weeks: weekRange.upperBound) }
+    private var minimumRaceDate: Date { Date().startOfDay.adding(days: 1) }
+    private var effectiveStartDate: Date {
+        goalRace.isGoalRace && raceDate.startOfDay < startDate.startOfDay ? Date().startOfDay : startDate.startOfDay
+    }
+    private var raceGoalReady: Bool {
+        !goalRace.isGoalRace || !raceName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     // MARK: - Body
 
@@ -105,6 +117,7 @@ struct NewPlanOnboardingView: View {
                 title: "Pick your goal.",
                 subtitle: "Choose a race or maintain fitness. You can change this anytime.",
                 ctaLabel: "Continue",
+                ctaEnabled: raceGoalReady,
                 onBack: { dismiss() },
                 onCTA: advance
             ) { raceContent }
@@ -134,9 +147,9 @@ struct NewPlanOnboardingView: View {
         case 3:
             OBShell(
                 stepIndex: 3, total: totalSteps,
-                kicker: "Step 4 · Duration",
-                title: "How long to train?",
-                subtitle: "Choose a plan length that suits your schedule and race date.",
+                kicker: goalRace.isGoalRace ? "Step 4 · Race Day" : "Step 4 · Duration",
+                title: goalRace.isGoalRace ? "When is race day?" : "How long to train?",
+                subtitle: goalRace.isGoalRace ? "Your plan will finish on the goal race date." : "Choose a plan length that suits your schedule.",
                 ctaLabel: "Continue",
                 onBack: retreat,
                 onCTA: advance
@@ -183,6 +196,14 @@ struct NewPlanOnboardingView: View {
                     goalRace = race
                     clampWeeks()
                 }
+            }
+            if goalRace.isGoalRace {
+                OBRaceDetailsCard(
+                    raceName: $raceName,
+                    raceDate: $raceDate,
+                    race: goalRace,
+                    minimumDate: minimumRaceDate
+                )
             }
         }
     }
@@ -268,45 +289,72 @@ struct NewPlanOnboardingView: View {
     private var durationContent: some View {
         VStack(spacing: 16) {
             VStack(spacing: 14) {
-                Picker("Set by", selection: $scheduleMode) {
-                    ForEach(ScheduleMode.allCases, id: \.self) { mode in
-                        Text(mode.rawValue).tag(mode)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .onChange(of: scheduleMode) { _, _ in recalibrateDates() }
-
-                if scheduleMode == .weeks {
-                    Stepper("\(selectedWeeks) weeks", value: $selectedWeeks, in: weekRange)
-                        .onChange(of: selectedWeeks) { _, _ in targetEndDate = computedEndDate }
-                    LabeledContent("End date") {
-                        Text(computedEndDate, style: .date)
-                            .foregroundStyle(.secondary)
-                    }
-                } else {
+                if goalRace.isGoalRace {
                     DatePicker(
-                        "End date",
-                        selection: $targetEndDate,
-                        in: minEndDate...maxEndDate,
+                        "Race date",
+                        selection: $raceDate,
+                        in: minimumRaceDate...,
                         displayedComponents: .date
                     )
+                    .onChange(of: raceDate) { _, _ in recalibrateDates() }
+
                     LabeledContent("Duration") {
-                        Text("\(computedWeeks) weeks")
+                        Text("\(effectiveWeeks) weeks")
                             .foregroundStyle(.secondary)
                     }
+
+                    if raceDate.startOfDay < startDate.startOfDay {
+                        LabeledContent("Start date") {
+                            Text(Date().startOfDay, style: .date)
+                                .foregroundStyle(.secondary)
+                        }
+                    } else {
+                        DatePicker("Start date", selection: $startDate, displayedComponents: .date)
+                            .onChange(of: startDate) { _, _ in recalibrateDates() }
+                    }
+                } else {
+                    Picker("Set by", selection: $scheduleMode) {
+                        ForEach(ScheduleMode.allCases, id: \.self) { mode in
+                            Text(mode.rawValue).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .onChange(of: scheduleMode) { _, _ in recalibrateDates() }
+
+                    if scheduleMode == .weeks {
+                        Stepper("\(selectedWeeks) weeks", value: $selectedWeeks, in: weekRange)
+                            .onChange(of: selectedWeeks) { _, _ in targetEndDate = computedEndDate }
+                        LabeledContent("End date") {
+                            Text(computedEndDate, style: .date)
+                                .foregroundStyle(.secondary)
+                        }
+                    } else {
+                        DatePicker(
+                            "End date",
+                            selection: $targetEndDate,
+                            in: minEndDate...maxEndDate,
+                            displayedComponents: .date
+                        )
+                        LabeledContent("Duration") {
+                            Text("\(computedWeeks) weeks")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Divider()
+
+                    DatePicker("Start date", selection: $startDate, displayedComponents: .date)
+                        .onChange(of: startDate) { _, _ in recalibrateDates() }
                 }
-
-                Divider()
-
-                DatePicker("Start date", selection: $startDate, displayedComponents: .date)
-                    .onChange(of: startDate) { _, _ in recalibrateDates() }
             }
             .padding(16)
             .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 20))
 
             HStack(spacing: 10) {
                 StrideIcon(name: .calendar, size: 16, color: .secondary)
-                Text("\(goalRace.typicalWeeks.lowerBound)–\(goalRace.typicalWeeks.upperBound) weeks recommended for \(goalRace.displayName).")
+                Text(goalRace.isGoalRace
+                     ? "Race plans can target any future date."
+                     : "\(goalRace.typicalWeeks.lowerBound)–\(goalRace.typicalWeeks.upperBound) weeks recommended for \(goalRace.displayName).")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -407,6 +455,8 @@ struct NewPlanOnboardingView: View {
     private func loadFromProfile() {
         guard let profile else { return }
         goalRace = profile.goalRace
+        raceName = profile.raceName ?? ""
+        raceDate = profile.raceDate ?? raceDate
         fitnessLevel = profile.fitnessLevel
         if !profile.preferredRunDayIndices.isEmpty {
             selectedDays = Set(profile.preferredRunDayIndices)
@@ -425,12 +475,23 @@ struct NewPlanOnboardingView: View {
     }
 
     private func recalibrateDates() {
-        if scheduleMode == .weeks {
+        if goalRace.isGoalRace {
+            if raceDate < minimumRaceDate { raceDate = minimumRaceDate }
+        } else if scheduleMode == .weeks {
             targetEndDate = computedEndDate
         } else {
             if targetEndDate < minEndDate { targetEndDate = minEndDate }
             if targetEndDate > maxEndDate { targetEndDate = maxEndDate }
         }
+    }
+
+    private func weeksThroughRaceDate(startDate: Date, raceDate: Date) -> Int {
+        let days = Calendar.current.dateComponents(
+            [.day],
+            from: startDate.startOfDay,
+            to: raceDate.startOfDay
+        ).day ?? 0
+        return max(1, Int(ceil(Double(max(days, 0) + 1) / 7.0)))
     }
 
     // MARK: - Plan generation
@@ -441,6 +502,8 @@ struct NewPlanOnboardingView: View {
         let sortedDays = selectedDays.sorted()
 
         profile.goalRace = goalRace
+        profile.raceName = goalRace.isGoalRace ? raceName.trimmingCharacters(in: .whitespacesAndNewlines) : nil
+        profile.raceDate = goalRace.isGoalRace ? raceDate.startOfDay : nil
         profile.fitnessLevel = fitnessLevel
         profile.weeklyRunDays = sortedDays.count
         profile.preferredRunDayIndices = sortedDays
@@ -450,13 +513,25 @@ struct NewPlanOnboardingView: View {
         let existing = (try? context.fetch(FetchDescriptor<TrainingPlan>())) ?? []
         existing.forEach { $0.isActive = false }
 
-        let plan = container.trainingPlanService.generatePlan(
-            profile: profile,
-            startDate: startDate,
-            numberOfWeeks: effectiveWeeks,
-            runDayIndices: sortedDays,
-            unitPreference: appSettings.unitPreference
-        )
+        let plan: TrainingPlan
+        if goalRace.isGoalRace {
+            plan = container.trainingPlanService.generateRacePlan(
+                profile: profile,
+                startDate: effectiveStartDate,
+                raceDate: raceDate,
+                raceName: raceName.trimmingCharacters(in: .whitespacesAndNewlines),
+                runDayIndices: sortedDays,
+                unitPreference: appSettings.unitPreference
+            )
+        } else {
+            plan = container.trainingPlanService.generatePlan(
+                profile: profile,
+                startDate: startDate,
+                numberOfWeeks: effectiveWeeks,
+                runDayIndices: sortedDays,
+                unitPreference: appSettings.unitPreference
+            )
+        }
         context.insert(plan)
         try? context.save()
 

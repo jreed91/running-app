@@ -7,12 +7,40 @@ struct WorkoutDetailView: View {
     @Environment(\.appContainer) private var container
     @Environment(\.modelContext) private var context
     @Environment(AppSettings.self) private var appSettings
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var isSyncingLocation = false
+
+    private var goalRacePlan: TrainingPlan? {
+        workout.week?.plan
+    }
+
+    private var isCompletedGoalRace: Bool {
+        guard workout.workoutType == .race, workout.isCompleted, let plan = goalRacePlan else {
+            return false
+        }
+        let hasRaceName = plan.raceName?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        let matchesRaceDate = plan.raceDate.map {
+            Calendar.current.isDate(workout.scheduledDate, inSameDayAs: $0)
+        } ?? false
+        return hasRaceName || matchesRaceDate
+    }
+
+    private var goalRaceName: String {
+        let trimmedName = goalRacePlan?.raceName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmedName?.isEmpty == false ? trimmedName! : workout.week?.plan?.targetRace.displayName ?? "Goal Race"
+    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                if isCompletedGoalRace {
+                    GoalRaceCelebrationCard(
+                        raceName: goalRaceName,
+                        raceDate: goalRacePlan?.raceDate ?? workout.scheduledDate,
+                        reduceMotion: reduceMotion
+                    )
+                }
                 headerSection
                 if let range = workout.targetPaceRange {
                     paceSection(range: range)
@@ -266,6 +294,150 @@ struct WorkoutDetailView: View {
                 .padding()
                 .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
         }
+    }
+}
+
+// MARK: - GoalRaceCelebrationCard
+
+private struct GoalRaceCelebrationCard: View {
+    let raceName: String
+    let raceDate: Date
+    let reduceMotion: Bool
+
+    @State private var burst = false
+
+    var body: some View {
+        ZStack {
+            if reduceMotion {
+                StaticConfettiView()
+            } else {
+                ConfettiBurstView(isExpanded: burst)
+            }
+
+            VStack(spacing: 8) {
+                StrideIcon(name: .trophy, size: 34, color: .brand, strokeWeight: 2.2)
+                Text(raceName)
+                    .font(.system(size: 26, weight: .heavy))
+                    .multilineTextAlignment(.center)
+                Text("Goal race completed")
+                    .font(.bodyStrong)
+                    .foregroundStyle(.secondary)
+                Text(raceDate.formatted(.dateTime.weekday(.wide).month(.wide).day()))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 28)
+            .padding(.horizontal, 18)
+        }
+        .frame(maxWidth: .infinity)
+        .background(
+            LinearGradient(
+                colors: [Color.brand.opacity(0.14), Color.success.opacity(0.10)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ),
+            in: RoundedRectangle(cornerRadius: 18)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18)
+                .strokeBorder(Color.brand.opacity(0.22), lineWidth: 0.75)
+        )
+        .clipped()
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.spring(response: 0.9, dampingFraction: 0.82).delay(0.1)) {
+                burst = true
+            }
+        }
+    }
+}
+
+private struct ConfettiBurstView: View {
+    let isExpanded: Bool
+
+    var body: some View {
+        GeometryReader { geo in
+            ForEach(ConfettiParticle.samples) { particle in
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(particle.color)
+                    .frame(width: particle.width, height: particle.height)
+                    .rotationEffect(.degrees(isExpanded ? particle.rotation : 0))
+                    .position(
+                        x: geo.size.width * 0.5,
+                        y: geo.size.height * 0.36
+                    )
+                    .offset(
+                        x: isExpanded ? particle.xOffset(in: geo.size.width) : 0,
+                        y: isExpanded ? particle.yOffset(in: geo.size.height) : 0
+                    )
+                    .opacity(isExpanded ? 1 : 0)
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+private struct StaticConfettiView: View {
+    var body: some View {
+        GeometryReader { geo in
+            ForEach(ConfettiParticle.samples.prefix(18)) { particle in
+                Circle()
+                    .fill(particle.color.opacity(0.72))
+                    .frame(width: 5, height: 5)
+                    .position(
+                        x: geo.size.width * particle.staticX,
+                        y: geo.size.height * particle.staticY
+                    )
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+private struct ConfettiParticle: Identifiable, Sendable {
+    let id: Int
+    let width: Double
+    let height: Double
+    let xFactor: Double
+    let yFactor: Double
+    let rotation: Double
+    let colorIndex: Int
+    let staticX: Double
+    let staticY: Double
+
+    var color: Color {
+        switch colorIndex % 5 {
+        case 0: return .brand
+        case 1: return .success
+        case 2: return .zoneTempo
+        case 3: return .zoneInterval
+        default: return .zoneEasy
+        }
+    }
+
+    func xOffset(in width: Double) -> Double {
+        xFactor * width * 0.42
+    }
+
+    func yOffset(in height: Double) -> Double {
+        yFactor * height * 0.40
+    }
+
+    static let samples: [ConfettiParticle] = (0..<42).map { index in
+        let column = Double(index % 7)
+        let row = Double(index / 7)
+        let direction = column - 3.0
+        return ConfettiParticle(
+            id: index,
+            width: index % 3 == 0 ? 5 : 7,
+            height: index % 2 == 0 ? 10 : 6,
+            xFactor: direction / 3.0,
+            yFactor: 0.15 + row / 7.0,
+            rotation: Double((index * 37) % 180) - 90,
+            colorIndex: index,
+            staticX: 0.12 + (column / 6.0) * 0.76,
+            staticY: 0.12 + (row / 5.0) * 0.30
+        )
     }
 }
 

@@ -18,6 +18,8 @@ struct OnboardingView: View {
 
     // Step data
     @State private var goalRace: RaceType = .halfMarathon
+    @State private var raceName = ""
+    @State private var raceDate = Date().startOfWeek.adding(weeks: 12)
     @State private var fitnessLevel: FitnessLevel = .intermediate
     @State private var fiveKMinutes = 25
     @State private var fiveKSeconds = 0
@@ -55,7 +57,24 @@ struct OnboardingView: View {
         PaceCalculatorService.trainingPaces(forVDOT: vdotValue)
     }
 
-    private var planWeeks: Int { goalRace.typicalWeeks.lowerBound }
+    private var planWeeks: Int {
+        guard goalRace.isGoalRace else { return goalRace.typicalWeeks.lowerBound }
+        return weeksThroughRaceDate(startDate: planStartDate, raceDate: raceDate)
+    }
+
+    private var planStartDate: Date {
+        let nextWeek = Date().startOfWeek.adding(weeks: 1).startOfDay
+        let today = Date().startOfDay
+        return raceDate.startOfDay < nextWeek ? today : nextWeek
+    }
+
+    private var minimumRaceDate: Date {
+        Date().startOfDay.adding(days: 1)
+    }
+
+    private var raceGoalReady: Bool {
+        !goalRace.isGoalRace || !raceName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     private var estimatedWorkouts: Int { planWeeks * max(selectedDays.count, 3) }
 
@@ -91,7 +110,10 @@ struct OnboardingView: View {
         case 1:
             OBShell(stepIndex: 0, total: totalSteps, kicker: "Step 1 · Goal",
                     title: "Pick your goal.", subtitle: "Choose a race or maintain fitness. You can change this anytime.",
-                    ctaLabel: "Continue", onBack: retreat, onCTA: advance) {
+                    ctaLabel: "Continue",
+                    ctaEnabled: raceGoalReady,
+                    onBack: retreat,
+                    onCTA: advance) {
                 goalContent
             }
         case 2:
@@ -154,7 +176,19 @@ struct OnboardingView: View {
     private var goalContent: some View {
         VStack(spacing: 10) {
             ForEach(RaceType.allCases, id: \.self) { race in
-                OBRaceCard(race: race, isSelected: goalRace == race) { goalRace = race }
+                OBRaceCard(race: race, isSelected: goalRace == race) {
+                    goalRace = race
+                    recalibrateRaceDate()
+                }
+            }
+
+            if goalRace.isGoalRace {
+                OBRaceDetailsCard(
+                    raceName: $raceName,
+                    raceDate: $raceDate,
+                    race: goalRace,
+                    minimumDate: minimumRaceDate
+                )
             }
         }
     }
@@ -448,6 +482,22 @@ struct OnboardingView: View {
         }
     }
 
+    private func weeksThroughRaceDate(startDate: Date, raceDate: Date) -> Int {
+        let days = Calendar.current.dateComponents(
+            [.day],
+            from: startDate.startOfDay,
+            to: raceDate.startOfDay
+        ).day ?? 0
+        return max(1, Int(ceil(Double(max(days, 0) + 1) / 7.0)))
+    }
+
+    private func recalibrateRaceDate() {
+        guard goalRace.isGoalRace else { return }
+        if raceDate < minimumRaceDate {
+            raceDate = minimumRaceDate
+        }
+    }
+
     // MARK: - Permissions
 
     /// Pre-populate enabled flags from actual system authorization status.
@@ -541,6 +591,8 @@ struct OnboardingView: View {
             name: "",
             goalRace: goalRace,
             goalFinishTime: goalFinishTime,
+            raceName: goalRace.isGoalRace ? raceName.trimmingCharacters(in: .whitespacesAndNewlines) : nil,
+            raceDate: goalRace.isGoalRace ? raceDate.startOfDay : nil,
             weeklyRunDays: max(selectedDays.count, 1),
             fitnessLevel: fitnessLevel,
             gender: .preferNotToShare,
@@ -548,13 +600,25 @@ struct OnboardingView: View {
             preferredRunDayIndices: selectedDays.sorted()
         )
         context.insert(profile)
-        let plan = container.trainingPlanService.generatePlan(
-            profile: profile,
-            startDate: Date().startOfWeek.adding(weeks: 1),
-            numberOfWeeks: planWeeks,
-            runDayIndices: selectedDays.sorted(),
-            unitPreference: appSettings.unitPreference
-        )
+        let plan: TrainingPlan
+        if goalRace.isGoalRace {
+            plan = container.trainingPlanService.generateRacePlan(
+                profile: profile,
+                startDate: planStartDate,
+                raceDate: raceDate,
+                raceName: raceName.trimmingCharacters(in: .whitespacesAndNewlines),
+                runDayIndices: selectedDays.sorted(),
+                unitPreference: appSettings.unitPreference
+            )
+        } else {
+            plan = container.trainingPlanService.generatePlan(
+                profile: profile,
+                startDate: Date().startOfWeek.adding(weeks: 1),
+                numberOfWeeks: planWeeks,
+                runDayIndices: selectedDays.sorted(),
+                unitPreference: appSettings.unitPreference
+            )
+        }
         context.insert(plan)
         try? context.save()
 

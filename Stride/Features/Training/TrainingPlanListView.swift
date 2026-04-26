@@ -59,10 +59,16 @@ struct TrainingPlanListView: View {
 struct PlanRowView: View {
     let plan: TrainingPlan
 
+    private var planTitle: String {
+        plan.raceName?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            ? plan.raceName!
+            : plan.targetRace.displayName
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text(plan.targetRace.displayName).font(.bodyStrong)
+                Text(planTitle).font(.bodyStrong)
                 if plan.isActive {
                     Text("ACTIVE")
                         .font(.caption)
