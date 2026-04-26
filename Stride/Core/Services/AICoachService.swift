@@ -42,7 +42,7 @@ struct AIWorkoutAdaptationResponse: Codable, Sendable {
     let targetPaceUpperBound: Double?
     let explanation: String
     let intervals: [AIWorkoutAdaptationInterval]
-    let workoutStructure: AIWorkoutStructure
+    let workoutStructure: AIWorkoutStructure?
 
     enum CodingKeys: String, CodingKey {
         case workoutType = "workout_type"
@@ -67,7 +67,7 @@ struct AIWorkoutPlanAdaptation: Codable, Sendable {
     let targetPaceUpperBound: Double?
     let explanation: String
     let intervals: [AIWorkoutAdaptationInterval]
-    let workoutStructure: AIWorkoutStructure
+    let workoutStructure: AIWorkoutStructure?
 
     enum CodingKeys: String, CodingKey {
         case workoutID = "workout_id"
@@ -429,7 +429,7 @@ struct AICoachService: Sendable {
         case let (lower?, upper?): lower <= upper
         default: true
         }
-        let validStructure = isValidStructure(adaptation.workoutStructure)
+        let validStructure = adaptation.workoutStructure.map(isValidStructure) ?? true
         return validType && hasExplanation && validDistance && validLower && validUpper && validRange && validStructure
     }
 
@@ -478,9 +478,103 @@ struct AICoachService: Sendable {
         )
         adapted.week = scheduled.week
         adapted.workoutLocation = scheduled.workoutLocation
-        adapted.workoutStructure = adaptation.workoutStructure.domainValue
         adapted.intervals = adaptation.intervals.compactMap(\.domainValue)
+        adapted.workoutStructure = adaptation.workoutStructure?.domainValue
+            ?? fallbackStructure(for: type, adaptation: adaptation, scheduled: scheduled, intervals: adapted.intervals)
         return adapted
+    }
+
+    private func fallbackStructure(
+        for type: WorkoutType,
+        adaptation: AIWorkoutAdaptationResponse,
+        scheduled: ScheduledWorkout,
+        intervals: [WorkoutInterval]
+    ) -> WorkoutStructure {
+        let distance = adaptation.targetDistanceMeters
+            ?? scheduled.targetDistanceMeters
+            ?? scheduled.workoutStructure?.totalEstimatedDistanceMeters
+            ?? 5_000
+        let pace = midPace(lower: adaptation.targetPaceLowerBound, upper: adaptation.targetPaceUpperBound)
+            ?? midPace(lower: scheduled.targetPaceLowerBound, upper: scheduled.targetPaceUpperBound)
+            ?? 360
+        let easyPace = min(pace + 45, 900)
+
+        switch type {
+        case .interval:
+            let interval = intervals.first
+            let repetitions = max(interval?.repetitions ?? 4, 1)
+            let workDistance = interval?.distanceMeters ?? max(400, distance * 0.12)
+            let recoverySeconds = interval?.recoverySeconds ?? 90
+            let warmupDistance = min(1_500, max(800, distance * 0.20))
+            let cooldownDistance = min(1_500, max(600, distance * 0.15))
+            let totalDistance = max(distance, warmupDistance + cooldownDistance + (Double(repetitions) * workDistance))
+            let totalDuration = (totalDistance / 1_000 * pace) + (Double(repetitions) * recoverySeconds)
+            return WorkoutStructure(
+                warmup: WorkoutSegment(distanceMeters: warmupDistance, durationSeconds: nil, targetPaceSecondsPerKm: easyPace, label: "Warm-up"),
+                mainSets: [
+                    WorkoutSet(
+                        repetitions: repetitions,
+                        workSegment: WorkoutSegment(distanceMeters: workDistance, durationSeconds: nil, targetPaceSecondsPerKm: interval?.targetPaceSecondsPerKm ?? pace, label: "Interval"),
+                        recoverySegment: WorkoutSegment(distanceMeters: nil, durationSeconds: recoverySeconds, targetPaceSecondsPerKm: nil, label: "Recovery jog"),
+                        label: "Interval Set"
+                    )
+                ],
+                cooldown: WorkoutSegment(distanceMeters: cooldownDistance, durationSeconds: nil, targetPaceSecondsPerKm: easyPace, label: "Cool-down"),
+                totalEstimatedDistanceMeters: totalDistance,
+                totalEstimatedDurationSeconds: totalDuration
+            )
+        case .tempo:
+            let warmupDistance = distance * 0.15
+            let cooldownDistance = distance * 0.10
+            let workDistance = max(500, distance - warmupDistance - cooldownDistance)
+            return WorkoutStructure(
+                warmup: WorkoutSegment(distanceMeters: warmupDistance, durationSeconds: nil, targetPaceSecondsPerKm: easyPace, label: "Warm-up"),
+                mainSets: [
+                    WorkoutSet(
+                        repetitions: 1,
+                        workSegment: WorkoutSegment(distanceMeters: workDistance, durationSeconds: nil, targetPaceSecondsPerKm: pace, label: "Tempo"),
+                        recoverySegment: WorkoutSegment(distanceMeters: nil, durationSeconds: nil, targetPaceSecondsPerKm: nil, label: ""),
+                        label: "Tempo Block"
+                    )
+                ],
+                cooldown: WorkoutSegment(distanceMeters: cooldownDistance, durationSeconds: nil, targetPaceSecondsPerKm: easyPace, label: "Cool-down"),
+                totalEstimatedDistanceMeters: distance,
+                totalEstimatedDurationSeconds: distance / 1_000 * pace
+            )
+        case .longRun:
+            return continuousStructure(distance: distance, pace: pace, label: "Long Run")
+        default:
+            return continuousStructure(distance: distance, pace: pace, label: type.displayName)
+        }
+    }
+
+    private func continuousStructure(distance: Double, pace: Double, label: String) -> WorkoutStructure {
+        let warmupDistance = distance * 0.15
+        let cooldownDistance = distance * 0.10
+        let workDistance = max(500, distance - warmupDistance - cooldownDistance)
+        return WorkoutStructure(
+            warmup: WorkoutSegment(distanceMeters: warmupDistance, durationSeconds: nil, targetPaceSecondsPerKm: min(pace + 30, 900), label: "Easy start"),
+            mainSets: [
+                WorkoutSet(
+                    repetitions: 1,
+                    workSegment: WorkoutSegment(distanceMeters: workDistance, durationSeconds: nil, targetPaceSecondsPerKm: pace, label: label),
+                    recoverySegment: WorkoutSegment(distanceMeters: nil, durationSeconds: nil, targetPaceSecondsPerKm: nil, label: ""),
+                    label: label
+                )
+            ],
+            cooldown: WorkoutSegment(distanceMeters: cooldownDistance, durationSeconds: nil, targetPaceSecondsPerKm: pace, label: "Cool-down"),
+            totalEstimatedDistanceMeters: distance,
+            totalEstimatedDurationSeconds: distance / 1_000 * pace
+        )
+    }
+
+    private func midPace(lower: Double?, upper: Double?) -> Double? {
+        switch (lower, upper) {
+        case let (lower?, upper?): return (lower + upper) / 2
+        case let (lower?, nil): return lower
+        case let (nil, upper?): return upper
+        default: return nil
+        }
     }
 
     private func protectedWorkoutType(_ responseType: WorkoutType, for scheduledType: WorkoutType) -> WorkoutType {
@@ -628,23 +722,52 @@ struct AICoachService: Sendable {
         profile: UserProfile,
         unitPreference: UnitPreference
     ) -> String {
-        let workoutContexts = workouts.map { workout in
+        let plan = workouts.first?.week?.plan
+        let planRace = plan?.targetRace.displayName ?? profile.goalRace.displayName
+        let goalTime = (plan?.goalTimeSeconds ?? profile.goalFinishTime).durationString
+        let selectedRunDays = preferredRunDayNames(for: profile)
+        let planLongRunDays = longRunDayNames(in: plan)
+        let recent = recentHistory.prefix(8).map { run in
+            let avgHR = run.averageHeartRate.map { "\(Int($0)) bpm" } ?? "n/a"
+            return "\(run.date.formatted(date: .abbreviated, time: .omitted)) | \(run.workoutType.displayName) | \(run.distanceMeters.distanceString(unit: unitPreference)) | pace \(run.averagePaceSecondsPerKm.paceString(unit: unitPreference)) | \(run.durationSeconds.durationString) | HR \(avgHR)"
+        }.joined(separator: "\n")
+        let workoutRows = workouts.map { workout in
+            let date = workout.scheduledDate.formatted(date: .abbreviated, time: .omitted)
+            let weekday = workout.scheduledDate.formatted(.dateTime.weekday(.abbreviated))
+            let distance = workout.targetDistanceMeters?.distanceString(unit: unitPreference) ?? "open"
+            let paceRange: String
+            if let range = workout.targetPaceRange {
+                paceRange = "\(range.lowerBound.paceString(unit: unitPreference))-\(range.upperBound.paceString(unit: unitPreference))"
+            } else {
+                paceRange = "none"
+            }
+            let intervals = workout.intervals.isEmpty
+                ? ""
+                : " | intervals \(workout.intervals.map { "\($0.repetitions)x \($0.distanceMeters?.distanceString(unit: unitPreference) ?? "open") rec \($0.recoverySeconds.durationString)" }.joined(separator: "; "))"
+            return """
+            \(workout.id.uuidString) | \(date) \(weekday) | week \(workout.week?.weekNumber ?? 0) \(workout.week?.phase.displayName ?? "Unknown") | \(workout.workoutType.displayName) | \(distance) | pace \(paceRange)\(intervals) | notes \(workout.notes ?? "none")
             """
-            Workout ID: \(workout.id.uuidString)
-            \(makeAdaptationContext(
-                scheduled: workout,
-                recentHistory: recentHistory,
-                profile: profile,
-                unitPreference: unitPreference
-            ))
-            """
-        }.joined(separator: "\n\n---\n\n")
+        }.joined(separator: "\n")
 
         return """
         Adapt these \(workouts.count) scheduled workouts as one coordinated plan update.
         Preserve the exact workout IDs so Stride can apply your response.
+        Keep output compact; Stride will build workout structures locally.
 
-        \(workoutContexts)
+        Athlete:
+        Target race: \(planRace)
+        Goal time: \(goalTime)
+        Fitness level: \(profile.fitnessLevel.displayName)
+        Weekly run days: \(profile.weeklyRunDays)
+        Selected running days: \(selectedRunDays)
+        Planned long-run days: \(planLongRunDays)
+        Unit preference for display: \(unitPreference.rawValue)
+
+        Recent completed runs:
+        \(recent.isEmpty ? "No recent completed runs." : recent)
+
+        Scheduled workouts:
+        \(workoutRows)
         """
     }
 

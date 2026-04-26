@@ -350,7 +350,7 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
     ) async throws -> String {
         let body = AnthropicRequest(
             model: model,
-            maxTokens: 8_000,
+            maxTokens: 3_000,
             messages: [.init(role: "user", content: makePlanAdaptationPrompt(adaptationContext: adaptationContext))],
             stream: true
         )
@@ -555,9 +555,7 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
         Return only valid JSON. Do not include markdown, prose before the JSON, code fences, or extra keys.
         Use this exact schema:
         {
-          "summary": [
-            "One short user-facing sentence describing a meaningful plan change"
-          ],
+          "summary": ["Short user-facing plan change"],
           "adaptations": [
             {
               "workout_id": "UUID copied exactly from the workout context",
@@ -565,42 +563,8 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
               "target_distance_meters": 5000,
               "target_pace_lower_bound": 330,
               "target_pace_upper_bound": 360,
-              "explanation": "One concise paragraph explaining why this adaptation is appropriate.",
-              "intervals": [],
-              "workout_structure": {
-                "warmup": {
-                  "distance_meters": 1000,
-                  "duration_seconds": null,
-                  "target_pace_seconds_per_km": 390,
-                  "label": "Warm-up"
-                },
-                "main_sets": [
-                  {
-                    "repetitions": 1,
-                    "work_segment": {
-                      "distance_meters": 3000,
-                      "duration_seconds": null,
-                      "target_pace_seconds_per_km": 330,
-                      "label": "Tempo"
-                    },
-                    "recovery_segment": {
-                      "distance_meters": null,
-                      "duration_seconds": null,
-                      "target_pace_seconds_per_km": null,
-                      "label": ""
-                    },
-                    "label": "Tempo Block"
-                  }
-                ],
-                "cooldown": {
-                  "distance_meters": 1000,
-                  "duration_seconds": null,
-                  "target_pace_seconds_per_km": 390,
-                  "label": "Cool-down"
-                },
-                "total_estimated_distance_meters": 5000,
-                "total_estimated_duration_seconds": 1800
-              }
+              "explanation": "One short sentence explaining the change.",
+              "intervals": []
             }
           ]
         }
@@ -611,6 +575,7 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
         - Make summary user-facing and specific, such as reduced volume, softened intensity, preserved long runs, or kept a workout unchanged.
         - Include exactly one adaptation for every workout_id in the context.
         - Copy each workout_id exactly.
+        - Keep explanations under 120 characters.
         - Choose workout_type from Easy, Tempo, Interval, or Long Run.
         - Do not move workouts to different dates or weekdays.
         - Respect the runner's selected running days and the existing long-run day.
@@ -621,7 +586,7 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
         - Keep target_distance_meters between 500 and 50000.
         - Keep pace values between 120 and 900 seconds per kilometer.
         - Include an empty intervals array unless workout_type is Interval.
-        - Include workout_structure for every adapted run.
+        - Do not include workout_structure; Stride will derive it locally.
         - Avoid medical diagnosis and avoid mentioning that you are an AI.
         - If an original workout should not change, return the same workout targets with an explanation.
         """
