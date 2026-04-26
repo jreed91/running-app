@@ -207,9 +207,11 @@ struct RunSummaryView: View {
     @ViewBuilder
     private var aiCoachSection: some View {
         if appSettings.aiInsightsEnabled {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text("AI COACH").font(.sectionHeader).foregroundStyle(.secondary)
+                    Label("AI COACH", systemImage: "sparkles")
+                        .font(.sectionHeader)
+                        .foregroundStyle(.secondary)
                     Spacer()
                     Button {
                         Task {
@@ -231,22 +233,54 @@ struct RunSummaryView: View {
                 }
 
                 if let aiInsight {
-                    Text(aiInsight.summary)
-                        .font(.bodyRegular)
-                        .foregroundStyle(.primary)
-                    VStack(alignment: .leading, spacing: 6) {
-                        ForEach(aiInsight.focusAreas, id: \.self) { suggestion in
-                            Label(suggestion, systemImage: "checkmark.circle")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                    HStack(spacing: 8) {
+                        Image(systemName: aiInsight.apiReady ? "checkmark.seal.fill" : "info.circle.fill")
+                            .foregroundStyle(aiInsight.apiReady ? .success : .secondary)
+                        Text(normalizedMarkdownText(aiInsight.headline))
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(aiInsight.apiReady ? .success : .secondary)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(.surfaceTertiary, in: Capsule())
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("Workout Summary", systemImage: "waveform.path.ecg")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        ForEach(markdownParagraphs(from: aiInsight.summary), id: \.self) { paragraph in
+                            Text(paragraph)
+                                .font(.bodyRegular)
+                                .foregroundStyle(.primary)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
-                    Text("Next: \(aiInsight.nextWorkoutSuggestion)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(aiInsight.headline)
-                        .font(.caption)
-                        .foregroundStyle(aiInsight.apiReady ? .success : .secondary)
+                    .padding()
+                    .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
+
+                    if !aiInsight.focusAreas.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Label("Focus Areas", systemImage: "target")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                            ForEach(aiInsight.focusAreas.map(normalizedMarkdownText), id: \.self) { suggestion in
+                                Label(suggestion, systemImage: "checkmark.circle.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label("Next Session", systemImage: "figure.run")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        Text(normalizedMarkdownText(aiInsight.nextWorkoutSuggestion))
+                            .font(.bodyRegular)
+                            .foregroundStyle(.primary)
+                    }
+                    .padding()
+                    .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
                 } else {
                     Text(hasAIKey
                          ? "Tap “Load Insights” to fetch AI coaching feedback for this workout."
@@ -258,6 +292,32 @@ struct RunSummaryView: View {
             .padding()
             .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
         }
+    }
+
+    private func markdownParagraphs(from text: String) -> [String] {
+        let cleanedLines = text
+            .split(separator: "\n")
+            .map { normalizedMarkdownText(String($0)) }
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        return cleanedLines.isEmpty ? [normalizedMarkdownText(text)] : cleanedLines
+    }
+
+    private func normalizedMarkdownText(_ text: String) -> String {
+        var output = text
+        let replacements = ["**", "__", "`", "###", "##", "#", ">", "_"]
+        replacements.forEach { output = output.replacingOccurrences(of: $0, with: "") }
+
+        let prefixes = ["- ", "* ", "+ "]
+        for prefix in prefixes where output.hasPrefix(prefix) {
+            output.removeFirst(prefix.count)
+        }
+
+        if let range = output.range(of: #"^\d+\.\s+"#, options: .regularExpression) {
+            output.removeSubrange(range)
+        }
+
+        return output.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     @MainActor
