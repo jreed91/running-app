@@ -116,11 +116,6 @@ struct ProgressDashboardView: View {
             selectedHRDate = nil
             selectedElevationDate = nil
             selectedVO2Date = nil
-            progressAppeared = false
-            Task {
-                try? await Task.sleep(for: .milliseconds(30))
-                progressAppeared = true
-            }
         }
     }
 
