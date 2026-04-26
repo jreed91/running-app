@@ -6,7 +6,8 @@ protocol AIIntegrationServiceProtocol: Sendable {
         apiKey: String,
         model: String,
         workoutSummary: String,
-        focusAreas: [String]
+        focusAreas: [String],
+        workoutDetails: String
     ) async throws -> String
 }
 
@@ -27,18 +28,37 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
         apiKey: String,
         model: String,
         workoutSummary: String,
-        focusAreas: [String]
+        focusAreas: [String],
+        workoutDetails: String
     ) async throws -> String {
         switch provider {
         case .openAI:
-            return try await requestOpenAI(apiKey: apiKey, model: model, workoutSummary: workoutSummary, focusAreas: focusAreas)
+            return try await requestOpenAI(
+                apiKey: apiKey,
+                model: model,
+                workoutSummary: workoutSummary,
+                focusAreas: focusAreas,
+                workoutDetails: workoutDetails
+            )
         case .anthropic:
-            return try await requestAnthropic(apiKey: apiKey, model: model, workoutSummary: workoutSummary, focusAreas: focusAreas)
+            return try await requestAnthropic(
+                apiKey: apiKey,
+                model: model,
+                workoutSummary: workoutSummary,
+                focusAreas: focusAreas,
+                workoutDetails: workoutDetails
+            )
         }
     }
 
-    private func requestOpenAI(apiKey: String, model: String, workoutSummary: String, focusAreas: [String]) async throws -> String {
-        let prompt = makePrompt(workoutSummary: workoutSummary, focusAreas: focusAreas)
+    private func requestOpenAI(
+        apiKey: String,
+        model: String,
+        workoutSummary: String,
+        focusAreas: [String],
+        workoutDetails: String
+    ) async throws -> String {
+        let prompt = makePrompt(workoutSummary: workoutSummary, focusAreas: focusAreas, workoutDetails: workoutDetails)
         let body = OpenAIRequest(
             model: model,
             messages: [
@@ -66,8 +86,14 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
         return message
     }
 
-    private func requestAnthropic(apiKey: String, model: String, workoutSummary: String, focusAreas: [String]) async throws -> String {
-        let prompt = makePrompt(workoutSummary: workoutSummary, focusAreas: focusAreas)
+    private func requestAnthropic(
+        apiKey: String,
+        model: String,
+        workoutSummary: String,
+        focusAreas: [String],
+        workoutDetails: String
+    ) async throws -> String {
+        let prompt = makePrompt(workoutSummary: workoutSummary, focusAreas: focusAreas, workoutDetails: workoutDetails)
         let body = AnthropicRequest(
             model: model,
             maxTokens: 350,
@@ -96,13 +122,16 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
         return text
     }
 
-    private func makePrompt(workoutSummary: String, focusAreas: [String]) -> String {
+    private func makePrompt(workoutSummary: String, focusAreas: [String], workoutDetails: String) -> String {
         let bullets = focusAreas.map { "- \($0)" }.joined(separator: "\n")
         return """
         Analyze this run and provide concise coaching.
 
         Workout summary:
         \(workoutSummary)
+
+        Workout details:
+        \(workoutDetails)
 
         Focus areas:
         \(bullets)

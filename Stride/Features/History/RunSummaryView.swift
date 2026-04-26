@@ -227,7 +227,7 @@ struct RunSummaryView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
-                    .disabled(isLoadingAIInsight)
+                    .disabled(isLoadingAIInsight || !hasAIKey)
                 }
 
                 if let aiInsight {
@@ -248,7 +248,9 @@ struct RunSummaryView: View {
                         .font(.caption)
                         .foregroundStyle(aiInsight.apiReady ? .success : .secondary)
                 } else {
-                    Text("Tap “Load Insights” to fetch AI coaching feedback for this workout.")
+                    Text(hasAIKey
+                         ? "Tap “Load Insights” to fetch AI coaching feedback for this workout."
+                         : "Add your AI API key in Settings to load cloud AI workout analysis.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -261,6 +263,10 @@ struct RunSummaryView: View {
     @MainActor
     private func loadAIInsight() async {
         guard !isLoadingAIInsight else { return }
+        guard hasAIKey else {
+            aiInsight = nil
+            return
+        }
         isLoadingAIInsight = true
         defer { isLoadingAIInsight = false }
 
@@ -273,6 +279,10 @@ struct RunSummaryView: View {
             apiKey: appSettings.aiAPIKey,
             modelOverride: appSettings.aiModelOverride
         )
+    }
+
+    private var hasAIKey: Bool {
+        !appSettings.aiAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     // MARK: Split pace chart
