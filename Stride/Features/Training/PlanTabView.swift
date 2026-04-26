@@ -25,20 +25,6 @@ struct PlanTabView: View {
                         VStack(spacing: 20) {
                             PlanOverviewCard(plan: plan)
 
-                            NavigationLink {
-                                PlanDetailView(plan: plan)
-                            } label: {
-                                HStack {
-                                    Label("Manage Plan", systemImage: "slider.horizontal.3")
-                                    Spacer()
-                                    StrideIcon(name: .chevronRight, size: 12,
-                                               color: Color.secondary.opacity(0.5), strokeWeight: 2)
-                                }
-                                .padding()
-                                .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
-                                .foregroundStyle(.primary)
-                            }
-
                             RouteGeniusCard {
                                 showRouteGenius = true
                             }
