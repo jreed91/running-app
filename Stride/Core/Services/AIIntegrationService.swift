@@ -10,6 +10,16 @@ protocol AIIntegrationServiceProtocol: Sendable {
         workoutDetails: String
     ) async throws -> String
 
+    func generateCoachingNarrativeStreaming(
+        provider: AIProvider,
+        apiKey: String,
+        model: String,
+        workoutSummary: String,
+        focusAreas: [String],
+        workoutDetails: String,
+        onChunk: @escaping @Sendable (String) -> Void
+    ) async throws -> String
+
     func generateWorkoutAdaptation(
         provider: AIProvider,
         apiKey: String,
@@ -62,6 +72,37 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
                 workoutSummary: workoutSummary,
                 focusAreas: focusAreas,
                 workoutDetails: workoutDetails
+            )
+        }
+    }
+
+    func generateCoachingNarrativeStreaming(
+        provider: AIProvider,
+        apiKey: String,
+        model: String,
+        workoutSummary: String,
+        focusAreas: [String],
+        workoutDetails: String,
+        onChunk: @escaping @Sendable (String) -> Void
+    ) async throws -> String {
+        switch provider {
+        case .openAI:
+            return try await requestOpenAICoachingNarrativeStream(
+                apiKey: apiKey,
+                model: model,
+                workoutSummary: workoutSummary,
+                focusAreas: focusAreas,
+                workoutDetails: workoutDetails,
+                onChunk: onChunk
+            )
+        case .anthropic:
+            return try await requestAnthropicCoachingNarrativeStream(
+                apiKey: apiKey,
+                model: model,
+                workoutSummary: workoutSummary,
+                focusAreas: focusAreas,
+                workoutDetails: workoutDetails,
+                onChunk: onChunk
             )
         }
     }
@@ -183,6 +224,186 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { throw AIIntegrationError.emptyMessage }
         return text
+    }
+
+    private func requestOpenAICoachingNarrativeStream(
+        apiKey: String,
+        model: String,
+        workoutSummary: String,
+        focusAreas: [String],
+        workoutDetails: String,
+        onChunk: @escaping @Sendable (String) -> Void
+    ) async throws -> String {
+        let prompt = makePrompt(workoutSummary: workoutSummary, focusAreas: focusAreas, workoutDetails: workoutDetails)
+        let body = OpenAIRequest(
+            model: model,
+            messages: [
+                .init(role: "system", content: "You are a running coach. Return only valid JSON that matches the requested schema."),
+                .init(role: "user", content: prompt)
+            ],
+            temperature: 0.3,
+            responseFormat: .init(type: "json_object"),
+            stream: true
+        )
+
+        var request = URLRequest(url: URL(string: "https://api.openai.com/v1/chat/completions")!)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.httpBody = try JSONEncoder().encode(body)
+
+        var message = ""
+        var responseData = Data()
+        var response: URLResponse?
+        var didStorePulseRequest = false
+
+        do {
+            let (bytes, urlResponse) = try await session.bytes(for: request, delegate: nil)
+            response = urlResponse
+            guard let http = urlResponse as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+                didStorePulseRequest = true
+                PulseIntegrationService.storeCompletedNetworkRequest(
+                    request,
+                    response: urlResponse,
+                    error: AIIntegrationError.invalidResponse,
+                    data: responseData,
+                    label: "AI",
+                    taskDescription: "OpenAI coaching narrative stream"
+                )
+                throw AIIntegrationError.invalidResponse
+            }
+
+            for try await line in bytes.lines {
+                responseData.append(Data((line + "\n").utf8))
+                guard line.hasPrefix("data:") else { continue }
+                let payload = line
+                    .dropFirst("data:".count)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if payload == "[DONE]" { break }
+                guard let data = payload.data(using: .utf8),
+                      let chunk = try? JSONDecoder().decode(OpenAIStreamChunk.self, from: data),
+                      let text = chunk.choices.first?.delta.content,
+                      !text.isEmpty else {
+                    continue
+                }
+                message += text
+                onChunk(text)
+            }
+
+            PulseIntegrationService.storeCompletedNetworkRequest(
+                request,
+                response: urlResponse,
+                error: nil,
+                data: responseData,
+                label: "AI",
+                taskDescription: "OpenAI coaching narrative stream"
+            )
+            didStorePulseRequest = true
+        } catch {
+            if !didStorePulseRequest {
+                PulseIntegrationService.storeCompletedNetworkRequest(
+                    request,
+                    response: response,
+                    error: error,
+                    data: responseData,
+                    label: "AI",
+                    taskDescription: "OpenAI coaching narrative stream"
+                )
+            }
+            throw error
+        }
+
+        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw AIIntegrationError.emptyMessage }
+        return trimmed
+    }
+
+    private func requestAnthropicCoachingNarrativeStream(
+        apiKey: String,
+        model: String,
+        workoutSummary: String,
+        focusAreas: [String],
+        workoutDetails: String,
+        onChunk: @escaping @Sendable (String) -> Void
+    ) async throws -> String {
+        let prompt = makePrompt(workoutSummary: workoutSummary, focusAreas: focusAreas, workoutDetails: workoutDetails)
+        let body = AnthropicRequest(
+            model: model,
+            maxTokens: 700,
+            messages: [.init(role: "user", content: prompt)],
+            stream: true
+        )
+
+        var request = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        request.httpBody = try JSONEncoder().encode(body)
+
+        var message = ""
+        var responseData = Data()
+        var response: URLResponse?
+        var didStorePulseRequest = false
+
+        do {
+            let (bytes, urlResponse) = try await session.bytes(for: request, delegate: nil)
+            response = urlResponse
+            guard let http = urlResponse as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+                didStorePulseRequest = true
+                PulseIntegrationService.storeCompletedNetworkRequest(
+                    request,
+                    response: urlResponse,
+                    error: AIIntegrationError.invalidResponse,
+                    data: responseData,
+                    label: "AI",
+                    taskDescription: "Anthropic coaching narrative stream"
+                )
+                throw AIIntegrationError.invalidResponse
+            }
+
+            for try await line in bytes.lines {
+                responseData.append(Data((line + "\n").utf8))
+                guard line.hasPrefix("data:") else { continue }
+                let payload = line
+                    .dropFirst("data:".count)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                guard let data = payload.data(using: .utf8),
+                      let event = try? JSONDecoder().decode(AnthropicStreamEvent.self, from: data),
+                      let text = event.delta?.text,
+                      !text.isEmpty else {
+                    continue
+                }
+                message += text
+                onChunk(text)
+            }
+
+            PulseIntegrationService.storeCompletedNetworkRequest(
+                request,
+                response: urlResponse,
+                error: nil,
+                data: responseData,
+                label: "AI",
+                taskDescription: "Anthropic coaching narrative stream"
+            )
+            didStorePulseRequest = true
+        } catch {
+            if !didStorePulseRequest {
+                PulseIntegrationService.storeCompletedNetworkRequest(
+                    request,
+                    response: response,
+                    error: error,
+                    data: responseData,
+                    label: "AI",
+                    taskDescription: "Anthropic coaching narrative stream"
+                )
+            }
+            throw error
+        }
+
+        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw AIIntegrationError.emptyMessage }
+        return trimmed
     }
 
     private func requestOpenAIAdaptation(

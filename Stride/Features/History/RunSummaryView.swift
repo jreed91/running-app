@@ -21,6 +21,7 @@ struct RunSummaryView: View {
     @State private var showDeleteConfirmation = false
     @State private var aiInsight: AICoachInsight?
     @State private var isLoadingAIInsight = false
+    @State private var aiStreamBuffer = ""
 
     private var matchedScheduled: ScheduledWorkout? {
         scheduledWorkouts.first { $0.completedWorkout?.id == workout.id }
@@ -209,7 +210,7 @@ struct RunSummaryView: View {
         if appSettings.aiInsightsEnabled {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Label("AI COACH", systemImage: "sparkles")
+                    Label(“AI COACH”, systemImage: “sparkles”)
                         .font(.sectionHeader)
                         .foregroundStyle(.secondary)
                     Spacer()
@@ -218,23 +219,19 @@ struct RunSummaryView: View {
                             await loadAIInsight()
                         }
                     } label: {
-                        if isLoadingAIInsight {
-                            ProgressView()
-                                .controlSize(.small)
-                                .frame(width: 16, height: 16)
-                        } else {
-                            Label(aiInsight == nil ? "Load Insights" : "Refresh", systemImage: "sparkles")
-                                .font(.caption.weight(.semibold))
-                        }
+                        Label(aiInsight == nil ? “Load Insights” : “Refresh”, systemImage: “sparkles”)
+                            .font(.caption.weight(.semibold))
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
                     .disabled(isLoadingAIInsight || !hasAIKey)
                 }
 
-                if let aiInsight {
+                if isLoadingAIInsight {
+                    aiCoachSkeletonSection
+                } else if let aiInsight {
                     HStack(spacing: 8) {
-                        Image(systemName: aiInsight.apiReady ? "checkmark.seal.fill" : "info.circle.fill")
+                        Image(systemName: aiInsight.apiReady ? “checkmark.seal.fill” : “info.circle.fill”)
                             .foregroundStyle(aiInsight.apiReady ? .success : .secondary)
                         Text(normalizedMarkdownText(aiInsight.headline))
                             .font(.caption.weight(.semibold))
@@ -245,7 +242,7 @@ struct RunSummaryView: View {
                     .background(.surfaceTertiary, in: Capsule())
 
                     VStack(alignment: .leading, spacing: 8) {
-                        Label("Key Takeaway", systemImage: "waveform.path.ecg")
+                        Label(“Key Takeaway”, systemImage: “waveform.path.ecg”)
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
                         Text(normalizedMarkdownText(aiInsight.summary))
@@ -258,7 +255,7 @@ struct RunSummaryView: View {
 
                     if !aiInsight.actionItems.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
-                            Label("Action Plan", systemImage: "checklist")
+                            Label(“Action Plan”, systemImage: “checklist”)
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(.secondary)
                             ForEach(aiInsight.actionItems, id: \.self) { action in
@@ -267,11 +264,11 @@ struct RunSummaryView: View {
                         }
                     } else if !aiInsight.focusAreas.isEmpty {
                         VStack(alignment: .leading, spacing: 6) {
-                            Label("Action Plan", systemImage: "checklist")
+                            Label(“Action Plan”, systemImage: “checklist”)
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(.secondary)
                             ForEach(aiInsight.focusAreas.map(normalizedMarkdownText), id: \.self) { suggestion in
-                                Label(suggestion, systemImage: "checkmark.circle.fill")
+                                Label(suggestion, systemImage: “checkmark.circle.fill”)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -279,7 +276,7 @@ struct RunSummaryView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 6) {
-                        Label("Next Session", systemImage: "figure.run")
+                        Label(“Next Session”, systemImage: “figure.run”)
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
                         Text(normalizedMarkdownText(aiInsight.nextWorkoutSuggestion))
@@ -297,14 +294,73 @@ struct RunSummaryView: View {
                     .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
                 } else {
                     Text(hasAIKey
-                         ? "Tap “Load Insights” to fetch AI coaching feedback for this workout."
-                         : "Add your AI API key in Settings to load cloud AI workout analysis.")
+                         ? “Tap \u{201C}Load Insights\u{201D} to fetch AI coaching feedback for this workout.”
+                         : “Add your AI API key in Settings to load cloud AI workout analysis.”)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
             .padding()
             .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
+        }
+    }
+
+    // MARK: Skeleton loading
+
+    private var aiCoachSkeletonSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Headline capsule skeleton
+            AIInsightSkeletonShape()
+                .frame(width: 180, height: 32)
+                .clipShape(Capsule())
+
+            // Key Takeaway skeleton
+            VStack(alignment: .leading, spacing: 8) {
+                AIInsightSkeletonShape().frame(width: 110, height: 11)
+                AIInsightSkeletonShape().frame(maxWidth: .infinity, minHeight: 14, maxHeight: 14)
+                AIInsightSkeletonShape().frame(maxWidth: 260, minHeight: 14, maxHeight: 14)
+            }
+            .padding()
+            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
+
+            // Action Plan skeleton
+            VStack(alignment: .leading, spacing: 8) {
+                AIInsightSkeletonShape().frame(width: 90, height: 11)
+                ForEach(0..<3, id: \.self) { _ in
+                    HStack(alignment: .top, spacing: 10) {
+                        AIInsightSkeletonShape().frame(width: 14, height: 14).clipShape(Circle())
+                        VStack(alignment: .leading, spacing: 6) {
+                            AIInsightSkeletonShape().frame(width: 140, height: 12)
+                            AIInsightSkeletonShape().frame(maxWidth: .infinity, minHeight: 11, maxHeight: 11)
+                        }
+                    }
+                    .padding(10)
+                    .background(.surfaceTertiary, in: RoundedRectangle(cornerRadius: 10))
+                }
+            }
+
+            // Next Session skeleton
+            VStack(alignment: .leading, spacing: 6) {
+                AIInsightSkeletonShape().frame(width: 90, height: 11)
+                AIInsightSkeletonShape().frame(maxWidth: .infinity, minHeight: 14, maxHeight: 14)
+                AIInsightSkeletonShape().frame(maxWidth: 200, minHeight: 11, maxHeight: 11)
+            }
+            .padding()
+            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
+        }
+    }
+
+    private struct AIInsightSkeletonShape: View {
+        @State private var opacity: Double = 0.12
+
+        var body: some View {
+            RoundedRectangle(cornerRadius: 4)
+                .fill(Color.secondary.opacity(opacity))
+                .onAppear {
+                    withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                        opacity = 0.28
+                    }
+                }
         }
     }
 
@@ -386,7 +442,11 @@ struct RunSummaryView: View {
             return
         }
         isLoadingAIInsight = true
-        defer { isLoadingAIInsight = false }
+        aiStreamBuffer = ""
+        defer {
+            isLoadingAIInsight = false
+            aiStreamBuffer = ""
+        }
 
         let historySlice = Array(recentHistory.prefix(8))
         aiInsight = await container.aiCoachService.evaluateWithProvider(
@@ -396,8 +456,18 @@ struct RunSummaryView: View {
             provider: appSettings.aiProvider,
             apiKey: appSettings.aiAPIKey,
             modelOverride: appSettings.aiModelOverride,
-            unitPreference: appSettings.unitPreference
+            unitPreference: appSettings.unitPreference,
+            onChunk: { chunk in
+                Task { @MainActor in
+                    appendInsightStreamChunk(chunk)
+                }
+            }
         )
+    }
+
+    @MainActor
+    private func appendInsightStreamChunk(_ chunk: String) {
+        aiStreamBuffer += chunk
     }
 
     private var hasAIKey: Bool {
