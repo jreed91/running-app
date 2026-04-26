@@ -62,10 +62,11 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
         let body = OpenAIRequest(
             model: model,
             messages: [
-                .init(role: "system", content: "You are a running coach. Keep advice practical and concise."),
+                .init(role: "system", content: "You are a running coach. Return only valid JSON that matches the requested schema."),
                 .init(role: "user", content: prompt)
             ],
-            temperature: 0.3
+            temperature: 0.3,
+            responseFormat: .init(type: "json_object")
         )
 
         var request = URLRequest(url: URL(string: "https://api.openai.com/v1/chat/completions")!)
@@ -96,7 +97,7 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
         let prompt = makePrompt(workoutSummary: workoutSummary, focusAreas: focusAreas, workoutDetails: workoutDetails)
         let body = AnthropicRequest(
             model: model,
-            maxTokens: 350,
+            maxTokens: 700,
             messages: [.init(role: "user", content: prompt)]
         )
 
@@ -125,7 +126,7 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
     private func makePrompt(workoutSummary: String, focusAreas: [String], workoutDetails: String) -> String {
         let bullets = focusAreas.map { "- \($0)" }.joined(separator: "\n")
         return """
-        Analyze this run and provide concise coaching.
+        Analyze this run and provide concise, practical coaching.
 
         Workout summary:
         \(workoutSummary)
@@ -136,10 +137,29 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
         Focus areas:
         \(bullets)
 
-        Return:
-        1) One paragraph summary.
-        2) 3 actionable suggestions.
-        3) A recommendation for the next workout.
+        Return only valid JSON. Do not include markdown, prose before the JSON, code fences, or extra keys.
+        Use this exact schema:
+        {
+          "headline": "Short coaching headline, maximum 8 words",
+          "summary": "One plain-language sentence explaining the main takeaway",
+          "action_items": [
+            {
+              "title": "Specific action, maximum 6 words",
+              "detail": "One sentence explaining what to do and why",
+              "priority": "High|Medium|Low"
+            }
+          ],
+          "next_workout": {
+            "title": "Specific next workout recommendation",
+            "rationale": "One sentence explaining why this should come next"
+          }
+        }
+
+        Rules:
+        - Include exactly 3 action_items.
+        - Make every action concrete enough to do in the next 7 days.
+        - Avoid medical diagnosis and avoid mentioning that you are an AI.
+        - Keep all values as strings.
         """
     }
 }
@@ -150,9 +170,21 @@ private struct OpenAIRequest: Encodable {
         let content: String
     }
 
+    struct ResponseFormat: Encodable {
+        let type: String
+    }
+
     let model: String
     let messages: [Message]
     let temperature: Double
+    let responseFormat: ResponseFormat
+
+    enum CodingKeys: String, CodingKey {
+        case model
+        case messages
+        case temperature
+        case responseFormat = "response_format"
+    }
 }
 
 private struct OpenAIResponse: Decodable {

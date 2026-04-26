@@ -245,22 +245,29 @@ struct RunSummaryView: View {
                     .background(.surfaceTertiary, in: Capsule())
 
                     VStack(alignment: .leading, spacing: 8) {
-                        Label("Workout Summary", systemImage: "waveform.path.ecg")
+                        Label("Key Takeaway", systemImage: "waveform.path.ecg")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
-                        ForEach(markdownParagraphs(from: aiInsight.summary), id: \.self) { paragraph in
-                            Text(paragraph)
-                                .font(.bodyRegular)
-                                .foregroundStyle(.primary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
+                        Text(normalizedMarkdownText(aiInsight.summary))
+                            .font(.bodyRegular)
+                            .foregroundStyle(.primary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     .padding()
                     .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
 
-                    if !aiInsight.focusAreas.isEmpty {
+                    if !aiInsight.actionItems.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label("Action Plan", systemImage: "checklist")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                            ForEach(aiInsight.actionItems, id: \.self) { action in
+                                AIActionItemRow(action: action)
+                            }
+                        }
+                    } else if !aiInsight.focusAreas.isEmpty {
                         VStack(alignment: .leading, spacing: 6) {
-                            Label("Focus Areas", systemImage: "target")
+                            Label("Action Plan", systemImage: "checklist")
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(.secondary)
                             ForEach(aiInsight.focusAreas.map(normalizedMarkdownText), id: \.self) { suggestion in
@@ -278,6 +285,13 @@ struct RunSummaryView: View {
                         Text(normalizedMarkdownText(aiInsight.nextWorkoutSuggestion))
                             .font(.bodyRegular)
                             .foregroundStyle(.primary)
+                        if let rationale = aiInsight.nextWorkoutRationale,
+                           !rationale.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            Text(normalizedMarkdownText(rationale))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                     .padding()
                     .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
@@ -292,15 +306,6 @@ struct RunSummaryView: View {
             .padding()
             .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
         }
-    }
-
-    private func markdownParagraphs(from text: String) -> [String] {
-        let cleanedLines = text
-            .split(separator: "\n")
-            .map { normalizedMarkdownText(String($0)) }
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        return cleanedLines.isEmpty ? [normalizedMarkdownText(text)] : cleanedLines
     }
 
     private func normalizedMarkdownText(_ text: String) -> String {
@@ -318,6 +323,59 @@ struct RunSummaryView: View {
         }
 
         return output.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private struct AIActionItemRow: View {
+        let action: AICoachActionItem
+
+        var body: some View {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(priorityColor)
+                    .font(.caption)
+                    .padding(.top, 2)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Text(cleaned(action.title))
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.primary)
+                        Text(cleaned(action.priority).uppercased())
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(priorityColor)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(priorityColor.opacity(0.12), in: Capsule())
+                    }
+
+                    Text(cleaned(action.detail))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(10)
+            .background(.surfaceTertiary, in: RoundedRectangle(cornerRadius: 10))
+        }
+
+        private var priorityColor: Color {
+            switch action.priority.lowercased() {
+            case "high":
+                return .warning
+            case "low":
+                return .secondary
+            default:
+                return .success
+            }
+        }
+
+        private func cleaned(_ text: String) -> String {
+            var output = text
+            ["**", "__", "`", "###", "##", "#", ">", "_"].forEach {
+                output = output.replacingOccurrences(of: $0, with: "")
+            }
+            return output.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
     }
 
     @MainActor

@@ -3,9 +3,36 @@ import Foundation
 struct AICoachInsight: Sendable {
     let headline: String
     let summary: String
+    let actionItems: [AICoachActionItem]
     let focusAreas: [String]
     let nextWorkoutSuggestion: String
+    let nextWorkoutRationale: String?
     let apiReady: Bool
+}
+
+struct AICoachActionItem: Codable, Hashable, Sendable {
+    let title: String
+    let detail: String
+    let priority: String
+}
+
+struct AICoachStructuredResponse: Codable, Sendable {
+    struct NextWorkout: Codable, Sendable {
+        let title: String
+        let rationale: String
+    }
+
+    let headline: String
+    let summary: String
+    let actionItems: [AICoachActionItem]
+    let nextWorkout: NextWorkout
+
+    enum CodingKeys: String, CodingKey {
+        case headline
+        case summary
+        case actionItems = "action_items"
+        case nextWorkout = "next_workout"
+    }
 }
 
 struct AICoachService: Sendable {
@@ -13,22 +40,6 @@ struct AICoachService: Sendable {
 
     init(integrationService: AIIntegrationServiceProtocol = AIIntegrationService()) {
         self.integrationService = integrationService
-    }
-
-    func evaluate(
-        workout: RunWorkout,
-        recentHistory: [RunWorkout],
-        profile: UserProfile?,
-        apiKey: String,
-        unitPreference: UnitPreference = .metric
-    ) -> AICoachInsight {
-        evaluateBaseInsight(
-            workout: workout,
-            recentHistory: recentHistory,
-            profile: profile,
-            apiKey: apiKey,
-            unitPreference: unitPreference
-        )
     }
 
     @MainActor
@@ -46,17 +57,18 @@ struct AICoachService: Sendable {
             return AICoachInsight(
                 headline: "AI Key Required",
                 summary: "Add an AI API key in Settings to load cloud coaching insights.",
+                actionItems: [],
                 focusAreas: [],
                 nextWorkoutSuggestion: "Set your key, then reload insights.",
+                nextWorkoutRationale: nil,
                 apiReady: false
             )
         }
 
-        let base = evaluateBaseInsight(
+        let context = makePromptContext(
             workout: workout,
             recentHistory: recentHistory,
             profile: profile,
-            apiKey: trimmedKey,
             unitPreference: unitPreference
         )
 
@@ -69,8 +81,8 @@ struct AICoachService: Sendable {
                 provider: provider,
                 apiKey: trimmedKey,
                 model: selectedModel,
-                workoutSummary: base.summary,
-                focusAreas: base.focusAreas,
+                workoutSummary: context.summary,
+                focusAreas: context.focusAreas,
                 workoutDetails: makeWorkoutDetails(
                     workout: workout,
                     recentHistory: recentHistory,
@@ -79,25 +91,75 @@ struct AICoachService: Sendable {
                 )
             )
 
+            guard let structured = Self.parseStructuredResponse(narrative) else {
+                return unavailableInsight(reason: "The AI response was not in the structured format Stride needs to display.")
+            }
+
             return AICoachInsight(
-                headline: "\(provider.displayName) Analysis",
-                summary: narrative,
-                focusAreas: base.focusAreas,
-                nextWorkoutSuggestion: base.nextWorkoutSuggestion,
+                headline: structured.headline.isEmpty ? "\(provider.displayName) Analysis" : structured.headline,
+                summary: structured.summary,
+                actionItems: Array(structured.actionItems.prefix(3)),
+                focusAreas: structured.actionItems.map(\.title),
+                nextWorkoutSuggestion: structured.nextWorkout.title,
+                nextWorkoutRationale: structured.nextWorkout.rationale,
                 apiReady: true
             )
         } catch {
-            return base
+            return unavailableInsight(reason: "Stride could not load structured AI insights. Check your API key, model, and network connection, then try again.")
         }
     }
 
-    private func evaluateBaseInsight(
+    static func parseStructuredResponse(_ text: String) -> AICoachStructuredResponse? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let candidates = [
+            trimmed,
+            extractFencedJSON(from: trimmed),
+            extractJSONObject(from: trimmed)
+        ].compactMap(\.self)
+
+        let decoder = JSONDecoder()
+        for candidate in candidates {
+            guard let data = candidate.data(using: .utf8),
+                  let decoded = try? decoder.decode(AICoachStructuredResponse.self, from: data) else {
+                continue
+            }
+
+            let hasRequiredContent = !decoded.summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && !decoded.nextWorkout.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && !decoded.actionItems.isEmpty
+            if hasRequiredContent {
+                return decoded
+            }
+        }
+
+        return nil
+    }
+
+    private static func extractFencedJSON(from text: String) -> String? {
+        guard let opening = text.range(of: "```") else { return nil }
+        let afterOpening = text[opening.upperBound...]
+        let contentStart = afterOpening.hasPrefix("json")
+            ? afterOpening.dropFirst("json".count)
+            : Substring(afterOpening)
+        guard let closing = contentStart.range(of: "```") else { return nil }
+        return String(contentStart[..<closing.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func extractJSONObject(from text: String) -> String? {
+        guard let start = text.firstIndex(of: "{"),
+              let end = text.lastIndex(of: "}"),
+              start < end else {
+            return nil
+        }
+        return String(text[start...end])
+    }
+
+    private func makePromptContext(
         workout: RunWorkout,
         recentHistory: [RunWorkout],
         profile: UserProfile?,
-        apiKey: String,
         unitPreference: UnitPreference
-    ) -> AICoachInsight {
+    ) -> (summary: String, focusAreas: [String]) {
         let drift = paceDriftPercent(for: workout)
         let hrDrift = heartRateDrift(for: workout)
         let qualityRuns = recentHistory.filter { $0.workoutType.isQualitySession }
@@ -140,33 +202,22 @@ struct AICoachService: Sendable {
         }
 
         let raceContext = profile.map { "Goal: \($0.goalRace.displayName)." } ?? ""
-        let apiReady = !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        let headline = apiReady ? "AI Coach Ready" : "On-device Coaching"
-
-        let nextWorkout: String
-        switch workout.workoutType {
-        case .interval, .tempo:
-            nextWorkout = "Next session should be easy (30–50 min) with low aerobic effort."
-        case .longRun:
-            nextWorkout = "Plan a short recovery run or rest day before quality intensity."
-        default:
-            nextWorkout = "Progress with one controlled quality session in 48–72 hours."
-        }
-
-        let summaryPrefix = apiReady
-            ? "Using your key, Stride can enrich this with deeper AI analysis."
-            : "Add an AI key in Settings to unlock deeper personalized explanations."
-
-        let summary = ([summaryPrefix, raceContext] + summaryBits)
+        let summary = ([raceContext] + summaryBits)
             .filter { !$0.isEmpty }
             .joined(separator: " ")
 
-        return AICoachInsight(
-            headline: headline,
-            summary: summary,
-            focusAreas: Array(focus.prefix(3)),
-            nextWorkoutSuggestion: nextWorkout,
-            apiReady: apiReady
+        return (summary: summary.isEmpty ? "No local summary available." : summary, focusAreas: Array(focus.prefix(3)))
+    }
+
+    private func unavailableInsight(reason: String) -> AICoachInsight {
+        AICoachInsight(
+            headline: "AI Insight Unavailable",
+            summary: reason,
+            actionItems: [],
+            focusAreas: [],
+            nextWorkoutSuggestion: "Try refreshing structured AI insights again.",
+            nextWorkoutRationale: nil,
+            apiReady: false
         )
     }
 
