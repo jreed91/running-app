@@ -7,6 +7,7 @@ final class TrainingPlan {
 
     var id: UUID = UUID()
     /// Raw-backed storage for `targetRace` to keep CloudKit fields primitive.
+    @Attribute(originalName: "targetRace")
     var targetRaceRaw: String = RaceType.fiveK.rawValue
     var goalTimeSeconds: Double = 0
     var startDate: Date = Date()

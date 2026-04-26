@@ -8,8 +8,10 @@ final class ScheduledWorkout {
     var id: UUID = UUID()
     var scheduledDate: Date = Date()
     /// Raw-backed storage for `workoutType` to keep CloudKit fields primitive.
+    @Attribute(originalName: "workoutType")
     var workoutTypeRaw: String = WorkoutType.easy.rawValue
     /// Raw-backed storage for `workoutLocation` to keep CloudKit fields primitive.
+    @Attribute(originalName: "workoutLocation")
     var workoutLocationRaw: String = WorkoutLocation.outdoor.rawValue
     var targetDistanceMeters: Double?
     /// Lower bound of target pace range in seconds/km.
