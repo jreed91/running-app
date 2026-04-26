@@ -8,12 +8,15 @@ final class UserProfile {
     var id: UUID = UUID()
     var name: String = ""
     /// Raw-backed storage for `goalRace` to keep CloudKit fields primitive.
+    @Attribute(originalName: "goalRace")
     var goalRaceRaw: String = RaceType.fiveK.rawValue
     var goalFinishTime: TimeInterval = 0      // seconds
     var weeklyRunDays: Int = 3
     /// Raw-backed storage for `fitnessLevel` to keep CloudKit fields primitive.
+    @Attribute(originalName: "fitnessLevel")
     var fitnessLevelRaw: String = FitnessLevel.beginner.rawValue
     /// Raw-backed storage for `gender` to keep CloudKit fields primitive.
+    @Attribute(originalName: "gender")
     var genderRaw: String = Gender.preferNotToShare.rawValue
     var currentEstimated5KTimeSeconds: Double?
     /// JSON-encoded `[Int]` backing store for preferred run weekdays.

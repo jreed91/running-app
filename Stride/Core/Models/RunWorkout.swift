@@ -14,8 +14,10 @@ final class RunWorkout {
     var maxHeartRate: Double?
     var elevationGainMeters: Double?
     /// Raw-backed storage for `workoutType` to keep CloudKit fields primitive.
+    @Attribute(originalName: "workoutType")
     var workoutTypeRaw: String = WorkoutType.easy.rawValue
     /// Raw-backed storage for `workoutLocation` to keep CloudKit fields primitive.
+    @Attribute(originalName: "workoutLocation")
     var workoutLocationRaw: String = WorkoutLocation.outdoor.rawValue
     var notes: String?
 

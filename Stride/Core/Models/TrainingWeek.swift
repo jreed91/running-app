@@ -10,6 +10,7 @@ final class TrainingWeek {
     var startDate: Date = Date()
     var endDate: Date = Date()
     /// Raw-backed storage for `phase` to keep CloudKit fields primitive.
+    @Attribute(originalName: "phase")
     var phaseRaw: String = TrainingPhase.base.rawValue
     var targetDistanceKm: Double = 0
 
