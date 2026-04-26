@@ -133,8 +133,7 @@ enum ProfileRestoreDeduplicator {
             target.gender = source.gender
         }
 
-        if target.preferredRunDayIndices.isEmpty,
-           !source.preferredRunDayIndices.isEmpty {
+        if !source.preferredRunDayIndices.isEmpty {
             target.preferredRunDayIndices = source.preferredRunDayIndices
             target.weeklyRunDays = source.weeklyRunDays
         }
