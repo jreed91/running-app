@@ -8,17 +8,59 @@ struct AICoachInsight: Sendable {
     let apiReady: Bool
 }
 
-/// Lightweight coaching layer that turns workout data into user-facing feedback.
-///
-/// This service intentionally supports two modes:
-/// 1) Local-only heuristics (works without a key and keeps all data on-device)
-/// 2) API-ready context assembly (when the runner opts in with their own key)
-///
-/// The external LLM call is left to a future network client so this service stays pure,
-/// deterministic, and easy to test.
 struct AICoachService: Sendable {
+    let integrationService: AIIntegrationServiceProtocol
+
+    init(integrationService: AIIntegrationServiceProtocol = AIIntegrationService()) {
+        self.integrationService = integrationService
+    }
 
     func evaluate(
+        workout: RunWorkout,
+        recentHistory: [RunWorkout],
+        profile: UserProfile?,
+        apiKey: String
+    ) -> AICoachInsight {
+        evaluateBaseInsight(workout: workout, recentHistory: recentHistory, profile: profile, apiKey: apiKey)
+    }
+
+    func evaluateWithProvider(
+        workout: RunWorkout,
+        recentHistory: [RunWorkout],
+        profile: UserProfile?,
+        provider: AIProvider,
+        apiKey: String,
+        modelOverride: String
+    ) async -> AICoachInsight {
+        let base = evaluateBaseInsight(workout: workout, recentHistory: recentHistory, profile: profile, apiKey: apiKey)
+        guard !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return base }
+
+        let selectedModel = modelOverride.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? provider.defaultModel
+            : modelOverride
+
+        do {
+            let narrative = try await integrationService.generateCoachingNarrative(
+                provider: provider,
+                apiKey: apiKey,
+                model: selectedModel,
+                workoutSummary: base.summary,
+                focusAreas: base.focusAreas
+            )
+
+            return AICoachInsight(
+                headline: "\(provider.displayName) Analysis",
+                summary: narrative,
+                focusAreas: base.focusAreas,
+                nextWorkoutSuggestion: base.nextWorkoutSuggestion,
+                apiReady: true
+            )
+        } catch {
+            return base
+        }
+    }
+
+    private func evaluateBaseInsight(
         workout: RunWorkout,
         recentHistory: [RunWorkout],
         profile: UserProfile?,

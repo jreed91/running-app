@@ -326,6 +326,26 @@ struct SettingsView: View {
                     .tint(.brand)
             }
             rowDivider
+            settingsRow(icon: .gear, iconColor: .brand, title: "Provider") {
+                Picker("", selection: Bindable(appSettings).aiProvider) {
+                    ForEach(AIProvider.allCases, id: \.self) { provider in
+                        Text(provider.displayName).tag(provider)
+                    }
+                }
+                .labelsHidden()
+            }
+            rowDivider
+            settingsRow(icon: .timer, iconColor: .secondary, title: "Model") {
+                EmptyView()
+            }
+            TextField("Optional model override", text: Bindable(appSettings).aiModelOverride)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .font(.system(size: 13, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 6)
+            rowDivider
             settingsRow(icon: .lock, iconColor: .secondary, title: "AI API Key") {
                 EmptyView()
             }
@@ -336,7 +356,7 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 16)
                 .padding(.bottom, 6)
-            Text("Your key stays on-device and is only used when AI Insights is enabled.")
+            Text("Supports OpenAI and Claude (Anthropic). Key stays on-device and is only used when enabled.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 16)

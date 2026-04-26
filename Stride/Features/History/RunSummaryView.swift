@@ -19,6 +19,7 @@ struct RunSummaryView: View {
     @State private var selectedSplitHRKm: Int? = nil
     @State private var selectedSplitElevKm: Int? = nil
     @State private var showDeleteConfirmation = false
+    @State private var aiInsight: AICoachInsight?
 
     private var matchedScheduled: ScheduledWorkout? {
         scheduledWorkouts.first { $0.completedWorkout?.id == workout.id }
@@ -42,15 +43,10 @@ struct RunSummaryView: View {
         workout.splits.first { $0.kilometer == km }
     }
 
-    private var aiInsight: AICoachInsight {
-        let history = allWorkouts.filter { $0.id != workout.id }
-        return container.aiCoachService.evaluate(
-            workout: workout,
-            recentHistory: Array(history.prefix(8)),
-            profile: profiles.first,
-            apiKey: appSettings.aiAPIKey
-        )
+    private var recentHistory: [RunWorkout] {
+        allWorkouts.filter { $0.id != workout.id }
     }
+
 
     var body: some View {
         ScrollView {
@@ -91,6 +87,17 @@ struct RunSummaryView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This workout will be permanently removed.")
+        }
+        .task(id: workout.id) {
+            let historySlice = Array(recentHistory.prefix(8))
+            aiInsight = await container.aiCoachService.evaluateWithProvider(
+                workout: workout,
+                recentHistory: historySlice,
+                profile: profiles.first,
+                provider: appSettings.aiProvider,
+                apiKey: appSettings.aiAPIKey,
+                modelOverride: appSettings.aiModelOverride
+            )
         }
     }
 
@@ -209,7 +216,7 @@ struct RunSummaryView: View {
 
     @ViewBuilder
     private var aiCoachSection: some View {
-        if appSettings.aiInsightsEnabled {
+        if appSettings.aiInsightsEnabled, let aiInsight {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Text("AI COACH").font(.sectionHeader).foregroundStyle(.secondary)

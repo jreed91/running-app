@@ -201,3 +201,25 @@ enum UnitPreference: String, CaseIterable, Sendable {
         }
     }
 }
+
+
+// MARK: - AIProvider
+
+enum AIProvider: String, CaseIterable, Sendable {
+    case openAI = "openai"
+    case anthropic = "anthropic"
+
+    var displayName: String {
+        switch self {
+        case .openAI: return "OpenAI"
+        case .anthropic: return "Claude (Anthropic)"
+        }
+    }
+
+    var defaultModel: String {
+        switch self {
+        case .openAI: return "gpt-4o-mini"
+        case .anthropic: return "claude-3-5-sonnet-latest"
+        }
+    }
+}
