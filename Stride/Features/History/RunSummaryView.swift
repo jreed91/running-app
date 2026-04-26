@@ -20,6 +20,7 @@ struct RunSummaryView: View {
     @State private var selectedSplitElevKm: Int? = nil
     @State private var showDeleteConfirmation = false
     @State private var aiInsight: AICoachInsight?
+    @State private var isLoadingAIInsight = false
 
     private var matchedScheduled: ScheduledWorkout? {
         scheduledWorkouts.first { $0.completedWorkout?.id == workout.id }
@@ -87,17 +88,6 @@ struct RunSummaryView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This workout will be permanently removed.")
-        }
-        .task(id: workout.id) {
-            let historySlice = Array(recentHistory.prefix(8))
-            aiInsight = await container.aiCoachService.evaluateWithProvider(
-                workout: workout,
-                recentHistory: historySlice,
-                profile: profiles.first,
-                provider: appSettings.aiProvider,
-                apiKey: appSettings.aiAPIKey,
-                modelOverride: appSettings.aiModelOverride
-            )
         }
     }
 
@@ -216,32 +206,73 @@ struct RunSummaryView: View {
 
     @ViewBuilder
     private var aiCoachSection: some View {
-        if appSettings.aiInsightsEnabled, let aiInsight {
+        if appSettings.aiInsightsEnabled {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Text("AI COACH").font(.sectionHeader).foregroundStyle(.secondary)
                     Spacer()
+                    Button {
+                        Task {
+                            await loadAIInsight()
+                        }
+                    } label: {
+                        if isLoadingAIInsight {
+                            ProgressView()
+                                .controlSize(.small)
+                                .frame(width: 16, height: 16)
+                        } else {
+                            Label(aiInsight == nil ? "Load Insights" : "Refresh", systemImage: "sparkles")
+                                .font(.caption.weight(.semibold))
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .disabled(isLoadingAIInsight)
+                }
+
+                if let aiInsight {
+                    Text(aiInsight.summary)
+                        .font(.bodyRegular)
+                        .foregroundStyle(.primary)
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(aiInsight.focusAreas, id: \.self) { suggestion in
+                            Label(suggestion, systemImage: "checkmark.circle")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Text("Next: \(aiInsight.nextWorkoutSuggestion)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     Text(aiInsight.headline)
                         .font(.caption)
                         .foregroundStyle(aiInsight.apiReady ? .success : .secondary)
+                } else {
+                    Text("Tap “Load Insights” to fetch AI coaching feedback for this workout.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                Text(aiInsight.summary)
-                    .font(.bodyRegular)
-                    .foregroundStyle(.primary)
-                VStack(alignment: .leading, spacing: 6) {
-                    ForEach(aiInsight.focusAreas, id: \.self) { suggestion in
-                        Label(suggestion, systemImage: "checkmark.circle")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                Text("Next: \(aiInsight.nextWorkoutSuggestion)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
             .padding()
             .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
         }
+    }
+
+    @MainActor
+    private func loadAIInsight() async {
+        guard !isLoadingAIInsight else { return }
+        isLoadingAIInsight = true
+        defer { isLoadingAIInsight = false }
+
+        let historySlice = Array(recentHistory.prefix(8))
+        aiInsight = await container.aiCoachService.evaluateWithProvider(
+            workout: workout,
+            recentHistory: historySlice,
+            profile: profiles.first,
+            provider: appSettings.aiProvider,
+            apiKey: appSettings.aiAPIKey,
+            modelOverride: appSettings.aiModelOverride
+        )
     }
 
     // MARK: Split pace chart
