@@ -103,6 +103,46 @@ struct ProfileRestoreDeduplicatorTests {
         #expect(remaining.name == "Current")
     }
 
+    @Test("Dedup merges CloudKit profile identity fields into newer local placeholder profile")
+    func deduplicateMergesIdentityFieldsFromRestoredProfile() throws {
+        let container = AppContainer.preview()
+        let context = container.modelContainer.mainContext
+
+        let restored = makeProfile(
+            name: "Taylor",
+            goalRace: .halfMarathon,
+            gender: .female,
+            createdAt: Date(timeIntervalSinceReferenceDate: 100),
+            updatedAt: Date(timeIntervalSinceReferenceDate: 200)
+        )
+        restored.preferredRunDayIndices = [1, 3, 6]
+        restored.weeklyRunDays = 3
+
+        let localPlaceholder = makeProfile(
+            name: "",
+            goalRace: .halfMarathon,
+            gender: .preferNotToShare,
+            createdAt: Date(timeIntervalSinceReferenceDate: 150),
+            updatedAt: Date(timeIntervalSinceReferenceDate: 300)
+        )
+
+        context.insert(restored)
+        context.insert(localPlaceholder)
+        try context.save()
+
+        try ProfileRestoreDeduplicator.deduplicate([restored, localPlaceholder], in: context)
+
+        let profiles = try context.fetch(FetchDescriptor<UserProfile>())
+        let remaining = try #require(profiles.first)
+
+        #expect(profiles.count == 1)
+        #expect(remaining.persistentModelID == localPlaceholder.persistentModelID)
+        #expect(remaining.name == "Taylor")
+        #expect(remaining.gender == .female)
+        #expect(remaining.preferredRunDayIndices == [1, 3, 6])
+        #expect(remaining.weeklyRunDays == 3)
+    }
+
     @Test("Goal race raw values decode maintain fitness and unknown values fall back to 5K")
     func goalRaceRawValueCompatibility() {
         let profile = makeProfile(

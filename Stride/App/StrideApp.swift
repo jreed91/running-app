@@ -94,6 +94,10 @@ enum ProfileRestoreDeduplicator {
         guard profiles.count > 1, let winner = preferredProfile(from: profiles) else { return }
 
         for profile in profiles where profile.persistentModelID != winner.persistentModelID {
+            mergeRestoreFields(from: profile, into: winner)
+        }
+
+        for profile in profiles where profile.persistentModelID != winner.persistentModelID {
             context.delete(profile)
         }
 
@@ -110,5 +114,31 @@ enum ProfileRestoreDeduplicator {
         }
 
         return lhs.id.uuidString < rhs.id.uuidString
+    }
+
+    /// During CloudKit restore, we can briefly end up with both:
+    /// - a newly created local onboarding profile (often blank/default fields), and
+    /// - a restored profile containing real personal preferences.
+    ///
+    /// Keep newest-profile semantics overall, but copy user-facing fields that
+    /// are still blank/default on the winner before deleting the older profile.
+    private static func mergeRestoreFields(from source: UserProfile, into target: UserProfile) {
+        if target.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           !source.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            target.name = source.name
+        }
+
+        if target.gender == .preferNotToShare,
+           source.gender != .preferNotToShare {
+            target.gender = source.gender
+        }
+
+        if target.preferredRunDayIndices.isEmpty,
+           !source.preferredRunDayIndices.isEmpty {
+            target.preferredRunDayIndices = source.preferredRunDayIndices
+            target.weeklyRunDays = source.weeklyRunDays
+        }
+
+        target.updatedAt = max(target.updatedAt, source.updatedAt)
     }
 }
