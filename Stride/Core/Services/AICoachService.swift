@@ -348,7 +348,8 @@ struct AICoachService: Sendable {
         from adaptation: AIWorkoutAdaptationResponse,
         scheduled: ScheduledWorkout
     ) -> ScheduledWorkout? {
-        guard let type = Self.workoutType(from: adaptation.workoutType) else { return nil }
+        guard let responseType = Self.workoutType(from: adaptation.workoutType) else { return nil }
+        let type = protectedWorkoutType(responseType, for: scheduled.workoutType)
 
         let adapted = ScheduledWorkout(
             scheduledDate: scheduled.scheduledDate,
@@ -363,6 +364,16 @@ struct AICoachService: Sendable {
         adapted.workoutStructure = adaptation.workoutStructure.domainValue
         adapted.intervals = adaptation.intervals.compactMap(\.domainValue)
         return adapted
+    }
+
+    private func protectedWorkoutType(_ responseType: WorkoutType, for scheduledType: WorkoutType) -> WorkoutType {
+        if scheduledType == .longRun {
+            return .longRun
+        }
+        if responseType == .longRun {
+            return scheduledType
+        }
+        return responseType
     }
 
     private func makePromptContext(
@@ -428,6 +439,7 @@ struct AICoachService: Sendable {
         unitPreference: UnitPreference
     ) -> String {
         let date = scheduled.scheduledDate.formatted(date: .abbreviated, time: .omitted)
+        let weekday = scheduled.scheduledDate.formatted(.dateTime.weekday(.wide))
         let distance = scheduled.targetDistanceMeters?.distanceString(unit: unitPreference) ?? "open"
         let paceRange: String
         if let range = scheduled.targetPaceRange {
@@ -435,6 +447,15 @@ struct AICoachService: Sendable {
         } else {
             paceRange = "none"
         }
+        let plan = scheduled.week?.plan
+        let planRace = plan?.targetRace.displayName ?? profile.goalRace.displayName
+        let goalTime = (plan?.goalTimeSeconds ?? profile.goalFinishTime).durationString
+        let phase = scheduled.week?.phase.displayName ?? "Unknown"
+        let weekNumber = scheduled.week.map { "\($0.weekNumber)" } ?? "Unknown"
+        let weekTarget = scheduled.week?.targetDistanceKm.distanceStringFromKm(unit: unitPreference) ?? "Unknown"
+        let selectedRunDays = preferredRunDayNames(for: profile)
+        let weekLongRunDays = longRunDayNames(in: scheduled.week)
+        let planLongRunDays = longRunDayNames(in: plan)
         let structure = scheduled.workoutStructure.map {
             describeStructure($0, unitPreference: unitPreference)
         } ?? "No structured workout."
@@ -452,13 +473,21 @@ struct AICoachService: Sendable {
         }.joined(separator: "\n")
 
         return """
-        Goal race: \(profile.goalRace.displayName)
+        Target race: \(planRace)
+        Goal time: \(goalTime)
         Fitness level: \(profile.fitnessLevel.displayName)
         Weekly run days: \(profile.weeklyRunDays)
+        Selected running days: \(selectedRunDays)
+        Planned long-run days this week: \(weekLongRunDays)
+        Planned long-run days across plan: \(planLongRunDays)
+        Training week: \(weekNumber)
+        Training phase: \(phase)
+        Week target volume: \(weekTarget)
         Unit preference for display: \(unitPreference.rawValue)
 
         Scheduled workout:
         Date: \(date)
+        Weekday: \(weekday)
         Type: \(scheduled.workoutType.displayName)
         Distance: \(distance)
         Pace range: \(paceRange)
@@ -473,6 +502,42 @@ struct AICoachService: Sendable {
         Recent completed runs:
         \(recent.isEmpty ? "No recent completed runs." : recent)
         """
+    }
+
+    private func preferredRunDayNames(for profile: UserProfile) -> String {
+        let days = profile.preferredRunDayIndices.isEmpty
+            ? Array(0..<max(profile.weeklyRunDays, 1))
+            : profile.preferredRunDayIndices
+        return days.map(weekdayName(forRunDayIndex:)).joined(separator: ", ")
+    }
+
+    private func longRunDayNames(in week: TrainingWeek?) -> String {
+        guard let week else { return "Unknown" }
+        let days = (week.workouts ?? [])
+            .filter { $0.workoutType == .longRun }
+            .map { Calendar.current.component(.weekday, from: $0.scheduledDate) }
+        return dayNames(fromCalendarWeekdays: days)
+    }
+
+    private func longRunDayNames(in plan: TrainingPlan?) -> String {
+        guard let plan else { return "Unknown" }
+        let days = (plan.weeks ?? [])
+            .flatMap { $0.workouts ?? [] }
+            .filter { $0.workoutType == .longRun }
+            .map { Calendar.current.component(.weekday, from: $0.scheduledDate) }
+        return dayNames(fromCalendarWeekdays: days)
+    }
+
+    private func dayNames(fromCalendarWeekdays weekdays: [Int]) -> String {
+        let uniqueDays = Array(Set(weekdays)).sorted()
+        guard !uniqueDays.isEmpty else { return "None" }
+        return uniqueDays.map { Calendar.current.weekdaySymbols[$0 - 1] }.joined(separator: ", ")
+    }
+
+    private func weekdayName(forRunDayIndex index: Int) -> String {
+        let names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        guard names.indices.contains(index) else { return "Unknown" }
+        return names[index]
     }
 
     private func describeStructure(_ structure: WorkoutStructure, unitPreference: UnitPreference) -> String {

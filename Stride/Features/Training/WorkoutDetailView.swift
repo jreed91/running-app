@@ -8,9 +8,6 @@ struct WorkoutDetailView: View {
     @Environment(\.modelContext) private var context
     @Environment(AppSettings.self) private var appSettings
 
-    @Query(sort: \RunWorkout.date, order: .reverse) private var recentWorkouts: [RunWorkout]
-    @Query private var profiles: [UserProfile]
-    @State private var isAdapting = false
     @State private var isSyncingLocation = false
 
     var body: some View {
@@ -37,61 +34,6 @@ struct WorkoutDetailView: View {
         }
         .navigationTitle(workout.workoutType.displayName)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            if let profile = profiles.first, !workout.isCompleted {
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        Task { await adaptThisWorkout(profile: profile) }
-                    } label: {
-                        if isAdapting {
-                            ProgressView().controlSize(.small)
-                        } else {
-                            Label("Smart Adapt", systemImage: "sparkles")
-                        }
-                    }
-                    .disabled(isAdapting || !canUseAIAdaptation)
-                }
-            }
-        }
-    }
-
-    private var canUseAIAdaptation: Bool {
-        appSettings.aiInsightsEnabled
-            && !appSettings.aiAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    // MARK: - Adaptation
-
-    @MainActor
-    private func adaptThisWorkout(profile: UserProfile) async {
-        isAdapting = true
-        defer { isAdapting = false }
-        let adapted = await container.adaptedWorkout(
-            scheduled: workout,
-            history: Array(recentWorkouts.prefix(50)),
-            profile: profile,
-            provider: appSettings.aiProvider,
-            apiKey: appSettings.aiAPIKey,
-            modelOverride: appSettings.aiModelOverride,
-            unitPreference: appSettings.unitPreference
-        )
-        // Mutate the existing model in-place so SwiftData tracks the change
-        workout.workoutStructure     = adapted.workoutStructure
-        workout.targetDistanceMeters = adapted.targetDistanceMeters
-        workout.targetPaceLowerBound = adapted.targetPaceLowerBound
-        workout.targetPaceUpperBound = adapted.targetPaceUpperBound
-        workout.notes                = adapted.notes
-        if !adapted.intervals.isEmpty {
-            workout.intervals = adapted.intervals
-        }
-        // Clear the old WorkoutKit plan ID so the next sync re-schedules this workout
-        // with the updated structure (warmup/work/cooldown goals).
-        workout.healthKitPlanID = nil
-        try? context.save()
-        // Immediately re-sync this workout's plan to WorkoutKit with the new structure.
-        if let plan = workout.week?.plan {
-            try? await container.healthKitRepository.syncWorkoutPlans(for: plan)
-        }
     }
 
     // MARK: - Location toggle

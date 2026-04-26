@@ -6,14 +6,17 @@ import SwiftData
 struct PlanTabView: View {
     @Environment(AppSettings.self) private var appSettings
     @Environment(\.appContainer) private var container
+    @Environment(\.modelContext) private var context
 
     @Query(filter: #Predicate<TrainingPlan> { $0.isActive == true })
     private var activePlans: [TrainingPlan]
 
     @Query private var profiles: [UserProfile]
+    @Query(sort: \RunWorkout.date, order: .reverse) private var recentWorkouts: [RunWorkout]
 
     @State private var showNewPlanSheet = false
     @State private var showRouteGenius = false
+    @State private var isAdaptingPlan = false
 
     private var activePlan: TrainingPlan? { activePlans.first }
 
@@ -24,6 +27,14 @@ struct PlanTabView: View {
                     ScrollView {
                         VStack(spacing: 20) {
                             PlanOverviewCard(plan: plan)
+
+                            SmartAdaptPlanCard(
+                                workoutCount: remainingAdaptableWorkouts(in: plan).count,
+                                isAdapting: isAdaptingPlan,
+                                unavailableReason: smartAdaptUnavailableReason(for: plan)
+                            ) {
+                                Task { await adaptRemainingWorkouts(in: plan) }
+                            }
 
                             RouteGeniusCard {
                                 showRouteGenius = true
@@ -78,6 +89,167 @@ struct PlanTabView: View {
                 )
             }
         }
+    }
+
+    private func remainingAdaptableWorkouts(in plan: TrainingPlan) -> [ScheduledWorkout] {
+        let today = Calendar.current.startOfDay(for: Date())
+        return (plan.weeks ?? [])
+            .flatMap { $0.workouts ?? [] }
+            .filter {
+                !$0.isCompleted
+                    && $0.workoutType != .rest
+                    && $0.workoutType != .crossTraining
+                    && $0.scheduledDate >= today
+            }
+            .sorted { $0.scheduledDate < $1.scheduledDate }
+    }
+
+    private func smartAdaptUnavailableReason(for plan: TrainingPlan) -> String? {
+        guard !remainingAdaptableWorkouts(in: plan).isEmpty else {
+            return "No remaining run workouts are available to adapt."
+        }
+        guard !profiles.isEmpty else {
+            return "Create a runner profile before adapting your plan."
+        }
+        guard appSettings.aiInsightsEnabled else {
+            return "Turn on AI Coach in Settings to adapt your plan."
+        }
+        guard !appSettings.aiAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return "Add an AI API key in Settings to adapt your plan."
+        }
+        return nil
+    }
+
+    @MainActor
+    private func adaptRemainingWorkouts(in plan: TrainingPlan) async {
+        guard !isAdaptingPlan,
+              smartAdaptUnavailableReason(for: plan) == nil,
+              let profile = profiles.first else {
+            return
+        }
+
+        isAdaptingPlan = true
+        defer { isAdaptingPlan = false }
+
+        let workoutsToAdapt = uniqueRemainingWorkoutsAfterDeletingSameDayDuplicates(in: plan)
+        try? await container.healthKitRepository.removeWorkoutPlans(for: plan)
+
+        for workout in workoutsToAdapt {
+            let adapted = await container.adaptedWorkout(
+                scheduled: workout,
+                history: Array(recentWorkouts.prefix(50)),
+                profile: profile,
+                provider: appSettings.aiProvider,
+                apiKey: appSettings.aiAPIKey,
+                modelOverride: appSettings.aiModelOverride,
+                unitPreference: appSettings.unitPreference
+            )
+
+            workout.workoutType = adapted.workoutType
+            workout.workoutStructure = adapted.workoutStructure
+            workout.targetDistanceMeters = adapted.targetDistanceMeters
+            workout.targetPaceLowerBound = adapted.targetPaceLowerBound
+            workout.targetPaceUpperBound = adapted.targetPaceUpperBound
+            workout.notes = adapted.notes
+            workout.intervals = adapted.intervals
+            workout.healthKitPlanID = nil
+        }
+
+        try? context.save()
+        try? await container.healthKitRepository.syncWorkoutPlans(for: plan)
+    }
+
+    @MainActor
+    private func uniqueRemainingWorkoutsAfterDeletingSameDayDuplicates(in plan: TrainingPlan) -> [ScheduledWorkout] {
+        let calendar = Calendar.current
+        var keptWorkouts: [ScheduledWorkout] = []
+
+        for workout in remainingAdaptableWorkouts(in: plan) {
+            if keptWorkouts.contains(where: { calendar.isDate($0.scheduledDate, inSameDayAs: workout.scheduledDate) }) {
+                context.delete(workout)
+            } else {
+                keptWorkouts.append(workout)
+            }
+        }
+
+        return keptWorkouts
+    }
+}
+
+// MARK: - Smart Adapt Card
+
+private struct SmartAdaptPlanCard: View {
+    let workoutCount: Int
+    let isAdapting: Bool
+    let unavailableReason: String?
+    let action: () -> Void
+
+    private var isEnabled: Bool {
+        workoutCount > 0 && unavailableReason == nil && !isAdapting
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Button(action: action) {
+                HStack(spacing: 14) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(Color.brand.opacity(0.12))
+                            .frame(width: 48, height: 48)
+                        if isAdapting {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundStyle(.brand)
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(isAdapting ? "Adapting Plan" : "Smart Adapt")
+                            .font(.system(size: 17, weight: .bold))
+                            .foregroundStyle(.brand)
+
+                        Text(subtitle)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+
+                    Spacer(minLength: 8)
+
+                    StrideIcon(name: .chevronRight, size: 12, color: .brand, strokeWeight: 2.4)
+                }
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 18)
+                        .fill(Color.brand.opacity(0.08))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 18)
+                                .strokeBorder(Color.brand.opacity(0.2), lineWidth: 0.5)
+                        )
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(!isEnabled)
+            .opacity(isEnabled ? 1 : 0.55)
+
+            if let unavailableReason {
+                Text(unavailableReason)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var subtitle: String {
+        guard workoutCount > 0 else {
+            return "No remaining run workouts are available."
+        }
+
+        let workoutLabel = workoutCount == 1 ? "workout" : "workouts"
+        return "Adapt the remaining \(workoutCount) \(workoutLabel) in this plan."
     }
 }
 

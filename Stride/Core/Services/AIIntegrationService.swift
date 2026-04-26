@@ -321,6 +321,11 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
 
         Rules:
         - Choose workout_type from Easy, Tempo, Interval, or Long Run.
+        - Do not move workouts to different dates or weekdays.
+        - Respect the runner's selected running days and the existing long-run day.
+        - If the scheduled workout is a Long Run, keep it as Long Run.
+        - Do not turn a non-long-run workout into a Long Run.
+        - Tailor volume and intensity to the target race and current training phase.
         - Use seconds per kilometer for all pace values, regardless of display unit.
         - Keep target_distance_meters between 500 and 50000.
         - Keep pace values between 120 and 900 seconds per kilometer.
