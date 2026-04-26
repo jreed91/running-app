@@ -19,9 +19,16 @@ struct AICoachService: Sendable {
         workout: RunWorkout,
         recentHistory: [RunWorkout],
         profile: UserProfile?,
-        apiKey: String
+        apiKey: String,
+        unitPreference: UnitPreference = .metric
     ) -> AICoachInsight {
-        evaluateBaseInsight(workout: workout, recentHistory: recentHistory, profile: profile, apiKey: apiKey)
+        evaluateBaseInsight(
+            workout: workout,
+            recentHistory: recentHistory,
+            profile: profile,
+            apiKey: apiKey,
+            unitPreference: unitPreference
+        )
     }
 
     @MainActor
@@ -31,7 +38,8 @@ struct AICoachService: Sendable {
         profile: UserProfile?,
         provider: AIProvider,
         apiKey: String,
-        modelOverride: String
+        modelOverride: String,
+        unitPreference: UnitPreference = .metric
     ) async -> AICoachInsight {
         let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedKey.isEmpty else {
@@ -44,7 +52,13 @@ struct AICoachService: Sendable {
             )
         }
 
-        let base = evaluateBaseInsight(workout: workout, recentHistory: recentHistory, profile: profile, apiKey: trimmedKey)
+        let base = evaluateBaseInsight(
+            workout: workout,
+            recentHistory: recentHistory,
+            profile: profile,
+            apiKey: trimmedKey,
+            unitPreference: unitPreference
+        )
 
         let selectedModel = modelOverride.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? provider.defaultModel
@@ -57,7 +71,12 @@ struct AICoachService: Sendable {
                 model: selectedModel,
                 workoutSummary: base.summary,
                 focusAreas: base.focusAreas,
-                workoutDetails: makeWorkoutDetails(workout: workout, recentHistory: recentHistory, profile: profile)
+                workoutDetails: makeWorkoutDetails(
+                    workout: workout,
+                    recentHistory: recentHistory,
+                    profile: profile,
+                    unitPreference: unitPreference
+                )
             )
 
             return AICoachInsight(
@@ -76,7 +95,8 @@ struct AICoachService: Sendable {
         workout: RunWorkout,
         recentHistory: [RunWorkout],
         profile: UserProfile?,
-        apiKey: String
+        apiKey: String,
+        unitPreference: UnitPreference
     ) -> AICoachInsight {
         let drift = paceDriftPercent(for: workout)
         let hrDrift = heartRateDrift(for: workout)
@@ -92,7 +112,7 @@ struct AICoachService: Sendable {
             if drift <= 3 {
                 summaryBits.append("Great pacing control across the run.")
             } else if drift <= 7 {
-                focus.append("Start 3–5 sec/km easier for the first 2 splits.")
+                focus.append("Start 3–5 sec/\(unitPreference.distanceLabel) easier for the first 2 splits.")
                 summaryBits.append("Moderate pace fade late in the workout.")
             } else {
                 focus.append("Pace conservatively early and protect form in final third.")
@@ -172,34 +192,35 @@ struct AICoachService: Sendable {
     private func makeWorkoutDetails(
         workout: RunWorkout,
         recentHistory: [RunWorkout],
-        profile: UserProfile?
+        profile: UserProfile?,
+        unitPreference: UnitPreference
     ) -> String {
         let date = workout.date.formatted(date: .abbreviated, time: .shortened)
-        let avgPace = workout.averagePaceSecondsPerKm.paceString(unit: .metric)
+        let avgPace = workout.averagePaceSecondsPerKm.paceString(unit: unitPreference)
         let avgHR = workout.averageHeartRate.map { "\(Int($0)) bpm" } ?? "n/a"
         let maxHR = workout.maxHeartRate.map { "\(Int($0)) bpm" } ?? "n/a"
-        let elevation = workout.elevationGainMeters.map { "\(Int($0)) m" } ?? "n/a"
+        let elevation = workout.elevationGainMeters.map { $0.elevationString(unit: unitPreference) } ?? "n/a"
         let weather = workout.weather.map {
-            "\($0.conditionDescription), \($0.temperatureString(unit: .metric)), humidity \(Int($0.humidityPercent))%"
+            "\($0.conditionDescription), \($0.temperatureString(unit: unitPreference)), humidity \(Int($0.humidityPercent))%"
         } ?? "n/a"
         let profileContext = profile.map {
             "Goal race: \($0.goalRace.displayName), fitness level: \($0.fitnessLevel.displayName), run days/week: \($0.weeklyRunDays)"
         } ?? "No athlete profile available."
 
         let splits = workout.splits.prefix(10).map {
-            "km \($0.kilometer): pace \($0.paceSecondsPerKm.paceString(unit: .metric)), hr \($0.heartRate.map { String(Int($0)) } ?? "n/a"), elev \($0.elevationGainMeters.formatted(.number.precision(.fractionLength(0...1)))) m"
+            "\(splitDistanceLabel(split: $0, unitPreference: unitPreference)): pace \($0.paceSecondsPerKm.paceString(unit: unitPreference)), hr \($0.heartRate.map { String(Int($0)) } ?? "n/a"), elev \($0.elevationGainMeters.elevationString(unit: unitPreference))"
         }.joined(separator: "\n")
         let splitSection = splits.isEmpty ? "No split data." : splits
 
         let recent = recentHistory.prefix(5).map { run in
-            "\(run.date.formatted(date: .abbreviated, time: .omitted)) • \(run.workoutType.displayName) • \((run.distanceMeters / 1000).formatted(.number.precision(.fractionLength(1)))) km • \(run.averagePaceSecondsPerKm.paceString(unit: .metric))"
+            "\(run.date.formatted(date: .abbreviated, time: .omitted)) • \(run.workoutType.displayName) • \(run.distanceMeters.distanceString(unit: unitPreference)) • \(run.averagePaceSecondsPerKm.paceString(unit: unitPreference))"
         }.joined(separator: "\n")
         let recentSection = recent.isEmpty ? "No recent runs." : recent
 
         return """
         Date: \(date)
         Type: \(workout.workoutType.displayName)
-        Distance: \((workout.distanceMeters / 1000).formatted(.number.precision(.fractionLength(2)))) km
+        Distance: \(workout.distanceMeters.distanceString(unit: unitPreference))
         Duration: \(workout.durationSeconds.durationString)
         Avg pace: \(avgPace)
         Avg HR: \(avgHR)
@@ -214,5 +235,14 @@ struct AICoachService: Sendable {
         Recent history:
         \(recentSection)
         """
+    }
+
+    private func splitDistanceLabel(split: Split, unitPreference: UnitPreference) -> String {
+        if split.cumulativeDistanceMeters > 0 {
+            return split.cumulativeDistanceMeters.distanceString(unit: unitPreference)
+        }
+
+        let distanceMeters = Double(split.kilometer) * 1_000
+        return distanceMeters.distanceString(unit: unitPreference)
     }
 }
