@@ -22,6 +22,30 @@ final class AppSettings {
         }
     }
 
+    var aiAPIKey: String {
+        didSet {
+            Self.persist(aiAPIKey, forKey: Self.aiAPIKeyKey)
+        }
+    }
+
+    var aiInsightsEnabled: Bool {
+        didSet {
+            Self.persist(aiInsightsEnabled, forKey: Self.aiInsightsEnabledKey)
+        }
+    }
+
+    var aiProvider: AIProvider {
+        didSet {
+            Self.persist(aiProvider.rawValue, forKey: Self.aiProviderKey)
+        }
+    }
+
+    var aiModelOverride: String {
+        didSet {
+            Self.persist(aiModelOverride, forKey: Self.aiModelOverrideKey)
+        }
+    }
+
     var iCloudSyncEnabled: Bool {
         didSet {
             Self.persist(iCloudSyncEnabled, forKey: Self.iCloudSyncKey)
@@ -37,6 +61,10 @@ final class AppSettings {
     // Internal so services can read the same key before AppSettings is created.
     static let unitPreferenceKey = "unitPreference"
     private static let orsAPIKeyKey      = "orsAPIKey"
+    private static let aiAPIKeyKey       = "aiAPIKey"
+    private static let aiInsightsEnabledKey = "aiInsightsEnabled"
+    private static let aiProviderKey     = "aiProvider"
+    private static let aiModelOverrideKey = "aiModelOverride"
     // Internal so AppContainer can read the same key before AppSettings is created.
     static let iCloudSyncKey = "iCloudSyncEnabled"
     static let morningReminderKey = "morningReminderEnabled"
@@ -47,6 +75,17 @@ final class AppSettings {
         let raw = Self.readString(forKey: Self.unitPreferenceKey) ?? ""
         self.unitPreference = UnitPreference(rawValue: raw) ?? .metric
         self.orsAPIKey = Self.readString(forKey: Self.orsAPIKeyKey) ?? ""
+        self.aiAPIKey = Self.readString(forKey: Self.aiAPIKeyKey) ?? ""
+
+        if Self.hasStoredValue(forKey: Self.aiInsightsEnabledKey) {
+            self.aiInsightsEnabled = Self.readBool(forKey: Self.aiInsightsEnabledKey)
+        } else {
+            self.aiInsightsEnabled = false
+        }
+
+        let providerRaw = Self.readString(forKey: Self.aiProviderKey) ?? ""
+        self.aiProvider = AIProvider(rawValue: providerRaw) ?? .openAI
+        self.aiModelOverride = Self.readString(forKey: Self.aiModelOverrideKey) ?? ""
 
         // Default to true (sync on) when the key has never been set.
         if Self.hasStoredValue(forKey: Self.iCloudSyncKey) {
@@ -64,6 +103,10 @@ final class AppSettings {
 
         Self.persist(unitPreference.rawValue, forKey: Self.unitPreferenceKey)
         Self.persist(orsAPIKey, forKey: Self.orsAPIKeyKey)
+        Self.persist(aiAPIKey, forKey: Self.aiAPIKeyKey)
+        Self.persist(aiInsightsEnabled, forKey: Self.aiInsightsEnabledKey)
+        Self.persist(aiProvider.rawValue, forKey: Self.aiProviderKey)
+        Self.persist(aiModelOverride, forKey: Self.aiModelOverrideKey)
         Self.persist(iCloudSyncEnabled, forKey: Self.iCloudSyncKey)
         Self.persist(morningReminderEnabled, forKey: Self.morningReminderKey)
     }

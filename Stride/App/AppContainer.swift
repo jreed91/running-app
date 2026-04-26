@@ -43,6 +43,7 @@ final class AppContainer: ObservableObject {
     let workoutSyncService: WorkoutSyncService
     let dataMigrationService: DataMigrationService
     let weatherService: WeatherService
+    let aiCoachService: AICoachService
 
     // MARK: Init
 
@@ -162,6 +163,7 @@ final class AppContainer: ObservableObject {
         self.routeGeniusService = RouteGeniusService()
         let weather = WeatherService()
         self.weatherService = weather
+        self.aiCoachService = AICoachService()
         self.workoutSyncService = WorkoutSyncService(
             healthKitRepository: hkRepository,
             notificationService: notifications,

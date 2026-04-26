@@ -9,13 +9,17 @@ struct RunSummaryView: View {
     @Environment(AppSettings.self) private var appSettings
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appContainer) private var container
     @Query private var scheduledWorkouts: [ScheduledWorkout]
+    @Query(sort: \RunWorkout.date, order: .reverse) private var allWorkouts: [RunWorkout]
+    @Query private var profiles: [UserProfile]
 
     // Chart selection state
     @State private var selectedSplitPaceKm: Int? = nil
     @State private var selectedSplitHRKm: Int? = nil
     @State private var selectedSplitElevKm: Int? = nil
     @State private var showDeleteConfirmation = false
+    @State private var aiInsight: AICoachInsight?
 
     private var matchedScheduled: ScheduledWorkout? {
         scheduledWorkouts.first { $0.completedWorkout?.id == workout.id }
@@ -39,6 +43,11 @@ struct RunSummaryView: View {
         workout.splits.first { $0.kilometer == km }
     }
 
+    private var recentHistory: [RunWorkout] {
+        allWorkouts.filter { $0.id != workout.id }
+    }
+
+
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
@@ -46,6 +55,7 @@ struct RunSummaryView: View {
                 statsGrid
                 weatherSection
                 performanceFeedbackSection
+                aiCoachSection
                 if !workout.splits.isEmpty {
                     splitPaceChart
                     if hasSplitHR { splitHRChart }
@@ -77,6 +87,17 @@ struct RunSummaryView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This workout will be permanently removed.")
+        }
+        .task(id: workout.id) {
+            let historySlice = Array(recentHistory.prefix(8))
+            aiInsight = await container.aiCoachService.evaluateWithProvider(
+                workout: workout,
+                recentHistory: historySlice,
+                profile: profiles.first,
+                provider: appSettings.aiProvider,
+                apiKey: appSettings.aiAPIKey,
+                modelOverride: appSettings.aiModelOverride
+            )
         }
     }
 
@@ -186,6 +207,40 @@ struct RunSummaryView: View {
                 .padding()
                 .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
             }
+        }
+    }
+
+
+
+    // MARK: AI coach section
+
+    @ViewBuilder
+    private var aiCoachSection: some View {
+        if appSettings.aiInsightsEnabled, let aiInsight {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("AI COACH").font(.sectionHeader).foregroundStyle(.secondary)
+                    Spacer()
+                    Text(aiInsight.headline)
+                        .font(.caption)
+                        .foregroundStyle(aiInsight.apiReady ? .success : .secondary)
+                }
+                Text(aiInsight.summary)
+                    .font(.bodyRegular)
+                    .foregroundStyle(.primary)
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(aiInsight.focusAreas, id: \.self) { suggestion in
+                        Label(suggestion, systemImage: "checkmark.circle")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Text("Next: \(aiInsight.nextWorkoutSuggestion)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding()
+            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
         }
     }
 
