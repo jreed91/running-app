@@ -33,8 +33,18 @@ struct AICoachService: Sendable {
         apiKey: String,
         modelOverride: String
     ) async -> AICoachInsight {
-        let base = evaluateBaseInsight(workout: workout, recentHistory: recentHistory, profile: profile, apiKey: apiKey)
-        guard !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return base }
+        let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedKey.isEmpty else {
+            return AICoachInsight(
+                headline: "AI Key Required",
+                summary: "Add an AI API key in Settings to load cloud coaching insights.",
+                focusAreas: [],
+                nextWorkoutSuggestion: "Set your key, then reload insights.",
+                apiReady: false
+            )
+        }
+
+        let base = evaluateBaseInsight(workout: workout, recentHistory: recentHistory, profile: profile, apiKey: trimmedKey)
 
         let selectedModel = modelOverride.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? provider.defaultModel
@@ -43,10 +53,11 @@ struct AICoachService: Sendable {
         do {
             let narrative = try await integrationService.generateCoachingNarrative(
                 provider: provider,
-                apiKey: apiKey,
+                apiKey: trimmedKey,
                 model: selectedModel,
                 workoutSummary: base.summary,
-                focusAreas: base.focusAreas
+                focusAreas: base.focusAreas,
+                workoutDetails: makeWorkoutDetails(workout: workout, recentHistory: recentHistory, profile: profile)
             )
 
             return AICoachInsight(
@@ -156,5 +167,52 @@ struct AICoachService: Sendable {
         let last = hrs.suffix(quarter).reduce(0, +) / Double(quarter)
         guard first > 0 else { return nil }
         return ((last - first) / first) * 100
+    }
+
+    private func makeWorkoutDetails(
+        workout: RunWorkout,
+        recentHistory: [RunWorkout],
+        profile: UserProfile?
+    ) -> String {
+        let date = workout.date.formatted(date: .abbreviated, time: .shortened)
+        let avgPace = workout.averagePaceSecondsPerKm.paceString(unit: .metric)
+        let avgHR = workout.averageHeartRate.map { "\(Int($0)) bpm" } ?? "n/a"
+        let maxHR = workout.maxHeartRate.map { "\(Int($0)) bpm" } ?? "n/a"
+        let elevation = workout.elevationGainMeters.map { "\(Int($0)) m" } ?? "n/a"
+        let weather = workout.weather.map {
+            "\($0.conditionDescription), \($0.temperatureString(unit: .metric)), humidity \(Int($0.humidityPercent))%"
+        } ?? "n/a"
+        let profileContext = profile.map {
+            "Goal race: \($0.goalRace.displayName), fitness level: \($0.fitnessLevel.displayName), run days/week: \($0.weeklyRunDays)"
+        } ?? "No athlete profile available."
+
+        let splits = workout.splits.prefix(10).map {
+            "km \($0.kilometer): pace \($0.paceSecondsPerKm.paceString(unit: .metric)), hr \($0.heartRate.map { String(Int($0)) } ?? "n/a"), elev \($0.elevationGainMeters.formatted(.number.precision(.fractionLength(0...1)))) m"
+        }.joined(separator: "\n")
+        let splitSection = splits.isEmpty ? "No split data." : splits
+
+        let recent = recentHistory.prefix(5).map { run in
+            "\(run.date.formatted(date: .abbreviated, time: .omitted)) • \(run.workoutType.displayName) • \(run.distanceMeters / 1000, specifier: "%.1f") km • \(run.averagePaceSecondsPerKm.paceString(unit: .metric))"
+        }.joined(separator: "\n")
+        let recentSection = recent.isEmpty ? "No recent runs." : recent
+
+        return """
+        Date: \(date)
+        Type: \(workout.workoutType.displayName)
+        Distance: \((workout.distanceMeters / 1000).formatted(.number.precision(.fractionLength(2)))) km
+        Duration: \(workout.durationSeconds.durationString)
+        Avg pace: \(avgPace)
+        Avg HR: \(avgHR)
+        Max HR: \(maxHR)
+        Elevation gain: \(elevation)
+        Weather: \(weather)
+        \(profileContext)
+
+        Splits:
+        \(splitSection)
+
+        Recent history:
+        \(recentSection)
+        """
     }
 }
