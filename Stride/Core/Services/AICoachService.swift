@@ -24,6 +24,7 @@ struct AICoachService: Sendable {
         evaluateBaseInsight(workout: workout, recentHistory: recentHistory, profile: profile, apiKey: apiKey)
     }
 
+    @MainActor
     func evaluateWithProvider(
         workout: RunWorkout,
         recentHistory: [RunWorkout],
