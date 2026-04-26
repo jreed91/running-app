@@ -210,21 +210,27 @@ final class AppContainer: ObservableObject {
 
     // MARK: - Workout adaptation
 
-    /// Returns an adapted ``ScheduledWorkout`` based on the runner's recent history.
-    /// If history is empty the original workout is returned unchanged.
+    /// Returns an AI-adapted ``ScheduledWorkout`` based on the runner's recent history.
+    /// If AI is unavailable or returns an invalid structured response, the original
+    /// workout is returned unchanged.
     func adaptedWorkout(
         scheduled: ScheduledWorkout,
         history: [RunWorkout],
         profile: UserProfile,
+        provider: AIProvider,
+        apiKey: String,
+        modelOverride: String,
         unitPreference: UnitPreference = .metric
-    ) -> ScheduledWorkout {
-        guard !history.isEmpty else { return scheduled }
-        return trainingPlanService.adaptWorkout(
+    ) async -> ScheduledWorkout {
+        await aiCoachService.adaptScheduledWorkoutWithProvider(
             scheduled: scheduled,
-            history: history,
+            recentHistory: history,
             profile: profile,
+            provider: provider,
+            apiKey: apiKey,
+            modelOverride: modelOverride,
             unitPreference: unitPreference
-        )
+        ) ?? scheduled
     }
 
     // MARK: - Continuous plan refresh

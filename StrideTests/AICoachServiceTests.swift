@@ -48,4 +48,117 @@ struct AICoachServiceTests {
 
         #expect(AICoachService.parseStructuredResponse(response) == nil)
     }
+
+    @Test("Parses structured AI workout adaptation JSON")
+    func parsesWorkoutAdaptationResponse() throws {
+        let response = """
+        {
+          "workout_type": "Interval",
+          "target_distance_meters": 5200,
+          "target_pace_lower_bound": 295,
+          "target_pace_upper_bound": 305,
+          "explanation": "Reduced the repeat count slightly because recent quality sessions faded late.",
+          "intervals": [
+            {
+              "repetitions": 4,
+              "distance_meters": 800,
+              "duration_seconds": null,
+              "target_pace_seconds_per_km": 300,
+              "recovery_seconds": 90,
+              "recovery_type": "jog"
+            }
+          ],
+          "workout_structure": {
+            "warmup": {
+              "distance_meters": 1000,
+              "duration_seconds": null,
+              "target_pace_seconds_per_km": 390,
+              "label": "Warm-up"
+            },
+            "main_sets": [
+              {
+                "repetitions": 4,
+                "work_segment": {
+                  "distance_meters": 800,
+                  "duration_seconds": null,
+                  "target_pace_seconds_per_km": 300,
+                  "label": "Interval"
+                },
+                "recovery_segment": {
+                  "distance_meters": null,
+                  "duration_seconds": 90,
+                  "target_pace_seconds_per_km": null,
+                  "label": "Recovery jog"
+                },
+                "label": "Controlled intervals"
+              }
+            ],
+            "cooldown": {
+              "distance_meters": 1000,
+              "duration_seconds": null,
+              "target_pace_seconds_per_km": 390,
+              "label": "Cool-down"
+            },
+            "total_estimated_distance_meters": 5200,
+            "total_estimated_duration_seconds": 1900
+          }
+        }
+        """
+
+        let parsed = try #require(AICoachService.parseWorkoutAdaptationResponse(response))
+
+        #expect(parsed.workoutType == "Interval")
+        #expect(parsed.intervals.first?.repetitions == 4)
+        #expect(parsed.workoutStructure.mainSets.first?.label == "Controlled intervals")
+    }
+
+    @Test("Rejects workout adaptation without explanation")
+    func rejectsWorkoutAdaptationWithoutExplanation() {
+        let response = """
+        {
+          "workout_type": "Easy",
+          "target_distance_meters": 5000,
+          "target_pace_lower_bound": 360,
+          "target_pace_upper_bound": 390,
+          "explanation": "",
+          "intervals": [],
+          "workout_structure": {
+            "warmup": {
+              "distance_meters": 1000,
+              "duration_seconds": null,
+              "target_pace_seconds_per_km": 390,
+              "label": "Warm-up"
+            },
+            "main_sets": [
+              {
+                "repetitions": 1,
+                "work_segment": {
+                  "distance_meters": 3000,
+                  "duration_seconds": null,
+                  "target_pace_seconds_per_km": 375,
+                  "label": "Easy"
+                },
+                "recovery_segment": {
+                  "distance_meters": null,
+                  "duration_seconds": null,
+                  "target_pace_seconds_per_km": null,
+                  "label": ""
+                },
+                "label": "Easy Block"
+              }
+            ],
+            "cooldown": {
+              "distance_meters": 1000,
+              "duration_seconds": null,
+              "target_pace_seconds_per_km": 390,
+              "label": "Cool-down"
+            },
+            "total_estimated_distance_meters": 5000,
+            "total_estimated_duration_seconds": 1900
+          }
+        }
+        """
+
+        #expect(AICoachService.parseWorkoutAdaptationResponse(response) == nil)
+    }
 }

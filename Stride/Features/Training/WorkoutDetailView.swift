@@ -49,10 +49,15 @@ struct WorkoutDetailView: View {
                             Label("Smart Adapt", systemImage: "sparkles")
                         }
                     }
-                    .disabled(isAdapting)
+                    .disabled(isAdapting || !canUseAIAdaptation)
                 }
             }
         }
+    }
+
+    private var canUseAIAdaptation: Bool {
+        appSettings.aiInsightsEnabled
+            && !appSettings.aiAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     // MARK: - Adaptation
@@ -61,10 +66,13 @@ struct WorkoutDetailView: View {
     private func adaptThisWorkout(profile: UserProfile) async {
         isAdapting = true
         defer { isAdapting = false }
-        let adapted = container.adaptedWorkout(
+        let adapted = await container.adaptedWorkout(
             scheduled: workout,
             history: Array(recentWorkouts.prefix(50)),
             profile: profile,
+            provider: appSettings.aiProvider,
+            apiKey: appSettings.aiAPIKey,
+            modelOverride: appSettings.aiModelOverride,
             unitPreference: appSettings.unitPreference
         )
         // Mutate the existing model in-place so SwiftData tracks the change

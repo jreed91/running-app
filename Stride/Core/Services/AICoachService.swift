@@ -35,6 +35,88 @@ struct AICoachStructuredResponse: Codable, Sendable {
     }
 }
 
+struct AIWorkoutAdaptationResponse: Codable, Sendable {
+    let workoutType: String
+    let targetDistanceMeters: Double?
+    let targetPaceLowerBound: Double?
+    let targetPaceUpperBound: Double?
+    let explanation: String
+    let intervals: [AIWorkoutAdaptationInterval]
+    let workoutStructure: AIWorkoutStructure
+
+    enum CodingKeys: String, CodingKey {
+        case workoutType = "workout_type"
+        case targetDistanceMeters = "target_distance_meters"
+        case targetPaceLowerBound = "target_pace_lower_bound"
+        case targetPaceUpperBound = "target_pace_upper_bound"
+        case explanation
+        case intervals
+        case workoutStructure = "workout_structure"
+    }
+}
+
+struct AIWorkoutAdaptationInterval: Codable, Sendable {
+    let repetitions: Int
+    let distanceMeters: Double?
+    let durationSeconds: Double?
+    let targetPaceSecondsPerKm: Double?
+    let recoverySeconds: Double
+    let recoveryType: String
+
+    enum CodingKeys: String, CodingKey {
+        case repetitions
+        case distanceMeters = "distance_meters"
+        case durationSeconds = "duration_seconds"
+        case targetPaceSecondsPerKm = "target_pace_seconds_per_km"
+        case recoverySeconds = "recovery_seconds"
+        case recoveryType = "recovery_type"
+    }
+}
+
+struct AIWorkoutStructure: Codable, Sendable {
+    let warmup: AIWorkoutSegment
+    let mainSets: [AIWorkoutSet]
+    let cooldown: AIWorkoutSegment
+    let totalEstimatedDistanceMeters: Double
+    let totalEstimatedDurationSeconds: Double
+
+    enum CodingKeys: String, CodingKey {
+        case warmup
+        case mainSets = "main_sets"
+        case cooldown
+        case totalEstimatedDistanceMeters = "total_estimated_distance_meters"
+        case totalEstimatedDurationSeconds = "total_estimated_duration_seconds"
+    }
+}
+
+struct AIWorkoutSet: Codable, Sendable {
+    let repetitions: Int
+    let workSegment: AIWorkoutSegment
+    let recoverySegment: AIWorkoutSegment
+    let label: String
+
+    enum CodingKeys: String, CodingKey {
+        case repetitions
+        case workSegment = "work_segment"
+        case recoverySegment = "recovery_segment"
+        case label
+    }
+}
+
+struct AIWorkoutSegment: Codable, Sendable {
+    let distanceMeters: Double?
+    let durationSeconds: Double?
+    let targetPaceSecondsPerKm: Double?
+    let label: String
+
+    enum CodingKeys: String, CodingKey {
+        case distanceMeters = "distance_meters"
+        case durationSeconds = "duration_seconds"
+        case targetPaceSecondsPerKm = "target_pace_seconds_per_km"
+        case label
+    }
+}
+
 struct AICoachService: Sendable {
     let integrationService: AIIntegrationServiceProtocol
 
@@ -135,6 +217,72 @@ struct AICoachService: Sendable {
         return nil
     }
 
+    @MainActor
+    func adaptScheduledWorkoutWithProvider(
+        scheduled: ScheduledWorkout,
+        recentHistory: [RunWorkout],
+        profile: UserProfile,
+        provider: AIProvider,
+        apiKey: String,
+        modelOverride: String,
+        unitPreference: UnitPreference = .metric
+    ) async -> ScheduledWorkout? {
+        guard scheduled.workoutType != .rest,
+              scheduled.workoutType != .crossTraining else {
+            return scheduled
+        }
+
+        let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedKey.isEmpty else { return nil }
+
+        let selectedModel = modelOverride.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? provider.defaultModel
+            : modelOverride
+
+        do {
+            let response = try await integrationService.generateWorkoutAdaptation(
+                provider: provider,
+                apiKey: trimmedKey,
+                model: selectedModel,
+                adaptationContext: makeAdaptationContext(
+                    scheduled: scheduled,
+                    recentHistory: recentHistory,
+                    profile: profile,
+                    unitPreference: unitPreference
+                )
+            )
+
+            guard let structured = Self.parseWorkoutAdaptationResponse(response),
+                  let adapted = makeScheduledWorkout(from: structured, scheduled: scheduled) else {
+                return nil
+            }
+            return adapted
+        } catch {
+            return nil
+        }
+    }
+
+    static func parseWorkoutAdaptationResponse(_ text: String) -> AIWorkoutAdaptationResponse? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let candidates = [
+            trimmed,
+            extractFencedJSON(from: trimmed),
+            extractJSONObject(from: trimmed)
+        ].compactMap(\.self)
+
+        let decoder = JSONDecoder()
+        for candidate in candidates {
+            guard let data = candidate.data(using: .utf8),
+                  let decoded = try? decoder.decode(AIWorkoutAdaptationResponse.self, from: data),
+                  isValidAdaptation(decoded) else {
+                continue
+            }
+            return decoded
+        }
+
+        return nil
+    }
+
     private static func extractFencedJSON(from text: String) -> String? {
         guard let opening = text.range(of: "```") else { return nil }
         let afterOpening = text[opening.upperBound...]
@@ -152,6 +300,69 @@ struct AICoachService: Sendable {
             return nil
         }
         return String(text[start...end])
+    }
+
+    private static func isValidAdaptation(_ adaptation: AIWorkoutAdaptationResponse) -> Bool {
+        let validType = workoutType(from: adaptation.workoutType) != nil
+        let hasExplanation = !adaptation.explanation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let validDistance = adaptation.targetDistanceMeters.map { (500...50_000).contains($0) } ?? true
+        let validLower = adaptation.targetPaceLowerBound.map { (120...900).contains($0) } ?? true
+        let validUpper = adaptation.targetPaceUpperBound.map { (120...900).contains($0) } ?? true
+        let validRange = switch (adaptation.targetPaceLowerBound, adaptation.targetPaceUpperBound) {
+        case let (lower?, upper?): lower <= upper
+        default: true
+        }
+        let validStructure = isValidStructure(adaptation.workoutStructure)
+        return validType && hasExplanation && validDistance && validLower && validUpper && validRange && validStructure
+    }
+
+    private static func isValidStructure(_ structure: AIWorkoutStructure) -> Bool {
+        guard (500...50_000).contains(structure.totalEstimatedDistanceMeters),
+              (60...30_000).contains(structure.totalEstimatedDurationSeconds),
+              !structure.mainSets.isEmpty else {
+            return false
+        }
+
+        let segments = [structure.warmup, structure.cooldown]
+            + structure.mainSets.flatMap { [$0.workSegment, $0.recoverySegment] }
+        return segments.allSatisfy { segment in
+            let validDistance = segment.distanceMeters.map { (0...50_000).contains($0) } ?? true
+            let validDuration = segment.durationSeconds.map { (0...30_000).contains($0) } ?? true
+            let validPace = segment.targetPaceSecondsPerKm.map { (120...900).contains($0) } ?? true
+            return validDistance && validDuration && validPace
+        }
+    }
+
+    private static func workoutType(from text: String) -> WorkoutType? {
+        switch text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "easy": return .easy
+        case "tempo": return .tempo
+        case "interval": return .interval
+        case "long run", "longrun": return .longRun
+        default: return nil
+        }
+    }
+
+    @MainActor
+    private func makeScheduledWorkout(
+        from adaptation: AIWorkoutAdaptationResponse,
+        scheduled: ScheduledWorkout
+    ) -> ScheduledWorkout? {
+        guard let type = Self.workoutType(from: adaptation.workoutType) else { return nil }
+
+        let adapted = ScheduledWorkout(
+            scheduledDate: scheduled.scheduledDate,
+            workoutType: type,
+            targetDistanceMeters: adaptation.targetDistanceMeters,
+            targetPaceLowerBound: adaptation.targetPaceLowerBound,
+            targetPaceUpperBound: adaptation.targetPaceUpperBound,
+            notes: adaptation.explanation
+        )
+        adapted.week = scheduled.week
+        adapted.workoutLocation = scheduled.workoutLocation
+        adapted.workoutStructure = adaptation.workoutStructure.domainValue
+        adapted.intervals = adaptation.intervals.compactMap(\.domainValue)
+        return adapted
     }
 
     private func makePromptContext(
@@ -207,6 +418,81 @@ struct AICoachService: Sendable {
             .joined(separator: " ")
 
         return (summary: summary.isEmpty ? "No local summary available." : summary, focusAreas: Array(focus.prefix(3)))
+    }
+
+    @MainActor
+    private func makeAdaptationContext(
+        scheduled: ScheduledWorkout,
+        recentHistory: [RunWorkout],
+        profile: UserProfile,
+        unitPreference: UnitPreference
+    ) -> String {
+        let date = scheduled.scheduledDate.formatted(date: .abbreviated, time: .omitted)
+        let distance = scheduled.targetDistanceMeters?.distanceString(unit: unitPreference) ?? "open"
+        let paceRange: String
+        if let range = scheduled.targetPaceRange {
+            paceRange = "\(range.lowerBound.paceString(unit: unitPreference))-\(range.upperBound.paceString(unit: unitPreference))"
+        } else {
+            paceRange = "none"
+        }
+        let structure = scheduled.workoutStructure.map {
+            describeStructure($0, unitPreference: unitPreference)
+        } ?? "No structured workout."
+        let intervals = scheduled.intervals.isEmpty
+            ? "No interval prescription."
+            : scheduled.intervals.map { interval in
+                let distance = interval.distanceMeters?.distanceString(unit: unitPreference) ?? "open"
+                let pace = interval.targetPaceSecondsPerKm?.paceString(unit: unitPreference) ?? "open"
+                return "\(interval.repetitions)x \(distance) at \(pace), recovery \(interval.recoverySeconds.durationString)"
+            }.joined(separator: "\n")
+
+        let recent = recentHistory.prefix(8).map { run in
+            let avgHR = run.averageHeartRate.map { "\(Int($0)) bpm" } ?? "n/a"
+            return "\(run.date.formatted(date: .abbreviated, time: .omitted)) | \(run.workoutType.displayName) | \(run.distanceMeters.distanceString(unit: unitPreference)) | avg pace \(run.averagePaceSecondsPerKm.paceString(unit: unitPreference)) | duration \(run.durationSeconds.durationString) | avg HR \(avgHR)"
+        }.joined(separator: "\n")
+
+        return """
+        Goal race: \(profile.goalRace.displayName)
+        Fitness level: \(profile.fitnessLevel.displayName)
+        Weekly run days: \(profile.weeklyRunDays)
+        Unit preference for display: \(unitPreference.rawValue)
+
+        Scheduled workout:
+        Date: \(date)
+        Type: \(scheduled.workoutType.displayName)
+        Distance: \(distance)
+        Pace range: \(paceRange)
+        Current notes: \(scheduled.notes ?? "none")
+
+        Current structure:
+        \(structure)
+
+        Current intervals:
+        \(intervals)
+
+        Recent completed runs:
+        \(recent.isEmpty ? "No recent completed runs." : recent)
+        """
+    }
+
+    private func describeStructure(_ structure: WorkoutStructure, unitPreference: UnitPreference) -> String {
+        let sets = structure.mainSets.map { set in
+            "\(set.label): \(set.repetitions)x \(describeSegment(set.workSegment, unitPreference: unitPreference)), recovery \(describeSegment(set.recoverySegment, unitPreference: unitPreference))"
+        }.joined(separator: "\n")
+        return """
+        Warmup: \(describeSegment(structure.warmup, unitPreference: unitPreference))
+        Main sets:
+        \(sets)
+        Cooldown: \(describeSegment(structure.cooldown, unitPreference: unitPreference))
+        Total: \(structure.totalEstimatedDistanceMeters.distanceString(unit: unitPreference)), \(structure.totalEstimatedDurationSeconds.durationString)
+        """
+    }
+
+    private func describeSegment(_ segment: WorkoutSegment, unitPreference: UnitPreference) -> String {
+        let distance = segment.distanceMeters?.distanceString(unit: unitPreference) ?? "open"
+        let duration = segment.durationSeconds?.durationString ?? "open"
+        let pace = segment.targetPaceSecondsPerKm?.paceString(unit: unitPreference) ?? "open"
+        return "\(segment.label) distance \(distance), duration \(duration), pace \(pace)"
     }
 
     private func unavailableInsight(reason: String) -> AICoachInsight {
@@ -295,5 +581,58 @@ struct AICoachService: Sendable {
 
         let distanceMeters = Double(split.kilometer) * 1_000
         return distanceMeters.distanceString(unit: unitPreference)
+    }
+}
+
+private extension AIWorkoutAdaptationInterval {
+    var domainValue: WorkoutInterval? {
+        guard repetitions > 0,
+              (distanceMeters != nil || durationSeconds != nil),
+              recoverySeconds >= 0 else {
+            return nil
+        }
+
+        return WorkoutInterval(
+            repetitions: repetitions,
+            distanceMeters: distanceMeters,
+            durationSeconds: durationSeconds,
+            targetPaceSecondsPerKm: targetPaceSecondsPerKm,
+            recoverySeconds: recoverySeconds,
+            recoveryType: recoveryType.lowercased() == "walk" ? .walk : .jog
+        )
+    }
+}
+
+private extension AIWorkoutStructure {
+    var domainValue: WorkoutStructure {
+        WorkoutStructure(
+            warmup: warmup.domainValue,
+            mainSets: mainSets.map(\.domainValue),
+            cooldown: cooldown.domainValue,
+            totalEstimatedDistanceMeters: totalEstimatedDistanceMeters,
+            totalEstimatedDurationSeconds: totalEstimatedDurationSeconds
+        )
+    }
+}
+
+private extension AIWorkoutSet {
+    var domainValue: WorkoutSet {
+        WorkoutSet(
+            repetitions: repetitions,
+            workSegment: workSegment.domainValue,
+            recoverySegment: recoverySegment.domainValue,
+            label: label
+        )
+    }
+}
+
+private extension AIWorkoutSegment {
+    var domainValue: WorkoutSegment {
+        WorkoutSegment(
+            distanceMeters: distanceMeters,
+            durationSeconds: durationSeconds,
+            targetPaceSecondsPerKm: targetPaceSecondsPerKm,
+            label: label
+        )
     }
 }
