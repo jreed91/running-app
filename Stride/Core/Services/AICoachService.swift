@@ -170,7 +170,8 @@ struct AICoachService: Sendable {
         provider: AIProvider,
         apiKey: String,
         modelOverride: String,
-        unitPreference: UnitPreference = .metric
+        unitPreference: UnitPreference = .metric,
+        onChunk: @escaping @Sendable (String) -> Void = { _ in }
     ) async -> AICoachInsight {
         let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedKey.isEmpty else {
@@ -197,7 +198,7 @@ struct AICoachService: Sendable {
             : modelOverride
 
         do {
-            let narrative = try await integrationService.generateCoachingNarrative(
+            let narrative = try await integrationService.generateCoachingNarrativeStreaming(
                 provider: provider,
                 apiKey: trimmedKey,
                 model: selectedModel,
@@ -208,7 +209,8 @@ struct AICoachService: Sendable {
                     recentHistory: recentHistory,
                     profile: profile,
                     unitPreference: unitPreference
-                )
+                ),
+                onChunk: onChunk
             )
 
             guard let structured = Self.parseStructuredResponse(narrative) else {
