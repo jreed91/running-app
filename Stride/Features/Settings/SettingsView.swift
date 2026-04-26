@@ -275,6 +275,20 @@ struct SettingsView: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(.primary)
+
+            if DataMigrationService.isTestFlight {
+                rowDivider
+                NavigationLink {
+                    CloudKitDebugView()
+                } label: {
+                    settingsRow(icon: .history, iconColor: .brand, title: "CloudKit Debug Data") {
+                        StrideIcon(name: .chevronRight, size: 12,
+                                   color: Color.secondary.opacity(0.5), strokeWeight: 2)
+                    }
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.primary)
+            }
         }
     }
 
