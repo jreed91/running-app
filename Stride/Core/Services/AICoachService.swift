@@ -409,6 +409,12 @@ struct AICoachService: Sendable {
             }
         }
 
+        for candidate in candidates {
+            if let partial = parsePartialStructuredResponse(candidate) {
+                return partial
+            }
+        }
+
         return nil
     }
 
@@ -574,6 +580,153 @@ struct AICoachService: Sendable {
             return nil
         }
         return String(text[start...end])
+    }
+
+    private static func parsePartialStructuredResponse(_ text: String) -> AICoachStructuredResponse? {
+        let headline = extractJSONStringValue("headline", from: text) ?? "Workout analysis"
+        let summary = extractJSONStringValue("summary", from: text)
+            ?? extractJSONStringValue("full_analysis", from: text)
+            ?? ""
+        let fullAnalysis = extractJSONStringValue("full_analysis", from: text)
+        guard !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+
+        return AICoachStructuredResponse(
+            headline: headline,
+            summary: summary,
+            fullAnalysis: fullAnalysis,
+            confidence: extractJSONIntValue("confidence", from: text) ?? 0,
+            evidence: decodeCompletedObjects(
+                inArrayNamed: "evidence",
+                from: text,
+                as: AICoachEvidenceItem.self
+            ),
+            actionItems: decodeCompletedObjects(
+                inArrayNamed: "action_items",
+                from: text,
+                as: AICoachActionItem.self
+            ),
+            nextWorkout: AICoachStructuredResponse.NextWorkout(
+                title: extractJSONStringValue("title", from: extractJSONObject(named: "next_workout", from: text) ?? "")
+                    ?? "Next easy run",
+                rationale: extractJSONStringValue("rationale", from: extractJSONObject(named: "next_workout", from: text) ?? "")
+                    ?? "Keep the next session controlled so the training plan stays on track."
+            )
+        )
+    }
+
+    private static func extractJSONStringValue(_ key: String, from text: String) -> String? {
+        guard let keyRange = text.range(of: "\"\(key)\""),
+              let colon = text[keyRange.upperBound...].firstIndex(of: ":") else {
+            return nil
+        }
+
+        var index = text.index(after: colon)
+        while index < text.endIndex, text[index].isWhitespace || text[index].isNewline {
+            index = text.index(after: index)
+        }
+        guard index < text.endIndex, text[index] == "\"" else { return nil }
+        index = text.index(after: index)
+
+        var result = ""
+        var isEscaped = false
+        while index < text.endIndex {
+            let character = text[index]
+            if isEscaped {
+                result.append(character)
+                isEscaped = false
+            } else if character == "\\" {
+                isEscaped = true
+            } else if character == "\"" {
+                return result
+            } else {
+                result.append(character)
+            }
+            index = text.index(after: index)
+        }
+        return nil
+    }
+
+    private static func extractJSONIntValue(_ key: String, from text: String) -> Int? {
+        guard let keyRange = text.range(of: "\"\(key)\""),
+              let colon = text[keyRange.upperBound...].firstIndex(of: ":") else {
+            return nil
+        }
+        let suffix = text[text.index(after: colon)...].drop { $0.isWhitespace || $0.isNewline || $0 == "\"" }
+        let digits = suffix.prefix { $0.isNumber }
+        return Int(digits)
+    }
+
+    private static func extractJSONObject(named key: String, from text: String) -> String? {
+        guard let keyRange = text.range(of: "\"\(key)\""),
+              let colon = text[keyRange.upperBound...].firstIndex(of: ":"),
+              let start = text[colon...].firstIndex(of: "{") else {
+            return nil
+        }
+        return extractBalancedObject(from: text, start: start)
+    }
+
+    private static func decodeCompletedObjects<T: Decodable>(
+        inArrayNamed key: String,
+        from text: String,
+        as type: T.Type
+    ) -> [T] {
+        guard let keyRange = text.range(of: "\"\(key)\""),
+              let colon = text[keyRange.upperBound...].firstIndex(of: ":"),
+              let arrayStart = text[colon...].firstIndex(of: "[") else {
+            return []
+        }
+
+        var index = text.index(after: arrayStart)
+        var objects: [T] = []
+        let decoder = JSONDecoder()
+        while index < text.endIndex {
+            let arrayEnd = text[index...].firstIndex(of: "]")
+            guard let objectStart = text[index...].firstIndex(of: "{"),
+                  arrayEnd.map({ objectStart < $0 }) ?? true,
+                  let object = extractBalancedObject(from: text, start: objectStart) else {
+                break
+            }
+            if let data = object.data(using: .utf8),
+               let decoded = try? decoder.decode(T.self, from: data) {
+                objects.append(decoded)
+            }
+            index = text.index(objectStart, offsetBy: object.count)
+        }
+        return objects
+    }
+
+    private static func extractBalancedObject(from text: String, start: String.Index) -> String? {
+        var index = start
+        var depth = 0
+        var inString = false
+        var isEscaped = false
+
+        while index < text.endIndex {
+            let character = text[index]
+            if inString {
+                if isEscaped {
+                    isEscaped = false
+                } else if character == "\\" {
+                    isEscaped = true
+                } else if character == "\"" {
+                    inString = false
+                }
+            } else if character == "\"" {
+                inString = true
+            } else if character == "{" {
+                depth += 1
+            } else if character == "}" {
+                depth -= 1
+                if depth == 0 {
+                    return String(text[start...index])
+                }
+            }
+            index = text.index(after: index)
+        }
+
+        return nil
     }
 
     private static func isValidAdaptation(_ adaptation: AIWorkoutAdaptationResponse) -> Bool {

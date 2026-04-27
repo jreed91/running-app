@@ -98,6 +98,32 @@ struct AICoachServiceTests {
         #expect(parsed?.nextWorkout.rationale.isEmpty == false)
     }
 
+    @Test("Salvages partial AI response when stream is truncated")
+    func salvagesPartialStructuredResponse() {
+        let response = """
+        {
+          "headline": "Heart Rate Too High for Easy Runs",
+          "summary": "Your easy runs are consistently pushing into moderate-to-hard effort territory.",
+          "full_analysis": "Today's easy run averaged 158 bpm with a max of 179 bpm, both above the easy zone. Slow down on easy days and use heart rate as the governor.",
+          "confidence": 78,
+          "evidence": [
+            { "label": "HR avg", "value": "158 bpm", "delta": "+13 bpm", "tone": "warning" },
+            { "label": "HR max", "value": "179 bpm", "delta": "too high", "tone": "warning" }
+          ],
+          "action_items": [
+            { "title": "Slow easy runs", "detail": "Stay below 145 bpm throughout.", "priority": "High", "metric": "≤145 bpm", "tone": "easy" },
+            { "title": "Cap weekly long run effort", "detail": "Keep your next long run conversational.", "priority": "Medium", "metric": "≤9:45/mi", "tone":
+        """
+
+        let parsed = AICoachService.parseStructuredResponse(response)
+
+        #expect(parsed?.headline == "Heart Rate Too High for Easy Runs")
+        #expect(parsed?.confidence == 78)
+        #expect(parsed?.evidence.count == 2)
+        #expect(parsed?.actionItems.count == 1)
+        #expect(parsed?.nextWorkout.title == "Next easy run")
+    }
+
     @Test("Parses structured AI workout adaptation JSON")
     func parsesWorkoutAdaptationResponse() throws {
         let response = """

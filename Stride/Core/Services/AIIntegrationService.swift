@@ -42,6 +42,8 @@ enum AIIntegrationError: Error {
 }
 
 struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
+    private static let coachingMaxTokens = 2_000
+
     private let session: any StrideURLSessionProtocol
 
     init(session: any StrideURLSessionProtocol = PulseIntegrationService.makeURLSession()) {
@@ -169,7 +171,8 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
                 .init(role: "user", content: prompt)
             ],
             temperature: 0.3,
-            responseFormat: .init(type: "json_object")
+            responseFormat: .init(type: "json_object"),
+            maxTokens: Self.coachingMaxTokens
         )
 
         var request = URLRequest(url: URL(string: "https://api.openai.com/v1/chat/completions")!)
@@ -200,7 +203,7 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
         let prompt = makePrompt(workoutSummary: workoutSummary, focusAreas: focusAreas, workoutDetails: workoutDetails)
         let body = AnthropicRequest(
             model: model,
-            maxTokens: 700,
+            maxTokens: Self.coachingMaxTokens,
             messages: [.init(role: "user", content: prompt)]
         )
 
@@ -243,6 +246,7 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
             ],
             temperature: 0.3,
             responseFormat: .init(type: "json_object"),
+            maxTokens: Self.coachingMaxTokens,
             stream: true
         )
 
@@ -329,7 +333,7 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
         let prompt = makePrompt(workoutSummary: workoutSummary, focusAreas: focusAreas, workoutDetails: workoutDetails)
         let body = AnthropicRequest(
             model: model,
-            maxTokens: 700,
+            maxTokens: Self.coachingMaxTokens,
             messages: [.init(role: "user", content: prompt)],
             stream: true
         )
@@ -694,7 +698,7 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
 
         Rules:
         - confidence must be an integer from 0 to 100.
-        - full_analysis must be 3 to 5 concise sentences that explain the diagnosis, key evidence, and practical adjustment.
+        - full_analysis must be 2 to 3 concise sentences that explain the diagnosis, key evidence, and practical adjustment.
         - Include exactly 4 evidence items. Each evidence item should be a compact display chip: label maximum 10 characters, value maximum 12 characters, optional delta maximum 8 characters.
         - Evidence tone must be one of: warning, success, brand, easy, interval, neutral.
         - Include exactly 3 action_items.
@@ -846,6 +850,7 @@ private struct OpenAIRequest: Encodable {
     let messages: [Message]
     let temperature: Double
     let responseFormat: ResponseFormat?
+    var maxTokens: Int? = nil
     var stream: Bool? = nil
 
     enum CodingKeys: String, CodingKey {
@@ -853,6 +858,7 @@ private struct OpenAIRequest: Encodable {
         case messages
         case temperature
         case responseFormat = "response_format"
+        case maxTokens = "max_tokens"
         case stream
     }
 }
