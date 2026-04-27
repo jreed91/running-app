@@ -523,8 +523,8 @@ struct NewPlanOnboardingView: View {
         profile.currentEstimated5KTimeSeconds = fiveKTimeSeconds
         profile.updatedAt = Date()
 
+        // Remove existing plans so there is only ever one plan per user.
         let existing = (try? context.fetch(FetchDescriptor<TrainingPlan>())) ?? []
-        existing.forEach { $0.isActive = false }
 
         let plan: TrainingPlan
         if goalRace.isGoalRace {
@@ -555,6 +555,7 @@ struct NewPlanOnboardingView: View {
             }
             for previous in existing {
                 try? await container.healthKitRepository.removeWorkoutPlans(for: previous)
+                context.delete(previous)
             }
             try? await container.healthKitRepository.syncWorkoutPlans(for: plan)
             try? context.save()
