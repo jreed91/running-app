@@ -18,6 +18,28 @@ struct AICoachEvidenceItem: Codable, Hashable, Sendable {
     let value: String
     let delta: String?
     let tone: String
+
+    init(label: String, value: String, delta: String?, tone: String) {
+        self.label = label
+        self.value = value
+        self.delta = delta
+        self.tone = tone
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case label
+        case value
+        case delta
+        case tone
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        label = container.decodeFlexibleStringIfPresent(forKey: .label) ?? "Metric"
+        value = container.decodeFlexibleStringIfPresent(forKey: .value) ?? "N/A"
+        delta = container.decodeFlexibleStringIfPresent(forKey: .delta)
+        tone = container.decodeFlexibleStringIfPresent(forKey: .tone) ?? "neutral"
+    }
 }
 
 struct AICoachActionItem: Codable, Hashable, Sendable {
@@ -26,12 +48,53 @@ struct AICoachActionItem: Codable, Hashable, Sendable {
     let priority: String
     let metric: String?
     let tone: String?
+
+    init(title: String, detail: String, priority: String, metric: String?, tone: String?) {
+        self.title = title
+        self.detail = detail
+        self.priority = priority
+        self.metric = metric
+        self.tone = tone
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case title
+        case detail
+        case priority
+        case metric
+        case tone
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        title = container.decodeFlexibleStringIfPresent(forKey: .title) ?? "Adjust effort"
+        detail = container.decodeFlexibleStringIfPresent(forKey: .detail) ?? "Keep the next run controlled and easy."
+        priority = container.decodeFlexibleStringIfPresent(forKey: .priority) ?? "Medium"
+        metric = container.decodeFlexibleStringIfPresent(forKey: .metric)
+        tone = container.decodeFlexibleStringIfPresent(forKey: .tone)
+    }
 }
 
-struct AICoachStructuredResponse: Codable, Sendable {
-    struct NextWorkout: Codable, Sendable {
+struct AICoachStructuredResponse: Decodable, Sendable {
+    struct NextWorkout: Decodable, Sendable {
         let title: String
         let rationale: String
+
+        init(title: String, rationale: String) {
+            self.title = title
+            self.rationale = rationale
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case title
+            case rationale
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            title = container.decodeFlexibleStringIfPresent(forKey: .title) ?? "Next easy run"
+            rationale = container.decodeFlexibleStringIfPresent(forKey: .rationale) ?? "Keep the next session controlled so the training plan stays on track."
+        }
     }
 
     let headline: String
@@ -49,7 +112,74 @@ struct AICoachStructuredResponse: Codable, Sendable {
         case confidence
         case evidence
         case actionItems = "action_items"
+        case actions
         case nextWorkout = "next_workout"
+    }
+
+    init(
+        headline: String,
+        summary: String,
+        fullAnalysis: String?,
+        confidence: Int,
+        evidence: [AICoachEvidenceItem],
+        actionItems: [AICoachActionItem],
+        nextWorkout: NextWorkout
+    ) {
+        self.headline = headline
+        self.summary = summary
+        self.fullAnalysis = fullAnalysis
+        self.confidence = confidence
+        self.evidence = evidence
+        self.actionItems = actionItems
+        self.nextWorkout = nextWorkout
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        headline = container.decodeFlexibleStringIfPresent(forKey: .headline) ?? "Workout analysis"
+        summary = container.decodeFlexibleStringIfPresent(forKey: .summary)
+            ?? container.decodeFlexibleStringIfPresent(forKey: .fullAnalysis)
+            ?? ""
+        fullAnalysis = container.decodeFlexibleStringIfPresent(forKey: .fullAnalysis)
+        confidence = container.decodeFlexibleIntIfPresent(forKey: .confidence) ?? 0
+        evidence = (try? container.decodeIfPresent([AICoachEvidenceItem].self, forKey: .evidence)) ?? []
+        actionItems = (try? container.decodeIfPresent([AICoachActionItem].self, forKey: .actionItems))
+            ?? (try? container.decodeIfPresent([AICoachActionItem].self, forKey: .actions))
+            ?? []
+        nextWorkout = (try? container.decodeIfPresent(NextWorkout.self, forKey: .nextWorkout))
+            ?? NextWorkout(title: "Next easy run", rationale: "Keep the next session controlled so the training plan stays on track.")
+    }
+}
+
+private extension KeyedDecodingContainer {
+    func decodeFlexibleStringIfPresent(forKey key: Key) -> String? {
+        if let value = try? decodeIfPresent(String.self, forKey: key) {
+            return value
+        }
+        if let value = try? decodeIfPresent(Int.self, forKey: key) {
+            return String(value)
+        }
+        if let value = try? decodeIfPresent(Double.self, forKey: key) {
+            return value.rounded() == value ? String(Int(value)) : String(value)
+        }
+        if let value = try? decodeIfPresent(Bool.self, forKey: key) {
+            return value ? "true" : "false"
+        }
+        return nil
+    }
+
+    func decodeFlexibleIntIfPresent(forKey key: Key) -> Int? {
+        if let value = try? decodeIfPresent(Int.self, forKey: key) {
+            return value
+        }
+        if let value = try? decodeIfPresent(Double.self, forKey: key) {
+            return Int(value.rounded())
+        }
+        if let value = try? decodeIfPresent(String.self, forKey: key) {
+            let digits = value.filter { $0.isNumber }
+            return Int(digits)
+        }
+        return nil
     }
 }
 
@@ -270,11 +400,10 @@ struct AICoachService: Sendable {
                 continue
             }
 
-            let hasRequiredContent = !decoded.summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let hasSummary = !decoded.summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                || decoded.fullAnalysis?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            let hasRequiredContent = hasSummary
                 && !decoded.nextWorkout.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                && (0...100).contains(decoded.confidence)
-                && !decoded.evidence.isEmpty
-                && !decoded.actionItems.isEmpty
             if hasRequiredContent {
                 return decoded
             }

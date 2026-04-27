@@ -46,8 +46,8 @@ struct AICoachServiceTests {
         #expect(parsed?.nextWorkout.title == "35 minute easy run")
     }
 
-    @Test("Rejects structured AI insight JSON without action items")
-    func rejectsEmptyActionItems() {
+    @Test("Parses structured AI insight JSON without optional display arrays")
+    func parsesMissingDisplayArrays() {
         let response = """
         {
           "headline": "Needs Actions",
@@ -64,7 +64,38 @@ struct AICoachServiceTests {
         }
         """
 
-        #expect(AICoachService.parseStructuredResponse(response) == nil)
+        let parsed = AICoachService.parseStructuredResponse(response)
+
+        #expect(parsed?.headline == "Needs Actions")
+        #expect(parsed?.actionItems.isEmpty == true)
+    }
+
+    @Test("Parses useful AI response with imperfect optional fields")
+    func parsesImperfectStructuredResponse() {
+        let response = """
+        {
+          "headline": "Keep It Easy",
+          "summary": "Your effort was higher than the planned easy run.",
+          "confidence": "82%",
+          "evidence": [
+            { "label": "HR", "value": 158, "delta": 12 }
+          ],
+          "actions": [
+            { "title": "Cap HR", "detail": "Keep easy runs below the cap.", "metric": 150 }
+          ],
+          "next_workout": {
+            "title": "30 minute easy run"
+          }
+        }
+        """
+
+        let parsed = AICoachService.parseStructuredResponse(response)
+
+        #expect(parsed?.confidence == 82)
+        #expect(parsed?.evidence.first?.value == "158")
+        #expect(parsed?.evidence.first?.tone == "neutral")
+        #expect(parsed?.actionItems.first?.metric == "150")
+        #expect(parsed?.nextWorkout.rationale.isEmpty == false)
     }
 
     @Test("Parses structured AI workout adaptation JSON")

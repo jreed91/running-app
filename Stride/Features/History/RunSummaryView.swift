@@ -73,7 +73,7 @@ struct RunSummaryView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 14) {
+            VStack(alignment: .leading, spacing: 14) {
                 titleBlock
                 routeMap
                 statsGrid
@@ -162,6 +162,7 @@ struct RunSummaryView: View {
         }
         .padding(.top, 18)
         .padding(.horizontal, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func metricInline(value: String, label: String) -> some View {
