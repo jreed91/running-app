@@ -52,8 +52,12 @@ struct RunSummaryView: View {
         allWorkouts.filter { $0.id != workout.id }
     }
 
+    private var displayType: WorkoutType {
+        workout.scheduledWorkout?.workoutType ?? workout.workoutType
+    }
+
     private var workoutTone: Color {
-        workout.workoutType.color
+        displayType.color
     }
 
     private var titleMetric: (value: String, unit: String) {
@@ -96,7 +100,7 @@ struct RunSummaryView: View {
             .frame(maxWidth: .infinity)
         }
         .background(Color.surfacePrimary.ignoresSafeArea())
-        .navigationTitle(workout.workoutType.displayName)
+        .navigationTitle(displayType.displayName)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .destructiveAction) {
@@ -158,7 +162,7 @@ struct RunSummaryView: View {
                     .frame(width: 8, height: 8)
                     .shadow(color: workoutTone.opacity(0.35), radius: 0, x: 0, y: 0)
                     .overlay(Circle().stroke(workoutTone.opacity(0.25), lineWidth: 6))
-                Text("\(workout.workoutType.displayName) run")
+                Text("\(displayType.displayName) run")
                     .font(.system(size: 11, weight: .bold))
                     .kerning(1.4)
                     .textCase(.uppercase)

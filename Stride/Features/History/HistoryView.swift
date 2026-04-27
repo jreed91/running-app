@@ -121,22 +121,33 @@ struct WorkoutRowView: View {
     let workout: RunWorkout
     @Environment(AppSettings.self) private var appSettings
 
+    private var displayType: WorkoutType {
+        workout.scheduledWorkout?.workoutType ?? workout.workoutType
+    }
+
     var body: some View {
         HStack(spacing: 14) {
             ZStack {
                 Circle()
-                    .fill(workout.workoutType.color.opacity(0.15))
+                    .fill(displayType.color.opacity(0.15))
                     .frame(width: 44, height: 44)
-                StrideIcon(name: workout.workoutType.strideIcon, size: 22,
-                           color: workout.workoutType.color, strokeWeight: 2.0)
+                StrideIcon(name: displayType.strideIcon, size: 22,
+                           color: displayType.color, strokeWeight: 2.0)
             }
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(workout.workoutType.displayName)
+                Text(displayType.displayName)
                     .font(.bodyStrong)
-                Text(workout.date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 4) {
+                    Text(workout.date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if workout.scheduledWorkout != nil {
+                        Image(systemName: "link")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.brand)
+                    }
+                }
             }
 
             Spacer()
