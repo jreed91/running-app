@@ -207,9 +207,8 @@ struct PlanSetupView: View {
         profile.preferredRunDayIndices = sortedSelectedDays
         profile.updatedAt = Date()
 
-        // Deactivate existing plans
+        // Remove existing plans so there is only ever one plan per user.
         let existing = (try? context.fetch(FetchDescriptor<TrainingPlan>())) ?? []
-        existing.forEach { $0.isActive = false }
 
         let plan = container.trainingPlanService.generatePlan(
             profile: profile,
@@ -228,6 +227,7 @@ struct PlanSetupView: View {
             }
             for previous in existing {
                 try? await container.healthKitRepository.removeWorkoutPlans(for: previous)
+                context.delete(previous)
             }
             try? await container.healthKitRepository.syncWorkoutPlans(for: plan)
             try? context.save()
