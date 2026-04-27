@@ -192,9 +192,18 @@ final class AppContainer: ObservableObject {
     /// Fetches weather for the given coordinate and attaches it to the workout, then saves.
     /// Silently no-ops if WeatherKit is unavailable or the workout has no coordinate.
     func attachWeather(to workout: RunWorkout, coordinate: Coordinate) async {
-        guard let summary = await weatherService.fetchWeather(at: coordinate, date: workout.date) else { return }
+        AppLogger.log(
+            "Attaching weather to workout \(workout.id) at (\(String(format: "%.4f", coordinate.latitude)), \(String(format: "%.4f", coordinate.longitude)))",
+            label: "WeatherKit",
+            level: .debug
+        )
+        guard let summary = await weatherService.fetchWeather(at: coordinate, date: workout.date) else {
+            AppLogger.log("Weather fetch returned nil for workout \(workout.id) — skipping attach", label: "WeatherKit", level: .warning)
+            return
+        }
         workout.weather = summary
         try? modelContainer.mainContext.save()
+        AppLogger.log("Weather attached to workout \(workout.id)", label: "WeatherKit", level: .info)
     }
 
     // MARK: - Route Genius

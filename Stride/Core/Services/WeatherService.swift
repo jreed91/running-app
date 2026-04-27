@@ -12,7 +12,17 @@ final class WeatherService: Sendable {
 
     func fetchWeather(at coordinate: Coordinate, date: Date) async -> WorkoutWeather? {
         let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
-        guard let weather = try? await WeatherKit.WeatherService.shared.weather(for: location) else {
+        AppLogger.log(
+            "Requesting weather at (\(String(format: "%.4f", coordinate.latitude)), \(String(format: "%.4f", coordinate.longitude))) for \(date.formatted(.dateTime.month().day().hour().minute()))",
+            label: "WeatherKit",
+            level: .debug
+        )
+
+        let weather: Weather
+        do {
+            weather = try await WeatherKit.WeatherService.shared.weather(for: location)
+        } catch {
+            AppLogger.log("WeatherKit request failed: \(error)", label: "WeatherKit", level: .error)
             return nil
         }
 
@@ -21,7 +31,7 @@ final class WeatherService: Sendable {
         if let hour = weather.hourlyForecast.min(by: {
             abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date))
         }) {
-            return WorkoutWeather(
+            let result = WorkoutWeather(
                 temperatureCelsius: hour.temperature.converted(to: UnitTemperature.celsius).value,
                 feelsLikeCelsius: hour.apparentTemperature.converted(to: UnitTemperature.celsius).value,
                 humidityPercent: hour.humidity * 100,
@@ -29,10 +39,16 @@ final class WeatherService: Sendable {
                 conditionSymbol: hour.symbolName,
                 conditionDescription: hour.condition.description
             )
+            AppLogger.log(
+                "Weather (hourly): \(result.conditionDescription), \(String(format: "%.0f", result.temperatureCelsius))°C",
+                label: "WeatherKit",
+                level: .info
+            )
+            return result
         }
 
         let c = weather.currentWeather
-        return WorkoutWeather(
+        let result = WorkoutWeather(
             temperatureCelsius: c.temperature.converted(to: UnitTemperature.celsius).value,
             feelsLikeCelsius: c.apparentTemperature.converted(to: UnitTemperature.celsius).value,
             humidityPercent: c.humidity * 100,
@@ -40,5 +56,11 @@ final class WeatherService: Sendable {
             conditionSymbol: c.symbolName,
             conditionDescription: c.condition.description
         )
+        AppLogger.log(
+            "Weather (current): \(result.conditionDescription), \(String(format: "%.0f", result.temperatureCelsius))°C",
+            label: "WeatherKit",
+            level: .info
+        )
+        return result
     }
 }
