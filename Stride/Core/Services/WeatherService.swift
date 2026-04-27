@@ -11,6 +11,11 @@ import CoreLocation
 final class WeatherService: Sendable {
 
     func fetchWeather(at coordinate: Coordinate, date: Date) async -> WorkoutWeather? {
+        #if targetEnvironment(simulator)
+        AppLogger.log("WeatherKit skipped on simulator — run on device", label: "WeatherKit", level: .debug)
+        return nil
+        #endif
+
         let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
         AppLogger.log(
             "Requesting weather at (\(String(format: "%.4f", coordinate.latitude)), \(String(format: "%.4f", coordinate.longitude))) for \(date.formatted(.dateTime.month().day().hour().minute()))",
@@ -22,7 +27,16 @@ final class WeatherService: Sendable {
         do {
             weather = try await WeatherKit.WeatherService.shared.weather(for: location)
         } catch {
-            AppLogger.log("WeatherKit request failed: \(error)", label: "WeatherKit", level: .error)
+            let nsError = error as NSError
+            if nsError.domain == "WeatherDaemon.WDSJWTAuthenticatorServiceListener.Errors" && nsError.code == 2 {
+                AppLogger.log(
+                    "WeatherKit JWT auth failed — enable WeatherKit for com.running.stride at developer.apple.com/account/resources/identifiers",
+                    label: "WeatherKit",
+                    level: .error
+                )
+            } else {
+                AppLogger.log("WeatherKit request failed: \(error)", label: "WeatherKit", level: .error)
+            }
             return nil
         }
 
