@@ -10,6 +10,11 @@ final class AppSettings {
     private static let defaults = UserDefaults.standard
     private static let ubiquitousStore = NSUbiquitousKeyValueStore.default
 
+    /// API keys should remain local-only and never sync through iCloud key-value storage.
+    private static let localOnlyStringKeys: Set<String> = [
+        aiAPIKeyKey
+    ]
+
     var unitPreference: UnitPreference {
         didSet {
             Self.persist(unitPreference.rawValue, forKey: Self.unitPreferenceKey)
@@ -71,6 +76,7 @@ final class AppSettings {
 
     init() {
         Self.ubiquitousStore.synchronize()
+        Self.removeLocalOnlyValuesFromUbiquitousStore()
 
         let raw = Self.readString(forKey: Self.unitPreferenceKey) ?? ""
         self.unitPreference = UnitPreference(rawValue: raw) ?? .metric
@@ -126,6 +132,13 @@ final class AppSettings {
 
     private static func persist(_ value: String, forKey key: String) {
         defaults.set(value, forKey: key)
+
+        guard localOnlyStringKeys.contains(key) == false else {
+            ubiquitousStore.removeObject(forKey: key)
+            ubiquitousStore.synchronize()
+            return
+        }
+
         ubiquitousStore.set(value, forKey: key)
         ubiquitousStore.synchronize()
     }
@@ -134,6 +147,19 @@ final class AppSettings {
         defaults.set(value, forKey: key)
         ubiquitousStore.set(value, forKey: key)
         ubiquitousStore.synchronize()
+    }
+
+
+    private static func removeLocalOnlyValuesFromUbiquitousStore() {
+        var removed = false
+        for key in localOnlyStringKeys where ubiquitousStore.object(forKey: key) != nil {
+            ubiquitousStore.removeObject(forKey: key)
+            removed = true
+        }
+
+        if removed {
+            ubiquitousStore.synchronize()
+        }
     }
 
     private static func hasStoredValue(forKey key: String) -> Bool {
