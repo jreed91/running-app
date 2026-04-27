@@ -12,38 +12,31 @@ final class WeatherService: Sendable {
 
     func fetchWeather(at coordinate: Coordinate, date: Date) async -> WorkoutWeather? {
         let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        guard let weather = try? await WeatherKit.WeatherService.shared.weather(for: location) else {
+            return nil
+        }
 
-        // Prefer hourly conditions at the actual workout time for accuracy.
-        // WeatherKit's hourly forecast covers roughly the past 24 h and next 10 days.
-        let start = date.addingTimeInterval(-1800)
-        let end = date.addingTimeInterval(1800)
-        if let hourly = try? await WeatherKit.WeatherService.shared.weather(
-            for: location,
-            including: .hourlyForecast(startDate: start, endDate: end)
-        ), let hour = hourly.min(by: {
+        // Prefer the hourly reading closest to the workout time for accuracy.
+        // Falls back to current conditions when the hourly forecast is empty.
+        if let hour = weather.hourlyForecast.min(by: {
             abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date))
         }) {
             return WorkoutWeather(
-                temperatureCelsius: hour.temperature.converted(to: .celsius).value,
-                feelsLikeCelsius: hour.apparentTemperature.converted(to: .celsius).value,
+                temperatureCelsius: hour.temperature.converted(to: UnitTemperature.celsius).value,
+                feelsLikeCelsius: hour.apparentTemperature.converted(to: UnitTemperature.celsius).value,
                 humidityPercent: hour.humidity * 100,
-                windSpeedKmh: hour.wind.speed.converted(to: .kilometersPerHour).value,
+                windSpeedKmh: hour.wind.speed.converted(to: UnitSpeed.kilometersPerHour).value,
                 conditionSymbol: hour.symbolName,
                 conditionDescription: hour.condition.description
             )
         }
 
-        // Fall back to current conditions (works for live runs; WeatherKit does not
-        // provide historical data for workouts older than the forecast window).
-        guard let weather = try? await WeatherKit.WeatherService.shared.weather(for: location) else {
-            return nil
-        }
         let c = weather.currentWeather
         return WorkoutWeather(
-            temperatureCelsius: c.temperature.converted(to: .celsius).value,
-            feelsLikeCelsius: c.apparentTemperature.converted(to: .celsius).value,
+            temperatureCelsius: c.temperature.converted(to: UnitTemperature.celsius).value,
+            feelsLikeCelsius: c.apparentTemperature.converted(to: UnitTemperature.celsius).value,
             humidityPercent: c.humidity * 100,
-            windSpeedKmh: c.wind.speed.converted(to: .kilometersPerHour).value,
+            windSpeedKmh: c.wind.speed.converted(to: UnitSpeed.kilometersPerHour).value,
             conditionSymbol: c.symbolName,
             conditionDescription: c.condition.description
         )
