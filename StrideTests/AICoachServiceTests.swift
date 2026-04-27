@@ -10,11 +10,20 @@ struct AICoachServiceTests {
         {
           "headline": "Control The Finish",
           "summary": "You paced well early but faded late.",
+          "confidence": 84,
+          "evidence": [
+            { "label": "Pace", "value": "5:42/km", "delta": "late fade", "tone": "warning" },
+            { "label": "HR avg", "value": "154 bpm", "delta": "+8", "tone": "warning" },
+            { "label": "Split 5", "value": "6:02", "delta": "slow", "tone": "neutral" },
+            { "label": "Load", "value": "high", "delta": null, "tone": "brand" }
+          ],
           "action_items": [
             {
               "title": "Start Easier",
               "detail": "Open the first two splits five seconds slower to preserve form.",
-              "priority": "High"
+              "priority": "High",
+              "metric": "-5 sec",
+              "tone": "warning"
             }
           ],
           "next_workout": {
@@ -28,7 +37,10 @@ struct AICoachServiceTests {
         let parsed = AICoachService.parseStructuredResponse(response)
 
         #expect(parsed?.headline == "Control The Finish")
+        #expect(parsed?.confidence == 84)
+        #expect(parsed?.evidence.count == 4)
         #expect(parsed?.actionItems.first?.priority == "High")
+        #expect(parsed?.actionItems.first?.metric == "-5 sec")
         #expect(parsed?.nextWorkout.title == "35 minute easy run")
     }
 
@@ -38,6 +50,10 @@ struct AICoachServiceTests {
         {
           "headline": "Needs Actions",
           "summary": "Valid text is not enough.",
+          "confidence": 70,
+          "evidence": [
+            { "label": "Pace", "value": "5:42/km", "delta": null, "tone": "neutral" }
+          ],
           "action_items": [],
           "next_workout": {
             "title": "Easy run",
@@ -109,7 +125,7 @@ struct AICoachServiceTests {
 
         #expect(parsed.workoutType == "Interval")
         #expect(parsed.intervals.first?.repetitions == 4)
-        #expect(parsed.workoutStructure.mainSets.first?.label == "Controlled intervals")
+        #expect(parsed.workoutStructure?.mainSets.first?.label == "Controlled intervals")
     }
 
     @Test("Parses batched workout adaptation JSON")
@@ -169,7 +185,7 @@ struct AICoachServiceTests {
 
         #expect(parsed.adaptations.first?.workoutID == workoutID)
         #expect(parsed.adaptations.first?.workoutType == "Tempo")
-        #expect(parsed.adaptations.first?.workoutStructure.totalEstimatedDistanceMeters == 6000)
+        #expect(parsed.adaptations.first?.workoutStructure?.totalEstimatedDistanceMeters == 6000)
     }
 
     @Test("Rejects workout adaptation without explanation")

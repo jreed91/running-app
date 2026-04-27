@@ -22,6 +22,8 @@ struct RunSummaryView: View {
     @State private var aiInsight: AICoachInsight?
     @State private var isLoadingAIInsight = false
     @State private var aiStreamBuffer = ""
+    @State private var showFullAIAnalysis = false
+    @State private var aiReaction: AIReaction?
 
     private var matchedScheduled: ScheduledWorkout? {
         scheduledWorkouts.first { $0.completedWorkout?.id == workout.id }
@@ -49,10 +51,30 @@ struct RunSummaryView: View {
         allWorkouts.filter { $0.id != workout.id }
     }
 
+    private var workoutTone: Color {
+        workout.workoutType.color
+    }
+
+    private var titleMetric: (value: String, unit: String) {
+        let converted = appSettings.unitPreference == .imperial
+            ? workout.distanceMeters / 1_609.344
+            : workout.distanceMeters / 1_000
+        return (String(format: "%.2f", converted), appSettings.unitPreference.distanceLabel)
+    }
+
+    private var routeName: String {
+        if let name = workout.scheduledWorkout?.week?.plan?.raceName?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !name.isEmpty {
+            return name
+        }
+        return workout.scheduledWorkout?.workoutType.displayName ?? "\(workout.workoutLocation.displayName) Run"
+    }
+
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 20) {
+            VStack(spacing: 14) {
+                titleBlock
                 routeMap
                 statsGrid
                 weatherSection
@@ -65,9 +87,11 @@ struct RunSummaryView: View {
                     splitsTable
                 }
             }
-            .padding()
+            .padding(.horizontal, 16)
+            .padding(.bottom, 32)
             .frame(maxWidth: .infinity)
         }
+        .background(Color.surfacePrimary.ignoresSafeArea())
         .navigationTitle(workout.workoutType.displayName)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -92,6 +116,65 @@ struct RunSummaryView: View {
         }
     }
 
+    // MARK: Title block
+
+    private var titleBlock: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(workoutTone)
+                    .frame(width: 8, height: 8)
+                    .shadow(color: workoutTone.opacity(0.35), radius: 0, x: 0, y: 0)
+                    .overlay(Circle().stroke(workoutTone.opacity(0.25), lineWidth: 6))
+                Text("\(workout.workoutType.displayName) run")
+                    .font(.system(size: 11, weight: .bold))
+                    .kerning(1.4)
+                    .textCase(.uppercase)
+                    .foregroundStyle(workoutTone)
+                Circle()
+                    .fill(Color.secondary.opacity(0.45))
+                    .frame(width: 3, height: 3)
+                Text(workout.date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute()))
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(titleMetric.value)
+                    .font(.system(size: 56, weight: .semibold, design: .monospaced))
+                    .kerning(-2.2)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+                Text(titleMetric.unit)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 12) {
+                metricInline(value: workout.durationSeconds.durationString, label: "total")
+                Text("·").foregroundStyle(.tertiary)
+                metricInline(
+                    value: workout.averagePaceSecondsPerKm.paceString(unit: appSettings.unitPreference).replacingOccurrences(of: " \(appSettings.unitPreference.paceLabel)", with: ""),
+                    label: appSettings.unitPreference.paceLabel
+                )
+            }
+        }
+        .padding(.top, 18)
+        .padding(.horizontal, 4)
+    }
+
+    private func metricInline(value: String, label: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Text(value)
+                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                .foregroundStyle(.primary)
+            Text(label)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.secondary)
+        }
+    }
+
     // MARK: Route map
 
     private var routeMap: some View {
@@ -99,14 +182,26 @@ struct RunSummaryView: View {
             if workout.routeCoordinates.isEmpty {
                 RoundedRectangle(cornerRadius: 16)
                     .fill(.surfaceSecondary)
-                    .frame(height: 220)
-                    .overlay { Label("No route data", systemImage: "map") }
+                    .frame(height: 180)
+                    .overlay {
+                        Label("No route data", systemImage: "map")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
             } else {
-                Map {
-                    MapPolyline(coordinates: workout.routeCoordinates.map(\.clCoordinate))
-                        .stroke(.brand, lineWidth: 4)
+                ZStack(alignment: .topLeading) {
+                    Map {
+                        MapPolyline(coordinates: workout.routeCoordinates.map(\.clCoordinate))
+                            .stroke(.brand, lineWidth: 4)
+                    }
+                    Text(routeName)
+                        .font(.system(size: 11, weight: .semibold))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                        .padding(10)
                 }
-                .frame(height: 220)
+                .frame(height: 180)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
             }
         }
@@ -115,39 +210,61 @@ struct RunSummaryView: View {
     // MARK: Stats grid
 
     private var statsGrid: some View {
-        LazyVGrid(columns: [.init(.flexible()), .init(.flexible())], spacing: 16) {
-            statCell(value: workout.distanceMeters.distanceString(unit: appSettings.unitPreference), label: "Distance")
+        LazyVGrid(columns: [.init(.flexible()), .init(.flexible())], spacing: 10) {
+            statCell(value: titleMetric.value, unit: titleMetric.unit, label: "Distance")
             statCell(value: workout.durationSeconds.durationString, label: "Duration")
             statCell(
-                value: workout.averagePaceSecondsPerKm.paceString(unit: appSettings.unitPreference),
+                value: workout.averagePaceSecondsPerKm.paceString(unit: appSettings.unitPreference).replacingOccurrences(of: " \(appSettings.unitPreference.paceLabel)", with: ""),
+                unit: appSettings.unitPreference.paceLabel,
                 label: "Avg Pace"
             )
             if let hr = workout.averageHeartRate {
-                statCell(value: "\(Int(hr)) bpm", label: "Avg HR")
+                statCell(value: "\(Int(hr))", unit: "bpm", label: "Avg HR", tone: hrTone(hr))
             }
             if let maxHR = workout.maxHeartRate {
-                statCell(value: "\(Int(maxHR)) bpm", label: "Max HR")
+                statCell(value: "\(Int(maxHR))", unit: "bpm", label: "Max HR", tone: hrTone(maxHR))
             }
             if let gain = workout.elevationGainMeters {
                 statCell(
-                    value: "+\(Int(gain.elevationValue(unit: appSettings.unitPreference))) \(appSettings.unitPreference.elevationLabel)",
+                    value: "\(Int(gain.elevationValue(unit: appSettings.unitPreference)))",
+                    unit: appSettings.unitPreference.elevationLabel,
                     label: "Elevation"
                 )
             }
             if let vo2 = estimatedVO2Max {
-                statCell(value: String(format: "%.1f", vo2), label: "Est. VO₂ Max")
+                statCell(value: String(format: "%.1f", vo2), label: "Est. VO₂ Max", colSpan: true)
             }
         }
     }
 
-    private func statCell(value: String, label: String) -> some View {
-        VStack(spacing: 4) {
-            Text(value).font(.metricSmall)
-            Text(label).font(.caption).foregroundStyle(.secondary)
+    private func statCell(value: String, unit: String? = nil, label: String, tone: Color? = nil, colSpan: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(value)
+                    .font(.system(size: 24, weight: .semibold, design: .monospaced))
+                    .kerning(-0.5)
+                    .foregroundStyle(tone ?? .primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+                if let unit {
+                    Text(unit)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Text(label)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
-        .padding()
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
+        .gridCellColumns(colSpan ? 2 : 1)
+    }
+
+    private func hrTone(_ value: Double) -> Color? {
+        value >= 155 ? .warning : nil
     }
 
     // MARK: Weather section
@@ -156,9 +273,7 @@ struct RunSummaryView: View {
     private var weatherSection: some View {
         if let w = workout.weather {
             VStack(alignment: .leading, spacing: 12) {
-                Text("CONDITIONS")
-                    .font(.sectionHeader)
-                    .foregroundStyle(.secondary)
+                sectionHeader(title: "Conditions")
 
                 HStack(spacing: 0) {
                     // Icon + condition description
@@ -195,8 +310,9 @@ struct RunSummaryView: View {
                     .font(.caption)
                     .frame(maxWidth: .infinity)
                 }
-                .padding()
-                .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
             }
         }
     }
@@ -209,100 +325,247 @@ struct RunSummaryView: View {
     private var aiCoachSection: some View {
         if appSettings.aiInsightsEnabled {
             VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Label("AI COACH", systemImage: "sparkles")
-                        .font(.sectionHeader)
-                        .foregroundStyle(.secondary)
+                HStack(alignment: .bottom, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 5) {
+                            SparkleShape()
+                                .fill(Color.brand)
+                                .frame(width: 11, height: 11)
+                            Text("AI COACH")
+                                .font(.system(size: 11, weight: .bold))
+                                .kerning(1.4)
+                                .foregroundStyle(.brand)
+                        }
+                        Text("Today's analysis")
+                            .font(.system(size: 18, weight: .bold))
+                            .kerning(-0.3)
+                    }
                     Spacer()
                     Button {
                         Task {
                             await loadAIInsight()
                         }
                     } label: {
-                        Label(aiInsight == nil ? "Load Insights" : "Refresh", systemImage: "sparkles")
-                            .font(.caption.weight(.semibold))
+                        HStack(spacing: 5) {
+                            SparkleShape()
+                                .fill(.white)
+                                .frame(width: 11, height: 11)
+                            Text(aiInsight == nil ? "Load" : "Refresh")
+                                .font(.system(size: 12, weight: .bold))
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color.brand, in: Capsule())
+                        .shadow(color: Color.brand.opacity(0.35), radius: 10, y: 4)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
+                    .buttonStyle(.plain)
                     .disabled(isLoadingAIInsight || !hasAIKey)
                 }
+                .padding(.horizontal, 4)
 
                 if isLoadingAIInsight {
                     aiCoachSkeletonSection
                 } else if let aiInsight {
-                    HStack(spacing: 8) {
-                        Image(systemName: aiInsight.apiReady ? "checkmark.seal.fill" : "info.circle.fill")
-                            .foregroundStyle(aiInsight.apiReady ? .success : .secondary)
-                        Text(normalizedMarkdownText(aiInsight.headline))
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(aiInsight.apiReady ? .success : .secondary)
+                    if aiInsight.apiReady {
+                        aiDiagnosisCard(aiInsight)
+                        aiActionPlan(aiInsight)
+                        aiNextSessionCard(aiInsight)
+                        aiReactionRow(aiInsight)
+                        aiAttribution(aiInsight)
+                    } else {
+                        aiUnavailableCard(aiInsight)
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    .background(.surfaceTertiary, in: Capsule())
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Label("Key Takeaway", systemImage: "waveform.path.ecg")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                        Text(normalizedMarkdownText(aiInsight.summary))
-                            .font(.bodyRegular)
-                            .foregroundStyle(.primary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .padding()
-                    .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
-
-                    if !aiInsight.actionItems.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Label("Action Plan", systemImage: "checklist")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                            ForEach(aiInsight.actionItems, id: \.self) { action in
-                                AIActionItemRow(action: action)
-                            }
-                        }
-                    } else if !aiInsight.focusAreas.isEmpty {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Label("Action Plan", systemImage: "checklist")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                            ForEach(aiInsight.focusAreas.map(normalizedMarkdownText), id: \.self) { suggestion in
-                                Label(suggestion, systemImage: "checkmark.circle.fill")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        Label("Next Session", systemImage: "figure.run")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                        Text(normalizedMarkdownText(aiInsight.nextWorkoutSuggestion))
-                            .font(.bodyRegular)
-                            .foregroundStyle(.primary)
-                        if let rationale = aiInsight.nextWorkoutRationale,
-                           !rationale.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            Text(normalizedMarkdownText(rationale))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                    .padding()
-                    .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
                 } else {
-                    Text(hasAIKey
-                         ? "Tap \u{201C}Load Insights\u{201D} to fetch AI coaching feedback for this workout."
-                         : "Add your AI API key in Settings to load cloud AI workout analysis.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    aiEmptyState
                 }
             }
-            .padding()
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
+            .padding(.top, 8)
         }
+    }
+
+    private func aiDiagnosisCard(_ insight: AICoachInsight) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 8) {
+                SparkleShape()
+                    .fill(Color.brand)
+                    .frame(width: 14, height: 14)
+                Text("DIAGNOSIS")
+                    .font(.system(size: 11, weight: .bold))
+                    .kerning(1.4)
+                    .foregroundStyle(.brand)
+                Spacer()
+                confidenceChip(insight.confidence)
+            }
+
+            Text(normalizedMarkdownText(insight.headline))
+                .font(.system(size: 22, weight: .heavy))
+                .kerning(-0.55)
+                .lineSpacing(1)
+                .fixedSize(horizontal: false, vertical: true)
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 6)], alignment: .leading, spacing: 6) {
+                ForEach(insight.evidence, id: \.self) { item in
+                    evidenceChip(
+                        label: "\(normalizedMarkdownText(item.label)) \(normalizedMarkdownText(item.value))",
+                        sub: item.delta.map(normalizedMarkdownText),
+                        tone: aiTone(item.tone)
+                    )
+                }
+            }
+        }
+        .padding(18)
+        .background(
+            LinearGradient(
+                colors: [Color.warning.opacity(0.14), Color.warning.opacity(0.035)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ),
+            in: RoundedRectangle(cornerRadius: 20)
+        )
+        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(Color.warning.opacity(0.28), lineWidth: 0.5))
+    }
+
+    private func aiActionPlan(_ insight: AICoachInsight) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("DO THIS NEXT")
+                .font(.system(size: 11, weight: .bold))
+                .kerning(1.4)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 4)
+
+            let actions = Array(insight.actionItems.prefix(3))
+            ForEach(Array(actions.enumerated()), id: \.offset) { index, action in
+                AIActionCard(
+                    number: String(format: "%02d", index + 1),
+                    title: normalizedMarkdownText(action.title),
+                    detail: normalizedMarkdownText(action.detail),
+                    metric: action.metric.map(normalizedMarkdownText),
+                    tone: aiTone(action.tone ?? action.priority)
+                )
+            }
+        }
+        .padding(.top, 6)
+    }
+
+    private func aiNextSessionCard(_ insight: AICoachInsight) -> some View {
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.success.opacity(0.14))
+                    .frame(width: 40, height: 40)
+                StrideIcon(name: .run, size: 20, color: .success, strokeWeight: 2)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text("NEXT SESSION")
+                    .font(.system(size: 10, weight: .bold))
+                    .kerning(0.8)
+                    .foregroundStyle(.secondary)
+                Text(normalizedMarkdownText(insight.nextWorkoutSuggestion))
+                    .font(.system(size: 14, weight: .bold))
+                    .lineLimit(2)
+                if let rationale = insight.nextWorkoutRationale?.trimmingCharacters(in: .whitespacesAndNewlines), !rationale.isEmpty {
+                    Text(normalizedMarkdownText(rationale))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+            }
+            Spacer()
+            StrideIcon(name: .chevronRight, size: 14, color: .secondary, strokeWeight: 2.4)
+        }
+        .padding(14)
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func aiReactionRow(_ insight: AICoachInsight) -> some View {
+        HStack(spacing: 8) {
+            Button {
+                withAnimation(AppAnimation.snappy) {
+                    showFullAIAnalysis.toggle()
+                }
+            } label: {
+                Text(showFullAIAnalysis ? "Hide full analysis" : "Read full analysis")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.brand)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
+            }
+            .buttonStyle(.plain)
+
+            reactionButton(.up)
+            reactionButton(.down)
+        }
+        .overlay(alignment: .bottomLeading) {
+            if showFullAIAnalysis {
+                Text(normalizedMarkdownText(insight.summary))
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                    .lineSpacing(2)
+                    .padding(14)
+                    .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
+                    .offset(y: 72)
+            }
+        }
+        .padding(.bottom, showFullAIAnalysis ? 96 : 0)
+    }
+
+    private func reactionButton(_ reaction: AIReaction) -> some View {
+        Button {
+            withAnimation(AppAnimation.snappy) {
+                aiReaction = aiReaction == reaction ? nil : reaction
+            }
+        } label: {
+            Image(systemName: reaction == .up ? "hand.thumbsup" : "hand.thumbsdown")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(aiReaction == reaction ? Color.brand : Color.secondary)
+                .frame(width: 48, height: 48)
+                .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func aiAttribution(_ insight: AICoachInsight) -> some View {
+        HStack(spacing: 5) {
+            SparkleShape()
+                .fill(Color.success)
+                .frame(width: 11, height: 11)
+            Text("Generated by \(appSettings.aiProvider.displayName) · \(workout.date.formatted(.dateTime.month(.abbreviated).day().hour().minute()))")
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 2)
+    }
+
+    private var aiEmptyState: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(hasAIKey ? "Ready for analysis" : "API key required")
+                .font(.system(size: 15, weight: .bold))
+            Text(hasAIKey
+                 ? "Tap Load to fetch AI coaching feedback for this workout."
+                 : "Add your AI API key in Settings to load cloud AI workout analysis.")
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private func aiUnavailableCard(_ insight: AICoachInsight) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(normalizedMarkdownText(insight.headline))
+                .font(.system(size: 15, weight: .bold))
+            Text(normalizedMarkdownText(insight.summary))
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
     }
 
     // MARK: Skeleton loading
@@ -478,7 +741,16 @@ struct RunSummaryView: View {
 
     private var splitPaceChart: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("SPLIT PACES").font(.sectionHeader).foregroundStyle(.secondary)
+            sectionHeader(title: "Splits")
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 10) {
+                    Text("Pace per \(appSettings.unitPreference.distanceLabel)")
+                        .font(.system(size: 13, weight: .bold))
+                    Spacer()
+                    splitTab("Pace", active: true)
+                    splitTab("HR", active: false)
+                    splitTab("Elev", active: false)
+                }
             Chart {
                 ForEach(workout.splits, id: \.kilometer) { split in
                     BarMark(
@@ -519,6 +791,9 @@ struct RunSummaryView: View {
             }
             .chartXSelection(value: $selectedSplitPaceKm)
             Text("Lower = faster").font(.caption).foregroundStyle(.secondary)
+            }
+            .padding(16)
+            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
         }
     }
 
@@ -527,7 +802,7 @@ struct RunSummaryView: View {
     private var splitHRChart: some View {
         let hrSplits = workout.splits.filter { $0.heartRate != nil }
         return VStack(alignment: .leading, spacing: 8) {
-            Text("HEART RATE BY SPLIT").font(.sectionHeader).foregroundStyle(.secondary)
+            Text("HEART RATE BY SPLIT").font(.sectionHeader).foregroundStyle(.secondary).padding(.horizontal, 4)
             Chart {
                 ForEach(hrSplits, id: \.kilometer) { split in
                     LineMark(
@@ -571,7 +846,7 @@ struct RunSummaryView: View {
 
     private var splitElevationChart: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("ELEVATION BY SPLIT").font(.sectionHeader).foregroundStyle(.secondary)
+            Text("ELEVATION BY SPLIT").font(.sectionHeader).foregroundStyle(.secondary).padding(.horizontal, 4)
             Chart {
                 ForEach(workout.splits, id: \.kilometer) { split in
                     let gain = split.elevationGainMeters.elevationValue(unit: appSettings.unitPreference)
@@ -614,7 +889,6 @@ struct RunSummaryView: View {
 
     private var splitsTable: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("SPLITS").font(.sectionHeader).foregroundStyle(.secondary)
             HStack {
                 Text(appSettings.unitPreference.distanceLabel.uppercased())
                     .frame(width: 36, alignment: .leading)
@@ -633,6 +907,8 @@ struct RunSummaryView: View {
                 Divider()
             }
         }
+        .padding(16)
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
     }
 
     @ViewBuilder
@@ -676,44 +952,206 @@ struct RunSummaryView: View {
 
     @ViewBuilder
     private var performanceFeedbackSection: some View {
+        if let feedback = performanceFeedback {
+            HStack(spacing: 10) {
+                ZStack {
+                    Circle()
+                        .fill(feedback.color)
+                        .frame(width: 24, height: 24)
+                    Image(systemName: feedback.icon)
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(feedback.title)
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(feedback.color)
+                    Text(feedback.detail)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(feedback.color.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(feedback.color.opacity(0.22), lineWidth: 0.5))
+        }
+    }
+
+    private var performanceFeedback: RunPerformanceFeedback? {
         if let scheduled = matchedScheduled, let targetRange = scheduled.targetPaceRange {
             let actual = workout.averagePaceSecondsPerKm
             let status = paceStatus(actual: actual, target: targetRange)
+            let targetText = "\(targetRange.lowerBound.paceString(unit: appSettings.unitPreference)) - \(targetRange.upperBound.paceString(unit: appSettings.unitPreference))"
+            return RunPerformanceFeedback(
+                title: status.label,
+                detail: "Target \(targetText); you averaged \(actual.paceString(unit: appSettings.unitPreference)).",
+                icon: status.icon,
+                color: status.color
+            )
+        }
 
-            VStack(alignment: .leading, spacing: 10) {
-                Text("PERFORMANCE")
-                    .font(.sectionHeader)
-                    .foregroundStyle(.secondary)
+        if let avg = workout.averageHeartRate, avg >= 155 {
+            return RunPerformanceFeedback(
+                title: "Effort higher than expected",
+                detail: "HR averaged \(Int(avg)) bpm for this \(workout.workoutType.displayName.lowercased()) effort.",
+                icon: "exclamationmark",
+                color: .warning
+            )
+        }
 
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Target pace")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Text(
-                            "\(targetRange.lowerBound.paceString(unit: appSettings.unitPreference))" +
-                            " – " +
-                            "\(targetRange.upperBound.paceString(unit: appSettings.unitPreference))"
-                        )
-                        .font(.bodyStrong)
+        return nil
+    }
+
+    private func sectionHeader(title: String) -> some View {
+        HStack {
+            Text(title.uppercased())
+                .font(.system(size: 11, weight: .bold))
+                .kerning(1.4)
+                .foregroundStyle(.secondary)
+            Spacer()
+        }
+        .padding(.horizontal, 4)
+        .padding(.top, 10)
+    }
+
+    private func splitTab(_ title: String, active: Bool) -> some View {
+        Text(title)
+            .font(.system(size: 11, weight: .bold))
+            .foregroundStyle(active ? Color.brand : Color.secondary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(active ? Color.brand.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func confidenceChip(_ value: Int) -> some View {
+        HStack(spacing: 6) {
+            Capsule()
+                .fill(Color.secondary.opacity(0.12))
+                .frame(width: 36, height: 4)
+                .overlay(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.brand)
+                        .frame(width: 36 * CGFloat(value) / 100, height: 4)
+                }
+            Text("\(value)%")
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func evidenceChip(label: String, sub: String?, tone: Color) -> some View {
+        HStack(spacing: 6) {
+            Text(label)
+                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .foregroundStyle(.primary)
+            if let sub {
+                Text(sub)
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(tone)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func aiTone(_ raw: String) -> Color {
+        switch raw.lowercased() {
+        case "easy":
+            return .zoneEasy
+        case "brand", "medium":
+            return .brand
+        case "interval", "high":
+            return .zoneInterval
+        case "warning":
+            return .warning
+        case "success", "low":
+            return .success
+        default:
+            return .secondary
+        }
+    }
+
+    private enum AIReaction {
+        case up
+        case down
+    }
+
+    private struct RunPerformanceFeedback {
+        let title: String
+        let detail: String
+        let icon: String
+        let color: Color
+    }
+
+    private struct SparkleShape: Shape {
+        func path(in rect: CGRect) -> Path {
+            var path = Path()
+            path.move(to: CGPoint(x: rect.midX, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.midX + rect.width * 0.12, y: rect.midY - rect.height * 0.12))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
+            path.addLine(to: CGPoint(x: rect.midX + rect.width * 0.12, y: rect.midY + rect.height * 0.12))
+            path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
+            path.addLine(to: CGPoint(x: rect.midX - rect.width * 0.12, y: rect.midY + rect.height * 0.12))
+            path.addLine(to: CGPoint(x: rect.minX, y: rect.midY))
+            path.addLine(to: CGPoint(x: rect.midX - rect.width * 0.12, y: rect.midY - rect.height * 0.12))
+            path.closeSubpath()
+            return path
+        }
+    }
+
+    private struct AIActionCard: View {
+        let number: String
+        let title: String
+        let detail: String
+        let metric: String?
+        let tone: Color
+
+        var bodyView: some View {
+            HStack(spacing: 12) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(tone)
+                    .frame(width: 4)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(number)
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .kerning(0.6)
+                            .foregroundStyle(tone)
+                        Text(title)
+                            .font(.system(size: 15, weight: .bold))
+                            .kerning(-0.2)
                     }
-                    Spacer()
-                    VStack(alignment: .trailing, spacing: 4) {
-                        Text("Your pace")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Text(actual.paceString(unit: appSettings.unitPreference))
-                            .font(.bodyStrong)
-                    }
+                    Text(detail)
+                        .font(.system(size: 13))
+                        .lineSpacing(1)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
-                Label(status.label, systemImage: status.icon)
-                    .font(.bodyStrong)
-                    .foregroundStyle(status.color)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .background(status.color.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+                Spacer(minLength: 6)
+
+                if let metric {
+                    Text(metric)
+                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .foregroundStyle(tone)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(tone.opacity(0.14), in: RoundedRectangle(cornerRadius: 8))
+                }
             }
+            .padding(14)
+            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
+        }
+
+        var body: some View {
+            bodyView
         }
     }
 

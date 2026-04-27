@@ -3,6 +3,8 @@ import Foundation
 struct AICoachInsight: Sendable {
     let headline: String
     let summary: String
+    let confidence: Int
+    let evidence: [AICoachEvidenceItem]
     let actionItems: [AICoachActionItem]
     let focusAreas: [String]
     let nextWorkoutSuggestion: String
@@ -10,10 +12,19 @@ struct AICoachInsight: Sendable {
     let apiReady: Bool
 }
 
+struct AICoachEvidenceItem: Codable, Hashable, Sendable {
+    let label: String
+    let value: String
+    let delta: String?
+    let tone: String
+}
+
 struct AICoachActionItem: Codable, Hashable, Sendable {
     let title: String
     let detail: String
     let priority: String
+    let metric: String?
+    let tone: String?
 }
 
 struct AICoachStructuredResponse: Codable, Sendable {
@@ -24,12 +35,16 @@ struct AICoachStructuredResponse: Codable, Sendable {
 
     let headline: String
     let summary: String
+    let confidence: Int
+    let evidence: [AICoachEvidenceItem]
     let actionItems: [AICoachActionItem]
     let nextWorkout: NextWorkout
 
     enum CodingKeys: String, CodingKey {
         case headline
         case summary
+        case confidence
+        case evidence
         case actionItems = "action_items"
         case nextWorkout = "next_workout"
     }
@@ -178,6 +193,8 @@ struct AICoachService: Sendable {
             return AICoachInsight(
                 headline: "AI Key Required",
                 summary: "Add an AI API key in Settings to load cloud coaching insights.",
+                confidence: 0,
+                evidence: [],
                 actionItems: [],
                 focusAreas: [],
                 nextWorkoutSuggestion: "Set your key, then reload insights.",
@@ -220,6 +237,8 @@ struct AICoachService: Sendable {
             return AICoachInsight(
                 headline: structured.headline.isEmpty ? "\(provider.displayName) Analysis" : structured.headline,
                 summary: structured.summary,
+                confidence: min(max(structured.confidence, 0), 100),
+                evidence: Array(structured.evidence.prefix(4)),
                 actionItems: Array(structured.actionItems.prefix(3)),
                 focusAreas: structured.actionItems.map(\.title),
                 nextWorkoutSuggestion: structured.nextWorkout.title,
@@ -248,6 +267,8 @@ struct AICoachService: Sendable {
 
             let hasRequiredContent = !decoded.summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 && !decoded.nextWorkout.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && (0...100).contains(decoded.confidence)
+                && !decoded.evidence.isEmpty
                 && !decoded.actionItems.isEmpty
             if hasRequiredContent {
                 return decoded
@@ -833,6 +854,8 @@ struct AICoachService: Sendable {
         AICoachInsight(
             headline: "AI Insight Unavailable",
             summary: reason,
+            confidence: 0,
+            evidence: [],
             actionItems: [],
             focusAreas: [],
             nextWorkoutSuggestion: "Try refreshing structured AI insights again.",

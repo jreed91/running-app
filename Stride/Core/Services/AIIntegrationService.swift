@@ -667,11 +667,22 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
         {
           "headline": "Short coaching headline, maximum 8 words",
           "summary": "One plain-language sentence explaining the main takeaway",
+          "confidence": 82,
+          "evidence": [
+            {
+              "label": "HR avg",
+              "value": "158 bpm",
+              "delta": "+12",
+              "tone": "warning"
+            }
+          ],
           "action_items": [
             {
               "title": "Specific action, maximum 6 words",
               "detail": "One sentence explaining what to do and why",
-              "priority": "High|Medium|Low"
+              "priority": "High|Medium|Low",
+              "metric": "≤150 bpm",
+              "tone": "easy|brand|interval|warning|neutral"
             }
           ],
           "next_workout": {
@@ -681,10 +692,15 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
         }
 
         Rules:
+        - confidence must be an integer from 0 to 100.
+        - Include exactly 4 evidence items. Each evidence item should be a compact display chip: label maximum 10 characters, value maximum 12 characters, optional delta maximum 8 characters.
+        - Evidence tone must be one of: warning, success, brand, easy, interval, neutral.
         - Include exactly 3 action_items.
+        - Each action item must include a compact metric badge, maximum 10 characters.
+        - Action item tone must be one of: easy, brand, interval, warning, neutral.
         - Make every action concrete enough to do in the next 7 days.
         - Avoid medical diagnosis and avoid mentioning that you are an AI.
-        - Keep all values as strings.
+        - Keep all values as strings except confidence.
         """
     }
 

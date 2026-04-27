@@ -32,36 +32,42 @@ struct WorkoutDetailView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                if isCompletedGoalRace {
-                    GoalRaceCelebrationCard(
-                        raceName: goalRaceName,
-                        raceDate: goalRacePlan?.raceDate ?? workout.scheduledDate,
-                        reduceMotion: reduceMotion
-                    )
+        Group {
+            if let completed = workout.completedWorkout {
+                RunSummaryView(workout: completed)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        if isCompletedGoalRace {
+                            GoalRaceCelebrationCard(
+                                raceName: goalRaceName,
+                                raceDate: goalRacePlan?.raceDate ?? workout.scheduledDate,
+                                reduceMotion: reduceMotion
+                            )
+                        }
+                        headerSection
+                        if let range = workout.targetPaceRange {
+                            paceSection(range: range)
+                        }
+                        if let structure = workout.workoutStructure {
+                            structuredWorkoutSection(structure: structure)
+                        } else if !workout.intervals.isEmpty {
+                            intervalsSection
+                        }
+                        if let dist = workout.targetDistanceMeters {
+                            distanceSection(dist: dist)
+                        }
+                        if let notes = workout.notes {
+                            notesSection(notes: notes)
+                        }
+                    }
+                    .padding()
+                    .frame(maxWidth: .infinity)
                 }
-                headerSection
-                if let range = workout.targetPaceRange {
-                    paceSection(range: range)
-                }
-                if let structure = workout.workoutStructure {
-                    structuredWorkoutSection(structure: structure)
-                } else if !workout.intervals.isEmpty {
-                    intervalsSection
-                }
-                if let dist = workout.targetDistanceMeters {
-                    distanceSection(dist: dist)
-                }
-                if let notes = workout.notes {
-                    notesSection(notes: notes)
-                }
+                .navigationTitle(workout.workoutType.displayName)
+                .navigationBarTitleDisplayMode(.inline)
             }
-            .padding()
-            .frame(maxWidth: .infinity)
         }
-        .navigationTitle(workout.workoutType.displayName)
-        .navigationBarTitleDisplayMode(.inline)
     }
 
     // MARK: - Location toggle
