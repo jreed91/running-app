@@ -479,36 +479,74 @@ struct RunSummaryView: View {
     }
 
     private func aiReactionRow(_ insight: AICoachInsight) -> some View {
-        HStack(spacing: 8) {
-            Button {
-                withAnimation(AppAnimation.snappy) {
-                    showFullAIAnalysis.toggle()
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Button {
+                    withAnimation(AppAnimation.snappy) {
+                        showFullAIAnalysis.toggle()
+                    }
+                } label: {
+                    Text(showFullAIAnalysis ? "Hide full analysis" : "Read full analysis")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.brand)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
                 }
-            } label: {
-                Text(showFullAIAnalysis ? "Hide full analysis" : "Read full analysis")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.brand)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
-            }
-            .buttonStyle(.plain)
+                .buttonStyle(.plain)
 
-            reactionButton(.up)
-            reactionButton(.down)
-        }
-        .overlay(alignment: .bottomLeading) {
+                reactionButton(.up)
+                reactionButton(.down)
+            }
+
             if showFullAIAnalysis {
-                Text(normalizedMarkdownText(insight.summary))
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-                    .lineSpacing(2)
-                    .padding(14)
-                    .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
-                    .offset(y: 72)
+                fullAnalysisCard(insight)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .padding(.bottom, showFullAIAnalysis ? 96 : 0)
+    }
+
+    private func fullAnalysisCard(_ insight: AICoachInsight) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("FULL ANALYSIS")
+                .font(.system(size: 10, weight: .bold))
+                .kerning(1.1)
+                .foregroundStyle(.secondary)
+
+            Text(normalizedMarkdownText(fullAnalysisText(for: insight)))
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+                .lineSpacing(3)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func fullAnalysisText(for insight: AICoachInsight) -> String {
+        if let fullAnalysis = insight.fullAnalysis?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !fullAnalysis.isEmpty {
+            return fullAnalysis
+        }
+
+        let actionSummary = insight.actionItems
+            .prefix(3)
+            .map { "\($0.title): \($0.detail)" }
+            .joined(separator: " ")
+        let nextWorkoutParts: [String?] = [
+            "Next session: \(insight.nextWorkoutSuggestion).",
+            insight.nextWorkoutRationale
+        ]
+        let nextWorkout = nextWorkoutParts
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+
+        return [insight.summary, actionSummary, nextWorkout]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
     }
 
     private func reactionButton(_ reaction: AIReaction) -> some View {

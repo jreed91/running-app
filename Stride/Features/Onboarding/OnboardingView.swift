@@ -316,12 +316,12 @@ struct OnboardingView: View {
                                 Text("\(dayNumbers[i])")
                                     .font(.system(size: 15, weight: .bold, design: .monospaced))
                             }
-                                .frame(maxWidth: .infinity)
-                                .aspectRatio(1, contentMode: .fit)
-                                .background(isOn ? Color.brand : Color.surfaceTertiary,
-                                            in: RoundedRectangle(cornerRadius: 14))
-                                .foregroundStyle(isOn ? Color.white : Color.primary)
-                                .shadow(color: isOn ? Color.brand.opacity(0.35) : .clear, radius: 10, y: 4)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 52)
+                            .background(isOn ? Color.brand : Color.surfaceTertiary,
+                                        in: RoundedRectangle(cornerRadius: 14))
+                            .foregroundStyle(isOn ? Color.white : Color.primary)
+                            .shadow(color: isOn ? Color.brand.opacity(0.35) : .clear, radius: 10, y: 4)
                         }
                         .buttonStyle(BouncyButtonStyle())
                     }

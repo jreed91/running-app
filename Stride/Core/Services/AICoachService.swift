@@ -3,6 +3,7 @@ import Foundation
 struct AICoachInsight: Sendable {
     let headline: String
     let summary: String
+    let fullAnalysis: String?
     let confidence: Int
     let evidence: [AICoachEvidenceItem]
     let actionItems: [AICoachActionItem]
@@ -35,6 +36,7 @@ struct AICoachStructuredResponse: Codable, Sendable {
 
     let headline: String
     let summary: String
+    let fullAnalysis: String?
     let confidence: Int
     let evidence: [AICoachEvidenceItem]
     let actionItems: [AICoachActionItem]
@@ -43,6 +45,7 @@ struct AICoachStructuredResponse: Codable, Sendable {
     enum CodingKeys: String, CodingKey {
         case headline
         case summary
+        case fullAnalysis = "full_analysis"
         case confidence
         case evidence
         case actionItems = "action_items"
@@ -193,6 +196,7 @@ struct AICoachService: Sendable {
             return AICoachInsight(
                 headline: "AI Key Required",
                 summary: "Add an AI API key in Settings to load cloud coaching insights.",
+                fullAnalysis: nil,
                 confidence: 0,
                 evidence: [],
                 actionItems: [],
@@ -237,6 +241,7 @@ struct AICoachService: Sendable {
             return AICoachInsight(
                 headline: structured.headline.isEmpty ? "\(provider.displayName) Analysis" : structured.headline,
                 summary: structured.summary,
+                fullAnalysis: structured.fullAnalysis,
                 confidence: min(max(structured.confidence, 0), 100),
                 evidence: Array(structured.evidence.prefix(4)),
                 actionItems: Array(structured.actionItems.prefix(3)),
@@ -854,6 +859,7 @@ struct AICoachService: Sendable {
         AICoachInsight(
             headline: "AI Insight Unavailable",
             summary: reason,
+            fullAnalysis: nil,
             confidence: 0,
             evidence: [],
             actionItems: [],

@@ -61,7 +61,8 @@ struct WorkoutDetailView: View {
                             notesSection(notes: notes)
                         }
                     }
-                    .padding()
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 16)
                     .frame(maxWidth: .infinity)
                 }
                 .navigationTitle(workout.workoutType.displayName)
@@ -155,18 +156,22 @@ struct WorkoutDetailView: View {
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Zone-color hero band
-            HStack(spacing: 16) {
+            HStack(alignment: .center, spacing: 14) {
                 ZStack {
-                    Circle()
+                    RoundedRectangle(cornerRadius: 14)
                         .fill(workout.workoutType.color.opacity(0.22))
-                        .frame(width: 56, height: 56)
+                        .frame(width: 52, height: 52)
                     StrideIcon(name: workout.workoutType.strideIcon, size: 28,
                                color: workout.workoutType.color, strokeWeight: 2.0)
                 }
-                VStack(alignment: .leading, spacing: 4) {
+                .frame(width: 52, height: 52)
+
+                VStack(alignment: .leading, spacing: 5) {
                     HStack(spacing: 8) {
                         Text(workout.workoutType.displayName)
                             .font(.system(size: 22, weight: .bold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.82)
                         if workout.isCompleted {
                             ZStack {
                                 Circle()
@@ -179,17 +184,19 @@ struct WorkoutDetailView: View {
                     Text(workout.scheduledDate.formatted(.dateTime.weekday(.wide).month(.wide).day()))
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
-                Spacer()
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding([.horizontal, .top], 18)
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
             .padding(.bottom, 12)
 
             // Indoor / outdoor toggle
             if !workout.isCompleted {
                 locationPicker
-                    .padding(.horizontal, 18)
-                    .padding(.bottom, 18)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 16)
             }
         }
         .background(

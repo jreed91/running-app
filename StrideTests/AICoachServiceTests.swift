@@ -10,6 +10,7 @@ struct AICoachServiceTests {
         {
           "headline": "Control The Finish",
           "summary": "You paced well early but faded late.",
+          "full_analysis": "You controlled the opening kilometers well, then the final split drifted as heart rate climbed. Treat this as a sign to protect the first half of similar runs and keep the effort ceiling lower. Next week, open slightly easier and let the final kilometer be the controlled progression.",
           "confidence": 84,
           "evidence": [
             { "label": "Pace", "value": "5:42/km", "delta": "late fade", "tone": "warning" },
@@ -37,6 +38,7 @@ struct AICoachServiceTests {
         let parsed = AICoachService.parseStructuredResponse(response)
 
         #expect(parsed?.headline == "Control The Finish")
+        #expect(parsed?.fullAnalysis?.contains("heart rate climbed") == true)
         #expect(parsed?.confidence == 84)
         #expect(parsed?.evidence.count == 4)
         #expect(parsed?.actionItems.first?.priority == "High")

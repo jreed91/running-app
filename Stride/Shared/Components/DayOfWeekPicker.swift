@@ -8,7 +8,7 @@ struct DayOfWeekPicker: View {
     private let labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 6) {
             ForEach(0..<7) { index in
                 DayToggleButton(
                     label: labels[index],
@@ -35,14 +35,15 @@ struct DayToggleButton: View {
     var body: some View {
         Button(action: action) {
             Text(label)
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .font(.system(size: 12, weight: .bold, design: .rounded))
                 .frame(maxWidth: .infinity)
-                .frame(height: 40)
+                .frame(height: 52)
                 .foregroundStyle(isOn ? .white : .primary)
                 .background(
                     isOn ? Color.brand : Color(.systemFill),
-                    in: RoundedRectangle(cornerRadius: 8)
+                    in: RoundedRectangle(cornerRadius: 14)
                 )
+                .shadow(color: isOn ? Color.brand.opacity(0.35) : .clear, radius: 8, y: 3)
         }
         .buttonStyle(.plain)
     }

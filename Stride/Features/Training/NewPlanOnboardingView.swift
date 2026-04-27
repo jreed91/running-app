@@ -375,12 +375,19 @@ struct NewPlanOnboardingView: View {
                 HStack(spacing: 6) {
                     ForEach(0..<7, id: \.self) { i in
                         let dayLabels = ["M", "T", "W", "T", "F", "S", "S"]
+                        let dayNumbers = [20, 21, 22, 23, 24, 25, 26]
                         let isOn = selectedDays.contains(i)
                         Button {
                             if isOn { selectedDays.remove(i) } else { selectedDays.insert(i) }
                         } label: {
-                            Text(dayLabels[i])
-                                .font(.system(size: 17, weight: .bold))
+                            VStack(spacing: 2) {
+                                Text(dayLabels[i])
+                                    .font(.system(size: 11, weight: .bold))
+                                    .kerning(0.6)
+                                    .opacity(isOn ? 0.85 : 0.6)
+                                Text("\(dayNumbers[i])")
+                                    .font(.system(size: 15, weight: .bold, design: .monospaced))
+                            }
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 52)
                                 .background(

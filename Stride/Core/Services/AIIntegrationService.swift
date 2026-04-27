@@ -667,6 +667,7 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
         {
           "headline": "Short coaching headline, maximum 8 words",
           "summary": "One plain-language sentence explaining the main takeaway",
+          "full_analysis": "A fuller 3-5 sentence coaching explanation with the why, the evidence, and how to adjust the next week.",
           "confidence": 82,
           "evidence": [
             {
@@ -693,6 +694,7 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
 
         Rules:
         - confidence must be an integer from 0 to 100.
+        - full_analysis must be 3 to 5 concise sentences that explain the diagnosis, key evidence, and practical adjustment.
         - Include exactly 4 evidence items. Each evidence item should be a compact display chip: label maximum 10 characters, value maximum 12 characters, optional delta maximum 8 characters.
         - Evidence tone must be one of: warning, success, brand, easy, interval, neutral.
         - Include exactly 3 action_items.
