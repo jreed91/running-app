@@ -19,6 +19,7 @@ struct RunSummaryView: View {
     @State private var selectedSplitHRKm: Int? = nil
     @State private var selectedSplitElevKm: Int? = nil
     @State private var showDeleteConfirmation = false
+    @State private var showAssociateSheet = false
     @State private var aiInsight: AICoachInsight?
     @State private var isLoadingAIInsight = false
     @State private var aiStreamBuffer = ""
@@ -75,6 +76,9 @@ struct RunSummaryView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 titleBlock
+                if workout.scheduledWorkout == nil {
+                    linkToPlannedWorkoutButton
+                }
                 routeMap
                 statsGrid
                 weatherSection
@@ -103,6 +107,9 @@ struct RunSummaryView: View {
                 }
             }
         }
+        .sheet(isPresented: $showAssociateSheet) {
+            AssociateWorkoutSheet(workout: workout)
+        }
         .confirmationDialog("Delete this workout?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
             Button("Delete", role: .destructive) {
                 workout.scheduledWorkout?.completedWorkout = nil
@@ -114,6 +121,31 @@ struct RunSummaryView: View {
         } message: {
             Text("This workout will be permanently removed.")
         }
+    }
+
+    // MARK: Link to planned workout
+
+    private var linkToPlannedWorkoutButton: some View {
+        Button {
+            showAssociateSheet = true
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "link")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.brand)
+                Text("Link to a planned workout")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.brand)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: Title block

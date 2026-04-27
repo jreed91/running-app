@@ -1,0 +1,105 @@
+import SwiftUI
+import SwiftData
+
+struct AssociateWorkoutSheet: View {
+    let workout: RunWorkout
+
+    @Environment(\.modelContext) private var context
+    @Environment(\.dismiss) private var dismiss
+    @Environment(AppSettings.self) private var appSettings
+
+    @Query(sort: \ScheduledWorkout.scheduledDate, order: .reverse)
+    private var scheduledWorkouts: [ScheduledWorkout]
+
+    private var unassociated: [ScheduledWorkout] {
+        scheduledWorkouts
+            .filter { $0.completedWorkout == nil && $0.workoutType != .rest }
+            .sorted { abs($0.scheduledDate.timeIntervalSince(workout.date)) < abs($1.scheduledDate.timeIntervalSince(workout.date)) }
+    }
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if unassociated.isEmpty {
+                    ContentUnavailableView(
+                        "No Available Workouts",
+                        systemImage: "calendar.badge.exclamationmark",
+                        description: Text("All scheduled workouts are already linked to a completed run.")
+                    )
+                } else {
+                    List(unassociated, id: \.id) { scheduled in
+                        Button {
+                            associate(scheduled)
+                        } label: {
+                            ScheduledWorkoutPickerRow(scheduled: scheduled)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .navigationTitle("Link to Planned Workout")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+        }
+    }
+
+    private func associate(_ scheduled: ScheduledWorkout) {
+        scheduled.completedWorkout = workout
+        workout.scheduledWorkout = scheduled
+        scheduled.isCompleted = true
+        try? context.save()
+        dismiss()
+    }
+}
+
+private struct ScheduledWorkoutPickerRow: View {
+    let scheduled: ScheduledWorkout
+    @Environment(AppSettings.self) private var appSettings
+
+    var body: some View {
+        HStack(spacing: 14) {
+            ZStack {
+                Circle()
+                    .fill(scheduled.workoutType.color.opacity(0.15))
+                    .frame(width: 44, height: 44)
+                StrideIcon(name: scheduled.workoutType.strideIcon, size: 22,
+                           color: scheduled.workoutType.color, strokeWeight: 2.0)
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(scheduled.workoutType.displayName)
+                    .font(.bodyStrong)
+                Text(scheduled.scheduledDate.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if let plan = scheduled.week?.plan {
+                    let planTitle = plan.raceName?.trimmingCharacters(in: .whitespacesAndNewlines)
+                    Text(planTitle?.isEmpty == false ? planTitle! : plan.targetRace.displayName)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 3) {
+                if let distance = scheduled.targetDistanceMeters {
+                    Text(distance.distanceString(unit: appSettings.unitPreference))
+                        .font(.system(size: 15, weight: .semibold, design: .monospaced))
+                }
+                if let paceRange = scheduled.targetPaceRange {
+                    Text(paceRange.lowerBound.paceString(unit: appSettings.unitPreference)
+                        .replacingOccurrences(of: " min/km", with: "")
+                        .replacingOccurrences(of: " min/mi", with: ""))
+                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding(.vertical, 6)
+    }
+}
