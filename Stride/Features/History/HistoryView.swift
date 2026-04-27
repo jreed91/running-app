@@ -137,6 +137,15 @@ struct WorkoutRowView: View {
                 Text(workout.date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if let scheduled = workout.scheduledWorkout {
+                    HStack(spacing: 3) {
+                        Image(systemName: "link")
+                            .font(.system(size: 9, weight: .semibold))
+                        Text(scheduled.workoutType.displayName)
+                            .font(.caption2.weight(.semibold))
+                    }
+                    .foregroundStyle(.brand)
+                }
             }
 
             Spacer()
