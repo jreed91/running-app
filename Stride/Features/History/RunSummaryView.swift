@@ -125,6 +125,10 @@ struct RunSummaryView: View {
         } message: {
             Text("This workout will be permanently removed.")
         }
+        .task {
+            guard workout.weather == nil, let coord = workout.routeCoordinates.first else { return }
+            await container.attachWeather(to: workout, coordinate: coord)
+        }
     }
 
     // MARK: Link to planned workout
