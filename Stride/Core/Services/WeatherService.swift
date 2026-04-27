@@ -29,13 +29,19 @@ final class WeatherService: Sendable {
         } catch {
             let nsError = error as NSError
             if nsError.domain == "WeatherDaemon.WDSJWTAuthenticatorServiceListener.Errors" && nsError.code == 2 {
+                let teamID = Bundle.main.object(forInfoDictionaryKey: "AppIdentifierPrefix") as? String ?? "unknown"
+                let bundleID = Bundle.main.bundleIdentifier ?? "unknown"
                 AppLogger.log(
-                    "WeatherKit JWT auth failed — enable WeatherKit for com.running.stride at developer.apple.com/account/resources/identifiers",
+                    "WeatherKit JWT auth rejected (Code=2) — bundle=\(bundleID) team=\(teamID) userInfo=\(nsError.userInfo)",
                     label: "WeatherKit",
                     level: .error
                 )
             } else {
-                AppLogger.log("WeatherKit request failed: \(error)", label: "WeatherKit", level: .error)
+                AppLogger.log(
+                    "WeatherKit request failed: domain=\(nsError.domain) code=\(nsError.code) userInfo=\(nsError.userInfo)",
+                    label: "WeatherKit",
+                    level: .error
+                )
             }
             return nil
         }
