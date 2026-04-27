@@ -15,7 +15,7 @@ protocol HealthKitRepositoryProtocol: Sendable {
     func fetchWorkouts(from startDate: Date, to endDate: Date) async throws -> [HKWorkout]
     /// Schedules each non-rest future workout in the plan as a WorkoutKit composition
     /// so it appears in the Apple Watch Workout app and the Fitness app.
-    @MainActor func syncWorkoutPlans(for plan: TrainingPlan) async throws
+    @MainActor func syncWorkoutPlans(for plan: TrainingPlan, unitPreference: UnitPreference) async throws
     /// Removes all WorkoutKit scheduled compositions for the plan.
     @MainActor func removeWorkoutPlans(for plan: TrainingPlan) async throws
     /// Fetches running workouts from HealthKit, converts them to RunWorkout models,
@@ -91,7 +91,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
 
     // MARK: - Workout plans (WorkoutKit)
 
-    @MainActor func syncWorkoutPlans(for plan: TrainingPlan) async throws {
+    @MainActor func syncWorkoutPlans(for plan: TrainingPlan, unitPreference: UnitPreference) async throws {
         guard WorkoutScheduler.isSupported else { return }
         let scheduler = WorkoutScheduler.shared
 
@@ -109,7 +109,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
                && workout.scheduledDate > now
                && workout.healthKitPlanID == nil
             {
-                let workoutPlan = makeWorkoutPlan(for: workout)
+                let workoutPlan = makeWorkoutPlan(for: workout, unitPreference: unitPreference)
                 let dateComponents = Calendar.current.dateComponents(
                     [.year, .month, .day, .hour, .minute],
                     from: workout.scheduledDate
@@ -139,12 +139,12 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
 
     // MARK: - WorkoutKit plan builder
 
-    private func makeWorkoutPlan(for workout: ScheduledWorkout) -> WorkoutPlan {
+    private func makeWorkoutPlan(for workout: ScheduledWorkout, unitPreference: UnitPreference) -> WorkoutPlan {
         let customWorkout: CustomWorkout
         if let structure = workout.workoutStructure, !structure.mainSets.isEmpty {
-            customWorkout = makeCustomWorkout(from: structure, workout: workout)
+            customWorkout = makeCustomWorkout(from: structure, workout: workout, unitPreference: unitPreference)
         } else {
-            customWorkout = makeCustomWorkoutLegacy(for: workout)
+            customWorkout = makeCustomWorkoutLegacy(for: workout, unitPreference: unitPreference)
         }
         return WorkoutPlan(.custom(customWorkout), id: UUID())
     }
@@ -152,16 +152,17 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
     /// Builds a ``CustomWorkout`` from a ``WorkoutStructure`` with precise distance/time goals.
     private func makeCustomWorkout(
         from structure: WorkoutStructure,
-        workout: ScheduledWorkout
+        workout: ScheduledWorkout,
+        unitPreference: UnitPreference
     ) -> CustomWorkout {
         let warmupGoal: WorkoutGoal = structure.warmup.distanceMeters
-            .map { .distance($0, UnitLength.meters) } ?? .open
+            .map { distanceGoal(meters: $0, unitPreference: unitPreference) } ?? .open
         let warmupStep = WorkoutStep(goal: warmupGoal, alert: nil)
 
         let blocks: [IntervalBlock] = structure.mainSets.map { set in
             let workGoal: WorkoutGoal
             if let dist = set.workSegment.distanceMeters {
-                workGoal = .distance(dist, UnitLength.meters)
+                workGoal = distanceGoal(meters: dist, unitPreference: unitPreference)
             } else if let dur = set.workSegment.durationSeconds {
                 workGoal = .time(dur, UnitDuration.seconds)
             } else {
@@ -179,7 +180,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             } else if let recDist = set.recoverySegment.distanceMeters, recDist > 0 {
                 steps.append(IntervalStep(
                     .recovery,
-                    goal: .distance(recDist, UnitLength.meters),
+                    goal: distanceGoal(meters: recDist, unitPreference: unitPreference),
                     alert: nil
                 ))
             }
@@ -188,7 +189,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         }
 
         let cooldownGoal: WorkoutGoal = structure.cooldown.distanceMeters
-            .map { .distance($0, UnitLength.meters) } ?? .open
+            .map { distanceGoal(meters: $0, unitPreference: unitPreference) } ?? .open
         let cooldownStep = WorkoutStep(goal: cooldownGoal, alert: nil)
 
         return CustomWorkout(
@@ -202,7 +203,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
     }
 
     /// Legacy path for workouts without a ``WorkoutStructure`` (flat interval array).
-    private func makeCustomWorkoutLegacy(for workout: ScheduledWorkout) -> CustomWorkout {
+    private func makeCustomWorkoutLegacy(for workout: ScheduledWorkout, unitPreference: UnitPreference) -> CustomWorkout {
         let warmup   = WorkoutStep(goal: .open, alert: nil)
         let cooldown = WorkoutStep(goal: .open, alert: nil)
         let blocks: [IntervalBlock]
@@ -211,7 +212,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             blocks = workout.intervals.map { interval in
                 let workGoal: WorkoutGoal
                 if let distance = interval.distanceMeters {
-                    workGoal = .distance(distance, UnitLength.meters)
+                    workGoal = distanceGoal(meters: distance, unitPreference: unitPreference)
                 } else if let duration = interval.durationSeconds {
                     workGoal = .time(duration, UnitDuration.seconds)
                 } else {
@@ -227,7 +228,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             }
         } else {
             let goal: WorkoutGoal = workout.targetDistanceMeters
-                .map { .distance($0, UnitLength.meters) } ?? .open
+                .map { distanceGoal(meters: $0, unitPreference: unitPreference) } ?? .open
             let workStep = IntervalStep(.work, goal: goal, alert: nil)
             blocks = [IntervalBlock(steps: [workStep], iterations: 1)]
         }
@@ -240,6 +241,15 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             blocks: blocks,
             cooldown: cooldown
         )
+    }
+
+    private func distanceGoal(meters: Double, unitPreference: UnitPreference) -> WorkoutGoal {
+        switch unitPreference {
+        case .metric:
+            return .distance(meters / 1_000, UnitLength.kilometers)
+        case .imperial:
+            return .distance(meters / 1_609.344, UnitLength.miles)
+        }
     }
 
     // MARK: - Background delivery & observer

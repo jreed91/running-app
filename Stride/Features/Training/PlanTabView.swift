@@ -224,7 +224,7 @@ struct PlanTabView: View {
             try? context.save()
         }
 
-        try? await container.healthKitRepository.syncWorkoutPlans(for: plan)
+        try? await container.healthKitRepository.syncWorkoutPlans(for: plan, unitPreference: appSettings.unitPreference)
         smartAdaptProgress.currentMessage = "Plan updated and synced."
     }
 

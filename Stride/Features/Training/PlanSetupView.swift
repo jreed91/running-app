@@ -229,7 +229,7 @@ struct PlanSetupView: View {
                 try? await container.healthKitRepository.removeWorkoutPlans(for: previous)
                 context.delete(previous)
             }
-            try? await container.healthKitRepository.syncWorkoutPlans(for: plan)
+            try? await container.healthKitRepository.syncWorkoutPlans(for: plan, unitPreference: appSettings.unitPreference)
             try? context.save()
             isGenerating = false
             dismiss()

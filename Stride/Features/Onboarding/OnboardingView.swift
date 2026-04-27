@@ -612,7 +612,7 @@ struct OnboardingView: View {
             if appSettings.morningReminderEnabled {
                 await container.notificationService.scheduleMorningReminders(for: plan)
             }
-            try? await container.healthKitRepository.syncWorkoutPlans(for: plan)
+            try? await container.healthKitRepository.syncWorkoutPlans(for: plan, unitPreference: appSettings.unitPreference)
             try? context.save()
             isCreatingPlan = false
         }

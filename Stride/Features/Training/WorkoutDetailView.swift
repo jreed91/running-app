@@ -83,7 +83,7 @@ struct WorkoutDetailView: View {
         workout.healthKitPlanID = nil
         try? context.save()
         if let plan = workout.week?.plan {
-            try? await container.healthKitRepository.syncWorkoutPlans(for: plan)
+            try? await container.healthKitRepository.syncWorkoutPlans(for: plan, unitPreference: appSettings.unitPreference)
         }
     }
 
