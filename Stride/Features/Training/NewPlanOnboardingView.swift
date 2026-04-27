@@ -81,6 +81,10 @@ struct NewPlanOnboardingView: View {
         return Int((base + base * 1.8) / 2 * Double(effectiveWeeks))
     }
 
+    private var goalFinishTimeSeconds: Double {
+        PaceCalculatorService.predictedTime(vdot: vdotValue, distanceMeters: goalRace.distanceMeters)
+    }
+
     private var minEndDate: Date { startDate.adding(weeks: weekRange.lowerBound) }
     private var maxEndDate: Date { startDate.adding(weeks: weekRange.upperBound) }
     private var minimumRaceDate: Date { Date().startOfDay.adding(days: 1) }
@@ -170,6 +174,8 @@ struct NewPlanOnboardingView: View {
             OBReady(
                 goalRace: goalRace,
                 planWeeks: effectiveWeeks,
+                progressTotal: totalSteps + 1,
+                goalTimeSeconds: goalFinishTimeSeconds,
                 estimatedWorkouts: estimatedWorkouts,
                 estimatedKm: estimatedKm,
                 isCreatingPlan: isCreatingPlan,

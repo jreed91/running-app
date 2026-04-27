@@ -17,13 +17,15 @@ struct OnboardingView: View {
     @State private var goingForward = true
 
     // Step data
-    @State private var goalRace: RaceType = .halfMarathon
-    @State private var raceName = ""
-    @State private var raceDate = Date().startOfWeek.adding(weeks: 12)
+    @State private var goalRace: RaceType = .fiveK
+    @State private var raceName = RaceType.fiveK.displayName
+    @State private var raceDate = Date().startOfWeek.adding(weeks: 8)
     @State private var fitnessLevel: FitnessLevel = .intermediate
-    @State private var fiveKMinutes = 25
-    @State private var fiveKSeconds = 0
-    @State private var selectedDays: Set<Int> = [0, 1, 3, 4, 5]
+    @State private var fitnessSelection: OBFitnessSelection = .recreational
+    @State private var fiveKHours = 0
+    @State private var fiveKMinutes = 26
+    @State private var fiveKSeconds = 24
+    @State private var selectedDays: Set<Int> = [0, 2, 4, 5]
     @State private var longRunOnSaturday = true
 
     // Permissions display state
@@ -41,12 +43,12 @@ struct OnboardingView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let locationManager = CLLocationManager()
-    private let totalSteps = 6
+    private let totalSteps = 8
 
     // MARK: - Computed
 
     private var fiveKTimeSeconds: Double {
-        Double(fiveKMinutes * 60 + fiveKSeconds)
+        Double(fiveKHours * 3600 + fiveKMinutes * 60 + fiveKSeconds)
     }
 
     private var vdotValue: Double {
@@ -108,42 +110,46 @@ struct OnboardingView: View {
                 OBWelcome(onStart: advance, onSignIn: handleSignIn)
             }
         case 1:
-            OBShell(stepIndex: 0, total: totalSteps, kicker: "Step 1 · Goal",
-                    title: "Pick your goal.", subtitle: "Choose a race or maintain fitness. You can change this anytime.",
+            OBShell(stepIndex: 1, total: totalSteps, kicker: "Your goal",
+                    title: "What are you training for?", subtitle: "We'll build a plan around your race — or keep you running strong without one.",
                     ctaLabel: "Continue",
-                    ctaEnabled: raceGoalReady,
                     onBack: retreat,
                     onCTA: advance) {
                 goalContent
             }
         case 2:
-            OBShell(stepIndex: 1, total: totalSteps, kicker: "Step 2 · Units",
+            OBShell(stepIndex: 2, total: totalSteps, kicker: "Units",
                     title: "Kilometres or miles?", subtitle: "Choose how distances and paces are shown throughout the app.",
                     ctaLabel: "Continue", onBack: retreat, onCTA: advance) {
                 unitsContent
             }
         case 3:
-            OBShell(stepIndex: 2, total: totalSteps, kicker: "Step 3 · Level",
-                    title: "Where are you now?", subtitle: "Be honest — plans scale up from here. No ego lifts allowed.",
+            OBShell(stepIndex: 3, total: totalSteps, kicker: "About you",
+                    title: "How would you describe your running?", subtitle: "We'll calibrate volume and pace from here.",
                     ctaLabel: "Continue", onBack: retreat, onCTA: advance) {
                 levelContent
             }
         case 4:
-            OBShell(stepIndex: 3, total: totalSteps, kicker: "Step 4 · Pace",
-                    title: "Your recent 5K time?", subtitle: "Your VDOT — and every training pace — comes from this number.",
-                    ctaLabel: "Continue", onBack: retreat, onCTA: advance) {
+            OBShell(stepIndex: 4, total: totalSteps, kicker: "Calibrate",
+                    title: "Your recent 5K time?", subtitle: "Used to compute your VDOT and pace zones. You can skip or update this later.",
+                    ctaLabel: "Continue",
+                    secondaryLabel: "I don't know my 5K time",
+                    onSecondary: advance,
+                    onBack: retreat, onCTA: advance) {
                 timeContent
             }
         case 5:
-            OBShell(stepIndex: 4, total: totalSteps, kicker: "Step 5 · Schedule",
-                    title: "When can you run?", subtitle: "Pick the days you'll train. We'll build your plan around them.",
+            OBShell(stepIndex: 5, total: totalSteps, kicker: "Schedule",
+                    title: "Which days can you run?", subtitle: "Pick your typical week. We'll place harder workouts on your energy days.",
                     ctaLabel: "Continue", onBack: retreat, onCTA: advance) {
                 scheduleContent
             }
         case 6:
-            OBShell(stepIndex: 5, total: totalSteps, kicker: "Step 6 · Access",
-                    title: "A few permissions.", subtitle: "Grant these so Stride can track your runs and keep your plan in sync.",
-                    ctaLabel: isRequestingPermissions ? "Requesting…" : "Enable & Continue",
+            OBShell(stepIndex: 6, total: totalSteps, kicker: "Permissions",
+                    title: "A few things to set up.", subtitle: "Each is optional — you can always change these in Settings.",
+                    ctaLabel: isRequestingPermissions ? "Requesting…" : "Build my plan",
+                    secondaryLabel: "Skip — I'll do this later",
+                    onSecondary: advance,
                     ctaEnabled: !isRequestingPermissions,
                     onBack: retreat,
                     onCTA: {
@@ -155,6 +161,8 @@ struct OnboardingView: View {
             }
         default:
             OBReady(goalRace: goalRace, planWeeks: planWeeks,
+                    progressTotal: totalSteps,
+                    goalTimeSeconds: goalFinishTimeSeconds,
                     estimatedWorkouts: estimatedWorkouts, estimatedKm: estimatedKm,
                     isCreatingPlan: isCreatingPlan, onViewPlan: { isCreatingPlan = true; createProfileAndPlan() })
         }
@@ -182,24 +190,6 @@ struct OnboardingView: View {
                 }
             }
 
-            if goalRace.isGoalRace {
-                OBRaceDetailsCard(
-                    raceName: $raceName,
-                    raceDate: $raceDate,
-                    race: goalRace,
-                    minimumDate: minimumRaceDate
-                )
-            }
-        }
-    }
-
-    // MARK: - Units content
-
-    private var unitsContent: some View {
-        VStack(spacing: 10) {
-            ForEach(UnitPreference.allCases, id: \.self) { unit in
-                unitCard(unit, isSelected: appSettings.unitPreference == unit)
-            }
         }
     }
 
@@ -233,12 +223,23 @@ struct OnboardingView: View {
         .buttonStyle(.plain)
     }
 
+    private var unitsContent: some View {
+        VStack(spacing: 10) {
+            ForEach(UnitPreference.allCases, id: \.self) { unit in
+                unitCard(unit, isSelected: appSettings.unitPreference == unit)
+            }
+        }
+    }
+
     // MARK: - Level content
 
     private var levelContent: some View {
         VStack(spacing: 10) {
-            ForEach(FitnessLevel.allCases, id: \.self) { level in
-                OBLevelRow(level: level, race: goalRace, isSelected: fitnessLevel == level) { fitnessLevel = level }
+            ForEach(OBFitnessSelection.allCases, id: \.self) { selection in
+                OBFitnessRow(selection: selection, isSelected: fitnessSelection == selection) {
+                    fitnessSelection = selection
+                    fitnessLevel = selection.fitnessLevel
+                }
             }
         }
     }
@@ -247,67 +248,47 @@ struct OnboardingView: View {
 
     private var timeContent: some View {
         VStack(spacing: 18) {
-            // Large time picker card
             VStack(spacing: 12) {
-                Text("5K FINISH TIME")
-                    .font(.sectionHeader)
-                    .foregroundStyle(.secondary)
-                HStack(spacing: 0) {
-                    Picker("Minutes", selection: $fiveKMinutes) {
-                        ForEach(14...59, id: \.self) { Text(String(format: "%02d", $0)).tag($0) }
-                    }
-                    .pickerStyle(.wheel)
-                    .frame(width: 80)
-                    Text(":")
-                        .font(.system(size: 48, weight: .bold, design: .monospaced))
-                        .foregroundStyle(.brand)
-                    Picker("Seconds", selection: $fiveKSeconds) {
-                        ForEach(stride(from: 0, through: 55, by: 5).map { $0 }, id: \.self) {
-                            Text(String(format: "%02d", $0)).tag($0)
-                        }
-                    }
-                    .pickerStyle(.wheel)
-                    .frame(width: 80)
-                }
-                // VDOT badge
                 HStack(spacing: 6) {
-                    Text(String(format: "VDOT %.0f", vdotValue))
-                        .font(.system(size: 13, weight: .bold, design: .monospaced))
-                        .foregroundStyle(.brand)
-                    Text("·")
-                        .foregroundStyle(.secondary)
-                    Text(vdotLabel)
-                        .font(.captionStrong)
-                        .foregroundStyle(.secondary)
+                    OBTimeWheelColumn(label: "HR", value: $fiveKHours, range: Array(0...4), isMuted: true)
+                    Picker("Minutes", selection: $fiveKMinutes) {
+                        ForEach(0...59, id: \.self) { Text(String(format: "%02d", $0)).tag($0) }
+                    }
+                    .modifier(OBWheelColumnStyle(label: "MIN"))
+                    Picker("Seconds", selection: $fiveKSeconds) { ForEach(0...59, id: \.self) { Text(String(format: "%02d", $0)).tag($0) } }
+                        .modifier(OBWheelColumnStyle(label: "SEC"))
                 }
-                .padding(.horizontal, 14).padding(.vertical, 7)
-                .background(Color.brand.opacity(0.1), in: Capsule())
             }
-            .padding(20)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 18)
             .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 20))
 
-            // Training paces
-            VStack(alignment: .leading, spacing: 10) {
-                Text("YOUR TRAINING PACES (\(appSettings.unitPreference.paceLabel.uppercased()))")
-                    .font(.sectionHeader)
-                    .foregroundStyle(.secondary)
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-                    OBPaceCell(zone: "Easy", color: .zoneEasy, pace: easyLabel)
-                    OBPaceCell(zone: "Marathon", color: .zoneMarathon, pace: marathonLabel)
-                    OBPaceCell(zone: "Tempo", color: .zoneTempo, pace: tempoLabel)
-                    OBPaceCell(zone: "Interval", color: .zoneInterval, pace: intervalLabel)
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.brand.opacity(0.2))
+                        .frame(width: 44, height: 44)
+                    Text(String(format: "%.0f", vdotValue))
+                        .font(.system(size: 14, weight: .bold, design: .monospaced))
+                        .foregroundStyle(.brand)
                 }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("VDOT \(String(format: "%.0f", vdotValue)) · \(vdotLabel)")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.primary)
+                    Text("Easy \(shortPace(paces.easyRange.lowerBound)) · Tempo \(tempoLabel) · Interval \(intervalLabel)")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
             }
-
-            // Tip
-            HStack(spacing: 10) {
-                StrideIcon(name: .timer, size: 16, color: .secondary)
-                Text("Don't know your 5K time? Run a time trial and come back, or estimate from a recent run.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(14)
-            .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(
+                LinearGradient(colors: [Color.brand.opacity(0.14), Color.brand.opacity(0.04)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                in: RoundedRectangle(cornerRadius: 16)
+            )
+            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color.brand.opacity(0.28), lineWidth: 0.5))
         }
     }
 
@@ -317,66 +298,72 @@ struct OnboardingView: View {
         VStack(spacing: 16) {
             VStack(spacing: 12) {
                 // Day grid
-                HStack(spacing: 6) {
+                HStack(spacing: 8) {
                     ForEach(0..<7) { i in
                         let labels = ["M","T","W","T","F","S","S"]
+                        let dayNumbers = [20, 21, 22, 23, 24, 25, 26]
                         let isOn = selectedDays.contains(i)
                         Button {
                             withAnimation(AppAnimation.snappy) {
                                 if isOn { selectedDays.remove(i) } else { selectedDays.insert(i) }
                             }
                         } label: {
-                            Text(labels[i])
-                                .font(.system(size: 17, weight: .bold))
-                                .frame(maxWidth: .infinity).frame(height: 52)
+                            VStack(spacing: 2) {
+                                Text(labels[i])
+                                    .font(.system(size: 11, weight: .bold))
+                                    .kerning(0.6)
+                                    .opacity(isOn ? 0.85 : 0.6)
+                                Text("\(dayNumbers[i])")
+                                    .font(.system(size: 15, weight: .bold, design: .monospaced))
+                            }
+                                .frame(maxWidth: .infinity)
+                                .aspectRatio(1, contentMode: .fit)
                                 .background(isOn ? Color.brand : Color.surfaceTertiary,
                                             in: RoundedRectangle(cornerRadius: 14))
-                                .foregroundStyle(isOn ? Color.white : Color.secondary)
-                                .shadow(color: isOn ? Color.brand.opacity(0.4) : .clear, radius: 8, y: 3)
+                                .foregroundStyle(isOn ? Color.white : Color.primary)
+                                .shadow(color: isOn ? Color.brand.opacity(0.35) : .clear, radius: 10, y: 4)
                         }
                         .buttonStyle(BouncyButtonStyle())
                     }
                 }
-                // Days per week pill
-                HStack(spacing: 10) {
-                    Text("\(selectedDays.count)")
-                        .font(.system(size: 22, weight: .bold, design: .monospaced))
-                        .foregroundStyle(.brand)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Days per week")
-                            .font(.captionStrong)
-                        Text(recommendedDaysLabel)
-                            .font(.caption).foregroundStyle(.secondary)
+            }
+            .padding(14)
+            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 18))
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Long run day")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                HStack(spacing: 6) {
+                    ForEach([("Sat", true), ("Sun", false), ("Flexible", false)], id: \.0) { name, isSat in
+                        Button { longRunOnSaturday = isSat } label: {
+                            Text(name)
+                                .font(.system(size: 13, weight: .semibold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                                .background(longRunOnSaturday == isSat && name != "Flexible" ? Color.surfaceSecondary : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+                                .shadow(color: longRunOnSaturday == isSat && name != "Flexible" ? Color.black.opacity(0.1) : .clear, radius: 6, y: 2)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.primary)
                     }
-                    Spacer()
                 }
-                .padding(.horizontal, 14).padding(.vertical, 12)
-                .background(Color.brand.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+                .padding(2)
+                .background(Color.secondary.opacity(0.14), in: RoundedRectangle(cornerRadius: 10))
+
+                HStack {
+                    Text("Runs per week")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text("\(selectedDays.count)")
+                        .font(.system(size: 20, weight: .bold, design: .monospaced))
+                        .foregroundStyle(.brand)
+                }
+                .padding(.top, 4)
             }
             .padding(16)
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 20))
-
-            // Long run day
-            VStack(alignment: .leading, spacing: 10) {
-                Text("LONG RUN DAY")
-                    .font(.sectionHeader).foregroundStyle(.secondary)
-                HStack(spacing: 8) {
-                    ForEach([("Saturday", true), ("Sunday", false)], id: \.0) { name, isSat in
-                        Button { longRunOnSaturday = isSat } label: {
-                            VStack(spacing: 4) {
-                                Text(name).font(.bodyStrong)
-                                Text(longRunOnSaturday == isSat ? "Selected" : "Alternate")
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
-                            .frame(maxWidth: .infinity).padding(.vertical, 12)
-                            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
-                            .overlay(RoundedRectangle(cornerRadius: 14)
-                                .strokeBorder(longRunOnSaturday == isSat ? Color.brand : Color.clear, lineWidth: 2))
-                        }
-                        .buttonStyle(.plain).foregroundStyle(.primary)
-                    }
-                }
-            }
+            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
         }
     }
 
@@ -384,49 +371,38 @@ struct OnboardingView: View {
 
     private var permissionsContent: some View {
         VStack(spacing: 16) {
-            VStack(spacing: 0) {
-                OBPermissionRow(icon: .heart, label: "Apple Health",
-                                desc: "Read runs, heart rate, workouts",
-                                tint: .destructive, isOn: healthEnabled,
+            VStack(spacing: 10) {
+                OBPermissionRow(icon: .location, label: "Location",
+                                desc: "Record GPS routes during runs.",
+                                tint: .zoneEasy, isOn: locationEnabled,
                                 isActive: activePermission == 0)
                     .opacity(permRowsVisible[0] ? 1 : 0)
                     .offset(y: permRowsVisible[0] ? 0 : 14)
 
-                Divider().padding(.leading, 68)
-                    .opacity(permRowsVisible[1] ? 1 : 0)
-
-                OBPermissionRow(icon: .location, label: "Location",
-                                desc: "GPS tracking during runs",
-                                tint: .zoneEasy, isOn: locationEnabled,
+                OBPermissionRow(icon: .heart, label: "HealthKit",
+                                desc: "Heart rate, VO2 max, workouts.",
+                                tint: .destructive, isOn: healthEnabled,
                                 isActive: activePermission == 1)
                     .opacity(permRowsVisible[1] ? 1 : 0)
                     .offset(y: permRowsVisible[1] ? 0 : 14)
 
-                Divider().padding(.leading, 68)
-                    .opacity(permRowsVisible[2] ? 1 : 0)
-
                 OBPermissionRow(icon: .bell, label: "Notifications",
-                                desc: "Workout reminders, plan updates",
+                                desc: "Plan reminders, daily workout ping.",
                                 tint: .zoneTempo, isOn: notificationsEnabled,
                                 isActive: activePermission == 2)
                     .opacity(permRowsVisible[2] ? 1 : 0)
                     .offset(y: permRowsVisible[2] ? 0 : 14)
+
+                OBPermissionRow(icon: .timer, label: "Apple Watch",
+                                desc: "Launch Stride on your wrist.",
+                                tint: .secondary, isOn: false,
+                                isActive: false)
+                    .opacity(permRowsVisible[2] ? 1 : 0)
+                    .offset(y: permRowsVisible[2] ? 0 : 14)
             }
-            .padding(16)
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 20))
             .adaptiveAnimation(AppAnimation.bouncy, value: permRowsVisible[0])
             .adaptiveAnimation(AppAnimation.bouncy, value: permRowsVisible[1])
             .adaptiveAnimation(AppAnimation.bouncy, value: permRowsVisible[2])
-
-            HStack(spacing: 10) {
-                StrideIcon(name: .lock, size: 16, color: .secondary)
-                Text("Data stays on-device. Stride never uploads your runs without permission.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            .padding(14)
-            .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))
-            .opacity(permRowsVisible[2] ? 1 : 0)
-            .animation(.easeOut(duration: 0.3).delay(0.1), value: permRowsVisible[2])
         }
         .task {
             await checkExistingPermissions()
@@ -467,7 +443,7 @@ struct OnboardingView: View {
         switch vdotValue {
         case ..<30: return "beginner"
         case 30..<40: return "base fitness"
-        case 40..<50: return "good intermediate"
+        case 40..<50: return "Intermediate"
         case 50..<60: return "advanced"
         default: return "elite"
         }
@@ -496,6 +472,15 @@ struct OnboardingView: View {
         if raceDate < minimumRaceDate {
             raceDate = minimumRaceDate
         }
+        let trimmedRaceName = raceName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let generatedRaceNames = Set(RaceType.allCases.map(\.displayName))
+        if trimmedRaceName.isEmpty || generatedRaceNames.contains(trimmedRaceName) {
+            raceName = goalRace.displayName
+        }
+    }
+
+    private var goalFinishTimeSeconds: Double {
+        PaceCalculatorService.predictedTime(vdot: vdotValue, distanceMeters: goalRace.distanceMeters)
     }
 
     // MARK: - Permissions
@@ -525,23 +510,23 @@ struct OnboardingView: View {
     }
 
     private func requestPermissionsSequentially() async {
-        // 1. HealthKit (skip if already granted)
-        if !healthEnabled {
+        // 1. Location (skip if already granted)
+        if !locationEnabled {
             activePermission = 0
+            locationManager.requestWhenInUseAuthorization()
+            try? await Task.sleep(nanoseconds: 1_800_000_000)   // time for system dialog
+            withAnimation { locationEnabled = true }
+            try? await Task.sleep(nanoseconds: 600_000_000)
+        }
+
+        // 2. HealthKit (skip if already granted)
+        if !healthEnabled {
+            activePermission = 1
             if HKHealthStore.isHealthDataAvailable() {
                 try? await container.healthKitRepository.requestAuthorization()
                 await container.workoutSyncService.startObserving()
             }
             withAnimation { healthEnabled = true }
-            try? await Task.sleep(nanoseconds: 600_000_000)
-        }
-
-        // 2. Location (skip if already granted)
-        if !locationEnabled {
-            activePermission = 1
-            locationManager.requestWhenInUseAuthorization()
-            try? await Task.sleep(nanoseconds: 1_800_000_000)   // time for system dialog
-            withAnimation { locationEnabled = true }
             try? await Task.sleep(nanoseconds: 600_000_000)
         }
 

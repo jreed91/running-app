@@ -345,6 +345,8 @@ struct OBShell<Content: View>: View {
     let title: String
     let subtitle: String
     let ctaLabel: String
+    var secondaryLabel: String?
+    var onSecondary: (() -> Void)?
     var ctaEnabled: Bool = true
     let onBack: () -> Void
     let onCTA: () -> Void
@@ -415,20 +417,36 @@ struct OBShell<Content: View>: View {
             }
 
             // CTA pinned at bottom
-            Button(action: onCTA) {
-                HStack(spacing: 10) {
-                    Text(ctaLabel).font(.system(size: 17, weight: .bold))
-                    StrideIcon(name: .chevronRight, size: 14, color: .white, strokeWeight: 2.6)
+            VStack(spacing: 10) {
+                Button(action: onCTA) {
+                    HStack(spacing: 10) {
+                        Text(ctaLabel).font(.system(size: 17, weight: .bold))
+                        StrideIcon(name: .chevronRight, size: 14, color: .white, strokeWeight: 2.6)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(Color.brand.opacity(ctaEnabled ? 1 : 0.5),
+                                in: RoundedRectangle(cornerRadius: 16))
+                    .shadow(color: Color.brand.opacity(ctaEnabled ? 0.4 : 0), radius: 12, y: 6)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .strokeBorder(.white.opacity(0.2), lineWidth: 0.5)
+                    )
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(Color.brand.opacity(ctaEnabled ? 1 : 0.5),
-                            in: RoundedRectangle(cornerRadius: 18))
-                .shadow(color: Color.brand.opacity(ctaEnabled ? 0.4 : 0), radius: 12, y: 6)
+                .foregroundStyle(.white)
+                .buttonStyle(.plain)
+                .disabled(!ctaEnabled)
+
+                if let secondaryLabel, let onSecondary {
+                    Button(action: onSecondary) {
+                        Text(secondaryLabel)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(.secondary)
+                            .padding(.vertical, 6)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
-            .foregroundStyle(.white)
-            .buttonStyle(.plain)
-            .disabled(!ctaEnabled)
             .padding(.horizontal, 20)
             .padding(.bottom, 44)
         }
@@ -561,6 +579,94 @@ struct OBRaceDetailsCard: View {
 
 // MARK: - OBLevelRow
 
+enum OBFitnessSelection: CaseIterable, Sendable {
+    case newToRunning
+    case recreational
+    case experienced
+    case competitive
+
+    var title: String {
+        switch self {
+        case .newToRunning: return "New to running"
+        case .recreational: return "Recreational"
+        case .experienced: return "Experienced"
+        case .competitive: return "Competitive"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .newToRunning: return "Run/walk intervals. 0-8 mi per week."
+        case .recreational: return "Run weekly. 8-20 mi per week."
+        case .experienced: return "Consistent. 20-40 mi per week."
+        case .competitive: return "40+ mi per week. Racing regularly."
+        }
+    }
+
+    var fitnessLevel: FitnessLevel {
+        switch self {
+        case .newToRunning: return .beginner
+        case .recreational: return .intermediate
+        case .experienced, .competitive: return .advanced
+        }
+    }
+
+    var barCount: Int {
+        switch self {
+        case .newToRunning: return 1
+        case .recreational: return 2
+        case .experienced: return 3
+        case .competitive: return 4
+        }
+    }
+}
+
+struct OBFitnessRow: View {
+    let selection: OBFitnessSelection
+    let isSelected: Bool
+    let onSelect: () -> Void
+
+    private let barHeights: [CGFloat] = [8, 12, 16, 22]
+
+    var body: some View {
+        Button(action: onSelect) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 10) {
+                    HStack(alignment: .bottom, spacing: 3) {
+                        ForEach(0..<4, id: \.self) { index in
+                            RoundedRectangle(cornerRadius: 1)
+                                .fill(index < selection.barCount ? Color.brand : Color.secondary.opacity(0.12))
+                                .frame(width: 5, height: barHeights[index])
+                        }
+                    }
+                    .frame(width: 28, height: 22)
+
+                    Text(selection.title)
+                        .font(.system(size: 17, weight: .bold))
+                        .kerning(-0.3)
+                        .foregroundStyle(.primary)
+
+                    Spacer()
+                    OBRadio(isSelected: isSelected, color: .brand)
+                }
+
+                Text(selection.subtitle)
+                    .font(.system(size: 13))
+                    .kerning(-0.1)
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, 38)
+            }
+            .padding(14)
+            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .strokeBorder(isSelected ? Color.brand : Color.clear, lineWidth: 2)
+            )
+        }
+        .buttonStyle(BouncyButtonStyle())
+    }
+}
+
 struct OBLevelRow: View {
     let level: FitnessLevel
     let race: RaceType
@@ -603,6 +709,74 @@ struct OBLevelRow: View {
                 .strokeBorder(isSelected ? Color.brand : Color.clear, lineWidth: 2))
         }
         .buttonStyle(BouncyButtonStyle()).foregroundStyle(.primary)
+    }
+}
+
+// MARK: - OBTimeWheelColumn
+
+struct OBTimeWheelColumn: View {
+    let label: String
+    @Binding var value: Int
+    let range: [Int]
+    var isMuted = false
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Text(label)
+                .font(.system(size: 11, weight: .bold))
+                .kerning(1.2)
+                .foregroundStyle(.secondary)
+
+            Picker(label, selection: $value) {
+                ForEach(range, id: \.self) { option in
+                    Text(String(format: "%02d", option))
+                        .font(.system(size: 28, weight: .bold, design: .monospaced))
+                        .foregroundStyle(isMuted ? .secondary : .primary)
+                        .tag(option)
+                }
+            }
+            .pickerStyle(.wheel)
+            .frame(maxWidth: .infinity)
+            .frame(height: 116)
+            .clipped()
+            .background(Color.secondary.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(Color.brand.opacity(0.32), lineWidth: 1.5)
+                    .padding(.horizontal, 8)
+                    .frame(height: 42),
+                alignment: .center
+            )
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+struct OBWheelColumnStyle: ViewModifier {
+    let label: String
+
+    func body(content: Content) -> some View {
+        VStack(spacing: 6) {
+            Text(label)
+                .font(.system(size: 11, weight: .bold))
+                .kerning(1.2)
+                .foregroundStyle(.secondary)
+
+            content
+                .pickerStyle(.wheel)
+                .frame(maxWidth: .infinity)
+                .frame(height: 116)
+                .clipped()
+                .background(Color.secondary.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(Color.brand.opacity(0.32), lineWidth: 1.5)
+                        .padding(.horizontal, 8)
+                        .frame(height: 42),
+                    alignment: .center
+                )
+        }
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -706,6 +880,8 @@ struct OBRadio: View {
 struct OBReady: View {
     let goalRace: RaceType
     let planWeeks: Int
+    var progressTotal = 8
+    let goalTimeSeconds: Double
     let estimatedWorkouts: Int
     let estimatedKm: Int
     let isCreatingPlan: Bool
@@ -719,6 +895,17 @@ struct OBReady: View {
         return appSettings.unitPreference == .imperial
             ? max(1, Int((peakKm * 0.621371).rounded()))
             : max(1, Int(peakKm.rounded()))
+    }
+
+    private var goalTimeLabel: String {
+        let total = max(0, Int(goalTimeSeconds.rounded()))
+        let hours = total / 3600
+        let minutes = (total % 3600) / 60
+        let seconds = total % 60
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, seconds)
+        }
+        return String(format: "%d:%02d", minutes, seconds)
     }
 
     var body: some View {
@@ -737,7 +924,7 @@ struct OBReady: View {
                         }
                     }
                     .frame(height: 4)
-                    Text("7/7")
+                    Text("\(progressTotal)/\(progressTotal)")
                         .font(.system(size: 11, weight: .bold, design: .monospaced))
                         .foregroundStyle(.secondary)
                 }
@@ -763,15 +950,13 @@ struct OBReady: View {
 
                         // Summary card
                         HStack(spacing: 0) {
+                            OBSummaryStat(label: "GOAL", value: goalTimeLabel)
+                            Rectangle().fill(Color.secondary.opacity(0.2)).frame(width: 1, height: 36)
                             OBSummaryStat(label: "WEEKS", value: "\(planWeeks)")
                             Rectangle().fill(Color.secondary.opacity(0.2)).frame(width: 1, height: 36)
-                            OBSummaryStat(label: "WORKOUTS", value: "\(estimatedWorkouts)")
-                            Rectangle().fill(Color.secondary.opacity(0.2)).frame(width: 1, height: 36)
                             OBSummaryStat(
-                                label: appSettings.unitPreference == .imperial ? "TOTAL MI" : "TOTAL KM",
-                                value: appSettings.unitPreference == .imperial
-                                    ? "\(Int((Double(estimatedKm) * 0.621371).rounded()))"
-                                    : "\(estimatedKm)"
+                                label: appSettings.unitPreference == .imperial ? "PEAK MI" : "PEAK KM",
+                                value: "\(peakMiles)"
                             )
                         }
                         .padding(16)
