@@ -199,9 +199,11 @@ struct PlanTabView: View {
 
             let response = adapted.notes?.trimmingCharacters(in: .whitespacesAndNewlines)
             smartAdaptProgress.completedCount = index + 1
-            smartAdaptProgress.currentMessage = response?.isEmpty == false
-                ? response!
-                : "Updated \(workoutLabel(workout))."
+            if let r = response, !r.isEmpty {
+                smartAdaptProgress.currentMessage = r
+            } else {
+                smartAdaptProgress.currentMessage = "Updated \(workoutLabel(workout))."
+            }
             smartAdaptProgress.updates.insert(
                 SmartAdaptProgress.Update(
                     title: workoutLabel(workout),
@@ -585,8 +587,10 @@ private struct PlanOverviewCard: View {
     }
 
     private var planTitle: String {
-        let trimmedName = plan.raceName?.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmedName?.isEmpty == false ? trimmedName! : plan.targetRace.displayName
+        if let name = plan.raceName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
+            return name
+        }
+        return plan.targetRace.displayName
     }
 
     var body: some View {

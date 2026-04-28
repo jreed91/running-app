@@ -60,9 +60,10 @@ struct PlanRowView: View {
     let plan: TrainingPlan
 
     private var planTitle: String {
-        plan.raceName?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-            ? plan.raceName!
-            : plan.targetRace.displayName
+        if let name = plan.raceName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
+            return name
+        }
+        return plan.targetRace.displayName
     }
 
     var body: some View {

@@ -27,8 +27,10 @@ struct WorkoutDetailView: View {
     }
 
     private var goalRaceName: String {
-        let trimmedName = goalRacePlan?.raceName?.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmedName?.isEmpty == false ? trimmedName! : workout.week?.plan?.targetRace.displayName ?? "Goal Race"
+        if let name = goalRacePlan?.raceName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
+            return name
+        }
+        return workout.week?.plan?.targetRace.displayName ?? "Goal Race"
     }
 
     var body: some View {
