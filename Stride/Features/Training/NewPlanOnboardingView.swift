@@ -233,7 +233,7 @@ struct NewPlanOnboardingView: View {
 
                 HStack(spacing: 0) {
                     Picker("Minutes", selection: $fiveKMinutes) {
-                        ForEach(14...59, id: \.self) {
+                        ForEach(14...99, id: \.self) {
                             Text(String(format: "%02d", $0)).tag($0)
                         }
                     }
@@ -475,7 +475,7 @@ struct NewPlanOnboardingView: View {
             selectedDays = Set(profile.preferredRunDayIndices)
         }
         if let t = profile.currentEstimated5KTimeSeconds, t > 0 {
-            fiveKMinutes = Int(t) / 60
+            fiveKMinutes = max(14, min(99, Int(t) / 60))
             let rem = Int(t) % 60
             fiveKSeconds = (rem / 5) * 5
         }
