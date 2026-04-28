@@ -35,8 +35,7 @@ final class RunWorkout {
     var routeData: Data?
 
     /// Back-reference to the ``ScheduledWorkout`` this run fulfilled, if any.
-    /// Required by CloudKit (every relationship must have an inverse).
-    @Relationship(inverse: \ScheduledWorkout.completedWorkout)
+    /// The inverse is declared on ``ScheduledWorkout/completedWorkout``; SwiftData infers it here.
     var scheduledWorkout: ScheduledWorkout?
 
     /// JSON-encoded ``WorkoutWeather``.
