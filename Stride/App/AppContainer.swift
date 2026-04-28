@@ -41,7 +41,6 @@ final class AppContainer: ObservableObject {
     let workoutAnalyticsService: WorkoutAnalyticsService
     let routeGeniusService: RouteGeniusService
     let workoutSyncService: WorkoutSyncService
-    let dataMigrationService: DataMigrationService
     let weatherService: WeatherService
     let aiCoachService: AICoachService
 
@@ -171,8 +170,6 @@ final class AppContainer: ObservableObject {
             context: context
         )
 
-        self.dataMigrationService = DataMigrationService()
-        self.dataMigrationService.runIfNeeded(context: context)
         self.configureCloudKitDiagnostics(cloudKitEnabled: cloudKitEnabled)
     }
 
