@@ -161,4 +161,40 @@ struct PersistenceGraphTests {
         #expect((try container.workoutRepository.fetchAll()).isEmpty)
         #expect((try container.routeRepository.fetchAll()).isEmpty)
     }
+
+    @Test("Manual scheduled-run links persist both relationship directions")
+    func manualScheduledRunLinkPersistsBidirectionally() throws {
+        let container = AppContainer.preview()
+        let context = container.modelContainer.mainContext
+
+        let scheduled = ScheduledWorkout(
+            scheduledDate: .now,
+            workoutType: .easy,
+            targetDistanceMeters: 5_000
+        )
+        let run = RunWorkout(
+            date: .now,
+            distanceMeters: 5_100,
+            durationSeconds: 1_700,
+            workoutType: .easy
+        )
+
+        // Mirrors the manual association flow in RunSummary/AssociateWorkoutSheet.
+        scheduled.completedWorkout = run
+        run.scheduledWorkout = scheduled
+        scheduled.isCompleted = true
+
+        context.insert(scheduled)
+        context.insert(run)
+        try context.save()
+
+        let savedRuns = try context.fetch(FetchDescriptor<RunWorkout>())
+        let savedScheduled = try context.fetch(FetchDescriptor<ScheduledWorkout>())
+        let persistedRun = try #require(savedRuns.first)
+        let persistedScheduled = try #require(savedScheduled.first)
+
+        #expect(persistedRun.scheduledWorkout?.id == persistedScheduled.id)
+        #expect(persistedScheduled.completedWorkout?.id == persistedRun.id)
+        #expect(persistedScheduled.isCompleted)
+    }
 }

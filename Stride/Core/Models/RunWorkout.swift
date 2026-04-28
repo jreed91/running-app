@@ -36,6 +36,7 @@ final class RunWorkout {
 
     /// Back-reference to the ``ScheduledWorkout`` this run fulfilled, if any.
     /// Required by CloudKit (every relationship must have an inverse).
+    @Relationship(inverse: \ScheduledWorkout.completedWorkout)
     var scheduledWorkout: ScheduledWorkout?
 
     /// JSON-encoded ``WorkoutWeather``.
