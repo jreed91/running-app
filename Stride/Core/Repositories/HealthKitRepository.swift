@@ -101,22 +101,29 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         }
         guard await scheduler.authorizationState == .authorized else { return }
 
-        let now = Date()
-        for week in plan.weeks ?? [] {
-            for workout in week.workouts ?? []
-            where workout.workoutType != .rest
-               && !workout.isCompleted
-               && workout.scheduledDate > now
-               && workout.healthKitPlanID == nil
-            {
-                let workoutPlan = makeWorkoutPlan(for: workout, unitPreference: unitPreference)
-                let dateComponents = Calendar.current.dateComponents(
-                    [.year, .month, .day, .hour, .minute],
-                    from: workout.scheduledDate
-                )
-                await scheduler.schedule(workoutPlan, at: dateComponents)
-                workout.healthKitPlanID = workoutPlan.id.uuidString
+        let allWorkouts = (plan.weeks ?? []).flatMap { $0.workouts ?? [] }
+        let existingIDs = Set(allWorkouts.compactMap(\.healthKitPlanID))
+        if !existingIDs.isEmpty {
+            let scheduled = await scheduler.scheduledWorkouts
+            for entry in scheduled where existingIDs.contains(entry.plan.id.uuidString) {
+                await scheduler.remove(entry.plan, at: entry.date)
             }
+            allWorkouts.forEach { $0.healthKitPlanID = nil }
+        }
+
+        let now = Date()
+        for workout in allWorkouts
+        where workout.workoutType != .rest
+           && !workout.isCompleted
+           && workout.scheduledDate > now
+        {
+            let workoutPlan = makeWorkoutPlan(for: workout, unitPreference: unitPreference)
+            let dateComponents = Calendar.current.dateComponents(
+                [.year, .month, .day, .hour, .minute],
+                from: workout.scheduledDate
+            )
+            await scheduler.schedule(workoutPlan, at: dateComponents)
+            workout.healthKitPlanID = workoutPlan.id.uuidString
         }
     }
 
