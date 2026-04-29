@@ -14,6 +14,10 @@ final class NotificationService: NSObject {
 
     private let center = UNUserNotificationCenter.current()
 
+    /// Called on MainActor when the user taps a SYNCED_RUN notification.
+    /// The argument is the `RunWorkout.id.uuidString` embedded in the notification payload.
+    var onSyncedRunTapped: ((String) -> Void)?
+
     // Notification category identifiers
     private enum Category {
         static let workoutReminder = "WORKOUT_REMINDER"
@@ -132,6 +136,7 @@ final class NotificationService: NSObject {
         content.body  = syncedRunBody(for: workout, unit: unit)
         content.sound = .default
         content.categoryIdentifier = Category.syncedRun
+        content.userInfo = ["workoutID": workout.id.uuidString]
         // nil trigger → fires immediately
         let request = UNNotificationRequest(
             identifier: "synced-run-\(workout.id.uuidString)",
@@ -179,5 +184,25 @@ extension NotificationService: UNUserNotificationCenterDelegate {
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
         completionHandler([.banner, .sound, .badge])
+    }
+
+    // Called when the user taps a delivered notification.
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        let content = response.notification.request.content
+        guard
+            content.categoryIdentifier == Category.syncedRun,
+            let workoutID = content.userInfo["workoutID"] as? String
+        else {
+            completionHandler()
+            return
+        }
+        Task { @MainActor in
+            self.onSyncedRunTapped?(workoutID)
+        }
+        completionHandler()
     }
 }
