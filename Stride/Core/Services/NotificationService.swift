@@ -46,39 +46,12 @@ final class NotificationService: NSObject {
 
     // MARK: Scheduling
 
-    /// Schedules a local notification for a planned workout.
+    /// Standard pre-workout reminders are disabled.
     func scheduleReminder(for workout: ScheduledWorkout, minutesBefore: Int = 60) async throws {
-        guard !Calendar.current.isDateInToday(workout.scheduledDate) else { return }
-
-        let content = UNMutableNotificationContent()
-        content.title = "Time to run!"
-        content.body = reminderBody(for: workout, minutesBefore: minutesBefore)
-        content.sound = .default
-        content.categoryIdentifier = Category.workoutReminder
-
-        let fireDate = workout.scheduledDate.addingTimeInterval(TimeInterval(-minutesBefore * 60))
-        guard fireDate > Date() else { return }  // past dates silently skipped
-
-        let components = Calendar.current.dateComponents(
-            [.year, .month, .day, .hour, .minute],
-            from: fireDate
-        )
-        let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
-        let request = UNNotificationRequest(
-            identifier: workout.id.uuidString,
-            content: content,
-            trigger: trigger
-        )
-        try await center.add(request)
     }
 
-    /// Schedules reminders for all future workouts in a plan.
+    /// Standard pre-workout reminders are disabled.
     func scheduleReminders(for plan: TrainingPlan, minutesBefore: Int = 60) async {
-        for week in plan.weeks ?? [] {
-            for workout in week.workouts ?? [] where !workout.isCompleted {
-                try? await scheduleReminder(for: workout, minutesBefore: minutesBefore)
-            }
-        }
     }
 
     /// Schedules an 8 AM morning reminder on the day of a planned workout.
