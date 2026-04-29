@@ -104,14 +104,21 @@ final class NotificationService: NSObject {
 
     /// Fires an immediate local notification when a run is automatically synced from Apple Health.
     /// Silently skipped if the user has not granted notification permission.
-    func notifyNewRunSynced(_ workout: RunWorkout, unit: UnitPreference = .metric) async throws {
+    func notifyNewRunSynced(
+        _ workout: RunWorkout,
+        unit: UnitPreference = .metric,
+        opensReviewOnTap: Bool = true
+    ) async throws {
         guard await isAuthorized else { return }
         let content = UNMutableNotificationContent()
         content.title = "Run Synced"
         content.body  = syncedRunBody(for: workout, unit: unit)
         content.sound = .default
         content.categoryIdentifier = Category.syncedRun
-        content.userInfo = ["workoutID": workout.id.uuidString]
+        content.userInfo = [
+            "workoutID": workout.id.uuidString,
+            "opensReviewOnTap": opensReviewOnTap
+        ]
         // nil trigger → fires immediately
         let request = UNNotificationRequest(
             identifier: "synced-run-\(workout.id.uuidString)",
@@ -233,6 +240,12 @@ extension NotificationService: UNUserNotificationCenterDelegate {
             completionHandler()
             return
         }
+        let opensReviewOnTap = content.userInfo["opensReviewOnTap"] as? Bool ?? true
+        guard opensReviewOnTap else {
+            completionHandler()
+            return
+        }
+
         Task { @MainActor in
             self.onSyncedRunTapped?(workoutID)
         }

@@ -403,7 +403,11 @@ struct SettingsView: View {
                             notificationTestStatus = "No runs found to notify. Record or sync a run first."
                             return
                         }
-                        try await container.notificationService.notifyNewRunSynced(lastRun, unit: appSettings.unitPreference)
+                        try await container.notificationService.notifyNewRunSynced(
+                            lastRun,
+                            unit: appSettings.unitPreference,
+                            opensReviewOnTap: false
+                        )
                         notificationTestStatus = "Sent synced-run notification for your latest run."
                     } catch {
                         notificationTestStatus = "Failed to send latest-run notification: \(error.localizedDescription)"
