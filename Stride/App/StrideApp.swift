@@ -1,5 +1,8 @@
 import SwiftUI
 import SwiftData
+import CoreLocation
+import UserNotifications
+import HealthKit
 
 @main
 struct StrideApp: App {
@@ -64,6 +67,10 @@ struct ContentView: View {
     // Tracks that we entered the app via a reinstall/restore flow and need to
     // re-register WorkoutKit plans once CloudKit delivers them.
     @State private var needsWorkoutKitSync = false
+    @State private var hasRunRestorePermissionCheck = false
+    @State private var isRunningRestorePermissionCheck = false
+
+    private let restoreLocationManager = CLLocationManager()
 
     var body: some View {
         Group {
@@ -91,6 +98,10 @@ struct ContentView: View {
                     }
                 }
             }
+
+            if newCount > 0 {
+                Task { await requestMissingPermissionsAfterRestoreIfNeeded() }
+            }
         }
         // When the user already has a saved Apple ID but no local SwiftData records yet
         // (e.g. fresh install, reinstall), skip regular onboarding and go straight to the
@@ -107,6 +118,11 @@ struct ContentView: View {
                 needsWorkoutKitSync = true
             }
         }
+        .onChange(of: profiles.count) { _, newCount in
+            if newCount > 0 {
+                Task { await requestMissingPermissionsAfterRestoreIfNeeded() }
+            }
+        }
     }
 
     /// Removes duplicate profiles and active plans, and applies the one-time
@@ -120,6 +136,43 @@ struct ContentView: View {
         if activePlans.count > 1 {
             activePlans.dropFirst().forEach { context.delete($0) }
             try? context.save()
+        }
+    }
+
+    private func requestMissingPermissionsAfterRestoreIfNeeded() async {
+        guard needsWorkoutKitSync, !profiles.isEmpty else { return }
+        guard !hasRunRestorePermissionCheck, !isRunningRestorePermissionCheck else { return }
+
+        isRunningRestorePermissionCheck = true
+        defer {
+            isRunningRestorePermissionCheck = false
+            hasRunRestorePermissionCheck = true
+        }
+
+        let locationStatus = restoreLocationManager.authorizationStatus
+        if locationStatus != .authorizedAlways, locationStatus != .authorizedWhenInUse {
+            restoreLocationManager.requestWhenInUseAuthorization()
+            try? await Task.sleep(nanoseconds: 1_600_000_000)
+        }
+
+        if HKHealthStore.isHealthDataAvailable() {
+            let store = HKHealthStore()
+            let distanceType = HKQuantityType.quantityType(forIdentifier: .distanceWalkingRunning)
+            let isHealthAuthorized = distanceType.map {
+                store.authorizationStatus(for: $0) == .sharingAuthorized
+            } ?? false
+
+            if !isHealthAuthorized {
+                try? await container.healthKitRepository.requestAuthorization()
+                await container.workoutSyncService.startObserving()
+            }
+        }
+
+        let notificationSettings = await UNUserNotificationCenter.current().notificationSettings()
+        let hasNotificationAuth = notificationSettings.authorizationStatus == .authorized ||
+            notificationSettings.authorizationStatus == .provisional
+        if !hasNotificationAuth {
+            try? await NotificationService.shared.requestAuthorization()
         }
     }
 }
