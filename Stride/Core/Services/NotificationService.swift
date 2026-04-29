@@ -48,6 +48,8 @@ final class NotificationService: NSObject {
 
     /// Schedules a local notification for a planned workout.
     func scheduleReminder(for workout: ScheduledWorkout, minutesBefore: Int = 60) async throws {
+        guard !Calendar.current.isDateInToday(workout.scheduledDate) else { return }
+
         let content = UNMutableNotificationContent()
         content.title = "Time to run!"
         content.body = reminderBody(for: workout, minutesBefore: minutesBefore)
