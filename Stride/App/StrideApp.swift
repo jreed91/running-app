@@ -34,7 +34,9 @@ struct StrideApp: App {
 /// "Welcome Back / Checking iCloud" screen and the standard new-user flow.
 struct ContentView: View {
     @Environment(\.modelContext) private var context
+    @Environment(\.appContainer) private var container
     @Environment(AuthService.self) private var authService
+    @Environment(AppSettings.self) private var appSettings
 
     // Sorted newest-first to bias the UI toward the most recently updated profile
     // while launch-time dedup resolves any duplicates delivered by CloudKit.
@@ -48,6 +50,10 @@ struct ContentView: View {
     )
     private var activePlans: [TrainingPlan]
 
+    // Tracks that we entered the app via a reinstall/restore flow and need to
+    // re-register WorkoutKit plans once CloudKit delivers them.
+    @State private var needsWorkoutKitSync = false
+
     var body: some View {
         Group {
             if profiles.isEmpty {
@@ -58,18 +64,33 @@ struct ContentView: View {
         }
         .task { deduplicate() }
         .onChange(of: profiles.count) { _, _ in deduplicate() }
-        .onChange(of: activePlans.count) { _, _ in deduplicate() }
+        .onChange(of: activePlans.count) { oldCount, newCount in
+            deduplicate()
+            // CloudKit delivered the restored plan while in a reinstall flow — re-register
+            // WorkoutKit scheduled workouts, which were wiped by the reinstall.
+            if oldCount == 0, newCount > 0, needsWorkoutKitSync, let plan = activePlans.first {
+                needsWorkoutKitSync = false
+                Task {
+                    try? await container.healthKitRepository.syncWorkoutPlans(
+                        for: plan,
+                        unitPreference: appSettings.unitPreference
+                    )
+                }
+            }
+        }
         // When the user already has a saved Apple ID but no local SwiftData records yet
         // (e.g. fresh install, reinstall), skip regular onboarding and go straight to the
         // CloudKit-restore screen so they don't accidentally create a duplicate profile.
         .task {
             if authService.isSignedIn && profiles.isEmpty {
                 authService.welcomeBackPending = true
+                needsWorkoutKitSync = true
             }
         }
         .onChange(of: authService.isSignedIn) { _, isSignedIn in
             if isSignedIn && profiles.isEmpty {
                 authService.welcomeBackPending = true
+                needsWorkoutKitSync = true
             }
         }
     }
