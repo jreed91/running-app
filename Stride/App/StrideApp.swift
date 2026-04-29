@@ -75,6 +75,9 @@ struct ContentView: View {
                         for: plan,
                         unitPreference: appSettings.unitPreference
                     )
+                    if appSettings.morningReminderEnabled {
+                        await container.notificationService.scheduleMorningReminders(for: plan)
+                    }
                 }
             }
         }
