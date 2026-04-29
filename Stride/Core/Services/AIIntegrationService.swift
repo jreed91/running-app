@@ -675,9 +675,9 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
           "confidence": 82,
           "evidence": [
             {
-              "label": "HR avg",
-              "value": "158 bpm",
-              "delta": "+12",
+              "label": "Pace",
+              "value": "5:02/km",
+              "delta": "+0:18",
               "tone": "warning"
             }
           ],
@@ -699,7 +699,9 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
         Rules:
         - confidence must be an integer from 0 to 100.
         - full_analysis must be 2 to 3 concise sentences that explain the diagnosis, key evidence, and practical adjustment.
+        - Prioritize analysis across pace execution, workout structure, distance, duration, splits, cadence/form clues, and recovery load; use heart-rate as supporting context only.
         - Include exactly 4 evidence items. Each evidence item should be a compact display chip: label maximum 10 characters, value maximum 12 characters, optional delta maximum 8 characters.
+        - Include at most 1 heart-rate evidence item unless the focus areas explicitly ask for heart-rate analysis.
         - Evidence tone must be one of: warning, success, brand, easy, interval, neutral.
         - Include exactly 3 action_items.
         - Each action item must include a compact metric badge, maximum 10 characters.
