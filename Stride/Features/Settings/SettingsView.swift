@@ -20,6 +20,7 @@ struct SettingsView: View {
     @State private var showResetConfirmation = false
     @State private var showSyncRestartNote = false
     @State private var showPulseConsole = false
+    @State private var notificationTestStatus: String?
     #if DEBUG
     @State private var seedWeeks = 8
     @State private var completionCutoff = Date()
@@ -55,6 +56,9 @@ struct SettingsView: View {
                     dataCard
                     routeGeniusCard
                     aiCoachCard
+                    if DataMigrationService.isTestFlight {
+                        notificationTestingCard
+                    }
                     aboutCard
                     dangerCard
                     #if DEBUG
@@ -365,6 +369,47 @@ struct SettingsView: View {
     }
 
     // MARK: - About card
+
+    private var notificationTestingCard: some View {
+        settingsSection("TestFlight · Notifications") {
+            Button {
+                Task {
+                    do {
+                        if !(await container.notificationService.isAuthorized) {
+                            try await container.notificationService.requestAuthorization()
+                        }
+                        try await container.notificationService.triggerAllTestNotifications()
+                        notificationTestStatus = "Sent workout, morning, and synced-run test notifications."
+                    } catch {
+                        notificationTestStatus = "Failed to send test notifications: \(error.localizedDescription)"
+                    }
+                }
+            } label: {
+                settingsRow(icon: .bell, iconColor: .brand, title: "Trigger All Notifications") {
+                    StrideIcon(name: .play, size: 12,
+                               color: Color.secondary.opacity(0.7), strokeWeight: 2)
+                }
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.primary)
+
+            if let notificationTestStatus {
+                rowDivider
+                Text(notificationTestStatus)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 14)
+            } else {
+                rowDivider
+                Text("Sends each local notification type immediately so QA can verify copy, sounds, and tap behavior.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 14)
+            }
+        }
+    }
 
     private var aboutCard: some View {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
