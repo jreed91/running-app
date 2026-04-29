@@ -111,11 +111,11 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             allWorkouts.forEach { $0.healthKitPlanID = nil }
         }
 
-        let now = Date()
+        let startOfToday = Calendar.current.startOfDay(for: Date())
         for workout in allWorkouts
         where workout.workoutType != .rest
            && !workout.isCompleted
-           && workout.scheduledDate > now
+           && workout.scheduledDate >= startOfToday
         {
             let workoutPlan = makeWorkoutPlan(for: workout, unitPreference: unitPreference)
             let dateComponents = Calendar.current.dateComponents(
