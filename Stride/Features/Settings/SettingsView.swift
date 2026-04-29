@@ -392,6 +392,31 @@ struct SettingsView: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(.primary)
+            rowDivider
+            Button {
+                Task {
+                    do {
+                        if !(await container.notificationService.isAuthorized) {
+                            try await container.notificationService.requestAuthorization()
+                        }
+                        guard let lastRun = try container.workoutRepository.fetchRecent(limit: 1).first else {
+                            notificationTestStatus = "No runs found to notify. Record or sync a run first."
+                            return
+                        }
+                        try await container.notificationService.notifyNewRunSynced(lastRun, unit: appSettings.unitPreference)
+                        notificationTestStatus = "Sent synced-run notification for your latest run."
+                    } catch {
+                        notificationTestStatus = "Failed to send latest-run notification: \(error.localizedDescription)"
+                    }
+                }
+            } label: {
+                settingsRow(icon: .history, iconColor: .brand, title: "Notify Latest Run") {
+                    StrideIcon(name: .play, size: 12,
+                               color: Color.secondary.opacity(0.7), strokeWeight: 2)
+                }
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.primary)
 
             if let notificationTestStatus {
                 rowDivider
