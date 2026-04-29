@@ -21,6 +21,9 @@ final class WorkoutSyncService {
     private let weatherService: WeatherService
     private let context: ModelContext
 
+    /// Called on MainActor after each batch of new workouts is imported and auto-linked.
+    var onWorkoutsSynced: (([RunWorkout]) -> Void)?
+
     // MARK: Init
 
     init(
@@ -100,10 +103,36 @@ final class WorkoutSyncService {
             }
         }
 
+        autoLink(newWorkouts)
+
         let unit = AppSettings.syncedUnitPreference()
         for workout in newWorkouts {
             try? await notificationService.notifyNewRunSynced(workout, unit: unit)
         }
+
+        if let first = newWorkouts.first {
+            UserDefaults.standard.set(first.id.uuidString, forKey: "pendingReviewWorkoutID")
+        }
+        onWorkoutsSynced?(newWorkouts)
+    }
+
+    private func autoLink(_ workouts: [RunWorkout]) {
+        let allScheduled = (try? context.fetch(FetchDescriptor<ScheduledWorkout>())) ?? []
+        var dirty = false
+        for workout in workouts {
+            guard workout.scheduledWorkout == nil else { continue }
+            if let match = allScheduled.first(where: {
+                $0.completedWorkout == nil &&
+                $0.workoutType != .rest &&
+                Calendar.current.isDate($0.scheduledDate, inSameDayAs: workout.date)
+            }) {
+                match.completedWorkout = workout
+                workout.scheduledWorkout = match
+                match.isCompleted = true
+                dirty = true
+            }
+        }
+        if dirty { try? context.save() }
     }
 
     private func attachWeather(to workout: RunWorkout, coordinate: Coordinate) async {

@@ -19,6 +19,17 @@ struct StrideApp: App {
                     PulseIntegrationService.activateIfNeeded()
                     await container.workoutSyncService.startObserving()
                     await authService.checkCredentialState()
+                    container.checkForPendingReviewWorkout()
+                }
+                .sheet(item: $container.pendingReviewWorkout) { workout in
+                    NavigationStack {
+                        RunSummaryView(workout: workout)
+                    }
+                }
+                .onChange(of: container.pendingReviewWorkout) { _, newValue in
+                    if newValue == nil {
+                        UserDefaults.standard.removeObject(forKey: "pendingReviewWorkoutID")
+                    }
                 }
         }
     }

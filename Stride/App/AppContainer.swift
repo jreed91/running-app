@@ -44,6 +44,13 @@ final class AppContainer: ObservableObject {
     let weatherService: WeatherService
     let aiCoachService: AICoachService
 
+    // MARK: Workout Review
+
+    /// Set when a workout is synced from HealthKit (background or foreground) or when the user
+    /// taps a "Run Synced" notification. Presenting a RunSummaryView sheet on this value lets
+    /// the user review their workout and confirms the auto-link to today's planned workout.
+    @Published var pendingReviewWorkout: RunWorkout?
+
     // MARK: Init
 
     init(
@@ -171,6 +178,22 @@ final class AppContainer: ObservableObject {
         )
 
         self.configureCloudKitDiagnostics(cloudKitEnabled: cloudKitEnabled)
+
+        // Wire background-sync callback: surface the review sheet immediately if the app is
+        // in the foreground when the sync fires. UserDefaults is written by WorkoutSyncService
+        // so a cold launch also surfaces the workout via checkForPendingReviewWorkout().
+        workoutSyncService.onWorkoutsSynced = { [weak self] workouts in
+            guard let self, let first = workouts.first else { return }
+            self.pendingReviewWorkout = first
+        }
+
+        // Wire notification-tap callback: look up the workout by ID and surface the sheet.
+        notifications.onSyncedRunTapped = { [weak self] idString in
+            guard let self, let uuid = UUID(uuidString: idString) else { return }
+            let all = (try? self.modelContainer.mainContext.fetch(FetchDescriptor<RunWorkout>())) ?? []
+            self.pendingReviewWorkout = all.first { $0.id == uuid }
+            UserDefaults.standard.removeObject(forKey: "pendingReviewWorkoutID")
+        }
     }
 
     private static func shouldUseCloudKit(syncEnabled: Bool, inMemory: Bool) -> Bool {
@@ -201,6 +224,20 @@ final class AppContainer: ObservableObject {
         workout.weather = summary
         try? modelContainer.mainContext.save()
         AppLogger.log("Weather attached to workout \(workout.id)", label: "WeatherKit", level: .info)
+    }
+
+    // MARK: - Workout Review
+
+    /// Checks UserDefaults for a workout that was synced while the app was not in the foreground
+    /// and surfaces it for review. Called at launch so cold-opens also trigger the review sheet.
+    func checkForPendingReviewWorkout() {
+        guard
+            let idString = UserDefaults.standard.string(forKey: "pendingReviewWorkoutID"),
+            let uuid = UUID(uuidString: idString),
+            pendingReviewWorkout == nil
+        else { return }
+        let all = (try? modelContainer.mainContext.fetch(FetchDescriptor<RunWorkout>())) ?? []
+        pendingReviewWorkout = all.first { $0.id == uuid }
     }
 
     // MARK: - Route Genius
