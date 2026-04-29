@@ -156,6 +156,64 @@ final class NotificationService: NSObject {
         center.removeAllPendingNotificationRequests()
     }
 
+    // MARK: Test helpers
+
+    /// Triggers all local notification types immediately for TestFlight QA.
+    /// Safe to call in other environments, but intended for internal builds only.
+    func triggerAllTestNotifications() async throws {
+        try await triggerWorkoutReminderTestNotification()
+        try await triggerMorningReminderTestNotification()
+        try await triggerSyncedRunTestNotification()
+    }
+
+    func triggerWorkoutReminderTestNotification() async throws {
+        guard await isAuthorized else { return }
+        let workout = ScheduledWorkout(
+            scheduledDate: Date(),
+            workoutType: .tempo
+        )
+        let content = UNMutableNotificationContent()
+        content.title = "Time to run!"
+        content.body = reminderBody(for: workout, minutesBefore: 0)
+        content.sound = .default
+        content.categoryIdentifier = Category.workoutReminder
+        let request = UNNotificationRequest(
+            identifier: "test-workout-reminder-\(UUID().uuidString)",
+            content: content,
+            trigger: nil
+        )
+        try await center.add(request)
+    }
+
+    func triggerMorningReminderTestNotification() async throws {
+        guard await isAuthorized else { return }
+        let workout = ScheduledWorkout(
+            scheduledDate: Date(),
+            workoutType: .easy
+        )
+        let content = UNMutableNotificationContent()
+        content.title = "Workout today"
+        content.body = "You have a \(workout.workoutType.displayName) workout scheduled today. Lace up!"
+        content.sound = .default
+        content.categoryIdentifier = Category.workoutReminder
+        let request = UNNotificationRequest(
+            identifier: "test-morning-reminder-\(UUID().uuidString)",
+            content: content,
+            trigger: nil
+        )
+        try await center.add(request)
+    }
+
+    func triggerSyncedRunTestNotification(unit: UnitPreference = .metric) async throws {
+        let workout = RunWorkout(
+            date: Date(),
+            distanceMeters: 5_000,
+            durationSeconds: 1_500,
+            workoutType: .easy
+        )
+        try await notifyNewRunSynced(workout, unit: unit)
+    }
+
     // MARK: Private
 
     private func syncedRunBody(for workout: RunWorkout, unit: UnitPreference) -> String {
