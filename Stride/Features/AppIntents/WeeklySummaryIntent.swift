@@ -11,7 +11,7 @@ struct WeeklySummaryIntent: AppIntent {
         let container = try IntentDataProvider.makeContainer()
         let actor = IntentModelActor(modelContainer: container)
         let data = try await actor.weeklySummary()
-        let unit = AppSettings.syncedUnitPreference()
+        let unit = await MainActor.run { AppSettings.syncedUnitPreference() }
         let formatted = data.totalMeters.distanceString(unit: unit)
         return .result(dialog: "You've run \(formatted) this week.") {
             WeeklySummaryIntentView(data: data)
