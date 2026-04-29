@@ -1,5 +1,6 @@
 import AppIntents
 import SwiftData
+import SwiftUI
 
 struct TodaysRunIntent: AppIntent {
     static let title: LocalizedStringResource = "Today's Run"
