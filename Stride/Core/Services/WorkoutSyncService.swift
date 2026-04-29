@@ -88,6 +88,7 @@ final class WorkoutSyncService {
         for workout in newWorkouts {
             context.insert(workout)
         }
+        linkToScheduledWorkouts(newWorkouts)
         do {
             try context.save()
         } catch {
@@ -103,6 +104,56 @@ final class WorkoutSyncService {
         let unit = AppSettings.syncedUnitPreference()
         for workout in newWorkouts {
             try? await notificationService.notifyNewRunSynced(workout, unit: unit)
+        }
+    }
+
+    /// Matches each newly imported `RunWorkout` to an unlinked `ScheduledWorkout` on
+    /// the same calendar day (or the day before, allowing for late completions).
+    /// Uses workout type as a tiebreaker when multiple candidates share the same day.
+    private func linkToScheduledWorkouts(_ runWorkouts: [RunWorkout]) {
+        let toLink = runWorkouts.filter { $0.scheduledWorkout == nil }
+        guard !toLink.isEmpty else { return }
+
+        let descriptor = FetchDescriptor<ScheduledWorkout>(
+            predicate: #Predicate { $0.isCompleted == false }
+        )
+        guard let allIncomplete = try? context.fetch(descriptor) else { return }
+        // Keep only those not already linked to another run.
+        var available = allIncomplete.filter { $0.completedWorkout == nil }
+
+        let calendar = Calendar.current
+        for run in toLink {
+            let runDay = calendar.startOfDay(for: run.date)
+
+            // Accept scheduled workouts from the same day or up to one day earlier
+            // (covers users who complete a workout slightly past midnight, or a day late).
+            let dayMatches = available.filter { scheduled in
+                let scheduledDay = calendar.startOfDay(for: scheduled.scheduledDate)
+                let diff = calendar.dateComponents([.day], from: scheduledDay, to: runDay).day ?? Int.max
+                return diff >= 0 && diff <= 1
+            }
+
+            guard !dayMatches.isEmpty else { continue }
+
+            // Prefer a type match, then fall back to the workout closest in scheduled time.
+            let best = dayMatches.min { a, b in
+                let aType = a.workoutType == run.workoutType
+                let bType = b.workoutType == run.workoutType
+                if aType != bType { return aType }
+                return abs(a.scheduledDate.timeIntervalSince(run.date)) <
+                       abs(b.scheduledDate.timeIntervalSince(run.date))
+            }
+
+            if let match = best {
+                run.scheduledWorkout = match
+                // Adopt the scheduled type so the completed run reflects the planned intent,
+                // overriding the coarse type inferred from distance/pace alone.
+                run.workoutType = match.workoutType
+                match.completedWorkout = run
+                match.isCompleted = true
+                // Remove from available pool so it can't be matched twice.
+                available.removeAll { $0.id == match.id }
+            }
         }
     }
 
