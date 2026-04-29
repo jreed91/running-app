@@ -1,5 +1,6 @@
 import AppIntents
 import SwiftData
+import SwiftUI
 
 struct WeeklySummaryIntent: AppIntent {
     static let title: LocalizedStringResource = "Weekly Running Summary"
