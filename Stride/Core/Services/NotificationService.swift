@@ -195,6 +195,7 @@ final class NotificationService: NSObject {
             workoutType: .easy
         )
         context?.insert(workout)
+        try context?.save()
         try await notifyNewRunSynced(workout, unit: unit, opensReviewOnTap: context != nil)
     }
 
@@ -219,21 +220,12 @@ final class NotificationService: NSObject {
 
 extension NotificationService: UNUserNotificationCenterDelegate {
     // Called when a notification arrives while the app is in the foreground.
-    // For SYNCED_RUN notifications with opensReviewOnTap, surface the modal immediately
-    // rather than requiring the user to tap the banner before it auto-dismisses.
+    // Present the banner and keep the review modal tied to the user's tap.
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
-        let content = notification.request.content
-        if content.categoryIdentifier == Category.syncedRun,
-           let workoutID = content.userInfo["workoutID"] as? String,
-           content.userInfo["opensReviewOnTap"] as? Bool != false {
-            Task { @MainActor in
-                self.onSyncedRunTapped?(workoutID)
-            }
-        }
         completionHandler([.banner, .sound, .badge])
     }
 

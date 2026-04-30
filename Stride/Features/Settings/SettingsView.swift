@@ -407,8 +407,7 @@ struct SettingsView: View {
                             lastRun,
                             unit: appSettings.unitPreference
                         )
-                        container.pendingReviewWorkout = lastRun
-                        notificationTestStatus = "Sent synced-run notification for your latest run."
+                        notificationTestStatus = "Sent synced-run notification. Tap it to review your latest run."
                     } catch {
                         notificationTestStatus = "Failed to send latest-run notification: \(error.localizedDescription)"
                     }

@@ -88,6 +88,7 @@ targets:
         NSHealthShareUsageDescription: "Stride reads your workout and heart-rate history to show training insights."
         NSHealthUpdateUsageDescription: "Stride saves your completed runs to Apple Health."
         NSMotionUsageDescription: "Stride uses motion data to measure cadence during runs."
+        NSWeatherKitUsageDescription: "Stride uses WeatherKit to record the conditions at the start of your run."
         NSLocalNetworkUsageDescription: "Network usage required only for development and TestFlight diagnostics."
         NSBonjourServices:
           - _pulse._tcp
