@@ -219,12 +219,21 @@ final class NotificationService: NSObject {
 
 extension NotificationService: UNUserNotificationCenterDelegate {
     // Called when a notification arrives while the app is in the foreground.
-    // Without this, immediate notifications (synced run, nil trigger) are silently dropped.
+    // For SYNCED_RUN notifications with opensReviewOnTap, surface the modal immediately
+    // rather than requiring the user to tap the banner before it auto-dismisses.
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
+        let content = notification.request.content
+        if content.categoryIdentifier == Category.syncedRun,
+           let workoutID = content.userInfo["workoutID"] as? String,
+           content.userInfo["opensReviewOnTap"] as? Bool != false {
+            Task { @MainActor in
+                self.onSyncedRunTapped?(workoutID)
+            }
+        }
         completionHandler([.banner, .sound, .badge])
     }
 
