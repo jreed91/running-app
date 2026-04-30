@@ -193,7 +193,7 @@ final class NotificationService: NSObject {
             durationSeconds: 1_500,
             workoutType: .easy
         )
-        try await notifyNewRunSynced(workout, unit: unit)
+        try await notifyNewRunSynced(workout, unit: unit, opensReviewOnTap: false)
     }
 
     // MARK: Private
