@@ -405,8 +405,7 @@ struct SettingsView: View {
                         }
                         try await container.notificationService.notifyNewRunSynced(
                             lastRun,
-                            unit: appSettings.unitPreference,
-                            opensReviewOnTap: false
+                            unit: appSettings.unitPreference
                         )
                         notificationTestStatus = "Sent synced-run notification for your latest run."
                     } catch {
