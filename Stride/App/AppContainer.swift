@@ -187,12 +187,14 @@ final class AppContainer: ObservableObject {
             self.pendingReviewWorkout = first
         }
 
-        // Wire notification-tap callback: look up the workout by ID and surface the sheet.
-        notifications.onSyncedRunTapped = { [weak self] idString in
-            guard let self, let uuid = UUID(uuidString: idString) else { return }
-            let all = (try? self.modelContainer.mainContext.fetch(FetchDescriptor<RunWorkout>())) ?? []
-            self.pendingReviewWorkout = all.first { $0.id == uuid }
-            UserDefaults.standard.removeObject(forKey: "pendingReviewWorkoutID")
+        // Wire notification-tap callback only for the real app container. The EnvironmentKey
+        // default creates an in-memory fallback container, and letting that container own this
+        // singleton callback means notification taps update a hidden container instead of the
+        // SwiftUI root container.
+        if !inMemory {
+            notifications.onSyncedRunTapped = { [weak self] idString in
+                self?.surfacePendingReviewWorkout(idString: idString)
+            }
         }
     }
 
@@ -233,11 +235,31 @@ final class AppContainer: ObservableObject {
     func checkForPendingReviewWorkout() {
         guard
             let idString = UserDefaults.standard.string(forKey: "pendingReviewWorkoutID"),
-            let uuid = UUID(uuidString: idString),
             pendingReviewWorkout == nil
         else { return }
+        surfacePendingReviewWorkout(idString: idString)
+    }
+
+    private func surfacePendingReviewWorkout(idString: String) {
+        guard let uuid = UUID(uuidString: idString) else {
+            AppLogger.log("Ignored pending review with invalid UUID \(idString)", label: "Notifications", level: .warning)
+            return
+        }
         let all = (try? modelContainer.mainContext.fetch(FetchDescriptor<RunWorkout>())) ?? []
-        pendingReviewWorkout = all.first { $0.id == uuid }
+        let workout: RunWorkout
+        if let storedWorkout = all.first(where: { $0.id == uuid }) {
+            workout = storedWorkout
+        } else if let snapshotWorkout = notificationService.workoutFromReviewSnapshot(idString: idString) {
+            modelContainer.mainContext.insert(snapshotWorkout)
+            try? modelContainer.mainContext.save()
+            workout = snapshotWorkout
+        } else {
+            AppLogger.log("Could not find workout for pending review id=\(idString); fetched \(all.count) workouts", label: "Notifications", level: .warning)
+            return
+        }
+        pendingReviewWorkout = workout
+        UserDefaults.standard.removeObject(forKey: "pendingReviewWorkoutID")
+        notificationService.removeReviewSnapshot(idString: idString)
     }
 
     // MARK: - Route Genius

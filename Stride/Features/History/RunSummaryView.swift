@@ -103,12 +103,21 @@ struct RunSummaryView: View {
         .navigationTitle(displayType.displayName)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .destructiveAction) {
+            ToolbarItem(placement: .cancellationAction) {
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark")
+                }
+                .accessibilityLabel("Close")
+            }
+            ToolbarItem(placement: .primaryAction) {
                 Button(role: .destructive) {
                     showDeleteConfirmation = true
                 } label: {
                     Image(systemName: "trash")
                 }
+                .accessibilityLabel("Delete workout")
             }
         }
         .sheet(isPresented: $showAssociateSheet) {

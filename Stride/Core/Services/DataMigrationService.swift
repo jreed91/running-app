@@ -15,4 +15,12 @@ enum DataMigrationService {
         guard let receiptURL = Bundle.main.appStoreReceiptURL else { return false }
         return receiptURL.lastPathComponent == "sandboxReceipt"
     }
+
+    static var showsTestFlightDiagnostics: Bool {
+        #if targetEnvironment(simulator)
+        true
+        #else
+        isTestFlight
+        #endif
+    }
 }

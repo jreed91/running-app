@@ -10,14 +10,24 @@ final class NotificationService: NSObject {
     static let shared = NotificationService()
     private override init() {
         super.init()
-        center.delegate = self
+        installAsDelegate()
     }
 
     private let center = UNUserNotificationCenter.current()
 
     /// Called on MainActor when the user taps a SYNCED_RUN notification.
     /// The argument is the `RunWorkout.id.uuidString` embedded in the notification payload.
-    var onSyncedRunTapped: ((String) -> Void)?
+    var onSyncedRunTapped: ((String) -> Void)? {
+        didSet {
+            replayBufferedSyncedRunTapIfNeeded()
+        }
+    }
+
+    private var bufferedSyncedRunTapID: String?
+
+    func installAsDelegate() {
+        center.delegate = self
+    }
 
     // Notification category identifiers
     private enum Category {
@@ -120,9 +130,12 @@ final class NotificationService: NSObject {
             "workoutID": workout.id.uuidString,
             "opensReviewOnTap": opensReviewOnTap
         ]
+        if opensReviewOnTap {
+            storeReviewSnapshot(for: workout)
+        }
         // nil trigger → fires immediately
         let request = UNNotificationRequest(
-            identifier: "synced-run-\(workout.id.uuidString)",
+            identifier: "synced-run-\(workout.id.uuidString)-\(UUID().uuidString)",
             content: content,
             trigger: nil
         )
@@ -199,6 +212,19 @@ final class NotificationService: NSObject {
         try await notifyNewRunSynced(workout, unit: unit, opensReviewOnTap: context != nil)
     }
 
+    func workoutFromReviewSnapshot(idString: String) -> RunWorkout? {
+        guard
+            let data = UserDefaults.standard.data(forKey: Self.reviewSnapshotKey(idString)),
+            let snapshot = try? JSONDecoder().decode(SyncedRunReviewSnapshot.self, from: data),
+            let workout = snapshot.workout
+        else { return nil }
+        return workout
+    }
+
+    func removeReviewSnapshot(idString: String) {
+        UserDefaults.standard.removeObject(forKey: Self.reviewSnapshotKey(idString))
+    }
+
     // MARK: Private
 
     private func syncedRunBody(for workout: RunWorkout, unit: UnitPreference) -> String {
@@ -207,12 +233,94 @@ final class NotificationService: NSObject {
         return "\(workout.workoutType.displayName) · \(distance) · \(pace)"
     }
 
+    private func storeReviewSnapshot(for workout: RunWorkout) {
+        let snapshot = SyncedRunReviewSnapshot(workout: workout)
+        guard let data = try? JSONEncoder().encode(snapshot) else { return }
+        UserDefaults.standard.set(data, forKey: Self.reviewSnapshotKey(workout.id.uuidString))
+    }
+
+    private nonisolated static func reviewSnapshotKey(_ idString: String) -> String {
+        "syncedRunReviewSnapshot.\(idString)"
+    }
+
     private func reminderBody(for workout: ScheduledWorkout, minutesBefore: Int) -> String {
         let type = workout.workoutType.displayName
         if minutesBefore == 0 {
             return "Your \(type) workout starts now. Lace up!"
         }
         return "Your \(type) workout is in \(minutesBefore) min. Get ready!"
+    }
+
+    private func replayBufferedSyncedRunTapIfNeeded() {
+        guard let workoutID = bufferedSyncedRunTapID, let onSyncedRunTapped else { return }
+        bufferedSyncedRunTapID = nil
+        onSyncedRunTapped(workoutID)
+    }
+
+    private func handleSyncedRunTap(workoutID: String) {
+        UserDefaults.standard.set(workoutID, forKey: "pendingReviewWorkoutID")
+        guard let onSyncedRunTapped else {
+            bufferedSyncedRunTapID = workoutID
+            return
+        }
+        onSyncedRunTapped(workoutID)
+    }
+
+    private struct SyncedRunReviewSnapshot: Codable {
+        let id: UUID
+        let date: Date
+        let distanceMeters: Double
+        let durationSeconds: Double
+        let averagePaceSecondsPerKm: Double
+        let averageHeartRate: Double?
+        let maxHeartRate: Double?
+        let elevationGainMeters: Double?
+        let workoutTypeRaw: String
+        let workoutLocationRaw: String
+        let notes: String?
+        let healthKitWorkoutID: String?
+        let splitsData: Data?
+        let routeData: Data?
+        let weatherData: Data?
+
+        init(workout: RunWorkout) {
+            self.id = workout.id
+            self.date = workout.date
+            self.distanceMeters = workout.distanceMeters
+            self.durationSeconds = workout.durationSeconds
+            self.averagePaceSecondsPerKm = workout.averagePaceSecondsPerKm
+            self.averageHeartRate = workout.averageHeartRate
+            self.maxHeartRate = workout.maxHeartRate
+            self.elevationGainMeters = workout.elevationGainMeters
+            self.workoutTypeRaw = workout.workoutTypeRaw
+            self.workoutLocationRaw = workout.workoutLocationRaw
+            self.notes = workout.notes
+            self.healthKitWorkoutID = workout.healthKitWorkoutID
+            self.splitsData = workout.splitsData
+            self.routeData = workout.routeData
+            self.weatherData = workout.weatherData
+        }
+
+        var workout: RunWorkout? {
+            let workout = RunWorkout(
+                date: date,
+                distanceMeters: distanceMeters,
+                durationSeconds: durationSeconds,
+                workoutType: WorkoutType(rawValue: workoutTypeRaw) ?? .easy,
+                workoutLocation: WorkoutLocation(rawValue: workoutLocationRaw) ?? .outdoor
+            )
+            workout.id = id
+            workout.averagePaceSecondsPerKm = averagePaceSecondsPerKm
+            workout.averageHeartRate = averageHeartRate
+            workout.maxHeartRate = maxHeartRate
+            workout.elevationGainMeters = elevationGainMeters
+            workout.notes = notes
+            workout.healthKitWorkoutID = healthKitWorkoutID
+            workout.splitsData = splitsData
+            workout.routeData = routeData
+            workout.weatherData = weatherData
+            return workout
+        }
     }
 }
 
@@ -226,7 +334,7 @@ extension NotificationService: UNUserNotificationCenterDelegate {
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
-        completionHandler([.banner, .sound, .badge])
+        completionHandler([.banner, .list, .sound, .badge])
     }
 
     // Called when the user taps a delivered notification.
@@ -243,15 +351,22 @@ extension NotificationService: UNUserNotificationCenterDelegate {
             completionHandler()
             return
         }
-        let opensReviewOnTap = content.userInfo["opensReviewOnTap"] as? Bool ?? true
+        let opensReviewOnTap = Self.boolValue(content.userInfo["opensReviewOnTap"]) ?? true
         guard opensReviewOnTap else {
             completionHandler()
             return
         }
 
         Task { @MainActor in
-            self.onSyncedRunTapped?(workoutID)
+            self.handleSyncedRunTap(workoutID: workoutID)
         }
         completionHandler()
+    }
+
+    private nonisolated static func boolValue(_ value: Any?) -> Bool? {
+        if let bool = value as? Bool { return bool }
+        if let number = value as? NSNumber { return number.boolValue }
+        if let string = value as? String { return Bool(string) }
+        return nil
     }
 }

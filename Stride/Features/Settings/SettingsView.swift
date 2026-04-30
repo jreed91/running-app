@@ -56,7 +56,7 @@ struct SettingsView: View {
                     dataCard
                     routeGeniusCard
                     aiCoachCard
-                    if DataMigrationService.isTestFlight {
+                    if DataMigrationService.showsTestFlightDiagnostics {
                         notificationTestingCard
                     }
                     aboutCard
@@ -281,7 +281,7 @@ struct SettingsView: View {
             .buttonStyle(.plain)
             .foregroundStyle(.primary)
 
-            if DataMigrationService.isTestFlight {
+            if DataMigrationService.showsTestFlightDiagnostics {
                 rowDivider
                 NavigationLink {
                     CloudKitDebugView()
@@ -448,7 +448,7 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
             #if canImport(PulseUI)
-            if DataMigrationService.isTestFlight {
+            if DataMigrationService.showsTestFlightDiagnostics {
                 rowDivider
                 Button {
                     showPulseConsole = true

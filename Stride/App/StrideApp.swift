@@ -7,7 +7,8 @@ import HealthKit
 @main
 struct StrideApp: App {
 
-    @StateObject private var container = AppContainer()
+    @UIApplicationDelegateAdaptor(StrideAppDelegate.self) private var appDelegate
+    @StateObject private var container = AppContainer(inMemory: UITestingSupport.isEnabled)
     @State private var appSettings = AppSettings()
     @State private var authService = AuthService()
 
@@ -20,21 +21,64 @@ struct StrideApp: App {
                 .modelContainer(container.modelContainer)
                 .task {
                     PulseIntegrationService.activateIfNeeded()
+                    guard !UITestingSupport.isEnabled else { return }
                     await container.workoutSyncService.startObserving()
                     await authService.checkCredentialState()
                     container.checkForPendingReviewWorkout()
                 }
-                .sheet(item: $container.pendingReviewWorkout) { workout in
-                    NavigationStack {
-                        RunSummaryView(workout: workout)
-                    }
-                }
+                .modifier(PendingReviewSheet(
+                    container: container,
+                    appSettings: appSettings,
+                    authService: authService
+                ))
                 .onChange(of: container.pendingReviewWorkout) { _, newValue in
                     if newValue == nil {
                         UserDefaults.standard.removeObject(forKey: "pendingReviewWorkoutID")
                     }
                 }
         }
+    }
+}
+
+private struct PendingReviewSheet: ViewModifier {
+    @ObservedObject var container: AppContainer
+    let appSettings: AppSettings
+    let authService: AuthService
+
+    func body(content: Content) -> some View {
+        content.sheet(isPresented: isPresented) {
+            if let workout = container.pendingReviewWorkout {
+                NavigationStack {
+                    RunSummaryView(workout: workout)
+                }
+                .environment(\.appContainer, container)
+                .environment(appSettings)
+                .environment(authService)
+                .modelContainer(container.modelContainer)
+            }
+        }
+    }
+
+    private var isPresented: Binding<Bool> {
+        Binding(
+            get: { container.pendingReviewWorkout != nil },
+            set: { isPresented in
+                if !isPresented {
+                    container.pendingReviewWorkout = nil
+                }
+            }
+        )
+    }
+}
+
+@MainActor
+final class StrideAppDelegate: NSObject, UIApplicationDelegate {
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        NotificationService.shared.installAsDelegate()
+        return true
     }
 }
 
