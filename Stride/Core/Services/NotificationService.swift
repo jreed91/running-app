@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 import UserNotifications
 
 // MARK: - NotificationService
@@ -142,10 +143,10 @@ final class NotificationService: NSObject {
 
     /// Triggers all local notification types immediately for TestFlight QA.
     /// Safe to call in other environments, but intended for internal builds only.
-    func triggerAllTestNotifications() async throws {
+    func triggerAllTestNotifications(in context: ModelContext? = nil) async throws {
         try await triggerWorkoutReminderTestNotification()
         try await triggerMorningReminderTestNotification()
-        try await triggerSyncedRunTestNotification()
+        try await triggerSyncedRunTestNotification(in: context)
     }
 
     func triggerWorkoutReminderTestNotification() async throws {
@@ -186,14 +187,15 @@ final class NotificationService: NSObject {
         try await center.add(request)
     }
 
-    func triggerSyncedRunTestNotification(unit: UnitPreference = .metric) async throws {
+    func triggerSyncedRunTestNotification(unit: UnitPreference = .metric, in context: ModelContext? = nil) async throws {
         let workout = RunWorkout(
             date: Date(),
             distanceMeters: 5_000,
             durationSeconds: 1_500,
             workoutType: .easy
         )
-        try await notifyNewRunSynced(workout, unit: unit)
+        context?.insert(workout)
+        try await notifyNewRunSynced(workout, unit: unit, opensReviewOnTap: context != nil)
     }
 
     // MARK: Private
