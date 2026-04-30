@@ -378,7 +378,7 @@ struct SettingsView: View {
                         if !(await container.notificationService.isAuthorized) {
                             try await container.notificationService.requestAuthorization()
                         }
-                        try await container.notificationService.triggerAllTestNotifications()
+                        try await container.notificationService.triggerAllTestNotifications(in: context)
                         notificationTestStatus = "Sent workout, morning, and synced-run test notifications."
                     } catch {
                         notificationTestStatus = "Failed to send test notifications: \(error.localizedDescription)"
