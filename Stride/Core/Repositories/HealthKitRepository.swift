@@ -31,10 +31,22 @@ protocol HealthKitRepositoryProtocol: Sendable {
     /// Registers a long-lived observer query that calls `handler` whenever new running
     /// workouts are written to HealthKit. The handler is invoked on an arbitrary
     /// background queue; callers are responsible for hopping to the appropriate actor.
-    func registerObserverQuery(handler: @escaping @Sendable () -> Void)
+    func registerObserverQuery(handler: @escaping @Sendable (_ completion: @escaping @Sendable () -> Void) -> Void)
 }
 
 // MARK: - Live implementation
+
+private final class HealthKitObserverCompletion: @unchecked Sendable {
+    private let completion: () -> Void
+
+    init(_ completion: @escaping () -> Void) {
+        self.completion = completion
+    }
+
+    func callAsFunction() {
+        completion()
+    }
+}
 
 final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendable {
     private let store = HKHealthStore()
@@ -266,16 +278,24 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         try await store.enableBackgroundDelivery(for: .workoutType(), frequency: .immediate)
     }
 
-    func registerObserverQuery(handler: @escaping @Sendable () -> Void) {
+    func registerObserverQuery(handler: @escaping @Sendable (_ completion: @escaping @Sendable () -> Void) -> Void) {
         guard isAvailable else { return }
         // Observe all running workouts (outdoor and treadmill share the .running activity type)
         let query = HKObserverQuery(
             sampleType: .workoutType(),
             predicate: nil
         ) { _, completionHandler, error in
-            defer { completionHandler() }
-            guard error == nil else { return }
-            handler()
+            guard error == nil else {
+                AppLogger.log(
+                    "HealthKit observer update failed: \(error?.localizedDescription ?? "unknown error")",
+                    label: "HealthKit",
+                    level: .warning
+                )
+                completionHandler()
+                return
+            }
+            let completion = HealthKitObserverCompletion(completionHandler)
+            handler { completion() }
         }
         observerQuery = query
         store.execute(query)

@@ -20,6 +20,7 @@ final class WorkoutSyncService {
     private let notificationService: NotificationService
     private let weatherService: WeatherService
     private let context: ModelContext
+    private var isObserving = false
 
     /// Called on MainActor after each batch of new workouts is imported and auto-linked.
     var onWorkoutsSynced: (([RunWorkout]) -> Void)?
@@ -44,25 +45,47 @@ final class WorkoutSyncService {
     /// No-op if HealthKit is unavailable or the user denies authorization.
     /// Safe to call multiple times — HealthKit background delivery is idempotent.
     func startObserving() async {
-        guard healthKitRepository.isAvailable, healthKitRepository.isAuthorized else { return }
-        do {
-            try await healthKitRepository.enableBackgroundDelivery()
-        } catch {
+        guard healthKitRepository.isAvailable else {
+            AppLogger.log("HealthKit is unavailable; workout background sync not started.", label: "HealthKit", level: .warning)
             return
         }
 
-        // The handler is called on a HealthKit background queue, so we hop to
-        // MainActor before touching SwiftData or NotificationService.
-        healthKitRepository.registerObserverQuery { [weak self] in
-            Task { @MainActor [weak self] in
-                await self?.handleNewWorkoutsDetected()
+        if !isObserving {
+            do {
+                try await healthKitRepository.enableBackgroundDelivery()
+            } catch {
+                AppLogger.log(
+                    "Failed to enable HealthKit background delivery: \(error.localizedDescription)",
+                    label: "HealthKit",
+                    level: .error
+                )
+                return
             }
+
+            // The handler is called on a HealthKit background queue, so we hop to
+            // MainActor before touching SwiftData or NotificationService. Keep
+            // HealthKit's completion open until the async import finishes, otherwise
+            // iOS can suspend the app before the notification is scheduled.
+            healthKitRepository.registerObserverQuery { [weak self] completion in
+                Task { @MainActor [weak self] in
+                    guard let self else {
+                        completion()
+                        return
+                    }
+                    await self.handleNewWorkoutsDetected(source: "observer")
+                    completion()
+                }
+            }
+            isObserving = true
+            AppLogger.log("HealthKit background workout observer registered.", label: "HealthKit", level: .info)
         }
+
+        await handleNewWorkoutsDetected(source: "startup")
     }
 
     // MARK: Private
 
-    private func handleNewWorkoutsDetected() async {
+    private func handleNewWorkoutsDetected(source: String) async {
         // Look back 7 days — the observer fires promptly after each new workout,
         // so a short window keeps the HealthKit query fast.
         let cutoff = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
@@ -72,6 +95,11 @@ final class WorkoutSyncService {
             let stored = try context.fetch(FetchDescriptor<RunWorkout>())
             existingIDs = Set(stored.compactMap(\.healthKitWorkoutID))
         } catch {
+            AppLogger.log(
+                "Failed to fetch existing workouts before HealthKit sync (\(source)): \(error.localizedDescription)",
+                label: "HealthKit",
+                level: .error
+            )
             return
         }
 
@@ -83,10 +111,18 @@ final class WorkoutSyncService {
                 existingIDs: existingIDs
             )
         } catch {
+            AppLogger.log(
+                "Failed to import HealthKit workouts (\(source)): \(error.localizedDescription)",
+                label: "HealthKit",
+                level: .error
+            )
             return
         }
 
-        guard !newWorkouts.isEmpty else { return }
+        guard !newWorkouts.isEmpty else {
+            AppLogger.log("No new HealthKit running workouts found during \(source) sync.", label: "HealthKit", level: .debug)
+            return
+        }
 
         for workout in newWorkouts {
             context.insert(workout)
@@ -95,6 +131,11 @@ final class WorkoutSyncService {
         do {
             try context.save()
         } catch {
+            AppLogger.log(
+                "Failed to save imported HealthKit workouts (\(source)): \(error.localizedDescription)",
+                label: "HealthKit",
+                level: .error
+            )
             return
         }
 
@@ -110,6 +151,11 @@ final class WorkoutSyncService {
         for workout in newWorkouts {
             try? await notificationService.notifyNewRunSynced(workout, unit: unit)
         }
+        AppLogger.log(
+            "Imported \(newWorkouts.count) HealthKit running workout(s) during \(source) sync.",
+            label: "HealthKit",
+            level: .info
+        )
 
         if let first = newWorkouts.first {
             UserDefaults.standard.set(first.id.uuidString, forKey: "pendingReviewWorkoutID")
