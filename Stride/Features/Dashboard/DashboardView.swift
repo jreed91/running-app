@@ -456,6 +456,7 @@ struct DashboardView: View {
             .padding(.vertical, 16)
         }
         .foregroundStyle(.white)
+        .accessibilityIdentifier("dashboard.startFreeRun")
         .background(
             RoundedRectangle(cornerRadius: 18)
                 .fill(Color.brand)

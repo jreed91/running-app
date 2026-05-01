@@ -108,6 +108,7 @@ struct OBWelcome: View {
                 }
                 .foregroundStyle(.white)
                 .buttonStyle(BouncyButtonStyle())
+                .accessibilityIdentifier("onboarding.getStarted")
                 .opacity(appeared ? 1 : 0)
                 .offset(y: appeared ? 0 : 18)
                 .adaptiveAnimation(AppAnimation.entrance.delay(0.28), value: appeared)
@@ -370,6 +371,7 @@ struct OBShell<Content: View>: View {
                             }
                         }
                         .buttonStyle(.plain)
+                        .accessibilityIdentifier("onboarding.back.\(stepIndex)")
 
                         GeometryReader { geo in
                             ZStack(alignment: .leading) {
@@ -436,6 +438,7 @@ struct OBShell<Content: View>: View {
                 .foregroundStyle(.white)
                 .buttonStyle(.plain)
                 .disabled(!ctaEnabled)
+                .accessibilityIdentifier("onboarding.primaryCTA.\(stepIndex)")
 
                 if let secondaryLabel, let onSecondary {
                     Button(action: onSecondary) {
@@ -445,6 +448,7 @@ struct OBShell<Content: View>: View {
                             .padding(.vertical, 6)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("onboarding.secondaryCTA.\(stepIndex)")
                 }
             }
             .padding(.horizontal, 20)
@@ -997,6 +1001,7 @@ struct OBReady: View {
             .foregroundStyle(.white)
             .buttonStyle(.plain)
             .disabled(isCreatingPlan)
+            .accessibilityIdentifier("onboarding.startTraining")
             .padding(.horizontal, 20)
             .padding(.bottom, 44)
         }

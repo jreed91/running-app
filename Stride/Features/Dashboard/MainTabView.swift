@@ -25,5 +25,6 @@ struct MainTabView: View {
                 }
         }
         .tint(.brand)
+        .accessibilityIdentifier("main.tabs")
     }
 }

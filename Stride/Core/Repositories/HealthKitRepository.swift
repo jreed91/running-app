@@ -312,7 +312,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         let compound = NSCompoundPredicate(
             andPredicateWithSubpredicates: [outdoorPredicate, datePredicate]
         )
-        return try await withCheckedThrowingContinuation { continuation in
+        let workouts: [HKWorkout] = try await withCheckedThrowingContinuation { continuation in
             let query = HKSampleQuery(
                 sampleType: .workoutType(),
                 predicate: compound,
@@ -329,6 +329,16 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             }
             store.execute(query)
         }
+        if workouts.isEmpty {
+            await logRecentWorkoutDiagnostics(from: startDate, to: endDate)
+        } else {
+            AppLogger.log(
+                "HealthKit returned \(workouts.count) running workout(s): \(workoutSummaries(workouts))",
+                label: "HealthKit",
+                level: .debug
+            )
+        }
+        return workouts
     }
 
     // MARK: - Import workouts from HealthKit
@@ -343,13 +353,34 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
     ) async throws -> [RunWorkout] {
         let hkWorkouts = try await fetchWorkouts(from: startDate, to: endDate)
         var result: [RunWorkout] = []
+        var skippedExisting = 0
+        var skippedTinyShell = 0
 
         for hkWorkout in hkWorkouts {
             let hkID = hkWorkout.uuid.uuidString
-            guard !existingIDs.contains(hkID) else { continue }
+            guard !existingIDs.contains(hkID) else {
+                skippedExisting += 1
+                continue
+            }
 
-            let distanceMeters = hkWorkout.totalDistance?.doubleValue(for: .meter()) ?? 0
-            guard distanceMeters > 100 else { continue }
+            let workoutDistanceMeters = hkWorkout.totalDistance?.doubleValue(for: .meter()) ?? 0
+            let distanceMeters: Double
+            if workoutDistanceMeters > 0 {
+                distanceMeters = workoutDistanceMeters
+            } else {
+                distanceMeters = (try? await fetchDistanceMeters(for: hkWorkout)) ?? 0
+                if distanceMeters > 0 {
+                    AppLogger.log(
+                        "Recovered \(Int(distanceMeters))m from distance samples for HealthKit workout \(hkID.prefix(8)).",
+                        label: "HealthKit",
+                        level: .debug
+                    )
+                }
+            }
+            guard distanceMeters > 100 || hkWorkout.duration >= 30 else {
+                skippedTinyShell += 1
+                continue
+            }
 
             let hrStats = try? await fetchHeartRateStats(for: hkWorkout)
             let elevation = elevationGain(from: hkWorkout)
@@ -370,10 +401,45 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             if !coordinates.isEmpty { run.routeCoordinates = coordinates }
             result.append(run)
         }
+        AppLogger.log(
+            "HealthKit import candidates: fetched=\(hkWorkouts.count), importable=\(result.count), existing=\(skippedExisting), tinyShell=\(skippedTinyShell)",
+            label: "HealthKit",
+            level: .debug
+        )
         return result
     }
 
     // MARK: - HealthKit sample helpers
+
+    private func fetchDistanceMeters(for workout: HKWorkout) async throws -> Double {
+        let distanceType = HKQuantityType(.distanceWalkingRunning)
+        let workoutPredicate = HKQuery.predicateForObjects(from: workout)
+        let datePredicate = HKQuery.predicateForSamples(
+            withStart: workout.startDate,
+            end: workout.endDate,
+            options: [.strictStartDate, .strictEndDate]
+        )
+        let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+            workoutPredicate,
+            datePredicate
+        ])
+
+        let stats: HKStatistics? = try await withCheckedThrowingContinuation { continuation in
+            let query = HKStatisticsQuery(
+                quantityType: distanceType,
+                quantitySamplePredicate: predicate,
+                options: .cumulativeSum
+            ) { _, result, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume(returning: result)
+                }
+            }
+            store.execute(query)
+        }
+        return stats?.sumQuantity()?.doubleValue(for: .meter()) ?? 0
+    }
 
     private func fetchRouteCoordinates(for workout: HKWorkout) async -> [Coordinate] {
         let predicate = HKQuery.predicateForObjects(from: workout)
@@ -450,5 +516,47 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         if distanceKm >= 16 { return .longRun }
         if paceSecPerKm < 320 { return .tempo }
         return .easy
+    }
+
+    private func logRecentWorkoutDiagnostics(from startDate: Date, to endDate: Date) async {
+        let datePredicate = HKQuery.predicateForSamples(
+            withStart: startDate, end: endDate, options: .strictStartDate
+        )
+        let workouts: [HKWorkout] = await withCheckedContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: .workoutType(),
+                predicate: datePredicate,
+                limit: 10,
+                sortDescriptors: [
+                    NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+                ]
+            ) { _, samples, _ in
+                continuation.resume(returning: (samples as? [HKWorkout]) ?? [])
+            }
+            store.execute(query)
+        }
+        guard !workouts.isEmpty else {
+            AppLogger.log(
+                "HealthKit returned no workouts of any type in the sync window. Check Stride's Health read permission for Workouts.",
+                label: "HealthKit",
+                level: .warning
+            )
+            return
+        }
+        AppLogger.log(
+            "HealthKit returned no running workouts. Recent workouts of any type: \(workoutSummaries(workouts))",
+            label: "HealthKit",
+            level: .warning
+        )
+    }
+
+    private func workoutSummaries(_ workouts: [HKWorkout]) -> String {
+        workouts.map { workout in
+            let id = workout.uuid.uuidString.prefix(8)
+            let distance = workout.totalDistance?.doubleValue(for: .meter()) ?? 0
+            let source = workout.sourceRevision.source.bundleIdentifier
+            return "\(id) type=\(workout.workoutActivityType.rawValue) dist=\(Int(distance))m duration=\(Int(workout.duration))s source=\(source)"
+        }
+        .joined(separator: "; ")
     }
 }

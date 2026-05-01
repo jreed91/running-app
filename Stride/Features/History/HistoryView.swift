@@ -85,6 +85,7 @@ struct HistoryView: View {
     /// already in the app. Triggered every time the History tab appears.
     @MainActor
     private func syncRecentHealthKitWorkouts() async {
+        guard !UITestingSupport.isEnabled else { return }
         let repo = container.healthKitRepository
         guard repo.isAvailable else { return }
         isSyncing = true

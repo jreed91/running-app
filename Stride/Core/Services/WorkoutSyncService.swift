@@ -103,13 +103,26 @@ final class WorkoutSyncService {
             return
         }
 
-        let newWorkouts: [RunWorkout]
+        var newWorkouts: [RunWorkout]
         do {
-            newWorkouts = try await healthKitRepository.fetchImportableWorkouts(
+            newWorkouts = try await fetchImportableWorkouts(
                 from: cutoff,
-                to: Date(),
-                existingIDs: existingIDs
+                existingIDs: existingIDs,
+                source: source
             )
+            if newWorkouts.isEmpty, source == "observer" {
+                AppLogger.log(
+                    "Observer sync found no importable workouts; retrying after HealthKit settles.",
+                    label: "HealthKit",
+                    level: .debug
+                )
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                newWorkouts = try await fetchImportableWorkouts(
+                    from: cutoff,
+                    existingIDs: existingIDs,
+                    source: "\(source)-retry"
+                )
+            }
         } catch {
             AppLogger.log(
                 "Failed to import HealthKit workouts (\(source)): \(error.localizedDescription)",
@@ -161,6 +174,23 @@ final class WorkoutSyncService {
             UserDefaults.standard.set(first.id.uuidString, forKey: "pendingReviewWorkoutID")
         }
         onWorkoutsSynced?(newWorkouts)
+    }
+
+    private func fetchImportableWorkouts(
+        from cutoff: Date,
+        existingIDs: Set<String>,
+        source: String
+    ) async throws -> [RunWorkout] {
+        AppLogger.log(
+            "Querying HealthKit running workouts for \(source) sync since \(cutoff.formatted(.iso8601)). Existing HK IDs: \(existingIDs.count).",
+            label: "HealthKit",
+            level: .debug
+        )
+        return try await healthKitRepository.fetchImportableWorkouts(
+            from: cutoff,
+            to: Date(),
+            existingIDs: existingIDs
+        )
     }
 
     private func autoLink(_ workouts: [RunWorkout]) {

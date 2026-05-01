@@ -11,45 +11,90 @@ final class StrideUITests: XCTestCase {
         app.launch()
     }
 
-    // MARK: Onboarding
-
-    func testOnboardingFlowCompletesSuccessfully() throws {
-        // If already onboarded the home tab appears directly
-        if app.tabBars.firstMatch.exists { return }
-
-        // Step 1: name
-        let nameField = app.textFields["Runner name"]
-        XCTAssertTrue(nameField.waitForExistence(timeout: 5))
-        nameField.tap()
-        nameField.typeText("Test Runner")
-        app.buttons["Next"].tap()
-
-        // Step 2: race goal
-        XCTAssertTrue(app.buttons["Next"].waitForExistence(timeout: 3))
-        app.buttons["Next"].tap()
-
-        // Step 3: fitness level
-        XCTAssertTrue(app.buttons["Next"].waitForExistence(timeout: 3))
-        app.buttons["Next"].tap()
-
-        // Step 4: run days → start
-        XCTAssertTrue(app.buttons["Start Training"].waitForExistence(timeout: 3))
-        app.buttons["Start Training"].tap()
-
-        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 5))
+    override func tearDownWithError() throws {
+        app = nil
     }
 
-    // MARK: Tab navigation
+    func testE2EOnboardingCreatesTrainingPlanAndDashboard() throws {
+        completeOnboarding()
 
-    func testAllTabsAreAccessible() throws {
-        guard app.tabBars.firstMatch.waitForExistence(timeout: 5) else {
-            throw XCTSkip("Onboarding not completed — run onboarding test first")
+        XCTAssertTrue(app.tabBars["main.tabs"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.navigationBars["Today"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["This Week"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["dashboard.startFreeRun"].waitForExistence(timeout: 5))
+
+        app.tabBars["main.tabs"].buttons["Plan"].tap()
+        XCTAssertTrue(app.navigationBars["My Plan"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["PACE INSIGHTS"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["TRAINING WEEKS"].waitForExistence(timeout: 5))
+    }
+
+    func testE2ETabNavigationShowsPrimaryScreens() throws {
+        completeOnboarding()
+
+        let tabBar = app.tabBars["main.tabs"]
+        XCTAssertTrue(tabBar.waitForExistence(timeout: 8))
+
+        assertTab("Home", showsNavigationTitle: "Today")
+        assertTab("Plan", showsNavigationTitle: "My Plan")
+        assertTab("History", showsNavigationTitle: "History")
+        assertTab("Progress", showsNavigationTitle: "Progress")
+        assertTab("Settings", showsNavigationTitle: "Settings")
+    }
+
+    func testE2EFreeRunHUDOpensFromDashboard() throws {
+        completeOnboarding()
+
+        let tabBar = app.tabBars["main.tabs"]
+        XCTAssertTrue(tabBar.waitForExistence(timeout: 8))
+        tabBar.buttons["Home"].tap()
+
+        let startFreeRun = app.buttons["dashboard.startFreeRun"]
+        XCTAssertTrue(startFreeRun.waitForExistence(timeout: 5))
+        startFreeRun.tap()
+
+        XCTAssertTrue(app.staticTexts["EASY ZONE"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["DISTANCE"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["TIME"].waitForExistence(timeout: 5))
+    }
+
+    private func completeOnboarding() {
+        if app.tabBars["main.tabs"].waitForExistence(timeout: 1) {
+            return
         }
-        let tabBar = app.tabBars.firstMatch
-        for label in ["Home", "Plan", "History", "Progress", "Settings"] {
-            tabBar.buttons[label].tap()
-            XCTAssertTrue(app.navigationBars.firstMatch.waitForExistence(timeout: 3),
-                          "\(label) tab nav bar missing")
-        }
+
+        let getStarted = app.buttons["onboarding.getStarted"]
+        XCTAssertTrue(getStarted.waitForExistence(timeout: 8))
+        getStarted.tap()
+
+        tapPrimaryCTA(step: 1, expectedTitle: "What are you training for?")
+        tapPrimaryCTA(step: 2, expectedTitle: "Kilometres or miles?")
+        tapPrimaryCTA(step: 3, expectedTitle: "How would you describe your running?")
+        tapPrimaryCTA(step: 4, expectedTitle: "Your recent 5K time?")
+        tapPrimaryCTA(step: 5, expectedTitle: "Which days can you run?")
+
+        let skipPermissions = app.buttons["onboarding.secondaryCTA.6"]
+        XCTAssertTrue(skipPermissions.waitForExistence(timeout: 5))
+        skipPermissions.tap()
+
+        let startTraining = app.buttons["onboarding.startTraining"]
+        XCTAssertTrue(startTraining.waitForExistence(timeout: 5))
+        startTraining.tap()
+
+        XCTAssertTrue(app.tabBars["main.tabs"].waitForExistence(timeout: 10))
+    }
+
+    private func tapPrimaryCTA(step: Int, expectedTitle: String) {
+        XCTAssertTrue(app.staticTexts[expectedTitle].waitForExistence(timeout: 5))
+        let button = app.buttons["onboarding.primaryCTA.\(step)"]
+        XCTAssertTrue(button.waitForExistence(timeout: 5))
+        button.tap()
+    }
+
+    private func assertTab(_ tabLabel: String, showsNavigationTitle title: String) {
+        let tabBar = app.tabBars["main.tabs"]
+        XCTAssertTrue(tabBar.buttons[tabLabel].waitForExistence(timeout: 5))
+        tabBar.buttons[tabLabel].tap()
+        XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 5), "\(tabLabel) did not show \(title)")
     }
 }
