@@ -96,6 +96,7 @@ final class NotificationService: NSObject {
 
     /// Schedules 8 AM morning reminders for all future non-rest workouts in a plan.
     func scheduleMorningReminders(for plan: TrainingPlan) async {
+        guard await isAuthorized else { return }
         for week in plan.weeks ?? [] {
             for workout in week.workouts ?? [] where !workout.isCompleted {
                 try? await scheduleMorningReminder(for: workout)
