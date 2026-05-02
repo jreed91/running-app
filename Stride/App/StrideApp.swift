@@ -114,6 +114,8 @@ struct ContentView: View {
     @State private var hasRunRestorePermissionCheck = false
     @State private var isRunningRestorePermissionCheck = false
 
+    @Environment(\.scenePhase) private var scenePhase
+
     private let restoreLocationManager = CLLocationManager()
 
     var body: some View {
@@ -167,6 +169,14 @@ struct ContentView: View {
                 Task { await requestMissingPermissionsAfterRestoreIfNeeded() }
             }
         }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active,
+                  appSettings.morningReminderEnabled,
+                  let plan = activePlans.first else { return }
+            Task {
+                await container.notificationService.scheduleMorningReminders(for: plan)
+            }
+        }
     }
 
     /// Removes duplicate profiles and active plans, and applies the one-time
@@ -217,6 +227,9 @@ struct ContentView: View {
             notificationSettings.authorizationStatus == .provisional
         if !hasNotificationAuth {
             try? await NotificationService.shared.requestAuthorization()
+        }
+        if appSettings.morningReminderEnabled, let plan = activePlans.first {
+            await container.notificationService.scheduleMorningReminders(for: plan)
         }
     }
 }

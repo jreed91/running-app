@@ -256,6 +256,9 @@ struct SettingsView: View {
                         guard let plan = activePlans.first else { return }
                         Task {
                             if enabled {
+                                if !(await container.notificationService.isAuthorized) {
+                                    try? await container.notificationService.requestAuthorization()
+                                }
                                 await container.notificationService.scheduleMorningReminders(for: plan)
                             } else {
                                 await container.notificationService.cancelAllMorningReminders()
