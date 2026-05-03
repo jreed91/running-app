@@ -20,6 +20,7 @@ struct OnboardingView: View {
     @State private var goalRace: RaceType = .fiveK
     @State private var raceName = RaceType.fiveK.displayName
     @State private var raceDate = Date().startOfWeek.adding(weeks: 8)
+    @State private var planStart: Date = Date().startOfWeek.adding(weeks: 1).startOfDay
     @State private var fitnessLevel: FitnessLevel = .intermediate
     @State private var fitnessSelection: OBFitnessSelection = .recreational
     @State private var fiveKHours = 0
@@ -65,13 +66,27 @@ struct OnboardingView: View {
     }
 
     private var planStartDate: Date {
-        let nextWeek = Date().startOfWeek.adding(weeks: 1).startOfDay
-        let today = Date().startOfDay
-        return raceDate.startOfDay < nextWeek ? today : nextWeek
+        planStart.startOfDay
     }
 
     private var minimumRaceDate: Date {
-        Date().startOfDay.adding(days: 1)
+        planStart.startOfDay.adding(days: 7)
+    }
+
+    private var minimumStartDate: Date {
+        Date().startOfDay
+    }
+
+    private var maximumStartDate: Date? {
+        goalRace.isGoalRace ? raceDate.startOfDay.adding(days: -7) : nil
+    }
+
+    private var startDateValid: Bool {
+        guard planStart.startOfDay >= minimumStartDate else { return false }
+        if let max = maximumStartDate {
+            return planStart.startOfDay <= max
+        }
+        return true
     }
 
     private var raceGoalReady: Bool {
@@ -118,19 +133,31 @@ struct OnboardingView: View {
                 goalContent
             }
         case 2:
-            OBShell(stepIndex: 2, total: totalSteps, kicker: "Units",
+            OBShell(stepIndex: 2, total: totalSteps, kicker: "Timing",
+                    title: goalRace.isGoalRace ? "When's the big day?" : "When do you want to start?",
+                    subtitle: goalRace.isGoalRace
+                        ? "Pick your race date and when training begins."
+                        : "Choose a start date — typically next Monday.",
+                    ctaLabel: "Continue",
+                    ctaEnabled: raceGoalReady && startDateValid,
+                    onBack: retreat,
+                    onCTA: advance) {
+                timingContent
+            }
+        case 3:
+            OBShell(stepIndex: 3, total: totalSteps, kicker: "Units",
                     title: "Kilometres or miles?", subtitle: "Choose how distances and paces are shown throughout the app.",
                     ctaLabel: "Continue", onBack: retreat, onCTA: advance) {
                 unitsContent
             }
-        case 3:
-            OBShell(stepIndex: 3, total: totalSteps, kicker: "About you",
+        case 4:
+            OBShell(stepIndex: 4, total: totalSteps, kicker: "About you",
                     title: "How would you describe your running?", subtitle: "We'll calibrate volume and pace from here.",
                     ctaLabel: "Continue", onBack: retreat, onCTA: advance) {
                 levelContent
             }
-        case 4:
-            OBShell(stepIndex: 4, total: totalSteps, kicker: "Calibrate",
+        case 5:
+            OBShell(stepIndex: 5, total: totalSteps, kicker: "Calibrate",
                     title: "Your recent 5K time?", subtitle: "Used to compute your VDOT and pace zones. You can skip or update this later.",
                     ctaLabel: "Continue",
                     secondaryLabel: "I don't know my 5K time",
@@ -138,14 +165,14 @@ struct OnboardingView: View {
                     onBack: retreat, onCTA: advance) {
                 timeContent
             }
-        case 5:
-            OBShell(stepIndex: 5, total: totalSteps, kicker: "Schedule",
+        case 6:
+            OBShell(stepIndex: 6, total: totalSteps, kicker: "Schedule",
                     title: "Which days can you run?", subtitle: "Pick your typical week. We'll place harder workouts on your energy days.",
                     ctaLabel: "Continue", onBack: retreat, onCTA: advance) {
                 scheduleContent
             }
-        case 6:
-            OBShell(stepIndex: 6, total: totalSteps, kicker: "Permissions",
+        case 7:
+            OBShell(stepIndex: 7, total: totalSteps, kicker: "Permissions",
                     title: "A few things to set up.", subtitle: "Each is optional — you can always change these in Settings.",
                     ctaLabel: isRequestingPermissions ? "Requesting…" : "Build my plan",
                     secondaryLabel: "Skip — I'll do this later",
@@ -190,6 +217,34 @@ struct OnboardingView: View {
                 }
             }
 
+        }
+    }
+
+    // MARK: - Timing content
+
+    private var timingContent: some View {
+        VStack(spacing: 16) {
+            if goalRace.isGoalRace {
+                OBRaceDetailsCard(
+                    raceName: $raceName,
+                    raceDate: $raceDate,
+                    race: goalRace,
+                    minimumDate: minimumRaceDate
+                )
+            }
+
+            OBStartDateCard(
+                startDate: $planStart,
+                planWeeks: planWeeks,
+                isRacePlan: goalRace.isGoalRace,
+                minimumDate: minimumStartDate,
+                maximumDate: maximumStartDate
+            )
+        }
+        .onChange(of: planStart) { _, _ in
+            if goalRace.isGoalRace, raceDate < minimumRaceDate {
+                raceDate = minimumRaceDate
+            }
         }
     }
 
@@ -598,7 +653,7 @@ struct OnboardingView: View {
         } else {
             plan = container.trainingPlanService.generatePlan(
                 profile: profile,
-                startDate: Date().startOfWeek.adding(weeks: 1),
+                startDate: planStartDate,
                 numberOfWeeks: planWeeks,
                 runDayIndices: selectedDays.sorted(),
                 unitPreference: appSettings.unitPreference
