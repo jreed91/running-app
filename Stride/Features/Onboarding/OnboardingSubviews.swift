@@ -581,6 +581,52 @@ struct OBRaceDetailsCard: View {
     }
 }
 
+// MARK: - OBStartDateCard
+
+struct OBStartDateCard: View {
+    @Binding var startDate: Date
+    let planWeeks: Int
+    let isRacePlan: Bool
+    let minimumDate: Date
+    let maximumDate: Date?
+
+    private var dateRange: ClosedRange<Date> {
+        let upper = maximumDate ?? minimumDate.adding(days: 365)
+        let lower = min(minimumDate, upper)
+        return lower...upper
+    }
+
+    private var weeksLabel: String {
+        guard isRacePlan else { return "Plan starts on this date" }
+        return "\(planWeeks)-week plan ends on race day"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                StrideIcon(name: .calendar, size: 18, color: .brand)
+                Text("START DATE")
+                    .font(.sectionHeader)
+                    .foregroundStyle(.secondary)
+            }
+
+            DatePicker(
+                "Start date",
+                selection: $startDate,
+                in: dateRange,
+                displayedComponents: .date
+            )
+            .font(.bodyStrong)
+
+            Text(weeksLabel)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(16)
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 18))
+    }
+}
+
 // MARK: - OBLevelRow
 
 enum OBFitnessSelection: CaseIterable, Sendable {
