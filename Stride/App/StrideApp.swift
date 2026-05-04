@@ -185,6 +185,7 @@ struct ContentView: View {
     private func deduplicate() {
         ProfileRestoreDeduplicator.applyLegacyFields(profiles, in: context)
         ProfileRestoreDeduplicator.applyLegacyFieldsToRelated(in: context)
+        ProfileRestoreDeduplicator.repairRelationships(in: context)
         try? ProfileRestoreDeduplicator.deduplicate(profiles, in: context)
         // Active plans: newest-first → drop everything after index 0
         if activePlans.count > 1 {
@@ -353,6 +354,44 @@ enum ProfileRestoreDeduplicator {
                 }
                 route.routeTypeLegacy = nil
             }
+        }
+
+        if dirty { try? context.save() }
+    }
+
+    /// Re-stitches RunWorkout ↔ ScheduledWorkout relationships using the primitive ID backup
+    /// fields after a CloudKit restore. CloudKit delivers records asynchronously and may
+    /// resolve relationship references only after both sides have arrived; the stored UUIDs
+    /// let us repair any gaps without waiting for a second sync cycle.
+    @MainActor
+    static func repairRelationships(in context: ModelContext) {
+        guard let runs = try? context.fetch(FetchDescriptor<RunWorkout>()),
+              let scheduled = try? context.fetch(FetchDescriptor<ScheduledWorkout>()) else { return }
+
+        let scheduledByID = Dictionary(uniqueKeysWithValues: scheduled.map { ($0.id, $0) })
+        let runsByID = Dictionary(uniqueKeysWithValues: runs.map { ($0.id, $0) })
+        var dirty = false
+
+        for run in runs where run.scheduledWorkout == nil {
+            guard let linkedID = run.linkedScheduledWorkoutID,
+                  let match = scheduledByID[linkedID] else { continue }
+            run.scheduledWorkout = match
+            if match.completedWorkout == nil {
+                match.completedWorkout = run
+                match.isCompleted = true
+            }
+            dirty = true
+        }
+
+        for sw in scheduled where sw.completedWorkout == nil {
+            guard let linkedID = sw.linkedRunWorkoutID,
+                  let match = runsByID[linkedID] else { continue }
+            sw.completedWorkout = match
+            sw.isCompleted = true
+            if match.scheduledWorkout == nil {
+                match.scheduledWorkout = sw
+            }
+            dirty = true
         }
 
         if dirty { try? context.save() }

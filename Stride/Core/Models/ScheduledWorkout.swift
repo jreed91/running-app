@@ -40,6 +40,10 @@ final class ScheduledWorkout {
     @Relationship(deleteRule: .nullify, inverse: \RunWorkout.scheduledWorkout)
     var completedWorkout: RunWorkout?
 
+    /// Primitive backup of the linked run workout's ID. See ``RunWorkout/linkedScheduledWorkoutID``
+    /// for rationale.
+    var linkedRunWorkoutID: UUID?
+
     // MARK: Computed helpers
 
     var intervals: [WorkoutInterval] {

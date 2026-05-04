@@ -51,6 +51,8 @@ struct AssociateWorkoutSheet: View {
         scheduled.completedWorkout = workout
         workout.scheduledWorkout = scheduled
         scheduled.isCompleted = true
+        scheduled.linkedRunWorkoutID = workout.id
+        workout.linkedScheduledWorkoutID = scheduled.id
         try? context.save()
         dismiss()
     }

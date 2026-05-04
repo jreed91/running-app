@@ -74,6 +74,11 @@ struct HistoryView: View {
             let workout = displayedWorkouts[index]
             // Nullify the inverse relationship so CloudKit doesn't reject the delete.
             workout.scheduledWorkout?.completedWorkout = nil
+            workout.scheduledWorkout?.linkedRunWorkoutID = nil
+            workout.linkedScheduledWorkoutID = nil
+            if let hkID = workout.healthKitWorkoutID {
+                context.insert(DeletedWorkout(healthKitWorkoutID: hkID))
+            }
             context.delete(workout)
         }
         try? context.save()
