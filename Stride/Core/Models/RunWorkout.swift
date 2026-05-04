@@ -38,6 +38,12 @@ final class RunWorkout {
     /// The inverse is declared on ``ScheduledWorkout/completedWorkout``; SwiftData infers it here.
     var scheduledWorkout: ScheduledWorkout?
 
+    /// Primitive backup of the linked scheduled workout's ID. CloudKit syncs scalar UUIDs
+    /// more reliably than relationship references when records arrive out of order during a
+    /// restore. Used by ``ProfileRestoreDeduplicator/repairRelationships(in:)`` to re-stitch
+    /// the relationship after reinstall.
+    var linkedScheduledWorkoutID: UUID?
+
     /// JSON-encoded ``WorkoutWeather``.
     var weatherData: Data?
 

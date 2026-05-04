@@ -86,10 +86,6 @@ final class WorkoutSyncService {
     // MARK: Private
 
     private func handleNewWorkoutsDetected(source: String) async {
-        // Look back 7 days — the observer fires promptly after each new workout,
-        // so a short window keeps the HealthKit query fast.
-        let cutoff = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
-
         let existingIDs: Set<String>
         do {
             let stored = try context.fetch(FetchDescriptor<RunWorkout>())
@@ -102,6 +98,12 @@ final class WorkoutSyncService {
             )
             return
         }
+
+        // On a fresh install or reinstall the local store is empty, so look back up to 90 days
+        // to recover runs that may not have synced to CloudKit before the app was removed.
+        // For normal syncs (store already has data) keep the window short for performance.
+        let lookbackDays = existingIDs.isEmpty ? -90 : -7
+        let cutoff = Calendar.current.date(byAdding: .day, value: lookbackDays, to: Date()) ?? Date()
 
         var newWorkouts: [RunWorkout]
         do {
@@ -206,6 +208,8 @@ final class WorkoutSyncService {
                 match.completedWorkout = workout
                 workout.scheduledWorkout = match
                 match.isCompleted = true
+                match.linkedRunWorkoutID = workout.id
+                workout.linkedScheduledWorkoutID = match.id
                 dirty = true
             }
         }
@@ -256,6 +260,8 @@ final class WorkoutSyncService {
                 run.workoutType = match.workoutType
                 match.completedWorkout = run
                 match.isCompleted = true
+                match.linkedRunWorkoutID = run.id
+                run.linkedScheduledWorkoutID = match.id
                 // Remove from available pool so it can't be matched twice.
                 available.removeAll { $0.id == match.id }
             }

@@ -126,6 +126,8 @@ struct RunSummaryView: View {
         .confirmationDialog("Delete this workout?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
             Button("Delete", role: .destructive) {
                 workout.scheduledWorkout?.completedWorkout = nil
+                workout.scheduledWorkout?.linkedRunWorkoutID = nil
+                workout.linkedScheduledWorkoutID = nil
                 context.delete(workout)
                 try? context.save()
                 dismiss()
