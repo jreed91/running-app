@@ -187,7 +187,9 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             } else {
                 workGoal = .open
             }
-            let workStep = IntervalStep(.work, goal: workGoal, alert: nil)
+            let workAlert: (any WorkoutAlert)? = set.workSegment.targetPaceSecondsPerKm
+                .flatMap { pace in paceAlert(centerSecPerKm: pace) }
+            let workStep = IntervalStep(.work, goal: workGoal, alert: workAlert)
 
             var steps: [IntervalStep] = [workStep]
             if let recDur = set.recoverySegment.durationSeconds, recDur > 0 {
@@ -237,7 +239,9 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
                 } else {
                     workGoal = .open
                 }
-                let workStep = IntervalStep(.work, goal: workGoal, alert: nil)
+                let workAlert: (any WorkoutAlert)? = interval.targetPaceSecondsPerKm
+                    .flatMap { pace in paceAlert(centerSecPerKm: pace) }
+                let workStep = IntervalStep(.work, goal: workGoal, alert: workAlert)
                 let restStep = IntervalStep(
                     .recovery,
                     goal: .time(interval.recoverySeconds, UnitDuration.seconds),
@@ -248,7 +252,10 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         } else {
             let goal: WorkoutGoal = workout.targetDistanceMeters
                 .map { distanceGoal(meters: $0, unitPreference: unitPreference) } ?? .open
-            let workStep = IntervalStep(.work, goal: goal, alert: nil)
+            let workAlert: (any WorkoutAlert)? = workout.workoutType == .tempo
+                ? workout.targetPaceRange.flatMap { paceAlert(lowerSecPerKm: $0.lowerBound, upperSecPerKm: $0.upperBound) }
+                : nil
+            let workStep = IntervalStep(.work, goal: goal, alert: workAlert)
             blocks = [IntervalBlock(steps: [workStep], iterations: 1)]
         }
 
@@ -260,6 +267,20 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             blocks: blocks,
             cooldown: cooldown
         )
+    }
+
+    /// Creates a pace alert centered on `centerSecPerKm` with a ±5 s/km window.
+    private func paceAlert(centerSecPerKm: Double) -> SpeedAlert? {
+        paceAlert(lowerSecPerKm: centerSecPerKm - 5, upperSecPerKm: centerSecPerKm + 5)
+    }
+
+    /// Creates a pace alert for the given sec/km bounds. Returns nil if the range is invalid.
+    private func paceAlert(lowerSecPerKm: Double, upperSecPerKm: Double) -> SpeedAlert? {
+        guard lowerSecPerKm > 0, upperSecPerKm >= lowerSecPerKm else { return nil }
+        let unit = HKUnit.second().unitDivided(by: HKUnit.meterUnit(with: .kilo))
+        let lower = HKQuantity(unit: unit, doubleValue: lowerSecPerKm)
+        let upper = HKQuantity(unit: unit, doubleValue: upperSecPerKm)
+        return SpeedAlert(target: lower...upper, metric: .currentPace)
     }
 
     private func distanceGoal(meters: Double, unitPreference: UnitPreference) -> WorkoutGoal {
