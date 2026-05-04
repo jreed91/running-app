@@ -437,7 +437,10 @@ struct ActiveRunView: View {
         context.insert(workout)
         try? context.save()
         Task { @MainActor in
-            try? await container.healthKitRepository.save(workout)
+            if let hkID = try? await container.healthKitRepository.save(workout) {
+                workout.healthKitWorkoutID = hkID
+                try? context.save()
+            }
         }
         if let coordinate = tracker.coordinates.first {
             Task {
