@@ -315,4 +315,22 @@ struct TrainingPlanServiceTests {
         }
         #expect(taperKm < peakKm, "Taper (\(taperKm) km) should be less than peak (\(peakKm) km)")
     }
+
+    @Test("Every non-rest, non-race workout has a warm-up defined")
+    func allWorkoutsHaveWarmup() {
+        let profile = makeProfile(race: .halfMarathon, runDays: 5)
+        let plan = service.generatePlan(profile: profile, startDate: .now, numberOfWeeks: 12)
+        for workout in workouts(in: plan) {
+            guard workout.workoutType != .rest,
+                  workout.workoutType != .race,
+                  workout.workoutType != .crossTraining else { continue }
+            guard let structure = workout.workoutStructure else {
+                Issue.record("\(workout.workoutType) on \(workout.scheduledDate) has no WorkoutStructure")
+                continue
+            }
+            let warmup = structure.warmup
+            let hasLength = (warmup.distanceMeters ?? 0) > 0 || (warmup.durationSeconds ?? 0) > 0
+            #expect(hasLength, "\(workout.workoutType) warm-up has neither distance nor duration defined")
+        }
+    }
 }
