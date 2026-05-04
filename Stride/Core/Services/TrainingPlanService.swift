@@ -134,8 +134,7 @@ struct TrainingPlanService {
             // immediately structured. Users can re-adapt later via the detail view to
             // personalise based on their actual run history.
             for workout in weekWorkouts {
-                guard workout.workoutType != .easy,
-                      workout.workoutType != .rest,
+                guard workout.workoutType != .rest,
                       workout.workoutType != .race,
                       workout.workoutType != .crossTraining else { continue }
                 let adapted = adaptWorkout(scheduled: workout, history: [], profile: profile, unitPreference: unitPreference)
@@ -859,15 +858,59 @@ struct TrainingPlanService {
         scheduled: ScheduledWorkout,
         paces: TrainingPaces
     ) -> ScheduledWorkout {
+        let totalDist    = scheduled.targetDistanceMeters ?? 5_000
+        let warmupDist   = totalDist * 0.10
+        let cooldownDist = totalDist * 0.10
+        let workDist     = totalDist - warmupDist - cooldownDist
+        let midEasyPace  = (paces.easyRange.lowerBound + paces.easyRange.upperBound) / 2
+
+        let warmup = WorkoutSegment(
+            distanceMeters: warmupDist,
+            durationSeconds: nil,
+            targetPaceSecondsPerKm: paces.easyRange.upperBound,
+            label: "Warm-up"
+        )
+        let easySet = WorkoutSet(
+            repetitions: 1,
+            workSegment: WorkoutSegment(
+                distanceMeters: workDist,
+                durationSeconds: nil,
+                targetPaceSecondsPerKm: midEasyPace,
+                label: "Easy run"
+            ),
+            recoverySegment: WorkoutSegment(
+                distanceMeters: nil,
+                durationSeconds: nil,
+                targetPaceSecondsPerKm: nil,
+                label: ""
+            ),
+            label: "Easy Run"
+        )
+        let cooldown = WorkoutSegment(
+            distanceMeters: cooldownDist,
+            durationSeconds: nil,
+            targetPaceSecondsPerKm: paces.easyRange.lowerBound,
+            label: "Cool-down"
+        )
+
+        let structure = WorkoutStructure(
+            warmup: warmup,
+            mainSets: [easySet],
+            cooldown: cooldown,
+            totalEstimatedDistanceMeters: totalDist,
+            totalEstimatedDurationSeconds: totalDist / 1_000 * midEasyPace
+        )
+
         let adapted = ScheduledWorkout(
             scheduledDate: scheduled.scheduledDate,
             workoutType: .easy,
-            targetDistanceMeters: scheduled.targetDistanceMeters,
+            targetDistanceMeters: totalDist,
             targetPaceLowerBound: paces.easyRange.lowerBound,
             targetPaceUpperBound: paces.easyRange.upperBound,
             notes: scheduled.notes ?? "Conversational effort – you should be able to speak in sentences."
         )
         adapted.week = scheduled.week
+        adapted.workoutStructure = structure
         return adapted
     }
 
