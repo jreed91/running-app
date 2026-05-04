@@ -70,7 +70,8 @@ final class AppContainer: ObservableObject {
             TrainingPlan.self,
             TrainingWeek.self,
             ScheduledWorkout.self,
-            SavedRoute.self
+            SavedRoute.self,
+            DeletedWorkout.self
         ])
         // Read the preference set during onboarding / Settings.
         // UserDefaults is checked directly here because AppSettings doesn't

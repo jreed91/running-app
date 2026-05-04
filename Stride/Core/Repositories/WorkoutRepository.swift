@@ -49,6 +49,9 @@ final class WorkoutRepository: WorkoutRepositoryProtocol {
     }
 
     func delete(_ workout: RunWorkout) throws {
+        if let hkID = workout.healthKitWorkoutID {
+            context.insert(DeletedWorkout(healthKitWorkoutID: hkID))
+        }
         context.delete(workout)
         try context.save()
     }

@@ -128,6 +128,9 @@ struct RunSummaryView: View {
                 workout.scheduledWorkout?.completedWorkout = nil
                 workout.scheduledWorkout?.linkedRunWorkoutID = nil
                 workout.linkedScheduledWorkoutID = nil
+                if let hkID = workout.healthKitWorkoutID {
+                    context.insert(DeletedWorkout(healthKitWorkoutID: hkID))
+                }
                 context.delete(workout)
                 try? context.save()
                 dismiss()

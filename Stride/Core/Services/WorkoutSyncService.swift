@@ -89,7 +89,9 @@ final class WorkoutSyncService {
         let existingIDs: Set<String>
         do {
             let stored = try context.fetch(FetchDescriptor<RunWorkout>())
+            let tombstoned = try context.fetch(FetchDescriptor<DeletedWorkout>())
             existingIDs = Set(stored.compactMap(\.healthKitWorkoutID))
+                .union(tombstoned.map(\.healthKitWorkoutID))
         } catch {
             AppLogger.log(
                 "Failed to fetch existing workouts before HealthKit sync (\(source)): \(error.localizedDescription)",
