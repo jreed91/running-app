@@ -1,5 +1,25 @@
 import Foundation
 
+// MARK: - TempoInsights
+
+/// Pace insights derived from a single completed tempo run.
+struct TempoInsights: Sendable {
+    /// Actual average pace achieved during the tempo run (sec/km).
+    let achievedPaceSecondsPerKm: Double
+    /// VDOT-derived threshold pace target based on prior quality runs (sec/km). Nil when history is insufficient.
+    let targetThresholdSecondsPerKm: Double?
+    /// Best average tempo pace from prior tempo runs (sec/km). Nil when no prior tempos exist.
+    let previousBestTempoSecondsPerKm: Double?
+    /// VDOT implied by this run's distance and time. Nil for degenerate inputs.
+    let derivedVDOT: Double?
+    /// Best VDOT from quality runs in the 6 weeks prior to this run (excluding this run). Nil when history is insufficient.
+    let previousVDOT: Double?
+    /// Standard deviation of per-km split paces (sec). Lower = more consistent effort. Nil when < 2 splits.
+    let splitConsistencySeconds: Double?
+    /// Number of tempo workouts in the 8-week window prior to this run.
+    let recentTempoCount: Int
+}
+
 // MARK: - PerformanceTrend
 
 enum PerformanceTrend: Sendable {
@@ -114,6 +134,62 @@ struct WorkoutAnalyticsService: Sendable {
             intervalFatigueRatio: fatigueRatio,
             lastIntervalPaceRatio: lastIntervalRatio,
             performanceTrend: trend
+        )
+    }
+
+    // MARK: - Tempo Insights
+
+    /// Produces ``TempoInsights`` for a completed tempo run given workout history and runner profile.
+    /// `history` should include all runs **excluding** the workout being analysed so that
+    /// comparisons reflect the state before this session.
+    func tempoInsights(for workout: RunWorkout, history: [RunWorkout], profile: UserProfile) -> TempoInsights {
+        let now = workout.date
+
+        // Previous best tempo pace (excluding this run)
+        let previousTempos = history.filter { $0.workoutType == .tempo && $0.distanceMeters >= Self.qualityMinDistanceMeters }
+        let previousBest = previousTempos.map(\.averagePaceSecondsPerKm).min()
+
+        // Recent tempo count (8-week lookback)
+        let eightWeekCutoff = now.adding(weeks: -8)
+        let recentTempoCount = previousTempos.filter { $0.date >= eightWeekCutoff }.count
+
+        // VDOT from this run
+        let derivedVDOT: Double? = {
+            guard workout.durationSeconds > 0, workout.distanceMeters >= Self.qualityMinDistanceMeters else { return nil }
+            let v = PaceCalculatorService.vdot(distanceMeters: workout.distanceMeters, timeSeconds: workout.durationSeconds)
+            return v.isFinite && v > 20 ? v : nil
+        }()
+
+        // Previous VDOT from quality runs in the 6 weeks before this run
+        let vdotCutoff = now.adding(weeks: -Self.lookbackWeeksVDOT)
+        let priorQuality = history.filter {
+            $0.date >= vdotCutoff
+                && $0.distanceMeters >= Self.qualityMinDistanceMeters
+                && $0.workoutType.isQualitySession
+        }
+        let previousVDOT = vdotFromRuns(priorQuality)
+
+        // Target threshold pace: derived from best prior VDOT (or profile VDOT if no history)
+        let baseVDOT = previousVDOT ?? profileVDOT(from: profile)
+        let targetThreshold = baseVDOT.map { PaceCalculatorService.trainingPaces(forVDOT: $0).threshold }
+
+        // Split consistency: std dev of split paces
+        let splitPaces = workout.splits.map(\.paceSecondsPerKm)
+        let splitConsistency: Double? = {
+            guard splitPaces.count >= 2 else { return nil }
+            let mean = splitPaces.reduce(0, +) / Double(splitPaces.count)
+            let variance = splitPaces.reduce(0) { $0 + ($1 - mean) * ($1 - mean) } / Double(splitPaces.count)
+            return sqrt(variance)
+        }()
+
+        return TempoInsights(
+            achievedPaceSecondsPerKm: workout.averagePaceSecondsPerKm,
+            targetThresholdSecondsPerKm: targetThreshold,
+            previousBestTempoSecondsPerKm: previousBest,
+            derivedVDOT: derivedVDOT,
+            previousVDOT: previousVDOT,
+            splitConsistencySeconds: splitConsistency,
+            recentTempoCount: recentTempoCount
         )
     }
 
