@@ -206,18 +206,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             return WorkoutPlan(.pacer(pacer), id: planID)
         }
 
-        // Any other workout with a distance target → SingleGoalWorkout.
-        if let distMeters = workout.targetDistanceMeters {
-            let single = SingleGoalWorkout(
-                activity: .running,
-                location: workout.workoutLocation == .indoor ? .indoor : .outdoor,
-                displayName: workout.workoutType.displayName,
-                goal: distanceGoal(meters: distMeters, unitPreference: unitPreference)
-            )
-            return WorkoutPlan(.singleGoal(single), id: planID)
-        }
-
-        // Fallback: open-ended custom workout.
+        // Remaining workouts (distance-goal or open-ended) → CustomWorkout.
         let custom = makeCustomWorkoutLegacy(for: workout, unitPreference: unitPreference)
         return WorkoutPlan(.custom(custom), id: planID)
     }
