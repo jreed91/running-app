@@ -24,6 +24,7 @@ struct SettingsView: View {
     #if DEBUG
     @State private var seedWeeks = 8
     @State private var completionCutoff = Date()
+    @State private var workoutKitResendStatus: String?
     #endif
 
     private var profile: UserProfile? { profiles.first }
@@ -562,6 +563,27 @@ struct SettingsView: View {
                     .buttonStyle(.plain)
                     .foregroundStyle(.destructive)
                 }
+
+                settingsSection("Developer · WorkoutKit") {
+                    Button {
+                        resendWorkoutsToWorkoutKit(plan: plan)
+                    } label: {
+                        settingsRow(icon: .sync, iconColor: .brand, title: "Resend Plan to WorkoutKit") {
+                            EmptyView()
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.primary)
+
+                    if let workoutKitResendStatus {
+                        Text(workoutKitResendStatus)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .padding(.leading, 62)
+                            .padding(.trailing, 16)
+                            .padding(.bottom, 12)
+                    }
+                }
             }
         }
     }
@@ -643,6 +665,27 @@ struct SettingsView: View {
         try? context.delete(model: SavedRoute.self)
         try? context.save()
     }
+
+    #if DEBUG
+    private func resendWorkoutsToWorkoutKit(plan: TrainingPlan) {
+        workoutKitResendStatus = "Resending workouts to WorkoutKit…"
+        Task {
+            do {
+                try await container.healthKitRepository.syncWorkoutPlans(
+                    for: plan,
+                    unitPreference: appSettings.unitPreference
+                )
+                await MainActor.run {
+                    workoutKitResendStatus = "WorkoutKit sync completed."
+                }
+            } catch {
+                await MainActor.run {
+                    workoutKitResendStatus = "WorkoutKit sync failed: \(error.localizedDescription)"
+                }
+            }
+        }
+    }
+    #endif
 }
 
 // MARK: - DebugRunGenerator
