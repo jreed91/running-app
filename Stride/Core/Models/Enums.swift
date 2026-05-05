@@ -50,9 +50,9 @@ enum FitnessLevel: String, Codable, CaseIterable, Sendable {
         switch raceType {
         case .maintainFitness:
             switch self {
-            case .beginner:     return 18
-            case .intermediate: return 30
-            case .advanced:     return 45
+            case .beginner:     return 12
+            case .intermediate: return 20
+            case .advanced:     return 30
             }
         case .fiveK:
             switch self {
