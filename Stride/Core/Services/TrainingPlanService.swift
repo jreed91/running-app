@@ -255,7 +255,7 @@ struct TrainingPlanService {
         case .taper:
             return base * 0.55
         case .peak:
-            let maxKm = base * 1.5
+            let maxKm = raceType == .maintainFitness ? base * 1.2 : base * 1.5
             return maxKm
         case .build, .base:
             // 10% increase per week with a cutback every 4th week
