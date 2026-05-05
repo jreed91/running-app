@@ -95,9 +95,10 @@ struct OnboardingView: View {
 
     private var estimatedWorkouts: Int { planWeeks * max(selectedDays.count, 3) }
 
-    private var estimatedKm: Int {
+    /// Peak weekly volume in km, mirroring `TrainingPlanService.weeklyKm` for the peak phase.
+    private var peakKm: Double {
         let base = fitnessLevel.startingWeeklyKm(for: goalRace)
-        return Int((base + base * 1.8) / 2 * Double(planWeeks))
+        return goalRace == .maintainFitness ? base * 1.2 : base * 1.5
     }
 
     // MARK: - Body
@@ -190,7 +191,7 @@ struct OnboardingView: View {
             OBReady(goalRace: goalRace, planWeeks: planWeeks,
                     progressTotal: totalSteps,
                     goalTimeSeconds: goalFinishTimeSeconds,
-                    estimatedWorkouts: estimatedWorkouts, estimatedKm: estimatedKm,
+                    estimatedWorkouts: estimatedWorkouts, peakKm: peakKm,
                     isCreatingPlan: isCreatingPlan, onViewPlan: { isCreatingPlan = true; createProfileAndPlan() })
         }
     }
@@ -291,7 +292,7 @@ struct OnboardingView: View {
     private var levelContent: some View {
         VStack(spacing: 10) {
             ForEach(OBFitnessSelection.allCases, id: \.self) { selection in
-                OBFitnessRow(selection: selection, isSelected: fitnessSelection == selection) {
+                OBFitnessRow(selection: selection, goalRace: goalRace, isSelected: fitnessSelection == selection) {
                     fitnessSelection = selection
                     fitnessLevel = selection.fitnessLevel
                 }

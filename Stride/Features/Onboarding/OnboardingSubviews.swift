@@ -646,10 +646,10 @@ enum OBFitnessSelection: CaseIterable, Sendable {
 
     var subtitle: String {
         switch self {
-        case .newToRunning: return "Run/walk intervals. 0-8 mi per week."
-        case .recreational: return "Run weekly. 8-20 mi per week."
-        case .experienced: return "Consistent. 20-40 mi per week."
-        case .competitive: return "40+ mi per week. Racing regularly."
+        case .newToRunning: return "Run/walk intervals. Just getting started."
+        case .recreational: return "Run weekly. Casual but consistent."
+        case .experienced:  return "Consistent training week to week."
+        case .competitive:  return "Racing regularly with structured training."
         }
     }
 
@@ -673,10 +673,23 @@ enum OBFitnessSelection: CaseIterable, Sendable {
 
 struct OBFitnessRow: View {
     let selection: OBFitnessSelection
+    let goalRace: RaceType
     let isSelected: Bool
     let onSelect: () -> Void
 
+    @Environment(AppSettings.self) private var appSettings
+
     private let barHeights: [CGFloat] = [8, 12, 16, 22]
+
+    private var planStartLabel: String {
+        let km = selection.fitnessLevel.startingWeeklyKm(for: goalRace)
+        switch appSettings.unitPreference {
+        case .metric:
+            return String(format: "Plan starts ~%.0f km/week", km)
+        case .imperial:
+            return String(format: "Plan starts ~%.0f mi/week", km * 0.621371)
+        }
+    }
 
     var body: some View {
         Button(action: onSelect) {
@@ -704,6 +717,11 @@ struct OBFitnessRow: View {
                     .font(.system(size: 13))
                     .kerning(-0.1)
                     .foregroundStyle(.secondary)
+                    .padding(.leading, 38)
+
+                Text(planStartLabel)
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(.secondary.opacity(0.75))
                     .padding(.leading, 38)
             }
             .padding(14)
@@ -933,16 +951,15 @@ struct OBReady: View {
     var progressTotal = 8
     let goalTimeSeconds: Double
     let estimatedWorkouts: Int
-    let estimatedKm: Int
+    let peakKm: Double
     let isCreatingPlan: Bool
     let onViewPlan: () -> Void
 
     @Environment(AppSettings.self) private var appSettings
 
-    /// Estimated peak weekly mileage for the chart's y-axis.
+    /// Peak weekly volume for the chart's y-axis, expressed in the user's preferred unit.
     private var peakMiles: Int {
-        let peakKm = Double(estimatedKm) / Double(max(planWeeks, 1)) * 1.40
-        return appSettings.unitPreference == .imperial
+        appSettings.unitPreference == .imperial
             ? max(1, Int((peakKm * 0.621371).rounded()))
             : max(1, Int(peakKm.rounded()))
     }

@@ -76,9 +76,10 @@ struct NewPlanOnboardingView: View {
 
     private var estimatedWorkouts: Int { effectiveWeeks * max(selectedDays.count, 3) }
 
-    private var estimatedKm: Int {
+    /// Peak weekly volume in km, mirroring `TrainingPlanService.weeklyKm` for the peak phase.
+    private var peakKm: Double {
         let base = fitnessLevel.startingWeeklyKm(for: goalRace)
-        return Int((base + base * 1.8) / 2 * Double(effectiveWeeks))
+        return goalRace == .maintainFitness ? base * 1.2 : base * 1.5
     }
 
     private var goalFinishTimeSeconds: Double {
@@ -177,7 +178,7 @@ struct NewPlanOnboardingView: View {
                 progressTotal: totalSteps + 1,
                 goalTimeSeconds: goalFinishTimeSeconds,
                 estimatedWorkouts: estimatedWorkouts,
-                estimatedKm: estimatedKm,
+                peakKm: peakKm,
                 isCreatingPlan: isCreatingPlan,
                 onViewPlan: {
                     guard !isCreatingPlan else { return }
