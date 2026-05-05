@@ -112,7 +112,9 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             }
         }
 
-        let hkWorkout = try await builder.finishWorkout()
+        guard let hkWorkout = try await builder.finishWorkout() else {
+            throw HKError(.errorNoData)
+        }
         return hkWorkout.uuid.uuidString
     }
 
@@ -199,7 +201,6 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             let pacer = PacerWorkout(
                 activity: .running,
                 location: workout.workoutLocation == .indoor ? .indoor : .outdoor,
-                displayName: workout.workoutType.displayName,
                 distance: distanceQuantity(meters: distMeters, unitPreference: unitPreference),
                 time: HKQuantity(unit: .second(), doubleValue: targetDurationSeconds)
             )
