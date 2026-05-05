@@ -201,8 +201,8 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             let pacer = PacerWorkout(
                 activity: .running,
                 location: workout.workoutLocation == .indoor ? .indoor : .outdoor,
-                distance: distanceQuantity(meters: distMeters, unitPreference: unitPreference),
-                time: HKQuantity(unit: .second(), doubleValue: targetDurationSeconds)
+                distance: distanceMeasurement(meters: distMeters, unitPreference: unitPreference),
+                time: Measurement(value: targetDurationSeconds, unit: UnitDuration.seconds)
             )
             return WorkoutPlan(.pacer(pacer), id: planID)
         }
@@ -308,10 +308,10 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         )
     }
 
-    private func distanceQuantity(meters: Double, unitPreference: UnitPreference) -> HKQuantity {
+    private func distanceMeasurement(meters: Double, unitPreference: UnitPreference) -> Measurement<UnitLength> {
         switch unitPreference {
-        case .metric:   return HKQuantity(unit: .meterUnit(with: .kilo), doubleValue: meters / 1_000)
-        case .imperial: return HKQuantity(unit: .mile(), doubleValue: meters / 1_609.344)
+        case .metric:   return Measurement(value: meters / 1_000, unit: .kilometers)
+        case .imperial: return Measurement(value: meters / 1_609.344, unit: .miles)
         }
     }
 
