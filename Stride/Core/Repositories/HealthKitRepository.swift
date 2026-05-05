@@ -85,19 +85,34 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
 
     @MainActor func save(_ workout: RunWorkout) async throws -> String {
         let isIndoor = workout.workoutLocation == .indoor
-        let hkWorkout = HKWorkout(
-            activityType: .running,
+        let config = HKWorkoutConfiguration()
+        config.activityType = .running
+        config.locationType = isIndoor ? .indoor : .outdoor
+
+        let builder = HKWorkoutBuilder(healthStore: store, configuration: config, device: .local())
+        try await builder.beginCollection(at: workout.date)
+
+        let distanceSample = HKQuantitySample(
+            type: HKQuantityType(.distanceWalkingRunning),
+            quantity: HKQuantity(unit: .meter(), doubleValue: workout.distanceMeters),
             start: workout.date,
-            end: workout.date.addingTimeInterval(workout.durationSeconds),
-            duration: workout.durationSeconds,
-            totalEnergyBurned: nil,
-            totalDistance: HKQuantity(unit: .meter(), doubleValue: workout.distanceMeters),
-            metadata: [
+            end: workout.date.addingTimeInterval(workout.durationSeconds)
+        )
+        try await builder.addSamples([distanceSample])
+
+        try await builder.endCollection(at: workout.date.addingTimeInterval(workout.durationSeconds))
+
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            builder.addMetadata([
                 "StrideWorkoutID": workout.id.uuidString,
                 HKMetadataKeyIndoorWorkout: isIndoor
-            ]
-        )
-        try await store.save(hkWorkout)
+            ]) { _, error in
+                if let error { continuation.resume(throwing: error) }
+                else { continuation.resume() }
+            }
+        }
+
+        let hkWorkout = try await builder.finishWorkout()
         return hkWorkout.uuid.uuidString
     }
 
@@ -159,13 +174,52 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
     // MARK: - WorkoutKit plan builder
 
     private func makeWorkoutPlan(for workout: ScheduledWorkout, unitPreference: UnitPreference) -> WorkoutPlan {
-        let customWorkout: CustomWorkout
+        // Use the scheduled workout's own UUID so the plan ID is stable across syncs.
+        let planID = workout.id
+
+        // Structured workouts (warmup + interval blocks + cooldown) → CustomWorkout.
         if let structure = workout.workoutStructure, !structure.mainSets.isEmpty {
-            customWorkout = makeCustomWorkout(from: structure, workout: workout, unitPreference: unitPreference)
-        } else {
-            customWorkout = makeCustomWorkoutLegacy(for: workout, unitPreference: unitPreference)
+            let custom = makeCustomWorkout(from: structure, workout: workout, unitPreference: unitPreference)
+            return WorkoutPlan(.custom(custom), id: planID)
         }
-        return WorkoutPlan(.custom(customWorkout), id: UUID())
+
+        // Flat interval workouts → CustomWorkout with explicit repeat blocks.
+        if workout.workoutType == .interval, !workout.intervals.isEmpty {
+            let custom = makeCustomWorkoutLegacy(for: workout, unitPreference: unitPreference)
+            return WorkoutPlan(.custom(custom), id: planID)
+        }
+
+        // Tempo runs with a distance + pace target → PacerWorkout.
+        // Apple Watch derives and displays the target pace from the distance/time pair.
+        if workout.workoutType == .tempo,
+           let distMeters = workout.targetDistanceMeters,
+           let paceRange = workout.targetPaceRange {
+            let midPaceSPerKm = (paceRange.lowerBound + paceRange.upperBound) / 2
+            let targetDurationSeconds = (distMeters / 1_000) * midPaceSPerKm
+            let pacer = PacerWorkout(
+                activity: .running,
+                location: workout.workoutLocation == .indoor ? .indoor : .outdoor,
+                displayName: workout.workoutType.displayName,
+                distance: distanceQuantity(meters: distMeters, unitPreference: unitPreference),
+                time: HKQuantity(unit: .second(), doubleValue: targetDurationSeconds)
+            )
+            return WorkoutPlan(.pacer(pacer), id: planID)
+        }
+
+        // Any other workout with a distance target → SingleGoalWorkout.
+        if let distMeters = workout.targetDistanceMeters {
+            let single = SingleGoalWorkout(
+                activity: .running,
+                location: workout.workoutLocation == .indoor ? .indoor : .outdoor,
+                displayName: workout.workoutType.displayName,
+                goal: distanceGoal(meters: distMeters, unitPreference: unitPreference)
+            )
+            return WorkoutPlan(.singleGoal(single), id: planID)
+        }
+
+        // Fallback: open-ended custom workout.
+        let custom = makeCustomWorkoutLegacy(for: workout, unitPreference: unitPreference)
+        return WorkoutPlan(.custom(custom), id: planID)
     }
 
     /// Builds a ``CustomWorkout`` from a ``WorkoutStructure`` with precise distance/time goals.
@@ -176,7 +230,8 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
     ) -> CustomWorkout {
         let warmupGoal: WorkoutGoal = structure.warmup.distanceMeters
             .map { distanceGoal(meters: $0, unitPreference: unitPreference) } ?? .open
-        let warmupStep = WorkoutStep(goal: warmupGoal, alert: nil)
+        let warmupName: String? = structure.warmup.label.isEmpty ? nil : structure.warmup.label
+        let warmupStep = WorkoutStep(goal: warmupGoal, alert: nil, displayName: warmupName)
 
         let blocks: [IntervalBlock] = structure.mainSets.map { set in
             let workGoal: WorkoutGoal
@@ -187,9 +242,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             } else {
                 workGoal = .open
             }
-            let workAlert: (any WorkoutAlert)? = set.workSegment.targetPaceSecondsPerKm
-                .flatMap { pace in paceAlert(centerSecPerKm: pace) }
-            let workStep = IntervalStep(.work, goal: workGoal, alert: workAlert)
+            let workStep = IntervalStep(.work, goal: workGoal, alert: nil)
 
             var steps: [IntervalStep] = [workStep]
             if let recDur = set.recoverySegment.durationSeconds, recDur > 0 {
@@ -211,7 +264,8 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
 
         let cooldownGoal: WorkoutGoal = structure.cooldown.distanceMeters
             .map { distanceGoal(meters: $0, unitPreference: unitPreference) } ?? .open
-        let cooldownStep = WorkoutStep(goal: cooldownGoal, alert: nil)
+        let cooldownName: String? = structure.cooldown.label.isEmpty ? nil : structure.cooldown.label
+        let cooldownStep = WorkoutStep(goal: cooldownGoal, alert: nil, displayName: cooldownName)
 
         return CustomWorkout(
             activity: .running,
@@ -239,9 +293,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
                 } else {
                     workGoal = .open
                 }
-                let workAlert: (any WorkoutAlert)? = interval.targetPaceSecondsPerKm
-                    .flatMap { pace in paceAlert(centerSecPerKm: pace) }
-                let workStep = IntervalStep(.work, goal: workGoal, alert: workAlert)
+                let workStep = IntervalStep(.work, goal: workGoal, alert: nil)
                 let restStep = IntervalStep(
                     .recovery,
                     goal: .time(interval.recoverySeconds, UnitDuration.seconds),
@@ -252,10 +304,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         } else {
             let goal: WorkoutGoal = workout.targetDistanceMeters
                 .map { distanceGoal(meters: $0, unitPreference: unitPreference) } ?? .open
-            let workAlert: (any WorkoutAlert)? = workout.workoutType == .tempo
-                ? workout.targetPaceRange.flatMap { paceAlert(lowerSecPerKm: $0.lowerBound, upperSecPerKm: $0.upperBound) }
-                : nil
-            let workStep = IntervalStep(.work, goal: goal, alert: workAlert)
+            let workStep = IntervalStep(.work, goal: goal, alert: nil)
             blocks = [IntervalBlock(steps: [workStep], iterations: 1)]
         }
 
@@ -269,18 +318,11 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         )
     }
 
-    /// Creates a pace alert centered on `centerSecPerKm` with a ±5 s/km window.
-    private func paceAlert(centerSecPerKm: Double) -> SpeedAlert? {
-        paceAlert(lowerSecPerKm: centerSecPerKm - 5, upperSecPerKm: centerSecPerKm + 5)
-    }
-
-    /// Creates a pace alert for the given sec/km bounds. Returns nil if the range is invalid.
-    private func paceAlert(lowerSecPerKm: Double, upperSecPerKm: Double) -> SpeedAlert? {
-        guard lowerSecPerKm > 0, upperSecPerKm >= lowerSecPerKm else { return nil }
-        let unit = HKUnit.second().unitDivided(by: HKUnit.meterUnit(with: .kilo))
-        let lower = HKQuantity(unit: unit, doubleValue: lowerSecPerKm)
-        let upper = HKQuantity(unit: unit, doubleValue: upperSecPerKm)
-        return SpeedAlert(target: lower...upper, metric: .currentPace)
+    private func distanceQuantity(meters: Double, unitPreference: UnitPreference) -> HKQuantity {
+        switch unitPreference {
+        case .metric:   return HKQuantity(unit: .meterUnit(with: .kilo), doubleValue: meters / 1_000)
+        case .imperial: return HKQuantity(unit: .mile(), doubleValue: meters / 1_609.344)
+        }
     }
 
     private func distanceGoal(meters: Double, unitPreference: UnitPreference) -> WorkoutGoal {
