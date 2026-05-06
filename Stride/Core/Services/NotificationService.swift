@@ -136,7 +136,7 @@ final class NotificationService: NSObject {
         }
         // nil trigger → fires immediately
         let request = UNNotificationRequest(
-            identifier: "synced-run-\(workout.id.uuidString)-\(UUID().uuidString)",
+            identifier: "synced-run-\(workout.id.uuidString)",
             content: content,
             trigger: nil
         )
