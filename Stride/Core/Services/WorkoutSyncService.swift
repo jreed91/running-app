@@ -21,6 +21,7 @@ final class WorkoutSyncService {
     private let weatherService: WeatherService
     private let context: ModelContext
     private var isObserving = false
+    private var isSyncing = false
 
     /// Called on MainActor after each batch of new workouts is imported and auto-linked.
     var onWorkoutsSynced: (([RunWorkout]) -> Void)?
@@ -86,6 +87,12 @@ final class WorkoutSyncService {
     // MARK: Private
 
     private func handleNewWorkoutsDetected(source: String) async {
+        guard !isSyncing else {
+            AppLogger.log("Sync already in progress; skipping \(source) sync.", label: "HealthKit", level: .debug)
+            return
+        }
+        isSyncing = true
+        defer { isSyncing = false }
         let existingIDs: Set<String>
         do {
             let stored = try context.fetch(FetchDescriptor<RunWorkout>())
