@@ -197,7 +197,7 @@ struct WorkoutDetailView: View {
             .padding(.bottom, 12)
 
             // Indoor / outdoor toggle
-            if !workout.isCompleted {
+            if !workout.isCompleted && workout.workoutType != .strength {
                 locationPicker
                     .padding(.horizontal, 16)
                     .padding(.bottom, 16)
