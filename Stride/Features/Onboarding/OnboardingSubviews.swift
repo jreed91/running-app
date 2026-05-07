@@ -1312,7 +1312,7 @@ private struct OBStrengthFocusRow: View {
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 12) {
-                OBRadio(isOn: isSelected)
+                OBRadio(isSelected: isSelected, color: .brand)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(option.displayName)
                         .font(.system(size: 15, weight: .semibold))

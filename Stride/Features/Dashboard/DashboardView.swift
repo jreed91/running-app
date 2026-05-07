@@ -182,6 +182,7 @@ private struct DayCell: View {
         case .tempo:                return .zoneTempo
         case .interval, .race:      return .zoneInterval
         case .rest, .crossTraining: return Color.secondary
+        case .strength:             return .brand
         }
     }
 }
