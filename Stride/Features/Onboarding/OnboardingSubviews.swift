@@ -1235,19 +1235,9 @@ struct OBEquipmentCard: View {
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 12) {
-                Image(systemName: equipment.systemImage)
-                    .font(.system(size: 18, weight: .medium))
-                    .frame(width: 28)
-                    .foregroundStyle(isSelected ? Color.brand : .secondary)
-
-                Text(equipment.displayName)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(isSelected ? .primary : .secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-
+                iconView
+                labelView
                 Spacer()
-
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 16))
@@ -1256,18 +1246,36 @@ struct OBEquipmentCard: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
-            .background(
-                isSelected
-                    ? Color.brand.opacity(0.12)
-                    : Color.surfaceSecondary,
-                in: RoundedRectangle(cornerRadius: 14)
-            )
+            .background(cardBackground, in: RoundedRectangle(cornerRadius: 14))
             .overlay(
                 RoundedRectangle(cornerRadius: 14)
-                    .stroke(isSelected ? Color.brand.opacity(0.5) : Color.clear, lineWidth: 1.5)
+                    .stroke(borderColor, lineWidth: 1.5)
             )
         }
         .buttonStyle(.plain)
+    }
+
+    private var iconView: some View {
+        Image(systemName: equipment.systemImage)
+            .font(.system(size: 18, weight: .medium))
+            .frame(width: 28)
+            .foregroundStyle(isSelected ? Color.brand : Color.secondary)
+    }
+
+    private var labelView: some View {
+        Text(equipment.displayName)
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(isSelected ? Color.primary : Color.secondary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+    }
+
+    private var cardBackground: Color {
+        isSelected ? Color.brand.opacity(0.12) : Color.surfaceSecondary
+    }
+
+    private var borderColor: Color {
+        isSelected ? Color.brand.opacity(0.5) : Color.clear
     }
 }
 
@@ -1285,38 +1293,53 @@ struct OBStrengthFocusPicker: View {
 
             VStack(spacing: 8) {
                 ForEach(StrengthFocus.allCases, id: \.self) { option in
-                    Button {
-                        focus = option
-                    } label: {
-                        HStack(spacing: 12) {
-                            OBRadio(isOn: focus == option)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(option.displayName)
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundStyle(.primary)
-                                Text(option.subtitle)
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            Spacer()
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 12)
-                        .background(
-                            focus == option
-                                ? Color.brand.opacity(0.10)
-                                : Color.surfaceSecondary,
-                            in: RoundedRectangle(cornerRadius: 14)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14)
-                                .stroke(focus == option ? Color.brand.opacity(0.4) : Color.clear, lineWidth: 1.5)
-                        )
-                    }
-                    .buttonStyle(.plain)
+                    OBStrengthFocusRow(
+                        option: option,
+                        isSelected: focus == option,
+                        onTap: { focus = option }
+                    )
                 }
             }
         }
+    }
+}
+
+private struct OBStrengthFocusRow: View {
+    let option: StrengthFocus
+    let isSelected: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 12) {
+                OBRadio(isOn: isSelected)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(option.displayName)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color.primary)
+                    Text(option.subtitle)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(rowBackground, in: RoundedRectangle(cornerRadius: 14))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(borderColor, lineWidth: 1.5)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var rowBackground: Color {
+        isSelected ? Color.brand.opacity(0.10) : Color.surfaceSecondary
+    }
+
+    private var borderColor: Color {
+        isSelected ? Color.brand.opacity(0.4) : Color.clear
     }
 }
