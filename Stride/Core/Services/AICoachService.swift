@@ -1,6 +1,6 @@
 import Foundation
 
-struct AICoachInsight: Sendable {
+struct AICoachInsight: Codable, Sendable {
     let headline: String
     let summary: String
     let fullAnalysis: String?

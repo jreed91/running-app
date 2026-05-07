@@ -47,6 +47,9 @@ final class RunWorkout {
     /// JSON-encoded ``WorkoutWeather``.
     var weatherData: Data?
 
+    /// JSON-encoded ``AICoachInsight`` cached after first load.
+    var cachedAIInsightData: Data?
+
     // MARK: Computed helpers (not persisted)
 
     var splits: [Split] {
@@ -62,6 +65,11 @@ final class RunWorkout {
     var weather: WorkoutWeather? {
         get { weatherData?.decode(WorkoutWeather.self) }
         set { weatherData = newValue.flatMap { .encoded($0) } }
+    }
+
+    var cachedAIInsight: AICoachInsight? {
+        get { cachedAIInsightData?.decode(AICoachInsight.self) }
+        set { cachedAIInsightData = newValue.flatMap { .encoded($0) } }
     }
 
     var workoutType: WorkoutType {
