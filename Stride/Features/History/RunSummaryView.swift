@@ -149,6 +149,11 @@ struct RunSummaryView: View {
         } message: {
             Text("This workout will be permanently removed.")
         }
+        .onAppear {
+            if aiInsight == nil {
+                aiInsight = workout.cachedAIInsight
+            }
+        }
         .task {
             guard workout.weather == nil, let coord = workout.routeCoordinates.first else { return }
             await container.attachWeather(to: workout, coordinate: coord)
@@ -982,7 +987,7 @@ struct RunSummaryView: View {
         }
 
         let historySlice = Array(recentHistory.prefix(8))
-        aiInsight = await container.aiCoachService.evaluateWithProvider(
+        let result = await container.aiCoachService.evaluateWithProvider(
             workout: workout,
             recentHistory: historySlice,
             profile: profiles.first,
@@ -996,6 +1001,11 @@ struct RunSummaryView: View {
                 }
             }
         )
+        aiInsight = result
+        if result.apiReady {
+            workout.cachedAIInsight = result
+            try? context.save()
+        }
     }
 
     @MainActor
