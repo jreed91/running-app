@@ -35,6 +35,9 @@ final class ScheduledWorkout {
     /// ``TrainingPlanService/adaptWorkout(scheduled:history:profile:)``.
     var structureData: Data?
 
+    /// JSON-encoded ``StrengthWorkoutPlan`` — set for `.strength` workouts.
+    var strengthData: Data?
+
     var week: TrainingWeek?
 
     @Relationship(deleteRule: .nullify, inverse: \RunWorkout.scheduledWorkout)
@@ -43,6 +46,12 @@ final class ScheduledWorkout {
     /// Primitive backup of the linked run workout's ID. See ``RunWorkout/linkedScheduledWorkoutID``
     /// for rationale.
     var linkedRunWorkoutID: UUID?
+
+    @Relationship(deleteRule: .nullify, inverse: \StrengthWorkout.scheduledWorkout)
+    var completedStrengthWorkout: StrengthWorkout?
+
+    /// Primitive backup of the linked strength workout's ID for CloudKit relationship repair.
+    var linkedStrengthWorkoutID: UUID?
 
     // MARK: Computed helpers
 
@@ -59,6 +68,11 @@ final class ScheduledWorkout {
     var workoutStructure: WorkoutStructure? {
         get { structureData?.decode(WorkoutStructure.self) }
         set { structureData = newValue.flatMap { Data.encoded($0) } }
+    }
+
+    var strengthPlan: StrengthWorkoutPlan? {
+        get { strengthData?.decode(StrengthWorkoutPlan.self) }
+        set { strengthData = newValue.flatMap { Data.encoded($0) } }
     }
 
     var workoutType: WorkoutType {

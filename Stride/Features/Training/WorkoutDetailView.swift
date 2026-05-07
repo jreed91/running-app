@@ -51,7 +51,9 @@ struct WorkoutDetailView: View {
                         if let range = workout.targetPaceRange {
                             paceSection(range: range)
                         }
-                        if let structure = workout.workoutStructure {
+                        if workout.workoutType == .strength, let plan = workout.strengthPlan {
+                            strengthSection(plan: plan)
+                        } else if let structure = workout.workoutStructure {
                             structuredWorkoutSection(structure: structure)
                         } else if !workout.intervals.isEmpty {
                             intervalsSection
@@ -308,6 +310,84 @@ struct WorkoutDetailView: View {
                 .font(.bodyRegular)
                 .padding()
                 .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
+        }
+    }
+
+    // MARK: - Strength section
+
+    private func strengthSection(plan: StrengthWorkoutPlan) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("EXERCISES").font(.sectionHeader).foregroundStyle(.secondary)
+            // Summary chip
+            HStack(spacing: 6) {
+                Image(systemName: "clock")
+                    .font(.system(size: 11))
+                Text("\(plan.estimatedDurationMinutes) min")
+                    .font(.system(size: 12, weight: .semibold))
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(.surfaceSecondary, in: Capsule())
+            .foregroundStyle(.secondary)
+
+            ForEach(Array(plan.exercises.enumerated()), id: \.offset) { _, exercise in
+                ExerciseRow(exercise: exercise)
+            }
+        }
+    }
+}
+
+// MARK: - ExerciseRow
+
+private struct ExerciseRow: View {
+    let exercise: StrengthExercise
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(exercise.name)
+                    .font(.system(size: 15, weight: .semibold))
+                Spacer()
+                Text(repsLabel)
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+            HStack(spacing: 6) {
+                ForEach(exercise.muscleGroups.prefix(3), id: \.self) { group in
+                    Text(group)
+                        .font(.system(size: 11, weight: .medium))
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(Color.brand.opacity(0.12), in: Capsule())
+                        .foregroundStyle(Color.brand)
+                }
+                if let weight = exercise.targetWeight {
+                    Text(weight)
+                        .font(.system(size: 11, weight: .medium))
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(.surfaceSecondary, in: Capsule())
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if let notes = exercise.notes {
+                Text(notes)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(12)
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var repsLabel: String {
+        if let duration = exercise.durationSeconds {
+            return "\(exercise.sets) × \(duration)s"
+        } else if exercise.reps == 0 {
+            return "\(exercise.sets) × AMRAP"
+        } else {
+            return "\(exercise.sets) × \(exercise.reps)"
         }
     }
 }

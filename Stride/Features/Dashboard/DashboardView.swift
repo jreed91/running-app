@@ -230,6 +230,7 @@ struct DashboardView: View {
     @Environment(AppSettings.self) private var appSettings
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showActiveRun = false
+    @State private var showStrengthWorkout = false
     @State private var selectedDate = Date()
 
     @Namespace private var workoutCardNamespace
@@ -270,6 +271,11 @@ struct DashboardView: View {
             .navigationBarTitleDisplayMode(.inline)
             .fullScreenCover(isPresented: $showActiveRun) {
                 ActiveRunView()
+            }
+            .fullScreenCover(isPresented: $showStrengthWorkout) {
+                if let workout = workoutForSelectedDate, workout.workoutType == .strength {
+                    StrengthActiveView(scheduledWorkout: workout)
+                }
             }
         }
     }
@@ -376,11 +382,15 @@ struct DashboardView: View {
 
                 if Calendar.current.isDateInToday(selectedDate) && !workout.isCompleted {
                     Button {
-                        showActiveRun = true
+                        if workout.workoutType == .strength {
+                            showStrengthWorkout = true
+                        } else {
+                            showActiveRun = true
+                        }
                     } label: {
                         HStack(spacing: 10) {
                             StrideIcon(name: .play, size: 18, color: .white, strokeWeight: 2.2)
-                            Text("Start This Workout")
+                            Text(workout.workoutType == .strength ? "Start Strength Workout" : "Start This Workout")
                                 .font(.system(size: 17, weight: .bold))
                         }
                         .frame(maxWidth: .infinity)

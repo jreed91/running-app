@@ -30,6 +30,10 @@ final class UserProfile {
     /// JSON-encoded `[Int]` backing store for preferred run weekdays.
     /// Access via the `preferredRunDayIndices` extension property — never persist `[Int]` directly.
     var preferredRunDayIndicesData: Data?
+    /// JSON-encoded `[String]` of `StrengthEquipment` rawValues the user owns.
+    var selectedEquipmentData: Data?
+    /// Raw-backed storage for `strengthFocus` to keep CloudKit fields primitive.
+    var strengthFocusRaw: String?
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
 
@@ -87,5 +91,21 @@ extension UserProfile {
     var preferredRunDayIndices: [Int] {
         get { preferredRunDayIndicesData?.decode([Int].self) ?? [] }
         set { preferredRunDayIndicesData = newValue.isEmpty ? nil : .encoded(newValue) }
+    }
+
+    var selectedEquipment: [StrengthEquipment] {
+        get {
+            guard let data = selectedEquipmentData,
+                  let rawValues = data.decode([String].self) else { return [] }
+            return rawValues.compactMap { StrengthEquipment(rawValue: $0) }
+        }
+        set {
+            selectedEquipmentData = newValue.isEmpty ? nil : .encoded(newValue.map(\.rawValue))
+        }
+    }
+
+    var strengthFocus: StrengthFocus {
+        get { strengthFocusRaw.flatMap { StrengthFocus(rawValue: $0) } ?? .runningSpecific }
+        set { strengthFocusRaw = newValue.rawValue }
     }
 }

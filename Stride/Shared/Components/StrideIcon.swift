@@ -13,6 +13,7 @@ enum StrideIconName: String {
     case moon
     case trophy
     case dumbbell
+    case barbell
     // Nav
     case home
     case calendar
@@ -247,6 +248,22 @@ struct StrideIcon: View {
             rj.addLine(to: CGPoint(x: 15, y: 16)); rj.addLine(to: CGPoint(x: 17, y: 16))
             rj.addLine(to: CGPoint(x: 17, y: 14)); rj.addLine(to: CGPoint(x: 19, y: 14))
             ctx.stroke(rj, with: .foreground, style: stroke)
+
+        case .barbell:
+            // Long central bar
+            var bar = Path()
+            bar.move(to: CGPoint(x: 2, y: 12)); bar.addLine(to: CGPoint(x: 22, y: 12))
+            ctx.fill(bar.strokedPath(StrokeStyle(lineWidth: 2, lineCap: .round)), with: .foreground)
+            // Left collar + plates
+            var lCollar = Path(roundedRect: CGRect(x: 5, y: 9.5, width: 2, height: 5), cornerRadius: 0.5)
+            ctx.fill(lCollar, with: .foreground)
+            var lPlate = Path(roundedRect: CGRect(x: 2, y: 8, width: 2.5, height: 8), cornerRadius: 1)
+            ctx.stroke(lPlate, with: .foreground, style: stroke)
+            // Right collar + plates
+            var rCollar = Path(roundedRect: CGRect(x: 17, y: 9.5, width: 2, height: 5), cornerRadius: 0.5)
+            ctx.fill(rCollar, with: .foreground)
+            var rPlate = Path(roundedRect: CGRect(x: 19.5, y: 8, width: 2.5, height: 8), cornerRadius: 1)
+            ctx.stroke(rPlate, with: .foreground, style: stroke)
 
         case .home:
             var p = Path()
@@ -488,7 +505,7 @@ extension Label where Title == Text, Icon == StrideIcon {
     let all: [(String, StrideIconName)] = [
         ("run", .run), ("walk", .walk), ("tempo", .tempo), ("bolt", .bolt),
         ("flame", .flame), ("tortoise", .tortoise), ("moon", .moon), ("trophy", .trophy),
-        ("dumbbell", .dumbbell), ("home", .home), ("calendar", .calendar),
+        ("dumbbell", .dumbbell), ("barbell", .barbell), ("home", .home), ("calendar", .calendar),
         ("play", .play), ("history", .history), ("chart", .chart),
         ("chevronR", .chevronRight), ("check", .check), ("pause", .pause),
         ("stop", .stop), ("lock", .lock), ("timer", .timer), ("flag", .flag), ("gear", .gear),

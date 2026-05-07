@@ -1199,3 +1199,124 @@ private struct WeeklyMileageChart: View {
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 18))
     }
 }
+
+// MARK: - OBEquipmentGrid
+
+struct OBEquipmentGrid: View {
+    @Binding var selectedEquipment: Set<StrengthEquipment>
+
+    private let columns = [GridItem(.flexible()), GridItem(.flexible())]
+
+    var body: some View {
+        LazyVGrid(columns: columns, spacing: 10) {
+            ForEach(StrengthEquipment.allCases, id: \.self) { item in
+                OBEquipmentCard(
+                    equipment: item,
+                    isSelected: selectedEquipment.contains(item)
+                ) {
+                    if selectedEquipment.contains(item) {
+                        selectedEquipment.remove(item)
+                    } else {
+                        selectedEquipment.insert(item)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - OBEquipmentCard
+
+struct OBEquipmentCard: View {
+    let equipment: StrengthEquipment
+    let isSelected: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 12) {
+                Image(systemName: equipment.systemImage)
+                    .font(.system(size: 18, weight: .medium))
+                    .frame(width: 28)
+                    .foregroundStyle(isSelected ? Color.brand : .secondary)
+
+                Text(equipment.displayName)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(isSelected ? .primary : .secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+
+                Spacer()
+
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(Color.brand)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(
+                isSelected
+                    ? Color.brand.opacity(0.12)
+                    : Color.surfaceSecondary,
+                in: RoundedRectangle(cornerRadius: 14)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(isSelected ? Color.brand.opacity(0.5) : Color.clear, lineWidth: 1.5)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - OBStrengthFocusPicker
+
+struct OBStrengthFocusPicker: View {
+    @Binding var focus: StrengthFocus
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("TRAINING FOCUS")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 4)
+
+            VStack(spacing: 8) {
+                ForEach(StrengthFocus.allCases, id: \.self) { option in
+                    Button {
+                        focus = option
+                    } label: {
+                        HStack(spacing: 12) {
+                            OBRadio(isOn: focus == option)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(option.displayName)
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(.primary)
+                                Text(option.subtitle)
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            Spacer()
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                        .background(
+                            focus == option
+                                ? Color.brand.opacity(0.10)
+                                : Color.surfaceSecondary,
+                            in: RoundedRectangle(cornerRadius: 14)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(focus == option ? Color.brand.opacity(0.4) : Color.clear, lineWidth: 1.5)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+}
