@@ -12,7 +12,8 @@ final class StrengthWorkout {
     /// JSON-encoded `[CompletedStrengthSet]` — the sets actually logged during the session.
     var completedSetsData: Data?
 
-    @Relationship(deleteRule: .nullify, inverse: \ScheduledWorkout.completedStrengthWorkout)
+    /// Back-reference to the ``ScheduledWorkout`` this strength session fulfilled, if any.
+    /// The inverse is declared on ``ScheduledWorkout/completedStrengthWorkout``; SwiftData infers it here.
     var scheduledWorkout: ScheduledWorkout?
     /// Scalar backup for CloudKit relationship repair.
     var linkedScheduledWorkoutID: UUID?
