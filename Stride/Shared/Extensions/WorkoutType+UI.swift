@@ -11,6 +11,7 @@ extension WorkoutType {
         case .race:          return .trophy
         case .rest:          return .moon
         case .crossTraining: return .dumbbell
+        case .strength:      return .barbell
         }
     }
 
@@ -24,6 +25,7 @@ extension WorkoutType {
         case .race:          return "trophy"
         case .rest:          return "moon.zzz"
         case .crossTraining: return "dumbbell"
+        case .strength:      return "figure.strengthtraining.traditional"
         }
     }
 
@@ -33,6 +35,7 @@ extension WorkoutType {
         case .easy, .longRun:  return .zoneEasy
         case .tempo:           return .zoneTempo
         case .interval, .race: return .zoneInterval
+        case .strength:        return .brand
         default:               return .secondary
         }
     }

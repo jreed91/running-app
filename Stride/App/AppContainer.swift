@@ -67,6 +67,7 @@ final class AppContainer: ObservableObject {
         let schema = Schema([
             UserProfile.self,
             RunWorkout.self,
+            StrengthWorkout.self,
             TrainingPlan.self,
             TrainingWeek.self,
             ScheduledWorkout.self,

@@ -29,6 +29,10 @@ struct OnboardingView: View {
     @State private var selectedDays: Set<Int> = [0, 2, 4, 5]
     @State private var longRunOnSaturday = true
 
+    // Strength step state
+    @State private var selectedEquipment: Set<StrengthEquipment> = []
+    @State private var strengthFocus: StrengthFocus = .runningSpecific
+
     // Permissions display state
     @State private var locationEnabled = false
     @State private var notificationsEnabled = false
@@ -44,7 +48,7 @@ struct OnboardingView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let locationManager = CLLocationManager()
-    private let totalSteps = 8
+    private let totalSteps = 9
 
     // MARK: - Computed
 
@@ -173,7 +177,18 @@ struct OnboardingView: View {
                 scheduleContent
             }
         case 7:
-            OBShell(stepIndex: 7, total: totalSteps, kicker: "Permissions",
+            OBShell(stepIndex: 7, total: totalSteps, kicker: "Strength Training",
+                    title: "What equipment do you have?",
+                    subtitle: "We'll add 1–2 strength sessions per week tailored to your gear.",
+                    ctaLabel: "Continue",
+                    secondaryLabel: "Skip strength training",
+                    onSecondary: { selectedEquipment.removeAll(); advance() },
+                    onBack: retreat,
+                    onCTA: advance) {
+                strengthContent
+            }
+        case 8:
+            OBShell(stepIndex: 8, total: totalSteps, kicker: "Permissions",
                     title: "A few things to set up.", subtitle: "Each is optional — you can always change these in Settings.",
                     ctaLabel: isRequestingPermissions ? "Requesting…" : "Build my plan",
                     secondaryLabel: "Skip — I'll do this later",
@@ -423,6 +438,17 @@ struct OnboardingView: View {
         }
     }
 
+    // MARK: - Strength content
+
+    private var strengthContent: some View {
+        VStack(spacing: 20) {
+            OBEquipmentGrid(selectedEquipment: $selectedEquipment)
+            OBStrengthFocusPicker(focus: $strengthFocus)
+                .opacity(selectedEquipment.isEmpty ? 0.4 : 1)
+                .disabled(selectedEquipment.isEmpty)
+        }
+    }
+
     // MARK: - Permissions content
 
     private var permissionsContent: some View {
@@ -640,6 +666,8 @@ struct OnboardingView: View {
             currentEstimated5KTimeSeconds: fiveKTimeSeconds,
             preferredRunDayIndices: selectedDays.sorted()
         )
+        profile.selectedEquipment = Array(selectedEquipment)
+        profile.strengthFocus = strengthFocus
         context.insert(profile)
         let plan: TrainingPlan
         if goalRace.isGoalRace {

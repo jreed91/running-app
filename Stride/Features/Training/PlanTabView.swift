@@ -103,6 +103,7 @@ struct PlanTabView: View {
                     && $0.workoutType != .rest
                     && $0.workoutType != .race
                     && $0.workoutType != .crossTraining
+                    && $0.workoutType != .strength
                     && $0.scheduledDate >= today
             }
             .sorted { $0.scheduledDate < $1.scheduledDate }
@@ -335,8 +336,9 @@ struct PlanTabView: View {
         case .longRun: return 2
         case .tempo, .interval: return 3
         case .easy: return 4
-        case .crossTraining: return 5
-        case .rest: return 6
+        case .strength: return 5
+        case .crossTraining: return 6
+        case .rest: return 7
         }
     }
 }

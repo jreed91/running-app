@@ -136,7 +136,8 @@ struct TrainingPlanService {
             for workout in weekWorkouts {
                 guard workout.workoutType != .rest,
                       workout.workoutType != .race,
-                      workout.workoutType != .crossTraining else { continue }
+                      workout.workoutType != .crossTraining,
+                      workout.workoutType != .strength else { continue }
                 let adapted = adaptWorkout(scheduled: workout, history: [], profile: profile, unitPreference: unitPreference)
                 workout.structureData        = adapted.structureData
                 workout.targetDistanceMeters = adapted.targetDistanceMeters
@@ -147,10 +148,83 @@ struct TrainingPlanService {
                     workout.intervals = adapted.intervals
                 }
             }
-            week.workouts = weekWorkouts
+            let strengthWorkouts = buildStrengthWorkouts(
+                weekStart: weekStart,
+                existingWorkouts: weekWorkouts,
+                profile: profile,
+                phase: phase
+            )
+            week.workouts = weekWorkouts + strengthWorkouts
             plan.weeks = (plan.weeks ?? []) + [week]
         }
         return plan
+    }
+
+    // MARK: - Strength Day Insertion
+
+    private func buildStrengthWorkouts(
+        weekStart: Date,
+        existingWorkouts: [ScheduledWorkout],
+        profile: UserProfile,
+        phase: TrainingPhase
+    ) -> [ScheduledWorkout] {
+        let equipment = profile.selectedEquipment
+        guard !equipment.isEmpty else { return [] }
+
+        let focus = profile.strengthFocus
+
+        // Determine how many strength days to insert based on phase and focus
+        let maxStrengthDays: Int
+        switch (phase, focus) {
+        case (.taper, _):          maxStrengthDays = profile.fitnessLevel == .beginner ? 0 : 1
+        case (.peak, _):           maxStrengthDays = 1
+        case (_, .generalStrength): maxStrengthDays = 1
+        default:                   maxStrengthDays = 2
+        }
+        guard maxStrengthDays > 0 else { return [] }
+
+        // Build a set of occupied day-offsets (0=Mon … 6=Sun) and find quality/long-run days
+        var occupiedOffsets = Set<Int>()
+        var qualityOrLongRunOffsets = Set<Int>()
+        for workout in existingWorkouts {
+            let offset = dayOffset(from: weekStart, to: workout.scheduledDate)
+            occupiedOffsets.insert(offset)
+            if workout.workoutType == .longRun || workout.workoutType.isQualitySession {
+                qualityOrLongRunOffsets.insert(offset)
+            }
+        }
+
+        // Candidate offsets: unoccupied, not adjacent to a quality or long-run day
+        var candidates: [Int] = []
+        for offset in 0...6 {
+            guard !occupiedOffsets.contains(offset) else { continue }
+            let adjacentToProtected = qualityOrLongRunOffsets.contains(offset - 1)
+                || qualityOrLongRunOffsets.contains(offset + 1)
+            if !adjacentToProtected {
+                candidates.append(offset)
+            }
+        }
+
+        let plan = StrengthLibrary.plan(for: equipment, focus: focus, phase: phase)
+        var result: [ScheduledWorkout] = []
+        for offset in candidates.prefix(maxStrengthDays) {
+            let date = weekStart.adding(days: offset)
+            let workout = ScheduledWorkout(
+                scheduledDate: date,
+                workoutType: .strength,
+                notes: "\(focus.displayName) strength — \(plan.estimatedDurationMinutes) min"
+            )
+            workout.strengthPlan = plan
+            result.append(workout)
+        }
+        return result
+    }
+
+    private func dayOffset(from weekStart: Date, to date: Date) -> Int {
+        let cal = Calendar.current
+        let start = cal.startOfDay(for: weekStart)
+        let target = cal.startOfDay(for: date)
+        return max(0, cal.dateComponents([.day], from: start, to: target).day ?? 0)
     }
 
     private func weeksThroughRaceDate(startDate: Date, raceDate: Date) -> Int {
@@ -569,7 +643,8 @@ struct TrainingPlanService {
         unitPreference: UnitPreference = .metric
     ) -> ScheduledWorkout {
         guard scheduled.workoutType != .rest,
-              scheduled.workoutType != .crossTraining else {
+              scheduled.workoutType != .crossTraining,
+              scheduled.workoutType != .strength else {
             return scheduled
         }
 
@@ -1044,7 +1119,7 @@ struct TrainingPlanService {
 
         for week in (plan.weeks ?? []).sorted(by: { $0.weekNumber < $1.weekNumber }) {
             let movable = (week.workouts ?? [])
-                .filter { !$0.isCompleted && $0.workoutType != .rest && $0.scheduledDate > today }
+                .filter { !$0.isCompleted && $0.workoutType != .rest && $0.workoutType != .strength && $0.scheduledDate > today }
                 .sorted { $0.scheduledDate < $1.scheduledDate }
             guard !movable.isEmpty else { continue }
 

@@ -102,6 +102,7 @@ enum WorkoutType: String, Codable, CaseIterable, Sendable {
     case race = "Race"
     case rest = "Rest"
     case crossTraining = "Cross Training"
+    case strength = "Strength"
 
     var displayName: String { rawValue }
 
@@ -224,6 +225,46 @@ enum AIProvider: String, CaseIterable, Sendable {
         switch self {
         case .openAI: return "gpt-4o-mini"
         case .anthropic: return "claude-3-5-sonnet-latest"
+        }
+    }
+}
+
+// MARK: - StrengthEquipment
+
+enum StrengthEquipment: String, Codable, CaseIterable, Sendable {
+    case bodyweight      = "Bodyweight"
+    case dumbbells       = "Dumbbells"
+    case resistanceBands = "Resistance Bands"
+    case pullUpBar       = "Pull-Up Bar"
+    case kettlebell      = "Kettlebell"
+    case barbell         = "Barbell"
+
+    var displayName: String { rawValue }
+
+    var systemImage: String {
+        switch self {
+        case .bodyweight:      return "figure.strengthtraining.traditional"
+        case .dumbbells:       return "dumbbell.fill"
+        case .resistanceBands: return "circle.grid.2x2.fill"
+        case .pullUpBar:       return "minus.rectangle.fill"
+        case .kettlebell:      return "drop.fill"
+        case .barbell:         return "line.horizontal.3"
+        }
+    }
+}
+
+// MARK: - StrengthFocus
+
+enum StrengthFocus: String, Codable, CaseIterable, Sendable {
+    case runningSpecific = "Running-Specific"
+    case generalStrength = "General Strength"
+
+    var displayName: String { rawValue }
+
+    var subtitle: String {
+        switch self {
+        case .runningSpecific: return "Glutes, hips, core, and single-leg stability"
+        case .generalStrength: return "Full-body strength with push, pull, and hinge patterns"
         }
     }
 }

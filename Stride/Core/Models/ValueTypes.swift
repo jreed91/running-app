@@ -146,3 +146,30 @@ struct GeneratedRoute: Sendable {
     /// Short human-readable label distinguishing this option, e.g. "Option A" or "Heading North".
     var label: String
 }
+
+// MARK: - Strength Types
+
+struct StrengthExercise: Codable, Hashable, Sendable {
+    var name: String
+    var sets: Int
+    var reps: Int           // 0 = AMRAP (as many reps as possible)
+    var durationSeconds: Int?  // non-nil for timed exercises (plank, wall sit)
+    var targetWeight: String?  // "Bodyweight", "Light", "Moderate", "Heavy"
+    var notes: String?
+    var muscleGroups: [String]
+}
+
+struct StrengthWorkoutPlan: Codable, Hashable, Sendable {
+    var focus: StrengthFocus
+    var exercises: [StrengthExercise]
+    var estimatedDurationMinutes: Int
+    var notes: String?
+}
+
+struct CompletedStrengthSet: Codable, Hashable, Sendable {
+    var exerciseIndex: Int
+    var setIndex: Int
+    var completedReps: Int
+    var actualWeight: String?
+    var skipped: Bool
+}
