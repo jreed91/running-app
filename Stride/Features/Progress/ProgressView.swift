@@ -20,7 +20,14 @@ struct ProgressDashboardView: View {
     @State private var selectedVO2Date: Date? = nil
 
     @Namespace private var rangeNamespace
+    @Namespace private var tabNamespace
     @State private var progressAppeared = false
+    @State private var selectedTab: ProgressTab = .stats
+
+    enum ProgressTab: String, CaseIterable {
+        case stats  = "Stats"
+        case medals = "Medals"
+    }
 
     enum ChartRange: String, CaseIterable {
         case month = "1M"
@@ -59,52 +66,59 @@ struct ProgressDashboardView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    summaryHeader
-                        .opacity(progressAppeared ? 1 : 0)
-                        .scaleEffect(progressAppeared ? 1 : 0.94, anchor: .top)
-                        .adaptiveAnimation(AppAnimation.entrance.delay(0.05), value: progressAppeared)
-                    rangePicker
-                        .opacity(progressAppeared ? 1 : 0)
-                        .offset(y: progressAppeared ? 0 : 10)
-                        .adaptiveAnimation(AppAnimation.entrance.delay(0.10), value: progressAppeared)
-                    weeklyVolumeChart
-                        .opacity(progressAppeared ? 1 : 0)
-                        .offset(y: progressAppeared ? 0 : 18)
-                        .adaptiveAnimation(AppAnimation.entrance.delay(0.15), value: progressAppeared)
-                    paceProgressChart
-                        .opacity(progressAppeared ? 1 : 0)
-                        .offset(y: progressAppeared ? 0 : 18)
-                        .adaptiveAnimation(AppAnimation.entrance.delay(0.20), value: progressAppeared)
-                    racePacePredictionChart
-                        .opacity(progressAppeared ? 1 : 0)
-                        .offset(y: progressAppeared ? 0 : 18)
-                        .adaptiveAnimation(AppAnimation.entrance.delay(0.25), value: progressAppeared)
-                    racePaceSummaryCard
-                        .opacity(progressAppeared ? 1 : 0)
-                        .offset(y: progressAppeared ? 0 : 18)
-                        .adaptiveAnimation(AppAnimation.entrance.delay(0.30), value: progressAppeared)
-                    heartRateTrendChart
-                        .opacity(progressAppeared ? 1 : 0)
-                        .offset(y: progressAppeared ? 0 : 18)
-                        .adaptiveAnimation(AppAnimation.entrance.delay(0.35), value: progressAppeared)
-                    elevationTrendChart
-                        .opacity(progressAppeared ? 1 : 0)
-                        .offset(y: progressAppeared ? 0 : 18)
-                        .adaptiveAnimation(AppAnimation.entrance.delay(0.40), value: progressAppeared)
-                    vo2MaxTrendChart
-                        .opacity(progressAppeared ? 1 : 0)
-                        .offset(y: progressAppeared ? 0 : 18)
-                        .adaptiveAnimation(AppAnimation.entrance.delay(0.45), value: progressAppeared)
-                    periodSummaryCard
-                        .opacity(progressAppeared ? 1 : 0)
-                        .offset(y: progressAppeared ? 0 : 18)
-                        .adaptiveAnimation(AppAnimation.entrance.delay(0.50), value: progressAppeared)
+            VStack(spacing: 0) {
+                tabPicker
+                if selectedTab == .stats {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 16) {
+                            summaryHeader
+                                .opacity(progressAppeared ? 1 : 0)
+                                .scaleEffect(progressAppeared ? 1 : 0.94, anchor: .top)
+                                .adaptiveAnimation(AppAnimation.entrance.delay(0.05), value: progressAppeared)
+                            rangePicker
+                                .opacity(progressAppeared ? 1 : 0)
+                                .offset(y: progressAppeared ? 0 : 10)
+                                .adaptiveAnimation(AppAnimation.entrance.delay(0.10), value: progressAppeared)
+                            weeklyVolumeChart
+                                .opacity(progressAppeared ? 1 : 0)
+                                .offset(y: progressAppeared ? 0 : 18)
+                                .adaptiveAnimation(AppAnimation.entrance.delay(0.15), value: progressAppeared)
+                            paceProgressChart
+                                .opacity(progressAppeared ? 1 : 0)
+                                .offset(y: progressAppeared ? 0 : 18)
+                                .adaptiveAnimation(AppAnimation.entrance.delay(0.20), value: progressAppeared)
+                            racePacePredictionChart
+                                .opacity(progressAppeared ? 1 : 0)
+                                .offset(y: progressAppeared ? 0 : 18)
+                                .adaptiveAnimation(AppAnimation.entrance.delay(0.25), value: progressAppeared)
+                            racePaceSummaryCard
+                                .opacity(progressAppeared ? 1 : 0)
+                                .offset(y: progressAppeared ? 0 : 18)
+                                .adaptiveAnimation(AppAnimation.entrance.delay(0.30), value: progressAppeared)
+                            heartRateTrendChart
+                                .opacity(progressAppeared ? 1 : 0)
+                                .offset(y: progressAppeared ? 0 : 18)
+                                .adaptiveAnimation(AppAnimation.entrance.delay(0.35), value: progressAppeared)
+                            elevationTrendChart
+                                .opacity(progressAppeared ? 1 : 0)
+                                .offset(y: progressAppeared ? 0 : 18)
+                                .adaptiveAnimation(AppAnimation.entrance.delay(0.40), value: progressAppeared)
+                            vo2MaxTrendChart
+                                .opacity(progressAppeared ? 1 : 0)
+                                .offset(y: progressAppeared ? 0 : 18)
+                                .adaptiveAnimation(AppAnimation.entrance.delay(0.45), value: progressAppeared)
+                            periodSummaryCard
+                                .opacity(progressAppeared ? 1 : 0)
+                                .offset(y: progressAppeared ? 0 : 18)
+                                .adaptiveAnimation(AppAnimation.entrance.delay(0.50), value: progressAppeared)
+                        }
+                        .padding()
+                        .frame(maxWidth: .infinity)
+                        .task { progressAppeared = true }
+                    }
+                } else {
+                    MedalsView()
                 }
-                .padding()
-                .frame(maxWidth: .infinity)
-                .task { progressAppeared = true }
             }
             .background(Color.surfacePrimary)
             .navigationTitle("Progress")
@@ -116,6 +130,12 @@ struct ProgressDashboardView: View {
             selectedHRDate = nil
             selectedElevationDate = nil
             selectedVO2Date = nil
+        }
+        .onChange(of: selectedTab) {
+            if selectedTab == .stats {
+                progressAppeared = false
+                Task { @MainActor in progressAppeared = true }
+            }
         }
     }
 
@@ -184,6 +204,38 @@ struct ProgressDashboardView: View {
         }
         .padding(4)
         .background(Color.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    // MARK: - Tab picker
+
+    private var tabPicker: some View {
+        HStack(spacing: 4) {
+            ForEach(ProgressTab.allCases, id: \.self) { tab in
+                Button {
+                    withAnimation(AppAnimation.bouncy) { selectedTab = tab }
+                } label: {
+                    Text(tab.rawValue)
+                        .font(.system(size: 14, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 9)
+                        .background {
+                            if selectedTab == tab {
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(Color.brand)
+                                    .matchedGeometryEffect(id: "tabPill", in: tabNamespace)
+                            }
+                        }
+                        .foregroundStyle(selectedTab == tab ? .white : .secondary)
+                        .adaptiveAnimation(AppAnimation.bouncy, value: selectedTab)
+                }
+                .buttonStyle(BouncyButtonStyle())
+            }
+        }
+        .padding(4)
+        .background(Color.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
+        .padding(.horizontal, AppSpacing.lg)
+        .padding(.top, AppSpacing.sm)
+        .padding(.bottom, AppSpacing.xs)
     }
 
     // MARK: - Chart card wrapper
