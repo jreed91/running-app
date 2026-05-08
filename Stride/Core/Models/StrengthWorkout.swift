@@ -9,6 +9,8 @@ final class StrengthWorkout {
     var date: Date = Date()
     var durationSeconds: Double = 0
     var notes: String?
+    /// HealthKit workout UUID string, set after syncing from HealthKit.
+    var healthKitWorkoutID: String?
     /// JSON-encoded `[CompletedStrengthSet]` — the sets actually logged during the session.
     var completedSetsData: Data?
 

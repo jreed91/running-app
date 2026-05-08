@@ -25,6 +25,14 @@ protocol HealthKitRepositoryProtocol: Sendable {
         to endDate: Date,
         existingIDs: Set<String>
     ) async throws -> [RunWorkout]
+    /// Fetches strength workouts (traditional, functional, core) from HealthKit,
+    /// converts them to StrengthWorkout models, and skips any whose HK UUID is
+    /// already in `existingIDs`.
+    @MainActor func fetchImportableStrengthWorkouts(
+        from startDate: Date,
+        to endDate: Date,
+        existingIDs: Set<String>
+    ) async throws -> [StrengthWorkout]
     /// Enables HealthKit background delivery for running workouts at `.immediate` frequency.
     /// Safe to call multiple times — HealthKit is idempotent.
     func enableBackgroundDelivery() async throws
@@ -456,6 +464,64 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         }
         AppLogger.log(
             "HealthKit import candidates: fetched=\(hkWorkouts.count), importable=\(result.count), existing=\(skippedExisting), tinyShell=\(skippedTinyShell)",
+            label: "HealthKit",
+            level: .debug
+        )
+        return result
+    }
+
+    // MARK: - Strength workout import
+
+    private func fetchStrengthHKWorkouts(from startDate: Date, to endDate: Date) async throws -> [HKWorkout] {
+        let activityTypes: [HKWorkoutActivityType] = [
+            .traditionalStrengthTraining,
+            .functionalStrengthTraining,
+            .coreTraining
+        ]
+        let typePredicate = NSCompoundPredicate(
+            orPredicateWithSubpredicates: activityTypes.map { HKQuery.predicateForWorkouts(with: $0) }
+        )
+        let datePredicate = HKQuery.predicateForSamples(
+            withStart: startDate, end: endDate, options: .strictStartDate
+        )
+        let compound = NSCompoundPredicate(andPredicateWithSubpredicates: [typePredicate, datePredicate])
+        return try await withCheckedThrowingContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: .workoutType(),
+                predicate: compound,
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)]
+            ) { _, samples, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume(returning: (samples as? [HKWorkout]) ?? [])
+                }
+            }
+            store.execute(query)
+        }
+    }
+
+    @MainActor func fetchImportableStrengthWorkouts(
+        from startDate: Date,
+        to endDate: Date,
+        existingIDs: Set<String>
+    ) async throws -> [StrengthWorkout] {
+        let hkWorkouts = try await fetchStrengthHKWorkouts(from: startDate, to: endDate)
+        var result: [StrengthWorkout] = []
+        var skippedExisting = 0
+
+        for hkWorkout in hkWorkouts {
+            let hkID = hkWorkout.uuid.uuidString
+            guard !existingIDs.contains(hkID) else { skippedExisting += 1; continue }
+            guard hkWorkout.duration >= 60 else { continue }
+
+            let workout = StrengthWorkout(date: hkWorkout.startDate, durationSeconds: hkWorkout.duration)
+            workout.healthKitWorkoutID = hkID
+            result.append(workout)
+        }
+        AppLogger.log(
+            "HealthKit strength import: fetched=\(hkWorkouts.count), importable=\(result.count), existing=\(skippedExisting)",
             label: "HealthKit",
             level: .debug
         )

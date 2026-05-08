@@ -143,48 +143,48 @@ final class WorkoutSyncService {
             return
         }
 
-        guard !newWorkouts.isEmpty else {
+        if newWorkouts.isEmpty {
             AppLogger.log("No new HealthKit running workouts found during \(source) sync.", label: "HealthKit", level: .debug)
-            return
-        }
-
-        for workout in newWorkouts {
-            context.insert(workout)
-        }
-        linkToScheduledWorkouts(newWorkouts)
-        do {
-            try context.save()
-        } catch {
-            AppLogger.log(
-                "Failed to save imported HealthKit workouts (\(source)): \(error.localizedDescription)",
-                label: "HealthKit",
-                level: .error
-            )
-            return
-        }
-
-        for workout in newWorkouts {
-            if let coordinate = workout.routeCoordinates.first {
-                await attachWeather(to: workout, coordinate: coordinate)
+        } else {
+            for workout in newWorkouts {
+                context.insert(workout)
             }
+            linkToScheduledWorkouts(newWorkouts)
+            do {
+                try context.save()
+            } catch {
+                AppLogger.log(
+                    "Failed to save imported HealthKit workouts (\(source)): \(error.localizedDescription)",
+                    label: "HealthKit",
+                    level: .error
+                )
+            }
+
+            for workout in newWorkouts {
+                if let coordinate = workout.routeCoordinates.first {
+                    await attachWeather(to: workout, coordinate: coordinate)
+                }
+            }
+
+            autoLink(newWorkouts)
+
+            let unit = AppSettings.syncedUnitPreference()
+            for workout in newWorkouts {
+                try? await notificationService.notifyNewRunSynced(workout, unit: unit)
+            }
+            AppLogger.log(
+                "Imported \(newWorkouts.count) HealthKit running workout(s) during \(source) sync.",
+                label: "HealthKit",
+                level: .info
+            )
+
+            if let first = newWorkouts.first {
+                UserDefaults.standard.set(first.id.uuidString, forKey: "pendingReviewWorkoutID")
+            }
+            onWorkoutsSynced?(newWorkouts)
         }
 
-        autoLink(newWorkouts)
-
-        let unit = AppSettings.syncedUnitPreference()
-        for workout in newWorkouts {
-            try? await notificationService.notifyNewRunSynced(workout, unit: unit)
-        }
-        AppLogger.log(
-            "Imported \(newWorkouts.count) HealthKit running workout(s) during \(source) sync.",
-            label: "HealthKit",
-            level: .info
-        )
-
-        if let first = newWorkouts.first {
-            UserDefaults.standard.set(first.id.uuidString, forKey: "pendingReviewWorkoutID")
-        }
-        onWorkoutsSynced?(newWorkouts)
+        await syncStrengthWorkouts(source: source, lookbackCutoff: cutoff)
     }
 
     private func fetchImportableWorkouts(
@@ -275,6 +275,79 @@ final class WorkoutSyncService {
                 available.removeAll { $0.id == match.id }
             }
         }
+    }
+
+    // MARK: - Strength workout sync
+
+    private func syncStrengthWorkouts(source: String, lookbackCutoff: Date) async {
+        let existingIDs: Set<String>
+        do {
+            let stored = try context.fetch(FetchDescriptor<StrengthWorkout>())
+            existingIDs = Set(stored.compactMap(\.healthKitWorkoutID))
+        } catch {
+            AppLogger.log(
+                "Failed to fetch existing strength workouts before HealthKit sync (\(source)): \(error.localizedDescription)",
+                label: "HealthKit",
+                level: .error
+            )
+            return
+        }
+
+        let newWorkouts: [StrengthWorkout]
+        do {
+            newWorkouts = try await healthKitRepository.fetchImportableStrengthWorkouts(
+                from: lookbackCutoff,
+                to: Date(),
+                existingIDs: existingIDs
+            )
+        } catch {
+            AppLogger.log(
+                "Failed to import HealthKit strength workouts (\(source)): \(error.localizedDescription)",
+                label: "HealthKit",
+                level: .error
+            )
+            return
+        }
+
+        guard !newWorkouts.isEmpty else { return }
+
+        for workout in newWorkouts { context.insert(workout) }
+        linkStrengthToScheduledWorkouts(newWorkouts)
+        try? context.save()
+        AppLogger.log(
+            "Imported \(newWorkouts.count) HealthKit strength workout(s) during \(source) sync.",
+            label: "HealthKit",
+            level: .info
+        )
+    }
+
+    private func linkStrengthToScheduledWorkouts(_ workouts: [StrengthWorkout]) {
+        let descriptor = FetchDescriptor<ScheduledWorkout>(
+            predicate: #Predicate { $0.isCompleted == false }
+        )
+        guard let allIncomplete = try? context.fetch(descriptor) else { return }
+        var available = allIncomplete.filter {
+            $0.completedStrengthWorkout == nil && $0.workoutType == .strength
+        }
+        let calendar = Calendar.current
+        var dirty = false
+        for workout in workouts {
+            let workoutDay = calendar.startOfDay(for: workout.date)
+            if let match = available.first(where: {
+                let scheduledDay = calendar.startOfDay(for: $0.scheduledDate)
+                let diff = calendar.dateComponents([.day], from: scheduledDay, to: workoutDay).day ?? Int.max
+                return diff >= 0 && diff <= 1
+            }) {
+                workout.scheduledWorkout = match
+                match.completedStrengthWorkout = workout
+                match.isCompleted = true
+                match.linkedStrengthWorkoutID = workout.id
+                workout.linkedScheduledWorkoutID = match.id
+                available.removeAll { $0.id == match.id }
+                dirty = true
+            }
+        }
+        if dirty { try? context.save() }
     }
 
     private func attachWeather(to workout: RunWorkout, coordinate: Coordinate) async {
