@@ -230,14 +230,24 @@ struct DashboardView: View {
 
     @Environment(AppSettings.self) private var appSettings
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.appContainer) private var container
+    @Environment(\.modelContext) private var context
+    @Query private var profiles: [UserProfile]
     @State private var showActiveRun = false
     @State private var showStrengthWorkout = false
     @State private var selectedDate = Date()
+    @State private var recoveryDismissed = false
+    @State private var isHandlingRecovery = false
 
     @Namespace private var workoutCardNamespace
     @State private var dashboardAppeared = false
 
     private var activePlan: TrainingPlan? { activePlans.first }
+
+    private var missedWorkoutInfo: MissedWorkoutInfo? {
+        guard !recoveryDismissed, let plan = activePlan else { return nil }
+        return MissedWorkoutDetector().detect(in: plan)
+    }
 
     var body: some View {
         NavigationStack {
@@ -253,6 +263,18 @@ struct DashboardView: View {
                             .opacity(dashboardAppeared ? 1 : 0)
                             .offset(y: dashboardAppeared ? 0 : 20)
                             .adaptiveAnimation(AppAnimation.entrance.delay(0.05), value: dashboardAppeared)
+                        if let info = missedWorkoutInfo {
+                            MissedWorkoutsRecoveryCard(
+                                info: info,
+                                isLoading: isHandlingRecovery,
+                                onPickUpWhereLeftOff: { handlePickUp(info: info) },
+                                onRebuild: { handleRebuild() },
+                                onDismiss: { recoveryDismissed = true }
+                            )
+                            .opacity(dashboardAppeared ? 1 : 0)
+                            .offset(y: dashboardAppeared ? 0 : 20)
+                            .adaptiveAnimation(AppAnimation.entrance.delay(0.08), value: dashboardAppeared)
+                        }
                         selectedDaySection
                             .opacity(dashboardAppeared ? 1 : 0)
                             .offset(y: dashboardAppeared ? 0 : 20)
@@ -529,6 +551,37 @@ struct DashboardView: View {
         let monday = Date().startOfWeek
         let count = recentWorkouts.filter { $0.date >= monday }.count
         return "\(count)"
+    }
+
+    // MARK: - Missed Workout Recovery
+
+    private func handlePickUp(info: MissedWorkoutInfo) {
+        guard let plan = activePlan else { return }
+        isHandlingRecovery = true
+        do {
+            try container.shiftMissedWorkoutsForward(plan: plan, by: info.daysToShift, context: context)
+            recoveryDismissed = true
+        } catch {
+            AppLogger.log("Recovery shift failed: \(error)", label: "Dashboard", level: .error)
+        }
+        isHandlingRecovery = false
+    }
+
+    private func handleRebuild() {
+        guard let plan = activePlan, let profile = profiles.first else { return }
+        isHandlingRecovery = true
+        do {
+            try container.rebuildPlan(
+                replacing: plan,
+                profile: profile,
+                context: context,
+                unitPreference: appSettings.unitPreference
+            )
+            recoveryDismissed = true
+        } catch {
+            AppLogger.log("Plan rebuild failed: \(error)", label: "Dashboard", level: .error)
+        }
+        isHandlingRecovery = false
     }
 }
 

@@ -358,6 +358,88 @@ final class AppContainer: ObservableObject {
         }
     }
 
+    // MARK: - Missed workout recovery
+
+    /// Shifts all future uncompleted non-rest workouts forward by `days` calendar days.
+    /// Extends `plan.endDate` if any shifted workout falls beyond it.
+    /// Race workouts are excluded when the plan has a fixed raceDate.
+    func shiftMissedWorkoutsForward(
+        plan: TrainingPlan,
+        by days: Int,
+        context: ModelContext
+    ) throws {
+        guard days > 0 else { return }
+        let startOfToday = Calendar.current.startOfDay(for: Date())
+        let hasFixedRace = plan.raceDate != nil
+
+        let toShift = (plan.weeks ?? [])
+            .flatMap { $0.workouts ?? [] }
+            .filter {
+                !$0.isCompleted
+                    && $0.workoutType != .rest
+                    && $0.workoutType != .strength
+                    && $0.workoutType != .crossTraining
+                    && !(hasFixedRace && $0.workoutType == .race)
+                    && $0.scheduledDate >= startOfToday
+            }
+
+        for workout in toShift {
+            workout.scheduledDate = Calendar.current.date(
+                byAdding: .day, value: days, to: workout.scheduledDate
+            ) ?? workout.scheduledDate
+        }
+
+        if let newLast = toShift.max(by: { $0.scheduledDate < $1.scheduledDate }),
+           newLast.scheduledDate > plan.endDate {
+            plan.endDate = newLast.scheduledDate
+        }
+
+        try context.save()
+    }
+
+    /// Deletes the active plan and generates a fresh one starting from today,
+    /// preserving the original race date, goal time, and race type.
+    func rebuildPlan(
+        replacing oldPlan: TrainingPlan,
+        profile: UserProfile,
+        context: ModelContext,
+        unitPreference: UnitPreference = .metric
+    ) throws {
+        let startDate = Date().startOfDay
+        let runDayIndices = profile.preferredRunDayIndices
+
+        let newPlan: TrainingPlan
+        if let raceDate = oldPlan.raceDate, let raceName = oldPlan.raceName {
+            newPlan = trainingPlanService.generateRacePlan(
+                profile: profile,
+                startDate: startDate,
+                raceDate: raceDate,
+                raceName: raceName,
+                runDayIndices: runDayIndices,
+                unitPreference: unitPreference
+            )
+        } else {
+            let remainingDays = Calendar.current.dateComponents(
+                [.day], from: startDate, to: oldPlan.endDate
+            ).day ?? 0
+            let remainingWeeks = max(1, Int(ceil(Double(remainingDays + 1) / 7.0)))
+            newPlan = trainingPlanService.generatePlan(
+                profile: profile,
+                startDate: startDate,
+                numberOfWeeks: remainingWeeks,
+                runDayIndices: runDayIndices,
+                unitPreference: unitPreference
+            )
+        }
+
+        newPlan.goalTimeSeconds = oldPlan.goalTimeSeconds
+        newPlan.targetRace = oldPlan.targetRace
+
+        try planRepository.delete(oldPlan)
+        try planRepository.save(newPlan)
+        try planRepository.setActive(newPlan)
+    }
+
     // MARK: Preview support
 
     /// In-memory container for SwiftUI previews and unit tests.
