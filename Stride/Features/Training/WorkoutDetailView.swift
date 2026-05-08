@@ -339,7 +339,7 @@ struct WorkoutDetailView: View {
 
 // MARK: - ExerciseRow
 
-private struct ExerciseRow: View {
+struct ExerciseRow: View {
     let exercise: StrengthExercise
 
     var body: some View {
