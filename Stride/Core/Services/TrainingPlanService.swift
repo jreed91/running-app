@@ -183,8 +183,10 @@ struct TrainingPlanService {
         }
         guard maxStrengthDays > 0 else { return [] }
 
-        // Build a set of occupied day-offsets (0=Mon … 6=Sun) and find quality/long-run days
-        var occupiedOffsets = Set<Int>()
+        // Build a set of occupied day-offsets (0=Mon … 6=Sun) and find quality/long-run days.
+        // Also block the user's preferred run days so strength never lands on a run-day slot,
+        // even in weeks where that slot happens to be empty.
+        var occupiedOffsets = Set(profile.preferredRunDayIndices)
         var qualityOrLongRunOffsets = Set<Int>()
         for workout in existingWorkouts {
             let offset = dayOffset(from: weekStart, to: workout.scheduledDate)

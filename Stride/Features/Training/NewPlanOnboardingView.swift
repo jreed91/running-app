@@ -38,9 +38,13 @@ struct NewPlanOnboardingView: View {
     // Step 5 – Schedule days
     @State private var selectedDays: Set<Int> = [0, 2, 4, 5]
 
+    // Step 6 – Strength
+    @State private var selectedEquipment: Set<StrengthEquipment> = []
+    @State private var strengthFocus: StrengthFocus = .runningSpecific
+
     @State private var isCreatingPlan = false
 
-    private let totalSteps = 5
+    private let totalSteps = 6
 
     private var profile: UserProfile? { profiles.first }
 
@@ -166,10 +170,23 @@ struct NewPlanOnboardingView: View {
                 kicker: "Step 5 · Schedule",
                 title: "When can you run?",
                 subtitle: "Pick the days you'll train. We'll build your plan around them.",
-                ctaLabel: "Build My Plan",
+                ctaLabel: "Continue",
                 onBack: retreat,
                 onCTA: { guard !selectedDays.isEmpty else { return }; advance() }
             ) { scheduleContent }
+
+        case 5:
+            OBShell(
+                stepIndex: 5, total: totalSteps,
+                kicker: "Step 6 · Strength",
+                title: "What equipment do you have?",
+                subtitle: "We'll add strength sessions on your off days, tailored to your gear.",
+                ctaLabel: "Build My Plan",
+                secondaryLabel: "Skip strength training",
+                onSecondary: { selectedEquipment.removeAll(); advance() },
+                onBack: retreat,
+                onCTA: advance
+            ) { strengthContent }
 
         default:
             OBReady(
@@ -432,6 +449,15 @@ struct NewPlanOnboardingView: View {
         }
     }
 
+    private var strengthContent: some View {
+        VStack(spacing: 16) {
+            OBEquipmentGrid(selectedEquipment: $selectedEquipment)
+            OBStrengthFocusPicker(focus: $strengthFocus)
+                .opacity(selectedEquipment.isEmpty ? 0.4 : 1)
+                .disabled(selectedEquipment.isEmpty)
+        }
+    }
+
     // MARK: - Helpers
 
     private var vdotLabel: String {
@@ -480,6 +506,8 @@ struct NewPlanOnboardingView: View {
             let rem = Int(t) % 60
             fiveKSeconds = (rem / 5) * 5
         }
+        selectedEquipment = Set(profile.selectedEquipment)
+        strengthFocus = profile.strengthFocus
         clampWeeks()
     }
 
@@ -522,6 +550,8 @@ struct NewPlanOnboardingView: View {
         profile.weeklyRunDays = sortedDays.count
         profile.preferredRunDayIndices = sortedDays
         profile.currentEstimated5KTimeSeconds = fiveKTimeSeconds
+        profile.selectedEquipment = Array(selectedEquipment)
+        profile.strengthFocus = strengthFocus
         profile.updatedAt = Date()
 
         // Remove existing plans so there is only ever one plan per user.

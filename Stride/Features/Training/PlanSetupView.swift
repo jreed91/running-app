@@ -26,6 +26,8 @@ struct PlanSetupView: View {
     @State private var goalRace: RaceType = .fiveK
     @State private var fitnessLevel: FitnessLevel = .beginner
     @State private var selectedDays: Set<Int> = [0, 2, 4, 5] // Mon Wed Fri Sat
+    @State private var selectedEquipment: Set<StrengthEquipment> = []
+    @State private var strengthFocus: StrengthFocus = .runningSpecific
 
     private var profile: UserProfile? { profiles.first }
 
@@ -59,6 +61,7 @@ struct PlanSetupView: View {
                 runDaysSection
                 planLengthSection
                 startDateSection
+                strengthSection
             }
             .navigationTitle("New Plan")
             .navigationBarTitleDisplayMode(.inline)
@@ -157,6 +160,25 @@ struct PlanSetupView: View {
         }
     }
 
+    private var strengthSection: some View {
+        Section {
+            OBEquipmentGrid(selectedEquipment: $selectedEquipment)
+                .listRowInsets(EdgeInsets(top: 12, leading: 0, bottom: 12, trailing: 0))
+                .listRowBackground(Color.clear)
+            if !selectedEquipment.isEmpty {
+                OBStrengthFocusPicker(focus: $strengthFocus)
+                    .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 12, trailing: 0))
+                    .listRowBackground(Color.clear)
+            }
+        } header: {
+            Text("Strength Training")
+        } footer: {
+            if selectedEquipment.isEmpty {
+                Text("Select equipment to add strength sessions on your off days.")
+            }
+        }
+    }
+
     // MARK: - Helpers
 
     private var minEndDate: Date { startDate.adding(weeks: weekRange.lowerBound) }
@@ -171,6 +193,8 @@ struct PlanSetupView: View {
         } else {
             selectedDays = defaultDays(for: profile.weeklyRunDays)
         }
+        selectedEquipment = Set(profile.selectedEquipment)
+        strengthFocus = profile.strengthFocus
         clampWeeks()
     }
 
@@ -205,6 +229,8 @@ struct PlanSetupView: View {
         profile.fitnessLevel = fitnessLevel
         profile.weeklyRunDays = selectedDays.count
         profile.preferredRunDayIndices = sortedSelectedDays
+        profile.selectedEquipment = Array(selectedEquipment)
+        profile.strengthFocus = strengthFocus
         profile.updatedAt = Date()
 
         // Remove existing plans so there is only ever one plan per user.
