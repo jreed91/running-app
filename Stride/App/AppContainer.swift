@@ -372,16 +372,15 @@ final class AppContainer: ObservableObject {
         let startOfToday = Calendar.current.startOfDay(for: Date())
         let hasFixedRace = plan.raceDate != nil
 
-        let toShift = (plan.weeks ?? [])
-            .flatMap { $0.workouts ?? [] }
-            .filter {
-                !$0.isCompleted
-                    && $0.workoutType != .rest
-                    && $0.workoutType != .strength
-                    && $0.workoutType != .crossTraining
-                    && !(hasFixedRace && $0.workoutType == .race)
-                    && $0.scheduledDate >= startOfToday
-            }
+        let allWorkouts: [ScheduledWorkout] = (plan.weeks ?? []).flatMap { $0.workouts ?? [] }
+        let toShift: [ScheduledWorkout] = allWorkouts.filter { w in
+            guard !w.isCompleted else { return false }
+            guard w.scheduledDate >= startOfToday else { return false }
+            let type = w.workoutType
+            if type == .rest || type == .strength || type == .crossTraining { return false }
+            if hasFixedRace && type == .race { return false }
+            return true
+        }
 
         for workout in toShift {
             workout.scheduledDate = Calendar.current.date(
