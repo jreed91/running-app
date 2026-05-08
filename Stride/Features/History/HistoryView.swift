@@ -163,11 +163,24 @@ struct HistoryView: View {
             }
 
             let existingStrengthIDs = Set(allStrengthWorkouts.compactMap(\.healthKitWorkoutID))
-            let newStrengthWorkouts = try await repo.fetchImportableStrengthWorkouts(
+            let hkStrengthWorkouts = try await repo.fetchImportableStrengthWorkouts(
                 from: cutoff, to: Date(), existingIDs: existingStrengthIDs
             )
-            for workout in newStrengthWorkouts { context.insert(workout) }
-            if !newStrengthWorkouts.isEmpty { try context.save() }
+            var unlinked = allStrengthWorkouts.filter { $0.healthKitWorkoutID == nil }
+            var toInsert: [StrengthWorkout] = []
+            for hkWorkout in hkStrengthWorkouts {
+                let hkDay = Calendar.current.startOfDay(for: hkWorkout.date)
+                if let idx = unlinked.firstIndex(where: {
+                    Calendar.current.startOfDay(for: $0.date) == hkDay
+                }) {
+                    unlinked[idx].healthKitWorkoutID = hkWorkout.healthKitWorkoutID
+                    unlinked.remove(at: idx)
+                } else {
+                    toInsert.append(hkWorkout)
+                }
+            }
+            for workout in toInsert { context.insert(workout) }
+            if !hkStrengthWorkouts.isEmpty { try context.save() }
         } catch {
             // Silent failure — background sync shouldn't interrupt the user
         }
