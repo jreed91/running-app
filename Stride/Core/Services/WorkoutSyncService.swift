@@ -280,9 +280,10 @@ final class WorkoutSyncService {
     // MARK: - Strength workout sync
 
     private func syncStrengthWorkouts(source: String, lookbackCutoff: Date) async {
+        let stored: [StrengthWorkout]
         let existingIDs: Set<String>
         do {
-            let stored = try context.fetch(FetchDescriptor<StrengthWorkout>())
+            stored = try context.fetch(FetchDescriptor<StrengthWorkout>())
             existingIDs = Set(stored.compactMap(\.healthKitWorkoutID))
         } catch {
             AppLogger.log(
@@ -293,9 +294,9 @@ final class WorkoutSyncService {
             return
         }
 
-        let newWorkouts: [StrengthWorkout]
+        let hkWorkouts: [StrengthWorkout]
         do {
-            newWorkouts = try await healthKitRepository.fetchImportableStrengthWorkouts(
+            hkWorkouts = try await healthKitRepository.fetchImportableStrengthWorkouts(
                 from: lookbackCutoff,
                 to: Date(),
                 existingIDs: existingIDs
@@ -309,13 +310,30 @@ final class WorkoutSyncService {
             return
         }
 
-        guard !newWorkouts.isEmpty else { return }
+        guard !hkWorkouts.isEmpty else { return }
 
-        for workout in newWorkouts { context.insert(workout) }
-        linkStrengthToScheduledWorkouts(newWorkouts)
+        // Merge: if an in-app StrengthWorkout exists on the same day without a HK ID,
+        // stamp the HK UUID onto it instead of creating a duplicate record.
+        var unlinked = stored.filter { $0.healthKitWorkoutID == nil }
+        var toInsert: [StrengthWorkout] = []
+        let calendar = Calendar.current
+        for hkWorkout in hkWorkouts {
+            let hkDay = calendar.startOfDay(for: hkWorkout.date)
+            if let idx = unlinked.firstIndex(where: {
+                calendar.startOfDay(for: $0.date) == hkDay
+            }) {
+                unlinked[idx].healthKitWorkoutID = hkWorkout.healthKitWorkoutID
+                unlinked.remove(at: idx)
+            } else {
+                toInsert.append(hkWorkout)
+            }
+        }
+
+        for workout in toInsert { context.insert(workout) }
+        linkStrengthToScheduledWorkouts(toInsert)
         try? context.save()
         AppLogger.log(
-            "Imported \(newWorkouts.count) HealthKit strength workout(s) during \(source) sync.",
+            "Strength sync (\(source)): merged=\(hkWorkouts.count - toInsert.count), inserted=\(toInsert.count).",
             label: "HealthKit",
             level: .info
         )
