@@ -25,16 +25,17 @@ struct MissedWorkoutDetector {
     func detect(in plan: TrainingPlan, today: Date = .now) -> MissedWorkoutInfo? {
         let startOfToday = Calendar.current.startOfDay(for: today)
 
-        // All past non-rest/strength/crossTraining workouts sorted ascending.
-        let allPastNonRest = (plan.weeks ?? [])
-            .flatMap { $0.workouts ?? [] }
-            .filter {
-                $0.scheduledDate < startOfToday
-                    && $0.workoutType != .rest
-                    && $0.workoutType != .strength
-                    && $0.workoutType != .crossTraining
-            }
-            .sorted { $0.scheduledDate < $1.scheduledDate }
+        // Flatten all workouts from the plan's weeks.
+        let allWorkouts: [ScheduledWorkout] = (plan.weeks ?? []).flatMap { $0.workouts ?? [] }
+
+        // Keep only past non-rest/strength/crossTraining workouts, sorted ascending.
+        let candidates: [ScheduledWorkout] = allWorkouts.filter { w in
+            w.scheduledDate < startOfToday
+                && w.workoutType != .rest
+                && w.workoutType != .strength
+                && w.workoutType != .crossTraining
+        }
+        let allPastNonRest: [ScheduledWorkout] = candidates.sorted { $0.scheduledDate < $1.scheduledDate }
 
         // Walk backward to find the trailing consecutive missed streak.
         // Stop at the first completed workout — any completed workout resets the streak.
