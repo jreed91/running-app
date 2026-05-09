@@ -69,12 +69,12 @@ struct HealthKitImportView: View {
             case .done(let imported, let skipped):
                 VStack(alignment: .leading, spacing: 6) {
                     if imported == 0 {
-                        Label("Already up to date", systemImage: "checkmark.circle")
+                        Label("Already up to date", strideIcon: .check)
                             .foregroundStyle(.secondary)
                     } else {
                         Label(
                             "\(imported) workout\(imported == 1 ? "" : "s") imported",
-                            systemImage: "checkmark.circle.fill"
+                            strideIcon: .check
                         )
                         .foregroundStyle(Color.success)
                     }
@@ -90,7 +90,7 @@ struct HealthKitImportView: View {
 
             case .failed(let message):
                 VStack(alignment: .leading, spacing: 6) {
-                    Label("Import failed", systemImage: "exclamationmark.triangle.fill")
+                    Label("Import failed", strideIcon: .exclamation)
                         .foregroundStyle(Color.destructive)
                     Text(message)
                         .font(.caption)

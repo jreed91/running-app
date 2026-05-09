@@ -5,23 +5,23 @@ struct MainTabView: View {
         TabView {
             DashboardView()
                 .tabItem {
-                    Label("Home", systemImage: "house.fill")
+                    Label("Home", strideIcon: .home)
                 }
             PlanTabView()
                 .tabItem {
-                    Label("Plan", systemImage: "calendar")
+                    Label("Plan", strideIcon: .calendar)
                 }
             HistoryView()
                 .tabItem {
-                    Label("History", systemImage: "clock.arrow.circlepath")
+                    Label("History", strideIcon: .history)
                 }
             ProgressDashboardView()
                 .tabItem {
-                    Label("Progress", systemImage: "chart.line.uptrend.xyaxis")
+                    Label("Progress", strideIcon: .chart)
                 }
             SettingsView()
                 .tabItem {
-                    Label("Settings", systemImage: "gear")
+                    Label("Settings", strideIcon: .gear)
                 }
         }
         .tint(.brand)

@@ -150,8 +150,8 @@ enum RouteType: String, Codable, CaseIterable, Sendable {
 
     var strideIcon: StrideIconName {
         switch self {
-        case .loop:       return .run
-        case .outAndBack: return .ruler
+        case .loop:       return .routeLoop
+        case .outAndBack: return .routeOutAndBack
         }
     }
 }
@@ -168,6 +168,13 @@ enum WorkoutLocation: String, Codable, CaseIterable, Sendable {
         switch self {
         case .outdoor: return "figure.run"
         case .indoor:  return "house.fill"
+        }
+    }
+
+    var strideIcon: StrideIconName {
+        switch self {
+        case .outdoor: return .run
+        case .indoor:  return .indoor
         }
     }
 }
@@ -249,6 +256,17 @@ enum StrengthEquipment: String, Codable, CaseIterable, Sendable {
         case .pullUpBar:       return "minus.rectangle.fill"
         case .kettlebell:      return "drop.fill"
         case .barbell:         return "line.horizontal.3"
+        }
+    }
+
+    var strideIcon: StrideIconName {
+        switch self {
+        case .bodyweight:      return .run
+        case .dumbbells:       return .dumbbell
+        case .resistanceBands: return .link
+        case .pullUpBar:       return .minus
+        case .kettlebell:      return .humidity
+        case .barbell:         return .barbell
         }
     }
 }

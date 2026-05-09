@@ -227,8 +227,11 @@ struct WorkoutDetailView: View {
                         if isSyncingLocation && workout.workoutLocation == location {
                             ProgressView().controlSize(.mini)
                         } else {
-                            Image(systemName: location.systemImage)
-                                .font(.system(size: 12, weight: .semibold))
+                            StrideIcon(
+                                name: location.strideIcon,
+                                size: 12,
+                                color: workout.workoutLocation == location ? workout.workoutType.color : .secondary
+                            )
                         }
                         Text(location.displayName)
                             .font(.system(size: 13, weight: .semibold))
@@ -320,8 +323,7 @@ struct WorkoutDetailView: View {
             Text("EXERCISES").font(.sectionHeader).foregroundStyle(.secondary)
             // Summary chip
             HStack(spacing: 6) {
-                Image(systemName: "clock")
-                    .font(.system(size: 11))
+                StrideIcon(name: .timer, size: 11, color: .secondary)
                 Text("\(plan.estimatedDurationMinutes) min")
                     .font(.system(size: 12, weight: .semibold))
             }

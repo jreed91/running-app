@@ -14,6 +14,13 @@ enum StartMode: String, CaseIterable, Sendable {
         case .address:         return "magnifyingglass"
         }
     }
+
+    var strideIcon: StrideIconName {
+        switch self {
+        case .currentLocation: return .location
+        case .address:         return .search
+        }
+    }
 }
 
 // MARK: - RouteGeniusViewModel

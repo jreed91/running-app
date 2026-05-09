@@ -48,9 +48,12 @@ struct MedalsView: View {
         .overlay {
             if workouts.isEmpty {
                 ContentUnavailableView(
-                    "No runs yet",
-                    systemImage: "medal",
-                    description: Text("Complete your first run to start earning medals.")
+                    label: {
+                        Label("No runs yet", strideIcon: .medal)
+                    },
+                    description: {
+                        Text("Complete your first run to start earning medals.")
+                    }
                 )
             }
         }
@@ -88,9 +91,11 @@ struct MedalsView: View {
 
     private func medalCard(_ bucket: MedalBucket) -> some View {
         HStack(spacing: AppSpacing.lg) {
-            Image(systemName: "medal.fill")
-                .font(.system(size: 34))
-                .foregroundStyle(bucket.bestRun != nil ? Color.warning : Color.secondary.opacity(0.25))
+            StrideIcon(
+                name: .medal,
+                size: 34,
+                color: bucket.bestRun != nil ? Color.warning : Color.secondary.opacity(0.25)
+            )
                 .frame(width: 44)
 
             VStack(alignment: .leading, spacing: 3) {

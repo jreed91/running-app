@@ -78,9 +78,12 @@ struct HistoryView: View {
             .overlay {
                 if allRunWorkouts.isEmpty && allStrengthWorkouts.isEmpty && !isSyncing {
                     ContentUnavailableView(
-                        "No workouts yet",
-                        systemImage: "figure.run.circle",
-                        description: Text("Start a workout or sync from Apple Health.")
+                        label: {
+                            Label("No workouts yet", strideIcon: .run)
+                        },
+                        description: {
+                            Text("Start a workout or sync from Apple Health.")
+                        }
                     )
                 }
             }
@@ -215,9 +218,7 @@ struct WorkoutRowView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     if workout.scheduledWorkout != nil {
-                        Image(systemName: "link")
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(.brand)
+                        StrideIcon(name: .link, size: 9, color: .brand)
                     }
                 }
             }
@@ -234,8 +235,7 @@ struct WorkoutRowView: View {
                     .foregroundStyle(.secondary)
                 if let w = workout.weather {
                     HStack(spacing: 3) {
-                        Image(systemName: w.conditionSymbol)
-                            .symbolRenderingMode(.multicolor)
+                        StrideIcon(name: StrideIconName(weatherSymbol: w.conditionSymbol), size: 11, color: .secondary)
                         Text(w.temperatureString(unit: appSettings.unitPreference))
                     }
                     .font(.system(size: 11, weight: .medium))
@@ -279,14 +279,10 @@ struct StrengthWorkoutRowView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     if workout.scheduledWorkout != nil {
-                        Image(systemName: "link")
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(.brand)
+                        StrideIcon(name: .link, size: 9, color: .brand)
                     }
                     if workout.healthKitWorkoutID != nil {
-                        Image(systemName: "heart.fill")
-                            .font(.system(size: 9))
-                            .foregroundStyle(.red)
+                        StrideIcon(name: .heart, size: 9, color: .red)
                     }
                 }
             }
