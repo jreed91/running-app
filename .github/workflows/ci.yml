@@ -23,12 +23,33 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install SwiftLint
         run: brew install swiftlint
 
       - name: Run SwiftLint
-        run: swiftlint lint --reporter github-actions-logging
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            git diff --name-only --diff-filter=ACMR \
+              "${{ github.event.pull_request.base.sha }}" \
+              "${{ github.event.pull_request.head.sha }}" \
+              -- '*.swift' > changed-swift-files.txt
+
+            if [[ ! -s changed-swift-files.txt ]]; then
+              echo "No Swift files changed; skipping SwiftLint."
+              exit 0
+            fi
+
+            status=0
+            while IFS= read -r file; do
+              swiftlint lint --path "$file" --reporter github-actions-logging || status=$?
+            done < changed-swift-files.txt
+            exit "$status"
+          fi
+
+          swiftlint lint --reporter github-actions-logging
 
   # ── Build & Test (iOS) ──────────────────────────────────────────────────────
   test-ios:
