@@ -103,6 +103,7 @@ jobs:
 
       - name: Build for testing
         run: |
+          set -o pipefail
           xcodebuild build-for-testing \
             -scheme "$SCHEME" \
             -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
@@ -112,6 +113,7 @@ jobs:
 
       - name: Run unit tests
         run: |
+          set -o pipefail
           xcodebuild test-without-building \
             -scheme "$SCHEME" \
             -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
@@ -123,6 +125,7 @@ jobs:
 
       - name: Run UI tests
         run: |
+          set -o pipefail
           xcodebuild test-without-building \
             -scheme "$SCHEME" \
             -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
@@ -175,6 +178,7 @@ jobs:
 
       - name: Archive (no signing)
         run: |
+          set -o pipefail
           xcodebuild archive \
             -scheme "$SCHEME" \
             -destination "generic/platform=iOS" \
