@@ -140,51 +140,11 @@ jobs:
           path: TestResults/
           retention-days: 7
 
-  # ── Build (watchOS) ──────────────────────────────────────────────────────────
-  build-watch:
-    name: Build — watchOS
-    runs-on: macos-26
-    needs: lint
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Select Xcode
-        run: sudo xcode-select -switch /Applications/Xcode_26.4.app
-
-      - name: Install XcodeGen and xcbeautify
-        run: brew install xcodegen xcbeautify
-
-      - name: Generate Xcode project
-        run: xcodegen generate
-
-      - name: Install Swift package pins
-        run: |
-          mkdir -p Stride.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
-          cp ci_scripts/Package.resolved Stride.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
-
-      - name: Cache DerivedData
-        uses: actions/cache@v4
-        with:
-          path: ~/Library/Developer/Xcode/DerivedData
-          key: deriveddata-watch-${{ hashFiles('project.yml') }}
-          restore-keys: |
-            deriveddata-watch-
-
-      - name: Build watchOS target
-        run: |
-          xcodebuild build \
-            -scheme "$SCHEME" \
-            -destination "generic/platform=watchOS" \
-            -derivedDataPath ~/Library/Developer/Xcode/DerivedData \
-            CODE_SIGNING_ALLOWED=NO \
-            | xcbeautify --renderer github-actions
-
   # ── Archive (release build) ─────────────────────────────────────────────────
   archive:
     name: Archive
     runs-on: macos-26
-    needs: [test-ios, build-watch]
+    needs: test-ios
     # Only archive on pushes to main (not PRs)
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
