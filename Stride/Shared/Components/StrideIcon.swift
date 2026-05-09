@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Pixel-art icon set drawn on a 24x24 grid.
 enum StrideIconName: String {
@@ -82,50 +83,10 @@ enum StrideIconName: String {
             self = .sun
         }
     }
-}
 
-private struct PixelBlock {
-    let x: CGFloat
-    let y: CGFloat
-    let width: CGFloat
-    let height: CGFloat
-
-    init(_ x: CGFloat, _ y: CGFloat, _ width: CGFloat, _ height: CGFloat) {
-        self.x = x
-        self.y = y
-        self.width = width
-        self.height = height
-    }
-
-    var rect: CGRect {
-        CGRect(x: x, y: y, width: width, height: height)
-    }
-}
-
-struct PixelIcon: View {
-    let name: StrideIconName
-    var size: CGFloat = 24
-    var color: Color = .primary
-
-    var body: some View {
-        Canvas(opaque: false, colorMode: .linear) { context, _ in
-            let unit = size / 24
-            for block in blocks(for: name) {
-                let rect = CGRect(
-                    x: block.x * unit,
-                    y: block.y * unit,
-                    width: block.width * unit,
-                    height: block.height * unit
-                )
-                context.fill(Path(rect), with: .color(color))
-            }
-        }
-        .frame(width: size, height: size)
-        .accessibilityHidden(true)
-    }
-
-    private func blocks(for name: StrideIconName) -> [PixelBlock] {
-        switch name {
+    // swiftlint:disable function_body_length
+    var pixels: [PixelBlock] {
+        switch self {
         case .run:
             return [
                 .init(13, 2, 4, 4), .init(11, 7, 5, 3), .init(9, 10, 4, 3),
@@ -415,6 +376,67 @@ struct PixelIcon: View {
                 .init(14, 7, 3, 3), .init(7, 14, 3, 3), .init(14, 14, 3, 3)
             ]
         }
+    }
+    // swiftlint:enable function_body_length
+
+    func uiImage(size: CGFloat = 24) -> UIImage {
+        let format = UIGraphicsImageRendererFormat()
+        format.opaque = false
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size), format: format)
+        let image = renderer.image { _ in
+            UIColor.label.setFill()
+            let unit = size / 24
+            for block in pixels {
+                UIBezierPath(rect: CGRect(
+                    x: block.x * unit,
+                    y: block.y * unit,
+                    width: block.width * unit,
+                    height: block.height * unit
+                )).fill()
+            }
+        }
+        return image.withRenderingMode(.alwaysTemplate)
+    }
+}
+
+private struct PixelBlock {
+    let x: CGFloat
+    let y: CGFloat
+    let width: CGFloat
+    let height: CGFloat
+
+    init(_ x: CGFloat, _ y: CGFloat, _ width: CGFloat, _ height: CGFloat) {
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+    }
+
+    var rect: CGRect {
+        CGRect(x: x, y: y, width: width, height: height)
+    }
+}
+
+struct PixelIcon: View {
+    let name: StrideIconName
+    var size: CGFloat = 24
+    var color: Color = .primary
+
+    var body: some View {
+        Canvas(opaque: false, colorMode: .linear) { context, _ in
+            let unit = size / 24
+            for block in name.pixels {
+                let rect = CGRect(
+                    x: block.x * unit,
+                    y: block.y * unit,
+                    width: block.width * unit,
+                    height: block.height * unit
+                )
+                context.fill(Path(rect), with: .color(color))
+            }
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
     }
 }
 
