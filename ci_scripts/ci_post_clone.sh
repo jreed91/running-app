@@ -14,7 +14,7 @@ git -C "$CI_PRIMARY_REPOSITORY_PATH" fetch --unshallow --tags 2>/dev/null \
     || echo "Warning: could not fetch full history; release notes may be incomplete."
 
 echo "--- Installing XcodeGen ---"
-brew install xcodegen
+HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1 brew install xcodegen
 
 echo "--- Generating Xcode project from project.yml ---"
 cd "$CI_PRIMARY_REPOSITORY_PATH"
