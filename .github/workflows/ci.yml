@@ -112,8 +112,11 @@ jobs:
             | xcbeautify --renderer github-actions
 
       - name: Run unit tests
+        continue-on-error: true
         run: |
+          mkdir -p TestResults
           set -o pipefail
+          set +e
           xcodebuild test-without-building \
             -scheme "$SCHEME" \
             -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
@@ -122,10 +125,16 @@ jobs:
             -resultBundlePath TestResults/unit.xcresult \
             CODE_SIGNING_ALLOWED=NO \
             | xcbeautify --renderer github-actions
+          status=$?
+          echo "$status" > TestResults/unit.exit
+          exit "$status"
 
       - name: Run UI tests
+        continue-on-error: true
         run: |
+          mkdir -p TestResults
           set -o pipefail
+          set +e
           xcodebuild test-without-building \
             -scheme "$SCHEME" \
             -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
@@ -134,6 +143,9 @@ jobs:
             -resultBundlePath TestResults/ui.xcresult \
             CODE_SIGNING_ALLOWED=NO \
             | xcbeautify --renderer github-actions
+          status=$?
+          echo "$status" > TestResults/ui.exit
+          exit "$status"
 
       - name: Upload test results
         if: always()
@@ -142,6 +154,17 @@ jobs:
           name: test-results-ios
           path: TestResults/
           retention-days: 7
+
+      - name: Fail if tests failed
+        if: always()
+        run: |
+          unit_status=$(cat TestResults/unit.exit 2>/dev/null || echo 1)
+          ui_status=$(cat TestResults/ui.exit 2>/dev/null || echo 1)
+
+          if [[ "$unit_status" != "0" || "$ui_status" != "0" ]]; then
+            echo "::error::Unit tests exited with $unit_status; UI tests exited with $ui_status."
+            exit 1
+          fi
 
   # ── Archive (release build) ─────────────────────────────────────────────────
   archive:
