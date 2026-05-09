@@ -35,9 +35,9 @@ enum PaceZone: String {
     var strideIcon: StrideIconName {
         switch self {
         case .recovery:  return .tortoise
-        case .easy:      return .shoe
-        case .marathon:  return .road
-        case .tempo:     return .flame
+        case .easy:      return .walk
+        case .marathon:  return .run
+        case .tempo:     return .tempo
         case .interval:  return .bolt
         case .maxEffort: return .flame
         }

@@ -117,7 +117,7 @@ struct RunSummaryView: View {
                 Button {
                     dismiss()
                 } label: {
-                    StrideIcon(name: .close, size: 18)
+                    Image(systemName: "xmark")
                 }
                 .accessibilityLabel("Close")
             }
@@ -125,7 +125,7 @@ struct RunSummaryView: View {
                 Button(role: .destructive) {
                     showDeleteConfirmation = true
                 } label: {
-                    StrideIcon(name: .trash, size: 18, color: .destructive)
+                    Image(systemName: "trash")
                 }
                 .accessibilityLabel("Delete workout")
             }
@@ -167,12 +167,16 @@ struct RunSummaryView: View {
             showAssociateSheet = true
         } label: {
             HStack(spacing: 10) {
-                StrideIcon(name: .link, size: 14, color: .brand)
+                Image(systemName: "link")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.brand)
                 Text("Link to a planned workout")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.brand)
                 Spacer()
-                StrideIcon(name: .chevronRight, size: 11, color: .secondary)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
@@ -250,7 +254,7 @@ struct RunSummaryView: View {
                     .fill(.surfaceSecondary)
                     .frame(height: 180)
                     .overlay {
-                        Label("No route data", strideIcon: .map, color: .secondary)
+                        Label("No route data", systemImage: "map")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
                     }
@@ -380,11 +384,8 @@ struct RunSummaryView: View {
                     let delta = prev - insights.achievedPaceSecondsPerKm
                     let isNew = delta > 1
                     HStack(spacing: 4) {
-                        StrideIcon(
-                            name: isNew ? .arrowUp : (delta < -1 ? .arrowDown : .minus),
-                            size: 10,
-                            color: isNew ? Color.success : (delta < -1 ? Color.destructive : Color.secondary)
-                        )
+                        Image(systemName: isNew ? "arrow.up.circle.fill" : (delta < -1 ? "arrow.down.circle.fill" : "minus.circle.fill"))
+                            .font(.system(size: 10))
                         Text(isNew
                              ? "New best"
                              : (delta < -1
@@ -425,7 +426,7 @@ struct RunSummaryView: View {
             }
         }()
         return HStack(spacing: 4) {
-            StrideIcon(name: iconName(forSystemImage: icon), size: 10, color: color)
+            Image(systemName: icon).font(.system(size: 10, weight: .bold))
             Text(label).font(.system(size: 11, weight: .bold))
         }
         .foregroundStyle(color)
@@ -514,7 +515,9 @@ struct RunSummaryView: View {
                 HStack(spacing: 0) {
                     // Icon + condition description
                     VStack(spacing: 6) {
-                        StrideIcon(name: StrideIconName(weatherSymbol: w.conditionSymbol), size: 32, color: .brand)
+                        Image(systemName: w.conditionSymbol)
+                            .font(.system(size: 32))
+                            .symbolRenderingMode(.multicolor)
                         Text(w.conditionDescription)
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -538,8 +541,8 @@ struct RunSummaryView: View {
 
                     // Humidity + wind
                     VStack(alignment: .leading, spacing: 8) {
-                        Label("\(Int(w.humidityPercent))%", strideIcon: .humidity, size: 12, color: .secondary)
-                        Label(w.windString(unit: appSettings.unitPreference), strideIcon: .wind, size: 12, color: .secondary)
+                        Label("\(Int(w.humidityPercent))%", systemImage: "humidity")
+                        Label(w.windString(unit: appSettings.unitPreference), systemImage: "wind")
                     }
                     .font(.caption)
                     .frame(maxWidth: .infinity)
@@ -789,11 +792,9 @@ struct RunSummaryView: View {
                 aiReaction = aiReaction == reaction ? nil : reaction
             }
         } label: {
-            StrideIcon(
-                name: reaction == .up ? .thumbsUp : .thumbsDown,
-                size: 18,
-                color: aiReaction == reaction ? Color.brand : Color.secondary
-            )
+            Image(systemName: reaction == .up ? "hand.thumbsup" : "hand.thumbsdown")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(aiReaction == reaction ? Color.brand : Color.secondary)
                 .frame(width: 48, height: 48)
                 .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
         }
@@ -923,7 +924,9 @@ struct RunSummaryView: View {
 
         var body: some View {
             HStack(alignment: .top, spacing: 10) {
-                StrideIcon(name: .check, size: 14, color: priorityColor)
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(priorityColor)
+                    .font(.caption)
                     .padding(.top, 2)
 
                 VStack(alignment: .leading, spacing: 4) {
@@ -1305,7 +1308,9 @@ struct RunSummaryView: View {
                     Circle()
                         .fill(Color.warning)
                         .frame(width: 24, height: 24)
-                    StrideIcon(name: .exclamation, size: 12, color: .white)
+                    Image(systemName: "exclamationmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(.white)
                 }
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Effort higher than expected")
@@ -1327,7 +1332,8 @@ struct RunSummaryView: View {
 
     private func plannedChip(icon: String, text: String) -> some View {
         HStack(spacing: 5) {
-            StrideIcon(name: iconName(forSystemImage: icon), size: 10, color: .secondary)
+            Image(systemName: icon)
+                .font(.system(size: 10, weight: .semibold))
             Text(text)
                 .font(.system(size: 12, weight: .semibold))
         }
@@ -1335,37 +1341,6 @@ struct RunSummaryView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
         .background(.surfaceTertiary, in: Capsule())
-    }
-
-    private func iconName(forSystemImage systemImage: String) -> StrideIconName {
-        switch systemImage {
-        case "arrow.up.circle.fill", "arrow.up":
-            return .arrowUp
-        case "arrow.down.circle.fill", "arrow.down":
-            return .arrowDown
-        case "minus.circle.fill", "minus":
-            return .minus
-        case "checkmark.circle.fill", "checkmark.circle", "checkmark":
-            return .check
-        case "exclamationmark.circle.fill", "exclamationmark", "exclamationmark.triangle.fill":
-            return .exclamation
-        case "bolt.fill", "bolt":
-            return .bolt
-        case "tortoise.fill", "tortoise":
-            return .tortoise
-        case "clock":
-            return .timer
-        case "figure.run":
-            return .run
-        case "map":
-            return .map
-        case "heart.fill":
-            return .heart
-        case "link":
-            return .link
-        default:
-            return .flag
-        }
     }
 
     private func planComparisonRow(label: String, planned: String, actual: String, status: PaceStatus) -> some View {
@@ -1378,14 +1353,17 @@ struct RunSummaryView: View {
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-            StrideIcon(name: .arrowRight, size: 9, color: Color.secondary.opacity(0.55))
+            Image(systemName: "arrow.right")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.tertiary)
             Text(actual)
                 .font(.system(size: 12, weight: .bold, design: .monospaced))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
             Spacer(minLength: 4)
             HStack(spacing: 4) {
-                StrideIcon(name: iconName(forSystemImage: status.icon), size: 10, color: status.color)
+                Image(systemName: status.icon)
+                    .font(.system(size: 10, weight: .bold))
                 Text(status.label)
                     .font(.system(size: 11, weight: .bold))
             }

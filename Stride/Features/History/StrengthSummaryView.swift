@@ -134,7 +134,8 @@ struct StrengthSummaryView: View {
                     .foregroundStyle(.secondary)
                 Spacer()
                 HStack(spacing: 4) {
-                    StrideIcon(name: .timer, size: 11, color: .secondary)
+                    Image(systemName: "clock")
+                        .font(.system(size: 11))
                     Text("\(plan.estimatedDurationMinutes) min")
                         .font(.system(size: 12, weight: .semibold))
                 }
@@ -155,10 +156,12 @@ struct StrengthSummaryView: View {
     private var sourceRow: some View {
         HStack(spacing: 8) {
             if workout.healthKitWorkoutID != nil {
-                StrideIcon(name: .heart, size: 14, color: .red)
+                Image(systemName: "heart.fill")
+                    .foregroundStyle(.red)
                 Text("Synced from Apple Health")
             } else {
-                StrideIcon(name: .seal, size: 14, color: WorkoutType.strength.color)
+                Image(systemName: "checkmark.seal.fill")
+                    .foregroundStyle(WorkoutType.strength.color)
                 Text("Logged in Stride")
             }
         }

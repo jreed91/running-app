@@ -5,43 +5,23 @@ struct MainTabView: View {
         TabView {
             DashboardView()
                 .tabItem {
-                    Label {
-                        Text("Home")
-                    } icon: {
-                        Image(uiImage: StrideIconName.home.uiImage())
-                    }
+                    Label("Home", systemImage: "house.fill")
                 }
             PlanTabView()
                 .tabItem {
-                    Label {
-                        Text("Plan")
-                    } icon: {
-                        Image(uiImage: StrideIconName.calendar.uiImage())
-                    }
+                    Label("Plan", systemImage: "calendar")
                 }
             HistoryView()
                 .tabItem {
-                    Label {
-                        Text("History")
-                    } icon: {
-                        Image(uiImage: StrideIconName.history.uiImage())
-                    }
+                    Label("History", systemImage: "clock.arrow.circlepath")
                 }
             ProgressDashboardView()
                 .tabItem {
-                    Label {
-                        Text("Progress")
-                    } icon: {
-                        Image(uiImage: StrideIconName.chart.uiImage())
-                    }
+                    Label("Progress", systemImage: "chart.line.uptrend.xyaxis")
                 }
             SettingsView()
                 .tabItem {
-                    Label {
-                        Text("Settings")
-                    } icon: {
-                        Image(uiImage: StrideIconName.gear.uiImage())
-                    }
+                    Label("Settings", systemImage: "gear")
                 }
         }
         .tint(.brand)

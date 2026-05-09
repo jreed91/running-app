@@ -1239,7 +1239,9 @@ struct OBEquipmentCard: View {
                 labelView
                 Spacer()
                 if isSelected {
-                    StrideIcon(name: .check, size: 16, color: .brand)
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(Color.brand)
                 }
             }
             .padding(.horizontal, 14)
@@ -1254,8 +1256,10 @@ struct OBEquipmentCard: View {
     }
 
     private var iconView: some View {
-        StrideIcon(name: equipment.strideIcon, size: 18, color: isSelected ? Color.brand : Color.secondary)
+        Image(systemName: equipment.systemImage)
+            .font(.system(size: 18, weight: .medium))
             .frame(width: 28)
+            .foregroundStyle(isSelected ? Color.brand : Color.secondary)
     }
 
     private var labelView: some View {
