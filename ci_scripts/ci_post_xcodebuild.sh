@@ -20,26 +20,15 @@ echo "--- Generating TestFlight 'What to Test' notes ---"
 
 cd "$CI_PRIMARY_REPOSITORY_PATH"
 
-# ── Determine commit range ───────────────────────────────────────────────────
-LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-
-if [ -n "$LAST_TAG" ]; then
-    RANGE="${LAST_TAG}..HEAD"
-    echo "Commits since tag: $LAST_TAG"
-else
-    RANGE="HEAD~20..HEAD"
-    echo "No tags found; using last 20 commits."
-fi
-
 # ── Build the notes ──────────────────────────────────────────────────────────
-COMMITS=$(git log "$RANGE" --pretty=format:"• %s" --no-merges 2>/dev/null || echo "")
-[ -z "$COMMITS" ] && COMMITS="• Build ${CI_BUILD_NUMBER:-local}"
+LAST_COMMIT=$(git log -1 --pretty=format:"• %s" 2>/dev/null || echo "")
+[ -z "$LAST_COMMIT" ] && LAST_COMMIT="• Build ${CI_BUILD_NUMBER:-local}"
 
 NOTES="Build ${CI_BUILD_NUMBER:-local} (${CI_BRANCH:-unknown})
 
 Testing instructions:
 Verify the changes from these commits:
-${COMMITS}"
+${LAST_COMMIT}"
 
 # ── Write to the file Xcode Cloud reads for TestFlight notes ─────────────────
 mkdir -p TestFlight
