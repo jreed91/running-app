@@ -88,9 +88,7 @@ struct StrengthActiveView: View {
     private var headerBar: some View {
         HStack {
             Button { showFinishConfirmation = true } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                StrideIcon(name: .close, size: 16, color: .secondary)
             }
             .padding(10)
             .background(.surfaceSecondary, in: Circle())
@@ -168,9 +166,7 @@ struct StrengthActiveView: View {
                     Circle()
                         .fill(Color.brand.opacity(0.12))
                         .frame(width: 52, height: 52)
-                    Image(systemName: "figure.strengthtraining.traditional")
-                        .font(.system(size: 24))
-                        .foregroundStyle(Color.brand)
+                    StrideIcon(name: .barbell, size: 24, color: .brand)
                 }
             }
 
@@ -327,9 +323,7 @@ struct StrengthActiveView: View {
                     .foregroundStyle(.secondary)
                 ForEach(Array(setsForCurrentExercise.enumerated()), id: \.offset) { _, set in
                     HStack {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(Color.brand)
-                            .font(.system(size: 14))
+                        StrideIcon(name: .check, size: 14, color: .brand)
                         Text("Set \(set.setIndex + 1)")
                             .font(.system(size: 14))
                         Spacer()
@@ -357,9 +351,7 @@ struct StrengthActiveView: View {
     private var workoutCompleteView: some View {
         VStack(spacing: 20) {
             Spacer()
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 64))
-                .foregroundStyle(Color.brand)
+            StrideIcon(name: .check, size: 64, color: .brand)
             Text("All exercises done!")
                 .font(.system(size: 22, weight: .bold))
             Text("Tap Finish to save your workout.")

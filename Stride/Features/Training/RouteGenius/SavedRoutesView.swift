@@ -13,9 +13,12 @@ struct SavedRoutesView: View {
         Group {
             if viewModel.savedRoutes.isEmpty {
                 ContentUnavailableView(
-                    "No Saved Routes",
-                    systemImage: "map",
-                    description: Text("Generate and save a route to see it here.")
+                    label: {
+                        Label("No Saved Routes", strideIcon: .map)
+                    },
+                    description: {
+                        Text("Generate and save a route to see it here.")
+                    }
                 )
             } else {
                 List {
@@ -30,7 +33,7 @@ struct SavedRoutesView: View {
                                 routeToDelete = route
                                 showDeleteConfirm = true
                             } label: {
-                                Label("Delete", systemImage: "trash")
+                                Label("Delete", strideIcon: .trash)
                             }
                         }
                     }

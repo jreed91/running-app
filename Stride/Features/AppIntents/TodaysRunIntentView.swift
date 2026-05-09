@@ -10,9 +10,7 @@ struct TodaysRunIntentView: View {
                     Circle()
                         .fill(data.workoutType.color.opacity(0.15))
                         .frame(width: 52, height: 52)
-                    Image(systemName: data.workoutType.icon)
-                        .font(.title2)
-                        .foregroundStyle(data.workoutType.color)
+                    StrideIcon(name: data.workoutType.strideIcon, size: 24, color: data.workoutType.color)
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     Text(data.workoutType.displayName)
@@ -34,9 +32,7 @@ struct TodaysRunIntentView: View {
             .padding()
         } else {
             HStack(spacing: 12) {
-                Image(systemName: "figure.run")
-                    .font(.title2)
-                    .foregroundStyle(.secondary)
+                StrideIcon(name: .moon, size: 24, color: .secondary)
                 Text("Rest day — no run scheduled")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)

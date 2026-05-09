@@ -4,11 +4,11 @@ extension WorkoutType {
     /// Stride Design System icon for this workout type.
     var strideIcon: StrideIconName {
         switch self {
-        case .easy:          return .walk
-        case .tempo:         return .tempo
+        case .easy:          return .shoe
+        case .tempo:         return .flame
         case .interval:      return .bolt
-        case .longRun:       return .run
-        case .race:          return .trophy
+        case .longRun:       return .road
+        case .race:          return .flag
         case .rest:          return .moon
         case .crossTraining: return .dumbbell
         case .strength:      return .barbell

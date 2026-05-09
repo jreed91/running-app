@@ -28,7 +28,7 @@ struct TrainingPlanListView: View {
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button { showNewPlanSheet = true } label: {
-                        Label("New Plan", systemImage: "plus")
+                        Label("New Plan", strideIcon: .plus)
                     }
                     .disabled(profiles.isEmpty)
                 }
@@ -39,9 +39,12 @@ struct TrainingPlanListView: View {
             .overlay {
                 if plans.isEmpty {
                     ContentUnavailableView(
-                        "No training plan",
-                        systemImage: "calendar.badge.plus",
-                        description: Text("Tap + to generate a personalised plan.")
+                        label: {
+                            Label("No training plan", strideIcon: .calendar)
+                        },
+                        description: {
+                            Text("Tap + to generate a personalised plan.")
+                        }
                     )
                 }
             }

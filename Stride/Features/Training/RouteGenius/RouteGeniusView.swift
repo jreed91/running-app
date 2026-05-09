@@ -50,7 +50,7 @@ struct RouteGeniusView: View {
                     NavigationLink {
                         SavedRoutesView(viewModel: viewModel)
                     } label: {
-                        Label("Saved", systemImage: "bookmark.fill")
+                        Label("Saved", strideIcon: .bookmark)
                     }
                 }
             }
@@ -74,7 +74,7 @@ struct RouteGeniusView: View {
 
     private var distanceField: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("Distance", systemImage: "ruler")
+            Label("Distance", strideIcon: .ruler)
                 .font(.sectionHeader)
                 .foregroundStyle(.secondary)
 
@@ -96,7 +96,7 @@ struct RouteGeniusView: View {
 
     private var routeTypePicker: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("Route Type", systemImage: "arrow.triangle.2.circlepath")
+            Label("Route Type", strideIcon: .routeLoop)
                 .font(.sectionHeader)
                 .foregroundStyle(.secondary)
 
@@ -115,13 +115,13 @@ struct RouteGeniusView: View {
 
     private var startPointPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("Starting Point", systemImage: "mappin.and.ellipse")
+            Label("Starting Point", strideIcon: .location)
                 .font(.sectionHeader)
                 .foregroundStyle(.secondary)
 
             Picker("Start", selection: $viewModel.startMode) {
                 ForEach(StartMode.allCases, id: \.self) { mode in
-                    Label(mode.rawValue, systemImage: mode.systemImage).tag(mode)
+                    Label(mode.rawValue, strideIcon: mode.strideIcon).tag(mode)
                 }
             }
             .pickerStyle(.segmented)
@@ -140,7 +140,7 @@ struct RouteGeniusView: View {
     private var addressSearchField: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                StrideIcon(name: .search, size: 16, color: .secondary)
                 TextField("Search address…", text: $viewModel.addressQuery)
                     .autocorrectionDisabled()
                     .onSubmit { Task { await viewModel.searchAddress() } }
@@ -150,7 +150,7 @@ struct RouteGeniusView: View {
                         viewModel.addressResults = []
                         viewModel.selectedMapItem = nil
                     } label: {
-                        Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                        StrideIcon(name: .close, size: 16, color: .secondary)
                     }
                 }
             }
@@ -223,7 +223,7 @@ struct RouteGeniusView: View {
         } label: {
             Label(
                 viewModel.routeOptions.isEmpty ? "Generate Routes" : "Regenerate",
-                systemImage: viewModel.routeOptions.isEmpty ? "wand.and.stars" : "arrow.clockwise"
+                strideIcon: viewModel.routeOptions.isEmpty ? .wand : .routeLoop
             )
             .font(.bodyStrong)
             .frame(maxWidth: .infinity)
@@ -308,7 +308,7 @@ struct RouteGeniusView: View {
                 routeNameInput = ""
                 showSaveSheet = true
             } label: {
-                Label("Save This Route", systemImage: "bookmark")
+                Label("Save This Route", strideIcon: .bookmark)
                     .font(.bodyStrong)
                     .frame(maxWidth: .infinity)
                     .padding()
@@ -407,8 +407,8 @@ private struct RouteOptionCard: View {
 
                 // Stats
                 HStack(spacing: 16) {
-                    Label(viewModel.formattedDistance(route.distanceMeters), systemImage: "arrow.triangle.swap")
-                    Label(viewModel.formattedDuration(route.durationSeconds), systemImage: "clock")
+                    Label(viewModel.formattedDistance(route.distanceMeters), strideIcon: .ruler)
+                    Label(viewModel.formattedDuration(route.durationSeconds), strideIcon: .timer)
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
