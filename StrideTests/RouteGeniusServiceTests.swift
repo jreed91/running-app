@@ -3,6 +3,7 @@ import Foundation
 import CoreLocation
 @testable import Stride
 
+@Suite(.serialized)
 struct RouteGeniusServiceTests {
 
     @Test("Returns decoded routes for successful responses")

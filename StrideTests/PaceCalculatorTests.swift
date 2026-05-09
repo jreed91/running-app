@@ -7,16 +7,16 @@ struct PaceCalculatorTests {
 
     // MARK: VDOT derivation
 
-    @Test("VDOT from 20:00 5K is approximately 52")
+    @Test("VDOT from 20:00 5K is approximately 50")
     func vdotFrom20Min5K() {
         let vdot = PaceCalculatorService.vdot(distanceMeters: 5_000, timeSeconds: 20 * 60)
-        #expect((50...54).contains(Int(vdot)), "Expected ~52, got \(vdot)")
+        #expect((48...51).contains(Int(vdot)), "Expected ~50, got \(vdot)")
     }
 
-    @Test("VDOT from 25:00 5K is approximately 43")
+    @Test("VDOT from 25:00 5K is approximately 38")
     func vdotFrom25Min5K() {
         let vdot = PaceCalculatorService.vdot(distanceMeters: 5_000, timeSeconds: 25 * 60)
-        #expect((41...45).contains(Int(vdot)), "Expected ~43, got \(vdot)")
+        #expect((37...40).contains(Int(vdot)), "Expected ~38, got \(vdot)")
     }
 
     @Test("VDOT increases as race time decreases")

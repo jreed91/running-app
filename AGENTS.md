@@ -1,12 +1,15 @@
 # AGENTS.md
 
-This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+This file provides guidance to coding agents working in this repository.
 
 ## Purpose
 
-A fully native iOS app built with Swift that replicates the core functionality of the Runna app: tracking running workouts and generating adaptive training plans for **5K**, **Half Marathon**, and **Marathon** races.
+Stride is a fully native iOS running coach app built with Swift and SwiftUI. It tracks running and strength workouts, imports/syncs HealthKit workouts, generates adaptive training plans, records weather, and creates route options for:
 
----
+- Maintain Fitness
+- 5K
+- Half Marathon
+- Marathon
 
 ## Key Commands
 
@@ -14,120 +17,160 @@ A fully native iOS app built with Swift that replicates the core functionality o
 # Generate Xcode project from project.yml (required after editing project.yml)
 xcodegen generate
 
-# Run unit tests
+# Run unit and UI tests from the generated scheme
 xcodebuild test -scheme Stride -destination 'platform=iOS Simulator,name=iPhone 17'
 
-# Run a single test class
+# Run only unit tests
+xcodebuild test -scheme Stride -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:StrideTests
+
+# Run a single Swift Testing test class
 xcodebuild test -scheme Stride -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:StrideTests/PaceCalculatorTests
 
-# Build for release
+# Run UI tests
+xcodebuild test -scheme Stride -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:StrideUITests
+
+# Build for release/archive
 xcodebuild archive -scheme Stride -archivePath build/Stride.xcarchive
 ```
 
-> GPS and HealthKit features require a **physical device**. The simulator supports build/test for pure logic.
-
----
+GPS, HealthKit, WeatherKit, CloudKit, and background delivery behavior require device entitlements and may need a physical device. The simulator is suitable for pure logic tests and most UI flow checks.
 
 ## Project Configuration
 
-The Xcode project is generated from **`project.yml`** using [XcodeGen](https://github.com/yonaskolb/XcodeGen). Edit `project.yml` to add targets, files, capabilities, or build settings — do **not** hand-edit the `.xcodeproj`.
+The Xcode project is generated from `project.yml` using XcodeGen. Edit `project.yml` to add targets, files, capabilities, packages, or build settings. Do not hand-edit the generated `.xcodeproj`.
 
-- **iOS deployment target**: 26.0
-- **Swift**: 6.0 with `SWIFT_STRICT_CONCURRENCY: complete`
-- **No third-party dependencies** — 100% Apple frameworks
+- iOS deployment target: 26.0
+- Xcode version in config: 26.4
+- Swift: 6.0 with `SWIFT_STRICT_CONCURRENCY: complete`
+- App target: iPhone only
+- Bundle ID: `com.running.stride`
+- CloudKit container: `iCloud.com.running.stride`
+- Swift package dependency: Pulse (`Pulse`, `PulseProxy`, `PulseUI`) for diagnostics/log inspection
+- Apple frameworks/capabilities include SwiftUI, SwiftData, HealthKit, CloudKit, WeatherKit, CoreLocation, background location, Sign in with Apple, App Intents, and local notifications
 
----
+Route generation requires an OpenRouteService API key:
+
+1. Copy `Stride/Resources/Secrets.plist.example` to `Stride/Resources/Secrets.plist`.
+2. Set `ORSAPIKey` to your token.
 
 ## Architecture
 
-MVVM + Repository pattern:
+The app follows MVVM plus repository/service boundaries:
 
-```
+```text
 View (SwiftUI)
-  └── ViewModel (@Observable)
-        └── Repository (protocol)
-              ├── SwiftData store
-              └── HealthKit store
-        └── Service (pure Swift, injected)
+  -> ViewModel or view-local state (@Observable where used)
+      -> Repository protocol
+          -> SwiftData store
+          -> HealthKit store
+      -> Service (pure Swift where possible, injected from AppContainer)
 ```
 
-**`AppContainer`** (`Stride/App/AppContainer.swift`) is the single DI root, created once at launch and injected via SwiftUI's `Environment` as `.appContainer`. It owns the `ModelContainer`, all repositories, and all services.
+`AppContainer` (`Stride/App/AppContainer.swift`) is the dependency-injection root. It is created once at launch and injected through SwiftUI environment as `.appContainer`. It owns the `ModelContainer`, repositories, and long-lived services.
 
-Business logic (plan generation, pace calculations) lives in **Services** with no UI dependencies, keeping them unit-testable.
-
----
+Business logic belongs in services or repositories, not directly in SwiftUI views. Keep plan generation, pace math, route generation, workout sync, analytics, and migration behavior unit-testable.
 
 ## Key Directories
 
 | Path | Contents |
-|---|---|
-| `Stride/App/` | `@main` entry point, `AppContainer` (DI root) |
-| `Stride/Core/Models/` | SwiftData `@Model` classes, `Enums.swift`, `ValueTypes.swift` |
-| `Stride/Core/Repositories/` | SwiftData + HealthKit CRUD via protocols |
-| `Stride/Core/Services/` | `TrainingPlanService`, `PaceCalculatorService`, `WorkoutTrackerService`, `NotificationService`, `WorkoutAnalyticsService` |
-| `Stride/Features/` | One folder per screen: `Dashboard`, `Training`, `ActiveRun`, `History`, `Progress`, `Settings`, `Onboarding` |
-| `Stride/Shared/` | Reusable `Components/`, `Extensions/`, `Theme/` |
-| `StrideTests/` | Unit tests using **Swift Testing** (`@Test`, `#expect`) |
-
----
+| --- | --- |
+| `Stride/App/` | `@main` app entry point, `AppContainer`, UI testing support |
+| `Stride/Core/Models/` | SwiftData `@Model` classes, shared enums, codable value types |
+| `Stride/Core/Repositories/` | SwiftData and HealthKit CRUD behind protocols |
+| `Stride/Core/Services/` | Plan generation, pace math, workout tracking/sync, notifications, analytics, routes, weather, AI coach, migration, logging |
+| `Stride/Features/` | SwiftUI feature modules: Dashboard, Training, ActiveRun, ActiveStrength, History, Progress, Settings, Onboarding, AppIntents |
+| `Stride/Shared/` | Reusable components, extensions, icons, theme primitives |
+| `StrideTests/` | Unit tests using Swift Testing (`@Test`, `#expect`) |
+| `StrideUITests/` | UI tests using XCTest and `XCUIApplication` |
+| `ci_scripts/` | Xcode Cloud helper scripts |
 
 ## Core Domain Types
 
-**`Enums.swift`** — All shared enums:
-- `RaceType`: `.fiveK` | `.halfMarathon` | `.marathon`
-- `WorkoutType`: `.easy` | `.tempo` | `.interval` | `.longRun` | `.race` | `.rest` | `.crossTraining`
-- `TrainingPhase`: `.base` | `.build` | `.peak` | `.taper`
-- `FitnessLevel`: `.beginner` | `.intermediate` | `.advanced`
+`Stride/Core/Models/Enums.swift` contains shared enums:
 
-**`ValueTypes.swift`** — Codable value types used in models:
-- `Coordinate` — Sendable/Codable wrapper around `CLLocationCoordinate2D`
-- `Split` — Per-km split data
-- `WorkoutStructure` / `WorkoutSet` / `WorkoutSegment` — Structured interval workout representation, serialised as JSON in `ScheduledWorkout`
+- `RaceType`: `.maintainFitness`, `.fiveK`, `.halfMarathon`, `.marathon`
+- `FitnessLevel`: `.beginner`, `.intermediate`, `.advanced`
+- `WorkoutType`: `.easy`, `.tempo`, `.interval`, `.longRun`, `.race`, `.rest`, `.crossTraining`, `.strength`
+- `TrainingPhase`: `.base`, `.build`, `.peak`, `.taper`
+- `RouteType`: `.loop`, `.outAndBack`
+- `WorkoutLocation`: `.outdoor`, `.indoor`
+- `UnitPreference`: `.metric`, `.imperial`
+- `AIProvider`: `.openAI`, `.anthropic`
+- `StrengthEquipment` and `StrengthFocus`
 
----
+`Stride/Core/Models/ValueTypes.swift` contains codable/sendable value types used inside SwiftData models:
+
+- `Coordinate`: `CLLocationCoordinate2D` storage wrapper
+- `Split`: per-kilometer split data
+- `WorkoutSegment`, `WorkoutSet`, `WorkoutStructure`: structured run workout representation stored as JSON in `ScheduledWorkout`
+- `WorkoutWeather`: weather snapshot attached to completed runs
+- `RouteStep`, `GeneratedRoute`: route-generation results
+- `StrengthExercise`, `StrengthWorkoutPlan`, `CompletedStrengthSet`: strength workout representation
 
 ## Training Plan Logic
 
 `TrainingPlanService` generates periodized plans:
-1. **VDOT-based pacing** — training paces derived from the user's estimated 5K time (Jack Daniels' VDOT tables), implemented in `PaceCalculatorService`
-2. **Phases**: Base → Build → Peak → Taper, scaled to week count
-3. **Progressive overload** — ~10% weekly mileage increase with a cutback every 4th week
-4. **80/20 principle** — ~80% easy/long, ~20% quality (tempo + intervals)
-5. **Workout adaptation** — `AppContainer.adaptedWorkout(scheduled:history:profile:)` adjusts a scheduled workout based on recent run history
 
----
+1. VDOT-based paces derived from the user's estimated 5K time via `PaceCalculatorService`.
+2. Phases progress through Base, Build, Peak, and Taper, scaled to week count.
+3. Weekly volume uses progressive overload with regular cutback weeks.
+4. Plans balance easy/long running with quality work such as tempo and intervals.
+5. Adaptation logic in `AppContainer.adaptedWorkout(scheduled:history:profile:)` adjusts scheduled workouts based on recent run history.
+
+## Persistence and Sync
+
+- SwiftData is the local persistence layer.
+- CloudKit is used for private iCloud sync when enabled and available.
+- `AppContainer` falls back from CloudKit to local storage and then emergency in-memory storage if needed.
+- `WorkoutSyncService` imports HealthKit workouts and can surface pending review workouts through `AppContainer.pendingReviewWorkout`.
+- Simulator builds intentionally disable CloudKit in `AppContainer.shouldUseCloudKit`.
 
 ## Testing
 
-Tests use **Swift Testing** (not XCTest). Pattern:
+Unit tests use Swift Testing, not XCTest:
+
 ```swift
 @Test("Description of what is tested")
 func testName() {
     #expect(condition)
-    Issue.record("failure message")  // for non-fatal failures inside guards
+    Issue.record("failure message") // for non-fatal failures inside guards
 }
 ```
 
-Test files live in `StrideTests/`. Coverage focuses on `PaceCalculatorService` (VDOT math, pace ordering, round-trips) and `TrainingPlanService` (plan structure, phase ordering, volume progression).
+UI tests use XCTest in `StrideUITests/` and launch with `--uitesting`. `Stride/App/UITestingSupport.swift` contains app-side support for deterministic UI-test behavior.
 
----
+Current unit coverage includes pace calculations, training plan structure/progression, route generation, AI coach behavior, strength library behavior, persistence graph, restore/deduplication, missed-workout detection, and app-container behavior. Add focused tests when changing shared services, repositories, SwiftData models, or cross-feature workflows.
 
 ## Navigation
 
-```
+Primary tab structure:
+
+```text
 TabView
-├── Dashboard     — upcoming workout card, weekly summary
-├── Training Plan — plan calendar, workout details
-├── Active Run    — fullscreen live tracking HUD
-├── History       — past runs list + detail
-└── Progress      — charts & stats
+├── Home / Dashboard
+├── Plan / Training Plan
+├── History
+├── Progress
+└── Settings
 ```
 
----
+Active run and active strength experiences are launched from feature flows rather than persistent tabs.
 
 ## Swift 6 Concurrency Notes
 
-Strict concurrency is enabled (`complete`). Key patterns in this codebase:
-- `AppContainer` is `@MainActor final class`
-- Repositories and services must be `Sendable` or actor-isolated
-- Use `nonisolated(unsafe)` only for static default values (e.g., `EnvironmentKey.defaultValue`)
+Strict concurrency is enabled. Key patterns:
+
+- `AppContainer` is `@MainActor final class`.
+- Repositories and services should be `Sendable` or actor-isolated where appropriate.
+- SwiftData model-context work should stay on the actor/context that owns it.
+- Use `nonisolated(unsafe)` only for narrowly scoped static defaults, such as environment-key defaults.
+- Be careful when adding closures stored on singleton services; avoid accidentally capturing hidden/test containers.
+
+## Implementation Guidance
+
+- Follow existing SwiftUI, SwiftData, and repository/service patterns.
+- Prefer small feature-local views and services over adding large view bodies or unrelated global helpers.
+- Keep generated project changes in `project.yml`; run `xcodegen generate` after project config edits.
+- Keep secrets out of git. `Secrets.plist` is local-only; commit only the example template.
+- Do not introduce new third-party packages without an explicit reason and a `project.yml` update.
+- For frontend/UI work, match the existing theme primitives in `Stride/Shared/Theme/` and reusable components in `Stride/Shared/Components/`.

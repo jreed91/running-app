@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main, develop]
 
+permissions:
+  contents: read
+  pull-requests: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -16,6 +20,30 @@ env:
   IOS_VERSION: "26.4"
 
 jobs:
+  # ── Change detection ────────────────────────────────────────────────────────
+  changes:
+    name: Detect iOS changes
+    runs-on: ubuntu-latest
+    outputs:
+      ios: ${{ steps.filter.outputs.ios }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 20
+
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            ios:
+              - 'Stride/**'
+              - 'StrideTests/**'
+              - 'StrideUITests/**'
+              - 'project.yml'
+              - 'ci_scripts/Package.resolved'
+              - '.github/workflows/ci.yml'
+
   # ── Lint ────────────────────────────────────────────────────────────────────
   lint:
     name: Lint (SwiftLint)
@@ -23,18 +51,38 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed Swift files
+        id: swift_changes
+        uses: dorny/paths-filter@v4
+        with:
+          list-files: shell
+          filters: |
+            swift:
+              - added|modified: '**/*.swift'
 
       - name: Install SwiftLint
+        if: github.event_name != 'pull_request' || steps.swift_changes.outputs.swift == 'true'
         run: brew install swiftlint
 
       - name: Run SwiftLint
-        run: swiftlint lint --reporter github-actions-logging
+        if: github.event_name != 'pull_request' || steps.swift_changes.outputs.swift == 'true'
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            swiftlint lint --reporter github-actions-logging ${{ steps.swift_changes.outputs.swift_files }}
+            exit $?
+          fi
+
+          swiftlint lint --reporter github-actions-logging
 
   # ── Build & Test (iOS) ──────────────────────────────────────────────────────
   test-ios:
     name: Test — iOS
     runs-on: macos-26
-    needs: lint
+    needs: [changes, lint]
+    if: needs.changes.outputs.ios == 'true'
 
     steps:
       - uses: actions/checkout@v4
@@ -82,6 +130,7 @@ jobs:
 
       - name: Build for testing
         run: |
+          set -o pipefail
           xcodebuild build-for-testing \
             -scheme "$SCHEME" \
             -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
@@ -90,7 +139,11 @@ jobs:
             | xcbeautify --renderer github-actions
 
       - name: Run unit tests
+        continue-on-error: true
         run: |
+          mkdir -p TestResults
+          set -o pipefail
+          set +e
           xcodebuild test-without-building \
             -scheme "$SCHEME" \
             -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
@@ -99,9 +152,16 @@ jobs:
             -resultBundlePath TestResults/unit.xcresult \
             CODE_SIGNING_ALLOWED=NO \
             | xcbeautify --renderer github-actions
+          status=$?
+          echo "$status" > TestResults/unit.exit
+          exit "$status"
 
       - name: Run UI tests
+        continue-on-error: true
         run: |
+          mkdir -p TestResults
+          set -o pipefail
+          set +e
           xcodebuild test-without-building \
             -scheme "$SCHEME" \
             -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
@@ -110,6 +170,9 @@ jobs:
             -resultBundlePath TestResults/ui.xcresult \
             CODE_SIGNING_ALLOWED=NO \
             | xcbeautify --renderer github-actions
+          status=$?
+          echo "$status" > TestResults/ui.exit
+          exit "$status"
 
       - name: Upload test results
         if: always()
@@ -119,51 +182,22 @@ jobs:
           path: TestResults/
           retention-days: 7
 
-  # ── Build (watchOS) ──────────────────────────────────────────────────────────
-  build-watch:
-    name: Build — watchOS
-    runs-on: macos-26
-    needs: lint
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Select Xcode
-        run: sudo xcode-select -switch /Applications/Xcode_26.4.app
-
-      - name: Install XcodeGen and xcbeautify
-        run: brew install xcodegen xcbeautify
-
-      - name: Generate Xcode project
-        run: xcodegen generate
-
-      - name: Install Swift package pins
+      - name: Fail if tests failed
+        if: always()
         run: |
-          mkdir -p Stride.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
-          cp ci_scripts/Package.resolved Stride.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+          unit_status=$(cat TestResults/unit.exit 2>/dev/null || echo 1)
+          ui_status=$(cat TestResults/ui.exit 2>/dev/null || echo 1)
 
-      - name: Cache DerivedData
-        uses: actions/cache@v4
-        with:
-          path: ~/Library/Developer/Xcode/DerivedData
-          key: deriveddata-watch-${{ hashFiles('project.yml') }}
-          restore-keys: |
-            deriveddata-watch-
-
-      - name: Build watchOS target
-        run: |
-          xcodebuild build \
-            -scheme "$SCHEME" \
-            -destination "generic/platform=watchOS" \
-            -derivedDataPath ~/Library/Developer/Xcode/DerivedData \
-            CODE_SIGNING_ALLOWED=NO \
-            | xcbeautify --renderer github-actions
+          if [[ "$unit_status" != "0" || "$ui_status" != "0" ]]; then
+            echo "::error::Unit tests exited with $unit_status; UI tests exited with $ui_status."
+            exit 1
+          fi
 
   # ── Archive (release build) ─────────────────────────────────────────────────
   archive:
     name: Archive
     runs-on: macos-26
-    needs: [test-ios, build-watch]
+    needs: [changes, test-ios]
     # Only archive on pushes to main (not PRs)
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
@@ -194,6 +228,7 @@ jobs:
 
       - name: Archive (no signing)
         run: |
+          set -o pipefail
           xcodebuild archive \
             -scheme "$SCHEME" \
             -destination "generic/platform=iOS" \
