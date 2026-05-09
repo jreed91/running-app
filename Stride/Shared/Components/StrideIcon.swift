@@ -1,443 +1,43 @@
 import SwiftUI
-import UIKit
 
-/// Pixel-art icon set drawn on a 24x24 grid.
+/// Custom icon set matching the Stride Design System.
+/// Paths are drawn on a 24×24 coordinate grid, same as the design spec.
 enum StrideIconName: String {
     // Workout types
     case run
     case walk
-    case shoe
-    case road
     case tempo
     case bolt
     case flame
     case tortoise
     case moon
     case trophy
-    case medal
     case dumbbell
     case barbell
-
-    // Navigation and places
+    // Nav
     case home
     case calendar
     case play
     case history
     case chart
-    case map
-    case location
-    case indoor
-    case mountain
-    case routeLoop
-    case routeOutAndBack
-
     // UI
     case chevronRight
     case chevronLeft
     case chevronDown
-    case arrowRight
-    case arrowUp
-    case arrowDown
     case check
     case plus
     case close
     case pause
     case stop
-    case minus
     case lock
     case heart
+    case location
+    case mountain
     case timer
     case ruler
     case bell
     case flag
     case gear
-    case sync
-    case search
-    case bookmark
-    case trash
-    case link
-    case exclamation
-    case sparkles
-    case wand
-    case humidity
-    case wind
-    case thumbsUp
-    case thumbsDown
-    case seal
-
-    // Weather
-    case sun
-    case cloud
-    case rain
-    case snow
-
-    init(weatherSymbol: String) {
-        let value = weatherSymbol.lowercased()
-        if value.contains("rain") || value.contains("drizzle") {
-            self = .rain
-        } else if value.contains("snow") || value.contains("sleet") {
-            self = .snow
-        } else if value.contains("cloud") || value.contains("fog") || value.contains("smoke") || value.contains("haze") {
-            self = .cloud
-        } else {
-            self = .sun
-        }
-    }
-
-    // swiftlint:disable function_body_length
-    fileprivate var pixels: [PixelBlock] {
-        switch self {
-        case .run:
-            return [
-                .init(13, 2, 4, 4), .init(11, 7, 5, 3), .init(9, 10, 4, 3),
-                .init(15, 9, 5, 3), .init(7, 13, 5, 3), .init(5, 16, 4, 3),
-                .init(3, 19, 6, 2), .init(12, 13, 5, 3), .init(16, 16, 3, 4),
-                .init(15, 20, 6, 2), .init(8, 7, 4, 2)
-            ]
-        case .walk:
-            return [
-                .init(12, 2, 4, 4), .init(11, 7, 4, 6), .init(8, 9, 3, 3),
-                .init(15, 10, 4, 3), .init(9, 13, 4, 4), .init(7, 17, 3, 5),
-                .init(13, 13, 4, 4), .init(16, 17, 4, 5)
-            ]
-        case .shoe:
-            return [
-                .init(4, 13, 3, 4), .init(7, 15, 5, 3), .init(12, 16, 5, 3),
-                .init(17, 15, 3, 4), .init(3, 18, 18, 3), .init(8, 12, 4, 2),
-                .init(12, 13, 3, 2)
-            ]
-        case .road:
-            return [
-                .init(10, 3, 4, 5), .init(9, 8, 6, 5), .init(7, 13, 10, 5),
-                .init(5, 18, 14, 4), .init(11, 5, 2, 2), .init(11, 10, 2, 2),
-                .init(11, 15, 2, 2), .init(11, 20, 2, 2)
-            ]
-        case .tempo, .flame:
-            return [
-                .init(11, 2, 3, 3), .init(10, 5, 5, 3), .init(8, 8, 8, 4),
-                .init(7, 12, 10, 5), .init(8, 17, 8, 3), .init(10, 20, 4, 2),
-                .init(6, 10, 3, 4), .init(14, 7, 3, 4)
-            ]
-        case .bolt:
-            return [
-                .init(12, 2, 5, 3), .init(10, 5, 5, 3), .init(8, 8, 5, 4),
-                .init(6, 12, 7, 3), .init(11, 13, 5, 3), .init(10, 16, 4, 3),
-                .init(9, 19, 3, 3)
-            ]
-        case .tortoise:
-            return [
-                .init(6, 10, 11, 6), .init(8, 8, 7, 3), .init(17, 11, 4, 3),
-                .init(4, 12, 3, 3), .init(7, 16, 3, 3), .init(14, 16, 3, 3)
-            ]
-        case .moon:
-            return [
-                .init(11, 3, 5, 2), .init(8, 5, 5, 3), .init(6, 8, 5, 5),
-                .init(6, 13, 5, 4), .init(8, 17, 6, 3), .init(13, 19, 4, 2),
-                .init(13, 8, 3, 3), .init(16, 11, 2, 4)
-            ]
-        case .trophy:
-            return [
-                .init(7, 3, 10, 3), .init(7, 6, 10, 5), .init(9, 11, 6, 3),
-                .init(11, 14, 2, 3), .init(8, 17, 8, 2), .init(6, 19, 12, 2),
-                .init(4, 6, 3, 3), .init(5, 9, 3, 3), .init(17, 6, 3, 3),
-                .init(16, 9, 3, 3)
-            ]
-        case .medal:
-            return [
-                .init(7, 2, 4, 7), .init(13, 2, 4, 7), .init(10, 7, 4, 4),
-                .init(7, 11, 10, 10), .init(5, 13, 2, 6), .init(17, 13, 2, 6),
-                .init(9, 15, 6, 3)
-            ]
-        case .dumbbell:
-            return [
-                .init(2, 8, 3, 8), .init(5, 10, 3, 4), .init(8, 11, 8, 2),
-                .init(16, 10, 3, 4), .init(19, 8, 3, 8)
-            ]
-        case .barbell:
-            return [
-                .init(1, 11, 22, 2), .init(3, 7, 2, 10), .init(6, 8, 2, 8),
-                .init(16, 8, 2, 8), .init(19, 7, 2, 10)
-            ]
-        case .home:
-            return [
-                .init(11, 3, 2, 2), .init(9, 5, 6, 2), .init(7, 7, 10, 2),
-                .init(5, 9, 14, 2), .init(6, 11, 12, 10), .init(10, 15, 4, 6),
-                .init(8, 13, 2, 2), .init(14, 13, 2, 2)
-            ]
-        case .calendar:
-            return [
-                .init(5, 4, 3, 3), .init(16, 4, 3, 3), .init(3, 7, 18, 3),
-                .init(3, 10, 3, 11), .init(18, 10, 3, 11), .init(6, 18, 12, 3),
-                .init(7, 12, 3, 3), .init(12, 12, 3, 3), .init(7, 16, 3, 2),
-                .init(12, 16, 3, 2)
-            ]
-        case .play:
-            return [.init(7, 4, 4, 16), .init(11, 7, 4, 10), .init(15, 10, 4, 4)]
-        case .history:
-            return [
-                .init(8, 3, 8, 3), .init(5, 6, 3, 3), .init(16, 6, 3, 3),
-                .init(3, 9, 3, 6), .init(18, 9, 3, 6), .init(5, 15, 3, 3),
-                .init(16, 15, 3, 3), .init(8, 18, 8, 3), .init(11, 7, 2, 6),
-                .init(12, 12, 5, 2)
-            ]
-        case .chart:
-            return [
-                .init(4, 4, 2, 17), .init(4, 19, 17, 2), .init(8, 15, 3, 4),
-                .init(12, 11, 3, 8), .init(16, 7, 3, 12), .init(8, 12, 5, 2),
-                .init(13, 9, 5, 2)
-            ]
-        case .map:
-            return [
-                .init(3, 5, 5, 15), .init(9, 4, 6, 15), .init(16, 5, 5, 15),
-                .init(8, 6, 1, 13), .init(15, 5, 1, 13), .init(11, 8, 2, 2),
-                .init(12, 10, 2, 2), .init(13, 12, 2, 2)
-            ]
-        case .location:
-            return [
-                .init(9, 3, 6, 2), .init(7, 5, 10, 4), .init(6, 9, 12, 4),
-                .init(8, 13, 8, 3), .init(10, 16, 4, 3), .init(11, 19, 2, 3),
-                .init(10, 8, 4, 4)
-            ]
-        case .indoor:
-            return [
-                .init(6, 10, 12, 11), .init(8, 8, 8, 2), .init(10, 6, 4, 2),
-                .init(4, 12, 2, 9), .init(18, 12, 2, 9), .init(10, 15, 4, 6)
-            ]
-        case .mountain:
-            return [
-                .init(10, 5, 4, 3), .init(8, 8, 8, 3), .init(6, 11, 12, 4),
-                .init(4, 15, 16, 4), .init(2, 19, 20, 2), .init(12, 10, 3, 2)
-            ]
-        case .routeLoop:
-            return [
-                .init(8, 3, 8, 2), .init(16, 5, 3, 3), .init(19, 8, 2, 7),
-                .init(16, 15, 3, 3), .init(8, 18, 8, 2), .init(5, 15, 3, 3),
-                .init(3, 8, 2, 7), .init(5, 5, 3, 3), .init(14, 3, 4, 4),
-                .init(15, 1, 2, 6)
-            ]
-        case .routeOutAndBack:
-            return [
-                .init(5, 7, 14, 3), .init(3, 10, 3, 3), .init(5, 13, 14, 3),
-                .init(18, 10, 3, 3), .init(4, 6, 3, 5), .init(17, 13, 3, 5)
-            ]
-        case .chevronRight:
-            return [.init(8, 5, 4, 4), .init(12, 9, 4, 3), .init(8, 12, 4, 4), .init(6, 16, 4, 3)]
-        case .chevronLeft:
-            return [.init(12, 5, 4, 4), .init(8, 9, 4, 3), .init(12, 12, 4, 4), .init(14, 16, 4, 3)]
-        case .chevronDown:
-            return [.init(5, 8, 4, 4), .init(9, 12, 3, 4), .init(12, 12, 3, 4), .init(15, 8, 4, 4)]
-        case .arrowRight:
-            return [.init(4, 10, 12, 4), .init(14, 6, 4, 4), .init(18, 10, 3, 4), .init(14, 14, 4, 4)]
-        case .arrowUp:
-            return [.init(10, 4, 4, 14), .init(6, 8, 4, 4), .init(14, 8, 4, 4), .init(8, 6, 8, 2)]
-        case .arrowDown:
-            return [.init(10, 6, 4, 14), .init(6, 14, 4, 4), .init(14, 14, 4, 4), .init(8, 18, 8, 2)]
-        case .check:
-            return [.init(4, 12, 4, 4), .init(8, 16, 4, 3), .init(12, 12, 3, 4), .init(15, 8, 3, 4), .init(18, 5, 3, 3)]
-        case .plus:
-            return [.init(10, 4, 4, 16), .init(4, 10, 16, 4)]
-        case .close:
-            return [
-                .init(5, 5, 4, 4), .init(9, 9, 3, 3), .init(12, 12, 3, 3),
-                .init(15, 15, 4, 4), .init(15, 5, 4, 4), .init(12, 9, 3, 3),
-                .init(9, 12, 3, 3), .init(5, 15, 4, 4)
-            ]
-        case .pause:
-            return [.init(6, 4, 5, 16), .init(13, 4, 5, 16)]
-        case .stop:
-            return [.init(5, 5, 14, 14)]
-        case .minus:
-            return [.init(5, 10, 14, 4)]
-        case .lock:
-            return [
-                .init(7, 10, 10, 11), .init(6, 12, 12, 8), .init(8, 6, 3, 5),
-                .init(13, 6, 3, 5), .init(10, 4, 4, 3), .init(11, 14, 2, 4)
-            ]
-        case .heart:
-            return [
-                .init(6, 6, 5, 3), .init(13, 6, 5, 3), .init(4, 9, 16, 5),
-                .init(6, 14, 12, 3), .init(8, 17, 8, 3), .init(11, 20, 2, 2)
-            ]
-        case .timer:
-            return [
-                .init(9, 2, 6, 2), .init(11, 4, 2, 2), .init(7, 6, 10, 3),
-                .init(5, 9, 14, 8), .init(7, 17, 10, 3), .init(11, 9, 2, 5),
-                .init(13, 13, 3, 2)
-            ]
-        case .ruler:
-            return [
-                .init(3, 9, 18, 6), .init(5, 8, 3, 2), .init(10, 8, 2, 2),
-                .init(14, 8, 2, 2), .init(18, 8, 2, 2), .init(6, 15, 2, 2),
-                .init(12, 15, 2, 2), .init(17, 15, 2, 2)
-            ]
-        case .bell:
-            return [
-                .init(10, 3, 4, 2), .init(7, 5, 10, 4), .init(6, 9, 12, 7),
-                .init(4, 16, 16, 3), .init(10, 19, 4, 2)
-            ]
-        case .flag:
-            return [
-                .init(5, 3, 3, 18), .init(8, 4, 10, 3), .init(8, 7, 8, 3),
-                .init(8, 10, 10, 3)
-            ]
-        case .gear:
-            return [
-                .init(10, 2, 4, 4), .init(10, 18, 4, 4), .init(2, 10, 4, 4),
-                .init(18, 10, 4, 4), .init(6, 6, 4, 4), .init(14, 6, 4, 4),
-                .init(6, 14, 4, 4), .init(14, 14, 4, 4), .init(9, 9, 6, 6)
-            ]
-        case .sync:
-            return [
-                .init(8, 3, 8, 2), .init(16, 5, 3, 3), .init(18, 8, 2, 5),
-                .init(15, 11, 5, 2), .init(17, 9, 4, 4), .init(8, 19, 8, 2),
-                .init(5, 16, 3, 3), .init(4, 11, 2, 5), .init(4, 11, 5, 2),
-                .init(3, 11, 4, 4)
-            ]
-        case .search:
-            return [
-                .init(6, 4, 8, 3), .init(4, 7, 3, 7), .init(13, 7, 3, 7),
-                .init(6, 14, 8, 3), .init(14, 15, 3, 3), .init(17, 18, 4, 4)
-            ]
-        case .bookmark:
-            return [
-                .init(6, 3, 12, 17), .init(8, 20, 3, 2), .init(13, 20, 3, 2),
-                .init(10, 18, 4, 3)
-            ]
-        case .trash:
-            return [
-                .init(7, 5, 10, 2), .init(9, 3, 6, 2), .init(6, 8, 12, 2),
-                .init(7, 10, 10, 11), .init(9, 12, 2, 7), .init(13, 12, 2, 7)
-            ]
-        case .link:
-            return [
-                .init(5, 8, 8, 3), .init(3, 11, 3, 5), .init(6, 16, 8, 3),
-                .init(11, 13, 3, 3), .init(11, 5, 8, 3), .init(18, 8, 3, 5),
-                .init(10, 13, 8, 3)
-            ]
-        case .exclamation:
-            return [.init(10, 3, 4, 12), .init(10, 18, 4, 4)]
-        case .sparkles:
-            return [
-                .init(11, 2, 2, 6), .init(9, 4, 6, 2), .init(11, 8, 2, 2),
-                .init(5, 13, 2, 4), .init(3, 15, 6, 2), .init(17, 14, 2, 5),
-                .init(15, 16, 6, 2)
-            ]
-        case .wand:
-            return [
-                .init(5, 16, 3, 3), .init(8, 13, 3, 3), .init(11, 10, 3, 3),
-                .init(14, 7, 3, 3), .init(17, 4, 3, 3), .init(5, 5, 2, 4),
-                .init(3, 7, 6, 2), .init(16, 16, 2, 4), .init(14, 18, 6, 2)
-            ]
-        case .humidity:
-            return [
-                .init(11, 3, 2, 3), .init(9, 6, 6, 4), .init(7, 10, 10, 5),
-                .init(8, 15, 8, 4), .init(10, 19, 4, 2)
-            ]
-        case .wind:
-            return [
-                .init(3, 7, 13, 3), .init(16, 6, 4, 4), .init(6, 12, 13, 3),
-                .init(3, 17, 10, 3), .init(13, 16, 4, 4)
-            ]
-        case .thumbsUp:
-            return [
-                .init(4, 11, 4, 8), .init(8, 9, 7, 10), .init(11, 5, 4, 5),
-                .init(15, 10, 5, 3), .init(15, 14, 4, 2), .init(15, 17, 3, 2)
-            ]
-        case .thumbsDown:
-            return [
-                .init(4, 5, 4, 8), .init(8, 5, 7, 10), .init(11, 14, 4, 5),
-                .init(15, 11, 5, 3), .init(15, 8, 4, 2), .init(15, 5, 3, 2)
-            ]
-        case .seal:
-            return [
-                .init(8, 3, 8, 3), .init(5, 6, 14, 5), .init(4, 11, 16, 5),
-                .init(7, 16, 10, 5), .init(8, 11, 3, 3), .init(11, 14, 2, 2),
-                .init(13, 9, 3, 3)
-            ]
-        case .sun:
-            return [
-                .init(10, 2, 4, 3), .init(10, 19, 4, 3), .init(2, 10, 3, 4),
-                .init(19, 10, 3, 4), .init(7, 7, 10, 10), .init(5, 5, 3, 3),
-                .init(16, 5, 3, 3), .init(5, 16, 3, 3), .init(16, 16, 3, 3)
-            ]
-        case .cloud:
-            return [
-                .init(8, 7, 8, 3), .init(5, 10, 14, 4), .init(3, 13, 18, 5),
-                .init(6, 18, 12, 2)
-            ]
-        case .rain:
-            return [
-                .init(8, 5, 8, 3), .init(5, 8, 14, 4), .init(3, 11, 18, 4),
-                .init(6, 17, 2, 4), .init(11, 18, 2, 4), .init(16, 17, 2, 4)
-            ]
-        case .snow:
-            return [
-                .init(11, 4, 2, 16), .init(4, 11, 16, 2), .init(7, 7, 3, 3),
-                .init(14, 7, 3, 3), .init(7, 14, 3, 3), .init(14, 14, 3, 3)
-            ]
-        }
-    }
-    // swiftlint:enable function_body_length
-
-    func uiImage(size: CGFloat = 24) -> UIImage {
-        let format = UIGraphicsImageRendererFormat()
-        format.opaque = false
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size), format: format)
-        let image = renderer.image { _ in
-            UIColor.label.setFill()
-            let unit = size / 24
-            for block in pixels {
-                UIBezierPath(rect: CGRect(
-                    x: block.x * unit,
-                    y: block.y * unit,
-                    width: block.width * unit,
-                    height: block.height * unit
-                )).fill()
-            }
-        }
-        return image.withRenderingMode(.alwaysTemplate)
-    }
-}
-
-fileprivate struct PixelBlock {
-    let x: CGFloat
-    let y: CGFloat
-    let width: CGFloat
-    let height: CGFloat
-
-    init(_ x: CGFloat, _ y: CGFloat, _ width: CGFloat, _ height: CGFloat) {
-        self.x = x
-        self.y = y
-        self.width = width
-        self.height = height
-    }
-
-    var rect: CGRect {
-        CGRect(x: x, y: y, width: width, height: height)
-    }
-}
-
-struct PixelIcon: View {
-    let name: StrideIconName
-    var size: CGFloat = 24
-    var color: Color = .primary
-
-    var body: some View {
-        Canvas(opaque: false, colorMode: .linear) { context, _ in
-            let unit = size / 24
-            for block in name.pixels {
-                let rect = CGRect(
-                    x: block.x * unit,
-                    y: block.y * unit,
-                    width: block.width * unit,
-                    height: block.height * unit
-                )
-                context.fill(Path(rect), with: .color(color))
-            }
-        }
-        .frame(width: size, height: size)
-        .accessibilityHidden(true)
-    }
 }
 
 struct StrideIcon: View {
@@ -447,9 +47,451 @@ struct StrideIcon: View {
     var strokeWeight: CGFloat = 1.8
 
     var body: some View {
-        PixelIcon(name: name, size: size, color: color)
+        Canvas { ctx, _ in
+            draw(ctx)
+        }
+        .frame(width: size, height: size)
+        .foregroundStyle(color)
+    }
+
+    // MARK: - Drawing
+
+    private func draw(_ ctx: GraphicsContext) {
+        // Scale from the 24pt design grid to the requested size
+        var ctx = ctx
+        let scale = size / 24
+        ctx.scaleBy(x: scale, y: scale)
+
+        let stroke = StrokeStyle(lineWidth: strokeWeight / scale, lineCap: .round, lineJoin: .round)
+
+        switch name {
+        case .run:
+            // Head
+            ctx.fill(Path(ellipseIn: CGRect(x: 13.3, y: 1.8, width: 4.4, height: 4.4)), with: .foreground)
+            // Back leg → torso → front arm (one continuous stroke)
+            var main = Path()
+            main.move(to: CGPoint(x: 5,    y: 21))    // back foot
+            main.addLine(to: CGPoint(x: 8,    y: 17))   // back shin
+            main.addLine(to: CGPoint(x: 11,   y: 13))   // hip
+            main.addLine(to: CGPoint(x: 13.5, y: 8))    // torso to shoulder
+            main.addLine(to: CGPoint(x: 17.5, y: 11.5)) // front arm swing
+            ctx.stroke(main, with: .foreground, style: stroke)
+            // Front leg (knee lifted, bent)
+            var frontLeg = Path()
+            frontLeg.move(to: CGPoint(x: 11,   y: 13))  // hip
+            frontLeg.addLine(to: CGPoint(x: 14.5, y: 17)) // front thigh
+            frontLeg.addLine(to: CGPoint(x: 13,   y: 21)) // front shin / foot
+            ctx.stroke(frontLeg, with: .foreground, style: stroke)
+            // Back arm (swings upward)
+            var backArm = Path()
+            backArm.move(to: CGPoint(x: 13,   y: 9.5))
+            backArm.addLine(to: CGPoint(x: 10, y: 7))
+            ctx.stroke(backArm, with: .foreground, style: stroke)
+
+        case .walk:
+            var head = Path(ellipseIn: CGRect(x: 11, y: 2, width: 4, height: 4))
+            ctx.fill(head, with: .foreground)
+            var body = Path()
+            body.move(to: CGPoint(x: 8, y: 22))
+            body.addLine(to: CGPoint(x: 11, y: 15))
+            body.addLine(to: CGPoint(x: 13, y: 12))
+            body.addLine(to: CGPoint(x: 15, y: 15))
+            body.addLine(to: CGPoint(x: 16, y: 19))
+            body.addLine(to: CGPoint(x: 19, y: 22))
+            ctx.stroke(body, with: .foreground, style: stroke)
+            var arm = Path()
+            arm.move(to: CGPoint(x: 6, y: 15))
+            arm.addLine(to: CGPoint(x: 9, y: 13))
+            ctx.stroke(arm, with: .foreground, style: stroke)
+
+        case .tempo:
+            var circle = Path(ellipseIn: CGRect(x: 4, y: 5, width: 16, height: 16))
+            ctx.stroke(circle, with: .foreground, style: stroke)
+            var hand = Path()
+            hand.move(to: CGPoint(x: 12, y: 13))
+            hand.addLine(to: CGPoint(x: 16, y: 9))
+            ctx.stroke(hand, with: .foreground, style: stroke)
+            var dot = Path(ellipseIn: CGRect(x: 10.8, y: 11.8, width: 2.4, height: 2.4))
+            ctx.fill(dot, with: .foreground)
+            var ticks = Path()
+            ticks.move(to: CGPoint(x: 12, y: 5)); ticks.addLine(to: CGPoint(x: 12, y: 6))
+            ticks.move(to: CGPoint(x: 19, y: 13)); ticks.addLine(to: CGPoint(x: 20, y: 13))
+            ticks.move(to: CGPoint(x: 4, y: 13)); ticks.addLine(to: CGPoint(x: 5, y: 13))
+            ctx.stroke(ticks, with: .foreground, style: stroke)
+
+        case .bolt:
+            var p = Path()
+            p.move(to: CGPoint(x: 13, y: 2))
+            p.addLine(to: CGPoint(x: 4, y: 14))
+            p.addLine(to: CGPoint(x: 10, y: 14))
+            p.addLine(to: CGPoint(x: 9, y: 22))
+            p.addLine(to: CGPoint(x: 18, y: 10))
+            p.addLine(to: CGPoint(x: 12, y: 10))
+            p.closeSubpath()
+            ctx.fill(p, with: .foreground)
+
+        case .flame:
+            var p = Path()
+            p.move(to: CGPoint(x: 12, y: 2))
+            p.addCurve(to: CGPoint(x: 17, y: 12),
+                       control1: CGPoint(x: 17, y: 6),
+                       control2: CGPoint(x: 17, y: 9))
+            p.addCurve(to: CGPoint(x: 12, y: 17),
+                       control1: CGPoint(x: 17, y: 15),
+                       control2: CGPoint(x: 15, y: 17))
+            p.addCurve(to: CGPoint(x: 7, y: 12),
+                       control1: CGPoint(x: 9, y: 17),
+                       control2: CGPoint(x: 7, y: 15))
+            p.addCurve(to: CGPoint(x: 9, y: 8),
+                       control1: CGPoint(x: 7, y: 9),
+                       control2: CGPoint(x: 9, y: 10))
+            p.addCurve(to: CGPoint(x: 9, y: 4),
+                       control1: CGPoint(x: 9, y: 6),
+                       control2: CGPoint(x: 8, y: 4))
+            p.addCurve(to: CGPoint(x: 12, y: 2),
+                       control1: CGPoint(x: 10, y: 3),
+                       control2: CGPoint(x: 11, y: 2))
+            p.closeSubpath()
+            ctx.fill(p, with: .foreground)
+
+        case .tortoise:
+            var body = Path(ellipseIn: CGRect(x: 5, y: 9, width: 14, height: 10))
+            ctx.stroke(body, with: .foreground, style: stroke)
+            var shell = Path()
+            shell.move(to: CGPoint(x: 8, y: 14))
+            shell.addCurve(to: CGPoint(x: 16, y: 14),
+                           control1: CGPoint(x: 8, y: 11),
+                           control2: CGPoint(x: 16, y: 11))
+            ctx.stroke(shell, with: .foreground, style: stroke)
+            var head = Path(ellipseIn: CGRect(x: 17.4, y: 10.4, width: 3.2, height: 3.2))
+            ctx.fill(head, with: .foreground)
+            var legs = Path()
+            legs.move(to: CGPoint(x: 5, y: 19)); legs.addLine(to: CGPoint(x: 6, y: 18))
+            legs.move(to: CGPoint(x: 18, y: 19)); legs.addLine(to: CGPoint(x: 17, y: 18))
+            legs.move(to: CGPoint(x: 7, y: 9)); legs.addLine(to: CGPoint(x: 8, y: 10))
+            ctx.stroke(legs, with: .foreground, style: stroke)
+
+        case .moon:
+            var p = Path()
+            p.move(to: CGPoint(x: 20, y: 14))
+            p.addCurve(to: CGPoint(x: 12, y: 4),
+                       control1: CGPoint(x: 20, y: 14),
+                       control2: CGPoint(x: 20, y: 4))
+            p.addCurve(to: CGPoint(x: 3, y: 12),
+                       control1: CGPoint(x: 7, y: 4),
+                       control2: CGPoint(x: 3, y: 7.6))
+            p.addCurve(to: CGPoint(x: 11, y: 20),
+                       control1: CGPoint(x: 3, y: 16.4),
+                       control2: CGPoint(x: 6.6, y: 20))
+            p.addCurve(to: CGPoint(x: 20, y: 14),
+                       control1: CGPoint(x: 15.4, y: 20),
+                       control2: CGPoint(x: 20, y: 17.6))
+            p.closeSubpath()
+            ctx.stroke(p, with: .foreground, style: stroke)
+
+        case .trophy:
+            var cup = Path()
+            cup.move(to: CGPoint(x: 8, y: 4))
+            cup.addLine(to: CGPoint(x: 16, y: 4))
+            cup.addLine(to: CGPoint(x: 16, y: 8))
+            cup.addCurve(to: CGPoint(x: 8, y: 8),
+                         control1: CGPoint(x: 16, y: 12),
+                         control2: CGPoint(x: 8, y: 12))
+            cup.closeSubpath()
+            ctx.stroke(cup, with: .foreground, style: stroke)
+            var handles = Path()
+            handles.move(to: CGPoint(x: 8, y: 6))
+            handles.addLine(to: CGPoint(x: 5, y: 6))
+            handles.addLine(to: CGPoint(x: 5, y: 8))
+            handles.addCurve(to: CGPoint(x: 8, y: 11),
+                             control1: CGPoint(x: 5, y: 9.7),
+                             control2: CGPoint(x: 6.3, y: 11))
+            handles.move(to: CGPoint(x: 16, y: 6))
+            handles.addLine(to: CGPoint(x: 19, y: 6))
+            handles.addLine(to: CGPoint(x: 19, y: 8))
+            handles.addCurve(to: CGPoint(x: 16, y: 11),
+                             control1: CGPoint(x: 19, y: 9.7),
+                             control2: CGPoint(x: 17.7, y: 11))
+            ctx.stroke(handles, with: .foreground, style: stroke)
+            var base = Path()
+            base.move(to: CGPoint(x: 10, y: 14))
+            base.addLine(to: CGPoint(x: 14, y: 14))
+            base.addLine(to: CGPoint(x: 14, y: 17))
+            base.addLine(to: CGPoint(x: 16, y: 17))
+            base.addLine(to: CGPoint(x: 16, y: 19))
+            base.addLine(to: CGPoint(x: 8, y: 19))
+            base.addLine(to: CGPoint(x: 8, y: 17))
+            base.addLine(to: CGPoint(x: 10, y: 17))
+            base.closeSubpath()
+            ctx.stroke(base, with: .foreground, style: stroke)
+
+        case .dumbbell:
+            // Bars
+            var bar = Path()
+            bar.move(to: CGPoint(x: 9, y: 12)); bar.addLine(to: CGPoint(x: 15, y: 12))
+            ctx.fill(bar.strokedPath(StrokeStyle(lineWidth: 2, lineCap: .round)), with: .foreground)
+            // Left plates
+            var lp = Path(roundedRect: CGRect(x: 2, y: 8, width: 3, height: 8), cornerRadius: 1)
+            ctx.stroke(lp, with: .foreground, style: stroke)
+            var lj = Path()
+            lj.move(to: CGPoint(x: 5, y: 10)); lj.addLine(to: CGPoint(x: 7, y: 10))
+            lj.addLine(to: CGPoint(x: 7, y: 8)); lj.addLine(to: CGPoint(x: 9, y: 8))
+            lj.addLine(to: CGPoint(x: 9, y: 16)); lj.addLine(to: CGPoint(x: 7, y: 16))
+            lj.addLine(to: CGPoint(x: 7, y: 14)); lj.addLine(to: CGPoint(x: 5, y: 14))
+            ctx.stroke(lj, with: .foreground, style: stroke)
+            // Right plates
+            var rp = Path(roundedRect: CGRect(x: 19, y: 8, width: 3, height: 8), cornerRadius: 1)
+            ctx.stroke(rp, with: .foreground, style: stroke)
+            var rj = Path()
+            rj.move(to: CGPoint(x: 19, y: 10)); rj.addLine(to: CGPoint(x: 17, y: 10))
+            rj.addLine(to: CGPoint(x: 17, y: 8)); rj.addLine(to: CGPoint(x: 15, y: 8))
+            rj.addLine(to: CGPoint(x: 15, y: 16)); rj.addLine(to: CGPoint(x: 17, y: 16))
+            rj.addLine(to: CGPoint(x: 17, y: 14)); rj.addLine(to: CGPoint(x: 19, y: 14))
+            ctx.stroke(rj, with: .foreground, style: stroke)
+
+        case .barbell:
+            // Long central bar
+            var bar = Path()
+            bar.move(to: CGPoint(x: 2, y: 12)); bar.addLine(to: CGPoint(x: 22, y: 12))
+            ctx.fill(bar.strokedPath(StrokeStyle(lineWidth: 2, lineCap: .round)), with: .foreground)
+            // Left collar + plates
+            var lCollar = Path(roundedRect: CGRect(x: 5, y: 9.5, width: 2, height: 5), cornerRadius: 0.5)
+            ctx.fill(lCollar, with: .foreground)
+            var lPlate = Path(roundedRect: CGRect(x: 2, y: 8, width: 2.5, height: 8), cornerRadius: 1)
+            ctx.stroke(lPlate, with: .foreground, style: stroke)
+            // Right collar + plates
+            var rCollar = Path(roundedRect: CGRect(x: 17, y: 9.5, width: 2, height: 5), cornerRadius: 0.5)
+            ctx.fill(rCollar, with: .foreground)
+            var rPlate = Path(roundedRect: CGRect(x: 19.5, y: 8, width: 2.5, height: 8), cornerRadius: 1)
+            ctx.stroke(rPlate, with: .foreground, style: stroke)
+
+        case .home:
+            var p = Path()
+            p.move(to: CGPoint(x: 3, y: 11))
+            p.addLine(to: CGPoint(x: 12, y: 4))
+            p.addLine(to: CGPoint(x: 21, y: 11))
+            p.addLine(to: CGPoint(x: 21, y: 20))
+            p.addCurve(to: CGPoint(x: 20, y: 21),
+                       control1: CGPoint(x: 21, y: 20.6),
+                       control2: CGPoint(x: 20.6, y: 21))
+            p.addLine(to: CGPoint(x: 15, y: 21))
+            p.addLine(to: CGPoint(x: 15, y: 15))
+            p.addLine(to: CGPoint(x: 9, y: 15))
+            p.addLine(to: CGPoint(x: 9, y: 21))
+            p.addLine(to: CGPoint(x: 4, y: 21))
+            p.addCurve(to: CGPoint(x: 3, y: 20),
+                       control1: CGPoint(x: 3.4, y: 21),
+                       control2: CGPoint(x: 3, y: 20.6))
+            p.closeSubpath()
+            ctx.stroke(p, with: .foreground, style: stroke)
+
+        case .calendar:
+            var rect = Path(roundedRect: CGRect(x: 3, y: 5, width: 18, height: 16), cornerRadius: 2)
+            ctx.stroke(rect, with: .foreground, style: stroke)
+            var lines = Path()
+            lines.move(to: CGPoint(x: 3, y: 9)); lines.addLine(to: CGPoint(x: 21, y: 9))
+            lines.move(to: CGPoint(x: 8, y: 3)); lines.addLine(to: CGPoint(x: 8, y: 7))
+            lines.move(to: CGPoint(x: 16, y: 3)); lines.addLine(to: CGPoint(x: 16, y: 7))
+            ctx.stroke(lines, with: .foreground, style: stroke)
+
+        case .play:
+            var p = Path()
+            p.move(to: CGPoint(x: 7, y: 4))
+            p.addLine(to: CGPoint(x: 20, y: 12))
+            p.addLine(to: CGPoint(x: 7, y: 20))
+            p.closeSubpath()
+            ctx.fill(p, with: .foreground)
+
+        case .history:
+            var circle = Path(ellipseIn: CGRect(x: 3, y: 3, width: 18, height: 18))
+            ctx.stroke(circle, with: .foreground, style: stroke)
+            var hands = Path()
+            hands.move(to: CGPoint(x: 12, y: 7)); hands.addLine(to: CGPoint(x: 12, y: 12))
+            hands.addLine(to: CGPoint(x: 15, y: 14))
+            ctx.stroke(hands, with: .foreground, style: stroke)
+
+        case .chart:
+            var axes = Path()
+            axes.move(to: CGPoint(x: 4, y: 20)); axes.addLine(to: CGPoint(x: 4, y: 4))
+            axes.move(to: CGPoint(x: 4, y: 20)); axes.addLine(to: CGPoint(x: 20, y: 20))
+            ctx.stroke(axes, with: .foreground, style: stroke)
+            var line = Path()
+            line.move(to: CGPoint(x: 7, y: 16))
+            line.addLine(to: CGPoint(x: 11, y: 11))
+            line.addLine(to: CGPoint(x: 14, y: 13))
+            line.addLine(to: CGPoint(x: 19, y: 6))
+            ctx.stroke(line, with: .foreground, style: stroke)
+
+        case .chevronRight:
+            var p = Path()
+            p.move(to: CGPoint(x: 9, y: 4)); p.addLine(to: CGPoint(x: 17, y: 12)); p.addLine(to: CGPoint(x: 9, y: 20))
+            ctx.stroke(p, with: .foreground, style: stroke)
+
+        case .chevronLeft:
+            var p = Path()
+            p.move(to: CGPoint(x: 15, y: 4)); p.addLine(to: CGPoint(x: 7, y: 12)); p.addLine(to: CGPoint(x: 15, y: 20))
+            ctx.stroke(p, with: .foreground, style: stroke)
+
+        case .chevronDown:
+            var p = Path()
+            p.move(to: CGPoint(x: 4, y: 9)); p.addLine(to: CGPoint(x: 12, y: 17)); p.addLine(to: CGPoint(x: 20, y: 9))
+            ctx.stroke(p, with: .foreground, style: stroke)
+
+        case .check:
+            var p = Path()
+            p.move(to: CGPoint(x: 4, y: 12)); p.addLine(to: CGPoint(x: 9, y: 17)); p.addLine(to: CGPoint(x: 20, y: 4))
+            ctx.stroke(p, with: .foreground, style: stroke)
+
+        case .plus:
+            var p = Path()
+            p.move(to: CGPoint(x: 12, y: 4)); p.addLine(to: CGPoint(x: 12, y: 20))
+            p.move(to: CGPoint(x: 4, y: 12)); p.addLine(to: CGPoint(x: 20, y: 12))
+            ctx.stroke(p, with: .foreground, style: stroke)
+
+        case .close:
+            var p = Path()
+            p.move(to: CGPoint(x: 5, y: 5)); p.addLine(to: CGPoint(x: 19, y: 19))
+            p.move(to: CGPoint(x: 19, y: 5)); p.addLine(to: CGPoint(x: 5, y: 19))
+            ctx.stroke(p, with: .foreground, style: stroke)
+
+        case .pause:
+            var p = Path(roundedRect: CGRect(x: 6, y: 4, width: 4, height: 16), cornerRadius: 1)
+            ctx.fill(p, with: .foreground)
+            var p2 = Path(roundedRect: CGRect(x: 14, y: 4, width: 4, height: 16), cornerRadius: 1)
+            ctx.fill(p2, with: .foreground)
+
+        case .stop:
+            var p = Path(roundedRect: CGRect(x: 5, y: 5, width: 14, height: 14), cornerRadius: 2)
+            ctx.fill(p, with: .foreground)
+
+        case .lock:
+            var body = Path(roundedRect: CGRect(x: 5, y: 11, width: 14, height: 10), cornerRadius: 2)
+            ctx.stroke(body, with: .foreground, style: stroke)
+            var shackle = Path()
+            shackle.move(to: CGPoint(x: 8, y: 11))
+            shackle.addLine(to: CGPoint(x: 8, y: 8))
+            shackle.addCurve(to: CGPoint(x: 16, y: 8),
+                             control1: CGPoint(x: 8, y: 4),
+                             control2: CGPoint(x: 16, y: 4))
+            shackle.addLine(to: CGPoint(x: 16, y: 11))
+            ctx.stroke(shackle, with: .foreground, style: stroke)
+
+        case .heart:
+            var p = Path()
+            p.move(to: CGPoint(x: 12, y: 20))
+            p.addCurve(to: CGPoint(x: 5, y: 10),
+                       control1: CGPoint(x: 5, y: 20),
+                       control2: CGPoint(x: 5, y: 14.5))
+            p.addCurve(to: CGPoint(x: 12, y: 7.5),
+                       control1: CGPoint(x: 5, y: 7),
+                       control2: CGPoint(x: 8.5, y: 7.5))
+            p.addCurve(to: CGPoint(x: 19, y: 10),
+                       control1: CGPoint(x: 15.5, y: 7.5),
+                       control2: CGPoint(x: 19, y: 7))
+            p.addCurve(to: CGPoint(x: 12, y: 20),
+                       control1: CGPoint(x: 19, y: 14.5),
+                       control2: CGPoint(x: 19, y: 20))
+            p.closeSubpath()
+            ctx.stroke(p, with: .foreground, style: stroke)
+
+        case .location:
+            var pin = Path()
+            pin.move(to: CGPoint(x: 12, y: 22))
+            pin.addCurve(to: CGPoint(x: 5, y: 10),
+                         control1: CGPoint(x: 5, y: 19),
+                         control2: CGPoint(x: 5, y: 14))
+            pin.addCurve(to: CGPoint(x: 19, y: 10),
+                         control1: CGPoint(x: 5, y: 3),
+                         control2: CGPoint(x: 19, y: 3))
+            pin.addCurve(to: CGPoint(x: 12, y: 22),
+                         control1: CGPoint(x: 19, y: 14),
+                         control2: CGPoint(x: 19, y: 19))
+            ctx.stroke(pin, with: .foreground, style: stroke)
+            var dot = Path(ellipseIn: CGRect(x: 9.5, y: 7.5, width: 5, height: 5))
+            ctx.stroke(dot, with: .foreground, style: stroke)
+
+        case .mountain:
+            var p = Path()
+            p.move(to: CGPoint(x: 3, y: 20))
+            p.addLine(to: CGPoint(x: 9, y: 9))
+            p.addLine(to: CGPoint(x: 13, y: 15))
+            p.addLine(to: CGPoint(x: 16, y: 11))
+            p.addLine(to: CGPoint(x: 21, y: 20))
+            p.closeSubpath()
+            ctx.stroke(p, with: .foreground, style: stroke)
+
+        case .timer:
+            var circle = Path(ellipseIn: CGRect(x: 4, y: 5, width: 16, height: 16))
+            ctx.stroke(circle, with: .foreground, style: stroke)
+            var hands = Path()
+            hands.move(to: CGPoint(x: 12, y: 13)); hands.addLine(to: CGPoint(x: 12, y: 9))
+            hands.move(to: CGPoint(x: 9, y: 3)); hands.addLine(to: CGPoint(x: 15, y: 3))
+            ctx.stroke(hands, with: .foreground, style: stroke)
+
+        case .ruler:
+            // Angled ruler
+            var rect = Path(roundedRect: CGRect(x: 3, y: 8, width: 18, height: 8), cornerRadius: 1)
+            var t = CGAffineTransform(translationX: 12, y: 12)
+                .rotated(by: -.pi / 15)
+                .translatedBy(x: -12, y: -12)
+            ctx.stroke(rect.applying(t), with: .foreground, style: stroke)
+
+        case .bell:
+            var body = Path()
+            body.move(to: CGPoint(x: 6, y: 16))
+            body.addLine(to: CGPoint(x: 6, y: 11))
+            body.addCurve(to: CGPoint(x: 18, y: 11),
+                          control1: CGPoint(x: 6, y: 5),
+                          control2: CGPoint(x: 18, y: 5))
+            body.addLine(to: CGPoint(x: 18, y: 16))
+            body.addLine(to: CGPoint(x: 20, y: 18))
+            body.addLine(to: CGPoint(x: 4, y: 18))
+            body.closeSubpath()
+            ctx.stroke(body, with: .foreground, style: stroke)
+            var clapper = Path()
+            clapper.move(to: CGPoint(x: 10, y: 20))
+            clapper.addCurve(to: CGPoint(x: 14, y: 20),
+                             control1: CGPoint(x: 10, y: 22),
+                             control2: CGPoint(x: 14, y: 22))
+            ctx.stroke(clapper, with: .foreground, style: stroke)
+
+        case .flag:
+            var p = Path()
+            p.move(to: CGPoint(x: 5, y: 3))
+            p.addLine(to: CGPoint(x: 5, y: 21))
+            p.move(to: CGPoint(x: 5, y: 3))
+            p.addLine(to: CGPoint(x: 19, y: 3))
+            p.addLine(to: CGPoint(x: 19, y: 12))
+            p.addLine(to: CGPoint(x: 5, y: 12))
+            ctx.stroke(p, with: .foreground, style: stroke)
+
+        case .gear:
+            var outer = Path(ellipseIn: CGRect(x: 9, y: 9, width: 6, height: 6))
+            ctx.stroke(outer, with: .foreground, style: stroke)
+            // Gear teeth via outer ring
+            var ring = Path(ellipseIn: CGRect(x: 3, y: 3, width: 18, height: 18))
+            var thinStroke = StrokeStyle(lineWidth: (strokeWeight / scale) * 0.5, lineCap: .round, lineJoin: .round)
+            ctx.stroke(ring, with: .foreground, style: thinStroke)
+            // 8 spokes for teeth suggestion
+            let spokes: [(CGPoint, CGPoint)] = [
+                (CGPoint(x: 12, y: 2), CGPoint(x: 12, y: 4)),
+                (CGPoint(x: 12, y: 20), CGPoint(x: 12, y: 22)),
+                (CGPoint(x: 2, y: 12), CGPoint(x: 4, y: 12)),
+                (CGPoint(x: 20, y: 12), CGPoint(x: 22, y: 12)),
+                (CGPoint(x: 4.9, y: 4.9), CGPoint(x: 6.3, y: 6.3)),
+                (CGPoint(x: 17.7, y: 17.7), CGPoint(x: 19.1, y: 19.1)),
+                (CGPoint(x: 4.9, y: 19.1), CGPoint(x: 6.3, y: 17.7)),
+                (CGPoint(x: 17.7, y: 6.3), CGPoint(x: 19.1, y: 4.9)),
+            ]
+            for (a, b) in spokes {
+                var sp = Path(); sp.move(to: a); sp.addLine(to: b)
+                ctx.stroke(sp, with: .foreground, style: stroke)
+            }
+        }
     }
 }
+
+// MARK: - Convenience label init
 
 extension Label where Title == Text, Icon == StrideIcon {
     init(_ title: String, strideIcon: StrideIconName, size: CGFloat = 20, color: Color = .primary) {
@@ -457,18 +499,21 @@ extension Label where Title == Text, Icon == StrideIcon {
     }
 }
 
+// MARK: - Preview
+
 #Preview {
     let all: [(String, StrideIconName)] = [
-        ("run", .run), ("shoe", .shoe), ("road", .road), ("flame", .flame),
-        ("bolt", .bolt), ("moon", .moon), ("flag", .flag), ("dumbbell", .dumbbell),
-        ("home", .home), ("calendar", .calendar), ("history", .history), ("chart", .chart),
-        ("gear", .gear), ("map", .map), ("search", .search), ("heart", .heart),
-        ("medal", .medal), ("sun", .sun), ("cloud", .cloud), ("rain", .rain)
+        ("run", .run), ("walk", .walk), ("tempo", .tempo), ("bolt", .bolt),
+        ("flame", .flame), ("tortoise", .tortoise), ("moon", .moon), ("trophy", .trophy),
+        ("dumbbell", .dumbbell), ("barbell", .barbell), ("home", .home), ("calendar", .calendar),
+        ("play", .play), ("history", .history), ("chart", .chart),
+        ("chevronR", .chevronRight), ("check", .check), ("pause", .pause),
+        ("stop", .stop), ("lock", .lock), ("timer", .timer), ("flag", .flag), ("gear", .gear),
     ]
     return LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 5), spacing: 16) {
         ForEach(all, id: \.0) { name, icon in
             VStack(spacing: 4) {
-                PixelIcon(name: icon, size: 28, color: .primary)
+                StrideIcon(name: icon, size: 28, color: .primary)
                 Text(name).font(.system(size: 9))
             }
         }

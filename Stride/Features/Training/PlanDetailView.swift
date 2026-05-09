@@ -35,7 +35,7 @@ struct PlanDetailView: View {
                 Button(role: .destructive) {
                     showDeleteConfirmation = true
                 } label: {
-                    Label("Delete Plan", strideIcon: .trash)
+                    Label("Delete Plan", systemImage: "trash")
                 }
             }
         }

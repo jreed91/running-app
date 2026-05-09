@@ -22,12 +22,9 @@ struct AssociateWorkoutSheet: View {
             Group {
                 if unassociated.isEmpty {
                     ContentUnavailableView(
-                        label: {
-                            Label("No Available Workouts", strideIcon: .calendar)
-                        },
-                        description: {
-                            Text("All scheduled workouts are already linked to a completed run.")
-                        }
+                        "No Available Workouts",
+                        systemImage: "calendar.badge.exclamationmark",
+                        description: Text("All scheduled workouts are already linked to a completed run.")
                     )
                 } else {
                     List(unassociated, id: \.id) { scheduled in

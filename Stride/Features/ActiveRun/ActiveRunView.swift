@@ -142,7 +142,8 @@ struct ActiveRunView: View {
             tracker.setLocation(selectedLocation)
         } label: {
             glassPill {
-                StrideIcon(name: selectedLocation.strideIcon, size: 13, color: .white)
+                Image(systemName: selectedLocation.systemImage)
+                    .font(.system(size: 13, weight: .semibold))
                 Text(selectedLocation.displayName)
                     .font(.system(size: 12, weight: .bold))
                     .kerning(0.5)

@@ -68,12 +68,9 @@ struct PlanTabView: View {
                     }
                 } else {
                     ContentUnavailableView(
-                        label: {
-                            Label("No Active Plan", strideIcon: .calendar)
-                        },
-                        description: {
-                            Text("Tap + to generate a personalised training plan.")
-                        }
+                        "No Active Plan",
+                        systemImage: "calendar.badge.plus",
+                        description: Text("Tap + to generate a personalised training plan.")
                     )
                 }
             }
@@ -81,7 +78,7 @@ struct PlanTabView: View {
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button { showNewPlanSheet = true } label: {
-                        Label("New Plan", strideIcon: .plus)
+                        Label("New Plan", systemImage: "plus")
                     }
                     .disabled(profiles.isEmpty)
                 }
@@ -403,7 +400,9 @@ private struct SmartAdaptPlanCard: View {
                             ProgressView()
                                 .controlSize(.small)
                         } else {
-                            StrideIcon(name: .sparkles, size: 20, color: .brand)
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundStyle(.brand)
                         }
                     }
 
