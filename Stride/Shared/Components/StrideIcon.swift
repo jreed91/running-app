@@ -85,7 +85,7 @@ enum StrideIconName: String {
     }
 
     // swiftlint:disable function_body_length
-    var pixels: [PixelBlock] {
+    fileprivate var pixels: [PixelBlock] {
         switch self {
         case .run:
             return [
@@ -399,7 +399,7 @@ enum StrideIconName: String {
     }
 }
 
-private struct PixelBlock {
+fileprivate struct PixelBlock {
     let x: CGFloat
     let y: CGFloat
     let width: CGFloat
