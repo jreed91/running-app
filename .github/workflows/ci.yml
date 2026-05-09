@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main, develop]
 
+permissions:
+  contents: read
+  pull-requests: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -16,6 +20,30 @@ env:
   IOS_VERSION: "26.4"
 
 jobs:
+  # ── Change detection ────────────────────────────────────────────────────────
+  changes:
+    name: Detect iOS changes
+    runs-on: ubuntu-latest
+    outputs:
+      ios: ${{ steps.filter.outputs.ios }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 20
+
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            ios:
+              - 'Stride/**'
+              - 'StrideTests/**'
+              - 'StrideUITests/**'
+              - 'project.yml'
+              - 'ci_scripts/Package.resolved'
+              - '.github/workflows/ci.yml'
+
   # ── Lint ────────────────────────────────────────────────────────────────────
   lint:
     name: Lint (SwiftLint)
@@ -26,27 +54,25 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Detect changed Swift files
+        id: swift_changes
+        uses: dorny/paths-filter@v4
+        with:
+          list-files: shell
+          filters: |
+            swift:
+              - added|modified: '**/*.swift'
+
       - name: Install SwiftLint
+        if: github.event_name != 'pull_request' || steps.swift_changes.outputs.swift == 'true'
         run: brew install swiftlint
 
       - name: Run SwiftLint
+        if: github.event_name != 'pull_request' || steps.swift_changes.outputs.swift == 'true'
         run: |
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            git diff --name-only --diff-filter=ACMR \
-              "${{ github.event.pull_request.base.sha }}" \
-              "${{ github.event.pull_request.head.sha }}" \
-              -- '*.swift' > changed-swift-files.txt
-
-            if [[ ! -s changed-swift-files.txt ]]; then
-              echo "No Swift files changed; skipping SwiftLint."
-              exit 0
-            fi
-
-            status=0
-            while IFS= read -r file; do
-              swiftlint lint --reporter github-actions-logging "$file" || status=$?
-            done < changed-swift-files.txt
-            exit "$status"
+            swiftlint lint --reporter github-actions-logging ${{ steps.swift_changes.outputs.swift_files }}
+            exit $?
           fi
 
           swiftlint lint --reporter github-actions-logging
@@ -55,7 +81,8 @@ jobs:
   test-ios:
     name: Test — iOS
     runs-on: macos-26
-    needs: lint
+    needs: [changes, lint]
+    if: needs.changes.outputs.ios == 'true'
 
     steps:
       - uses: actions/checkout@v4
@@ -170,7 +197,7 @@ jobs:
   archive:
     name: Archive
     runs-on: macos-26
-    needs: test-ios
+    needs: [changes, test-ios]
     # Only archive on pushes to main (not PRs)
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
