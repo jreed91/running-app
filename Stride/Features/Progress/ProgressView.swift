@@ -14,7 +14,6 @@ struct ProgressDashboardView: View {
 
     @State private var selectedVolumeDate: Date? = nil
     @State private var selectedPaceDate: Date? = nil
-    @State private var selectedPredictionDate: Date? = nil
     @State private var selectedHRDate: Date? = nil
     @State private var selectedElevationDate: Date? = nil
     @State private var selectedVO2Date: Date? = nil
@@ -25,8 +24,9 @@ struct ProgressDashboardView: View {
     @State private var selectedTab: ProgressTab = .stats
 
     enum ProgressTab: String, CaseIterable {
-        case stats  = "Stats"
-        case medals = "Medals"
+        case stats    = "Stats"
+        case insights = "Insights"
+        case medals   = "Medals"
     }
 
     enum ChartRange: String, CaseIterable {
@@ -68,7 +68,9 @@ struct ProgressDashboardView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 tabPicker
-                if selectedTab == .stats {
+                if selectedTab == .insights {
+                    RaceInsightsView()
+                } else if selectedTab == .stats {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 16) {
                             summaryHeader
@@ -87,30 +89,22 @@ struct ProgressDashboardView: View {
                                 .opacity(progressAppeared ? 1 : 0)
                                 .offset(y: progressAppeared ? 0 : 18)
                                 .adaptiveAnimation(AppAnimation.entrance.delay(0.20), value: progressAppeared)
-                            racePacePredictionChart
-                                .opacity(progressAppeared ? 1 : 0)
-                                .offset(y: progressAppeared ? 0 : 18)
-                                .adaptiveAnimation(AppAnimation.entrance.delay(0.25), value: progressAppeared)
-                            racePaceSummaryCard
-                                .opacity(progressAppeared ? 1 : 0)
-                                .offset(y: progressAppeared ? 0 : 18)
-                                .adaptiveAnimation(AppAnimation.entrance.delay(0.30), value: progressAppeared)
                             heartRateTrendChart
                                 .opacity(progressAppeared ? 1 : 0)
                                 .offset(y: progressAppeared ? 0 : 18)
-                                .adaptiveAnimation(AppAnimation.entrance.delay(0.35), value: progressAppeared)
+                                .adaptiveAnimation(AppAnimation.entrance.delay(0.25), value: progressAppeared)
                             elevationTrendChart
                                 .opacity(progressAppeared ? 1 : 0)
                                 .offset(y: progressAppeared ? 0 : 18)
-                                .adaptiveAnimation(AppAnimation.entrance.delay(0.40), value: progressAppeared)
+                                .adaptiveAnimation(AppAnimation.entrance.delay(0.30), value: progressAppeared)
                             vo2MaxTrendChart
                                 .opacity(progressAppeared ? 1 : 0)
                                 .offset(y: progressAppeared ? 0 : 18)
-                                .adaptiveAnimation(AppAnimation.entrance.delay(0.45), value: progressAppeared)
+                                .adaptiveAnimation(AppAnimation.entrance.delay(0.35), value: progressAppeared)
                             periodSummaryCard
                                 .opacity(progressAppeared ? 1 : 0)
                                 .offset(y: progressAppeared ? 0 : 18)
-                                .adaptiveAnimation(AppAnimation.entrance.delay(0.50), value: progressAppeared)
+                                .adaptiveAnimation(AppAnimation.entrance.delay(0.40), value: progressAppeared)
                         }
                         .padding()
                         .frame(maxWidth: .infinity)
@@ -126,7 +120,6 @@ struct ProgressDashboardView: View {
         .onChange(of: selectedRange) {
             selectedVolumeDate = nil
             selectedPaceDate = nil
-            selectedPredictionDate = nil
             selectedHRDate = nil
             selectedElevationDate = nil
             selectedVO2Date = nil
@@ -345,102 +338,6 @@ struct ProgressDashboardView: View {
         }
     }
 
-    // MARK: - Predicted race pace chart
-
-    private var racePacePredictionChart: some View {
-        chartCard("PREDICTED RACE PACE") {
-            if pacePredictionPoints.isEmpty {
-                emptyDataPlaceholder("Log at least 2 runs of 1.5 km+ to see a prediction.")
-            } else {
-                Chart {
-                    ForEach(pacePredictionPoints) { point in
-                        LineMark(
-                            x: .value("Date", point.date),
-                            y: .value("Predicted Pace", point.predictedPaceSecondsPerKm)
-                        )
-                        .foregroundStyle(Color.brand)
-                        .interpolationMethod(.catmullRom)
-                        PointMark(
-                            x: .value("Date", point.date),
-                            y: .value("Predicted Pace", point.predictedPaceSecondsPerKm)
-                        )
-                        .foregroundStyle(Color.brand)
-                        .symbolSize(
-                            selectedPredictionDate.flatMap { closestPredictionPoint(to: $0) }?.id == point.id ? 80 : 36
-                        )
-                    }
-                    if let selected = selectedPredictionDate,
-                       let point = closestPredictionPoint(to: selected) {
-                        selectionRule(x: .value("Date", point.date)) {
-                            tooltipContainer {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(point.date, format: .dateTime.month(.abbreviated).day())
-                                        .font(.caption2).foregroundStyle(.secondary)
-                                    Text(point.predictedPaceSecondsPerKm.paceString(unit: appSettings.unitPreference))
-                                        .font(.caption).bold()
-                                }
-                            }
-                        }
-                    }
-                }
-                .frame(height: 140)
-                .chartYScale(domain: .automatic(includesZero: false))
-                .chartYAxis {
-                    AxisMarks { value in
-                        AxisValueLabel {
-                            if let secs = value.as(Double.self) {
-                                Text(secs.paceString(unit: appSettings.unitPreference)
-                                    .replacingOccurrences(of: " \(appSettings.unitPreference.paceLabel)", with: ""))
-                            }
-                        }
-                    }
-                }
-                .chartXAxis {
-                    AxisMarks(values: .stride(by: .month)) {
-                        AxisValueLabel(format: .dateTime.month(.abbreviated))
-                    }
-                }
-                .chartXSelection(value: $selectedPredictionDate)
-                Text("Lower is faster")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    // MARK: - Race fitness card
-
-    private var racePaceSummaryCard: some View {
-        let trend = paceTrend
-        let raceName = profile?.goalRace.displayName ?? "Race"
-        return VStack(alignment: .leading, spacing: 12) {
-            Text("RACE FITNESS").font(.sectionHeader).foregroundStyle(.secondary)
-            HStack(alignment: .top, spacing: 0) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Predicted \(raceName)")
-                        .font(.caption).foregroundStyle(.secondary)
-                    Text(currentPredictedFinishTime)
-                        .font(.metricSmall)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                VStack(alignment: .trailing, spacing: 4) {
-                    Text("Trend")
-                        .font(.caption).foregroundStyle(.secondary)
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(trend.color)
-                            .frame(width: 8, height: 8)
-                        Text(trend.label)
-                            .font(.bodyStrong)
-                            .foregroundStyle(trend.color)
-                    }
-                }
-            }
-        }
-        .padding(16)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
-    }
-
     // MARK: - Heart rate trend chart
 
     private var heartRateTrendChart: some View {
@@ -654,57 +551,6 @@ struct ProgressDashboardView: View {
         .frame(height: 60)
     }
 
-    // MARK: - Data helpers
-
-    private struct PacePredictionPoint: Identifiable {
-        let id = UUID()
-        let date: Date
-        let predictedPaceSecondsPerKm: Double
-    }
-
-    private var pacePredictionPoints: [PacePredictionPoint] {
-        guard let raceDistance = profile?.goalRace.distanceMeters else { return [] }
-        return filteredWorkouts.compactMap { workout in
-            guard let pace = PaceCalculatorService.predictedRacePaceSecondsPerKm(
-                workoutDistanceMeters: workout.distanceMeters,
-                workoutDurationSeconds: workout.durationSeconds,
-                raceDistanceMeters: raceDistance
-            ) else { return nil }
-            return PacePredictionPoint(date: workout.date, predictedPaceSecondsPerKm: pace)
-        }
-        .sorted { $0.date < $1.date }
-    }
-
-    private var paceTrend: (label: String, color: Color) {
-        guard pacePredictionPoints.count >= 3 else {
-            return ("Not enough data", .secondary)
-        }
-        let rawPoints = pacePredictionPoints.map {
-            (x: $0.date.timeIntervalSinceReferenceDate, y: $0.predictedPaceSecondsPerKm)
-        }
-        guard let slopePerSecond = PaceCalculatorService.linearRegressionSlope(rawPoints) else {
-            return ("Stable", .secondary)
-        }
-        let slopePerWeek = slopePerSecond * 7 * 86_400
-        switch slopePerWeek {
-        case ..<(-1.0): return ("Improving", Color.success)
-        case 1.0...:    return ("Declining", Color.destructive)
-        default:        return ("Stable", Color.warning)
-        }
-    }
-
-    private var currentPredictedFinishTime: String {
-        guard let raceDistance = profile?.goalRace.distanceMeters,
-              let mostRecent = filteredWorkouts.last(where: { $0.distanceMeters >= 1_500 }),
-              let pace = PaceCalculatorService.predictedRacePaceSecondsPerKm(
-                  workoutDistanceMeters: mostRecent.distanceMeters,
-                  workoutDurationSeconds: mostRecent.durationSeconds,
-                  raceDistanceMeters: raceDistance
-              )
-        else { return "--:--" }
-        return (pace * (raceDistance / 1_000)).durationString
-    }
-
     // MARK: - Selection helpers
 
     private func closestWorkout(to date: Date, in list: [RunWorkout]) -> RunWorkout? {
@@ -713,10 +559,6 @@ struct ProgressDashboardView: View {
 
     private func closestWeekBucket(to date: Date) -> WeekBucket? {
         weeklyBuckets.min(by: { abs($0.week.timeIntervalSince(date)) < abs($1.week.timeIntervalSince(date)) })
-    }
-
-    private func closestPredictionPoint(to date: Date) -> PacePredictionPoint? {
-        pacePredictionPoints.min(by: { abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date)) })
     }
 
     private func closestVO2Point(to date: Date) -> VO2Point? {
