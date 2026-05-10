@@ -21,13 +21,11 @@ echo "--- Generating TestFlight 'What to Test' notes ---"
 cd "$CI_PRIMARY_REPOSITORY_PATH"
 
 # ── Build the notes ──────────────────────────────────────────────────────────
-LAST_COMMIT=$(git log -1 --pretty=format:"• %s" 2>/dev/null || echo "")
-[ -z "$LAST_COMMIT" ] && LAST_COMMIT="• Build ${CI_BUILD_NUMBER:-local}"
+LAST_COMMIT=$(git log -1 --pretty=format:"%s" 2>/dev/null || echo "")
+[ -z "$LAST_COMMIT" ] && LAST_COMMIT="Build ${CI_BUILD_NUMBER:-local}"
 
 NOTES="Build ${CI_BUILD_NUMBER:-local} (${CI_BRANCH:-unknown})
 
-Testing instructions:
-Verify the changes from these commits:
 ${LAST_COMMIT}"
 
 # ── Write to the file Xcode Cloud reads for TestFlight notes ─────────────────
