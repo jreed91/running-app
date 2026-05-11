@@ -236,7 +236,7 @@ struct DashboardView: View {
     @State private var showActiveRun = false
     @State private var showStrengthWorkout = false
     @State private var selectedDate = Date()
-    @State private var recoveryDismissed = false
+    @AppStorage("dismissedMissedWorkoutDate") private var dismissedMissedWorkoutInterval: Double = 0
     @State private var isHandlingRecovery = false
 
     @Namespace private var workoutCardNamespace
@@ -245,8 +245,12 @@ struct DashboardView: View {
     private var activePlan: TrainingPlan? { activePlans.first }
 
     private var missedWorkoutInfo: MissedWorkoutInfo? {
-        guard !recoveryDismissed, let plan = activePlan else { return nil }
-        return MissedWorkoutDetector().detect(in: plan)
+        guard let plan = activePlan else { return nil }
+        guard let info = MissedWorkoutDetector().detect(in: plan) else { return nil }
+        guard dismissedMissedWorkoutInterval == 0 ||
+              !Calendar.current.isDate(info.firstMissedDate, inSameDayAs: Date(timeIntervalSince1970: dismissedMissedWorkoutInterval))
+        else { return nil }
+        return info
     }
 
     var body: some View {
@@ -269,7 +273,7 @@ struct DashboardView: View {
                                 isLoading: isHandlingRecovery,
                                 onPickUpWhereLeftOff: { handlePickUp(info: info) },
                                 onRebuild: { handleRebuild() },
-                                onDismiss: { recoveryDismissed = true }
+                                onDismiss: { dismissedMissedWorkoutInterval = info.firstMissedDate.timeIntervalSince1970 }
                             )
                             .opacity(dashboardAppeared ? 1 : 0)
                             .offset(y: dashboardAppeared ? 0 : 20)
@@ -560,7 +564,7 @@ struct DashboardView: View {
         isHandlingRecovery = true
         do {
             try container.shiftMissedWorkoutsForward(plan: plan, by: info.daysToShift, context: context)
-            recoveryDismissed = true
+            dismissedMissedWorkoutInterval = info.firstMissedDate.timeIntervalSince1970
         } catch {
             AppLogger.log("Recovery shift failed: \(error)", label: "Dashboard", level: .error)
         }
@@ -577,7 +581,6 @@ struct DashboardView: View {
                 context: context,
                 unitPreference: appSettings.unitPreference
             )
-            recoveryDismissed = true
         } catch {
             AppLogger.log("Plan rebuild failed: \(error)", label: "Dashboard", level: .error)
         }
