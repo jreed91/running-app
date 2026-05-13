@@ -15,6 +15,11 @@ final class NotificationService: NSObject {
 
     private let center = UNUserNotificationCenter.current()
 
+    // Guards against concurrent scheduleMorningReminders calls racing through the
+    // UNUserNotificationCenter.add path and delivering two notifications before iOS
+    // can replace the first pending one with the second (same-ID) request.
+    private var isBulkScheduling = false
+
     /// Called on MainActor when the user taps a SYNCED_RUN notification.
     /// The argument is the `RunWorkout.id.uuidString` embedded in the notification payload.
     var onSyncedRunTapped: ((String) -> Void)? {
@@ -96,7 +101,14 @@ final class NotificationService: NSObject {
 
     /// Schedules 8 AM morning reminders for all future non-rest workouts in a plan.
     func scheduleMorningReminders(for plan: TrainingPlan) async {
+        // Prevent concurrent calls from racing through center.add and delivering
+        // duplicate notifications before iOS can replace the pending request.
+        guard !isBulkScheduling else { return }
+
         guard await isAuthorized else { return }
+        isBulkScheduling = true
+        defer { isBulkScheduling = false }
+
         for week in plan.weeks ?? [] {
             for workout in week.workouts ?? [] where !workout.isCompleted {
                 try? await scheduleMorningReminder(for: workout)
