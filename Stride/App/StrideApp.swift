@@ -126,7 +126,10 @@ struct ContentView: View {
                 MainTabView()
             }
         }
-        .task { deduplicate() }
+        .task(id: activePlans.first?.id) {
+            deduplicate()
+            await reconcileActivePlanIntegrations()
+        }
         .onChange(of: profiles.count) { _, _ in deduplicate() }
         .onChange(of: activePlans.count) { oldCount, newCount in
             deduplicate()
@@ -191,6 +194,32 @@ struct ContentView: View {
         if activePlans.count > 1 {
             activePlans.dropFirst().forEach { context.delete($0) }
             try? context.save()
+        }
+    }
+
+    @MainActor
+    private func reconcileActivePlanIntegrations() async {
+        guard !UITestingSupport.isEnabled, let plan = activePlans.first else { return }
+
+        if appSettings.morningReminderEnabled {
+            await container.notificationService.scheduleMorningReminders(for: plan)
+        } else {
+            await container.notificationService.cancelAllMorningReminders()
+        }
+
+        do {
+            try await container.healthKitRepository.syncWorkoutPlans(
+                for: plan,
+                unitPreference: appSettings.unitPreference
+            )
+            try? context.save()
+            AppLogger.log("Active plan synced to WorkoutKit.", label: "WorkoutKit", level: .info)
+        } catch {
+            AppLogger.log(
+                "Active plan WorkoutKit sync failed: \(error.localizedDescription)",
+                label: "WorkoutKit",
+                level: .error
+            )
         }
     }
 

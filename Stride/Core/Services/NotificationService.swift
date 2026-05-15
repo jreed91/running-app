@@ -109,6 +109,8 @@ final class NotificationService: NSObject {
         isBulkScheduling = true
         defer { isBulkScheduling = false }
 
+        await cancelAllMorningReminders()
+
         for week in plan.weeks ?? [] {
             for workout in week.workouts ?? [] where !workout.isCompleted {
                 try? await scheduleMorningReminder(for: workout)

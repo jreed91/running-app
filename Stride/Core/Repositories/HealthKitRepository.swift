@@ -56,6 +56,20 @@ private final class HealthKitObserverCompletion: @unchecked Sendable {
     }
 }
 
+private enum HealthKitRepositoryError: LocalizedError {
+    case workoutKitUnsupported
+    case workoutKitNotAuthorized
+
+    var errorDescription: String? {
+        switch self {
+        case .workoutKitUnsupported:
+            return "WorkoutKit scheduling is not supported on this device."
+        case .workoutKitNotAuthorized:
+            return "WorkoutKit scheduling is not authorized."
+        }
+    }
+}
+
 final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendable {
     private let store = HKHealthStore()
     // Retained so the observer is not deallocated after registration.
@@ -129,17 +143,28 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
     // MARK: - Workout plans (WorkoutKit)
 
     @MainActor func syncWorkoutPlans(for plan: TrainingPlan, unitPreference: UnitPreference) async throws {
-        guard WorkoutScheduler.isSupported else { return }
+        guard WorkoutScheduler.isSupported else {
+            throw HealthKitRepositoryError.workoutKitUnsupported
+        }
         let scheduler = WorkoutScheduler.shared
 
         if await scheduler.authorizationState == .notDetermined {
             let state = await scheduler.requestAuthorization()
-            guard state == .authorized else { return }
+            guard state == .authorized else {
+                throw HealthKitRepositoryError.workoutKitNotAuthorized
+            }
         }
-        guard await scheduler.authorizationState == .authorized else { return }
+        guard await scheduler.authorizationState == .authorized else {
+            throw HealthKitRepositoryError.workoutKitNotAuthorized
+        }
 
         let allWorkouts = (plan.weeks ?? []).flatMap { $0.workouts ?? [] }
-        let existingIDs = Set(allWorkouts.compactMap(\.healthKitPlanID))
+        let syncableWorkouts = allWorkouts.filter {
+            $0.workoutType != .rest &&
+            !$0.isCompleted
+        }
+        var existingIDs = Set(allWorkouts.map { $0.id.uuidString })
+        existingIDs.formUnion(allWorkouts.compactMap(\.healthKitPlanID))
         if !existingIDs.isEmpty {
             let scheduled = await scheduler.scheduledWorkouts
             for entry in scheduled where existingIDs.contains(entry.plan.id.uuidString) {
@@ -149,10 +174,8 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         }
 
         let startOfToday = Calendar.current.startOfDay(for: Date())
-        for workout in allWorkouts
-        where workout.workoutType != .rest
-           && !workout.isCompleted
-           && workout.scheduledDate >= startOfToday
+        for workout in syncableWorkouts
+        where workout.scheduledDate >= startOfToday
         {
             let workoutPlan = makeWorkoutPlan(for: workout, unitPreference: unitPreference)
             let dateComponents = Calendar.current.dateComponents(
