@@ -568,7 +568,7 @@ struct SettingsView: View {
                     Button {
                         resendWorkoutsToWorkoutKit(plan: plan)
                     } label: {
-                        settingsRow(icon: .sync, iconColor: .brand, title: "Resend Plan to WorkoutKit") {
+                        settingsRow(icon: .calendar, iconColor: .brand, title: "Resend Plan to WorkoutKit") {
                             EmptyView()
                         }
                     }
