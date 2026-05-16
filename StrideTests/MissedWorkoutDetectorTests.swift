@@ -116,7 +116,11 @@ struct MissedWorkoutDetectorTests {
 
         // Leave first N-1 missed, mark the last as completed → trailing streak = 0
         past.dropLast(1).forEach { $0.isCompleted = false }
-        past.last!.isCompleted = true
+        guard let last = past.last else {
+            Issue.record("Expected at least one past workout")
+            return
+        }
+        last.isCompleted = true
 
         let result = detector.detect(in: plan, today: today)
         #expect(result == nil)
@@ -158,7 +162,7 @@ struct MissedWorkoutDetectorTests {
             from: Calendar.current.startOfDay(for: first.scheduledDate),
             to: Calendar.current.startOfDay(for: today)
         ).day ?? 0
-        #expect(result!.daysToShift == expected)
+        #expect(result?.daysToShift == expected)
     }
 
     // MARK: Excluded types

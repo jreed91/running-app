@@ -45,9 +45,16 @@ private extension AppElevation {
 private struct AppShadowModifier: ViewModifier {
     let level: AppElevation
 
+    @ViewBuilder
     func body(content: Content) -> some View {
-        level.layers.reduce(AnyView(content)) { view, layer in
-            AnyView(view.shadow(color: layer.color, radius: layer.radius, x: layer.x, y: layer.y))
+        switch level {
+        case .e0:
+            content
+        case .e1, .e2, .e3:
+            let layers = level.layers
+            content
+                .shadow(color: layers[0].color, radius: layers[0].radius, x: layers[0].x, y: layers[0].y)
+                .shadow(color: layers[1].color, radius: layers[1].radius, x: layers[1].x, y: layers[1].y)
         }
     }
 }

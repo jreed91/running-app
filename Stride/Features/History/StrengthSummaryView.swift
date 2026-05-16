@@ -93,9 +93,11 @@ struct StrengthSummaryView: View {
             let grouped = Dictionary(grouping: workout.completedSets, by: \.exerciseIndex)
             ForEach(grouped.keys.sorted(), id: \.self) { exerciseIndex in
                 let sets = grouped[exerciseIndex] ?? []
-                let exerciseName = plan?.exercises.indices.contains(exerciseIndex) == true
-                    ? plan!.exercises[exerciseIndex].name
-                    : "Exercise \(exerciseIndex + 1)"
+                let exerciseName: String = if let plan, plan.exercises.indices.contains(exerciseIndex) {
+                    plan.exercises[exerciseIndex].name
+                } else {
+                    "Exercise \(exerciseIndex + 1)"
+                }
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text(exerciseName)

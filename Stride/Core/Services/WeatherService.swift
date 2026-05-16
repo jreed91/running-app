@@ -14,7 +14,7 @@ final class WeatherService: Sendable {
         #if targetEnvironment(simulator)
         AppLogger.log("WeatherKit skipped on simulator — run on device", label: "WeatherKit", level: .debug)
         return nil
-        #endif
+        #else
 
         let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
         AppLogger.log(
@@ -82,5 +82,6 @@ final class WeatherService: Sendable {
             level: .info
         )
         return result
+        #endif
     }
 }

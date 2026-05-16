@@ -552,7 +552,6 @@ struct TrainingPlanService {
         case (.peak, .marathon):          return [.tempo, .interval]
         case (.peak, _):                  return [.interval, .tempo]
         case (.taper, _):                 return [.tempo]
-        default:                          return []
         }
     }
 

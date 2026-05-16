@@ -224,8 +224,10 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
 
     private func startTimer() {
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            guard let self, self.trackingState == .active else { return }
-            Task { @MainActor in self.elapsedSeconds += 1 }
+            Task { @MainActor [weak self] in
+                guard let self, self.trackingState == .active else { return }
+                self.elapsedSeconds += 1
+            }
         }
     }
 

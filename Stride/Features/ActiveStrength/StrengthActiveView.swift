@@ -22,6 +22,7 @@ struct StrengthActiveView: View {
     // Rest timer
     @State private var restTimerActive: Bool = false
     @State private var restTimeRemaining: Int = 0
+    @State private var restTimerTask: Task<Void, Never>?
     private let defaultRestSeconds = 60
 
     // Session timing
@@ -81,6 +82,7 @@ struct StrengthActiveView: View {
         } message: {
             Text("Your progress will be saved.")
         }
+        .onDisappear { endRestTimer() }
     }
 
     // MARK: - Header
@@ -204,10 +206,10 @@ struct StrengthActiveView: View {
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            if exercise.durationSeconds != nil {
+            if let durationSeconds = exercise.durationSeconds {
                 // Timed exercise — just log completion with no rep count
                 VStack(spacing: 8) {
-                    Text("Hold for \(exercise.durationSeconds!) seconds")
+                    Text("Hold for \(durationSeconds) seconds")
                         .font(.system(size: 17, weight: .semibold))
                     Text("Tap below when done")
                         .font(.system(size: 13))
@@ -315,12 +317,11 @@ struct StrengthActiveView: View {
 
     // MARK: - Completed Sets History
 
+    @ViewBuilder
     private var completedSetsHistory: some View {
         let setsForCurrentExercise = completedSets
             .filter { $0.exerciseIndex == currentExerciseIndex && !$0.skipped }
-        guard !setsForCurrentExercise.isEmpty else { return AnyView(EmptyView()) }
-
-        return AnyView(
+        if !setsForCurrentExercise.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 Text("COMPLETED SETS")
                     .font(.system(size: 11, weight: .semibold))
@@ -349,7 +350,7 @@ struct StrengthActiveView: View {
                     .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 10))
                 }
             }
-        )
+        }
     }
 
     // MARK: - Workout Complete
@@ -481,11 +482,13 @@ struct StrengthActiveView: View {
     }
 
     private func startRestTimer() {
+        restTimerTask?.cancel()
         restTimeRemaining = defaultRestSeconds
         restTimerActive = true
-        Task {
+        restTimerTask = Task { @MainActor in
             while restTimeRemaining > 0 && restTimerActive {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
+                guard !Task.isCancelled else { return }
                 guard restTimerActive else { break }
                 restTimeRemaining = max(0, restTimeRemaining - 1)
             }
@@ -494,6 +497,8 @@ struct StrengthActiveView: View {
     }
 
     private func endRestTimer() {
+        restTimerTask?.cancel()
+        restTimerTask = nil
         restTimerActive = false
         restTimeRemaining = 0
     }

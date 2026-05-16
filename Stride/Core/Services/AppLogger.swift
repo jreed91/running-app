@@ -1,10 +1,12 @@
 import Foundation
+import OSLog
 
 #if canImport(Pulse)
 import Pulse
 #endif
 
 enum AppLogger {
+    private static let subsystem = Bundle.main.bundleIdentifier ?? "com.running.stride"
 
     enum Level {
         case trace
@@ -31,7 +33,23 @@ enum AppLogger {
         )
         #endif
 
-        print("[\(label)] \(text)")
+        Logger(subsystem: subsystem, category: label)
+            .log(level: mapToOSLog(level), "\(text, privacy: .public)")
+    }
+
+    private static func mapToOSLog(_ level: Level) -> OSLogType {
+        switch level {
+        case .trace, .debug:
+            return .debug
+        case .info:
+            return .info
+        case .notice, .warning:
+            return .default
+        case .error:
+            return .error
+        case .critical:
+            return .fault
+        }
     }
 
     #if canImport(Pulse)
