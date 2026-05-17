@@ -3,6 +3,7 @@ import SwiftData
 
 struct AICoachChatView: View {
     private let workoutContext: RunWorkout?
+    private let initialPrompt: String?
 
     @Environment(AppSettings.self) private var appSettings
     @Environment(\.appContainer) private var container
@@ -19,10 +20,12 @@ struct AICoachChatView: View {
     @State private var messages: [AICoachChatMessage] = []
     @State private var draft = ""
     @State private var isWaitingForCoach = false
+    @State private var didSendInitialPrompt = false
     @FocusState private var isComposerFocused: Bool
 
-    init(workout: RunWorkout? = nil) {
+    init(workout: RunWorkout? = nil, initialPrompt: String? = nil) {
         self.workoutContext = workout
+        self.initialPrompt = initialPrompt
     }
 
     private var latestRun: RunWorkout? { workoutContext ?? recentRuns.first }
@@ -71,6 +74,9 @@ struct AICoachChatView: View {
                         .frame(width: 36, height: 36)
                         .background(.surfaceSecondary, in: Circle())
                 }
+            }
+            .task {
+                await sendInitialPromptIfNeeded()
             }
         }
     }
@@ -375,6 +381,17 @@ struct AICoachChatView: View {
                 )
             }
         }
+    }
+
+    @MainActor
+    private func sendInitialPromptIfNeeded() async {
+        guard !didSendInitialPrompt else { return }
+        didSendInitialPrompt = true
+        guard let prompt = initialPrompt?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !prompt.isEmpty else {
+            return
+        }
+        await send(prompt)
     }
 
     private func scrollToLatest(_ proxy: ScrollViewProxy) {

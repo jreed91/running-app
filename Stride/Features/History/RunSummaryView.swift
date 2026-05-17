@@ -32,6 +32,7 @@ struct RunSummaryView: View {
     @State private var aiReaction: AIReaction?
     @State private var isApplyingNextSessionFeedback = false
     @State private var nextSessionUpdateMessage: String?
+    @State private var coachChatRequest: AICoachChatRequest?
 
     private var matchedScheduled: ScheduledWorkout? {
         scheduledWorkouts.first { $0.completedWorkout?.id == workout.id }
@@ -106,6 +107,7 @@ struct RunSummaryView: View {
                     linkToPlannedWorkoutButton
                 }
                 routeMap
+                aiCoachAccessCard
                 statsGrid
                 paceInsightsSection
                 weatherSection
@@ -145,6 +147,9 @@ struct RunSummaryView: View {
         }
         .sheet(isPresented: $showAssociateSheet) {
             AssociateWorkoutSheet(workout: workout)
+        }
+        .sheet(item: $coachChatRequest) { request in
+            AICoachChatView(workout: workout, initialPrompt: request.prompt)
         }
         .confirmationDialog("Delete this workout?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
             Button("Delete", role: .destructive) {
@@ -287,6 +292,134 @@ struct RunSummaryView: View {
                 .frame(height: 180)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
             }
+        }
+    }
+
+    // MARK: Top AI Coach access
+
+    private var aiCoachAccessCard: some View {
+        Button {
+            handleTopCoachCardTap()
+        } label: {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(.white)
+                        .frame(width: 42, height: 42)
+                        .shadow(color: Color.brand.opacity(0.20), radius: 10, y: 4)
+                    if isLoadingAIInsight {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(.brand)
+                    } else {
+                        SparkleShape()
+                            .fill(Color.brand)
+                            .frame(width: 18, height: 18)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 6) {
+                        Text("AI COACH")
+                            .font(.system(size: 10.5, weight: .heavy))
+                            .kerning(1.4)
+                            .foregroundStyle(.brand)
+                        Circle()
+                            .fill(Color.brand)
+                            .frame(width: 5, height: 5)
+                        Text(topCoachBadgeText)
+                            .font(.system(size: 10, weight: .bold))
+                            .kerning(0.6)
+                            .foregroundStyle(.brand)
+                    }
+
+                    Text(topCoachHeadline)
+                        .font(.system(size: 14, weight: .bold))
+                        .kerning(-0.2)
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+
+                    if let confidence = topCoachConfidence {
+                        HStack(spacing: 6) {
+                            Capsule()
+                                .fill(Color.brand.opacity(0.18))
+                                .frame(width: 50, height: 3)
+                                .overlay(alignment: .leading) {
+                                    Capsule()
+                                        .fill(Color.brand)
+                                        .frame(width: 50 * CGFloat(confidence) / 100, height: 3)
+                                }
+                            Text("\(confidence)% conf.")
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .foregroundStyle(.brand)
+                        }
+                    }
+                }
+
+                Spacer(minLength: 8)
+                StrideIcon(name: .chevronRight, size: 14, color: .brand, strokeWeight: 2.4)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(
+                LinearGradient(
+                    colors: [Color.brand.opacity(0.20), Color.brand.opacity(0.075)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                in: RoundedRectangle(cornerRadius: 18)
+            )
+            .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Color.brand.opacity(0.12), lineWidth: 0.5))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("AI Coach")
+        .accessibilityHint(topCoachAccessibilityHint)
+    }
+
+    private var topCoachBadgeText: String {
+        guard appSettings.aiInsightsEnabled else { return "SETUP" }
+        guard hasAIKey else { return "KEY NEEDED" }
+        if isLoadingAIInsight { return "LOADING" }
+        return aiInsight?.apiReady == true ? "READY" : "NEW"
+    }
+
+    private var topCoachHeadline: String {
+        if let aiInsight, aiInsight.apiReady {
+            let headline = normalizedMarkdownText(aiInsight.headline)
+            return headline.isEmpty ? "Analysis ready. Ask a follow-up." : headline
+        }
+        if appSettings.aiInsightsEnabled, hasAIKey {
+            return "Get a diagnosis, evidence, and next-session actions."
+        }
+        return "Turn on AI Coach to ask follow-ups about this run."
+    }
+
+    private var topCoachConfidence: Int? {
+        guard let aiInsight, aiInsight.apiReady else { return nil }
+        return aiInsight.confidence
+    }
+
+    private var topCoachAccessibilityHint: String {
+        if aiInsight?.apiReady == true {
+            return "Opens AI Coach chat for this workout."
+        }
+        return "Loads AI Coach analysis for this workout."
+    }
+
+    @MainActor
+    private func handleTopCoachCardTap() {
+        if aiInsight?.apiReady == true {
+            coachChatRequest = AICoachChatRequest(prompt: "Walk me through the diagnosis for this run.")
+            return
+        }
+
+        guard appSettings.aiInsightsEnabled, hasAIKey else {
+            coachChatRequest = AICoachChatRequest(prompt: "What should I learn from this run?")
+            return
+        }
+
+        Task {
+            await loadAIInsight()
         }
     }
 
@@ -619,6 +752,7 @@ struct RunSummaryView: View {
                 } else if let aiInsight {
                     if aiInsight.apiReady {
                         aiDiagnosisCard(aiInsight)
+                        aiAskCoachCard
                         aiActionPlan(aiInsight)
                         aiNextSessionCard(aiInsight)
                         aiReactionRow(aiInsight)
@@ -674,6 +808,61 @@ struct RunSummaryView: View {
             in: RoundedRectangle(cornerRadius: 20)
         )
         .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(Color.warning.opacity(0.28), lineWidth: 0.5))
+    }
+
+    private var aiAskCoachCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("ASK COACH")
+                .font(.system(size: 11, weight: .bold))
+                .kerning(1.4)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 4)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(postRunCoachPrompts, id: \.self) { prompt in
+                        Button {
+                            coachChatRequest = AICoachChatRequest(prompt: prompt)
+                        } label: {
+                            Text(prompt)
+                                .font(.system(size: 12.5, weight: .semibold))
+                                .foregroundStyle(.brand)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(.surfaceSecondary, in: Capsule())
+                                .overlay(Capsule().strokeBorder(Color.brand.opacity(0.22), lineWidth: 0.5))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .scrollClipDisabled()
+
+            Button {
+                coachChatRequest = AICoachChatRequest(prompt: nil)
+            } label: {
+                HStack(spacing: 10) {
+                    SparkleShape()
+                        .fill(Color.brand)
+                        .frame(width: 13, height: 13)
+                    Text("Ask your coach...")
+                        .font(.system(size: 13.5))
+                        .foregroundStyle(.tertiary)
+                    Spacer()
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 30, height: 30)
+                        .background(Color.brand, in: Circle())
+                }
+                .padding(.leading, 14)
+                .padding(.trailing, 8)
+                .padding(.vertical, 8)
+                .background(.surfaceSecondary, in: Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.top, 2)
     }
 
     private func aiActionPlan(_ insight: AICoachInsight) -> some View {
@@ -1082,6 +1271,7 @@ struct RunSummaryView: View {
         }
 
         apply(adapted, to: nextWorkout)
+        removeDuplicateFutureRuns(preserving: nextWorkout)
         try? context.save()
 
         if let plan = nextWorkout.week?.plan {
@@ -1170,6 +1360,79 @@ struct RunSummaryView: View {
         scheduled.healthKitPlanID = nil
     }
 
+    private func removeDuplicateFutureRuns(preserving keeper: ScheduledWorkout) {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let planID = keeper.week?.plan?.id
+
+        let futureRuns = scheduledWorkouts.filter { scheduled in
+            guard let planID else { return false }
+            return scheduled.week?.plan?.id == planID
+                && !scheduled.isCompleted
+                && scheduled.completedWorkout == nil
+                && scheduled.completedStrengthWorkout == nil
+                && isRunWorkout(scheduled.workoutType)
+                && scheduled.scheduledDate >= today
+        }
+
+        let runsByDay = Dictionary(grouping: futureRuns) { scheduled in
+            calendar.startOfDay(for: scheduled.scheduledDate)
+        }
+
+        let duplicates = runsByDay.values.flatMap { sameDayRuns -> [ScheduledWorkout] in
+            guard sameDayRuns.count > 1 else { return [] }
+            let keeperForDay = preferredRun(from: sameDayRuns, preserving: keeper.id)
+            return sameDayRuns.filter { $0.id != keeperForDay.id }
+        }
+
+        for duplicate in duplicates {
+            duplicate.week?.workouts?.removeAll { $0.id == duplicate.id }
+            context.delete(duplicate)
+        }
+    }
+
+    private func preferredRun(
+        from workouts: [ScheduledWorkout],
+        preserving preservedID: UUID
+    ) -> ScheduledWorkout {
+        if let preserved = workouts.first(where: { $0.id == preservedID }) {
+            return preserved
+        }
+
+        return workouts.sorted { lhs, rhs in
+            let lhsPriority = runPriority(lhs.workoutType)
+            let rhsPriority = runPriority(rhs.workoutType)
+            if lhsPriority != rhsPriority {
+                return lhsPriority < rhsPriority
+            }
+            return lhs.scheduledDate < rhs.scheduledDate
+        }.first ?? workouts[0]
+    }
+
+    private func runPriority(_ type: WorkoutType) -> Int {
+        switch type {
+        case .race:
+            return 0
+        case .interval, .tempo:
+            return 1
+        case .longRun:
+            return 2
+        case .easy:
+            return 3
+        case .rest, .crossTraining, .strength:
+            return 4
+        }
+    }
+
+    private func isRunWorkout(_ type: WorkoutType) -> Bool {
+        switch type {
+        case .easy, .tempo, .interval, .longRun, .race:
+            return true
+        case .rest, .crossTraining, .strength:
+            return false
+        }
+    }
+
     private func workoutLabel(_ workout: ScheduledWorkout) -> String {
         let date = workout.scheduledDate.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
         return "\(date) \(workout.workoutType.displayName)"
@@ -1182,6 +1445,15 @@ struct RunSummaryView: View {
 
     private var hasAIKey: Bool {
         !appSettings.aiAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var postRunCoachPrompts: [String] {
+        [
+            "Why was my HR so high?",
+            "Should I rest tomorrow?",
+            "How does this compare to last week?",
+            "Adjust this week"
+        ]
     }
 
     // MARK: Split pace chart
@@ -1627,6 +1899,11 @@ struct RunSummaryView: View {
     private enum AIReaction {
         case up
         case down
+    }
+
+    private struct AICoachChatRequest: Identifiable {
+        let id = UUID()
+        let prompt: String?
     }
 
     private struct SparkleShape: Shape {
