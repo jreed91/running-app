@@ -19,6 +19,10 @@ struct MainTabView: View {
                 .tabItem {
                     Label("Progress", systemImage: "chart.line.uptrend.xyaxis")
                 }
+            AICoachChatView()
+                .tabItem {
+                    Label("Coach", systemImage: "sparkles")
+                }
             SettingsView()
                 .tabItem {
                     Label("Settings", systemImage: "gear")
