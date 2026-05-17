@@ -13,6 +13,11 @@ struct RunSummaryView: View {
     @Query private var scheduledWorkouts: [ScheduledWorkout]
     @Query(sort: \RunWorkout.date, order: .reverse) private var allWorkouts: [RunWorkout]
     @Query private var profiles: [UserProfile]
+    @Query(
+        filter: #Predicate<TrainingPlan> { $0.isActive },
+        sort: \TrainingPlan.createdAt, order: .reverse
+    )
+    private var activePlans: [TrainingPlan]
 
     // Chart selection state
     @State private var selectedSplitPaceKm: Int? = nil
@@ -25,9 +30,17 @@ struct RunSummaryView: View {
     @State private var aiStreamBuffer = ""
     @State private var showFullAIAnalysis = false
     @State private var aiReaction: AIReaction?
+    @State private var isApplyingNextSessionFeedback = false
+    @State private var nextSessionUpdateMessage: String?
 
     private var matchedScheduled: ScheduledWorkout? {
         scheduledWorkouts.first { $0.completedWorkout?.id == workout.id }
+    }
+
+    private var planForNextSessionUpdate: TrainingPlan? {
+        matchedScheduled?.week?.plan
+            ?? workout.scheduledWorkout?.week?.plan
+            ?? activePlans.first
     }
 
     private var estimatedVO2Max: Double? {
@@ -686,30 +699,52 @@ struct RunSummaryView: View {
     }
 
     private func aiNextSessionCard(_ insight: AICoachInsight) -> some View {
-        HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.success.opacity(0.14))
-                    .frame(width: 40, height: 40)
-                StrideIcon(name: .run, size: 20, color: .success, strokeWeight: 2)
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                Text("NEXT SESSION")
-                    .font(.system(size: 10, weight: .bold))
-                    .kerning(0.8)
-                    .foregroundStyle(.secondary)
-                Text(normalizedMarkdownText(insight.nextWorkoutSuggestion))
-                    .font(.system(size: 14, weight: .bold))
-                    .lineLimit(2)
-                if let rationale = insight.nextWorkoutRationale?.trimmingCharacters(in: .whitespacesAndNewlines), !rationale.isEmpty {
-                    Text(normalizedMarkdownText(rationale))
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                Task { await applyNextSessionFeedback(insight) }
+            } label: {
+                HStack(spacing: 12) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.success.opacity(0.14))
+                            .frame(width: 40, height: 40)
+                        if isApplyingNextSessionFeedback {
+                            ProgressView()
+                                .controlSize(.small)
+                                .tint(.success)
+                        } else {
+                            StrideIcon(name: .run, size: 20, color: .success, strokeWeight: 2)
+                        }
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("NEXT SESSION")
+                            .font(.system(size: 10, weight: .bold))
+                            .kerning(0.8)
+                            .foregroundStyle(.secondary)
+                        Text(normalizedMarkdownText(insight.nextWorkoutSuggestion))
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.primary)
+                            .lineLimit(2)
+                        if let rationale = insight.nextWorkoutRationale?.trimmingCharacters(in: .whitespacesAndNewlines), !rationale.isEmpty {
+                            Text(normalizedMarkdownText(rationale))
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                        }
+                    }
+                    Spacer()
+                    StrideIcon(name: .chevronRight, size: 14, color: .secondary, strokeWeight: 2.4)
                 }
             }
-            Spacer()
-            StrideIcon(name: .chevronRight, size: 14, color: .secondary, strokeWeight: 2.4)
+            .buttonStyle(.plain)
+            .disabled(isApplyingNextSessionFeedback || !canApplyNextSessionFeedback)
+
+            if let nextSessionUpdateMessage {
+                Text(nextSessionUpdateMessage)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(nextSessionUpdateMessage.hasPrefix("Updated") ? Color.success : Color.secondary)
+                    .padding(.horizontal, 2)
+            }
         }
         .padding(14)
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
@@ -1006,6 +1041,138 @@ struct RunSummaryView: View {
             workout.cachedAIInsight = result
             try? context.save()
         }
+    }
+
+    private var canApplyNextSessionFeedback: Bool {
+        hasAIKey && profiles.first != nil && nextWorkoutForFeedback() != nil
+    }
+
+    @MainActor
+    private func applyNextSessionFeedback(_ insight: AICoachInsight) async {
+        guard !isApplyingNextSessionFeedback else { return }
+        guard hasAIKey else {
+            nextSessionUpdateMessage = "Add an AI API key in Settings to update the plan."
+            return
+        }
+        guard let profile = profiles.first else {
+            nextSessionUpdateMessage = "Create a runner profile before updating planned workouts."
+            return
+        }
+        guard let nextWorkout = nextWorkoutForFeedback() else {
+            nextSessionUpdateMessage = "No upcoming planned run is available to update."
+            return
+        }
+
+        isApplyingNextSessionFeedback = true
+        nextSessionUpdateMessage = "Updating \(workoutLabel(nextWorkout))..."
+        defer { isApplyingNextSessionFeedback = false }
+
+        let seededWorkout = workoutSeededWithCoachFeedback(nextWorkout, insight: insight)
+        guard let adapted = await container.aiCoachService.adaptScheduledWorkoutWithProvider(
+            scheduled: seededWorkout,
+            recentHistory: Array(allWorkouts.prefix(50)),
+            profile: profile,
+            provider: appSettings.aiProvider,
+            apiKey: appSettings.aiAPIKey,
+            modelOverride: appSettings.aiModelOverride,
+            unitPreference: appSettings.unitPreference
+        ) else {
+            nextSessionUpdateMessage = "The coach feedback could not be applied. Try refreshing the AI analysis."
+            return
+        }
+
+        apply(adapted, to: nextWorkout)
+        try? context.save()
+
+        if let plan = nextWorkout.week?.plan {
+            try? await container.healthKitRepository.removeWorkoutPlans(for: plan)
+            try? await container.healthKitRepository.syncWorkoutPlans(for: plan, unitPreference: appSettings.unitPreference)
+        }
+
+        nextSessionUpdateMessage = "Updated \(workoutLabel(nextWorkout)) in your plan."
+    }
+
+    private func nextWorkoutForFeedback() -> ScheduledWorkout? {
+        guard let plan = planForNextSessionUpdate else { return nil }
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let completedDate = matchedScheduled?.scheduledDate
+            ?? workout.scheduledWorkout?.scheduledDate
+            ?? workout.date
+
+        let weeks = plan.weeks ?? []
+        let workouts = weeks.flatMap { $0.workouts ?? [] }
+        let candidates = workouts.filter { scheduled in
+            guard !scheduled.isCompleted else { return false }
+            guard scheduled.scheduledDate >= today else { return false }
+            guard scheduled.scheduledDate > completedDate else { return false }
+
+            switch scheduled.workoutType {
+            case .easy, .tempo, .interval, .longRun:
+                return true
+            case .race, .rest, .crossTraining, .strength:
+                return false
+            }
+        }
+
+        return candidates.sorted { lhs, rhs in
+            lhs.scheduledDate < rhs.scheduledDate
+        }.first
+    }
+
+    private func workoutSeededWithCoachFeedback(
+        _ scheduled: ScheduledWorkout,
+        insight: AICoachInsight
+    ) -> ScheduledWorkout {
+        let feedback = [
+            "AI Coach feedback from completed \(displayType.displayName.lowercased()) on \(workout.date.formatted(date: .abbreviated, time: .omitted)):",
+            normalizedMarkdownText(insight.headline),
+            normalizedMarkdownText(insight.summary),
+            "Next session suggestion: \(normalizedMarkdownText(insight.nextWorkoutSuggestion))",
+            insight.nextWorkoutRationale.map { "Rationale: \(normalizedMarkdownText($0))" }
+        ]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+
+        let notes = [
+            scheduled.notes?.trimmingCharacters(in: .whitespacesAndNewlines),
+            feedback
+        ]
+            .compactMap { $0 }
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n\n")
+
+        let seeded = ScheduledWorkout(
+            scheduledDate: scheduled.scheduledDate,
+            workoutType: scheduled.workoutType,
+            targetDistanceMeters: scheduled.targetDistanceMeters,
+            targetPaceLowerBound: scheduled.targetPaceLowerBound,
+            targetPaceUpperBound: scheduled.targetPaceUpperBound,
+            notes: notes
+        )
+        seeded.week = scheduled.week
+        seeded.workoutLocation = scheduled.workoutLocation
+        seeded.intervals = scheduled.intervals
+        seeded.workoutStructure = scheduled.workoutStructure
+        seeded.strengthPlan = scheduled.strengthPlan
+        return seeded
+    }
+
+    private func apply(_ adapted: ScheduledWorkout, to scheduled: ScheduledWorkout) {
+        scheduled.workoutType = adapted.workoutType
+        scheduled.workoutStructure = adapted.workoutStructure
+        scheduled.targetDistanceMeters = adapted.targetDistanceMeters
+        scheduled.targetPaceLowerBound = adapted.targetPaceLowerBound
+        scheduled.targetPaceUpperBound = adapted.targetPaceUpperBound
+        scheduled.notes = adapted.notes
+        scheduled.intervals = adapted.intervals
+        scheduled.healthKitPlanID = nil
+    }
+
+    private func workoutLabel(_ workout: ScheduledWorkout) -> String {
+        let date = workout.scheduledDate.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
+        return "\(date) \(workout.workoutType.displayName)"
     }
 
     @MainActor

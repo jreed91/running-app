@@ -2,7 +2,10 @@ import SwiftUI
 import SwiftData
 
 struct AICoachChatView: View {
+    private let workoutContext: RunWorkout?
+
     @Environment(AppSettings.self) private var appSettings
+    @Environment(\.appContainer) private var container
 
     @Query(sort: [SortDescriptor(\RunWorkout.date, order: .reverse)])
     private var recentRuns: [RunWorkout]
@@ -15,9 +18,14 @@ struct AICoachChatView: View {
 
     @State private var messages: [AICoachChatMessage] = []
     @State private var draft = ""
+    @State private var isWaitingForCoach = false
     @FocusState private var isComposerFocused: Bool
 
-    private var latestRun: RunWorkout? { recentRuns.first }
+    init(workout: RunWorkout? = nil) {
+        self.workoutContext = workout
+    }
+
+    private var latestRun: RunWorkout? { workoutContext ?? recentRuns.first }
     private var activePlan: TrainingPlan? { activePlans.first }
 
     var body: some View {
@@ -31,6 +39,10 @@ struct AICoachChatView: View {
                                 messageRow(message)
                                     .id(message.id)
                             }
+                            if isWaitingForCoach {
+                                typingRow
+                                    .id("typing")
+                            }
                         }
                         .padding(.horizontal, 16)
                         .padding(.top, 10)
@@ -40,8 +52,7 @@ struct AICoachChatView: View {
                     .onChange(of: messages.count) { _, _ in
                         scrollToLatest(proxy)
                     }
-                    .onAppear {
-                        seedConversationIfNeeded()
+                    .onChange(of: isWaitingForCoach) { _, _ in
                         scrollToLatest(proxy)
                     }
                 }
@@ -114,7 +125,7 @@ struct AICoachChatView: View {
             HStack(spacing: 8) {
                 ForEach(quickReplyPrompts, id: \.self) { prompt in
                     Button {
-                        send(prompt)
+                        Task { await send(prompt) }
                     } label: {
                         Text(prompt)
                             .font(.system(size: 13, weight: .semibold))
@@ -145,11 +156,11 @@ struct AICoachChatView: View {
                 .focused($isComposerFocused)
                 .submitLabel(.send)
                 .onSubmit {
-                    send(draft)
+                    Task { await send(draft) }
                 }
 
             Button {
-                send(draft)
+                Task { await send(draft) }
             } label: {
                 Image(systemName: "arrow.up")
                     .font(.system(size: 15, weight: .bold))
@@ -158,7 +169,7 @@ struct AICoachChatView: View {
                     .background(canSendDraft ? Color.brand : Color.secondary.opacity(0.35), in: Circle())
             }
             .buttonStyle(.plain)
-            .disabled(!canSendDraft)
+            .disabled(!canSendDraft || isWaitingForCoach)
         }
         .padding(.leading, 16)
         .padding(.trailing, 10)
@@ -205,6 +216,29 @@ struct AICoachChatView: View {
             if message.sender == .coach {
                 Spacer(minLength: 20)
             }
+        }
+    }
+
+    private var typingRow: some View {
+        HStack(alignment: .top, spacing: 10) {
+            coachAvatar(size: 36)
+            HStack(spacing: 6) {
+                ForEach(0..<3, id: \.self) { index in
+                    Circle()
+                        .fill(Color.secondary.opacity(0.55))
+                        .frame(width: 6, height: 6)
+                        .opacity(isWaitingForCoach ? 1 : 0.3)
+                        .animation(
+                            .easeInOut(duration: 0.7)
+                                .repeatForever()
+                                .delay(Double(index) * 0.12),
+                            value: isWaitingForCoach
+                        )
+                }
+            }
+            .padding(14)
+            .background(.surfaceSecondary, in: UnevenRoundedRectangle(topLeadingRadius: 4, bottomLeadingRadius: 18, bottomTrailingRadius: 18, topTrailingRadius: 18))
+            Spacer(minLength: 20)
         }
     }
 
@@ -279,9 +313,10 @@ struct AICoachChatView: View {
         )
     }
 
-    private func send(_ text: String) {
+    @MainActor
+    private func send(_ text: String) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard !trimmed.isEmpty, !isWaitingForCoach else { return }
 
         withAnimation(AppAnimation.snappy) {
             messages.append(
@@ -292,51 +327,63 @@ struct AICoachChatView: View {
                     status: nil
                 )
             )
-            messages.append(reply(for: trimmed))
         }
         draft = ""
-    }
 
-    private func seedConversationIfNeeded() {
-        guard messages.isEmpty else { return }
-        messages = [
-            AICoachChatMessage(
-                sender: .coach,
-                text: openingCoachMessage,
-                metrics: openingMetrics,
-                status: openingStatus
+        guard appSettings.aiInsightsEnabled, hasAIKey else {
+            messages.append(
+                AICoachChatMessage(
+                    sender: .coach,
+                    text: "Turn on AI Coach and add an API key in Settings to chat with \(appSettings.aiProvider.displayName).",
+                    metrics: [],
+                    status: .setupNeeded
+                )
             )
-        ]
-    }
-
-    private func reply(for prompt: String) -> AICoachChatMessage {
-        let lower = prompt.lowercased()
-        let response: String
-        let status: AICoachCoachStatus?
-
-        if lower.contains("why") || lower.contains("high") {
-            response = effortExplanation
-            status = .watchEffort
-        } else if lower.contains("rest") || lower.contains("tomorrow") || lower.contains("adjust") {
-            response = nextStepExplanation
-            status = .actionReady
-        } else if lower.contains("last 5") || lower.contains("easy run") {
-            response = recentRunsExplanation
-            status = .dataBacked
-        } else {
-            response = generalExplanation(for: prompt)
-            status = openingStatus
+            return
         }
 
-        return AICoachChatMessage(
-            sender: .coach,
-            text: response,
-            metrics: openingMetrics,
-            status: status
-        )
+        isWaitingForCoach = true
+        defer { isWaitingForCoach = false }
+
+        do {
+            let reply = try await container.aiCoachService.chatWithProvider(
+                provider: appSettings.aiProvider,
+                apiKey: appSettings.aiAPIKey,
+                modelOverride: chatModel,
+                context: coachContext,
+                messages: providerMessages
+            )
+            withAnimation(AppAnimation.snappy) {
+                messages.append(
+                    AICoachChatMessage(
+                        sender: .coach,
+                        text: reply,
+                        metrics: openingMetrics,
+                        status: openingStatus
+                    )
+                )
+            }
+        } catch {
+            withAnimation(AppAnimation.snappy) {
+                messages.append(
+                    AICoachChatMessage(
+                        sender: .coach,
+                        text: "I could not reach \(appSettings.aiProvider.displayName). Check your API key, model, and network connection, then try again.",
+                        metrics: [],
+                        status: .setupNeeded
+                    )
+                )
+            }
+        }
     }
 
     private func scrollToLatest(_ proxy: ScrollViewProxy) {
+        if isWaitingForCoach {
+            withAnimation(AppAnimation.snappy) {
+                proxy.scrollTo("typing", anchor: .bottom)
+            }
+            return
+        }
         guard let last = messages.last else { return }
         withAnimation(AppAnimation.snappy) {
             proxy.scrollTo(last.id, anchor: .bottom)
@@ -345,6 +392,20 @@ struct AICoachChatView: View {
 
     private var canSendDraft: Bool {
         !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var chatModel: String {
+        let override = appSettings.aiModelOverride.trimmingCharacters(in: .whitespacesAndNewlines)
+        return override.isEmpty ? appSettings.aiProvider.defaultModel : override
+    }
+
+    private var providerMessages: [AIProviderChatMessage] {
+        messages.map { message in
+            AIProviderChatMessage(
+                role: message.sender == .coach ? "assistant" : "user",
+                content: message.text
+            )
+        }
     }
 
     private var hasAIKey: Bool {
@@ -370,72 +431,58 @@ struct AICoachChatView: View {
         ]
     }
 
+    private var coachContext: String {
+        let unit = appSettings.unitPreference
+        let selectedRun = latestRun.map { run in
+            """
+            Current workout context:
+            Date: \(run.date.formatted(date: .abbreviated, time: .shortened))
+            Type: \(run.workoutType.displayName)
+            Distance: \(run.distanceMeters.distanceString(unit: unit))
+            Duration: \(run.durationSeconds.durationString)
+            Average pace: \(run.averagePaceSecondsPerKm.paceString(unit: unit))
+            Average heart rate: \(run.averageHeartRate.map { "\(Int($0.rounded())) bpm" } ?? "n/a")
+            Max heart rate: \(run.maxHeartRate.map { "\(Int($0.rounded())) bpm" } ?? "n/a")
+            Notes: \(run.notes ?? "none")
+            """
+        } ?? "Current workout context: none selected."
+
+        let planContext = activePlan.map { plan in
+            """
+            Active plan:
+            Race: \(plan.targetRace.displayName)
+            Race date: \(plan.raceDate?.formatted(date: .abbreviated, time: .omitted) ?? "none")
+            Goal time: \(plan.goalTimeSeconds.durationString)
+            Current week: \(plan.currentWeek?.weekNumber ?? 0) of \(plan.totalWeeks)
+            """
+        } ?? "Active plan: none."
+
+        let recent = recentRuns
+            .prefix(8)
+            .map { run in
+                let hr = run.averageHeartRate.map { "\(Int($0.rounded())) bpm" } ?? "n/a"
+                return "\(run.date.formatted(date: .abbreviated, time: .omitted)) | \(run.workoutType.displayName) | \(run.distanceMeters.distanceString(unit: unit)) | \(run.averagePaceSecondsPerKm.paceString(unit: unit)) | avg HR \(hr)"
+            }
+            .joined(separator: "\n")
+
+        return """
+        Unit preference: \(unit.rawValue)
+
+        \(selectedRun)
+
+        \(planContext)
+
+        Recent runs:
+        \(recent.isEmpty ? "No recent runs." : recent)
+        """
+    }
+
     private var openingStatus: AICoachCoachStatus {
         guard latestRun != nil else { return .dataBacked }
         if (latestRun?.averageHeartRate ?? 0) >= 155 || (latestRun?.maxHeartRate ?? 0) >= 175 {
             return .watchEffort
         }
         return .actionReady
-    }
-
-    private var openingCoachMessage: String {
-        guard let latestRun else {
-            if let activePlan {
-                return "I have your \(activePlan.targetRace.displayName) plan context. Ask me how to approach the next workout, where recovery fits, or how your paces should feel."
-            }
-            return "Once you log or import a run, I can answer follow-ups using your recent workouts, plan, and pace zones. For now, ask about training structure or recovery."
-        }
-
-        let workoutLabel = latestRun.workoutType.displayName.lowercased()
-        let distance = latestRun.distanceMeters.distanceString(unit: appSettings.unitPreference)
-        let pace = latestRun.averagePaceSecondsPerKm.paceString(unit: appSettings.unitPreference)
-        let effortNote = effortRead(for: latestRun)
-
-        return "That \(workoutLabel) run was \(distance) at \(pace). \(effortNote) Ask me why it felt that way, how to adjust tomorrow, or what pattern shows up across your recent runs."
-    }
-
-    private var effortExplanation: String {
-        guard let run = latestRun else {
-            return "The strongest signal usually comes from pace relative to heart rate. Once a run is logged, I compare effort, distance, and recent workload before calling something easy, hot, or under-recovered."
-        }
-
-        let heartRate = run.averageHeartRate.map { "\(Int($0.rounded())) bpm" } ?? "your available heart-rate data"
-        let maxHeartRate = run.maxHeartRate.map { " with a max of \(Int($0.rounded()))" } ?? ""
-        return "The effort flag comes from the gap between the intended run and the physiological cost. This run averaged \(heartRate)\(maxHeartRate), so I would keep the next aerobic session capped by effort instead of chasing pace."
-    }
-
-    private var nextStepExplanation: String {
-        guard latestRun != nil else {
-            return "For tomorrow, keep the first decision simple: if your legs feel flat or your resting HR is elevated, make it rest or low-impact cross-training. Otherwise, keep the next run conversational."
-        }
-
-        return "Tomorrow should stay boring in the best way: rest, walk, or cross-train if soreness is lingering. If you do run, cap it at easy effort and stop the moment the heart-rate drift shows up again."
-    }
-
-    private var recentRunsExplanation: String {
-        let runs = Array(recentRuns.prefix(5))
-        guard !runs.isEmpty else {
-            return "I need a few completed runs before I can compare trends. After that, I can look for pace creep, heart-rate drift, long-run recovery, and whether easy days are actually easy."
-        }
-
-        let totalDistance = runs.reduce(0) { $0 + $1.distanceMeters }
-        let avgPace = runs.map(\.averagePaceSecondsPerKm).filter { $0 > 0 }.average
-        let paceText = avgPace.map { $0.paceString(unit: appSettings.unitPreference) } ?? "unknown pace"
-        return "Across your last \(runs.count) runs, you covered \(totalDistance.distanceString(unit: appSettings.unitPreference)) with an average pace around \(paceText). The first thing I would check is whether easy days are drifting faster as fatigue rises."
-    }
-
-    private func generalExplanation(for prompt: String) -> String {
-        "For \"\(prompt),\" I would start with three checks: recent workload, the intent of the next scheduled workout, and whether your last easy effort looked truly easy. From there, the safest adjustment is usually effort first, distance second, pace last."
-    }
-
-    private func effortRead(for run: RunWorkout) -> String {
-        if let averageHeartRate = run.averageHeartRate, averageHeartRate >= 155 {
-            return "Your average heart rate was high enough that I would treat it as a recovery warning, not just a pace note."
-        }
-        if let maxHeartRate = run.maxHeartRate, maxHeartRate >= 175 {
-            return "The max heart-rate spike is the signal I would watch before stacking another hard session."
-        }
-        return "The effort looks controlled, so the next useful question is whether this fits the week's workload."
     }
 
     private var openingMetrics: [AICoachMiniMetric] {
@@ -501,12 +548,14 @@ private enum AICoachCoachStatus {
     case watchEffort
     case actionReady
     case dataBacked
+    case setupNeeded
 
     var title: String {
         switch self {
         case .watchEffort: "WATCH EFFORT"
         case .actionReady: "ACTION READY"
         case .dataBacked: "DATA BACKED"
+        case .setupNeeded: "SETUP"
         }
     }
 
@@ -515,14 +564,8 @@ private enum AICoachCoachStatus {
         case .watchEffort: .warning
         case .actionReady: .success
         case .dataBacked: .brand
+        case .setupNeeded: .secondary
         }
-    }
-}
-
-private extension Array where Element == Double {
-    var average: Double? {
-        guard !isEmpty else { return nil }
-        return reduce(0, +) / Double(count)
     }
 }
 

@@ -310,6 +310,29 @@ struct AICoachService: Sendable {
         self.integrationService = integrationService
     }
 
+    func chatWithProvider(
+        provider: AIProvider,
+        apiKey: String,
+        modelOverride: String,
+        context: String,
+        messages: [AIProviderChatMessage]
+    ) async throws -> String {
+        let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedKey.isEmpty else { throw AIIntegrationError.emptyMessage }
+
+        let selectedModel = modelOverride.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? provider.defaultModel
+            : modelOverride
+
+        return try await integrationService.generateCoachChatReply(
+            provider: provider,
+            apiKey: trimmedKey,
+            model: selectedModel,
+            context: context,
+            messages: messages
+        )
+    }
+
     @MainActor
     func evaluateWithProvider(
         workout: RunWorkout,

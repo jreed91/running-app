@@ -34,11 +34,24 @@ protocol AIIntegrationServiceProtocol: Sendable {
         adaptationContext: String,
         onChunk: @escaping @Sendable (String) -> Void
     ) async throws -> String
+
+    func generateCoachChatReply(
+        provider: AIProvider,
+        apiKey: String,
+        model: String,
+        context: String,
+        messages: [AIProviderChatMessage]
+    ) async throws -> String
 }
 
 enum AIIntegrationError: Error {
     case invalidResponse
     case emptyMessage
+}
+
+struct AIProviderChatMessage: Sendable {
+    let role: String
+    let content: String
 }
 
 struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
@@ -156,6 +169,31 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
         }
     }
 
+    func generateCoachChatReply(
+        provider: AIProvider,
+        apiKey: String,
+        model: String,
+        context: String,
+        messages: [AIProviderChatMessage]
+    ) async throws -> String {
+        switch provider {
+        case .openAI:
+            return try await requestOpenAIChat(
+                apiKey: apiKey,
+                model: model,
+                context: context,
+                messages: messages
+            )
+        case .anthropic:
+            return try await requestAnthropicChat(
+                apiKey: apiKey,
+                model: model,
+                context: context,
+                messages: messages
+            )
+        }
+    }
+
     private func requestOpenAI(
         apiKey: String,
         model: String,
@@ -205,6 +243,94 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
             model: model,
             maxTokens: Self.coachingMaxTokens,
             messages: [.init(role: "user", content: prompt)]
+        )
+
+        var request = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        request.httpBody = try JSONEncoder().encode(body)
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            throw AIIntegrationError.invalidResponse
+        }
+
+        let decoded = try JSONDecoder().decode(AnthropicResponse.self, from: data)
+        let text = decoded.content
+            .filter { $0.type == "text" }
+            .map(\.text)
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { throw AIIntegrationError.emptyMessage }
+        return text
+    }
+
+    private func requestOpenAIChat(
+        apiKey: String,
+        model: String,
+        context: String,
+        messages: [AIProviderChatMessage]
+    ) async throws -> String {
+        let promptMessages = [
+            OpenAIRequest.Message(
+                role: "system",
+                content: """
+                You are Stride's AI running coach. Give concise, practical coaching answers grounded only in the supplied runner context and conversation. Avoid medical diagnosis, do not claim certainty, and ask for more information when the data is insufficient. Keep answers under 120 words unless the runner asks for detail.
+                """
+            ),
+            OpenAIRequest.Message(role: "user", content: "Runner context:\n\(context)")
+        ] + messages.map {
+            OpenAIRequest.Message(role: $0.role == "assistant" ? "assistant" : "user", content: $0.content)
+        }
+
+        let body = OpenAIRequest(
+            model: model,
+            messages: promptMessages,
+            temperature: 0.4,
+            responseFormat: nil,
+            maxTokens: 500
+        )
+
+        var request = URLRequest(url: URL(string: "https://api.openai.com/v1/chat/completions")!)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.httpBody = try JSONEncoder().encode(body)
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            throw AIIntegrationError.invalidResponse
+        }
+
+        let decoded = try JSONDecoder().decode(OpenAIResponse.self, from: data)
+        guard let message = decoded.choices.first?.message.content.trimmingCharacters(in: .whitespacesAndNewlines), !message.isEmpty else {
+            throw AIIntegrationError.emptyMessage
+        }
+        return message
+    }
+
+    private func requestAnthropicChat(
+        apiKey: String,
+        model: String,
+        context: String,
+        messages: [AIProviderChatMessage]
+    ) async throws -> String {
+        let prompt = """
+        You are Stride's AI running coach. Give concise, practical coaching answers grounded only in the supplied runner context and conversation. Avoid medical diagnosis, do not claim certainty, and ask for more information when the data is insufficient. Keep answers under 120 words unless the runner asks for detail.
+
+        Runner context:
+        \(context)
+        """
+
+        let body = AnthropicRequest(
+            model: model,
+            maxTokens: 500,
+            system: prompt,
+            messages: messages.map {
+                AnthropicRequest.Message(role: $0.role == "assistant" ? "assistant" : "user", content: $0.content)
+            }
         )
 
         var request = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
@@ -897,12 +1023,14 @@ private struct AnthropicRequest: Encodable {
 
     let model: String
     let maxTokens: Int
+    var system: String? = nil
     let messages: [Message]
     var stream: Bool? = nil
 
     enum CodingKeys: String, CodingKey {
         case model
         case maxTokens = "max_tokens"
+        case system
         case messages
         case stream
     }
