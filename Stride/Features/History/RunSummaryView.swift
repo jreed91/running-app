@@ -389,7 +389,7 @@ struct RunSummaryView: View {
             return headline.isEmpty ? "Analysis ready. Ask a follow-up." : headline
         }
         if appSettings.aiInsightsEnabled, hasAIKey {
-            return "Get a diagnosis, evidence, and next-session actions."
+            return "Get a coaching read, evidence, and next-session actions."
         }
         return "Turn on AI Coach to ask follow-ups about this run."
     }
@@ -409,7 +409,7 @@ struct RunSummaryView: View {
     @MainActor
     private func handleTopCoachCardTap() {
         if aiInsight?.apiReady == true {
-            coachChatRequest = AICoachChatRequest(prompt: "Walk me through the diagnosis for this run.")
+            coachChatRequest = AICoachChatRequest(prompt: "Walk me through your coaching read for this run.")
             return
         }
 
@@ -751,7 +751,7 @@ struct RunSummaryView: View {
                     aiCoachSkeletonSection
                 } else if let aiInsight {
                     if aiInsight.apiReady {
-                        aiDiagnosisCard(aiInsight)
+                        aiCoachingReadCard(aiInsight)
                         aiAskCoachCard
                         aiActionPlan(aiInsight)
                         aiNextSessionCard(aiInsight)
@@ -768,13 +768,13 @@ struct RunSummaryView: View {
         }
     }
 
-    private func aiDiagnosisCard(_ insight: AICoachInsight) -> some View {
+    private func aiCoachingReadCard(_ insight: AICoachInsight) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 8) {
                 SparkleShape()
                     .fill(Color.brand)
                     .frame(width: 14, height: 14)
-                Text("DIAGNOSIS")
+                Text("COACHING READ")
                     .font(.system(size: 11, weight: .bold))
                     .kerning(1.4)
                     .foregroundStyle(.brand)
@@ -782,7 +782,7 @@ struct RunSummaryView: View {
                 confidenceChip(insight.confidence)
             }
 
-            Text(normalizedMarkdownText(insight.headline))
+            Text(markdownText(insight.headline))
                 .font(.system(size: 22, weight: .heavy))
                 .kerning(-0.55)
                 .lineSpacing(1)
@@ -910,12 +910,12 @@ struct RunSummaryView: View {
                             .font(.system(size: 10, weight: .bold))
                             .kerning(0.8)
                             .foregroundStyle(.secondary)
-                        Text(normalizedMarkdownText(insight.nextWorkoutSuggestion))
+                        Text(markdownText(insight.nextWorkoutSuggestion))
                             .font(.system(size: 14, weight: .bold))
                             .foregroundStyle(.primary)
                             .lineLimit(2)
                         if let rationale = insight.nextWorkoutRationale?.trimmingCharacters(in: .whitespacesAndNewlines), !rationale.isEmpty {
-                            Text(normalizedMarkdownText(rationale))
+                            Text(markdownText(rationale))
                                 .font(.system(size: 12))
                                 .foregroundStyle(.secondary)
                                 .lineLimit(2)
@@ -974,7 +974,7 @@ struct RunSummaryView: View {
                 .kerning(1.1)
                 .foregroundStyle(.secondary)
 
-            Text(normalizedMarkdownText(fullAnalysisText(for: insight)))
+            Text(markdownText(fullAnalysisText(for: insight)))
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
                 .lineSpacing(3)
@@ -1055,9 +1055,9 @@ struct RunSummaryView: View {
 
     private func aiUnavailableCard(_ insight: AICoachInsight) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(normalizedMarkdownText(insight.headline))
+            Text(markdownText(insight.headline))
                 .font(.system(size: 15, weight: .bold))
-            Text(normalizedMarkdownText(insight.summary))
+            Text(markdownText(insight.summary))
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1143,6 +1143,17 @@ struct RunSummaryView: View {
         return output.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    private func markdownText(_ text: String) -> AttributedString {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let attributed = try? AttributedString(
+            markdown: trimmed,
+            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        ) {
+            return attributed
+        }
+        return AttributedString(normalizedMarkdownText(text))
+    }
+
     private struct AIActionItemRow: View {
         let action: AICoachActionItem
 
@@ -1155,7 +1166,7 @@ struct RunSummaryView: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
-                        Text(cleaned(action.title))
+                        Text(Self.markdownText(action.title))
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.primary)
                         Text(cleaned(action.priority).uppercased())
@@ -1166,7 +1177,7 @@ struct RunSummaryView: View {
                             .background(priorityColor.opacity(0.12), in: Capsule())
                     }
 
-                    Text(cleaned(action.detail))
+                    Text(Self.markdownText(action.detail))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -1193,6 +1204,21 @@ struct RunSummaryView: View {
                 output = output.replacingOccurrences(of: $0, with: "")
             }
             return output.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        private static func markdownText(_ text: String) -> AttributedString {
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let attributed = try? AttributedString(
+                markdown: trimmed,
+                options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+            ) {
+                return attributed
+            }
+            var output = trimmed
+            ["**", "__", "`", "###", "##", "#", ">", "_"].forEach {
+                output = output.replacingOccurrences(of: $0, with: "")
+            }
+            return AttributedString(output)
         }
     }
 
@@ -1941,11 +1967,11 @@ struct RunSummaryView: View {
                             .font(.system(size: 11, weight: .bold, design: .monospaced))
                             .kerning(0.6)
                             .foregroundStyle(tone)
-                        Text(title)
+                        Text(Self.markdownText(title))
                             .font(.system(size: 15, weight: .bold))
                             .kerning(-0.2)
                     }
-                    Text(detail)
+                    Text(Self.markdownText(detail))
                         .font(.system(size: 13))
                         .lineSpacing(1)
                         .foregroundStyle(.secondary)
@@ -1971,6 +1997,21 @@ struct RunSummaryView: View {
 
         var body: some View {
             bodyView
+        }
+
+        private static func markdownText(_ text: String) -> AttributedString {
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let attributed = try? AttributedString(
+                markdown: trimmed,
+                options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+            ) {
+                return attributed
+            }
+            var output = trimmed
+            ["**", "__", "`", "###", "##", "#", ">", "_"].forEach {
+                output = output.replacingOccurrences(of: $0, with: "")
+            }
+            return AttributedString(output)
         }
     }
 

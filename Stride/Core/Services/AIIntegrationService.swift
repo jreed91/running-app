@@ -277,7 +277,7 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
             OpenAIRequest.Message(
                 role: "system",
                 content: """
-                You are Stride's AI running coach. Give concise, practical coaching answers grounded only in the supplied runner context and conversation. Avoid medical diagnosis, do not claim certainty, and ask for more information when the data is insufficient. Keep answers under 120 words unless the runner asks for detail.
+                You are Stride's AI running coach. Give concise, practical coaching answers grounded only in the supplied runner context and conversation. Avoid medical advice or clinical claims, do not claim certainty, and ask for more information when the data is insufficient. Keep answers under 120 words unless the runner asks for detail.
                 """
             ),
             OpenAIRequest.Message(role: "user", content: "Runner context:\n\(context)")
@@ -318,7 +318,7 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
         messages: [AIProviderChatMessage]
     ) async throws -> String {
         let prompt = """
-        You are Stride's AI running coach. Give concise, practical coaching answers grounded only in the supplied runner context and conversation. Avoid medical diagnosis, do not claim certainty, and ask for more information when the data is insufficient. Keep answers under 120 words unless the runner asks for detail.
+        You are Stride's AI running coach. Give concise, practical coaching answers grounded only in the supplied runner context and conversation. Avoid medical advice or clinical claims, do not claim certainty, and ask for more information when the data is insufficient. Keep answers under 120 words unless the runner asks for detail.
 
         Runner context:
         \(context)
@@ -824,7 +824,7 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
 
         Rules:
         - confidence must be an integer from 0 to 100.
-        - full_analysis must be 2 to 3 concise sentences that explain the diagnosis, key evidence, and practical adjustment.
+        - full_analysis must be 2 to 3 concise sentences that explain the coaching read, key evidence, and practical adjustment.
         - Prioritize analysis across pace execution, workout structure, distance, duration, splits, cadence/form clues, and recovery load; use heart-rate as supporting context only.
         - Include exactly 4 evidence items. Each evidence item should be a compact display chip: label maximum 10 characters, value maximum 12 characters, optional delta maximum 8 characters.
         - Include at most 1 heart-rate evidence item unless the focus areas explicitly ask for heart-rate analysis.
@@ -833,7 +833,7 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
         - Each action item must include a compact metric badge, maximum 10 characters.
         - Action item tone must be one of: easy, brand, interval, warning, neutral.
         - Make every action concrete enough to do in the next 7 days.
-        - Avoid medical diagnosis and avoid mentioning that you are an AI.
+        - Avoid medical advice or clinical claims and avoid mentioning that you are an AI.
         - Keep all values as strings except confidence.
         """
     }
@@ -911,7 +911,7 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
         - Keep pace values between 120 and 900 seconds per kilometer.
         - Include an empty intervals array unless workout_type is Interval.
         - Include workout_structure for every adapted run.
-        - Avoid medical diagnosis and avoid mentioning that you are an AI.
+        - Avoid medical advice or clinical claims and avoid mentioning that you are an AI.
         - If the original workout should not change, return the same workout targets with an explanation.
         """
     }
@@ -958,7 +958,7 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
         - Keep pace values between 120 and 900 seconds per kilometer.
         - Include an empty intervals array unless workout_type is Interval.
         - Do not include workout_structure; Stride will derive it locally.
-        - Avoid medical diagnosis and avoid mentioning that you are an AI.
+        - Avoid medical advice or clinical claims and avoid mentioning that you are an AI.
         - If an original workout should not change, return the same workout targets with an explanation.
         """
     }

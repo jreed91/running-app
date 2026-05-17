@@ -199,7 +199,7 @@ struct AICoachChatView: View {
                     coachBubbleHeader(message)
                 }
 
-                Text(message.text)
+                Text(markdownText(message.text))
                     .font(.system(size: 15))
                     .lineSpacing(3)
                     .foregroundStyle(message.sender == .coach ? Color.primary : Color.white)
@@ -409,6 +409,17 @@ struct AICoachChatView: View {
 
     private var canSendDraft: Bool {
         !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func markdownText(_ text: String) -> AttributedString {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let attributed = try? AttributedString(
+            markdown: trimmed,
+            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        ) {
+            return attributed
+        }
+        return AttributedString(trimmed.replacingOccurrences(of: "**", with: ""))
     }
 
     private var chatModel: String {
