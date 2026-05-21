@@ -231,6 +231,23 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         // Use the scheduled workout's own UUID so the plan ID is stable across syncs.
         let planID = workout.id
 
+        // Strength workouts → SingleGoalWorkout with a strength activity so the Watch starts a
+        // strength session, not a run. (All the builders below assume a running activity.)
+        if workout.workoutType == .strength {
+            let goal: WorkoutGoal
+            if let minutes = workout.strengthPlan?.estimatedDurationMinutes, minutes > 0 {
+                goal = .time(Double(minutes) * 60, UnitDuration.seconds)
+            } else {
+                goal = .open
+            }
+            let strength = SingleGoalWorkout(
+                activity: .functionalStrengthTraining,
+                location: .indoor,
+                goal: goal
+            )
+            return WorkoutPlan(.goal(strength), id: planID)
+        }
+
         // Structured workouts (warmup + interval blocks + cooldown) → CustomWorkout.
         if let structure = workout.workoutStructure, !structure.mainSets.isEmpty {
             let custom = makeCustomWorkout(from: structure, workout: workout, unitPreference: unitPreference)
