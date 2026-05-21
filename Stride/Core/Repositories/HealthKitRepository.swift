@@ -75,6 +75,32 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
     // Retained so the observer is not deallocated after registration.
     private var observerQuery: HKObserverQuery?
 
+    // Workouts are stored with a midnight (`startOfDay`) scheduled date. WorkoutKit drops any
+    // workout scheduled in the past, so a midnight schedule expires the instant its day begins —
+    // making the workout appear and then immediately disappear. Anchor schedules to a morning
+    // time (ahead of the 8 AM morning reminder) so they stay available throughout the day.
+    static let scheduledWorkoutHour = 7
+
+    /// Resolves the instant at which a workout should be registered with WorkoutKit.
+    ///
+    /// Returns `nil` when the workout's day is already in the past (it can't be scheduled).
+    /// Otherwise anchors to ``scheduledWorkoutHour`` on the workout's day, falling forward to
+    /// just after `now` when that morning has already elapsed so today's workout still appears.
+    static func workoutKitFireDate(
+        for scheduledDate: Date,
+        now: Date,
+        calendar: Calendar = .current
+    ) -> Date? {
+        guard calendar.startOfDay(for: scheduledDate) >= calendar.startOfDay(for: now) else {
+            return nil
+        }
+        var morning = calendar.dateComponents([.year, .month, .day], from: scheduledDate)
+        morning.hour = scheduledWorkoutHour
+        morning.minute = 0
+        guard let morningDate = calendar.date(from: morning) else { return nil }
+        return max(morningDate, now.addingTimeInterval(60))
+    }
+
     private static let shareTypes: Set<HKSampleType> = [
         HKObjectType.workoutType(),
         HKQuantityType(.distanceWalkingRunning),
@@ -173,15 +199,17 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             allWorkouts.forEach { $0.healthKitPlanID = nil }
         }
 
-        let startOfToday = Calendar.current.startOfDay(for: Date())
-        for workout in syncableWorkouts
-        where workout.scheduledDate >= startOfToday
-        {
-            let workoutPlan = makeWorkoutPlan(for: workout, unitPreference: unitPreference)
-            let dateComponents = Calendar.current.dateComponents(
+        let calendar = Calendar.current
+        let now = Date()
+        for workout in syncableWorkouts {
+            guard let fireDate = Self.workoutKitFireDate(for: workout.scheduledDate, now: now, calendar: calendar)
+            else { continue }
+
+            let dateComponents = calendar.dateComponents(
                 [.year, .month, .day, .hour, .minute],
-                from: workout.scheduledDate
+                from: fireDate
             )
+            let workoutPlan = makeWorkoutPlan(for: workout, unitPreference: unitPreference)
             await scheduler.schedule(workoutPlan, at: dateComponents)
             workout.healthKitPlanID = workoutPlan.id.uuidString
         }
