@@ -75,30 +75,23 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
     // Retained so the observer is not deallocated after registration.
     private var observerQuery: HKObserverQuery?
 
-    // Workouts are stored with a midnight (`startOfDay`) scheduled date. WorkoutKit drops any
-    // workout scheduled in the past, so a midnight schedule expires the instant its day begins —
-    // making the workout appear and then immediately disappear. Anchor schedules to a morning
-    // time (ahead of the 8 AM morning reminder) so they stay available throughout the day.
-    static let scheduledWorkoutHour = 7
-
-    /// Resolves the instant at which a workout should be registered with WorkoutKit.
-    ///
-    /// Returns `nil` when the workout's day is already in the past (it can't be scheduled).
-    /// Otherwise anchors to ``scheduledWorkoutHour`` on the workout's day, falling forward to
-    /// just after `now` when that morning has already elapsed so today's workout still appears.
+    // WorkoutKit shows a scheduled workout as "upcoming" up until its scheduled instant, then
+    // removes it the moment that instant passes. Workouts are stored at midnight (`startOfDay`),
+    // so scheduling at that raw time meant a day's workout vanished at 00:00 — visible only as a
+    // future day, never on the day itself. Anchoring to the END of the scheduled day instead keeps
+    // each workout visible in the Workout app for the entire day it's planned for (today included)
+    // and drops it only once that day is over.
     static func workoutKitFireDate(
         for scheduledDate: Date,
         now: Date,
         calendar: Calendar = .current
     ) -> Date? {
-        guard calendar.startOfDay(for: scheduledDate) >= calendar.startOfDay(for: now) else {
-            return nil
-        }
-        var morning = calendar.dateComponents([.year, .month, .day], from: scheduledDate)
-        morning.hour = scheduledWorkoutHour
-        morning.minute = 0
-        guard let morningDate = calendar.date(from: morning) else { return nil }
-        return max(morningDate, now.addingTimeInterval(60))
+        let dayStart = calendar.startOfDay(for: scheduledDate)
+        // End of the scheduled day: next midnight minus a minute (DST-safe via calendar math).
+        guard let endOfDay = calendar.date(byAdding: DateComponents(day: 1, minute: -1), to: dayStart),
+              endOfDay > now
+        else { return nil }
+        return endOfDay
     }
 
     private static let shareTypes: Set<HKSampleType> = [
