@@ -236,7 +236,9 @@ struct DashboardView: View {
     @State private var showActiveRun = false
     @State private var showStrengthWorkout = false
     @State private var selectedDate = Date()
-    @AppStorage("dismissedMissedWorkoutDate") private var dismissedMissedWorkoutInterval: Double = 0
+    /// Timestamp of the last time the rearrange-workouts prompt was flagged
+    /// (dismissed or acted on). Used to limit the prompt to once per week.
+    @AppStorage("missedWorkoutPromptFlaggedDate") private var missedWorkoutPromptFlaggedInterval: Double = 0
     @State private var isHandlingRecovery = false
 
     @Namespace private var workoutCardNamespace
@@ -247,9 +249,13 @@ struct DashboardView: View {
     private var missedWorkoutInfo: MissedWorkoutInfo? {
         guard let plan = activePlan else { return nil }
         guard let info = MissedWorkoutDetector().detect(in: plan) else { return nil }
-        guard dismissedMissedWorkoutInterval == 0 ||
-              !Calendar.current.isDate(info.firstMissedDate, inSameDayAs: Date(timeIntervalSince1970: dismissedMissedWorkoutInterval))
-        else { return nil }
+        // Only surface the rearrange-workouts prompt once per week. If the user
+        // already flagged it this week (dismissed or acted on it), stay hidden
+        // until the next week begins.
+        if missedWorkoutPromptFlaggedInterval != 0,
+           Date(timeIntervalSince1970: missedWorkoutPromptFlaggedInterval).startOfWeek == Date().startOfWeek {
+            return nil
+        }
         return info
     }
 
@@ -273,7 +279,7 @@ struct DashboardView: View {
                                 isLoading: isHandlingRecovery,
                                 onPickUpWhereLeftOff: { handlePickUp(info: info) },
                                 onRebuild: { handleRebuild() },
-                                onDismiss: { dismissedMissedWorkoutInterval = info.firstMissedDate.timeIntervalSince1970 }
+                                onDismiss: { missedWorkoutPromptFlaggedInterval = Date().timeIntervalSince1970 }
                             )
                             .opacity(dashboardAppeared ? 1 : 0)
                             .offset(y: dashboardAppeared ? 0 : 20)
@@ -564,7 +570,7 @@ struct DashboardView: View {
         isHandlingRecovery = true
         do {
             try container.shiftMissedWorkoutsForward(plan: plan, by: info.daysToShift, context: context)
-            dismissedMissedWorkoutInterval = info.firstMissedDate.timeIntervalSince1970
+            missedWorkoutPromptFlaggedInterval = Date().timeIntervalSince1970
         } catch {
             AppLogger.log("Recovery shift failed: \(error)", label: "Dashboard", level: .error)
         }
@@ -581,6 +587,7 @@ struct DashboardView: View {
                 context: context,
                 unitPreference: appSettings.unitPreference
             )
+            missedWorkoutPromptFlaggedInterval = Date().timeIntervalSince1970
         } catch {
             AppLogger.log("Plan rebuild failed: \(error)", label: "Dashboard", level: .error)
         }
