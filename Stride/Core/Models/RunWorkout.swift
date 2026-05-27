@@ -28,6 +28,17 @@ final class RunWorkout {
     /// HealthKit workout UUID string, set after syncing.
     var healthKitWorkoutID: String?
 
+    /// Strava upload identifier, set once an upload has been accepted by Strava.
+    /// Its presence marks the run as already pushed so auto-sync never uploads it twice.
+    var stravaUploadID: Int?
+
+    /// Strava activity identifier, populated once Strava finishes processing the upload
+    /// (or recovered from a duplicate-upload response).
+    var stravaActivityID: Int?
+
+    /// Timestamp of the most recent successful Strava upload attempt.
+    var stravaUploadedAt: Date?
+
     /// JSON-encoded `[Split]`.
     var splitsData: Data?
 
@@ -76,6 +87,9 @@ final class RunWorkout {
         get { WorkoutType(rawValue: workoutTypeRaw) ?? .easy }
         set { workoutTypeRaw = newValue.rawValue }
     }
+
+    /// True once the run has been pushed to Strava (or is in-flight), so it is not re-uploaded.
+    var isUploadedToStrava: Bool { stravaUploadID != nil }
 
     var workoutLocation: WorkoutLocation {
         get { WorkoutLocation(rawValue: workoutLocationRaw) ?? .outdoor }

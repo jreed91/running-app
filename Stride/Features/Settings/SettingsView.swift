@@ -10,6 +10,7 @@ struct SettingsView: View {
     @Environment(\.appContainer) private var container
     @Environment(AppSettings.self) private var appSettings
     @Environment(AuthService.self) private var authService
+    @Environment(StravaTokenStore.self) private var stravaStore
     @Query private var profiles: [UserProfile]
     @Query(
         filter: #Predicate<TrainingPlan> { $0.isActive },
@@ -21,6 +22,8 @@ struct SettingsView: View {
     @State private var showSyncRestartNote = false
     @State private var showPulseConsole = false
     @State private var notificationTestStatus: String?
+    @State private var isConnectingStrava = false
+    @State private var stravaStatusMessage: String?
     #if DEBUG
     @State private var seedWeeks = 8
     @State private var completionCutoff = Date()
@@ -56,6 +59,9 @@ struct SettingsView: View {
                     appCard
                     dataCard
                     routeGeniusCard
+                    if container.stravaSyncService.isConfigured {
+                        stravaCard
+                    }
                     aiCoachCard
                     if DataMigrationService.showsTestFlightDiagnostics {
                         notificationTestingCard
@@ -323,6 +329,77 @@ struct SettingsView: View {
         }
     }
 
+
+    // MARK: - Strava card
+
+    private var stravaCard: some View {
+        settingsSection("Strava") {
+            if stravaStore.isConnected {
+                settingsRow(icon: .check, iconColor: .success,
+                            title: stravaStore.athleteName.map { "Connected · \($0)" } ?? "Connected") {
+                    Button("Disconnect") {
+                        Task {
+                            stravaStatusMessage = nil
+                            await container.stravaSyncService.disconnect()
+                        }
+                    }
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .buttonStyle(.plain)
+                }
+                Text("New runs with GPS data upload to Strava automatically.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 14)
+            } else {
+                settingsRow(icon: .location, iconColor: .brand, title: "Connect to Strava") {
+                    Button {
+                        connectStrava()
+                    } label: {
+                        if isConnectingStrava {
+                            ProgressView()
+                        } else {
+                            Text("Connect")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(.brand)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isConnectingStrava)
+                }
+                Text("Automatically upload your completed runs to Strava as GPS activities.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 14)
+            }
+
+            if let stravaStatusMessage {
+                rowDivider
+                Text(stravaStatusMessage)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+            }
+        }
+    }
+
+    private func connectStrava() {
+        isConnectingStrava = true
+        stravaStatusMessage = nil
+        Task {
+            defer { isConnectingStrava = false }
+            do {
+                try await container.stravaSyncService.connect()
+            } catch let error as ASWebAuthenticationSessionError where error.code == .canceledLogin {
+                // User dismissed the Strava login sheet — nothing to report.
+            } catch {
+                stravaStatusMessage = "Couldn't connect to Strava: \(error.localizedDescription)"
+            }
+        }
+    }
 
     // MARK: - AI Coach card
 

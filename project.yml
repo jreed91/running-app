@@ -93,6 +93,10 @@ targets:
         NSLocalNetworkUsageDescription: "Network usage required only for development and TestFlight diagnostics."
         NSBonjourServices:
           - _pulse._tcp
+        CFBundleURLTypes:
+          - CFBundleURLName: com.running.stride.strava-auth
+            CFBundleURLSchemes:
+              - stride
         UILaunchScreen: {}
         ITSAppUsesNonExemptEncryption: false
 

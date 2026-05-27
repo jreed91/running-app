@@ -18,6 +18,7 @@ struct StrideApp: App {
                 .environment(\.appContainer, container)
                 .environment(appSettings)
                 .environment(authService)
+                .environment(container.stravaTokenStore)
                 .modelContainer(container.modelContainer)
                 .task {
                     PulseIntegrationService.activateIfNeeded()

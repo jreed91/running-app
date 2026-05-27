@@ -43,6 +43,9 @@ final class AppContainer: ObservableObject {
     let workoutSyncService: WorkoutSyncService
     let weatherService: WeatherService
     let aiCoachService: AICoachService
+    let stravaService: StravaService
+    let stravaTokenStore: StravaTokenStore
+    let stravaSyncService: StravaSyncService
 
     // MARK: Workout Review
 
@@ -178,6 +181,15 @@ final class AppContainer: ObservableObject {
             weatherService: weather,
             context: context
         )
+        let stravaService = StravaService()
+        self.stravaService = stravaService
+        let stravaTokenStore = StravaTokenStore()
+        self.stravaTokenStore = stravaTokenStore
+        self.stravaSyncService = StravaSyncService(
+            service: stravaService,
+            tokenStore: stravaTokenStore,
+            context: context
+        )
 
         self.configureCloudKitDiagnostics(cloudKitEnabled: cloudKitEnabled)
 
@@ -187,6 +199,7 @@ final class AppContainer: ObservableObject {
         workoutSyncService.onWorkoutsSynced = { [weak self] workouts in
             guard let self, let first = workouts.first else { return }
             self.pendingReviewWorkout = first
+            Task { await self.stravaSyncService.uploadNewlySynced(workouts) }
         }
 
         // Wire notification-tap callback only for the real app container. The EnvironmentKey
