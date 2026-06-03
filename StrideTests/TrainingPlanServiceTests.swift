@@ -181,6 +181,59 @@ struct TrainingPlanServiceTests {
         #expect(raceWorkout?.targetDistanceMeters == RaceType.halfMarathon.distanceMeters)
     }
 
+    // MARK: Custom distance
+
+    @Test("Custom distance maps to the nearest training archetype")
+    func customDistanceTrainingStyle() {
+        #expect(RaceType.custom.trainingStyle(forDistanceMeters: 5_000) == .fiveK)
+        #expect(RaceType.custom.trainingStyle(forDistanceMeters: 10_000) == .halfMarathon)
+        #expect(RaceType.custom.trainingStyle(forDistanceMeters: 21_097.5) == .halfMarathon)
+        #expect(RaceType.custom.trainingStyle(forDistanceMeters: 42_195) == .marathon)
+        // Standard race types always resolve to themselves.
+        #expect(RaceType.fiveK.trainingStyle(forDistanceMeters: 99_999) == .fiveK)
+    }
+
+    @Test("Custom race plan targets the user-defined distance on race day")
+    func customRacePlanUsesCustomDistance() {
+        let customMeters = 10_000.0
+        let profile = makeProfile(race: .custom, runDays: 4)
+        profile.customDistanceMeters = customMeters
+
+        let plan = service.generateRacePlan(
+            profile: profile,
+            startDate: date(2026, 1, 5),
+            raceDate: date(2026, 3, 22),
+            raceName: "City 10K",
+            runDayIndices: [0, 2, 4, 5]
+        )
+
+        #expect(plan.targetRace == .custom)
+        #expect(plan.customDistanceMeters == customMeters)
+        #expect(plan.effectiveRaceDistanceMeters == customMeters)
+
+        let raceWorkout = workouts(in: plan).first { $0.workoutType == .race }
+        #expect(raceWorkout?.targetDistanceMeters == customMeters)
+        #expect(raceWorkout?.notes?.contains("City 10K") == true)
+    }
+
+    @Test("Custom plan still produces a periodised plan with quality work")
+    func customPlanHasQualitySessions() {
+        let profile = makeProfile(race: .custom, runDays: 5)
+        profile.customDistanceMeters = 12_000
+
+        let plan = service.generatePlan(
+            profile: profile,
+            startDate: .now,
+            numberOfWeeks: 12,
+            runDayIndices: [0, 1, 2, 4, 5]
+        )
+
+        #expect(weeks(in: plan).count == 12)
+        let hasQuality = workouts(in: plan).contains { $0.workoutType.isQualitySession }
+        #expect(hasQuality, "Custom-distance plan should include quality sessions")
+        #expect(weeks(in: plan).last?.phase == .taper)
+    }
+
     // MARK: Easy run distribution
 
     @Test("Easy run count per week matches expected value for any run-day configuration")

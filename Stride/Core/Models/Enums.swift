@@ -7,12 +7,22 @@ enum RaceType: String, Codable, CaseIterable, Sendable {
     case fiveK = "5K"
     case halfMarathon = "Half Marathon"
     case marathon = "Marathon"
+    /// A user-defined goal distance. The actual distance is stored alongside the
+    /// race type on `UserProfile`/`TrainingPlan` as `customDistanceMeters`; the
+    /// value here is only a fallback used when no distance has been supplied.
+    case custom = "Custom"
 
-    var displayName: String { rawValue }
+    var displayName: String {
+        self == .custom ? "Custom Distance" : rawValue
+    }
 
     var isGoalRace: Bool {
         self != .maintainFitness
     }
+
+    /// Whether this race type carries a user-defined distance. When `true`, callers
+    /// should prefer the stored `customDistanceMeters` over `distanceMeters`.
+    var usesCustomDistance: Bool { self == .custom }
 
     var distanceMeters: Double {
         switch self {
@@ -20,6 +30,7 @@ enum RaceType: String, Codable, CaseIterable, Sendable {
         case .fiveK:        return 5_000
         case .halfMarathon: return 21_097.5
         case .marathon:     return 42_195
+        case .custom:       return 10_000   // fallback only — see `customDistanceMeters`
         }
     }
 
@@ -29,6 +40,20 @@ enum RaceType: String, Codable, CaseIterable, Sendable {
         case .fiveK:        return 8...12
         case .halfMarathon: return 12...20
         case .marathon:     return 16...24
+        case .custom:       return 6...24
+        }
+    }
+
+    /// The closest standard race used to derive training characteristics
+    /// (phasing, quality sessions, intervals, and pace targets) for a given
+    /// distance. Returns `self` for the standard race types; for `.custom` it
+    /// maps the supplied distance onto the nearest training archetype.
+    func trainingStyle(forDistanceMeters meters: Double) -> RaceType {
+        guard self == .custom else { return self }
+        switch meters {
+        case ..<8_000:   return .fiveK          // 5K-and-under: speed focused
+        case ..<32_000:  return .halfMarathon   // 10K–30K: threshold/tempo focused
+        default:         return .marathon       // 30K+: long-run focused
         }
     }
 }
@@ -71,6 +96,14 @@ enum FitnessLevel: String, Codable, CaseIterable, Sendable {
             case .beginner:     return 40   // ~25 mi/wk
             case .intermediate: return 55   // ~34 mi/wk
             case .advanced:     return 80   // ~50 mi/wk
+            }
+        case .custom:
+            // Custom distances route through `trainingStyle(forDistanceMeters:)`
+            // during generation, so this is only a neutral mid-range fallback.
+            switch self {
+            case .beginner:     return 25
+            case .intermediate: return 40
+            case .advanced:     return 60
             }
         }
     }

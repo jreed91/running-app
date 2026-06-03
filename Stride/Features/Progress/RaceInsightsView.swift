@@ -31,7 +31,7 @@ struct RaceInsightsView: View {
     }
 
     private var pacePredictionPoints: [PacePredictionPoint] {
-        guard let raceDistance = profile?.goalRace.distanceMeters else { return [] }
+        guard let raceDistance = profile?.effectiveRaceDistanceMeters else { return [] }
         return workouts.compactMap { workout in
             guard let pace = PaceCalculatorService.predictedRacePaceSecondsPerKm(
                 workoutDistanceMeters: workout.distanceMeters,
@@ -62,7 +62,7 @@ struct RaceInsightsView: View {
     }
 
     private var currentPredictedFinishTime: String {
-        guard let raceDistance = profile?.goalRace.distanceMeters,
+        guard let raceDistance = profile?.effectiveRaceDistanceMeters,
               let mostRecent = workouts.last(where: { $0.distanceMeters >= 1_500 }),
               let pace = PaceCalculatorService.predictedRacePaceSecondsPerKm(
                   workoutDistanceMeters: mostRecent.distanceMeters,
@@ -75,7 +75,7 @@ struct RaceInsightsView: View {
 
     private var goalGapSeconds: Double {
         guard let prof = profile, prof.goalFinishTime > 0 else { return 0 }
-        let raceDistance = prof.goalRace.distanceMeters
+        let raceDistance = prof.effectiveRaceDistanceMeters
         guard let mostRecent = workouts.last(where: { $0.distanceMeters >= 1_500 }),
               let pace = PaceCalculatorService.predictedRacePaceSecondsPerKm(
                   workoutDistanceMeters: mostRecent.distanceMeters,

@@ -472,6 +472,7 @@ struct OBRaceCard: View {
         case .fiveK: return .zoneInterval
         case .halfMarathon: return .zoneTempo
         case .marathon: return .zoneEasy
+        case .custom: return .zoneMarathon
         }
     }
     private var icon: StrideIconName {
@@ -480,6 +481,7 @@ struct OBRaceCard: View {
         case .fiveK: return .bolt
         case .halfMarathon: return .tempo
         case .marathon: return .run
+        case .custom: return .ruler
         }
     }
     private var distanceLabel: String {
@@ -489,6 +491,7 @@ struct OBRaceCard: View {
         case .fiveK:         return isImperial ? "3.1 mi"  : "5.0 km"
         case .halfMarathon:  return isImperial ? "13.1 mi" : "21.1 km"
         case .marathon:      return isImperial ? "26.2 mi" : "42.2 km"
+        case .custom:        return "Set your own"
         }
     }
     private var desc: String {
@@ -497,6 +500,7 @@ struct OBRaceCard: View {
         case .fiveK: return "Fast, speed-focused plans"
         case .halfMarathon: return "Endurance with tempo work"
         case .marathon: return "Long-run focused, biggest build"
+        case .custom: return "Any distance — 10K, 50K, or anything"
         }
     }
 
@@ -526,6 +530,68 @@ struct OBRaceCard: View {
                 .strokeBorder(isSelected ? color : Color.clear, lineWidth: 2))
         }
         .buttonStyle(BouncyButtonStyle()).foregroundStyle(.primary)
+    }
+}
+
+// MARK: - OBCustomDistanceCard
+
+/// Lets the runner dial in an arbitrary goal distance when `RaceType.custom` is selected.
+/// The canonical value is stored in kilometres; the display adapts to the unit preference.
+struct OBCustomDistanceCard: View {
+    @Binding var distanceKm: Double
+
+    @Environment(AppSettings.self) private var appSettings
+
+    private var isImperial: Bool { appSettings.unitPreference == .imperial }
+
+    /// Common goal distances offered as one-tap chips (stored in kilometres).
+    private let quickPicks: [(label: String, km: Double)] = [
+        ("10K", 10), ("15K", 15), ("20K", 20), ("30K", 30), ("50K", 50)
+    ]
+
+    private var displayValue: String {
+        isImperial
+            ? String(format: "%.1f mi", distanceKm * 0.621371)
+            : String(format: "%.1f km", distanceKm)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                StrideIcon(name: .ruler, size: 18, color: .brand)
+                Text("RACE DISTANCE")
+                    .font(.sectionHeader)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(displayValue)
+                    .font(.system(size: 18, weight: .bold, design: .monospaced))
+                    .foregroundStyle(.brand)
+            }
+
+            Slider(value: $distanceKm, in: 1...80, step: 0.1)
+                .tint(.brand)
+                .accessibilityIdentifier("onboarding.customDistanceSlider")
+
+            HStack(spacing: 8) {
+                ForEach(quickPicks, id: \.label) { pick in
+                    let isOn = abs(distanceKm - pick.km) < 0.05
+                    Button { distanceKm = pick.km } label: {
+                        Text(pick.label)
+                            .font(.system(size: 13, weight: .semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(
+                                isOn ? Color.brand : Color.surfaceTertiary,
+                                in: RoundedRectangle(cornerRadius: 10)
+                            )
+                            .foregroundStyle(isOn ? Color.white : Color.primary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(16)
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 18))
     }
 }
 

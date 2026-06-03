@@ -73,9 +73,16 @@ struct TrainingPlanService {
         runDayIndices: [Int],
         unitPreference: UnitPreference
     ) -> TrainingPlan {
+        // Resolve the goal distance and the training archetype it maps to. Custom
+        // distances carry their own meters and route through the nearest standard
+        // race style; standard races resolve to themselves.
+        let raceDistanceMeters = profile.effectiveRaceDistanceMeters
+        let style = profile.goalRace.trainingStyle(forDistanceMeters: raceDistanceMeters)
+
         let plan = TrainingPlan(
             targetRace: profile.goalRace,
             goalTimeSeconds: profile.goalFinishTime,
+            customDistanceMeters: profile.goalRace.usesCustomDistance ? raceDistanceMeters : nil,
             raceName: raceName,
             raceDate: raceDate,
             startDate: startDate,
@@ -84,8 +91,8 @@ struct TrainingPlanService {
 
         let vdot = estimatedVDOT(from: profile)
         let paces = PaceCalculatorService.trainingPaces(forVDOT: vdot)
-        let phases = phaseSchedule(totalWeeks: numberOfWeeks, raceType: profile.goalRace)
-        let baseKm = profile.fitnessLevel.startingWeeklyKm(for: profile.goalRace)
+        let phases = phaseSchedule(totalWeeks: numberOfWeeks, raceType: style)
+        let baseKm = profile.fitnessLevel.startingWeeklyKm(for: style)
 
         // Prefer explicit indices; fall back to even distribution from profile
         let effectiveDayOffsets: [Int]? = runDayIndices.isEmpty ? nil : sanitizeDayOffsets(runDayIndices)
@@ -97,7 +104,7 @@ struct TrainingPlanService {
                 weekIndex: index,
                 totalWeeks: numberOfWeeks,
                 phase: phase,
-                raceType: profile.goalRace
+                raceType: style
             )
             let week = TrainingWeek(
                 weekNumber: index + 1,
@@ -111,7 +118,7 @@ struct TrainingPlanService {
                 dayOffsets: effectiveDayOffsets,
                 phase: phase,
                 paces: paces,
-                raceType: profile.goalRace,
+                raceType: style,
                 targetKm: targetKm,
                 unitPreference: unitPreference
             )
@@ -122,8 +129,9 @@ struct TrainingPlanService {
                 weekWorkouts = workoutsForRaceWeek(
                     workouts,
                     raceDate: raceDate,
-                    raceType: profile.goalRace,
-                    raceName: raceName,
+                    style: style,
+                    raceDistanceMeters: raceDistanceMeters,
+                    raceName: raceName ?? profile.goalRace.displayName,
                     paces: paces
                 )
             } else {
@@ -239,7 +247,8 @@ struct TrainingPlanService {
     private func workoutsForRaceWeek(
         _ workouts: [ScheduledWorkout],
         raceDate: Date,
-        raceType: RaceType,
+        style: RaceType,
+        raceDistanceMeters: Double,
         raceName: String?,
         paces: TrainingPaces
     ) -> [ScheduledWorkout] {
@@ -248,23 +257,30 @@ struct TrainingPlanService {
             $0.scheduledDate.startOfDay < raceDay
         }
         return trainingWorkouts + [
-            raceWorkout(date: raceDay, raceType: raceType, raceName: raceName, paces: paces)
+            raceWorkout(
+                date: raceDay,
+                style: style,
+                raceDistanceMeters: raceDistanceMeters,
+                raceName: raceName,
+                paces: paces
+            )
         ]
     }
 
     private func raceWorkout(
         date: Date,
-        raceType: RaceType,
+        style: RaceType,
+        raceDistanceMeters: Double,
         raceName: String?,
         paces: TrainingPaces
     ) -> ScheduledWorkout {
-        let racePace = targetRacePace(for: raceType, paces: paces)
+        let racePace = targetRacePace(for: style, paces: paces)
         let displayName = raceName?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let noteName = (displayName?.isEmpty == false ? displayName : nil) ?? raceType.displayName
+        let noteName = (displayName?.isEmpty == false ? displayName : nil) ?? style.displayName
         return ScheduledWorkout(
             scheduledDate: date.startOfDay,
             workoutType: .race,
-            targetDistanceMeters: raceType.distanceMeters,
+            targetDistanceMeters: raceDistanceMeters,
             targetPaceLowerBound: racePace - 5,
             targetPaceUpperBound: racePace + 5,
             notes: "\(noteName) goal race. Trust the taper, start controlled, and race the final third."
@@ -275,7 +291,7 @@ struct TrainingPlanService {
         switch raceType {
         case .maintainFitness: return paces.easyRange.lowerBound
         case .fiveK: return paces.interval
-        case .halfMarathon: return (paces.threshold + paces.marathon) / 2
+        case .halfMarathon, .custom: return (paces.threshold + paces.marathon) / 2
         case .marathon: return paces.marathon
         }
     }
@@ -301,7 +317,7 @@ struct TrainingPlanService {
             taperWeeks = max(1, Int(Double(totalWeeks) * 0.10))
             peakWeeks  = max(1, Int(Double(totalWeeks) * 0.20))
             buildWeeks = max(1, Int(Double(totalWeeks) * 0.30))
-        case .halfMarathon:
+        case .halfMarathon, .custom:
             taperWeeks = max(1, Int(Double(totalWeeks) * 0.10))
             peakWeeks  = max(1, Int(Double(totalWeeks) * 0.15))
             buildWeeks = max(1, Int(Double(totalWeeks) * 0.35))
@@ -355,7 +371,7 @@ struct TrainingPlanService {
         // Use goal race/time as a directional signal while keeping the outcome bounded
         // by a fitness-level prior to avoid over-prescribing intensity from optimistic goals.
         let goalVDOT = PaceCalculatorService.vdot(
-            distanceMeters: profile.goalRace.distanceMeters,
+            distanceMeters: profile.effectiveRaceDistanceMeters,
             timeSeconds: profile.goalFinishTime
         )
         guard goalVDOT.isFinite, goalVDOT > 0 else { return baseline }
@@ -549,6 +565,7 @@ struct TrainingPlanService {
         case (.build, .fiveK):            return [.interval, .tempo]
         case (.build, .halfMarathon):     return [.tempo, .interval]
         case (.build, .marathon):         return [.tempo, .tempo]
+        case (.build, _):                 return [.tempo, .interval]
         case (.peak, .marathon):          return [.tempo, .interval]
         case (.peak, _):                  return [.interval, .tempo]
         case (.taper, _):                 return [.tempo]
@@ -577,7 +594,7 @@ struct TrainingPlanService {
                 recoverySeconds: 90,
                 recoveryType: .jog
             )]
-        case .halfMarathon:
+        case .halfMarathon, .custom:
             // 5 × 1000 m @ interval pace, 90 s jog recovery
             return [WorkoutInterval(
                 repetitions: 5,
@@ -606,7 +623,7 @@ struct TrainingPlanService {
             return "5 × 3 min @ interval pace with 90 s jog recovery."
         case .fiveK:
             return "6 × \(shortDistanceString(800, unit: unitPreference)) @ interval pace with 90 s jog recovery. Hard but controlled."
-        case .halfMarathon:
+        case .halfMarathon, .custom:
             return "5 × \(shortDistanceString(1_000, unit: unitPreference)) @ interval pace with 90 s jog recovery."
         case .marathon:
             return "4 × \(shortDistanceString(1_200, unit: unitPreference)) @ interval pace with 2 min jog recovery."

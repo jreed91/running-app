@@ -967,12 +967,26 @@ struct AICoachService: Sendable {
             focus.append("Keep weekly consistency: 1 long run, 1 quality run, remaining easy.")
         }
 
-        let raceContext = profile.map { "Goal: \($0.goalRace.displayName)." } ?? ""
+        let raceContext = profile.map {
+            "Goal: \(raceLabel(race: $0.goalRace, distanceMeters: $0.effectiveRaceDistanceMeters, unitPreference: unitPreference))."
+        } ?? ""
         let summary = ([raceContext] + summaryBits)
             .filter { !$0.isEmpty }
             .joined(separator: " ")
 
         return (summary: summary.isEmpty ? "No local summary available." : summary, focusAreas: Array(focus.prefix(3)))
+    }
+
+    /// A label for the goal race that appends the concrete distance for
+    /// custom-distance goals (e.g. "Custom Distance (10.0 km)"), so the model
+    /// knows the actual target rather than just "Custom Distance".
+    private func raceLabel(
+        race: RaceType,
+        distanceMeters: Double,
+        unitPreference: UnitPreference
+    ) -> String {
+        guard race.usesCustomDistance else { return race.displayName }
+        return "\(race.displayName) (\(distanceMeters.distanceString(unit: unitPreference)))"
     }
 
     @MainActor
@@ -992,7 +1006,8 @@ struct AICoachService: Sendable {
             paceRange = "none"
         }
         let plan = scheduled.week?.plan
-        let planRace = plan?.targetRace.displayName ?? profile.goalRace.displayName
+        let planRace = plan.map { raceLabel(race: $0.targetRace, distanceMeters: $0.effectiveRaceDistanceMeters, unitPreference: unitPreference) }
+            ?? raceLabel(race: profile.goalRace, distanceMeters: profile.effectiveRaceDistanceMeters, unitPreference: unitPreference)
         let goalTime = (plan?.goalTimeSeconds ?? profile.goalFinishTime).durationString
         let phase = scheduled.week?.phase.displayName ?? "Unknown"
         let weekNumber = scheduled.week.map { "\($0.weekNumber)" } ?? "Unknown"
@@ -1056,7 +1071,8 @@ struct AICoachService: Sendable {
         unitPreference: UnitPreference
     ) -> String {
         let plan = workouts.first?.week?.plan
-        let planRace = plan?.targetRace.displayName ?? profile.goalRace.displayName
+        let planRace = plan.map { raceLabel(race: $0.targetRace, distanceMeters: $0.effectiveRaceDistanceMeters, unitPreference: unitPreference) }
+            ?? raceLabel(race: profile.goalRace, distanceMeters: profile.effectiveRaceDistanceMeters, unitPreference: unitPreference)
         let goalTime = (plan?.goalTimeSeconds ?? profile.goalFinishTime).durationString
         let selectedRunDays = preferredRunDayNames(for: profile)
         let planLongRunDays = longRunDayNames(in: plan)
@@ -1209,7 +1225,7 @@ struct AICoachService: Sendable {
             "\($0.conditionDescription), \($0.temperatureString(unit: unitPreference)), humidity \(Int($0.humidityPercent))%"
         } ?? "n/a"
         let profileContext = profile.map {
-            "Goal race: \($0.goalRace.displayName), fitness level: \($0.fitnessLevel.displayName), run days/week: \($0.weeklyRunDays)"
+            "Goal race: \(raceLabel(race: $0.goalRace, distanceMeters: $0.effectiveRaceDistanceMeters, unitPreference: unitPreference)), fitness level: \($0.fitnessLevel.displayName), run days/week: \($0.weeklyRunDays)"
         } ?? "No athlete profile available."
 
         let splits = workout.splits.prefix(10).map {

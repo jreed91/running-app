@@ -585,6 +585,7 @@ private struct PlanOverviewCard: View {
         case .fiveK: return .bolt
         case .halfMarathon: return .tempo
         case .marathon: return .run
+        case .custom: return .ruler
         }
     }
 
@@ -765,13 +766,13 @@ private struct PaceInsightsCard: View {
             )
         }
         return PaceCalculatorService.vdot(
-            distanceMeters: plan.targetRace.distanceMeters,
+            distanceMeters: plan.effectiveRaceDistanceMeters,
             timeSeconds: plan.goalTimeSeconds
         )
     }
 
     private var estimatedTime: TimeInterval {
-        PaceCalculatorService.predictedTime(vdot: currentVDOT, distanceMeters: plan.targetRace.distanceMeters)
+        PaceCalculatorService.predictedTime(vdot: currentVDOT, distanceMeters: plan.effectiveRaceDistanceMeters)
     }
 
     private var trainingPaces: TrainingPaces {

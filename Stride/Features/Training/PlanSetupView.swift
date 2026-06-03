@@ -28,10 +28,17 @@ struct PlanSetupView: View {
     @State private var selectedDays: Set<Int> = [0, 2, 4, 5] // Mon Wed Fri Sat
     @State private var selectedEquipment: Set<StrengthEquipment> = []
     @State private var strengthFocus: StrengthFocus = .runningSpecific
+    /// Canonical custom goal distance in kilometres (used when `goalRace == .custom`).
+    @State private var customDistanceKm: Double = 10.0
 
     private var profile: UserProfile? { profiles.first }
 
     private var weekRange: ClosedRange<Int> { goalRace.typicalWeeks }
+
+    /// Goal distance in meters, resolving a custom distance when applicable.
+    private var effectiveRaceDistanceMeters: Double {
+        goalRace.usesCustomDistance ? customDistanceKm * 1_000 : goalRace.distanceMeters
+    }
 
     private var computedEndDate: Date { startDate.adding(weeks: selectedWeeks) }
 
@@ -92,6 +99,23 @@ struct PlanSetupView: View {
                 }
             }
             .onChange(of: goalRace) { _, _ in clampWeeks() }
+
+            if goalRace.usesCustomDistance {
+                Stepper(
+                    value: $customDistanceKm,
+                    in: 1...80,
+                    step: appSettings.unitPreference == .imperial ? 0.5 : 1
+                ) {
+                    LabeledContent("Distance") {
+                        Text(
+                            appSettings.unitPreference == .imperial
+                                ? String(format: "%.1f mi", customDistanceKm * 0.621371)
+                                : String(format: "%.1f km", customDistanceKm)
+                        )
+                        .foregroundStyle(.secondary)
+                    }
+                }
+            }
 
             Picker("Fitness level", selection: $fitnessLevel) {
                 ForEach(FitnessLevel.allCases, id: \.self) { level in
@@ -187,6 +211,9 @@ struct PlanSetupView: View {
     private func loadFromProfile() {
         guard let profile else { return }
         goalRace = profile.goalRace
+        if let custom = profile.customDistanceMeters, custom > 0 {
+            customDistanceKm = custom / 1_000
+        }
         fitnessLevel = profile.fitnessLevel
         if !profile.preferredRunDayIndices.isEmpty {
             selectedDays = Set(profile.preferredRunDayIndices)
@@ -226,6 +253,13 @@ struct PlanSetupView: View {
 
         // Persist goal changes back to the profile
         profile.goalRace = goalRace
+        profile.customDistanceMeters = goalRace.usesCustomDistance ? effectiveRaceDistanceMeters : nil
+        if let t = profile.currentEstimated5KTimeSeconds, t > 0 {
+            let v = PaceCalculatorService.vdot(distanceMeters: 5_000, timeSeconds: t)
+            profile.goalFinishTime = PaceCalculatorService.predictedTime(
+                vdot: v, distanceMeters: effectiveRaceDistanceMeters
+            )
+        }
         profile.fitnessLevel = fitnessLevel
         profile.weeklyRunDays = selectedDays.count
         profile.preferredRunDayIndices = sortedSelectedDays
