@@ -937,20 +937,32 @@ struct AICoachService: Sendable {
         var summaryBits: [String] = []
 
         if let drift {
+            let driftPct = Int(drift.rounded())
             if drift <= 3 {
-                summaryBits.append("Great pacing control across the run.")
+                summaryBits.append("Pacing held steady across the run (about \(driftPct)% drift).")
             } else if drift <= 7 {
                 focus.append("Start 3–5 sec/\(unitPreference.distanceLabel) easier for the first 2 splits.")
-                summaryBits.append("Moderate pace fade late in the workout.")
+                summaryBits.append("Pace faded around \(driftPct)% from the opening to the closing splits.")
             } else {
                 focus.append("Pace conservatively early and protect form in final third.")
-                summaryBits.append("Large late-run fade suggests pacing or endurance mismatch.")
+                summaryBits.append("A \(driftPct)% late-run fade suggests a pacing or endurance mismatch.")
             }
         }
 
-        if let hrDrift, hrDrift > 8 {
-            focus.append("Add easy aerobic volume or extend recoveries between reps.")
-            summaryBits.append("Heart-rate drift was elevated, indicating accumulating fatigue.")
+        // Cardiac drift rises naturally on longer, harder, hotter, or hillier
+        // efforts, so only surface it when it is clearly beyond the normal range
+        // for this kind of run instead of flagging routine drift every time.
+        if let hrDrift {
+            let driftThreshold: Double
+            switch workout.workoutType {
+            case .interval, .tempo, .race: driftThreshold = 16
+            case .longRun: driftThreshold = 14
+            default: driftThreshold = 12
+            }
+            if hrDrift > driftThreshold {
+                focus.append("Add easy aerobic volume to rebuild durability before the next hard day.")
+                summaryBits.append("Heart-rate drift of \(Int(hrDrift.rounded()))% ran high for a \(workout.workoutType.displayName.lowercased()), hinting at accumulating fatigue.")
+            }
         }
 
         if let averageRecentPace {
@@ -961,6 +973,17 @@ struct AICoachService: Sendable {
                 focus.append("Prioritize recovery before the next quality day.")
                 summaryBits.append("This run was slower than your recent quality baseline.")
             }
+        }
+
+        // Conditions and terrain are unique to each run, so let them shape the
+        // analysis rather than leaning on the same generic talking points.
+        if let weather = workout.weather, weather.temperatureCelsius >= 24 {
+            summaryBits.append("Warm conditions (\(weather.temperatureString(unit: unitPreference))) likely added cardiovascular strain, so weigh effort by feel over pace.")
+        }
+        if let elevationGain = workout.elevationGainMeters,
+           workout.distanceMeters > 0,
+           elevationGain / (workout.distanceMeters / 1_000) >= 15 {
+            summaryBits.append("Notable climbing (\(elevationGain.elevationString(unit: unitPreference))) shaped pace and heart rate on this route.")
         }
 
         if focus.isEmpty {

@@ -825,9 +825,12 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
         Rules:
         - confidence must be an integer from 0 to 100.
         - full_analysis must be 2 to 3 concise sentences that explain the coaching read, key evidence, and practical adjustment.
+        - Ground every observation in THIS run's specific data: cite its actual pace, splits, distance, terrain, and conditions, and tailor the headline, analysis, and actions to what is distinctive about this session. Do not reuse generic running advice or boilerplate that would fit any run.
+        - Vary the focus from run to run: lead with whatever stands out most in this workout (pacing execution, split trends, workout structure, terrain, conditions, or recovery load) rather than defaulting to the same theme every time.
         - Prioritize analysis across pace execution, workout structure, distance, duration, splits, cadence/form clues, and recovery load; use heart-rate as supporting context only.
+        - Be lenient with heart rate. Elevated or drifting heart rate is normal and expected on hard, long, hot, or hilly runs, so do NOT flag it as a problem unless it is clearly and substantially outside the normal range for this run type AND another signal corroborates it. When in doubt, treat heart rate as informational rather than a concern.
         - Include exactly 4 evidence items. Each evidence item should be a compact display chip: label maximum 10 characters, value maximum 12 characters, optional delta maximum 8 characters.
-        - Include at most 1 heart-rate evidence item unless the focus areas explicitly ask for heart-rate analysis.
+        - Include at most 1 heart-rate evidence item, and only make heart rate the headline or a high-priority action when the focus areas explicitly call it out.
         - Evidence tone must be one of: warning, success, brand, easy, interval, neutral.
         - Include exactly 3 action_items.
         - Each action item must include a compact metric badge, maximum 10 characters.
