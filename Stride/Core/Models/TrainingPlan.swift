@@ -12,6 +12,8 @@ final class TrainingPlan {
     @Attribute(originalName: "targetRace")
     var targetRaceLegacy: String? = nil
     var goalTimeSeconds: Double = 0
+    /// User-defined goal distance in meters when `targetRace == .custom`; nil otherwise.
+    var customDistanceMeters: Double?
     var raceName: String?
     var raceDate: Date?
     var startDate: Date = Date()
@@ -42,6 +44,7 @@ final class TrainingPlan {
     init(
         targetRace: RaceType,
         goalTimeSeconds: Double,
+        customDistanceMeters: Double? = nil,
         raceName: String? = nil,
         raceDate: Date? = nil,
         startDate: Date,
@@ -50,6 +53,7 @@ final class TrainingPlan {
         self.id = UUID()
         self.targetRaceRaw = targetRace.rawValue
         self.goalTimeSeconds = goalTimeSeconds
+        self.customDistanceMeters = customDistanceMeters
         self.raceName = raceName
         self.raceDate = raceDate
         self.startDate = startDate
@@ -61,5 +65,13 @@ final class TrainingPlan {
     var targetRace: RaceType {
         get { RaceType(rawValue: targetRaceRaw) ?? .fiveK }
         set { targetRaceRaw = newValue.rawValue }
+    }
+
+    /// The goal race distance in meters, honoring a user-defined custom distance.
+    var effectiveRaceDistanceMeters: Double {
+        if targetRace.usesCustomDistance, let custom = customDistanceMeters, custom > 0 {
+            return custom
+        }
+        return targetRace.distanceMeters
     }
 }

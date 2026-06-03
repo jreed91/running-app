@@ -10,6 +10,8 @@ final class UserProfile {
     /// Raw-backed storage for `goalRace` to keep CloudKit fields primitive.
     var goalRaceRaw: String = RaceType.fiveK.rawValue
     var goalFinishTime: TimeInterval = 0      // seconds
+    /// User-defined goal distance in meters when `goalRace == .custom`; nil otherwise.
+    var customDistanceMeters: Double?
     var raceName: String?
     var raceDate: Date?
     var weeklyRunDays: Int = 3
@@ -84,6 +86,14 @@ extension UserProfile {
     var gender: Gender {
         get { Gender(rawValue: genderRaw) ?? .preferNotToShare }
         set { genderRaw = newValue.rawValue }
+    }
+
+    /// The goal race distance in meters, honoring a user-defined custom distance.
+    var effectiveRaceDistanceMeters: Double {
+        if goalRace.usesCustomDistance, let custom = customDistanceMeters, custom > 0 {
+            return custom
+        }
+        return goalRace.distanceMeters
     }
 
     /// Weekday indices (0 = Monday … 6 = Sunday) the user prefers to run.
