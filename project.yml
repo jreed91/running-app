@@ -44,6 +44,10 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.running.stride
         PRODUCT_NAME: Stride
+        # Phase 2 (iOS 27 / WWDC26): to enable Apple Private Cloud Compute routing for
+        # AI insights, build on the iOS 27 SDK and add STRIDE_ENABLE_IOS27_MODELS here, e.g.
+        #   SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) STRIDE_ENABLE_IOS27_MODELS"
+        # Left off by default so the iOS 26 build does not reference unavailable symbols.
         INFOPLIST_FILE: Stride/Resources/Info.plist
         TARGETED_DEVICE_FAMILY: "1"         # iPhone only
         CODE_SIGN_STYLE: Automatic

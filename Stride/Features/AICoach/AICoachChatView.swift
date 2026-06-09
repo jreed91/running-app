@@ -337,10 +337,13 @@ struct AICoachChatView: View {
         draft = ""
 
         guard appSettings.aiInsightsEnabled, hasAIKey else {
+            let setupText = appSettings.aiProvider.requiresAPIKey
+                ? "Turn on AI Coach and add an API key in Settings to chat with \(appSettings.aiProvider.displayName)."
+                : "Turn on AI Coach in Settings to chat with \(appSettings.aiProvider.displayName)."
             messages.append(
                 AICoachChatMessage(
                     sender: .coach,
-                    text: "Turn on AI Coach and add an API key in Settings to chat with \(appSettings.aiProvider.displayName).",
+                    text: setupText,
                     metrics: [],
                     status: .setupNeeded
                 )
@@ -437,7 +440,8 @@ struct AICoachChatView: View {
     }
 
     private var hasAIKey: Bool {
-        !appSettings.aiAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        // Apple's on-device / Private Cloud Compute models need no key.
+        appSettings.hasAICredentials
     }
 
     private var contextSubtitle: String {

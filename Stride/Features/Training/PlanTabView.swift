@@ -119,7 +119,7 @@ struct PlanTabView: View {
         guard appSettings.aiInsightsEnabled else {
             return "Turn on AI Coach in Settings to adapt your plan."
         }
-        guard !appSettings.aiAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        guard appSettings.hasAICredentials else {
             return "Add an AI API key in Settings to adapt your plan."
         }
         return nil

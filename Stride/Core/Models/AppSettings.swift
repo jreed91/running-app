@@ -90,7 +90,8 @@ final class AppSettings {
         }
 
         let providerRaw = Self.readString(forKey: Self.aiProviderKey) ?? ""
-        self.aiProvider = AIProvider(rawValue: providerRaw) ?? .openAI
+        // New installs default to Apple's on-device model: no API key, private, free.
+        self.aiProvider = AIProvider(rawValue: providerRaw) ?? .appleOnDevice
         self.aiModelOverride = Self.readString(forKey: Self.aiModelOverrideKey) ?? ""
 
         // Default to true (sync on) when the key has never been set.
@@ -115,6 +116,21 @@ final class AppSettings {
         Self.persist(aiModelOverride, forKey: Self.aiModelOverrideKey)
         Self.persist(iCloudSyncEnabled, forKey: Self.iCloudSyncKey)
         Self.persist(morningReminderEnabled, forKey: Self.morningReminderKey)
+    }
+
+    // MARK: - AI readiness
+
+    /// True when the selected provider has the credentials it needs. Apple's
+    /// on-device / Private Cloud Compute models require no key, so they are always
+    /// "credentialed"; cloud providers need a non-empty API key.
+    var hasAICredentials: Bool {
+        guard aiProvider.requiresAPIKey else { return true }
+        return !aiAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// True when AI Coach is enabled and the provider is ready to use.
+    var isAICoachReady: Bool {
+        aiInsightsEnabled && hasAICredentials
     }
 
     // MARK: - Shared readers

@@ -305,9 +305,14 @@ struct AIWorkoutSegment: Codable, Sendable {
 
 struct AICoachService: Sendable {
     let integrationService: AIIntegrationServiceProtocol
+    let onDeviceBackend: (any OnDeviceCoachGenerating)?
 
-    init(integrationService: AIIntegrationServiceProtocol = AIIntegrationService()) {
+    init(
+        integrationService: AIIntegrationServiceProtocol = AIIntegrationService(),
+        onDeviceBackend: (any OnDeviceCoachGenerating)? = OnDeviceCoachFactory.makeDefault()
+    ) {
         self.integrationService = integrationService
+        self.onDeviceBackend = onDeviceBackend
     }
 
     func chatWithProvider(
@@ -317,6 +322,18 @@ struct AICoachService: Sendable {
         context: String,
         messages: [AIProviderChatMessage]
     ) async throws -> String {
+        if provider.isAppleModel {
+            guard let backend = onDeviceBackend, await backend.isAvailable() else {
+                throw OnDeviceCoachError.unavailable
+            }
+            return try await backend.generateChatReply(
+                instructions: Self.chatInstructions,
+                context: context,
+                messages: messages,
+                useServerModel: provider.usesPrivateCloudCompute
+            )
+        }
+
         let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedKey.isEmpty else { throw AIIntegrationError.emptyMessage }
 
@@ -344,6 +361,43 @@ struct AICoachService: Sendable {
         unitPreference: UnitPreference = .metric,
         onChunk: @escaping @Sendable (String) -> Void = { _ in }
     ) async -> AICoachInsight {
+        let context = makePromptContext(
+            workout: workout,
+            recentHistory: recentHistory,
+            profile: profile,
+            unitPreference: unitPreference
+        )
+        let details = makeWorkoutDetails(
+            workout: workout,
+            recentHistory: recentHistory,
+            profile: profile,
+            unitPreference: unitPreference
+        )
+
+        // Apple's on-device / Private Cloud Compute model: no key required.
+        if provider.isAppleModel {
+            if let backend = onDeviceBackend, await backend.isAvailable() {
+                do {
+                    let prompt = Self.insightPrompt(
+                        summary: context.summary,
+                        focusAreas: context.focusAreas,
+                        details: details
+                    )
+                    let structured = try await backend.generateCoachInsight(
+                        instructions: Self.insightInstructions,
+                        prompt: prompt,
+                        useServerModel: provider.usesPrivateCloudCompute,
+                        onPartial: onChunk
+                    )
+                    return makeInsight(from: structured, provider: provider)
+                } catch {
+                    return localHeuristicInsight(context: context, provider: provider)
+                }
+            }
+            // Model unavailable: degrade to the locally-computed analysis rather than a dead-end.
+            return localHeuristicInsight(context: context, provider: provider)
+        }
+
         let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedKey.isEmpty else {
             return AICoachInsight(
@@ -360,13 +414,6 @@ struct AICoachService: Sendable {
             )
         }
 
-        let context = makePromptContext(
-            workout: workout,
-            recentHistory: recentHistory,
-            profile: profile,
-            unitPreference: unitPreference
-        )
-
         let selectedModel = modelOverride.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? provider.defaultModel
             : modelOverride
@@ -378,12 +425,7 @@ struct AICoachService: Sendable {
                 model: selectedModel,
                 workoutSummary: context.summary,
                 focusAreas: context.focusAreas,
-                workoutDetails: makeWorkoutDetails(
-                    workout: workout,
-                    recentHistory: recentHistory,
-                    profile: profile,
-                    unitPreference: unitPreference
-                ),
+                workoutDetails: details,
                 onChunk: onChunk
             )
 
@@ -391,21 +433,49 @@ struct AICoachService: Sendable {
                 return unavailableInsight(reason: "The AI response was not in the structured format Stride needs to display.")
             }
 
-            return AICoachInsight(
-                headline: structured.headline.isEmpty ? "\(provider.displayName) Analysis" : structured.headline,
-                summary: structured.summary,
-                fullAnalysis: structured.fullAnalysis,
-                confidence: min(max(structured.confidence, 0), 100),
-                evidence: Array(structured.evidence.prefix(4)),
-                actionItems: Array(structured.actionItems.prefix(3)),
-                focusAreas: structured.actionItems.map(\.title),
-                nextWorkoutSuggestion: structured.nextWorkout.title,
-                nextWorkoutRationale: structured.nextWorkout.rationale,
-                apiReady: true
-            )
+            return makeInsight(from: structured, provider: provider)
         } catch {
             return unavailableInsight(reason: "Stride could not load structured AI insights. Check your API key, model, and network connection, then try again.")
         }
+    }
+
+    private func makeInsight(from structured: AICoachStructuredResponse, provider: AIProvider) -> AICoachInsight {
+        AICoachInsight(
+            headline: structured.headline.isEmpty ? "\(provider.displayName) Analysis" : structured.headline,
+            summary: structured.summary,
+            fullAnalysis: structured.fullAnalysis,
+            confidence: min(max(structured.confidence, 0), 100),
+            evidence: Array(structured.evidence.prefix(4)),
+            actionItems: Array(structured.actionItems.prefix(3)),
+            focusAreas: structured.actionItems.map(\.title),
+            nextWorkoutSuggestion: structured.nextWorkout.title,
+            nextWorkoutRationale: structured.nextWorkout.rationale,
+            apiReady: true
+        )
+    }
+
+    /// Surfaces the locally-computed run analysis (pace/HR drift, conditions, baseline)
+    /// as a non-model insight when Apple's model is unavailable. Always shows something
+    /// useful instead of an "AI unavailable" dead-end.
+    private func localHeuristicInsight(
+        context: (summary: String, focusAreas: [String]),
+        provider: AIProvider
+    ) -> AICoachInsight {
+        let actions = context.focusAreas.prefix(3).map {
+            AICoachActionItem(title: "Focus", detail: $0, priority: "Medium", metric: nil, tone: "neutral")
+        }
+        return AICoachInsight(
+            headline: "On-Device Summary",
+            summary: context.summary,
+            fullAnalysis: nil,
+            confidence: 0,
+            evidence: [],
+            actionItems: Array(actions),
+            focusAreas: context.focusAreas,
+            nextWorkoutSuggestion: "Keep the next session controlled and consistent.",
+            nextWorkoutRationale: nil,
+            apiReady: false
+        )
     }
 
     static func parseStructuredResponse(_ text: String) -> AICoachStructuredResponse? {
@@ -456,6 +526,31 @@ struct AICoachService: Sendable {
             return scheduled
         }
 
+        let adaptationContext = makeAdaptationContext(
+            scheduled: scheduled,
+            recentHistory: recentHistory,
+            profile: profile,
+            unitPreference: unitPreference
+        )
+
+        if provider.isAppleModel {
+            guard let backend = onDeviceBackend, await backend.isAvailable() else { return nil }
+            do {
+                let structured = try await backend.generateWorkoutAdaptation(
+                    instructions: Self.adaptationInstructions,
+                    prompt: Self.adaptationPrompt(context: adaptationContext),
+                    useServerModel: provider.usesPrivateCloudCompute
+                )
+                guard Self.isValidAdaptation(structured),
+                      let adapted = makeScheduledWorkout(from: structured, scheduled: scheduled) else {
+                    return nil
+                }
+                return adapted
+            } catch {
+                return nil
+            }
+        }
+
         let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedKey.isEmpty else { return nil }
 
@@ -468,12 +563,7 @@ struct AICoachService: Sendable {
                 provider: provider,
                 apiKey: trimmedKey,
                 model: selectedModel,
-                adaptationContext: makeAdaptationContext(
-                    scheduled: scheduled,
-                    recentHistory: recentHistory,
-                    profile: profile,
-                    unitPreference: unitPreference
-                )
+                adaptationContext: adaptationContext
             )
 
             guard let structured = Self.parseWorkoutAdaptationResponse(response),
@@ -504,43 +594,53 @@ struct AICoachService: Sendable {
         }
         guard !adaptableWorkouts.isEmpty else { return [:] }
 
-        let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedKey.isEmpty else { return [:] }
+        let adaptationContext = makePlanAdaptationContext(
+            scheduled: adaptableWorkouts,
+            recentHistory: recentHistory,
+            profile: profile,
+            unitPreference: unitPreference
+        )
 
-        let selectedModel = modelOverride.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? provider.defaultModel
-            : modelOverride
+        let structured: AIWorkoutPlanAdaptationResponse?
+        if provider.isAppleModel {
+            guard let backend = onDeviceBackend, await backend.isAvailable() else { return [:] }
+            structured = try? await backend.generatePlanAdaptation(
+                instructions: Self.planAdaptationInstructions,
+                prompt: Self.planAdaptationPrompt(context: adaptationContext),
+                useServerModel: provider.usesPrivateCloudCompute,
+                onPartial: onChunk
+            )
+        } else {
+            let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmedKey.isEmpty else { return [:] }
 
-        do {
-            let response = try await integrationService.generateWorkoutPlanAdaptation(
+            let selectedModel = modelOverride.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? provider.defaultModel
+                : modelOverride
+
+            let response = try? await integrationService.generateWorkoutPlanAdaptation(
                 provider: provider,
                 apiKey: trimmedKey,
                 model: selectedModel,
-                adaptationContext: makePlanAdaptationContext(
-                    scheduled: adaptableWorkouts,
-                    recentHistory: recentHistory,
-                    profile: profile,
-                    unitPreference: unitPreference
-                ),
+                adaptationContext: adaptationContext,
                 onChunk: onChunk
             )
-            guard let structured = Self.parseWorkoutPlanAdaptationResponse(response) else {
-                return [:]
-            }
-
-            var adaptedByID: [UUID: ScheduledWorkout] = [:]
-            for item in structured.adaptations {
-                guard let id = UUID(uuidString: item.workoutID),
-                      let original = adaptableWorkouts.first(where: { $0.id == id }),
-                      let adapted = makeScheduledWorkout(from: item.adaptation, scheduled: original) else {
-                    continue
-                }
-                adaptedByID[id] = adapted
-            }
-            return adaptedByID
-        } catch {
-            return [:]
+            structured = response.flatMap(Self.parseWorkoutPlanAdaptationResponse)
         }
+
+        guard let structured else { return [:] }
+
+        var adaptedByID: [UUID: ScheduledWorkout] = [:]
+        for item in structured.adaptations {
+            guard let id = UUID(uuidString: item.workoutID),
+                  let original = adaptableWorkouts.first(where: { $0.id == id }),
+                  Self.isValidAdaptation(item.adaptation),
+                  let adapted = makeScheduledWorkout(from: item.adaptation, scheduled: original) else {
+                continue
+            }
+            adaptedByID[id] = adapted
+        }
+        return adaptedByID
     }
 
     static func parseWorkoutAdaptationResponse(_ text: String) -> AIWorkoutAdaptationResponse? {
@@ -1288,6 +1388,61 @@ struct AICoachService: Sendable {
 
         let distanceMeters = Double(split.kilometer) * 1_000
         return distanceMeters.distanceString(unit: unitPreference)
+    }
+}
+
+// MARK: - On-device prompt + instruction builders
+//
+// Instructions carry the coaching guidance; the structural rules (counts, ranges,
+// field lengths, enum choices) live in the `@Generable` `@Guide` annotations, so these
+// strings omit the JSON-schema block the cloud prompts need.
+extension AICoachService {
+    static let chatInstructions = """
+    You are Stride's AI running coach. Give concise, practical coaching answers grounded only in the supplied runner context and conversation. Avoid medical advice or clinical claims, do not claim certainty, and ask for more information when the data is insufficient. Keep answers under 120 words unless the runner asks for detail.
+    """
+
+    static let insightInstructions = """
+    You are an expert running coach analysing a single completed run. Give concise, practical, evidence-based feedback grounded only in the supplied data. Cite this run's actual pace, splits, distance, terrain, and conditions, and tailor the read to what is distinctive about this session rather than generic advice. Vary the lead focus run to run (pacing execution, split trends, structure, terrain, conditions, or recovery load). Treat heart rate as supporting context, not a problem, unless it is clearly and substantially abnormal for this run type. Avoid medical advice or clinical claims and never mention that you are an AI.
+    """
+
+    static func insightPrompt(summary: String, focusAreas: [String], details: String) -> String {
+        let bullets = focusAreas.map { "- \($0)" }.joined(separator: "\n")
+        return """
+        Analyse this run and produce coaching feedback.
+
+        Workout summary:
+        \(summary)
+
+        Workout details:
+        \(details)
+
+        Focus areas:
+        \(bullets)
+        """
+    }
+
+    static let adaptationInstructions = """
+    You are an expert running coach adapting a single scheduled run using only the supplied athlete context. Keep the workout on its scheduled day and weekday. If the scheduled workout is a long run, keep it a long run; never convert a non-long-run into a long run. Tailor volume and intensity to the target race and current training phase. Express all paces in seconds per kilometre regardless of display unit. If the run should not change, return the same targets with an explanation. Avoid medical advice or clinical claims and never mention that you are an AI.
+    """
+
+    static func adaptationPrompt(context: String) -> String {
+        """
+        Adapt the scheduled run using only the athlete and workout context below.
+
+        \(context)
+        """
+    }
+
+    static let planAdaptationInstructions = """
+    You are an expert running coach adapting several scheduled runs as one coordinated plan update, using only the supplied athlete context. Return exactly one adaptation per provided workout id, copying each id exactly. Keep each workout on its scheduled day and weekday. If a scheduled workout is a long run, keep it a long run; never convert a non-long-run into a long run. Tailor volume and intensity to the target race and training phase. Express all paces in seconds per kilometre. Keep explanations under 120 characters. Avoid medical advice or clinical claims and never mention that you are an AI.
+    """
+
+    static func planAdaptationPrompt(context: String) -> String {
+        """
+        Adapt all scheduled runs in one pass using only the athlete, plan, and workout context below.
+
+        \(context)
+        """
     }
 }
 

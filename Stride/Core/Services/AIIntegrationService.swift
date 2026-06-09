@@ -88,6 +88,9 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
                 focusAreas: focusAreas,
                 workoutDetails: workoutDetails
             )
+        default:
+            // Apple on-device / Private Cloud Compute providers are handled in AICoachService.
+            throw AIIntegrationError.invalidResponse
         }
     }
 
@@ -119,6 +122,8 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
                 workoutDetails: workoutDetails,
                 onChunk: onChunk
             )
+        default:
+            throw AIIntegrationError.invalidResponse
         }
     }
 
@@ -141,6 +146,8 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
                 model: model,
                 adaptationContext: adaptationContext
             )
+        default:
+            throw AIIntegrationError.invalidResponse
         }
     }
 
@@ -166,6 +173,8 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
                 adaptationContext: adaptationContext,
                 onChunk: onChunk
             )
+        default:
+            throw AIIntegrationError.invalidResponse
         }
     }
 
@@ -191,6 +200,8 @@ struct AIIntegrationService: AIIntegrationServiceProtocol, Sendable {
                 context: context,
                 messages: messages
             )
+        default:
+            throw AIIntegrationError.invalidResponse
         }
     }
 

@@ -1470,7 +1470,8 @@ struct RunSummaryView: View {
     }
 
     private var hasAIKey: Bool {
-        !appSettings.aiAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        // Apple's on-device / Private Cloud Compute models need no key.
+        appSettings.hasAICredentials
     }
 
     private var postRunCoachPrompts: [String] {

@@ -1,6 +1,7 @@
 # Migrating Stride's AI insights to Apple Foundation Models (iOS 27 / WWDC26)
 
-> **Status:** Plan / proposal. No code changes yet.
+> **Status:** Phase 1 + Phase 2 implemented on branch `claude/apple-foundation-models-plan-nm0m22`.
+> See "Implementation status" below.
 > **Author context:** Generated from a review of the current AI implementation
 > (`AICoachService`, `AIIntegrationService`, `AppSettings`, `AIProvider`) plus the
 > WWDC25/WWDC26 Foundation Models sessions and the in-repo `coreai-context.md`.
@@ -390,7 +391,46 @@ entitlements are required for this migration.
 
 ---
 
-## 11. Authoritative references
+## 11. Implementation status (this branch)
+
+Phases 1 and 2 are implemented. **Not yet built/verified** — this repo builds on macOS
+with Xcode (per `AGENTS.md`); it was authored in a Linux container with no iOS SDK, so a
+build + on-device test pass on an Apple-Intelligence-eligible device is still required.
+
+**Added**
+- `AIProvider.appleOnDevice` / `.applePrivateCloud` + `requiresAPIKey` / `isAppleModel` /
+  `usesPrivateCloudCompute` (`Enums.swift`).
+- `Stride/Core/Services/FoundationModels/`
+  - `OnDeviceCoachGenerating.swift` — backend protocol + `OnDeviceCoachFactory` (no FM import).
+  - `FoundationModelsCoachTypes.swift` — `@Generable` types + mappers to existing structs.
+  - `FoundationModelsCoachBackend.swift` — `LanguageModelSession` backend; Phase 2 PCC path
+    behind `#if STRIDE_ENABLE_IOS27_MODELS` + `if #available(iOS 27.0, *)`.
+- `AppSettings.hasAICredentials` / `isAICoachReady`; default provider now `.appleOnDevice`.
+- `AICoachService` branches Apple providers to the on-device backend (producing the existing
+  structured types), with a local-heuristic fallback; on-device instruction/prompt builders.
+- `StrideTests/FoundationModelsCoachServiceTests.swift` — provider flags, availability
+  branch (uses/falls-back), cloud-still-needs-key, and `@Generable` mapping tests.
+
+**Changed (UI gating)** — `SettingsView` (hide key/model fields for keyless providers,
+provider-aware footnote), `RunSummaryView` / `AICoachChatView` / `PlanTabView` now gate on
+`hasAICredentials` instead of a raw key check.
+
+**Deployment target** unchanged at iOS 26.0; Phase 2 iOS 27 symbols are compiled out by
+default (see `project.yml`).
+
+### Verify-against-SDK checklist (beta-era symbols)
+- [ ] `SystemLanguageModel.default.availability` cases (`deviceNotEligible`,
+      `appleIntelligenceNotEnabled`, `modelNotReady`).
+- [ ] `LanguageModelSession(model:instructions:)` accepting a `String` instructions value.
+- [ ] `session.respond(to:generating:)` → `.content`, and `respond(to:)` → `.content`.
+- [ ] `@Generable` / `@Guide(.range/.count)` and `@Generable` enums.
+- [ ] Phase 2 only: `PrivateCloudComputeLanguageModel`, `GenerationOptions(reasoningLevel:)`.
+- [ ] Confirm the `@Generable` macro preserves the memberwise initializer (used by the
+      mapping tests); adjust the tests if it generates a different init.
+
+---
+
+## 12. Authoritative references
 
 - Foundation Models framework — https://developer.apple.com/documentation/FoundationModels
 - WWDC25 286 *Meet the Foundation Models framework* — https://developer.apple.com/videos/play/wwdc2025/286/
