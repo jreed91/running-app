@@ -244,22 +244,45 @@ enum UnitPreference: String, CaseIterable, Sendable {
 // MARK: - AIProvider
 
 enum AIProvider: String, CaseIterable, Sendable {
+    // Declared first so they appear first in `allCases`-driven pickers.
+    case appleOnDevice = "apple_on_device"
+    case applePrivateCloud = "apple_pcc"
     case openAI = "openai"
     case anthropic = "anthropic"
 
     var displayName: String {
         switch self {
+        case .appleOnDevice: return "On-device (Apple Intelligence)"
+        case .applePrivateCloud: return "Apple Private Cloud Compute"
         case .openAI: return "OpenAI"
         case .anthropic: return "Claude (Anthropic)"
         }
     }
 
+    /// Cloud BYO-key providers send a `model` string; the Apple providers run the
+    /// system model and ignore this, but we still return a stable identifier.
     var defaultModel: String {
         switch self {
+        case .appleOnDevice: return "apple-on-device"
+        case .applePrivateCloud: return "apple-private-cloud-compute"
         case .openAI: return "gpt-4o-mini"
         case .anthropic: return "claude-3-5-sonnet-latest"
         }
     }
+
+    /// Whether the user must supply an API key. Apple's models need no key.
+    var requiresAPIKey: Bool {
+        switch self {
+        case .appleOnDevice, .applePrivateCloud: return false
+        case .openAI, .anthropic: return true
+        }
+    }
+
+    /// Routed through Apple's Foundation Models framework rather than a cloud HTTP API.
+    var isAppleModel: Bool { !requiresAPIKey }
+
+    /// Apple's server-backed model (Private Cloud Compute); only meaningful on iOS 27+.
+    var usesPrivateCloudCompute: Bool { self == .applePrivateCloud }
 }
 
 // MARK: - StrengthEquipment
