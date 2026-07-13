@@ -1,9 +1,10 @@
 import SwiftUI
 import SwiftData
 
+/// Lists every training plan — the active one plus all past plans — with
+/// completion stats. Pushed from the Plan tab's history toolbar button.
 struct TrainingPlanListView: View {
     @Environment(\.modelContext) private var context
-    @Environment(\.appContainer) private var container
 
     @Query(sort: \TrainingPlan.createdAt, order: .reverse)
     private var plans: [TrainingPlan]
@@ -12,45 +13,58 @@ struct TrainingPlanListView: View {
 
     @State private var showNewPlanSheet = false
 
+    private var currentPlans: [TrainingPlan] { plans.filter(\.isActive) }
+    private var pastPlans: [TrainingPlan] { plans.filter { !$0.isActive } }
+
     var body: some View {
-        NavigationStack {
-            List {
-                ForEach(plans) { plan in
-                    NavigationLink {
-                        PlanDetailView(plan: plan)
-                    } label: {
-                        PlanRowView(plan: plan)
-                    }
-                }
-                .onDelete(perform: deletePlans)
-            }
-            .navigationTitle("Training Plans")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button { showNewPlanSheet = true } label: {
-                        Label("New Plan", systemImage: "plus")
-                    }
-                    .disabled(profiles.isEmpty)
+        List {
+            if !currentPlans.isEmpty {
+                Section("Current") {
+                    planRows(currentPlans)
                 }
             }
-            .sheet(isPresented: $showNewPlanSheet) {
-                PlanSetupView()
-            }
-            .overlay {
-                if plans.isEmpty {
-                    ContentUnavailableView(
-                        "No training plan",
-                        systemImage: "calendar.badge.plus",
-                        description: Text("Tap + to generate a personalised plan.")
-                    )
+            if !pastPlans.isEmpty {
+                Section("Past Plans") {
+                    planRows(pastPlans)
                 }
+            }
+        }
+        .navigationTitle("Plan History")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button { showNewPlanSheet = true } label: {
+                    Label("New Plan", systemImage: "plus")
+                }
+                .disabled(profiles.isEmpty)
+            }
+        }
+        .sheet(isPresented: $showNewPlanSheet) {
+            PlanSetupView()
+        }
+        .overlay {
+            if plans.isEmpty {
+                ContentUnavailableView(
+                    "No training plans yet",
+                    systemImage: "calendar.badge.plus",
+                    description: Text("Plans you create appear here, along with the workouts you completed in them.")
+                )
             }
         }
     }
 
-    private func deletePlans(at offsets: IndexSet) {
-        for index in offsets { context.delete(plans[index]) }
-        try? context.save()
+    private func planRows(_ sectionPlans: [TrainingPlan]) -> some View {
+        ForEach(sectionPlans) { plan in
+            NavigationLink {
+                PlanDetailView(plan: plan)
+            } label: {
+                PlanRowView(plan: plan)
+            }
+        }
+        .onDelete { offsets in
+            for index in offsets { context.delete(sectionPlans[index]) }
+            try? context.save()
+        }
     }
 }
 
@@ -59,6 +73,10 @@ struct TrainingPlanListView: View {
 struct PlanRowView: View {
     let plan: TrainingPlan
 
+    @Environment(AppSettings.self) private var appSettings
+
+    private var summary: PlanSummary { PlanSummaryService.summary(for: plan) }
+
     private var planTitle: String {
         if let name = plan.raceName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
             return name
@@ -66,26 +84,58 @@ struct PlanRowView: View {
         return plan.targetRace.displayName
     }
 
+    private var dateRange: String {
+        let start = plan.startDate.formatted(.dateTime.month(.abbreviated).day().year())
+        let end = plan.endDate.formatted(.dateTime.month(.abbreviated).day().year())
+        return "\(start) – \(end)"
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        let summary = self.summary
+        VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(planTitle).font(.bodyStrong)
-                if plan.isActive {
-                    Text("ACTIVE")
-                        .font(.caption)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(.brand.opacity(0.15), in: Capsule())
-                        .foregroundStyle(.brand)
-                }
+                PlanStatusBadge(status: summary.status)
             }
-            Text("\(plan.totalWeeks) weeks · starts \(plan.startDate.formatted(date: .abbreviated, time: .omitted))")
+
+            Text("\(plan.totalWeeks) weeks · \(dateRange)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            ProgressView(value: plan.progress)
-                .tint(.brand)
+            HStack(spacing: 4) {
+                Text("\(summary.completedCount)/\(summary.scheduledCount) workouts")
+                Text("·").foregroundStyle(.tertiary)
+                Text(summary.completedDistanceMeters.distanceString(unit: appSettings.unitPreference))
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+            ProgressView(value: summary.adherence)
+                .tint(summary.status == .active ? .brand : .success)
         }
         .padding(.vertical, 4)
+    }
+}
+
+// MARK: - PlanStatusBadge
+
+struct PlanStatusBadge: View {
+    let status: PlanStatus
+
+    private var color: Color {
+        switch status {
+        case .active:   return .brand
+        case .finished: return .success
+        case .ended:    return .secondary
+        }
+    }
+
+    var body: some View {
+        Text(status.displayName.uppercased())
+            .font(.caption)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(color.opacity(0.15), in: Capsule())
+            .foregroundStyle(color)
     }
 }

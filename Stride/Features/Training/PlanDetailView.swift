@@ -21,6 +21,13 @@ struct PlanDetailView: View {
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 16) {
+                PlanSummaryCard(plan: plan)
+
+                Text("TRAINING WEEKS")
+                    .font(.sectionHeader)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
                 ForEach((plan.weeks ?? []).sorted(by: { $0.weekNumber < $1.weekNumber })) { week in
                     WeekCardView(week: week)
                 }
@@ -52,6 +59,158 @@ struct PlanDetailView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This will permanently remove all \(plan.totalWeeks) weeks and scheduled workouts.")
+        }
+    }
+}
+
+// MARK: - PlanSummaryCard
+
+/// Aggregate "how did this plan go" card: adherence, completed distance and
+/// time, pace, and a per-workout-type completion breakdown.
+struct PlanSummaryCard: View {
+    let plan: TrainingPlan
+
+    @Environment(AppSettings.self) private var appSettings
+
+    private var dateRange: String {
+        let start = plan.startDate.formatted(.dateTime.month(.abbreviated).day().year())
+        let end = plan.endDate.formatted(.dateTime.month(.abbreviated).day().year())
+        return "\(start) – \(end)"
+    }
+
+    var body: some View {
+        let summary = PlanSummaryService.summary(for: plan)
+
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("SUMMARY")
+                        .font(.sectionHeader)
+                        .foregroundStyle(.secondary)
+                    Text(dateRange)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                PlanStatusBadge(status: summary.status)
+            }
+
+            // Adherence
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .lastTextBaseline) {
+                    Text("\(Int((summary.adherence * 100).rounded()))%")
+                        .font(.system(size: 28, weight: .bold, design: .monospaced))
+                        .foregroundStyle(.brand)
+                    Text("\(summary.completedCount) of \(summary.scheduledCount) workouts completed")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+                ProgressView(value: summary.adherence)
+                    .tint(.brand)
+            }
+
+            Divider()
+
+            // Totals grid
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
+                SummaryStat(
+                    value: summary.completedDistanceMeters.distanceString(unit: appSettings.unitPreference),
+                    label: "Distance"
+                )
+                SummaryStat(
+                    value: summary.totalDurationSeconds > 0 ? summary.totalDurationSeconds.durationString : "--",
+                    label: "Time"
+                )
+                SummaryStat(
+                    value: summary.averagePaceSecondsPerKm.map {
+                        $0.paceString(unit: appSettings.unitPreference)
+                            .replacingOccurrences(of: " \(appSettings.unitPreference.paceLabel)", with: "")
+                    } ?? "--:--",
+                    label: "Avg Pace"
+                )
+                SummaryStat(
+                    value: summary.longestRunMeters > 0
+                        ? summary.longestRunMeters.distanceString(unit: appSettings.unitPreference)
+                        : "--",
+                    label: "Longest Run"
+                )
+                SummaryStat(
+                    value: "\(summary.weeksCompleted)/\(summary.totalWeeks)",
+                    label: "Weeks Done"
+                )
+                SummaryStat(
+                    value: "\(summary.completedRunCount + summary.completedStrengthCount)",
+                    label: "Sessions"
+                )
+            }
+
+            if !summary.typeBreakdown.isEmpty {
+                Divider()
+
+                VStack(spacing: 10) {
+                    ForEach(summary.typeBreakdown) { stat in
+                        TypeBreakdownRow(stat: stat)
+                    }
+                }
+            }
+        }
+        .padding()
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
+    }
+}
+
+// MARK: - SummaryStat
+
+private struct SummaryStat: View {
+    let value: String
+    let label: String
+
+    var body: some View {
+        VStack(spacing: 2) {
+            Text(value)
+                .font(.bodyStrong)
+                .minimumScaleFactor(0.7)
+                .lineLimit(1)
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+// MARK: - TypeBreakdownRow
+
+private struct TypeBreakdownRow: View {
+    let stat: PlanSummary.TypeStat
+
+    private var fraction: Double {
+        stat.scheduled > 0 ? Double(stat.completed) / Double(stat.scheduled) : 0
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(stat.type.color.opacity(0.15))
+                    .frame(width: 28, height: 28)
+                StrideIcon(name: stat.type.strideIcon, size: 13,
+                           color: stat.type.color, strokeWeight: 1.8)
+            }
+
+            Text(stat.type.displayName)
+                .font(.bodyRegular)
+
+            Spacer()
+
+            Text("\(stat.completed)/\(stat.scheduled)")
+                .font(.system(size: 13, weight: .medium, design: .monospaced))
+                .foregroundStyle(.secondary)
+
+            ProgressView(value: fraction)
+                .tint(stat.type.color)
+                .frame(width: 56)
         }
     }
 }

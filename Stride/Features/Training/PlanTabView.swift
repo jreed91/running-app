@@ -77,6 +77,13 @@ struct PlanTabView: View {
             .navigationTitle("My Plan")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
+                    NavigationLink {
+                        TrainingPlanListView()
+                    } label: {
+                        Label("Plan History", systemImage: "clock.arrow.circlepath")
+                    }
+                }
+                ToolbarItem(placement: .primaryAction) {
                     Button { showNewPlanSheet = true } label: {
                         Label("New Plan", systemImage: "plus")
                     }
