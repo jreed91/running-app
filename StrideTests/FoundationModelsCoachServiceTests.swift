@@ -141,7 +141,9 @@ struct FoundationModelsCoachServiceTests {
 #if canImport(FoundationModels)
 import FoundationModels
 
-@available(iOS 26.0, *)
+// No @available attribute here: the deployment target is already iOS 26.0, and
+// swift-testing rejects @Test functions inside an availability-constrained type
+// ("Attribute 'Test' cannot be applied to this function...").
 struct GeneratedTypeMappingTests {
 
     @Test("Generated insight maps into the structured response shape")
