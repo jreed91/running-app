@@ -321,6 +321,17 @@ Cloud BYO-key was dropped entirely. Concretely:
     `project.yml`; `isAvailable` then returns `true` and coaching routes to PCC.
     Until the grant is in the provisioning profile, the app safely uses the on-device
     model.
+  - **ITMS-90863 (Apple silicon Mac warning).** Because the iOS-27 `@Generable`
+    additions (`Generable.promptRepresentation` / `instructionsRepresentation`, which
+    back `Prompt` / `Instructions`) aren't present in the Mac's FoundationModels
+    framework, App Store Connect emits a *non-blocking* ITMS-90863 warning when the
+    build is validated for "iPhone and iPad Apps on Apple Silicon Macs" (seen on build
+    136). Stride requires CoreLocation / background location / HealthKit / motion and
+    cannot run on a Mac, so the correct fix is to **opt the app out of Apple-silicon
+    Mac availability** in App Store Connect (Pricing and Availability → uncheck
+    "iPhone and iPad Apps on Apple Silicon Macs"). This is an account/ASC setting, not
+    a code change. (The alternative — weak-linking FoundationModels — is not used: it
+    would keep the app installable-but-broken on Mac.)
 - Settings drops the API-key `SecureField` and model-override field; `SettingsView`,
   `RunSummaryView`, `AICoachChatView`, and `PlanTabView` copy no longer mentions keys.
 - Tests: `AICoachServiceTests.swift` (cloud JSON-parse tests) removed;
