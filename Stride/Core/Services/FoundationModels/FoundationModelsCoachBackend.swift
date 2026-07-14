@@ -125,9 +125,19 @@ struct FoundationModelsCoachBackend: OnDeviceCoachGenerating {
     private func makeSession(instructions: String, useServerModel: Bool) -> LanguageModelSession {
         #if STRIDE_ENABLE_IOS27_MODELS
         if useServerModel, #available(iOS 27.0, *) {
-            // VERIFY-AGAINST-SDK (WWDC26 session 241): Private Cloud Compute model.
+            // VERIFY-AGAINST-SDK (WWDC26 session 319): Private Cloud Compute model.
+            //
+            // Constructing the model is safe, but running inference without the
+            // Private Cloud Compute entitlement traps inside
+            // `Executor.assertEntitled()` — a fatal `EXC_BREAKPOINT`, *not* a
+            // catchable Swift error, so a `do/catch` at the call site cannot recover.
+            // Gate on the framework's own `isAvailable` (which reflects the
+            // entitlement, device eligibility, and Apple Intelligence being on) and
+            // fall back to the on-device model when PCC can't be used.
             let serverModel = PrivateCloudComputeLanguageModel()
-            return LanguageModelSession(model: serverModel, instructions: instructions)
+            if serverModel.isAvailable {
+                return LanguageModelSession(model: serverModel, instructions: instructions)
+            }
         }
         #endif
         return LanguageModelSession(model: SystemLanguageModel.default, instructions: instructions)
