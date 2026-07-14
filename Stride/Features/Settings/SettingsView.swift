@@ -334,37 +334,13 @@ struct SettingsView: View {
                     .tint(.brand)
             }
             rowDivider
-            settingsRow(icon: .gear, iconColor: .brand, title: "Provider") {
+            settingsRow(icon: .gear, iconColor: .brand, title: "Model") {
                 Picker("", selection: Bindable(appSettings).aiProvider) {
                     ForEach(AIProvider.allCases, id: \.self) { provider in
                         Text(provider.displayName).tag(provider)
                     }
                 }
                 .labelsHidden()
-            }
-            if appSettings.aiProvider.requiresAPIKey {
-                rowDivider
-                settingsRow(icon: .timer, iconColor: .secondary, title: "Model") {
-                    EmptyView()
-                }
-                TextField("Optional model override", text: Bindable(appSettings).aiModelOverride)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                    .font(.system(size: 13, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 6)
-                rowDivider
-                settingsRow(icon: .lock, iconColor: .secondary, title: "AI API Key") {
-                    EmptyView()
-                }
-                SecureField("Paste your key here", text: Bindable(appSettings).aiAPIKey)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                    .font(.system(size: 13, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 6)
             }
             Text(aiProviderFootnote)
                 .font(.caption)
@@ -379,9 +355,7 @@ struct SettingsView: View {
         case .appleOnDevice:
             return "Runs on your device with Apple Intelligence. No API key, no cost, and your training data never leaves your iPhone. Requires a supported device with Apple Intelligence enabled."
         case .applePrivateCloud:
-            return "Uses Apple Private Cloud Compute for deeper analysis. No API key required; data is processed with Apple's Private Cloud Compute privacy guarantees."
-        case .openAI, .anthropic:
-            return "Supports OpenAI and Claude (Anthropic). Key stays on-device and is only used when enabled."
+            return "Uses Apple Private Cloud Compute for deeper analysis on longer requests. No API key required; data is processed with Apple's Private Cloud Compute privacy guarantees."
         }
     }
 

@@ -10,10 +10,10 @@ final class AppSettings {
     private static let defaults = UserDefaults.standard
     private static let ubiquitousStore = NSUbiquitousKeyValueStore.default
 
-    /// API keys should remain local-only and never sync through iCloud key-value storage.
-    private static let localOnlyStringKeys: Set<String> = [
-        aiAPIKeyKey
-    ]
+    /// String keys that must stay local-only and never sync through iCloud key-value
+    /// storage. AI coaching no longer uses any API key (it runs on Apple's Foundation
+    /// Models), so this is currently empty; the machinery is kept for future secrets.
+    private static let localOnlyStringKeys: Set<String> = []
 
     var unitPreference: UnitPreference {
         didSet {
@@ -27,12 +27,6 @@ final class AppSettings {
         }
     }
 
-    var aiAPIKey: String {
-        didSet {
-            Self.persist(aiAPIKey, forKey: Self.aiAPIKeyKey)
-        }
-    }
-
     var aiInsightsEnabled: Bool {
         didSet {
             Self.persist(aiInsightsEnabled, forKey: Self.aiInsightsEnabledKey)
@@ -42,12 +36,6 @@ final class AppSettings {
     var aiProvider: AIProvider {
         didSet {
             Self.persist(aiProvider.rawValue, forKey: Self.aiProviderKey)
-        }
-    }
-
-    var aiModelOverride: String {
-        didSet {
-            Self.persist(aiModelOverride, forKey: Self.aiModelOverrideKey)
         }
     }
 
@@ -66,10 +54,8 @@ final class AppSettings {
     // Internal so services can read the same key before AppSettings is created.
     static let unitPreferenceKey = "unitPreference"
     private static let orsAPIKeyKey      = "orsAPIKey"
-    private static let aiAPIKeyKey       = "aiAPIKey"
     private static let aiInsightsEnabledKey = "aiInsightsEnabled"
     private static let aiProviderKey     = "aiProvider"
-    private static let aiModelOverrideKey = "aiModelOverride"
     // Internal so AppContainer can read the same key before AppSettings is created.
     static let iCloudSyncKey = "iCloudSyncEnabled"
     static let morningReminderKey = "morningReminderEnabled"
@@ -81,7 +67,6 @@ final class AppSettings {
         let raw = Self.readString(forKey: Self.unitPreferenceKey) ?? ""
         self.unitPreference = UnitPreference(rawValue: raw) ?? .metric
         self.orsAPIKey = Self.readString(forKey: Self.orsAPIKeyKey) ?? ""
-        self.aiAPIKey = Self.readString(forKey: Self.aiAPIKeyKey) ?? ""
 
         if Self.hasStoredValue(forKey: Self.aiInsightsEnabledKey) {
             self.aiInsightsEnabled = Self.readBool(forKey: Self.aiInsightsEnabledKey)
@@ -92,7 +77,6 @@ final class AppSettings {
         let providerRaw = Self.readString(forKey: Self.aiProviderKey) ?? ""
         // New installs default to Apple's on-device model: no API key, private, free.
         self.aiProvider = AIProvider(rawValue: providerRaw) ?? .appleOnDevice
-        self.aiModelOverride = Self.readString(forKey: Self.aiModelOverrideKey) ?? ""
 
         // Default to true (sync on) when the key has never been set.
         if Self.hasStoredValue(forKey: Self.iCloudSyncKey) {
@@ -110,23 +94,19 @@ final class AppSettings {
 
         Self.persist(unitPreference.rawValue, forKey: Self.unitPreferenceKey)
         Self.persist(orsAPIKey, forKey: Self.orsAPIKeyKey)
-        Self.persist(aiAPIKey, forKey: Self.aiAPIKeyKey)
         Self.persist(aiInsightsEnabled, forKey: Self.aiInsightsEnabledKey)
         Self.persist(aiProvider.rawValue, forKey: Self.aiProviderKey)
-        Self.persist(aiModelOverride, forKey: Self.aiModelOverrideKey)
         Self.persist(iCloudSyncEnabled, forKey: Self.iCloudSyncKey)
         Self.persist(morningReminderEnabled, forKey: Self.morningReminderKey)
     }
 
     // MARK: - AI readiness
 
-    /// True when the selected provider has the credentials it needs. Apple's
-    /// on-device / Private Cloud Compute models require no key, so they are always
-    /// "credentialed"; cloud providers need a non-empty API key.
-    var hasAICredentials: Bool {
-        guard aiProvider.requiresAPIKey else { return true }
-        return !aiAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
+    /// AI coaching runs on Apple's on-device / Private Cloud Compute models, which
+    /// require no API key, so the provider is always "credentialed". Kept as a named
+    /// property so call sites read intentionally and to leave room for future gating
+    /// (e.g. device eligibility) without touching every caller.
+    var hasAICredentials: Bool { true }
 
     /// True when AI Coach is enabled and the provider is ready to use.
     var isAICoachReady: Bool {

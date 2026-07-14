@@ -7,11 +7,10 @@ import FoundationModels
 // These `@Generable` types replace the hand-written JSON schema (and the ~700 lines
 // of fault-tolerant JSON parsing in `AICoachService`) for the on-device path. Guided
 // generation uses constrained decoding, so the framework *guarantees* the model emits
-// exactly this structure — the `@Guide` annotations carry the rules that used to live
-// as prose in `AIIntegrationService.makePrompt`.
+// exactly this structure — the `@Guide` annotations carry the coaching rules directly.
 //
-// Each type maps to the existing `Codable` value type the cloud path already produces,
-// so `AICoachService`'s downstream mapping/validation is reused unchanged.
+// Each type maps to the `Codable` value types in `AICoachService`, so the downstream
+// mapping/validation (`isValidAdaptation`, `makeScheduledWorkout`, …) is reused unchanged.
 
 @available(iOS 26.0, *)
 @Generable

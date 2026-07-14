@@ -17,7 +17,7 @@ concurrency:
 env:
   SCHEME: Stride
   SIMULATOR: iPhone 17
-  IOS_VERSION: "26.4"
+  IOS_VERSION: "27.0"
 
 jobs:
   # ── Change detection ────────────────────────────────────────────────────────
@@ -80,7 +80,7 @@ jobs:
   # ── Build & Test (iOS) ──────────────────────────────────────────────────────
   test-ios:
     name: Test — iOS
-    runs-on: macos-26
+    runs-on: macos-27
     needs: [changes, lint]
     if: needs.changes.outputs.ios == 'true'
 
@@ -88,7 +88,15 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Select Xcode
-        run: sudo xcode-select -switch /Applications/Xcode_26.4.app
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_27*.app 2>/dev/null | sort -V | tail -1)
+          if [[ -z "$XCODE" ]]; then
+            echo "::error::No Xcode 27 toolchain found on this runner. Installed Xcodes:"
+            ls -d /Applications/Xcode_*.app 2>/dev/null || true
+            exit 1
+          fi
+          echo "Using $XCODE"
+          sudo xcode-select -switch "$XCODE"
 
       - name: Print Xcode version
         run: xcodebuild -version
@@ -196,7 +204,7 @@ jobs:
   # ── Archive (release build) ─────────────────────────────────────────────────
   archive:
     name: Archive
-    runs-on: macos-26
+    runs-on: macos-27
     needs: [changes, test-ios]
     # Only archive on pushes to main (not PRs)
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -205,7 +213,15 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Select Xcode
-        run: sudo xcode-select -switch /Applications/Xcode_26.4.app
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_27*.app 2>/dev/null | sort -V | tail -1)
+          if [[ -z "$XCODE" ]]; then
+            echo "::error::No Xcode 27 toolchain found on this runner. Installed Xcodes:"
+            ls -d /Applications/Xcode_*.app 2>/dev/null || true
+            exit 1
+          fi
+          echo "Using $XCODE"
+          sudo xcode-select -switch "$XCODE"
 
       - name: Install XcodeGen and xcbeautify
         run: brew install xcodegen xcbeautify

@@ -285,8 +285,6 @@ final class AppContainer: ObservableObject {
         history: [RunWorkout],
         profile: UserProfile,
         provider: AIProvider,
-        apiKey: String,
-        modelOverride: String,
         unitPreference: UnitPreference = .metric
     ) async -> ScheduledWorkout {
         await aiCoachService.adaptScheduledWorkoutWithProvider(
@@ -294,8 +292,6 @@ final class AppContainer: ObservableObject {
             recentHistory: history,
             profile: profile,
             provider: provider,
-            apiKey: apiKey,
-            modelOverride: modelOverride,
             unitPreference: unitPreference
         ) ?? scheduled
     }
@@ -306,8 +302,6 @@ final class AppContainer: ObservableObject {
         history: [RunWorkout],
         profile: UserProfile,
         provider: AIProvider,
-        apiKey: String,
-        modelOverride: String,
         unitPreference: UnitPreference = .metric,
         onChunk: @escaping @Sendable (String) -> Void = { _ in }
     ) async -> [UUID: ScheduledWorkout] {
@@ -316,8 +310,6 @@ final class AppContainer: ObservableObject {
             recentHistory: history,
             profile: profile,
             provider: provider,
-            apiKey: apiKey,
-            modelOverride: modelOverride,
             unitPreference: unitPreference,
             onChunk: onChunk
         )

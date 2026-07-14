@@ -60,6 +60,37 @@ actor IntentModelActor {
         )
     }
 
+    // MARK: - RunWorkoutEntity fetches (Siri / Spotlight / Apple Intelligence)
+
+    func recentRunEntities(limit: Int, unit: UnitPreference) throws -> [RunWorkoutEntity] {
+        var descriptor = FetchDescriptor<RunWorkout>(
+            sortBy: [SortDescriptor(\.date, order: .reverse)]
+        )
+        descriptor.fetchLimit = limit
+        return try modelContext.fetch(descriptor).map { $0.runWorkoutEntity(unit: unit) }
+    }
+
+    func runEntities(ids: [UUID], unit: UnitPreference) throws -> [RunWorkoutEntity] {
+        guard !ids.isEmpty else { return [] }
+        let identifiers = ids
+        let predicate = #Predicate<RunWorkout> { identifiers.contains($0.id) }
+        let descriptor = FetchDescriptor<RunWorkout>(predicate: predicate)
+        return try modelContext.fetch(descriptor).map { $0.runWorkoutEntity(unit: unit) }
+    }
+
+    func runEntities(matching query: String, unit: UnitPreference) throws -> [RunWorkoutEntity] {
+        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        var descriptor = FetchDescriptor<RunWorkout>(
+            sortBy: [SortDescriptor(\.date, order: .reverse)]
+        )
+        descriptor.fetchLimit = 50
+        return try modelContext.fetch(descriptor).compactMap { run in
+            let entity = run.runWorkoutEntity(unit: unit)
+            guard needle.isEmpty || entity.title.lowercased().contains(needle) else { return nil }
+            return entity
+        }
+    }
+
     func weeklySummary() throws -> WeeklySummaryData {
         let cal = Calendar.current
         let components = cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: Date())

@@ -1,7 +1,9 @@
 # Migrating Stride's AI insights to Apple Foundation Models (iOS 27 / WWDC26)
 
-> **Status:** Phase 1 + Phase 2 implemented on branch `claude/apple-foundation-models-plan-nm0m22`.
-> See "Implementation status" below.
+> **Status:** Phase 1 + Phase 2 implemented (merged). **Phase 3 complete** — the app is
+> now iOS-27-only and Apple-only: the OpenAI/Anthropic BYO-key providers, the API-key
+> storage/UI, and the entire cloud HTTP + JSON-parsing layer have been removed. See
+> "Implementation status" and "Phase 3" below.
 > **Author context:** Generated from a review of the current AI implementation
 > (`AICoachService`, `AIIntegrationService`, `AppSettings`, `AIProvider`) plus the
 > WWDC25/WWDC26 Foundation Models sessions and the in-repo `coreai-context.md`.
@@ -284,11 +286,44 @@ etc. are replaced by `@Guide` annotations and short natural-language instruction
    request/response/stream-decoding structs at the bottom of `AIIntegrationService.swift`.
 5. Surface `response.usage` in Pulse diagnostics instead of raw HTTP bodies.
 
-### Phase 3 — Cleanup
-- Once on-device is the proven default, decide whether to keep cloud BYO-key at all.
-  If kept, it's now just one `LanguageModel` conformer among several. If dropped,
-  delete `AIIntegrationService`'s HTTP layer, the `*Stream*` parsing, and the
-  flexible-decoding helpers.
+### Phase 3 — Cleanup (DONE — Apple-only, iOS 27)
+Cloud BYO-key was dropped entirely. Concretely:
+- `AIProvider` now has only `.appleOnDevice` and `.applePrivateCloud`; `requiresAPIKey`,
+  `isAppleModel`, and `defaultModel` are gone (all providers are keyless Apple models).
+- `AppSettings` no longer stores `aiAPIKey` / `aiModelOverride`; `hasAICredentials` is
+  always `true` (Apple models need no key).
+- `AICoachService` is on-device-only: the cloud branches, `apiKey`/`modelOverride`
+  parameters, the `AIIntegrationServiceProtocol` dependency, and the ~200 lines of
+  fault-tolerant JSON parsing (`parseStructuredResponse`, `parseWorkout*Response`,
+  `extractFencedJSON`, `extractBalancedObject`, partial-object salvage, …) were deleted.
+- `AIIntegrationService.swift` (OpenAI/Anthropic `URLSession` code + request/response
+  structs) was deleted; `AIProviderChatMessage` moved into `AICoachService.swift`.
+- Deployment target raised to **iOS 27.0**; `STRIDE_ENABLE_IOS27_MODELS` is now defined
+  in `project.yml`, so the Private Cloud Compute path in `FoundationModelsCoachBackend`
+  is compiled in.
+- Settings drops the API-key `SecureField` and model-override field; `SettingsView`,
+  `RunSummaryView`, `AICoachChatView`, and `PlanTabView` copy no longer mentions keys.
+- Tests: `AICoachServiceTests.swift` (cloud JSON-parse tests) removed;
+  `FoundationModelsCoachServiceTests.swift` updated to the keyless API.
+
+> **App Intents / Siri / Apple Intelligence:** Following Apple's *Apple Intelligence and
+> Siri* App Intents guidance (entities are the foundation, indexed in Spotlight for
+> semantic discovery):
+> - `StrideShortcuts` (an `AppShortcutsProvider`) exposes `TodaysRunIntent` and
+>   `WeeklySummaryIntent` — headless, read-only intents Siri runs by voice without opening
+>   the app. Auto-discovered at launch; phrases broadened for recognition.
+> - `RunWorkoutEntity` models a completed run as an `AppEntity` and conforms to
+>   `IndexedEntity`, so runs are indexed in Spotlight and can be found/referenced by
+>   Apple Intelligence and passed into intents. `RunWorkoutEntityQuery`
+>   (`EntityQuery` + `EntityStringQuery`) resolves runs by id, suggestion, and text.
+> - `RunDetailsIntent(run:)` is an entity-driven action available in Shortcuts / Siri.
+> - `RunSpotlightIndexer` indexes recent runs at launch via `CSSearchableIndex`.
+>
+> Note: Apple's *assistant schema domains* (`@AssistantIntent` / `@AssistantEntity`)
+> cover Messages, Calendar, Audio, Clock, Photos, etc. — there is no fitness/running
+> domain, so schema adoption does not apply to Stride's core actions. The entity +
+> Spotlight-index + App Shortcuts path above is the recommended integration for a
+> running app.
 
 ---
 

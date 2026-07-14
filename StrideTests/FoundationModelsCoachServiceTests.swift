@@ -70,13 +70,11 @@ private func sampleStructured() -> AICoachStructuredResponse {
 @MainActor
 struct FoundationModelsCoachServiceTests {
 
-    @Test("AIProvider exposes Apple model and key-requirement flags")
+    @Test("AIProvider exposes only keyless Apple models")
     func providerFlags() {
-        #expect(AIProvider.appleOnDevice.isAppleModel)
-        #expect(AIProvider.appleOnDevice.requiresAPIKey == false)
+        #expect(AIProvider.allCases == [.appleOnDevice, .applePrivateCloud])
+        #expect(AIProvider.appleOnDevice.usesPrivateCloudCompute == false)
         #expect(AIProvider.applePrivateCloud.usesPrivateCloudCompute)
-        #expect(AIProvider.openAI.requiresAPIKey)
-        #expect(AIProvider.anthropic.isAppleModel == false)
     }
 
     @Test("On-device insight is used when the model is available, with no API key")
@@ -89,9 +87,7 @@ struct FoundationModelsCoachServiceTests {
             workout: workout,
             recentHistory: [],
             profile: nil,
-            provider: .appleOnDevice,
-            apiKey: "",
-            modelOverride: ""
+            provider: .appleOnDevice
         )
 
         #expect(insight.apiReady)
@@ -109,9 +105,7 @@ struct FoundationModelsCoachServiceTests {
             workout: workout,
             recentHistory: [],
             profile: nil,
-            provider: .appleOnDevice,
-            apiKey: "",
-            modelOverride: ""
+            provider: .appleOnDevice
         )
 
         // Local fallback is not an AI/model result, so it is not marked apiReady.
@@ -119,8 +113,8 @@ struct FoundationModelsCoachServiceTests {
         #expect(insight.headline == "On-Device Summary")
     }
 
-    @Test("Cloud providers still require an API key")
-    func cloudStillRequiresKey() async {
+    @Test("With no backend at all, evaluation degrades to the local heuristic insight")
+    func localHeuristicWithoutBackend() async {
         let service = AICoachService(onDeviceBackend: nil)
         let workout = RunWorkout(date: Date(), distanceMeters: 8_000, durationSeconds: 2_500, workoutType: .easy)
 
@@ -128,22 +122,20 @@ struct FoundationModelsCoachServiceTests {
             workout: workout,
             recentHistory: [],
             profile: nil,
-            provider: .openAI,
-            apiKey: "",
-            modelOverride: ""
+            provider: .applePrivateCloud
         )
 
         #expect(insight.apiReady == false)
-        #expect(insight.headline == "AI Key Required")
+        #expect(insight.headline == "On-Device Summary")
     }
 }
 
 #if canImport(FoundationModels)
 import FoundationModels
 
-// No @available attribute here: the deployment target is already iOS 26.0, and
-// swift-testing rejects @Test functions inside an availability-constrained type
-// ("Attribute 'Test' cannot be applied to this function...").
+// No @available attribute here: the deployment target is iOS 27.0 (>= the iOS 26.0
+// availability on the @Generable types), and swift-testing rejects @Test functions
+// inside an availability-constrained type ("Attribute 'Test' cannot be applied...").
 struct GeneratedTypeMappingTests {
 
     @Test("Generated insight maps into the structured response shape")

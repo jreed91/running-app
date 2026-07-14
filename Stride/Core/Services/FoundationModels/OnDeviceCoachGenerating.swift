@@ -56,10 +56,9 @@ enum OnDeviceCoachError: Error {
 enum OnDeviceCoachFactory {
     static func makeDefault() -> (any OnDeviceCoachGenerating)? {
         #if canImport(FoundationModels)
-        if #available(iOS 26.0, *) {
-            return FoundationModelsCoachBackend()
-        }
-        #endif
+        return FoundationModelsCoachBackend()
+        #else
         return nil
+        #endif
     }
 }
