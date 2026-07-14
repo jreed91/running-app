@@ -337,9 +337,7 @@ struct AICoachChatView: View {
         draft = ""
 
         guard appSettings.aiInsightsEnabled, hasAIKey else {
-            let setupText = appSettings.aiProvider.requiresAPIKey
-                ? "Turn on AI Coach and add an API key in Settings to chat with \(appSettings.aiProvider.displayName)."
-                : "Turn on AI Coach in Settings to chat with \(appSettings.aiProvider.displayName)."
+            let setupText = "Turn on AI Coach in Settings to chat with \(appSettings.aiProvider.displayName)."
             messages.append(
                 AICoachChatMessage(
                     sender: .coach,
@@ -357,8 +355,6 @@ struct AICoachChatView: View {
         do {
             let reply = try await container.aiCoachService.chatWithProvider(
                 provider: appSettings.aiProvider,
-                apiKey: appSettings.aiAPIKey,
-                modelOverride: chatModel,
                 context: coachContext,
                 messages: providerMessages
             )
@@ -377,7 +373,7 @@ struct AICoachChatView: View {
                 messages.append(
                     AICoachChatMessage(
                         sender: .coach,
-                        text: "I could not reach \(appSettings.aiProvider.displayName). Check your API key, model, and network connection, then try again.",
+                        text: "I could not reach \(appSettings.aiProvider.displayName). Make sure Apple Intelligence is enabled on this device, then try again.",
                         metrics: [],
                         status: .setupNeeded
                     )
@@ -423,11 +419,6 @@ struct AICoachChatView: View {
             return attributed
         }
         return AttributedString(trimmed.replacingOccurrences(of: "**", with: ""))
-    }
-
-    private var chatModel: String {
-        let override = appSettings.aiModelOverride.trimmingCharacters(in: .whitespacesAndNewlines)
-        return override.isEmpty ? appSettings.aiProvider.defaultModel : override
     }
 
     private var providerMessages: [AIProviderChatMessage] {

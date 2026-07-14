@@ -3,8 +3,8 @@ name: Stride
 options:
   bundleIdPrefix: com.running.stride
   deploymentTarget:
-    iOS: "26.0"
-  xcodeVersion: "26.4"
+    iOS: "27.0"
+  xcodeVersion: "27.0"
   createIntermediateGroups: true
   groupSortPosition: top
   generateEmptyDirectories: true
@@ -35,7 +35,7 @@ targets:
   Stride:
     type: application
     platform: iOS
-    deploymentTarget: "26.0"
+    deploymentTarget: "27.0"
 
     sources:
       - path: Stride
@@ -44,10 +44,11 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.running.stride
         PRODUCT_NAME: Stride
-        # Phase 2 (iOS 27 / WWDC26): to enable Apple Private Cloud Compute routing for
-        # AI insights, build on the iOS 27 SDK and add STRIDE_ENABLE_IOS27_MODELS here, e.g.
-        #   SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) STRIDE_ENABLE_IOS27_MODELS"
-        # Left off by default so the iOS 26 build does not reference unavailable symbols.
+        # iOS 27 / WWDC26: enables Apple Private Cloud Compute routing for AI insights.
+        # Now that the deployment target is iOS 27, the Private Cloud Compute symbols
+        # (PrivateCloudComputeLanguageModel, GenerationOptions(reasoningLevel:)) are
+        # available, so the Phase 2 path in FoundationModelsCoachBackend is compiled in.
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) STRIDE_ENABLE_IOS27_MODELS"
         INFOPLIST_FILE: Stride/Resources/Info.plist
         TARGETED_DEVICE_FAMILY: "1"         # iPhone only
         CODE_SIGN_STYLE: Automatic
@@ -104,7 +105,7 @@ targets:
   StrideTests:
     type: bundle.unit-test
     platform: iOS
-    deploymentTarget: "26.0"
+    deploymentTarget: "27.0"
 
     sources:
       - StrideTests
@@ -123,7 +124,7 @@ targets:
   StrideUITests:
     type: bundle.ui-testing
     platform: iOS
-    deploymentTarget: "26.0"
+    deploymentTarget: "27.0"
 
     sources:
       - StrideUITests

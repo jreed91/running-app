@@ -39,8 +39,8 @@ GPS, HealthKit, WeatherKit, CloudKit, and background delivery behavior require d
 
 The Xcode project is generated from `project.yml` using XcodeGen. Edit `project.yml` to add targets, files, capabilities, packages, or build settings. Do not hand-edit the generated `.xcodeproj`.
 
-- iOS deployment target: 26.0
-- Xcode version in config: 26.4
+- iOS deployment target: 27.0
+- Xcode version in config: 27.0
 - Swift: 6.0 with `SWIFT_STRICT_CONCURRENCY: complete`
 - App target: iPhone only
 - Bundle ID: `com.running.stride`
@@ -95,7 +95,7 @@ Business logic belongs in services or repositories, not directly in SwiftUI view
 - `RouteType`: `.loop`, `.outAndBack`
 - `WorkoutLocation`: `.outdoor`, `.indoor`
 - `UnitPreference`: `.metric`, `.imperial`
-- `AIProvider`: `.openAI`, `.anthropic`
+- `AIProvider`: `.appleOnDevice`, `.applePrivateCloud` (Apple Foundation Models only — no third-party providers or API keys)
 - `StrengthEquipment` and `StrengthFocus`
 
 `Stride/Core/Models/ValueTypes.swift` contains codable/sendable value types used inside SwiftData models:

@@ -126,9 +126,6 @@ struct PlanTabView: View {
         guard appSettings.aiInsightsEnabled else {
             return "Turn on AI Coach in Settings to adapt your plan."
         }
-        guard appSettings.hasAICredentials else {
-            return "Add an AI API key in Settings to adapt your plan."
-        }
         return nil
     }
 
@@ -168,8 +165,6 @@ struct PlanTabView: View {
             history: Array(recentWorkouts.prefix(50)),
             profile: profile,
             provider: appSettings.aiProvider,
-            apiKey: appSettings.aiAPIKey,
-            modelOverride: appSettings.aiModelOverride,
             unitPreference: appSettings.unitPreference,
             onChunk: { chunk in
                 Task { @MainActor in
@@ -179,7 +174,7 @@ struct PlanTabView: View {
         )
 
         guard !adaptedByID.isEmpty else {
-            smartAdaptProgress.currentMessage = "The coach response could not be applied. Check your API key, model, and network connection."
+            smartAdaptProgress.currentMessage = "The coach response could not be applied. Make sure Apple Intelligence is enabled on this device, then try again."
             return
         }
 

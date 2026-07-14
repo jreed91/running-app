@@ -303,50 +303,34 @@ struct AIWorkoutSegment: Codable, Sendable {
     }
 }
 
+/// A single turn in a coaching conversation, passed to the on-device model.
+struct AIProviderChatMessage: Sendable {
+    let role: String
+    let content: String
+}
+
 struct AICoachService: Sendable {
-    let integrationService: AIIntegrationServiceProtocol
     let onDeviceBackend: (any OnDeviceCoachGenerating)?
 
     init(
-        integrationService: AIIntegrationServiceProtocol = AIIntegrationService(),
         onDeviceBackend: (any OnDeviceCoachGenerating)? = OnDeviceCoachFactory.makeDefault()
     ) {
-        self.integrationService = integrationService
         self.onDeviceBackend = onDeviceBackend
     }
 
     func chatWithProvider(
         provider: AIProvider,
-        apiKey: String,
-        modelOverride: String,
         context: String,
         messages: [AIProviderChatMessage]
     ) async throws -> String {
-        if provider.isAppleModel {
-            guard let backend = onDeviceBackend, await backend.isAvailable() else {
-                throw OnDeviceCoachError.unavailable
-            }
-            return try await backend.generateChatReply(
-                instructions: Self.chatInstructions,
-                context: context,
-                messages: messages,
-                useServerModel: provider.usesPrivateCloudCompute
-            )
+        guard let backend = onDeviceBackend, await backend.isAvailable() else {
+            throw OnDeviceCoachError.unavailable
         }
-
-        let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedKey.isEmpty else { throw AIIntegrationError.emptyMessage }
-
-        let selectedModel = modelOverride.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? provider.defaultModel
-            : modelOverride
-
-        return try await integrationService.generateCoachChatReply(
-            provider: provider,
-            apiKey: trimmedKey,
-            model: selectedModel,
+        return try await backend.generateChatReply(
+            instructions: Self.chatInstructions,
             context: context,
-            messages: messages
+            messages: messages,
+            useServerModel: provider.usesPrivateCloudCompute
         )
     }
 
@@ -356,8 +340,6 @@ struct AICoachService: Sendable {
         recentHistory: [RunWorkout],
         profile: UserProfile?,
         provider: AIProvider,
-        apiKey: String,
-        modelOverride: String,
         unitPreference: UnitPreference = .metric,
         onChunk: @escaping @Sendable (String) -> Void = { _ in }
     ) async -> AICoachInsight {
@@ -375,68 +357,26 @@ struct AICoachService: Sendable {
         )
 
         // Apple's on-device / Private Cloud Compute model: no key required.
-        if provider.isAppleModel {
-            if let backend = onDeviceBackend, await backend.isAvailable() {
-                do {
-                    let prompt = Self.insightPrompt(
-                        summary: context.summary,
-                        focusAreas: context.focusAreas,
-                        details: details
-                    )
-                    let structured = try await backend.generateCoachInsight(
-                        instructions: Self.insightInstructions,
-                        prompt: prompt,
-                        useServerModel: provider.usesPrivateCloudCompute,
-                        onPartial: onChunk
-                    )
-                    return makeInsight(from: structured, provider: provider)
-                } catch {
-                    return localHeuristicInsight(context: context, provider: provider)
-                }
+        if let backend = onDeviceBackend, await backend.isAvailable() {
+            do {
+                let prompt = Self.insightPrompt(
+                    summary: context.summary,
+                    focusAreas: context.focusAreas,
+                    details: details
+                )
+                let structured = try await backend.generateCoachInsight(
+                    instructions: Self.insightInstructions,
+                    prompt: prompt,
+                    useServerModel: provider.usesPrivateCloudCompute,
+                    onPartial: onChunk
+                )
+                return makeInsight(from: structured, provider: provider)
+            } catch {
+                return localHeuristicInsight(context: context, provider: provider)
             }
-            // Model unavailable: degrade to the locally-computed analysis rather than a dead-end.
-            return localHeuristicInsight(context: context, provider: provider)
         }
-
-        let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedKey.isEmpty else {
-            return AICoachInsight(
-                headline: "AI Key Required",
-                summary: "Add an AI API key in Settings to load cloud coaching insights.",
-                fullAnalysis: nil,
-                confidence: 0,
-                evidence: [],
-                actionItems: [],
-                focusAreas: [],
-                nextWorkoutSuggestion: "Set your key, then reload insights.",
-                nextWorkoutRationale: nil,
-                apiReady: false
-            )
-        }
-
-        let selectedModel = modelOverride.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? provider.defaultModel
-            : modelOverride
-
-        do {
-            let narrative = try await integrationService.generateCoachingNarrativeStreaming(
-                provider: provider,
-                apiKey: trimmedKey,
-                model: selectedModel,
-                workoutSummary: context.summary,
-                focusAreas: context.focusAreas,
-                workoutDetails: details,
-                onChunk: onChunk
-            )
-
-            guard let structured = Self.parseStructuredResponse(narrative) else {
-                return unavailableInsight(reason: "The AI response was not in the structured format Stride needs to display.")
-            }
-
-            return makeInsight(from: structured, provider: provider)
-        } catch {
-            return unavailableInsight(reason: "Stride could not load structured AI insights. Check your API key, model, and network connection, then try again.")
-        }
+        // Model unavailable: degrade to the locally-computed analysis rather than a dead-end.
+        return localHeuristicInsight(context: context, provider: provider)
     }
 
     private func makeInsight(from structured: AICoachStructuredResponse, provider: AIProvider) -> AICoachInsight {
@@ -478,47 +418,12 @@ struct AICoachService: Sendable {
         )
     }
 
-    static func parseStructuredResponse(_ text: String) -> AICoachStructuredResponse? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let candidates = [
-            trimmed,
-            extractFencedJSON(from: trimmed),
-            extractJSONObject(from: trimmed)
-        ].compactMap(\.self)
-
-        let decoder = JSONDecoder()
-        for candidate in candidates {
-            guard let data = candidate.data(using: .utf8),
-                  let decoded = try? decoder.decode(AICoachStructuredResponse.self, from: data) else {
-                continue
-            }
-
-            let hasSummary = !decoded.summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                || decoded.fullAnalysis?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-            let hasRequiredContent = hasSummary
-                && !decoded.nextWorkout.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            if hasRequiredContent {
-                return decoded
-            }
-        }
-
-        for candidate in candidates {
-            if let partial = parsePartialStructuredResponse(candidate) {
-                return partial
-            }
-        }
-
-        return nil
-    }
-
     @MainActor
     func adaptScheduledWorkoutWithProvider(
         scheduled: ScheduledWorkout,
         recentHistory: [RunWorkout],
         profile: UserProfile,
         provider: AIProvider,
-        apiKey: String,
-        modelOverride: String,
         unitPreference: UnitPreference = .metric
     ) async -> ScheduledWorkout? {
         guard scheduled.workoutType != .rest,
@@ -533,40 +438,14 @@ struct AICoachService: Sendable {
             unitPreference: unitPreference
         )
 
-        if provider.isAppleModel {
-            guard let backend = onDeviceBackend, await backend.isAvailable() else { return nil }
-            do {
-                let structured = try await backend.generateWorkoutAdaptation(
-                    instructions: Self.adaptationInstructions,
-                    prompt: Self.adaptationPrompt(context: adaptationContext),
-                    useServerModel: provider.usesPrivateCloudCompute
-                )
-                guard Self.isValidAdaptation(structured),
-                      let adapted = makeScheduledWorkout(from: structured, scheduled: scheduled) else {
-                    return nil
-                }
-                return adapted
-            } catch {
-                return nil
-            }
-        }
-
-        let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedKey.isEmpty else { return nil }
-
-        let selectedModel = modelOverride.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? provider.defaultModel
-            : modelOverride
-
+        guard let backend = onDeviceBackend, await backend.isAvailable() else { return nil }
         do {
-            let response = try await integrationService.generateWorkoutAdaptation(
-                provider: provider,
-                apiKey: trimmedKey,
-                model: selectedModel,
-                adaptationContext: adaptationContext
+            let structured = try await backend.generateWorkoutAdaptation(
+                instructions: Self.adaptationInstructions,
+                prompt: Self.adaptationPrompt(context: adaptationContext),
+                useServerModel: provider.usesPrivateCloudCompute
             )
-
-            guard let structured = Self.parseWorkoutAdaptationResponse(response),
+            guard Self.isValidAdaptation(structured),
                   let adapted = makeScheduledWorkout(from: structured, scheduled: scheduled) else {
                 return nil
             }
@@ -582,8 +461,6 @@ struct AICoachService: Sendable {
         recentHistory: [RunWorkout],
         profile: UserProfile,
         provider: AIProvider,
-        apiKey: String,
-        modelOverride: String,
         unitPreference: UnitPreference = .metric,
         onChunk: @escaping @Sendable (String) -> Void = { _ in }
     ) async -> [UUID: ScheduledWorkout] {
@@ -601,32 +478,13 @@ struct AICoachService: Sendable {
             unitPreference: unitPreference
         )
 
-        let structured: AIWorkoutPlanAdaptationResponse?
-        if provider.isAppleModel {
-            guard let backend = onDeviceBackend, await backend.isAvailable() else { return [:] }
-            structured = try? await backend.generatePlanAdaptation(
-                instructions: Self.planAdaptationInstructions,
-                prompt: Self.planAdaptationPrompt(context: adaptationContext),
-                useServerModel: provider.usesPrivateCloudCompute,
-                onPartial: onChunk
-            )
-        } else {
-            let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmedKey.isEmpty else { return [:] }
-
-            let selectedModel = modelOverride.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                ? provider.defaultModel
-                : modelOverride
-
-            let response = try? await integrationService.generateWorkoutPlanAdaptation(
-                provider: provider,
-                apiKey: trimmedKey,
-                model: selectedModel,
-                adaptationContext: adaptationContext,
-                onChunk: onChunk
-            )
-            structured = response.flatMap(Self.parseWorkoutPlanAdaptationResponse)
-        }
+        guard let backend = onDeviceBackend, await backend.isAvailable() else { return [:] }
+        let structured = try? await backend.generatePlanAdaptation(
+            instructions: Self.planAdaptationInstructions,
+            prompt: Self.planAdaptationPrompt(context: adaptationContext),
+            useServerModel: provider.usesPrivateCloudCompute,
+            onPartial: onChunk
+        )
 
         guard let structured else { return [:] }
 
@@ -641,215 +499,6 @@ struct AICoachService: Sendable {
             adaptedByID[id] = adapted
         }
         return adaptedByID
-    }
-
-    static func parseWorkoutAdaptationResponse(_ text: String) -> AIWorkoutAdaptationResponse? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let candidates = [
-            trimmed,
-            extractFencedJSON(from: trimmed),
-            extractJSONObject(from: trimmed)
-        ].compactMap(\.self)
-
-        let decoder = JSONDecoder()
-        for candidate in candidates {
-            guard let data = candidate.data(using: .utf8),
-                  let decoded = try? decoder.decode(AIWorkoutAdaptationResponse.self, from: data),
-                  isValidAdaptation(decoded) else {
-                continue
-            }
-            return decoded
-        }
-
-        return nil
-    }
-
-    static func parseWorkoutPlanAdaptationResponse(_ text: String) -> AIWorkoutPlanAdaptationResponse? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let candidates = [
-            trimmed,
-            extractFencedJSON(from: trimmed),
-            extractJSONObject(from: trimmed)
-        ].compactMap(\.self)
-
-        let decoder = JSONDecoder()
-        for candidate in candidates {
-            guard let data = candidate.data(using: .utf8),
-                  let decoded = try? decoder.decode(AIWorkoutPlanAdaptationResponse.self, from: data),
-                  !decoded.adaptations.isEmpty,
-                  decoded.adaptations.allSatisfy({ UUID(uuidString: $0.workoutID) != nil && isValidAdaptation($0.adaptation) }) else {
-                continue
-            }
-            return decoded
-        }
-
-        return nil
-    }
-
-    private static func extractFencedJSON(from text: String) -> String? {
-        guard let opening = text.range(of: "```") else { return nil }
-        let afterOpening = text[opening.upperBound...]
-        let contentStart = afterOpening.hasPrefix("json")
-            ? afterOpening.dropFirst("json".count)
-            : Substring(afterOpening)
-        guard let closing = contentStart.range(of: "```") else { return nil }
-        return String(contentStart[..<closing.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private static func extractJSONObject(from text: String) -> String? {
-        guard let start = text.firstIndex(of: "{"),
-              let end = text.lastIndex(of: "}"),
-              start < end else {
-            return nil
-        }
-        return String(text[start...end])
-    }
-
-    private static func parsePartialStructuredResponse(_ text: String) -> AICoachStructuredResponse? {
-        let headline = extractJSONStringValue("headline", from: text) ?? "Workout analysis"
-        let summary = extractJSONStringValue("summary", from: text)
-            ?? extractJSONStringValue("full_analysis", from: text)
-            ?? ""
-        let fullAnalysis = extractJSONStringValue("full_analysis", from: text)
-        guard !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return nil
-        }
-
-        return AICoachStructuredResponse(
-            headline: headline,
-            summary: summary,
-            fullAnalysis: fullAnalysis,
-            confidence: extractJSONIntValue("confidence", from: text) ?? 0,
-            evidence: decodeCompletedObjects(
-                inArrayNamed: "evidence",
-                from: text,
-                as: AICoachEvidenceItem.self
-            ),
-            actionItems: decodeCompletedObjects(
-                inArrayNamed: "action_items",
-                from: text,
-                as: AICoachActionItem.self
-            ),
-            nextWorkout: AICoachStructuredResponse.NextWorkout(
-                title: extractJSONStringValue("title", from: extractJSONObject(named: "next_workout", from: text) ?? "")
-                    ?? "Next easy run",
-                rationale: extractJSONStringValue("rationale", from: extractJSONObject(named: "next_workout", from: text) ?? "")
-                    ?? "Keep the next session controlled so the training plan stays on track."
-            )
-        )
-    }
-
-    private static func extractJSONStringValue(_ key: String, from text: String) -> String? {
-        guard let keyRange = text.range(of: "\"\(key)\""),
-              let colon = text[keyRange.upperBound...].firstIndex(of: ":") else {
-            return nil
-        }
-
-        var index = text.index(after: colon)
-        while index < text.endIndex, text[index].isWhitespace || text[index].isNewline {
-            index = text.index(after: index)
-        }
-        guard index < text.endIndex, text[index] == "\"" else { return nil }
-        index = text.index(after: index)
-
-        var result = ""
-        var isEscaped = false
-        while index < text.endIndex {
-            let character = text[index]
-            if isEscaped {
-                result.append(character)
-                isEscaped = false
-            } else if character == "\\" {
-                isEscaped = true
-            } else if character == "\"" {
-                return result
-            } else {
-                result.append(character)
-            }
-            index = text.index(after: index)
-        }
-        return nil
-    }
-
-    private static func extractJSONIntValue(_ key: String, from text: String) -> Int? {
-        guard let keyRange = text.range(of: "\"\(key)\""),
-              let colon = text[keyRange.upperBound...].firstIndex(of: ":") else {
-            return nil
-        }
-        let suffix = text[text.index(after: colon)...].drop { $0.isWhitespace || $0.isNewline || $0 == "\"" }
-        let digits = suffix.prefix { $0.isNumber }
-        return Int(digits)
-    }
-
-    private static func extractJSONObject(named key: String, from text: String) -> String? {
-        guard let keyRange = text.range(of: "\"\(key)\""),
-              let colon = text[keyRange.upperBound...].firstIndex(of: ":"),
-              let start = text[colon...].firstIndex(of: "{") else {
-            return nil
-        }
-        return extractBalancedObject(from: text, start: start)
-    }
-
-    private static func decodeCompletedObjects<T: Decodable>(
-        inArrayNamed key: String,
-        from text: String,
-        as type: T.Type
-    ) -> [T] {
-        guard let keyRange = text.range(of: "\"\(key)\""),
-              let colon = text[keyRange.upperBound...].firstIndex(of: ":"),
-              let arrayStart = text[colon...].firstIndex(of: "[") else {
-            return []
-        }
-
-        var index = text.index(after: arrayStart)
-        var objects: [T] = []
-        let decoder = JSONDecoder()
-        while index < text.endIndex {
-            let arrayEnd = text[index...].firstIndex(of: "]")
-            guard let objectStart = text[index...].firstIndex(of: "{"),
-                  arrayEnd.map({ objectStart < $0 }) ?? true,
-                  let object = extractBalancedObject(from: text, start: objectStart) else {
-                break
-            }
-            if let data = object.data(using: .utf8),
-               let decoded = try? decoder.decode(T.self, from: data) {
-                objects.append(decoded)
-            }
-            index = text.index(objectStart, offsetBy: object.count)
-        }
-        return objects
-    }
-
-    private static func extractBalancedObject(from text: String, start: String.Index) -> String? {
-        var index = start
-        var depth = 0
-        var inString = false
-        var isEscaped = false
-
-        while index < text.endIndex {
-            let character = text[index]
-            if inString {
-                if isEscaped {
-                    isEscaped = false
-                } else if character == "\\" {
-                    isEscaped = true
-                } else if character == "\"" {
-                    inString = false
-                }
-            } else if character == "\"" {
-                inString = true
-            } else if character == "{" {
-                depth += 1
-            } else if character == "}" {
-                depth -= 1
-                if depth == 0 {
-                    return String(text[start...index])
-                }
-            }
-            index = text.index(after: index)
-        }
-
-        return nil
     }
 
     private static func isValidAdaptation(_ adaptation: AIWorkoutAdaptationResponse) -> Bool {
@@ -1297,21 +946,6 @@ struct AICoachService: Sendable {
         let duration = segment.durationSeconds?.durationString ?? "open"
         let pace = segment.targetPaceSecondsPerKm?.paceString(unit: unitPreference) ?? "open"
         return "\(segment.label) distance \(distance), duration \(duration), pace \(pace)"
-    }
-
-    private func unavailableInsight(reason: String) -> AICoachInsight {
-        AICoachInsight(
-            headline: "AI Insight Unavailable",
-            summary: reason,
-            fullAnalysis: nil,
-            confidence: 0,
-            evidence: [],
-            actionItems: [],
-            focusAreas: [],
-            nextWorkoutSuggestion: "Try refreshing structured AI insights again.",
-            nextWorkoutRationale: nil,
-            apiReady: false
-        )
     }
 
     private func paceDriftPercent(for workout: RunWorkout) -> Double? {
