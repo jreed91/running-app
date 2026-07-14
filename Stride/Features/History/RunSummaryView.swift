@@ -3,6 +3,11 @@ import MapKit
 import Charts
 import SwiftData
 
+// This screen is a large, pre-existing composite view (run map, charts, splits, AI
+// coach) that already exceeds SwiftLint's file_length limit. Disable the rule here
+// rather than force a risky split; a proper decomposition is tracked separately.
+// swiftlint:disable file_length
+
 struct RunSummaryView: View {
     let workout: RunWorkout
 

@@ -1036,7 +1036,14 @@ extension AICoachService {
     """
 
     static let insightInstructions = """
-    You are an expert running coach analysing a single completed run. Give concise, practical, evidence-based feedback grounded only in the supplied data. Cite this run's actual pace, splits, distance, terrain, and conditions, and tailor the read to what is distinctive about this session rather than generic advice. Vary the lead focus run to run (pacing execution, split trends, structure, terrain, conditions, or recovery load). Treat heart rate as supporting context, not a problem, unless it is clearly and substantially abnormal for this run type. Avoid medical advice or clinical claims and never mention that you are an AI.
+    You are an expert running coach analysing a single completed run. Give concise, \
+    practical, evidence-based feedback grounded only in the supplied data. Cite this \
+    run's actual pace, splits, distance, terrain, and conditions, and tailor the read \
+    to what is distinctive about this session rather than generic advice. Vary the \
+    lead focus run to run (pacing execution, split trends, structure, terrain, \
+    conditions, or recovery load). Treat heart rate as supporting context, not a \
+    problem, unless it is clearly and substantially abnormal for this run type. Avoid \
+    medical advice or clinical claims and never mention that you are an AI.
     """
 
     static func insightPrompt(summary: String, focusAreas: [String], details: String) -> String {
@@ -1056,7 +1063,14 @@ extension AICoachService {
     }
 
     static let adaptationInstructions = """
-    You are an expert running coach adapting a single scheduled run using only the supplied athlete context. Keep the workout on its scheduled day and weekday. If the scheduled workout is a long run, keep it a long run; never convert a non-long-run into a long run. Tailor volume and intensity to the target race and current training phase. Express all paces in seconds per kilometre regardless of display unit. If the run should not change, return the same targets with an explanation. Avoid medical advice or clinical claims and never mention that you are an AI.
+    You are an expert running coach adapting a single scheduled run using only the \
+    supplied athlete context. Keep the workout on its scheduled day and weekday. If \
+    the scheduled workout is a long run, keep it a long run; never convert a \
+    non-long-run into a long run. Tailor volume and intensity to the target race and \
+    current training phase. Express all paces in seconds per kilometre regardless of \
+    display unit. If the run should not change, return the same targets with an \
+    explanation. Avoid medical advice or clinical claims and never mention that you \
+    are an AI.
     """
 
     static func adaptationPrompt(context: String) -> String {
@@ -1068,7 +1082,14 @@ extension AICoachService {
     }
 
     static let planAdaptationInstructions = """
-    You are an expert running coach adapting several scheduled runs as one coordinated plan update, using only the supplied athlete context. Return exactly one adaptation per provided workout id, copying each id exactly. Keep each workout on its scheduled day and weekday. If a scheduled workout is a long run, keep it a long run; never convert a non-long-run into a long run. Tailor volume and intensity to the target race and training phase. Express all paces in seconds per kilometre. Keep explanations under 120 characters. Avoid medical advice or clinical claims and never mention that you are an AI.
+    You are an expert running coach adapting several scheduled runs as one coordinated \
+    plan update, using only the supplied athlete context. Return exactly one \
+    adaptation per provided workout id, copying each id exactly. Keep each workout on \
+    its scheduled day and weekday. If a scheduled workout is a long run, keep it a \
+    long run; never convert a non-long-run into a long run. Tailor volume and \
+    intensity to the target race and training phase. Express all paces in seconds per \
+    kilometre. Keep explanations under 120 characters. Avoid medical advice or \
+    clinical claims and never mention that you are an AI.
     """
 
     static func planAdaptationPrompt(context: String) -> String {
