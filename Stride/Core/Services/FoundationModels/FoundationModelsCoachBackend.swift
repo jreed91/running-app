@@ -139,17 +139,10 @@ struct FoundationModelsCoachBackend: OnDeviceCoachGenerating {
         generating type: Content.Type,
         useServerModel: Bool
     ) async throws -> Content where Content: Generable {
-        #if STRIDE_ENABLE_IOS27_MODELS
-        if useServerModel, #available(iOS 27.0, *) {
-            // VERIFY-AGAINST-SDK: deeper reasoning for the server model.
-            let response = try await session.respond(
-                to: prompt,
-                generating: type,
-                options: GenerationOptions(reasoningLevel: .deep)
-            )
-            return response.content
-        }
-        #endif
+        // The on-device vs. Private Cloud Compute choice is made in `makeSession`
+        // (which model backs the session); the response call itself is identical for
+        // both, so `useServerModel` is only meaningful there.
+        _ = useServerModel
         let response = try await session.respond(to: prompt, generating: type)
         return response.content
     }

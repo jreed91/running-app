@@ -1,3 +1,5 @@
+import AppIntents
+
 /// Registers Stride's App Intents with the system so Siri (and the Shortcuts app,
 /// Spotlight, and Action Button) can run them by voice or tap. `AppShortcutsProvider`
 /// conformers are discovered automatically at launch — no manual registration needed.
