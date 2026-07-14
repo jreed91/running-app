@@ -301,6 +301,17 @@ Cloud BYO-key was dropped entirely. Concretely:
 - Deployment target raised to **iOS 27.0**; `STRIDE_ENABLE_IOS27_MODELS` is now defined
   in `project.yml`, so the Private Cloud Compute path in `FoundationModelsCoachBackend`
   is compiled in.
+  - **Entitlement gate (crash fix).** `PrivateCloudComputeLanguageModel` requires a
+    Private Cloud Compute Foundation Models entitlement. Constructing it without that
+    entitlement traps inside `Executor.assertEntitled()` — a fatal `EXC_BREAKPOINT`,
+    not a catchable Swift error, so the `do/catch` around inference can't recover
+    (observed on TestFlight build 135 when a user selected "Apple Private Cloud
+    Compute"). `makeSession` now checks `hasPrivateCloudComputeEntitlement` (via
+    `SecTaskCopyValueForEntitlement`) *before* creating the PCC model and falls back
+    to the on-device model when the entitlement is absent. The check fails safe: an
+    absent/unknown key routes to on-device rather than crashing. To actually enable
+    PCC, add the entitlement to `Stride.entitlements` / `project.yml` once it is
+    available in the provisioning profile.
 - Settings drops the API-key `SecureField` and model-override field; `SettingsView`,
   `RunSummaryView`, `AICoachChatView`, and `PlanTabView` copy no longer mentions keys.
 - Tests: `AICoachServiceTests.swift` (cloud JSON-parse tests) removed;

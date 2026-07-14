@@ -1,6 +1,9 @@
 #if canImport(FoundationModels)
 import Foundation
 import FoundationModels
+#if canImport(Security)
+import Security
+#endif
 
 /// On-device coach backend built on Apple's Foundation Models framework.
 ///
@@ -124,7 +127,13 @@ struct FoundationModelsCoachBackend: OnDeviceCoachGenerating {
 
     private func makeSession(instructions: String, useServerModel: Bool) -> LanguageModelSession {
         #if STRIDE_ENABLE_IOS27_MODELS
-        if useServerModel, #available(iOS 27.0, *) {
+        // Only route to Private Cloud Compute when this build actually holds the
+        // required entitlement. Constructing `PrivateCloudComputeLanguageModel`
+        // without it traps inside `Executor.assertEntitled()` — a fatal
+        // `EXC_BREAKPOINT`, *not* a catchable Swift error — so a `do/catch` at the
+        // call site cannot recover. We must gate the model *before* creating it and
+        // fall back to the on-device model when the entitlement is absent.
+        if useServerModel, #available(iOS 27.0, *), Self.hasPrivateCloudComputeEntitlement {
             // VERIFY-AGAINST-SDK (WWDC26 session 241): Private Cloud Compute model.
             let serverModel = PrivateCloudComputeLanguageModel()
             return LanguageModelSession(model: serverModel, instructions: instructions)
@@ -132,6 +141,41 @@ struct FoundationModelsCoachBackend: OnDeviceCoachGenerating {
         #endif
         return LanguageModelSession(model: SystemLanguageModel.default, instructions: instructions)
     }
+
+    #if STRIDE_ENABLE_IOS27_MODELS
+    /// Whether this build carries an entitlement that authorises Apple's Private
+    /// Cloud Compute language model. The check is deliberately *fail-safe*: an
+    /// absent, unknown, or unreadable entitlement routes coaching to the on-device
+    /// model (the correct non-crashing behaviour) rather than trapping.
+    ///
+    /// VERIFY-AGAINST-SDK: confirm the exact entitlement key(s) against the shipping
+    /// SDK. Because a missing key falls back to on-device, an out-of-date key here is
+    /// safe — it can only under-enable PCC, never crash.
+    private static let hasPrivateCloudComputeEntitlement: Bool = {
+        #if targetEnvironment(simulator)
+        // PCC is not available in the simulator; never attempt it there.
+        return false
+        #elseif canImport(Security)
+        guard let task = SecTaskCreateFromSelf(nil) else { return false }
+        let candidateKeys = [
+            "com.apple.developer.foundation-models.private-cloud-compute",
+            "com.apple.developer.foundation-models"
+        ]
+        for key in candidateKeys {
+            guard let value = SecTaskCopyValueForEntitlement(task, key as CFString, nil) else { continue }
+            if let flag = value as? Bool {
+                if flag { return true }
+            } else {
+                // Any non-boolean value (e.g. an array of allowed modes) counts as present.
+                return true
+            }
+        }
+        return false
+        #else
+        return false
+        #endif
+    }()
+    #endif
 
     private func respond<Content>(
         in session: LanguageModelSession,
