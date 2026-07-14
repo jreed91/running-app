@@ -306,10 +306,24 @@ Cloud BYO-key was dropped entirely. Concretely:
 - Tests: `AICoachServiceTests.swift` (cloud JSON-parse tests) removed;
   `FoundationModelsCoachServiceTests.swift` updated to the keyless API.
 
-> **App Intents / Siri:** `StrideShortcuts` (an `AppShortcutsProvider`) exposes
-> `TodaysRunIntent` and `WeeklySummaryIntent` — headless, read-only intents Siri can run
-> by voice without opening the app. These are auto-discovered at launch; phrases were
-> broadened in Phase 3 for better recognition.
+> **App Intents / Siri / Apple Intelligence:** Following Apple's *Apple Intelligence and
+> Siri* App Intents guidance (entities are the foundation, indexed in Spotlight for
+> semantic discovery):
+> - `StrideShortcuts` (an `AppShortcutsProvider`) exposes `TodaysRunIntent` and
+>   `WeeklySummaryIntent` — headless, read-only intents Siri runs by voice without opening
+>   the app. Auto-discovered at launch; phrases broadened for recognition.
+> - `RunWorkoutEntity` models a completed run as an `AppEntity` and conforms to
+>   `IndexedEntity`, so runs are indexed in Spotlight and can be found/referenced by
+>   Apple Intelligence and passed into intents. `RunWorkoutEntityQuery`
+>   (`EntityQuery` + `EntityStringQuery`) resolves runs by id, suggestion, and text.
+> - `RunDetailsIntent(run:)` is an entity-driven action available in Shortcuts / Siri.
+> - `RunSpotlightIndexer` indexes recent runs at launch via `CSSearchableIndex`.
+>
+> Note: Apple's *assistant schema domains* (`@AssistantIntent` / `@AssistantEntity`)
+> cover Messages, Calendar, Audio, Clock, Photos, etc. — there is no fitness/running
+> domain, so schema adoption does not apply to Stride's core actions. The entity +
+> Spotlight-index + App Shortcuts path above is the recommended integration for a
+> running app.
 
 ---
 

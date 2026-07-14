@@ -25,6 +25,12 @@ struct StrideApp: App {
                     await container.workoutSyncService.startObserving()
                     await authService.checkCredentialState()
                     container.checkForPendingReviewWorkout()
+                    // Index recent runs so Siri / Spotlight / Apple Intelligence can find
+                    // and reference them by natural language.
+                    await RunSpotlightIndexer.indexRecentRuns(
+                        in: container.modelContainer,
+                        unit: appSettings.unitPreference
+                    )
                 }
                 .modifier(PendingReviewSheet(
                     container: container,
