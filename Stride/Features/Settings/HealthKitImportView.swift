@@ -111,7 +111,11 @@ struct HealthKitImportView: View {
             try await repo.requestAuthorization()
 
             let allHKWorkouts = try await repo.fetchWorkouts(from: startDate, to: Date())
-            let existingIDs = Set(existingWorkouts.compactMap(\.healthKitWorkoutID))
+            // Union deletion tombstones so a manually removed run isn't re-imported here.
+            let tombstonedIDs = Set(
+                ((try? context.fetch(FetchDescriptor<DeletedWorkout>())) ?? []).map(\.healthKitWorkoutID)
+            )
+            let existingIDs = Set(existingWorkouts.compactMap(\.healthKitWorkoutID)).union(tombstonedIDs)
             let skipped = allHKWorkouts.filter { existingIDs.contains($0.uuid.uuidString) }.count
 
             let newWorkouts = try await repo.fetchImportableWorkouts(

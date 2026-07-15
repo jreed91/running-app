@@ -145,6 +145,16 @@ enum WorkoutType: String, Codable, CaseIterable, Sendable {
         default: return false
         }
     }
+
+    /// True for workout types that are fulfilled by a run and can therefore be
+    /// linked to an imported `RunWorkout`. Strength, cross-training, and rest days
+    /// must never be matched to (or completed by) an imported run.
+    var isRunType: Bool {
+        switch self {
+        case .easy, .tempo, .interval, .longRun, .race: return true
+        case .rest, .crossTraining, .strength: return false
+        }
+    }
 }
 
 // MARK: - TrainingPhase

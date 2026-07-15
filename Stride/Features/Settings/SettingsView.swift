@@ -646,10 +646,17 @@ struct SettingsView: View {
     }
 
     private func resetAll() {
+        // Clear every persisted model type so "Reset All Data" leaves a true clean slate.
+        // Missing StrengthWorkout, ScheduledWorkout/TrainingWeek, and DeletedWorkout tombstones
+        // previously left orphaned records and blocked re-importing runs after a reset.
         try? context.delete(model: RunWorkout.self)
+        try? context.delete(model: StrengthWorkout.self)
+        try? context.delete(model: ScheduledWorkout.self)
+        try? context.delete(model: TrainingWeek.self)
         try? context.delete(model: TrainingPlan.self)
         try? context.delete(model: UserProfile.self)
         try? context.delete(model: SavedRoute.self)
+        try? context.delete(model: DeletedWorkout.self)
         try? context.save()
     }
 

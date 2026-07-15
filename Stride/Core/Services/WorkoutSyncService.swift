@@ -166,8 +166,6 @@ final class WorkoutSyncService {
                 }
             }
 
-            autoLink(newWorkouts)
-
             let unit = AppSettings.syncedUnitPreference()
             for workout in newWorkouts {
                 try? await notificationService.notifyNewRunSynced(workout, unit: unit)
@@ -204,30 +202,14 @@ final class WorkoutSyncService {
         )
     }
 
-    private func autoLink(_ workouts: [RunWorkout]) {
-        let allScheduled = (try? context.fetch(FetchDescriptor<ScheduledWorkout>())) ?? []
-        var dirty = false
-        for workout in workouts {
-            guard workout.scheduledWorkout == nil else { continue }
-            if let match = allScheduled.first(where: {
-                $0.completedWorkout == nil &&
-                $0.workoutType != .rest &&
-                Calendar.current.isDate($0.scheduledDate, inSameDayAs: workout.date)
-            }) {
-                match.completedWorkout = workout
-                workout.scheduledWorkout = match
-                match.isCompleted = true
-                match.linkedRunWorkoutID = workout.id
-                workout.linkedScheduledWorkoutID = match.id
-                dirty = true
-            }
-        }
-        if dirty { try? context.save() }
-    }
-
-    /// Matches each newly imported `RunWorkout` to an unlinked `ScheduledWorkout` on
-    /// the same calendar day (or the day before, allowing for late completions).
-    /// Uses workout type as a tiebreaker when multiple candidates share the same day.
+    /// Matches each newly imported `RunWorkout` to an unlinked, **run-type** `ScheduledWorkout`
+    /// on the same calendar day (or the day before, allowing for late completions).
+    ///
+    /// This is the single linker for runs. It never considers strength, cross-training, or rest
+    /// days as candidates (an imported run must not complete a gym day), and it never overwrites
+    /// the run's own `workoutType` from the schedule — the run keeps the type inferred from its
+    /// data; the schedule link records which planned session it fulfilled. Workout type is used
+    /// only as a tiebreaker when several run days share the same date.
     private func linkToScheduledWorkouts(_ runWorkouts: [RunWorkout]) {
         let toLink = runWorkouts.filter { $0.scheduledWorkout == nil }
         guard !toLink.isEmpty else { return }
@@ -236,8 +218,8 @@ final class WorkoutSyncService {
             predicate: #Predicate { $0.isCompleted == false }
         )
         guard let allIncomplete = try? context.fetch(descriptor) else { return }
-        // Keep only those not already linked to another run.
-        var available = allIncomplete.filter { $0.completedWorkout == nil }
+        // Keep only run-type slots not already linked to another run.
+        var available = allIncomplete.filter { $0.completedWorkout == nil && $0.workoutType.isRunType }
 
         let calendar = Calendar.current
         for run in toLink {
@@ -264,9 +246,6 @@ final class WorkoutSyncService {
 
             if let match = best {
                 run.scheduledWorkout = match
-                // Adopt the scheduled type so the completed run reflects the planned intent,
-                // overriding the coarse type inferred from distance/pace alone.
-                run.workoutType = match.workoutType
                 match.completedWorkout = run
                 match.isCompleted = true
                 match.linkedRunWorkoutID = run.id
@@ -284,7 +263,10 @@ final class WorkoutSyncService {
         let existingIDs: Set<String>
         do {
             stored = try context.fetch(FetchDescriptor<StrengthWorkout>())
+            let tombstoned = try context.fetch(FetchDescriptor<DeletedWorkout>())
+            // Union tombstones so a deleted Watch gym session is not re-imported forever.
             existingIDs = Set(stored.compactMap(\.healthKitWorkoutID))
+                .union(tombstoned.map(\.healthKitWorkoutID))
         } catch {
             AppLogger.log(
                 "Failed to fetch existing strength workouts before HealthKit sync (\(source)): \(error.localizedDescription)",
