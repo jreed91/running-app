@@ -128,4 +128,36 @@ struct ProgressStatsServiceTests {
         let avgPace = ProgressStatsService.distanceWeightedAveragePaceSecondsPerKm(for: [run])
         #expect(abs(avgPace - run.averagePaceSecondsPerKm) < 0.01)
     }
+
+    // MARK: Estimated VO₂max / VDOT sampling (M35)
+
+    @Test("Easy and long runs are never sampled for the VO₂max trend")
+    func easyAndLongRunsAreNotVO2Samples() {
+        // A brisk-looking easy/long run would still compute a VDOT, but sampling
+        // it drags the fitness trend down because the effort is submaximal.
+        let easy = RunWorkout(distanceMeters: 8_000, durationSeconds: 40 * 60, workoutType: .easy)
+        let long = RunWorkout(distanceMeters: 20_000, durationSeconds: 110 * 60, workoutType: .longRun)
+
+        #expect(ProgressStatsService.estimatedVDOT(for: easy) == nil)
+        #expect(ProgressStatsService.estimatedVDOT(for: long) == nil)
+    }
+
+    @Test("Quality and race efforts yield a positive VDOT sample")
+    func qualityAndRaceEffortsAreSampled() {
+        for type in [WorkoutType.tempo, .interval, .race] {
+            let run = RunWorkout(distanceMeters: 5_000, durationSeconds: 20 * 60, workoutType: type)
+            let vdot = ProgressStatsService.estimatedVDOT(for: run)
+            #expect(vdot != nil)
+            #expect((vdot ?? 0) > 0)
+        }
+    }
+
+    @Test("Very short or zero-duration quality runs are excluded")
+    func shortOrZeroDurationRunsExcluded() {
+        let tooShort = RunWorkout(distanceMeters: 200, durationSeconds: 60, workoutType: .tempo)
+        let noDuration = RunWorkout(distanceMeters: 5_000, durationSeconds: 0, workoutType: .interval)
+
+        #expect(ProgressStatsService.estimatedVDOT(for: tooShort) == nil)
+        #expect(ProgressStatsService.estimatedVDOT(for: noDuration) == nil)
+    }
 }

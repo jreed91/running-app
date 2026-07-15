@@ -181,10 +181,12 @@ A temporary `ScheduledWorkout` built purely as an LLM prompt input gets `seeded.
 
 **Fix:** never attach prompt-only models to persisted relationships; use a plain struct for prompt context.
 
-### H11. Split charts label kilometer buckets as miles for imperial users
+### ✅ H11. Split charts label kilometer buckets as miles for imperial users
 `Stride/Features/History/RunSummaryView.swift:1493-1663`
 
 Splits are always built per kilometer (`WorkoutTrackerService.swift:172-178`), but every axis, tooltip, header ("Pace per mi"), and table column uses the user's unit label. An imperial user's 10 km run renders as "MI 1 … MI 10" with min/mi paces per *kilometer* bucket — implying a 10-mile run with wrong per-split paces.
+
+**FIXED:** the splits pace/HR/elevation charts and the splits table now label their per-kilometer buckets "km"/"KM" regardless of the user's distance preference (the axis, rule-mark tooltips, and column header), so a 10 km run no longer reads as ten miles. Pace and elevation values inside each bucket are still shown in the preferred unit (the pace header "Pace per mi" correctly describes the min/mi *rate*).
 
 **Fix:** either bucket splits by the user's unit at record time, or label the axis honestly ("km") until splits are re-bucketed for display.
 
@@ -250,8 +252,8 @@ static let defaultValue: AppContainer = MainActor.assumeIsolated { AppContainer(
 
 ### Aggregation & display
 - ✅ **M33. Period "Avg Pace" is an unweighted mean of per-run paces** — `ProgressView.swift:493-496` (verified): one long fast run + one short slow jog average to 6:30/km when the true distance-weighted pace is ~5:09/km. Use Σduration/Σdistance (as `PlanSummaryService` already does). **FIXED (PR #230):** distance-weighted via `ProgressStatsService`.
-- **M34. Weekly Summary intent uses a different week start than the app** — `IntentDataProvider.swift:95-103` uses locale default (Sunday in US) vs the app-wide Monday `startOfWeek` (`Date+Extensions.swift:5-10`); Siri and the dashboard disagree by a whole run.
-- **M35. Every run ≥400 m is treated as a VO₂max sample** — `RunSummaryView.swift:52-56`, `ProgressView.swift:59-65`: easy runs systematically depress the "fitness" trend; filter to quality/race efforts like the tempo-insights path does.
+- ✅ **M34. Weekly Summary intent uses a different week start than the app** — `IntentDataProvider.swift:95-103` uses locale default (Sunday in US) vs the app-wide Monday `startOfWeek` (`Date+Extensions.swift:5-10`); Siri and the dashboard disagree by a whole run. **FIXED:** `weeklySummary()` now derives its window from `Date().startOfWeek` (Monday) so the intent total matches the dashboard. Covered by `IntentDataProviderTests`.
+- ✅ **M35. Every run ≥400 m is treated as a VO₂max sample** — `RunSummaryView.swift:52-56`, `ProgressView.swift:59-65`: easy runs systematically depress the "fitness" trend; filter to quality/race efforts like the tempo-insights path does. **FIXED:** VO₂/VDOT sampling moved to a pure `ProgressStatsService.estimatedVDOT(for:)` that only samples quality/race efforts (`WorkoutType.isQualitySession`), still requiring ≥400 m and non-zero duration; both the Progress trend and the run-detail "Est. VO₂ Max" card now call it. Covered by `ProgressStatsServiceTests`.
 - **M36. Address search races** — `RouteGeniusView.swift:198-200`, `RouteGeniusViewModel.swift:107-120`: per-keystroke `MKLocalSearch` tasks aren't cancelled; stale responses clobber newer ones.
 - **M37. Smart Adapt runs as an uncancelled fire-and-forget task** — `PlanTabView.swift:39`: keeps mutating and saving `ScheduledWorkout`s (and resyncing HealthKit) after the plan is deleted or the tab is switched; the mid-loop dedup (`:181-230`) can also delete workouts still queued for mutation in the captured array.
 - **M38. History multi-delete iterates an `IndexSet` against a recomputed array** — `HistoryView.swift:117-136`: `displayedEntries` is re-derived per access mid-loop; offsets can shift. Snapshot once before the loop.

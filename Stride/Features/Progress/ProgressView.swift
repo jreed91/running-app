@@ -58,9 +58,8 @@ struct ProgressDashboardView: View {
 
     private var vo2Points: [VO2Point] {
         filteredWorkouts.compactMap { w in
-            guard w.distanceMeters >= 400, w.durationSeconds > 0 else { return nil }
-            let v = PaceCalculatorService.vdot(distanceMeters: w.distanceMeters, timeSeconds: w.durationSeconds)
-            return v > 0 ? VO2Point(date: w.date, vdot: v) : nil
+            guard let v = ProgressStatsService.estimatedVDOT(for: w) else { return nil }
+            return VO2Point(date: w.date, vdot: v)
         }
     }
 

@@ -55,6 +55,31 @@ struct ProgressStatsService: Sendable {
         return run.durationSeconds * pow(targetMeters / run.distanceMeters, riegelExponent)
     }
 
+    /// Minimum distance (metres) a run must cover before its implied VDOT is a
+    /// meaningful fitness sample. Very short runs produce noisy/extreme VDOT
+    /// values, so they are excluded from the trend.
+    static let minVO2SampleMeters = 400.0
+
+    /// Estimates the VDOT (a VO₂max proxy) implied by a single run, or `nil`
+    /// when the run should not contribute to the fitness trend.
+    ///
+    /// Only quality and race efforts (`WorkoutType.isQualitySession`) are
+    /// sampled. An easy or long run is deliberately paced well below the
+    /// runner's capability, so treating it as a maximal effort systematically
+    /// drags the estimated-VO₂max trend downward — the same reason the
+    /// analytics VDOT path restricts sampling to hard efforts. Runs shorter
+    /// than `minVO2SampleMeters` or with no recorded duration are also excluded.
+    static func estimatedVDOT(for run: RunWorkout) -> Double? {
+        guard run.workoutType.isQualitySession,
+              run.distanceMeters >= minVO2SampleMeters,
+              run.durationSeconds > 0 else { return nil }
+        let v = PaceCalculatorService.vdot(
+            distanceMeters: run.distanceMeters,
+            timeSeconds: run.durationSeconds
+        )
+        return v > 0 ? v : nil
+    }
+
     /// Distance-weighted average pace (seconds per km) across `runs`: total
     /// duration over total distance, guarding the zero-distance case. This is
     /// the same Σduration/Σdistance pattern `PlanSummaryService` already uses,
