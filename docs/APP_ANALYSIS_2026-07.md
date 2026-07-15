@@ -117,17 +117,21 @@ Both plan-creation flows fetch **every** `TrainingPlan` and delete them all — 
 
 **Fix:** deactivate (`isActive = false`) instead of deleting; delete only never-started/abandoned plans. Related: `TrainingPlan.init` always sets `isActive = true` and `PlanRepository.fetchActivePlan` (`PlanRepository.swift:35-40`) resolves multiple actives arbitrarily — repository `save` should own the "only one active plan" invariant.
 
-### H4. "Start This Workout" ignores the scheduled workout — always records an unlinked easy run
-`Stride/Features/Dashboard/DashboardView.swift:305-306, 416-431`; `Stride/Features/ActiveRun/ActiveRunView.swift:366-367, 435-444`
+### ✅ H4. "Start This Workout" ignores the scheduled workout — always records an unlinked easy run
+`Stride/Features/Dashboard/DashboardView.swift`; `Stride/Features/ActiveRun/ActiveRunView.swift`
 
 The dashboard button for a tempo/interval/long-run day presents `ActiveRunView()` with no parameter; the view hardcodes `tracker.startWorkout(type: .easy)` and `finishAndSave()` never links the run to the `ScheduledWorkout`. The scheduled day stays incomplete, the calendar shows it missed, and the recovery card later nags the user about a workout they did.
 
+**FIXED:** `ActiveRunView` now takes an optional `scheduledWorkout`; the start button uses its (run-)type via a `startType` helper (`isRunType`-guarded, falling back to `.easy`), the indoor/outdoor toggle defaults to the scheduled location, and `finishAndSave()` links the saved run to the scheduled day (`completedWorkout`/`linkedRunWorkoutID`/`isCompleted`) exactly as the canonical importer does. The dashboard passes the day's workout for "Start This Workout" and `nil` for "Start a Free Run".
+
 **Fix:** pass the scheduled workout into `ActiveRunView`, start with its type, and set `workout.scheduledWorkout`/`isCompleted` on save.
 
-### H5. Closing an accidentally opened strength session force-saves it and marks the day complete
-`Stride/Features/ActiveStrength/StrengthActiveView.swift:75-84, 92, 506-519`
+### ✅ H5. Closing an accidentally opened strength session force-saves it and marks the day complete
+`Stride/Features/ActiveStrength/StrengthActiveView.swift`
 
 The header "X" offers only "Finish & Save" / "Cancel" — there is no discard. `finishAndSave()` unconditionally inserts a `StrengthWorkout` and sets `scheduled.isCompleted = true` even with zero logged sets, corrupting adherence stats.
+
+**FIXED:** the confirmation dialog now offers "Discard Workout" (and drops the save option entirely when nothing was logged); `finishAndSave()` guards on `hasLoggedWork` (a non-skipped set exists) and otherwise dismisses without persisting, so an accidentally opened session never marks the day complete.
 
 **Fix:** add a "Discard workout" option; refuse to mark `isCompleted` when nothing was logged.
 

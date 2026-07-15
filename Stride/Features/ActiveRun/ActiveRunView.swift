@@ -7,6 +7,11 @@ struct ActiveRunView: View {
     @Environment(\.modelContext) private var context
     @Environment(AppSettings.self) private var appSettings
 
+    /// The scheduled workout this run fulfills, when launched from "Start This
+    /// Workout". `nil` for a free run. Drives the start type and links the saved
+    /// run back to the plan so the day is marked complete (H4).
+    var scheduledWorkout: ScheduledWorkout? = nil
+
     @Query private var profiles: [UserProfile]
     @Query private var activePlans: [TrainingPlan]
     @State private var showFinishConfirmation = false
@@ -19,6 +24,15 @@ struct ActiveRunView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var tracker: WorkoutTrackerService { container.workoutTrackerService }
+
+    /// Start type for the run: the scheduled workout's type when it's a run
+    /// (easy/tempo/interval/long/race), otherwise a free easy run (H4).
+    private var startType: WorkoutType {
+        if let scheduledType = scheduledWorkout?.workoutType, scheduledType.isRunType {
+            return scheduledType
+        }
+        return .easy
+    }
 
     private var trainingPaces: TrainingPaces? {
         guard let time = profiles.first?.currentEstimated5KTimeSeconds else { return nil }
@@ -84,6 +98,11 @@ struct ActiveRunView: View {
         .onAppear {
             // Recover from a previous run's terminal state so the start button works.
             tracker.prepareForNewWorkout()
+            // Default the indoor/outdoor toggle to the scheduled workout's location.
+            if let scheduledLocation = scheduledWorkout?.workoutLocation {
+                selectedLocation = scheduledLocation
+                tracker.setLocation(scheduledLocation)
+            }
             metricsAppeared = true
             controlsAppeared = true
             if !reduceMotion {
@@ -366,7 +385,7 @@ struct ActiveRunView: View {
                 } else {
                     filledControlButton(size: 84, tintColor: zoneColor) {
                         tracker.setLocation(selectedLocation)
-                        tracker.startWorkout(type: .easy)
+                        tracker.startWorkout(type: startType)
                     } label: {
                         StrideIcon(name: .play, size: 28, color: zoneColor, strokeWeight: 2.2)
                     }
@@ -437,6 +456,15 @@ struct ActiveRunView: View {
     private func finishAndSave() {
         guard let workout = tracker.finishWorkout() else { dismiss(); return }
         context.insert(workout)
+        // Link the run back to its scheduled day so the plan marks it complete
+        // and the calendar/recovery card don't nag about a workout that was done (H4).
+        if let scheduled = scheduledWorkout {
+            workout.scheduledWorkout = scheduled
+            workout.linkedScheduledWorkoutID = scheduled.id
+            scheduled.completedWorkout = workout
+            scheduled.linkedRunWorkoutID = workout.id
+            scheduled.isCompleted = true
+        }
         try? context.save()
         Task { @MainActor in
             if let hkID = try? await container.healthKitRepository.save(workout) {

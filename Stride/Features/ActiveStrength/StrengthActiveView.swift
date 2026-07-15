@@ -73,14 +73,22 @@ struct StrengthActiveView: View {
         }
         .onAppear { setupForCurrentExercise() }
         .confirmationDialog(
-            "Finish Workout?",
+            hasLoggedWork ? "Finish Workout?" : "Discard Workout?",
             isPresented: $showFinishConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Finish & Save") { finishAndSave() }
+            // Only offer to save when something was actually logged — otherwise an
+            // accidentally opened session must not be force-saved and mark the day
+            // complete with zero sets (H5).
+            if hasLoggedWork {
+                Button("Finish & Save") { finishAndSave() }
+            }
+            Button("Discard Workout", role: .destructive) { discard() }
             Button("Cancel", role: .cancel) { }
         } message: {
-            Text("Your progress will be saved.")
+            Text(hasLoggedWork
+                 ? "Your progress will be saved."
+                 : "No sets were logged — this workout won't be saved and the day stays open.")
         }
         .onDisappear { endRestTimer() }
     }
@@ -426,6 +434,11 @@ struct StrengthActiveView: View {
         }
     }
 
+    /// True once at least one set has been logged (skipped sets don't count).
+    private var hasLoggedWork: Bool {
+        completedSets.contains { !$0.skipped }
+    }
+
     private var elapsedTimeString: String {
         let elapsed = Int(Date().timeIntervalSince(startTime))
         let m = elapsed / 60
@@ -503,8 +516,17 @@ struct StrengthActiveView: View {
         restTimeRemaining = 0
     }
 
+    /// Leave without persisting anything — the scheduled day stays open (H5).
+    private func discard() {
+        endRestTimer()
+        dismiss()
+    }
+
     private func finishAndSave() {
         endRestTimer()
+        // Never persist an empty session or mark the scheduled day complete when
+        // nothing was logged (H5) — a safety net behind the dialog's gating.
+        guard hasLoggedWork else { dismiss(); return }
         let duration = Date().timeIntervalSince(startTime)
         let strengthWorkout = StrengthWorkout(date: startTime, durationSeconds: duration)
         strengthWorkout.completedSets = completedSets

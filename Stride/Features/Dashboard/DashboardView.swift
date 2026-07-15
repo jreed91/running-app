@@ -235,6 +235,9 @@ struct DashboardView: View {
     @Query private var profiles: [UserProfile]
     @State private var showActiveRun = false
     @State private var showStrengthWorkout = false
+    /// The scheduled workout to fulfill when the active-run sheet is a planned run
+    /// (set by "Start This Workout"); `nil` for a free run (H4).
+    @State private var activeRunScheduled: ScheduledWorkout?
     @State private var selectedDate = Date()
     /// Timestamp of the last time the rearrange-workouts prompt was flagged
     /// (dismissed or acted on). Used to limit the prompt to once per week.
@@ -303,7 +306,7 @@ struct DashboardView: View {
             .navigationTitle("Today")
             .navigationBarTitleDisplayMode(.inline)
             .fullScreenCover(isPresented: $showActiveRun) {
-                ActiveRunView()
+                ActiveRunView(scheduledWorkout: activeRunScheduled)
             }
             .fullScreenCover(isPresented: $showStrengthWorkout) {
                 if let workout = workoutForSelectedDate, workout.workoutType == .strength {
@@ -418,6 +421,7 @@ struct DashboardView: View {
                         if workout.workoutType == .strength {
                             showStrengthWorkout = true
                         } else {
+                            activeRunScheduled = workout
                             showActiveRun = true
                         }
                     } label: {
@@ -488,6 +492,7 @@ struct DashboardView: View {
 
     private var startRunButton: some View {
         Button {
+            activeRunScheduled = nil
             showActiveRun = true
         } label: {
             HStack(spacing: 10) {
