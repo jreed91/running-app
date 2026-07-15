@@ -57,21 +57,20 @@ struct MedalsView: View {
     }
 
     private var buckets: [MedalBucket] {
-        var definitions: [(id: String, name: String, meters: Double)] = []
-        if appSettings.unitPreference == .imperial {
-            definitions.append(("1mi", "1 Mile", 1_609.344))
-        } else {
-            definitions.append(("1K", "1K", 1_000))
-        }
-        definitions += [
-            ("5K",  "5K",            5_000),
-            ("10K", "10K",           10_000),
-            ("HM",  "Half Marathon", 21_097.5),
-            ("M",   "Marathon",      42_195),
+        let shortest: MedalBucket = appSettings.unitPreference == .imperial
+            ? makeBucket(id: "1mi", name: "1 Mile", meters: 1_609.344)
+            : makeBucket(id: "1K", name: "1K", meters: 1_000)
+        return [
+            shortest,
+            makeBucket(id: "5K",  name: "5K",            meters: 5_000),
+            makeBucket(id: "10K", name: "10K",           meters: 10_000),
+            makeBucket(id: "HM",  name: "Half Marathon", meters: 21_097.5),
+            makeBucket(id: "M",   name: "Marathon",      meters: 42_195),
         ]
-        return definitions.map { def in
-            MedalBucket(id: def.id, name: def.name, targetMeters: def.meters, bestRun: prRun(for: def.meters))
-        }
+    }
+
+    private func makeBucket(id: String, name: String, meters: Double) -> MedalBucket {
+        MedalBucket(id: id, name: name, targetMeters: meters, bestRun: prRun(for: meters))
     }
 
     private func prRun(for targetMeters: Double) -> RunWorkout? {
