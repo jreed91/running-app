@@ -138,10 +138,12 @@ The header "X" offers only "Finish & Save" / "Cancel" — there is no discard. `
 
 **FIXED:** `currentWeek` now compares on day boundaries (`startDate.startOfDay <= today && endDate.startOfDay >= today` with `today = Date().startOfDay`), so the whole final day resolves. Covered by `TrainingPlanServiceTests` (final-day-included and fully-elapsed cases).
 
-### H7. Historical HealthKit imports get *today's* weather attached permanently
-`Stride/Core/Services/WeatherService.swift:28, 51-53`; consumed at `WorkoutSyncService.swift:163-167`
+### ✅ H7. Historical HealthKit imports get *today's* weather attached permanently
+`Stride/Core/Services/WeatherService.swift`; consumed at `WorkoutSyncService.swift:163-167`
 
 `weather(for: location)` returns current conditions + forward forecast; picking `hourlyForecast.min(by: closest to date)` for a past workout selects roughly *now*. The fresh-install 90-day lookback import stamps six-week-old runs with today's weather, which then feeds AI-coach commentary ("warm conditions added strain") about a winter run.
+
+**FIXED:** `WeatherService.fetchStrategy(for:now:)` (pure, unit-tested) routes any workout older than a ~6 h threshold to the historical hourly API (`weather(for:including: .hourly(startDate:endDate:))`) over a ±1 h window and picks the closest reading; if no historical reading is available it returns `nil` rather than falling back to current conditions. Recent runs still use the cheaper live path. Covered by `WeatherServiceStrategyTests`.
 
 **Fix:** use the historical API (`weather(for:including: .hourly(startDate:endDate:))`) or skip weather attach when the workout is older than ~1 day.
 
@@ -229,10 +231,10 @@ static let defaultValue: AppContainer = MainActor.assumeIsolated { AppContainer(
 - **M22. Missing push entitlement while sync depends on remote notifications** — `Stride.entitlements` / `project.yml:60-72`: `remote-notification` background mode is declared but there's no `aps-environment`, so CloudKit silent pushes are never delivered and sync only happens on foregrounding.
 
 ### Timers & active-session tracking
-- **M23. Elapsed time counted by timer ticks, not wall clock** — `WorkoutTrackerService.swift:225-232`: `elapsedSeconds += 1` per `Timer` fire undercounts whenever the process is suspended (indoor runs have no background keep-alive) or the run loop stalls. Locked-phone treadmill run records minutes instead of the real duration, corrupting pace and all downstream VDOT analytics. Derive from start/pause timestamps.
-- **M24. Indoor resume replays paused distance** — `WorkoutTrackerService.swift:94-104, 149-164`: `pedometer.startUpdates(from: startDate)` on resume replays cumulative distance since original start; walking while paused counts.
-- **M25. Indoor pace guards the wrong variable** — `WorkoutTrackerService.swift:158-160`: guard checks `elapsedSeconds > 0` but divides by `meters` → `+inf` pace on the first callbacks.
-- **M26. Split elevation gain is the delta of the last two GPS fixes** — `WorkoutTrackerService.swift:272`: a km climbing 50 m steadily records ~0.25 m. Also `finishWorkout` never populates `elevationGainMeters`/`maxHeartRate` despite having the data.
+- ✅ **M23. Elapsed time counted by timer ticks, not wall clock** — `WorkoutTrackerService.swift:225-232`: `elapsedSeconds += 1` per `Timer` fire undercounts whenever the process is suspended (indoor runs have no background keep-alive) or the run loop stalls. Locked-phone treadmill run records minutes instead of the real duration, corrupting pace and all downstream VDOT analytics. Derive from start/pause timestamps. **FIXED:** a new `WallClockStopwatch` value type derives elapsed time from start/pause timestamps (banking active segments across pause/resume); the timer now just recomputes `elapsedSeconds = stopwatch.elapsed(at: Date())`, so a suspended process resumes with the correct total. Covered by `WallClockStopwatchTests`.
+- ✅ **M24. Indoor resume replays paused distance** — `WorkoutTrackerService.swift:94-104, 149-164`: `pedometer.startUpdates(from: startDate)` on resume replays cumulative distance since original start; walking while paused counts. **FIXED:** pause banks `distanceMeters` into `indoorDistanceBaselineMeters`; each pedometer segment now starts from its own resume date and its cumulative distance is added to the banked baseline, so paused walking is neither replayed nor dropped.
+- ✅ **M25. Indoor pace guards the wrong variable** — `WorkoutTrackerService.swift:158-160`: guard checks `elapsedSeconds > 0` but divides by `meters` → `+inf` pace on the first callbacks. **FIXED:** the guard now checks the divisor (`meters > 0`).
+- ✅ **M26. Split elevation gain is the delta of the last two GPS fixes** — `WorkoutTrackerService.swift:272`: a km climbing 50 m steadily records ~0.25 m. Also `finishWorkout` never populates `elevationGainMeters`/`maxHeartRate` despite having the data. **FIXED:** positive altitude deltas are accumulated per split and per run; each split records its accumulated ascent (reset at the km boundary), and `finishWorkout` now sets `elevationGainMeters` (run total) and `maxHeartRate` (`hrSamples.max()`).
 - **M27. Strength rest timer and elapsed display don't track wall-clock** — `StrengthActiveView.swift:105, 429-434, 484-497`: rest countdown pauses while the app is suspended (no `Date`-based deadline); the header elapsed time only updates as a side effect of unrelated state changes.
 
 ### Training-plan math
@@ -362,12 +364,12 @@ Existing test files cover: PaceCalculator, TrainingPlanService, PlanSummaryServi
 
 | Untested source | Criticals/highs found there |
 | --- | --- |
-| `WorkoutTrackerService` | C1 (GPS distance), C2 (stuck state machine), M23–M26 |
+| `WorkoutTrackerService` | C1 (GPS distance), C2 (stuck state machine); M23–M26 wall-clock/distance/pace/elevation now fixed (`WallClockStopwatchTests`) |
 | `WorkoutSyncService` | H8 (wrong linking), H9 (resurrection), M1–M8 |
 | `WorkoutAnalyticsService` | H2 (adaptation misclassification) — now covered by `WorkoutAnalyticsServiceTests` |
 | `HealthKitRepository` | M9–M13 |
 | `NotificationService` | M3–M7 (also untestable as a singleton — D4) |
-| `WeatherService` | H7 (historical weather) |
+| `WeatherService` | H7 (historical weather) — now fixed (`WeatherServiceStrategyTests`) |
 | `AppSettings` | M15–M16, S1 |
 | All view-embedded stat math | H12, M33, M34, M35 |
 
@@ -409,8 +411,8 @@ Worth stating so the fixes don't churn what works:
 12. ✅ H2: pace double-discount (H2.2) removed with Daniels-table tests; interval classification (H2.1) now computed from split efforts; VDOT sampling (H2.3) restricted to race efforts. Covered by `WorkoutAnalyticsServiceTests`.
 13. ✅ M28–M32: cutback/progression curve (M28), long-run preservation on run-day reduction (M29), stub sizing against outstanding volume (M30), race-week strength placement (M31), and volume conservation for 1–2 run-day weeks (M32) all fixed with `TrainingPlanServiceTests` coverage.
 14. ✅ H6: week `endDate` boundary.
-15. H7: historical weather.
-16. M23: wall-clock elapsed time.
+15. ✅ H7: historical weather (with `WeatherServiceStrategyTests`).
+16. ✅ M23–M26: wall-clock elapsed time, indoor resume distance replay, indoor pace divisor guard, and per-split/run elevation gain + `finishWorkout` HR/elevation population (with `WallClockStopwatchTests`).
 
 **P3 — structural (enables everything above to stay fixed):**
 17. Extract `ProgressStatsService`, `PlanLifecycleService`, Smart-Adapt service; slim `RunSummaryView` and `AppContainer` (D1/D2).

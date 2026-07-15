@@ -44,6 +44,21 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
     private var lastLocation: CLLocation?
     private var lastSplitDistance: Double = 0
 
+    /// Wall-clock elapsed time, immune to process suspension / stalled run loops (M23).
+    private var stopwatch = WallClockStopwatch()
+
+    /// Elevation gain accumulated across the whole run and the current split bucket.
+    /// (M26 — a split's gain is the sum of positive altitude deltas within the km,
+    /// not just the delta between its final two GPS fixes.)
+    private var totalElevationGainMeters: Double = 0
+    private var currentSplitElevationGainMeters: Double = 0
+
+    /// Distance banked from active segments before the current indoor resume, so
+    /// resuming the pedometer from "now" no longer replays distance walked while
+    /// paused (M24). The pedometer reports cumulative distance since its own start
+    /// date, so each active segment is measured independently and summed here.
+    private var indoorDistanceBaselineMeters: Double = 0
+
     private let locationManager = CLLocationManager()
     private let autoPauseThresholdMetersPerSecond: Double = 0.5  // below this ≈ standing still
 
@@ -68,6 +83,7 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
         startDate = Date()
         reset()
         trackingState = .active
+        stopwatch.start(at: startDate)
         startTimer()
         startHeartRateQuery(from: startDate)
 
@@ -75,17 +91,22 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
             configureLocationManager()
             locationManager.startUpdatingLocation()
         } else {
-            startPedometerUpdates()
+            startPedometerUpdates(from: startDate)
         }
     }
 
     func pauseWorkout() {
         guard trackingState == .active else { return }
         trackingState = .paused
+        stopwatch.pause(at: Date())
+        elapsedSeconds = stopwatch.accumulated
         timer?.invalidate()
         if workoutLocation == .outdoor {
             locationManager.stopUpdatingLocation()
         } else {
+            // Bank distance covered so far; the next pedometer segment starts fresh
+            // from its own resume date so paused walking is not replayed (M24).
+            indoorDistanceBaselineMeters = distanceMeters
             stopPedometerUpdates()
         }
         if let q = hrQuery { hkStore.stop(q) }
@@ -94,12 +115,13 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
     func resumeWorkout() {
         guard trackingState == .paused else { return }
         trackingState = .active
+        stopwatch.resume(at: Date())
         startTimer()
         startHeartRateQuery(from: Date())
         if workoutLocation == .outdoor {
             locationManager.startUpdatingLocation()
         } else {
-            startPedometerUpdates()
+            startPedometerUpdates(from: Date())
         }
     }
 
@@ -122,6 +144,8 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
             stopPedometerUpdates()
         }
         if let q = hrQuery { hkStore.stop(q); hrQuery = nil }
+        stopwatch.pause(at: Date())
+        elapsedSeconds = stopwatch.accumulated
         trackingState = .finished
 
         let workout = RunWorkout(
@@ -133,8 +157,12 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
         )
         workout.routeCoordinates = coordinates
         workout.splits = splits
+        if totalElevationGainMeters > 0 {
+            workout.elevationGainMeters = totalElevationGainMeters
+        }
         if !hrSamples.isEmpty {
             workout.averageHeartRate = hrSamples.reduce(0, +) / Double(hrSamples.count)
+            workout.maxHeartRate = hrSamples.max()
         }
         return workout
     }
@@ -142,6 +170,7 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
     // MARK: Private helpers
 
     private func reset() {
+        stopwatch.reset()
         elapsedSeconds = 0
         distanceMeters = 0
         currentPaceSecondsPerKm = 0
@@ -151,21 +180,29 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
         hrSamples = []
         lastLocation = nil
         lastSplitDistance = 0
+        totalElevationGainMeters = 0
+        currentSplitElevationGainMeters = 0
+        indoorDistanceBaselineMeters = 0
         pedometerActive = false
     }
 
     // MARK: - Pedometer (indoor)
 
-    private func startPedometerUpdates() {
+    private func startPedometerUpdates(from segmentStart: Date) {
         guard CMPedometer.isDistanceAvailable(), !pedometerActive else { return }
         pedometerActive = true
-        pedometer.startUpdates(from: startDate) { [weak self] data, error in
+        let baseline = indoorDistanceBaselineMeters
+        pedometer.startUpdates(from: segmentStart) { [weak self] data, error in
             guard let data, error == nil else { return }
-            let meters = data.distance?.doubleValue ?? 0
+            // `distance` is cumulative since `segmentStart`; add the distance banked
+            // before this segment so a pause/resume never replays or drops meters (M24).
+            let meters = baseline + (data.distance?.doubleValue ?? 0)
             Task { @MainActor [weak self] in
                 guard let self, self.trackingState == .active else { return }
                 self.distanceMeters = meters
-                if self.elapsedSeconds > 0 {
+                // Guard the divisor, not the elapsed time (M25) — otherwise the first
+                // callbacks (meters == 0) produce a +inf pace.
+                if meters > 0 {
                     self.currentPaceSecondsPerKm = self.elapsedSeconds / meters * 1_000
                 }
                 self.updateSplitsForIndoor()
@@ -236,7 +273,9 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self, self.trackingState == .active else { return }
-                self.elapsedSeconds += 1
+                // Derive from wall clock rather than counting ticks so a suspended
+                // process or stalled run loop can't undercount the run (M23).
+                self.elapsedSeconds = self.stopwatch.elapsed(at: Date())
             }
         }
     }
@@ -267,6 +306,13 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
 
             distanceMeters += delta
 
+            // Accumulate positive altitude change across the whole run and the
+            // current split so a steady climb is recorded, not just the last
+            // fix-to-fix delta (M26).
+            let ascent = max(0, location.altitude - last.altitude)
+            totalElevationGainMeters += ascent
+            currentSplitElevationGainMeters += ascent
+
             if location.speed > 0 {
                 currentPaceSecondsPerKm = 1_000 / location.speed
             }
@@ -279,11 +325,12 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
                     kilometer: kmCovered,
                     paceSecondsPerKm: currentPaceSecondsPerKm,
                     heartRate: currentHeartRate,
-                    elevationGainMeters: max(0, location.altitude - (last.altitude)),
+                    elevationGainMeters: currentSplitElevationGainMeters,
                     cumulativeDistanceMeters: distanceMeters
                 )
                 splits.append(split)
                 lastSplitDistance = distanceMeters
+                currentSplitElevationGainMeters = 0
             }
         }
         lastLocation = location
