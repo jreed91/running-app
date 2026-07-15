@@ -662,18 +662,31 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             store.execute(query)
         }
 
-        guard let route = routes.first else { return [] }
+        guard !routes.isEmpty else { return [] }
 
-        // Step 2: stream CLLocation objects from the route
+        // Step 2: stream CLLocation objects from every route segment. A paused/
+        // resumed workout produces multiple HKWorkoutRoute samples; reading only
+        // `routes.first` dropped the later segments.
         var coordinates: [Coordinate] = []
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            let routeQuery = HKWorkoutRouteQuery(route: route) { _, locations, done, _ in
-                if let locations {
-                    coordinates += locations.map { Coordinate($0.coordinate) }
+        for route in routes {
+            let segment: [Coordinate] = await withCheckedContinuation { continuation in
+                var collected: [Coordinate] = []
+                var didResume = false
+                let routeQuery = HKWorkoutRouteQuery(route: route) { _, locations, done, error in
+                    if let locations {
+                        collected += locations.map { Coordinate($0.coordinate) }
+                    }
+                    // Resume exactly once — on completion or on error. Ignoring
+                    // the error and resuming only on `done` let a failed callback
+                    // hang the entire serial import forever.
+                    if (done || error != nil), !didResume {
+                        didResume = true
+                        continuation.resume(returning: collected)
+                    }
                 }
-                if done { continuation.resume() }
+                store.execute(routeQuery)
             }
-            store.execute(routeQuery)
+            coordinates += segment
         }
 
         return coordinates

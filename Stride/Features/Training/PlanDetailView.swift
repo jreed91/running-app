@@ -5,6 +5,7 @@ struct PlanDetailView: View {
     let plan: TrainingPlan
 
     @Environment(\.modelContext) private var context
+    @Environment(\.appContainer) private var container
     @Environment(\.dismiss) private var dismiss
 
     @State private var showDeleteConfirmation = false
@@ -52,9 +53,16 @@ struct PlanDetailView: View {
             titleVisibility: .visible
         ) {
             Button("Delete Plan", role: .destructive) {
-                context.delete(plan)
-                try? context.save()
                 dismiss()
+                Task {
+                    // Tear down the Watch plans and reminders before deleting the
+                    // record, otherwise they orphan (still scheduled, but no plan
+                    // to find them from).
+                    try? await container.healthKitRepository.removeWorkoutPlans(for: plan)
+                    container.notificationService.cancelReminders(for: plan)
+                    context.delete(plan)
+                    try? context.save()
+                }
             }
             Button("Cancel", role: .cancel) {}
         } message: {

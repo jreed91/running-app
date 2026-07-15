@@ -167,6 +167,17 @@ final class NotificationService: NSObject {
         center.removeAllPendingNotificationRequests()
     }
 
+    /// Cancels every pending reminder belonging to `plan` — used when a plan is
+    /// deleted so its morning reminders don't keep firing for workouts that no
+    /// longer exist. Removes both the standard (`<uuid>`) and morning
+    /// (`morning-<uuid>`) identifiers for each of the plan's workouts.
+    func cancelReminders(for plan: TrainingPlan) {
+        let workouts = (plan.weeks ?? []).flatMap { $0.workouts ?? [] }
+        let ids = workouts.flatMap { [$0.id.uuidString, NotificationID.morning($0)] }
+        guard !ids.isEmpty else { return }
+        center.removePendingNotificationRequests(withIdentifiers: ids)
+    }
+
     // MARK: Test helpers
 
     /// Triggers all local notification types immediately for TestFlight QA.

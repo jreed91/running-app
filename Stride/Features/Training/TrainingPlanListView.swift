@@ -5,6 +5,7 @@ import SwiftData
 /// completion stats. Pushed from the Plan tab's history toolbar button.
 struct TrainingPlanListView: View {
     @Environment(\.modelContext) private var context
+    @Environment(\.appContainer) private var container
 
     @Query(sort: \TrainingPlan.createdAt, order: .reverse)
     private var plans: [TrainingPlan]
@@ -62,8 +63,18 @@ struct TrainingPlanListView: View {
             }
         }
         .onDelete { offsets in
-            for index in offsets { context.delete(sectionPlans[index]) }
-            try? context.save()
+            let toDelete = offsets.map { sectionPlans[$0] }
+            Task {
+                for plan in toDelete {
+                    // Remove the Watch plans and reminders before deleting the
+                    // record, otherwise they orphan (still scheduled, but no plan
+                    // to find them from).
+                    try? await container.healthKitRepository.removeWorkoutPlans(for: plan)
+                    container.notificationService.cancelReminders(for: plan)
+                    context.delete(plan)
+                }
+                try? context.save()
+            }
         }
     }
 }
