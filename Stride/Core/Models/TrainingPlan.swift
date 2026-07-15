@@ -29,8 +29,13 @@ final class TrainingPlan {
     var totalWeeks: Int { (weeks ?? []).count }
 
     var currentWeek: TrainingWeek? {
-        let today = Date()
-        return (weeks ?? []).first { $0.startDate <= today && $0.endDate >= today }
+        // Compare on day boundaries. `endDate` is stored as the last day at 00:00
+        // (see `TrainingWeek.init`), so a raw `endDate >= now` comparison excludes the
+        // entire final day of every week — most visibly Sunday, the long-run day.
+        let today = Date().startOfDay
+        return (weeks ?? []).first {
+            $0.startDate.startOfDay <= today && $0.endDate.startOfDay >= today
+        }
     }
 
     /// 0.0 – 1.0 based on completed non-rest workouts.

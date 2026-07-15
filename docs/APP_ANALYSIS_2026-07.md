@@ -103,10 +103,10 @@ The doc comment says the returned adapted workout "should [have] its fields copi
 ### H2. The adaptation engine systematically misjudges runners (three compounding math bugs)
 
 1. **Interval sessions always classify as `.struggling`** — `WorkoutAnalyticsService.swift:255-266, 284-287`: `lastIntervalPaceRatio` divides the *whole-session* average pace (warm-up + recovery jogs + cool-down; `RunWorkout.swift:96-98`) by the *rep target* pace. A runner who nails 6×800 m at target still shows a ratio ≈ 1.3 → `.struggling` → reps cut and paces slowed, locking the engine in permanent downgrade mode.
-2. **Threshold/marathon paces double-discount %VO₂max** — `PaceCalculatorService.swift:121-151`: `speedForFraction` multiplies the intensity fraction (already a %VO₂max, e.g. 0.86 for threshold) by `fractionVO2max(forDurationMinutes:)` *again*. For VDOT 50 this prescribes tempo ≈ 4:36/km vs Daniels ≈ 4:15/km, and a marathon pace ~55 s/km slower than the app's own `predictedTime` for the same VDOT.
+2. ✅ **Threshold/marathon paces double-discount %VO₂max** — `PaceCalculatorService.swift:121-151`: `speedForFraction` multiplied the intensity fraction (already a %VO₂max, e.g. 0.86 for threshold) by `fractionVO2max(forDurationMinutes:)` *again*. For VDOT 50 this prescribed tempo ≈ 4:36/km vs Daniels ≈ 4:15/km, and a marathon pace ~55 s/km slower than the app's own `predictedTime` for the same VDOT. **FIXED:** the second `fractionVO2max` multiplication (and the now-unused `typicalDuration` plumbing) were removed, so `targetVO2 = fraction · vdot`. VDOT-50 paces now land within Daniels tolerance (threshold ≈ 4:20/km, marathon ≈ 4:38/km, interval ≈ 3:55/km); covered by new `PaceCalculatorTests` Daniels-table assertions.
 3. **VDOT estimated from session averages** — `WorkoutAnalyticsService.swift:199-209`: quality sessions including warm-up/recoveries are treated as race efforts, biasing `currentVDOT` low.
 
-**Fix:** compute interval performance from splits or the structured workout segments, not session averages; remove the second `fractionVO2max` multiplication (or derive paces from `predictedTime` for equivalent-effort race distances so the two paths agree); estimate VDOT only from race-effort runs. Add tests asserting agreement with published Daniels tables within tolerance.
+**Fix (remaining — H2.1, H2.3):** compute interval performance from splits or the structured workout segments, not session averages; estimate VDOT only from race-effort runs. Add tests asserting the classifier no longer downgrades on-target interval sessions.
 
 ### ✅ H3. Creating a new plan permanently deletes all past plans — wiping the Plan History feature's data
 `Stride/Features/Training/PlanSetupView.swift:271, 288-291`; `Stride/Features/Training/NewPlanOnboardingView.swift:600, 629-632`
@@ -131,12 +131,12 @@ The header "X" offers only "Finish & Save" / "Cancel" — there is no discard. `
 
 **Fix:** add a "Discard workout" option; refuse to mark `isCompleted` when nothing was logged.
 
-### H6. `currentWeek` is nil for the entire last day of every training week
+### ✅ H6. `currentWeek` is nil for the entire last day of every training week
 `Stride/Core/Models/TrainingWeek.swift:47`; `Stride/Core/Models/TrainingPlan.swift:31-34`
 
-`endDate = startDate.adding(days: 6)` keeps the 00:00 time component, and `currentWeek` requires `endDate >= today`. For a Monday-start week, `endDate` is Sunday 00:00, so **any time Sunday after midnight no week matches**: the dashboard weekly-progress card vanishes, `PlanTabView` loses the current-week highlight, and the AI coach reports "week 0 of N" — every Sunday, which is long-run day.
+`endDate = startDate.adding(days: 6)` keeps the 00:00 time component, and `currentWeek` required `endDate >= today`. For a Monday-start week, `endDate` is Sunday 00:00, so **any time Sunday after midnight no week matched**: the dashboard weekly-progress card vanished, `PlanTabView` lost the current-week highlight, and the AI coach reported "week 0 of N" — every Sunday, which is long-run day.
 
-**Fix:** compare against `today.startOfDay`, or store `endDate` as the exclusive start of the next week and use `<`.
+**FIXED:** `currentWeek` now compares on day boundaries (`startDate.startOfDay <= today && endDate.startOfDay >= today` with `today = Date().startOfDay`), so the whole final day resolves. Covered by `TrainingPlanServiceTests` (final-day-included and fully-elapsed cases).
 
 ### H7. Historical HealthKit imports get *today's* weather attached permanently
 `Stride/Core/Services/WeatherService.swift:28, 51-53`; consumed at `WorkoutSyncService.swift:163-167`
@@ -236,7 +236,7 @@ static let defaultValue: AppContainer = MainActor.assumeIsolated { AppContainer(
 - **M27. Strength rest timer and elapsed display don't track wall-clock** — `StrengthActiveView.swift:105, 429-434, 484-497`: rest countdown pauses while the app is suspended (no `Date`-based deadline); the header elapsed time only updates as a side effect of unrelated state changes.
 
 ### Training-plan math
-- **M28. Cutback weeks never cut back; volume flatlines at week ~5** — `TrainingPlanService.swift:352-359`: the "cutback" multiplier equals the *previous* week (0 % reduction, comment claims ~20 %), and since `1.1⁴ ≈ 1.464 > 1.45` the clamp makes every week from index 4 onward exactly `1.45 × base` — no progression, no cutbacks, contradicting AGENTS.md.
+- ✅ **M28. Cutback weeks never cut back; volume flatlines at week ~5** — `TrainingPlanService.swift:352-359`: the "cutback" multiplier equalled the *previous* week (0 % reduction, comment claimed ~20 %), and since `1.1⁴ ≈ 1.464 > 1.45` the clamp made every week from index 4 onward exactly `1.45 × base` — no progression, no cutbacks, contradicting AGENTS.md. **FIXED:** `weeklyKm` now ramps ~8 %/week capped at the phase peak multiplier, and cutback weeks (every 4th) multiply the *capped* trend by 0.8 for a genuine ~20 % dip (e.g. base 30 km → 30 → 32 → 35 → 30 (cut) → 41 → 44 → 45 → 36 (cut) → 45). Covered by `TrainingPlanServiceTests` progression/cutback assertions.
 - **M29. Reducing run days deletes the long run** — `TrainingPlanService.swift:1149-1157`: excess (latest-dated) workouts are deleted, and the long run is always last in the week.
 - **M30. `applyNewRunDays` creates oversized stub runs** — `TrainingPlanService.swift:1164-1167`: `remainingKm` ignores already-completed volume; a mid-week day-count change can add 35 km of new easy running to a week with 15 km outstanding.
 - **M31. Race-week strength sessions can be scheduled after race day** — `TrainingPlanService.swift:159-165, 207-230`.
@@ -406,9 +406,9 @@ Worth stating so the fixes don't churn what works:
 11. ✅ S1: move the ORS key out of KVS/UserDefaults (Keychain).
 
 **P2 — training-math correctness (the product's core promise):**
-12. H2: fix interval classification, pace double-discount, and VDOT sampling; add Daniels-table tests.
-13. M28–M32: cutback/progression curve, long-run preservation, volume conservation.
-14. H6: week `endDate` boundary.
+12. H2: ✅ pace double-discount (H2.2) removed with Daniels-table tests; *remaining:* interval classification (H2.1) and VDOT sampling (H2.3).
+13. M28–M32: ✅ M28 cutback/progression curve fixed; *remaining:* M29–M32 (long-run preservation, volume conservation).
+14. ✅ H6: week `endDate` boundary.
 15. H7: historical weather.
 16. M23: wall-clock elapsed time.
 

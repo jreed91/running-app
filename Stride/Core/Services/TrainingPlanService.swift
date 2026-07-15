@@ -356,19 +356,25 @@ struct TrainingPlanService {
         phase: TrainingPhase,
         raceType: RaceType
     ) -> Double {
+        let peakMultiplier = raceType == .maintainFitness ? 1.2 : 1.5
         switch phase {
         case .taper:
             return base * 0.55
         case .peak:
-            let maxKm = raceType == .maintainFitness ? base * 1.2 : base * 1.5
-            return maxKm
+            return base * peakMultiplier
         case .build, .base:
-            // 10% increase per week with a cutback every 4th week
+            // Progressive overload: ramp ~8% per week toward peak volume, with a
+            // cutback every 4th week that drops ~20% below the surrounding trend.
+            //
+            // The trend is capped at `peakMultiplier` so volume plateaus near the peak
+            // rather than compounding without bound. The cutback multiplies the *capped*
+            // trend (not the previous exponent) so cutback weeks are genuinely lighter
+            // even after the trend plateaus — e.g. base 30 km yields roughly
+            // 30 → 32 → 35 → 30 (cut) → 41 → 44 → 45 → 36 (cut) → 45 …
             let isCutback = (weekIndex + 1) % 4 == 0
-            let multiplier = isCutback
-                ? pow(1.10, Double(weekIndex - 1))  // step back ~20%
-                : pow(1.10, Double(weekIndex))
-            return min(base * multiplier, base * 1.45)
+            let trend = min(pow(1.08, Double(weekIndex)), peakMultiplier)
+            let multiplier = isCutback ? trend * 0.8 : trend
+            return base * multiplier
         }
     }
 

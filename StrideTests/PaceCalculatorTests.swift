@@ -61,4 +61,36 @@ struct PaceCalculatorTests {
         let halfTime = PaceCalculatorService.predictedTime(vdot: vdot, distanceMeters: 21_097.5)
         #expect(halfTime > fiveKTime)
     }
+
+    // MARK: Daniels-table agreement (H2.2 — no double-discount of %VO₂max)
+
+    /// Training paces are Daniels' %VO₂max zones, so they must land near the published
+    /// tables. The pre-fix implementation multiplied intensity by `fractionVO2max` a
+    /// second time, prescribing paces ~15–50 s/km too slow (e.g. threshold 4:36/km
+    /// instead of ~4:15/km for VDOT 50). Each bound below excludes the old value.
+    @Test("VDOT 50 training paces match the Daniels tables within tolerance")
+    func vdot50PacesMatchDaniels() {
+        // VDOT from an exact 19:57 5K ≈ 50.
+        let paces = PaceCalculatorService.trainingPaces(forVDOT: 50)
+
+        // Threshold ≈ 4:15/km (255 s). Old (broken) value ≈ 276 s.
+        #expect((248...268).contains(paces.threshold),
+                "Threshold \(paces.threshold)s/km outside Daniels tolerance")
+        // Marathon ≈ 4:31/km (271 s). Old (broken) value ≈ 327 s.
+        #expect((262...292).contains(paces.marathon),
+                "Marathon \(paces.marathon)s/km outside Daniels tolerance")
+        // Interval ≈ 3:57/km (237 s). Old (broken) value ≈ 268 s.
+        #expect((224...250).contains(paces.interval),
+                "Interval \(paces.interval)s/km outside Daniels tolerance")
+        // Easy runs sit around 4:40–5:20/km (280–320 s) at VDOT 50.
+        #expect(paces.easyRange.lowerBound > paces.threshold,
+                "Easy pace should be slower (larger sec/km) than threshold")
+    }
+
+    @Test("Threshold pace is faster than marathon pace for the same VDOT")
+    func thresholdFasterThanMarathon() {
+        let paces = PaceCalculatorService.trainingPaces(forVDOT: 45)
+        #expect(paces.threshold < paces.marathon)
+        #expect(paces.marathon < paces.easyRange.lowerBound)
+    }
 }

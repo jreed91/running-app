@@ -399,6 +399,81 @@ struct TrainingPlanServiceTests {
         #expect(taperKm < peakKm, "Taper (\(taperKm) km) should be less than peak (\(peakKm) km)")
     }
 
+    // MARK: Progressive overload & cutbacks (M28)
+
+    @Test("Cutback weeks reduce volume below the surrounding progression")
+    func cutbackWeeksReduceVolume() {
+        let profile = makeProfile(race: .fiveK, runDays: 4)
+        let plan = service.generatePlan(profile: profile, startDate: .now, numberOfWeeks: 12)
+        let ws = weeks(in: plan)
+        func km(_ weekNumber: Int) -> Double { ws[weekNumber - 1].targetDistanceKm }
+
+        // Progressive overload: volume rises across the first three weeks.
+        #expect(km(1) < km(2), "Week 1 (\(km(1))) should be below week 2 (\(km(2)))")
+        #expect(km(2) < km(3), "Week 2 (\(km(2))) should be below week 3 (\(km(3)))")
+        // Week 4 is a cutback: meaningfully below week 3, not equal to it (the old bug
+        // made the cutback multiplier identical to the preceding week).
+        #expect(km(4) < km(3) * 0.95, "Week 4 cutback (\(km(4))) not below week 3 (\(km(3)))")
+        // Volume rebounds after the cutback.
+        #expect(km(5) > km(4), "Week 5 (\(km(5))) should rebound above week 4 cutback (\(km(4)))")
+        // The second cutback (week 8) also dips below its neighbour.
+        #expect(km(8) < km(7) * 0.95, "Week 8 cutback (\(km(8))) not below week 7 (\(km(7)))")
+    }
+
+    @Test("Base/build volume progresses instead of flatlining")
+    func volumeProgressesNotFlat() {
+        let profile = makeProfile(race: .fiveK, runDays: 4)
+        let plan = service.generatePlan(profile: profile, startDate: .now, numberOfWeeks: 12)
+        let ws = weeks(in: plan)
+
+        // The old clamp made every week from index 4 onward exactly 1.45×base — a flat
+        // line. Peak volume must exceed the opening base week.
+        let peakKm = ws.first { $0.phase == .peak }?.targetDistanceKm ?? 0
+        #expect(peakKm > ws[0].targetDistanceKm, "Peak (\(peakKm)) not above opening week (\(ws[0].targetDistanceKm))")
+
+        // Non-cutback base/build weeks should take on more than one distinct value.
+        let baseBuildKm = ws
+            .filter { $0.phase == .base || $0.phase == .build }
+            .map { Int($0.targetDistanceKm.rounded()) }
+        #expect(Set(baseBuildKm).count > 1, "Base/build volume is flat: \(baseBuildKm)")
+    }
+
+    // MARK: Current-week boundary (H6)
+
+    @Test("currentWeek includes the final calendar day of the week")
+    func currentWeekIncludesFinalDay() {
+        // A week whose last calendar day is today: startDate = today − 6 days, so the
+        // stored endDate is today at 00:00. The pre-fix `endDate >= Date()` comparison
+        // excluded the entire final day (most visibly Sunday, the long-run day).
+        let start = Date().startOfDay.adding(days: -6)
+        let plan = TrainingPlan(
+            targetRace: .fiveK,
+            goalTimeSeconds: 1_500,
+            startDate: start,
+            endDate: start.adding(days: 6)
+        )
+        let week = TrainingWeek(weekNumber: 1, startDate: start, phase: .base, targetDistanceKm: 20)
+        plan.weeks = [week]
+
+        #expect(plan.currentWeek === week, "currentWeek should resolve on the final day of the week")
+    }
+
+    @Test("currentWeek is nil once the week has fully elapsed")
+    func currentWeekNilAfterWeekEnds() {
+        // A week that ended yesterday: startDate = today − 7 days.
+        let start = Date().startOfDay.adding(days: -7)
+        let plan = TrainingPlan(
+            targetRace: .fiveK,
+            goalTimeSeconds: 1_500,
+            startDate: start,
+            endDate: start.adding(days: 6)
+        )
+        let week = TrainingWeek(weekNumber: 1, startDate: start, phase: .base, targetDistanceKm: 20)
+        plan.weeks = [week]
+
+        #expect(plan.currentWeek == nil)
+    }
+
     @Test("Every non-rest, non-race workout has a warm-up defined")
     func allWorkoutsHaveWarmup() {
         let profile = makeProfile(race: .halfMarathon, runDays: 5)
