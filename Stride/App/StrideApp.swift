@@ -246,16 +246,14 @@ struct ContentView: View {
         }
 
         if HKHealthStore.isHealthDataAvailable() {
-            let store = HKHealthStore()
-            let distanceType = HKQuantityType.quantityType(forIdentifier: .distanceWalkingRunning)
-            let isHealthAuthorized = distanceType.map {
-                store.authorizationStatus(for: $0) == .sharingAuthorized
-            } ?? false
-
-            if !isHealthAuthorized {
-                try? await container.healthKitRepository.requestAuthorization()
-                await container.workoutSyncService.startObserving()
-            }
+            // HealthKit deliberately does not expose *read* authorization status, so
+            // `authorizationStatus(for:)` reports only share/write permission and misfires
+            // in both directions when used to gate imports (M17). `requestAuthorization()`
+            // is idempotent — it never re-prompts once the user has decided — and
+            // `startObserving()` guards against duplicate observer registration, so we
+            // simply ensure both have run rather than branching on an unreliable signal.
+            try? await container.healthKitRepository.requestAuthorization()
+            await container.workoutSyncService.startObserving()
         }
 
         let notificationSettings = await UNUserNotificationCenter.current().notificationSettings()
