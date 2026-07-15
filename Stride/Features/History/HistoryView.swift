@@ -115,24 +115,18 @@ struct HistoryView: View {
     // MARK: Delete
 
     private func deleteEntries(at offsets: IndexSet) {
-        for index in offsets {
-            switch displayedEntries[index] {
+        // Snapshot the entries before deleting: `displayedEntries` is recomputed on every
+        // access, so mutating the store mid-loop would shift the offsets we're iterating.
+        // All invariant repair (tombstones, scheduled-day reset) lives in the repository.
+        let entries = displayedEntries
+        for index in offsets where entries.indices.contains(index) {
+            switch entries[index] {
             case .run(let workout):
-                workout.scheduledWorkout?.completedWorkout = nil
-                workout.scheduledWorkout?.linkedRunWorkoutID = nil
-                workout.linkedScheduledWorkoutID = nil
-                if let hkID = workout.healthKitWorkoutID {
-                    context.insert(DeletedWorkout(healthKitWorkoutID: hkID))
-                }
-                context.delete(workout)
+                try? container.workoutRepository.delete(workout)
             case .strength(let workout):
-                workout.scheduledWorkout?.completedStrengthWorkout = nil
-                workout.scheduledWorkout?.linkedStrengthWorkoutID = nil
-                workout.linkedScheduledWorkoutID = nil
-                context.delete(workout)
+                try? container.workoutRepository.delete(workout)
             }
         }
-        try? context.save()
     }
 
     // MARK: Auto-sync
@@ -148,7 +142,11 @@ struct HistoryView: View {
             try await repo.requestAuthorization()
             let cutoff = Calendar.current.date(byAdding: .day, value: -60, to: Date()) ?? Date()
 
-            let existingRunIDs = Set(allRunWorkouts.compactMap(\.healthKitWorkoutID))
+            // Union deletion tombstones so runs the user removed don't resurrect on sync.
+            let tombstonedIDs = Set(
+                ((try? context.fetch(FetchDescriptor<DeletedWorkout>())) ?? []).map(\.healthKitWorkoutID)
+            )
+            let existingRunIDs = Set(allRunWorkouts.compactMap(\.healthKitWorkoutID)).union(tombstonedIDs)
             let newRunWorkouts = try await repo.fetchImportableWorkouts(
                 from: cutoff, to: Date(), existingIDs: existingRunIDs
             )
@@ -163,6 +161,7 @@ struct HistoryView: View {
             }
 
             let existingStrengthIDs = Set(allStrengthWorkouts.compactMap(\.healthKitWorkoutID))
+                .union(tombstonedIDs)
             let hkStrengthWorkouts = try await repo.fetchImportableStrengthWorkouts(
                 from: cutoff, to: Date(), existingIDs: existingStrengthIDs
             )

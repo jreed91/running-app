@@ -143,14 +143,18 @@ The header "X" offers only "Finish & Save" / "Cancel" — there is no discard. `
 
 **Fix:** use the historical API (`weather(for:including: .hourly(startDate:endDate:))`) or skip weather attach when the workout is older than ~1 day.
 
-### H8. Imported runs can link to (and complete) strength/rest days — and mutate the run's own type
+### ✅ H8. Imported runs can link to (and complete) strength/rest days — and mutate the run's own type
+
+**FIXED:** the two competing linkers were consolidated into one. `linkToScheduledWorkouts` now filters candidates to run-type scheduled workouts only (new `WorkoutType.isRunType`) and no longer overwrites `run.workoutType` from the schedule; the redundant `autoLink` was removed.
 `Stride/Core/Services/WorkoutSyncService.swift:235-276` (vs the second linker at `:207-226`)
 
 `linkToScheduledWorkouts` matches by day with **no workout-type filter** (type is only a tiebreaker), then does `run.workoutType = match.workoutType`. A HealthKit run imported on a strength-only day links to the strength workout, marks it complete, and the `RunWorkout` itself becomes `workoutType == .strength`. The sibling `autoLink` uses different rules (excludes `.rest` only) — the two linkers already disagree.
 
 **Fix:** consolidate into one linker that only matches run-type scheduled workouts, and never overwrite the run's type from the schedule.
 
-### H9. Deleted workouts resurrect on the next sync (three separate holes)
+### ✅ H9. Deleted workouts resurrect on the next sync (three separate holes)
+
+**FIXED:** all deletion now routes through `WorkoutRepository.delete` (extended with a `StrengthWorkout` overload that writes a `DeletedWorkout` tombstone and resets the scheduled day), and every import path unions tombstones: strength sync (`WorkoutSyncService`), `HistoryView` auto-sync (runs + strength), and manual `HealthKitImportView`.
 
 The tombstone mechanism (`DeletedWorkout`) only works on the canonical run path; three paths bypass it:
 
@@ -218,8 +222,8 @@ static let defaultValue: AppContainer = MainActor.assumeIsolated { AppContainer(
 - **M17. HealthKit read permission tested via write-only API** — `StrideApp.swift:248-258`: `authorizationStatus(for:)` reports *share* permission; using it to gate "is Health authorized" misfires in both directions.
 - **M18. Onboarding permission rows show green regardless of the user's answer** — `OnboardingView.swift:625-657`: all three flags set `true` unconditionally after a fixed 1.8 s sleep races the system dialogs.
 - **M19. Onboarding/plan-setup pickers render hardcoded fake dates** — `OnboardingView.swift:390-404`, `NewPlanOnboardingView.swift:412-423`: `let dayNumbers = [20, 21, ... 26]` renders literal "M 20 … S 26" every day of every month; also assumes Monday-first regardless of locale.
-- **M20. Deleting a run never resets `scheduled.isCompleted`** — `HistoryView.swift:120-127`, `RunSummaryView.swift:160-168`: adherence counts a workout that no longer exists; the intents' `todaysRun()` reports wrongly.
-- **M21. "Reset All Data" leaves strength workouts and tombstones behind** — `SettingsView.swift:648-654`: deletes 4 of 8 model types while the dialog promises "all workouts".
+- ✅ **M20. Deleting a run never resets `scheduled.isCompleted`** — `HistoryView.swift:120-127`, `RunSummaryView.swift:160-168`: adherence counts a workout that no longer exists; the intents' `todaysRun()` reports wrongly. **FIXED:** `WorkoutRepository.delete` clears `scheduled.isCompleted`/links; both views now delete through the repository.
+- ✅ **M21. "Reset All Data" leaves strength workouts and tombstones behind** — `SettingsView.swift:648-654`: deletes 4 of 8 model types while the dialog promises "all workouts". **FIXED:** `resetAll()` now clears all 8 model types.
 - **M22. Missing push entitlement while sync depends on remote notifications** — `Stride.entitlements` / `project.yml:60-72`: `remote-notification` background mode is declared but there's no `aps-environment`, so CloudKit silent pushes are never delivered and sync only happens on foregrounding.
 
 ### Timers & active-session tracking
@@ -393,8 +397,8 @@ Worth stating so the fixes don't churn what works:
 6. ✅ H1/H10: stop assigning `.week` on prompt/adaptation temporaries (one-line cause, plan-corrupting effect).
 
 **P1 — data integrity:**
-7. H9 + M20/M21: single repository delete path (tombstones for both types, `isCompleted` reset, full reset coverage).
-8. H8: unify the two linkers; type-filter matches; never overwrite run type.
+7. ✅ H9 + M20/M21: single repository delete path (tombstones for both types, `isCompleted` reset, full reset coverage).
+8. ✅ H8: unify the two linkers; type-filter matches; never overwrite run type.
 9. H3: deactivate rather than delete past plans; enforce single-active-plan in the repository.
 10. M6/M39: tombstone-check the snapshot resurrection path; tag or remove the QA fake-run helper.
 11. S1: move the ORS key out of KVS/UserDefaults (Keychain).
