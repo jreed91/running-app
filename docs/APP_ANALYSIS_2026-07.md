@@ -237,10 +237,10 @@ static let defaultValue: AppContainer = MainActor.assumeIsolated { AppContainer(
 
 ### Training-plan math
 - ✅ **M28. Cutback weeks never cut back; volume flatlines at week ~5** — `TrainingPlanService.swift:352-359`: the "cutback" multiplier equalled the *previous* week (0 % reduction, comment claimed ~20 %), and since `1.1⁴ ≈ 1.464 > 1.45` the clamp made every week from index 4 onward exactly `1.45 × base` — no progression, no cutbacks, contradicting AGENTS.md. **FIXED:** `weeklyKm` now ramps ~8 %/week capped at the phase peak multiplier, and cutback weeks (every 4th) multiply the *capped* trend by 0.8 for a genuine ~20 % dip (e.g. base 30 km → 30 → 32 → 35 → 30 (cut) → 41 → 44 → 45 → 36 (cut) → 45). Covered by `TrainingPlanServiceTests` progression/cutback assertions.
-- **M29. Reducing run days deletes the long run** — `TrainingPlanService.swift:1149-1157`: excess (latest-dated) workouts are deleted, and the long run is always last in the week.
-- **M30. `applyNewRunDays` creates oversized stub runs** — `TrainingPlanService.swift:1164-1167`: `remainingKm` ignores already-completed volume; a mid-week day-count change can add 35 km of new easy running to a week with 15 km outstanding.
-- **M31. Race-week strength sessions can be scheduled after race day** — `TrainingPlanService.swift:159-165, 207-230`.
-- **M32. Weekly volume not conserved for 1–2 run days** — `TrainingPlanService.swift:438-453`: with no easy slots the remainder fraction is silently dropped (1 run day → only 35 % of target scheduled).
+- ✅ **M29. Reducing run days deletes the long run** — `TrainingPlanService.swift:1149-1157`: excess (latest-dated) workouts are deleted, and the long run is always last in the week. **FIXED:** `applyNewRunDays` now ranks movable workouts by importance (long run + quality over easy) when choosing what to drop, so only easy runs are shed and the long run is re-slotted to the last selected day. Covered by `TrainingPlanServiceTests`.
+- ✅ **M30. `applyNewRunDays` creates oversized stub runs** — `TrainingPlanService.swift:1164-1167`: `remainingKm` ignores already-completed volume; a mid-week day-count change can add 35 km of new easy running to a week with 15 km outstanding. **FIXED:** stub volume now subtracts completed run volume as well as movable volume, so a nearly-finished week no longer balloons past its target. Covered by `TrainingPlanServiceTests`.
+- ✅ **M31. Race-week strength sessions can be scheduled after race day** — `TrainingPlanService.swift:159-165, 207-230`. **FIXED:** `buildStrengthWorkouts` now derives the race-day offset and excludes strength candidates on or after it (and the day before), so no strength lands once the race has run. Covered by `TrainingPlanServiceTests`.
+- ✅ **M32. Weekly volume not conserved for 1–2 run days** — `TrainingPlanService.swift:438-453`: with no easy slots the remainder fraction is silently dropped (1 run day → only 35 % of target scheduled). **FIXED:** when there are no easy slots to absorb the remainder, `buildWorkouts` folds it into the long run so scheduled volume still sums to the week target. Covered by `TrainingPlanServiceTests`.
 
 ### Aggregation & display
 - ✅ **M33. Period "Avg Pace" is an unweighted mean of per-run paces** — `ProgressView.swift:493-496` (verified): one long fast run + one short slow jog average to 6:30/km when the true distance-weighted pace is ~5:09/km. Use Σduration/Σdistance (as `PlanSummaryService` already does). **FIXED (PR #230):** distance-weighted via `ProgressStatsService`.
@@ -407,7 +407,7 @@ Worth stating so the fixes don't churn what works:
 
 **P2 — training-math correctness (the product's core promise):**
 12. ✅ H2: pace double-discount (H2.2) removed with Daniels-table tests; interval classification (H2.1) now computed from split efforts; VDOT sampling (H2.3) restricted to race efforts. Covered by `WorkoutAnalyticsServiceTests`.
-13. M28–M32: ✅ M28 cutback/progression curve fixed; *remaining:* M29–M32 (long-run preservation, volume conservation).
+13. ✅ M28–M32: cutback/progression curve (M28), long-run preservation on run-day reduction (M29), stub sizing against outstanding volume (M30), race-week strength placement (M31), and volume conservation for 1–2 run-day weeks (M32) all fixed with `TrainingPlanServiceTests` coverage.
 14. ✅ H6: week `endDate` boundary.
 15. H7: historical weather.
 16. M23: wall-clock elapsed time.
