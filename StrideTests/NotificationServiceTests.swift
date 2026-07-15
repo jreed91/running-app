@@ -22,4 +22,89 @@ struct NotificationServiceTests {
         #expect(before == 0)
         #expect(after == 0)
     }
+
+    // MARK: Morning reminder candidates (M7)
+
+    private var calendar: Calendar {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "America/New_York") ?? .current
+        return cal
+    }
+
+    private func date(_ y: Int, _ mo: Int, _ d: Int, _ h: Int = 0, _ mi: Int = 0) -> Date {
+        var c = DateComponents()
+        c.year = y; c.month = mo; c.day = d; c.hour = h; c.minute = mi
+        return calendar.date(from: c)!
+    }
+
+    /// A plan holding one week whose workouts are `days` day-offsets from `start`.
+    private func makePlan(start: Date, workouts: [ScheduledWorkout]) -> TrainingPlan {
+        let plan = TrainingPlan(
+            targetRace: .marathon,
+            goalTimeSeconds: 4 * 3_600,
+            startDate: start,
+            endDate: start.adding(days: 7 * 18)
+        )
+        let week = TrainingWeek(weekNumber: 1, startDate: start, phase: .base, targetDistanceKm: 40)
+        week.workouts = workouts
+        plan.weeks = [week]
+        return plan
+    }
+
+    @Test("Morning reminders cap at the soonest workouts, below the iOS 64-pending limit (M7)")
+    func morningRemindersCappedAtSoonest() {
+        // An 18-week marathon plan schedules ~100 non-rest workouts; iOS silently
+        // keeps only 64 pending requests, dropping the tail of the plan.
+        let now = date(2026, 7, 15, 12, 0)
+        let workouts = (1...100).map { offset in
+            ScheduledWorkout(scheduledDate: date(2026, 7, 15).adding(days: offset), workoutType: .easy)
+        }
+        let plan = makePlan(start: date(2026, 7, 15), workouts: workouts.shuffled())
+
+        let candidates = NotificationService.morningReminderCandidates(
+            for: plan, now: now, calendar: calendar
+        )
+
+        #expect(candidates.count == NotificationService.maxScheduledMorningReminders)
+        #expect(NotificationService.maxScheduledMorningReminders < 64)
+        // Soonest-first: the cap must drop the far end of the plan, not the near end.
+        let dates = candidates.map(\.scheduledDate)
+        #expect(dates == dates.sorted())
+        #expect(dates.last! <= date(2026, 7, 15).adding(days: NotificationService.maxScheduledMorningReminders))
+    }
+
+    @Test("Completed, rest, and past workouts get no morning reminder")
+    func morningReminderFiltering() {
+        let now = date(2026, 7, 15, 12, 0)
+
+        let past = ScheduledWorkout(scheduledDate: date(2026, 7, 14), workoutType: .easy)
+        let completed = ScheduledWorkout(scheduledDate: date(2026, 7, 17), workoutType: .tempo)
+        completed.isCompleted = true
+        let rest = ScheduledWorkout(scheduledDate: date(2026, 7, 18), workoutType: .rest)
+        let upcoming = ScheduledWorkout(scheduledDate: date(2026, 7, 19), workoutType: .longRun)
+
+        let plan = makePlan(start: date(2026, 7, 13), workouts: [past, completed, rest, upcoming])
+        let candidates = NotificationService.morningReminderCandidates(
+            for: plan, now: now, calendar: calendar
+        )
+
+        #expect(candidates.count == 1)
+        #expect(candidates.first === upcoming)
+    }
+
+    @Test("A same-day workout is included only before its 8 AM fire time")
+    func sameDayWorkoutRespectsFireTime() {
+        let workout = ScheduledWorkout(scheduledDate: date(2026, 7, 15), workoutType: .easy)
+        let plan = makePlan(start: date(2026, 7, 15), workouts: [workout])
+
+        let beforeEight = NotificationService.morningReminderCandidates(
+            for: plan, now: date(2026, 7, 15, 7, 0), calendar: calendar
+        )
+        let afterEight = NotificationService.morningReminderCandidates(
+            for: plan, now: date(2026, 7, 15, 9, 0), calendar: calendar
+        )
+
+        #expect(beforeEight.count == 1)
+        #expect(afterEight.isEmpty)
+    }
 }

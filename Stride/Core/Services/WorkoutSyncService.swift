@@ -4,7 +4,8 @@ import SwiftData
 // MARK: - WorkoutSyncService
 
 /// Observes HealthKit for new running workouts and automatically imports them
-/// into SwiftData, firing a local notification for each newly synced run.
+/// into SwiftData, firing a local notification for each newly synced run (or a
+/// single summary notification for large recovery imports).
 ///
 /// Lifecycle:
 ///   1. Created by `AppContainer` at launch.
@@ -22,6 +23,11 @@ final class WorkoutSyncService {
     private let context: ModelContext
     private var isObserving = false
     private var isSyncing = false
+
+    /// Source label of a sync trigger that arrived while another sync was in
+    /// flight. The in-flight pass replays it when it finishes instead of
+    /// dropping the trigger (M1). `private(set)` so tests can observe queueing.
+    private(set) var pendingSyncSource: String?
 
     /// Called on MainActor after each batch of new workouts is imported and auto-linked.
     var onWorkoutsSynced: (([RunWorkout]) -> Void)?
@@ -52,9 +58,15 @@ final class WorkoutSyncService {
         }
 
         if !isObserving {
+            // Claim the flag before the first suspension point: startObserving is
+            // called concurrently (StrideApp.task, onboarding, the restore flow),
+            // and a check-then-set separated by an await let two callers both see
+            // "not observing" and register duplicate observer queries (M2).
+            isObserving = true
             do {
                 try await healthKitRepository.enableBackgroundDelivery()
             } catch {
+                isObserving = false
                 AppLogger.log(
                     "Failed to enable HealthKit background delivery: \(error.localizedDescription)",
                     label: "HealthKit",
@@ -77,7 +89,6 @@ final class WorkoutSyncService {
                     completion()
                 }
             }
-            isObserving = true
             AppLogger.log("HealthKit background workout observer registered.", label: "HealthKit", level: .info)
         }
 
@@ -87,12 +98,31 @@ final class WorkoutSyncService {
     // MARK: Private
 
     private func handleNewWorkoutsDetected(source: String) async {
+        // A trigger that lands mid-sync must not be dropped: the in-flight pass
+        // snapshotted its existing-ID set before the workout that fired this
+        // trigger existed, so it can miss it. Queue exactly one follow-up pass
+        // and let the in-flight caller replay it (M1).
         guard !isSyncing else {
-            AppLogger.log("Sync already in progress; skipping \(source) sync.", label: "HealthKit", level: .debug)
+            pendingSyncSource = source
+            AppLogger.log(
+                "Sync already in progress; queued follow-up \(source) sync.",
+                label: "HealthKit",
+                level: .debug
+            )
             return
         }
         isSyncing = true
         defer { isSyncing = false }
+
+        var currentSource: String? = source
+        while let source = currentSource {
+            await runSyncPass(source: source)
+            currentSource = pendingSyncSource
+            pendingSyncSource = nil
+        }
+    }
+
+    private func runSyncPass(source: String) async {
         let existingIDs: Set<String>
         do {
             let stored = try context.fetch(FetchDescriptor<RunWorkout>())
@@ -166,23 +196,41 @@ final class WorkoutSyncService {
                 }
             }
 
-            let unit = AppSettings.syncedUnitPreference()
-            for workout in newWorkouts {
-                try? await notificationService.notifyNewRunSynced(workout, unit: unit)
+            if Self.shouldBatchSyncNotifications(count: newWorkouts.count) {
+                // A large import (fresh-install 90-day recovery) fired one banner per
+                // recovered run — 50+ simultaneous notifications. Send one summary
+                // instead, and skip the auto-review sheet: surfacing one arbitrary
+                // weeks-old run for review makes no sense for a bulk recovery (M5).
+                try? await notificationService.notifyRunBatchSynced(count: newWorkouts.count)
+            } else {
+                let unit = AppSettings.syncedUnitPreference()
+                for workout in newWorkouts {
+                    try? await notificationService.notifyNewRunSynced(workout, unit: unit)
+                }
+                if let first = newWorkouts.first {
+                    UserDefaults.standard.set(first.id.uuidString, forKey: "pendingReviewWorkoutID")
+                }
+                onWorkoutsSynced?(newWorkouts)
             }
             AppLogger.log(
                 "Imported \(newWorkouts.count) HealthKit running workout(s) during \(source) sync.",
                 label: "HealthKit",
                 level: .info
             )
-
-            if let first = newWorkouts.first {
-                UserDefaults.standard.set(first.id.uuidString, forKey: "pendingReviewWorkoutID")
-            }
-            onWorkoutsSynced?(newWorkouts)
         }
 
         await syncStrengthWorkouts(source: source, lookbackCutoff: cutoff)
+    }
+
+    /// Imports larger than this send one summary notification instead of a
+    /// banner per run. Small batches (a normal day's sync) keep the per-run
+    /// banner with its tap-to-review flow.
+    static let maxIndividualSyncNotifications = 3
+
+    /// Whether an import of `count` runs should collapse to a single summary
+    /// notification rather than one banner per run.
+    static func shouldBatchSyncNotifications(count: Int) -> Bool {
+        count > maxIndividualSyncNotifications
     }
 
     private func fetchImportableWorkouts(

@@ -724,7 +724,6 @@ struct OnboardingView: View {
         try? context.save()
 
         Task {
-            await container.notificationService.scheduleReminders(for: plan)
             if appSettings.morningReminderEnabled {
                 await container.notificationService.scheduleMorningReminders(for: plan)
             }
