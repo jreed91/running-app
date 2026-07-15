@@ -12,7 +12,7 @@ struct TempoInsights: Sendable {
     let previousBestTempoSecondsPerKm: Double?
     /// VDOT implied by this run's distance and time. Nil for degenerate inputs.
     let derivedVDOT: Double?
-    /// Best VDOT from quality runs in the 6 weeks prior to this run (excluding this run). Nil when history is insufficient.
+    /// Best VDOT from race efforts in the 6 weeks prior to this run (excluding this run). Nil when no race efforts exist.
     let previousVDOT: Double?
     /// Standard deviation of per-km split paces (sec). Lower = more consistent effort. Nil when < 2 splits.
     let splitConsistencySeconds: Double?
@@ -36,7 +36,7 @@ enum PerformanceTrend: Sendable {
 /// A point-in-time summary of the runner's recent performance, derived from
 /// completed ``RunWorkout`` history.
 struct PerformanceSnapshot: Sendable {
-    /// Best VDOT from quality runs in the last 6 weeks. Nil when < 2 qualifying workouts exist.
+    /// Best VDOT from race efforts in the last 6 weeks. Nil when no race efforts exist.
     var currentVDOT: Double?
 
     /// OLS slope of pace vs time over the last 8 weeks (seconds/km per day).
@@ -77,17 +77,19 @@ struct WorkoutAnalyticsService: Sendable {
     // MARK: - Public API
 
     /// Analyses `history` and produces a ``PerformanceSnapshot``.
-    func snapshot(from history: [RunWorkout], profile: UserProfile) -> PerformanceSnapshot {
-        let now = Date()
-
-        // 1. Recent VDOT from best quality run
+    /// `now` is injectable so callers (and tests) can pin the reference date.
+    func snapshot(from history: [RunWorkout], profile: UserProfile, now: Date = Date()) -> PerformanceSnapshot {
+        // 1. Recent VDOT from best race effort. Only genuine race efforts are used:
+        // tempo/interval session averages fold in warm-up, recovery jogs, and
+        // cool-down, so treating them as race efforts biases VDOT (and every
+        // derived pace) low. Non-racers fall back to the profile estimate below.
         let vdotCutoff = now.adding(weeks: -Self.lookbackWeeksVDOT)
-        let qualityRuns = history.filter {
+        let raceRuns = history.filter {
             $0.date >= vdotCutoff
                 && $0.distanceMeters >= Self.qualityMinDistanceMeters
-                && $0.workoutType.isQualitySession
+                && $0.workoutType == .race
         }
-        let currentVDOT = vdotFromRuns(qualityRuns)
+        let currentVDOT = vdotFromRuns(raceRuns)
 
         // 2. OLS pace trend across all runs last 8 weeks
         let trendCutoff = now.adding(weeks: -Self.lookbackWeeksTrend)
@@ -160,14 +162,16 @@ struct WorkoutAnalyticsService: Sendable {
             return v.isFinite && v > 20 ? v : nil
         }()
 
-        // Previous VDOT from quality runs in the 6 weeks before this run
+        // Previous VDOT from race efforts in the 6 weeks before this run. Only
+        // race efforts qualify — a tempo/interval average understates true VDOT
+        // because it includes warm-up/recovery/cool-down (see `snapshot`).
         let vdotCutoff = now.adding(weeks: -Self.lookbackWeeksVDOT)
-        let priorQuality = history.filter {
+        let priorRaces = history.filter {
             $0.date >= vdotCutoff
                 && $0.distanceMeters >= Self.qualityMinDistanceMeters
-                && $0.workoutType.isQualitySession
+                && $0.workoutType == .race
         }
-        let previousVDOT = vdotFromRuns(priorQuality)
+        let previousVDOT = vdotFromRuns(priorRaces)
 
         // Target threshold pace: derived from best prior VDOT (or profile VDOT if no history)
         let baseVDOT = previousVDOT ?? profileVDOT(from: profile)
@@ -195,7 +199,7 @@ struct WorkoutAnalyticsService: Sendable {
 
     // MARK: - Private helpers
 
-    /// Returns the highest (best) VDOT from the supplied quality runs.
+    /// Returns the highest (best) VDOT from the supplied race-effort runs.
     private func vdotFromRuns(_ runs: [RunWorkout]) -> Double? {
         let candidates = runs.compactMap { run -> Double? in
             guard run.durationSeconds > 0 else { return nil }
@@ -252,6 +256,10 @@ struct WorkoutAnalyticsService: Sendable {
     }
 
     /// Ratio of actual/target pace for the most recent interval workout.
+    /// Uses the work-effort pace (see ``intervalEffortPace(for:)``) rather than
+    /// the whole-session average, which folds in warm-up, recovery jogs, and
+    /// cool-down and would otherwise read ~30% slow — permanently classifying
+    /// even on-target interval sessions as `.struggling`.
     private func lastIntervalPaceRatio(
         from history: [RunWorkout],
         targetIntervalPace: Double?
@@ -262,7 +270,20 @@ struct WorkoutAnalyticsService: Sendable {
             .sorted(by: { $0.date > $1.date })
             .first
         else { return nil }
-        return last.averagePaceSecondsPerKm / target
+        return intervalEffortPace(for: last) / target
+    }
+
+    /// Estimates the pace of the *work* portion of an interval session from its
+    /// per-km splits, so classification reflects the reps rather than the
+    /// warm-up/recovery/cool-down that dominate the whole-session average.
+    /// Uses the fastest third of splits as a proxy for the rep efforts.
+    /// Falls back to the session average when splits are unavailable (< 3).
+    private func intervalEffortPace(for workout: RunWorkout) -> Double {
+        let paces = workout.splits.map(\.paceSecondsPerKm).filter { $0 > 0 }
+        guard paces.count >= 3 else { return workout.averagePaceSecondsPerKm }
+        let workCount = max(1, paces.count / 3)
+        let fastest = paces.sorted().prefix(workCount)
+        return fastest.reduce(0, +) / Double(fastest.count)
     }
 
     /// Derives VDOT from UserProfile's estimated 5K time.
