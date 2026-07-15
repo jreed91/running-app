@@ -44,11 +44,11 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.running.stride
         PRODUCT_NAME: Stride
-        # iOS 27 / WWDC26: enables Apple Private Cloud Compute routing for AI insights.
-        # Now that the deployment target is iOS 27, the Private Cloud Compute symbols
-        # (PrivateCloudComputeLanguageModel, GenerationOptions(reasoningLevel:)) are
-        # available, so the Phase 2 path in FoundationModelsCoachBackend is compiled in.
-        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) STRIDE_ENABLE_IOS27_MODELS"
+        # NOTE: STRIDE_ENABLE_IOS27_MODELS is intentionally NOT defined. The shipping
+        # iOS 27 SDK does not expose `PrivateCloudComputeLanguageModel` (build fails
+        # with "Cannot find 'PrivateCloudComputeLanguageModel' in scope"), so the
+        # Phase 2 Private Cloud Compute path in FoundationModelsCoachBackend stays
+        # compiled out until the symbols are verified against a released SDK.
         INFOPLIST_FILE: Stride/Resources/Info.plist
         TARGETED_DEVICE_FAMILY: "1"         # iPhone only
         CODE_SIGN_STYLE: Automatic

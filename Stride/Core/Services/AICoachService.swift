@@ -424,7 +424,8 @@ struct AICoachService: Sendable {
         recentHistory: [RunWorkout],
         profile: UserProfile,
         provider: AIProvider,
-        unitPreference: UnitPreference = .metric
+        unitPreference: UnitPreference = .metric,
+        coachFeedback: String? = nil
     ) async -> ScheduledWorkout? {
         guard scheduled.workoutType != .rest,
               scheduled.workoutType != .crossTraining else {
@@ -435,7 +436,8 @@ struct AICoachService: Sendable {
             scheduled: scheduled,
             recentHistory: recentHistory,
             profile: profile,
-            unitPreference: unitPreference
+            unitPreference: unitPreference,
+            coachFeedback: coachFeedback
         )
 
         guard let backend = onDeviceBackend, await backend.isAvailable() else { return nil }
@@ -558,7 +560,9 @@ struct AICoachService: Sendable {
             targetPaceUpperBound: adaptation.targetPaceUpperBound,
             notes: adaptation.explanation
         )
-        adapted.week = scheduled.week
+        // Deliberately NOT setting `adapted.week`: relating an unmanaged model to a
+        // managed one auto-inserts it into the SwiftData context, persisting a phantom
+        // duplicate workout. Callers copy fields back onto the scheduled workout.
         adapted.workoutLocation = scheduled.workoutLocation
         adapted.intervals = adaptation.intervals.compactMap(\.domainValue)
         adapted.workoutStructure = adaptation.workoutStructure?.domainValue
@@ -766,7 +770,8 @@ struct AICoachService: Sendable {
         scheduled: ScheduledWorkout,
         recentHistory: [RunWorkout],
         profile: UserProfile,
-        unitPreference: UnitPreference
+        unitPreference: UnitPreference,
+        coachFeedback: String? = nil
     ) -> String {
         let date = scheduled.scheduledDate.formatted(date: .abbreviated, time: .omitted)
         let weekday = scheduled.scheduledDate.formatted(.dateTime.weekday(.wide))
@@ -832,6 +837,8 @@ struct AICoachService: Sendable {
 
         Recent completed runs:
         \(recent.isEmpty ? "No recent completed runs." : recent)
+
+        \(coachFeedback.map { "Coach feedback to incorporate:\n\($0)" } ?? "")
         """
     }
 

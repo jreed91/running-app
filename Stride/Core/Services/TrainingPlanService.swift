@@ -326,12 +326,25 @@ struct TrainingPlanService {
             peakWeeks  = max(2, Int(Double(totalWeeks) * 0.18))
             buildWeeks = max(1, Int(Double(totalWeeks) * 0.30))
         }
-        let baseWeeks = totalWeeks - taperWeeks - peakWeeks - buildWeeks
+        // Short horizons (e.g. a race 1–3 weeks out, or a past race date clamped to
+        // 1 week) can make the minimum phase counts exceed totalWeeks, which would
+        // produce a negative base count and trap in Array(repeating:count:).
+        // Fit phases from race day backwards instead: taper first, then peak, then
+        // build; whatever remains is base. For normal horizons this is identical to
+        // the percentage layout above.
+        var remaining = max(1, totalWeeks)
+        let taper = min(taperWeeks, remaining)
+        remaining -= taper
+        let peak = min(peakWeeks, remaining)
+        remaining -= peak
+        let build = min(buildWeeks, remaining)
+        remaining -= build
+        let base = remaining
 
-        return Array(repeating: .base, count: baseWeeks)
-             + Array(repeating: .build, count: buildWeeks)
-             + Array(repeating: .peak, count: peakWeeks)
-             + Array(repeating: .taper, count: taperWeeks)
+        return Array(repeating: .base, count: base)
+             + Array(repeating: .build, count: build)
+             + Array(repeating: .peak, count: peak)
+             + Array(repeating: .taper, count: taper)
     }
 
     // MARK: Weekly mileage progression
@@ -778,7 +791,6 @@ struct TrainingPlanService {
                 unitPreference: unitPreference
             )
         )
-        adapted.week = scheduled.week
         adapted.workoutStructure = structure
         // Preserve flat intervals for backward compat (Watch / widgets)
         adapted.intervals = [WorkoutInterval(
@@ -870,7 +882,6 @@ struct TrainingPlanService {
                 unitPreference: unitPreference
             )
         )
-        adapted.week = scheduled.week
         adapted.workoutStructure = structure
         return adapted
     }
@@ -940,7 +951,6 @@ struct TrainingPlanService {
             targetPaceUpperBound: paces.easyRange.upperBound,
             notes: adaptedLongRunNote(km: adaptedDist / 1_000, pace: midEasyPace, trend: snap.performanceTrend, unitPreference: unitPreference)
         )
-        adapted.week = scheduled.week
         adapted.workoutStructure = structure
         return adapted
     }
@@ -1002,7 +1012,6 @@ struct TrainingPlanService {
             targetPaceUpperBound: paces.easyRange.upperBound,
             notes: scheduled.notes ?? "Conversational effort – you should be able to speak in sentences."
         )
-        adapted.week = scheduled.week
         adapted.workoutStructure = structure
         return adapted
     }

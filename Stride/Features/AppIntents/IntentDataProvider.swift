@@ -19,17 +19,10 @@ struct WeeklySummaryData: Sendable {
 enum IntentDataProvider {
     /// Opens the same on-disk store that AppContainer uses, without CloudKit
     /// sync overhead. Safe for read-only intent access alongside the main container.
+    /// Uses `StrideSchema` so the schema can never drift from the app's.
     static func makeContainer() throws -> ModelContainer {
-        let schema = Schema([
-            UserProfile.self,
-            RunWorkout.self,
-            TrainingPlan.self,
-            TrainingWeek.self,
-            ScheduledWorkout.self,
-            SavedRoute.self,
-        ])
-        let storeURL = URL.applicationSupportDirectory.appending(path: "Stride.store")
-        let config = ModelConfiguration(schema: schema, url: storeURL)
+        let schema = StrideSchema.make()
+        let config = ModelConfiguration(schema: schema, url: StrideSchema.storeURL)
         return try ModelContainer(for: schema, configurations: [config])
     }
 }

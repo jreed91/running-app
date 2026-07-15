@@ -1284,13 +1284,13 @@ struct RunSummaryView: View {
         nextSessionUpdateMessage = "Updating \(workoutLabel(nextWorkout))..."
         defer { isApplyingNextSessionFeedback = false }
 
-        let seededWorkout = workoutSeededWithCoachFeedback(nextWorkout, insight: insight)
         guard let adapted = await container.aiCoachService.adaptScheduledWorkoutWithProvider(
-            scheduled: seededWorkout,
+            scheduled: nextWorkout,
             recentHistory: Array(allWorkouts.prefix(50)),
             profile: profile,
             provider: appSettings.aiProvider,
-            unitPreference: appSettings.unitPreference
+            unitPreference: appSettings.unitPreference,
+            coachFeedback: coachFeedbackPromptText(insight: insight)
         ) else {
             nextSessionUpdateMessage = "The coach feedback could not be applied. Try refreshing the AI analysis."
             return
@@ -1336,11 +1336,11 @@ struct RunSummaryView: View {
         }.first
     }
 
-    private func workoutSeededWithCoachFeedback(
-        _ scheduled: ScheduledWorkout,
-        insight: AICoachInsight
-    ) -> ScheduledWorkout {
-        let feedback = [
+    /// Coach feedback as plain prompt text. Passed to the adaptation request as a
+    /// string instead of seeding a temporary ScheduledWorkout: relating an unmanaged
+    /// model to a persisted week auto-inserts it, leaving a phantom duplicate in the plan.
+    private func coachFeedbackPromptText(insight: AICoachInsight) -> String {
+        [
             "AI Coach feedback from completed \(displayType.displayName.lowercased()) on \(workout.date.formatted(date: .abbreviated, time: .omitted)):",
             normalizedMarkdownText(insight.headline),
             normalizedMarkdownText(insight.summary),
@@ -1350,29 +1350,6 @@ struct RunSummaryView: View {
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .joined(separator: " ")
-
-        let notes = [
-            scheduled.notes?.trimmingCharacters(in: .whitespacesAndNewlines),
-            feedback
-        ]
-            .compactMap { $0 }
-            .filter { !$0.isEmpty }
-            .joined(separator: "\n\n")
-
-        let seeded = ScheduledWorkout(
-            scheduledDate: scheduled.scheduledDate,
-            workoutType: scheduled.workoutType,
-            targetDistanceMeters: scheduled.targetDistanceMeters,
-            targetPaceLowerBound: scheduled.targetPaceLowerBound,
-            targetPaceUpperBound: scheduled.targetPaceUpperBound,
-            notes: notes
-        )
-        seeded.week = scheduled.week
-        seeded.workoutLocation = scheduled.workoutLocation
-        seeded.intervals = scheduled.intervals
-        seeded.workoutStructure = scheduled.workoutStructure
-        seeded.strengthPlan = scheduled.strengthPlan
-        return seeded
     }
 
     private func apply(_ adapted: ScheduledWorkout, to scheduled: ScheduledWorkout) {

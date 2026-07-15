@@ -298,9 +298,14 @@ Cloud BYO-key was dropped entirely. Concretely:
   `extractFencedJSON`, `extractBalancedObject`, partial-object salvage, …) were deleted.
 - `AIIntegrationService.swift` (OpenAI/Anthropic `URLSession` code + request/response
   structs) was deleted; `AIProviderChatMessage` moved into `AICoachService.swift`.
-- Deployment target raised to **iOS 27.0**; `STRIDE_ENABLE_IOS27_MODELS` is now defined
-  in `project.yml`, so the Private Cloud Compute path in `FoundationModelsCoachBackend`
-  is compiled in.
+- Deployment target raised to **iOS 27.0**. `STRIDE_ENABLE_IOS27_MODELS` was briefly
+  defined in `project.yml`, but the shipping iOS 27 SDK does **not** expose
+  `PrivateCloudComputeLanguageModel` (Xcode Cloud failed with "Cannot find
+  'PrivateCloudComputeLanguageModel' in scope"), so the flag was removed again and the
+  Private Cloud Compute path in `FoundationModelsCoachBackend` remains compiled out.
+  When the "Apple Private Cloud Compute" provider is selected, `makeSession` falls
+  through to the on-device model. Re-enable the flag only after the PCC symbols are
+  verified against a released SDK.
   - **Availability gate (crash fix).** Running inference on
     `PrivateCloudComputeLanguageModel` without the Private Cloud Compute entitlement
     traps inside `Executor.assertEntitled()` — a fatal `EXC_BREAKPOINT`, not a

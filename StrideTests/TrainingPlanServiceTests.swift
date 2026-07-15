@@ -148,6 +148,36 @@ struct TrainingPlanServiceTests {
         #expect(finalWorkout.map { Calendar.current.isDate($0.scheduledDate, inSameDayAs: raceDate) } == true)
     }
 
+    @Test("Very short race horizons never crash and still end in a taper", arguments: [1, 2, 3, 4, 5])
+    func shortRacePlanDoesNotCrash(weeksOut: Int) {
+        for race in [RaceType.fiveK, .halfMarathon, .marathon] {
+            let profile = makeProfile(race: race, runDays: 4)
+            let start = date(2026, 7, 6)
+            let plan = service.generateRacePlan(
+                profile: profile,
+                startDate: start,
+                raceDate: start.adding(weeks: weeksOut - 1).adding(days: 6),
+                raceName: "Short Notice Race",
+                runDayIndices: [0, 2, 4, 5]
+            )
+            #expect(weeks(in: plan).count == weeksOut, "\(race) at \(weeksOut) weeks")
+            #expect(weeks(in: plan).last?.phase == .taper, "\(race) at \(weeksOut) weeks should end in taper")
+        }
+    }
+
+    @Test("A race date in the past falls back to a single-week plan instead of crashing")
+    func pastRaceDateDoesNotCrash() {
+        let profile = makeProfile(race: .marathon, runDays: 4)
+        let plan = service.generateRacePlan(
+            profile: profile,
+            startDate: date(2026, 7, 6),
+            raceDate: date(2026, 6, 1),
+            raceName: "Already Ran It",
+            runDayIndices: [0, 2, 4, 5]
+        )
+        #expect(weeks(in: plan).count == 1)
+    }
+
     @Test("Race plan schedules race day even when weekday is not selected")
     func racePlanAllowsRaceDayOutsideTrainingDays() {
         let profile = makeProfile(race: .fiveK, runDays: 2)

@@ -45,7 +45,7 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
     private var lastSplitDistance: Double = 0
 
     private let locationManager = CLLocationManager()
-    private let autoPauseThresholdMs: Double = 500  // < 0.5 m/s ≈ standing still
+    private let autoPauseThresholdMetersPerSecond: Double = 0.5  // below this ≈ standing still
 
     private let hkStore = HKHealthStore()
     private var hrQuery: HKAnchoredObjectQuery?
@@ -101,6 +101,16 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
         } else {
             startPedometerUpdates()
         }
+    }
+
+    /// Returns the tracker to `.idle` after a finished workout so a new one can start.
+    /// The service is a single long-lived instance, so without this transition
+    /// `startWorkout` would silently no-op for every run after the first.
+    /// No-op while a workout is active or paused.
+    func prepareForNewWorkout() {
+        guard trackingState == .finished else { return }
+        reset()
+        trackingState = .idle
     }
 
     func finishWorkout() -> RunWorkout? {
@@ -250,7 +260,7 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
             let delta = location.distance(from: last)
 
             // Auto-pause: stop accumulating distance if nearly stationary
-            if location.speed >= 0 && location.speed < autoPauseThresholdMs {
+            if location.speed >= 0 && location.speed < autoPauseThresholdMetersPerSecond {
                 lastLocation = location
                 return
             }
