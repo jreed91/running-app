@@ -294,15 +294,17 @@ final class WorkoutSyncService {
 
         guard !hkWorkouts.isEmpty else { return }
 
-        // Merge: if an in-app StrengthWorkout exists on the same day without a HK ID,
-        // stamp the HK UUID onto it instead of creating a duplicate record.
+        // Merge: if an in-app StrengthWorkout without a HK ID looks like the same
+        // physical session as an imported one, stamp the HK UUID onto it instead
+        // of creating a duplicate. Matching by same-day alone collapsed two
+        // genuinely distinct same-day sessions (e.g. a morning app-log and an
+        // evening Watch workout) into one, discarding the second; require the
+        // start times to be close instead.
         var unlinked = stored.filter { $0.healthKitWorkoutID == nil }
         var toInsert: [StrengthWorkout] = []
-        let calendar = Calendar.current
         for hkWorkout in hkWorkouts {
-            let hkDay = calendar.startOfDay(for: hkWorkout.date)
             if let idx = unlinked.firstIndex(where: {
-                calendar.startOfDay(for: $0.date) == hkDay
+                Self.isSameStrengthSession($0.date, hkWorkout.date)
             }) {
                 unlinked[idx].healthKitWorkoutID = hkWorkout.healthKitWorkoutID
                 unlinked.remove(at: idx)
@@ -319,6 +321,19 @@ final class WorkoutSyncService {
             label: "HealthKit",
             level: .info
         )
+    }
+
+    /// Two strength sessions are treated as the same physical workout — and so
+    /// deduplicated on import — only when their start times fall within this
+    /// window. Generous enough to absorb the lag between finishing a session and
+    /// logging it, but far tighter than "same calendar day", which merged
+    /// unrelated morning/evening sessions.
+    static let strengthMergeToleranceSeconds: TimeInterval = 3 * 60 * 60
+
+    /// Whether two strength-session start dates are close enough to be the same
+    /// workout for dedup purposes.
+    static func isSameStrengthSession(_ lhs: Date, _ rhs: Date) -> Bool {
+        abs(lhs.timeIntervalSince(rhs)) <= strengthMergeToleranceSeconds
     }
 
     private func linkStrengthToScheduledWorkouts(_ workouts: [StrengthWorkout]) {

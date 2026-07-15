@@ -210,8 +210,11 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
 
     @MainActor func removeWorkoutPlans(for plan: TrainingPlan) async throws {
         let allWorkouts = (plan.weeks ?? []).flatMap { $0.workouts ?? [] }
-        defer { allWorkouts.forEach { $0.healthKitPlanID = nil } }
 
+        // Clear the local tracking IDs only once removal has actually run.
+        // Nulling them on an unsupported/unauthorized early return (as the old
+        // `defer` did) would permanently orphan the scheduled Watch workouts —
+        // they'd stay on the Watch but no longer be findable for removal.
         guard WorkoutScheduler.isSupported else { return }
         let scheduler = WorkoutScheduler.shared
         guard await scheduler.authorizationState == .authorized else { return }
@@ -223,6 +226,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         for entry in scheduled where ids.contains(entry.plan.id.uuidString) {
             await scheduler.remove(entry.plan, at: entry.date)
         }
+        allWorkouts.forEach { $0.healthKitPlanID = nil }
     }
 
     // MARK: - WorkoutKit plan builder
@@ -246,6 +250,18 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
                 goal: goal
             )
             return WorkoutPlan(.goal(strength), id: planID)
+        }
+
+        // Cross-training days → a cross-training activity so the Watch starts the
+        // right session rather than a run. (The builders below all assume
+        // running.) The modality is unspecified, so use an open goal.
+        if workout.workoutType == .crossTraining {
+            let crossTraining = SingleGoalWorkout(
+                activity: .crossTraining,
+                location: workout.workoutLocation == .indoor ? .indoor : .outdoor,
+                goal: .open
+            )
+            return WorkoutPlan(.goal(crossTraining), id: planID)
         }
 
         // Structured workouts (warmup + interval blocks + cooldown) → CustomWorkout.
@@ -465,6 +481,15 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
 
     // MARK: - Import workouts from HealthKit
 
+    /// Whether a HealthKit running workout carries enough substance to import,
+    /// as opposed to a tiny "shell" left by an accidental start/stop. A genuine
+    /// run has both a real distance **and** a non-trivial duration; a 0 m,
+    /// 30-second entry (previously admitted by an `||` guard) is noise that
+    /// pollutes pace/VDOT stats.
+    static func isImportableWorkout(distanceMeters: Double, durationSeconds: Double) -> Bool {
+        distanceMeters > 100 && durationSeconds >= 30
+    }
+
     /// Fetches running workouts from HealthKit in the given range, converts each to a
     /// `RunWorkout` (with heart rate and elevation from associated HealthKit samples),
     /// and returns only those whose HK UUID is not already in `existingIDs`.
@@ -499,7 +524,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
                     )
                 }
             }
-            guard distanceMeters > 100 || hkWorkout.duration >= 30 else {
+            guard Self.isImportableWorkout(distanceMeters: distanceMeters, durationSeconds: hkWorkout.duration) else {
                 skippedTinyShell += 1
                 continue
             }
@@ -637,18 +662,31 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             store.execute(query)
         }
 
-        guard let route = routes.first else { return [] }
+        guard !routes.isEmpty else { return [] }
 
-        // Step 2: stream CLLocation objects from the route
+        // Step 2: stream CLLocation objects from every route segment. A paused/
+        // resumed workout produces multiple HKWorkoutRoute samples; reading only
+        // `routes.first` dropped the later segments.
         var coordinates: [Coordinate] = []
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            let routeQuery = HKWorkoutRouteQuery(route: route) { _, locations, done, _ in
-                if let locations {
-                    coordinates += locations.map { Coordinate($0.coordinate) }
+        for route in routes {
+            let segment: [Coordinate] = await withCheckedContinuation { continuation in
+                var collected: [Coordinate] = []
+                var didResume = false
+                let routeQuery = HKWorkoutRouteQuery(route: route) { _, locations, done, error in
+                    if let locations {
+                        collected += locations.map { Coordinate($0.coordinate) }
+                    }
+                    // Resume exactly once — on completion or on error. Ignoring
+                    // the error and resuming only on `done` let a failed callback
+                    // hang the entire serial import forever.
+                    if (done || error != nil), !didResume {
+                        didResume = true
+                        continuation.resume(returning: collected)
+                    }
                 }
-                if done { continuation.resume() }
+                store.execute(routeQuery)
             }
-            store.execute(routeQuery)
+            coordinates += segment
         }
 
         return coordinates
@@ -656,9 +694,17 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
 
     private func fetchHeartRateStats(for workout: HKWorkout) async throws -> (avg: Double?, max: Double?) {
         let hrType = HKQuantityType(.heartRate)
-        let predicate = HKQuery.predicateForSamples(
+        // Scope to samples associated with this workout (like the distance query
+        // does), not merely those in its time window. A time-only predicate lets
+        // chest-strap or overlapping samples from other sources skew avg/max HR.
+        let workoutPredicate = HKQuery.predicateForObjects(from: workout)
+        let datePredicate = HKQuery.predicateForSamples(
             withStart: workout.startDate, end: workout.endDate, options: .strictStartDate
         )
+        let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+            workoutPredicate,
+            datePredicate
+        ])
         let stats: HKStatistics? = try await withCheckedThrowingContinuation { cont in
             let query = HKStatisticsQuery(
                 quantityType: hrType,

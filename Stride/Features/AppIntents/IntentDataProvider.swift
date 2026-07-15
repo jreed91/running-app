@@ -85,10 +85,12 @@ actor IntentModelActor {
     }
 
     func weeklySummary() throws -> WeeklySummaryData {
-        let cal = Calendar.current
-        let components = cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: Date())
-        let startOfWeek = cal.date(from: components) ?? Date()
-        let endOfWeek = cal.date(byAdding: .day, value: 7, to: startOfWeek) ?? Date()
+        // Use the app-wide Monday-based week (`Date.startOfWeek`) so Siri's
+        // weekly total matches the dashboard. `Calendar.current`'s default
+        // `firstWeekday` (Sunday in the US) would otherwise disagree by a whole
+        // run whenever the current day is a Sunday or Monday.
+        let startOfWeek = Date().startOfWeek
+        let endOfWeek = startOfWeek.adding(days: 7)
         let predicate = #Predicate<RunWorkout> {
             $0.date >= startOfWeek && $0.date < endOfWeek
         }

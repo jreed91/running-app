@@ -50,9 +50,7 @@ struct RunSummaryView: View {
     }
 
     private var estimatedVO2Max: Double? {
-        guard workout.distanceMeters >= 400, workout.durationSeconds > 0 else { return nil }
-        let v = PaceCalculatorService.vdot(distanceMeters: workout.distanceMeters, timeSeconds: workout.durationSeconds)
-        return v > 0 ? v : nil
+        ProgressStatsService.estimatedVDOT(for: workout)
     }
 
     private var hasSplitHR: Bool {
@@ -1456,6 +1454,11 @@ struct RunSummaryView: View {
 
     // MARK: Split pace chart
 
+    // Splits are always recorded per kilometer (`WorkoutTrackerService` buckets
+    // every 1000 m), so the bucket axis, tooltips, and table column are labelled
+    // "km" regardless of the user's distance preference. Labelling a 10 km run's
+    // ten buckets "MI 1 … MI 10" implied a 10-mile run. The pace and elevation
+    // values shown inside each bucket are still converted to the preferred unit.
     private var splitPaceChart: some View {
         VStack(alignment: .leading, spacing: 8) {
             sectionHeader(title: "Splits")
@@ -1471,13 +1474,13 @@ struct RunSummaryView: View {
             Chart {
                 ForEach(workout.splits, id: \.kilometer) { split in
                     BarMark(
-                        x: .value(appSettings.unitPreference.distanceLabel, split.kilometer),
+                        x: .value("km", split.kilometer),
                         y: .value("Pace", split.paceSecondsPerKm)
                     )
                     .foregroundStyle(selectedSplitPaceKm == split.kilometer ? Color.brand : Color.brand.opacity(selectedSplitPaceKm == nil ? 1.0 : 0.5))
                 }
                 if let km = selectedSplitPaceKm, let split = split(forKm: km) {
-                    RuleMark(x: .value(appSettings.unitPreference.distanceLabel, km))
+                    RuleMark(x: .value("km", km))
                         .foregroundStyle(.secondary.opacity(0.4))
                         .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
                         .annotation(
@@ -1485,7 +1488,7 @@ struct RunSummaryView: View {
                             overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
                         ) {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("\(appSettings.unitPreference.distanceLabel) \(km)")
+                                Text("km \(km)")
                                     .font(.caption2).foregroundStyle(.secondary)
                                 Text(split.paceSecondsPerKm.paceString(unit: appSettings.unitPreference))
                                     .font(.caption).bold()
@@ -1523,19 +1526,19 @@ struct RunSummaryView: View {
             Chart {
                 ForEach(hrSplits, id: \.kilometer) { split in
                     LineMark(
-                        x: .value(appSettings.unitPreference.distanceLabel, split.kilometer),
+                        x: .value("km", split.kilometer),
                         y: .value("bpm", split.heartRate ?? 0)
                     )
                     .foregroundStyle(.zoneInterval)
                     PointMark(
-                        x: .value(appSettings.unitPreference.distanceLabel, split.kilometer),
+                        x: .value("km", split.kilometer),
                         y: .value("bpm", split.heartRate ?? 0)
                     )
                     .foregroundStyle(.zoneInterval)
                     .symbolSize(selectedSplitHRKm == split.kilometer ? 80 : 36)
                 }
                 if let km = selectedSplitHRKm, let split = split(forKm: km), let hr = split.heartRate {
-                    RuleMark(x: .value(appSettings.unitPreference.distanceLabel, km))
+                    RuleMark(x: .value("km", km))
                         .foregroundStyle(.secondary.opacity(0.4))
                         .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
                         .annotation(
@@ -1543,7 +1546,7 @@ struct RunSummaryView: View {
                             overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
                         ) {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("\(appSettings.unitPreference.distanceLabel) \(km)")
+                                Text("km \(km)")
                                     .font(.caption2).foregroundStyle(.secondary)
                                 Text("\(Int(hr)) bpm")
                                     .font(.caption).bold()
@@ -1568,7 +1571,7 @@ struct RunSummaryView: View {
                 ForEach(workout.splits, id: \.kilometer) { split in
                     let gain = split.elevationGainMeters.elevationValue(unit: appSettings.unitPreference)
                     BarMark(
-                        x: .value(appSettings.unitPreference.distanceLabel, split.kilometer),
+                        x: .value("km", split.kilometer),
                         y: .value(appSettings.unitPreference.elevationLabel, gain)
                     )
                     .foregroundStyle(
@@ -1578,7 +1581,7 @@ struct RunSummaryView: View {
                 }
                 if let km = selectedSplitElevKm, let split = split(forKm: km) {
                     let gain = split.elevationGainMeters.elevationValue(unit: appSettings.unitPreference)
-                    RuleMark(x: .value(appSettings.unitPreference.distanceLabel, km))
+                    RuleMark(x: .value("km", km))
                         .foregroundStyle(.secondary.opacity(0.4))
                         .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
                         .annotation(
@@ -1586,7 +1589,7 @@ struct RunSummaryView: View {
                             overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
                         ) {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("\(appSettings.unitPreference.distanceLabel) \(km)")
+                                Text("km \(km)")
                                     .font(.caption2).foregroundStyle(.secondary)
                                 Text("\(gain >= 0 ? "+" : "")\(Int(gain)) \(appSettings.unitPreference.elevationLabel)")
                                     .font(.caption).bold()
@@ -1607,7 +1610,7 @@ struct RunSummaryView: View {
     private var splitsTable: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(appSettings.unitPreference.distanceLabel.uppercased())
+                Text("KM")
                     .frame(width: 36, alignment: .leading)
                 Spacer()
                 Text("PACE")
