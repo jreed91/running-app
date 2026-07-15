@@ -196,18 +196,24 @@ struct TrainingPlanService {
         // even in weeks where that slot happens to be empty.
         var occupiedOffsets = Set(profile.preferredRunDayIndices)
         var qualityOrLongRunOffsets = Set<Int>()
+        var raceOffset: Int?
         for workout in existingWorkouts {
             let offset = dayOffset(from: weekStart, to: workout.scheduledDate)
             occupiedOffsets.insert(offset)
             if workout.workoutType == .longRun || workout.workoutType.isQualitySession {
                 qualityOrLongRunOffsets.insert(offset)
             }
+            if workout.workoutType == .race {
+                raceOffset = offset
+            }
         }
 
-        // Candidate offsets: unoccupied, not adjacent to a quality or long-run day
+        // Candidate offsets: unoccupied, not adjacent to a quality or long-run day,
+        // and never on or after race day (M31 — no strength once the race has run).
         var candidates: [Int] = []
         for offset in 0...6 {
             guard !occupiedOffsets.contains(offset) else { continue }
+            if let raceOffset, offset >= raceOffset - 1 { continue }
             let adjacentToProtected = qualityOrLongRunOffsets.contains(offset - 1)
                 || qualityOrLongRunOffsets.contains(offset + 1)
             if !adjacentToProtected {
@@ -458,17 +464,21 @@ struct TrainingPlanService {
         let qualitySlots = min(qualityTypes.count, min(max(0, days.count - 1), qualityCap))
         let easySlots    = max(0, days.count - qualitySlots - 1)
         let totalQualityFraction = 0.15 * Double(qualitySlots)
-        let easyFractionEach = easySlots > 0
-            ? max(0.0, 1.0 - 0.35 - totalQualityFraction) / Double(easySlots)
-            : 0.0
+        let longBaseFraction = 0.35
+        // Volume left over after the long run and quality sessions are budgeted.
+        let remainderFraction = max(0.0, 1.0 - longBaseFraction - totalQualityFraction)
+        let easyFractionEach = easySlots > 0 ? remainderFraction / Double(easySlots) : 0.0
         let easyKmEach = targetKm * easyFractionEach
+        // With 1–2 run days there are no easy slots to absorb the remainder; fold it into
+        // the long run so the week's scheduled volume still sums to targetKm (M32).
+        let longFraction = longBaseFraction + (easySlots == 0 ? remainderFraction : 0.0)
 
         for (slotIndex, dayOffset) in days.enumerated() {
             let date = weekStart.adding(days: dayOffset)
 
             // Last run day of the week → long run
             if slotIndex == days.count - 1 {
-                let longKm = targetKm * 0.35
+                let longKm = targetKm * longFraction
                 workouts.append(longRunWorkout(date: date, km: longKm, paces: paces))
                 continue
             }
@@ -1162,13 +1172,28 @@ struct TrainingPlanService {
             guard !targets.isEmpty else { continue }
 
             // Assign workouts 1-to-1 — never place two workouts on the same day.
-            let assignCount = min(movable.count, targets.count)
-            for i in 0..<assignCount {
-                movable[i].scheduledDate = targets[i]
+            let keepCount = min(movable.count, targets.count)
+
+            // When run days are reduced we must drop workouts. Drop the least important
+            // first (easy runs) and keep the long run and quality sessions (M29) — the
+            // long run must never be the casualty just because it is dated last.
+            let byImportance = movable.sorted {
+                keepPriority($0.workoutType) != keepPriority($1.workoutType)
+                    ? keepPriority($0.workoutType) > keepPriority($1.workoutType)
+                    : $0.scheduledDate < $1.scheduledDate
             }
-            // Collect excess workouts so the caller can delete them.
-            for i in assignCount..<movable.count {
-                toDelete.append(movable[i])
+            let kept = Array(byImportance.prefix(keepCount))
+            toDelete.append(contentsOf: byImportance.dropFirst(keepCount))
+
+            // Place kept workouts on the target days in weekly order: easy earliest,
+            // quality mid-week, long run last, so the long run keeps its end-of-week slot.
+            let ordered = kept.sorted {
+                placementRank($0.workoutType) != placementRank($1.workoutType)
+                    ? placementRank($0.workoutType) < placementRank($1.workoutType)
+                    : $0.scheduledDate < $1.scheduledDate
+            }
+            for (i, workout) in ordered.enumerated() {
+                workout.scheduledDate = targets[i]
             }
 
             // If more days selected than workouts, fill extra slots with stub easy runs.
@@ -1177,8 +1202,13 @@ struct TrainingPlanService {
                     PaceCalculatorService.trainingPaces(forVDOT: estimatedVDOT(from: p))
                 }
                 let totalMovableKm = movable.reduce(0.0) { $0 + ($1.targetDistanceMeters ?? 0) / 1_000 }
+                // Volume already logged this week must count against the week target so we
+                // don't pile oversized stub runs onto a week that is nearly done (M30).
+                let completedKm = (week.workouts ?? [])
+                    .filter { $0.isCompleted && $0.workoutType.isRunType }
+                    .reduce(0.0) { $0 + ($1.targetDistanceMeters ?? 0) / 1_000 }
                 let stubCount = Double(targets.count - movable.count)
-                let remainingKm = week.targetDistanceKm - totalMovableKm
+                let remainingKm = week.targetDistanceKm - totalMovableKm - completedKm
                 let stubKm = remainingKm > 0 ? remainingKm / stubCount : 5.0
                 for targetDate in targets.dropFirst(movable.count) {
                     let stub = ScheduledWorkout(
@@ -1201,5 +1231,25 @@ struct TrainingPlanService {
         }
 
         return toDelete
+    }
+
+    /// Which workouts to keep when run days are reduced (higher = keep).
+    /// The long run and quality sessions outrank easy runs.
+    private func keepPriority(_ type: WorkoutType) -> Int {
+        switch type {
+        case .longRun, .race:      return 2
+        case .tempo, .interval:    return 1
+        default:                   return 0
+        }
+    }
+
+    /// Where a kept workout should land in the week (lower = earlier day).
+    /// Easy runs go early, quality mid-week, the long run last.
+    private func placementRank(_ type: WorkoutType) -> Int {
+        switch type {
+        case .longRun, .race:      return 2
+        case .tempo, .interval:    return 1
+        default:                   return 0
+        }
     }
 }

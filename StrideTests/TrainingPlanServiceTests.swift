@@ -474,6 +474,113 @@ struct TrainingPlanServiceTests {
         #expect(plan.currentWeek == nil)
     }
 
+    // MARK: Volume conservation & run-day changes (M29–M32)
+
+    @Test("Weekly running volume is conserved for 1 and 2 run-day weeks (M32)", arguments: [1, 2])
+    func volumeConservedForFewRunDays(runDays: Int) {
+        let profile = makeProfile(race: .maintainFitness, runDays: runDays)
+        let plan = service.generatePlan(profile: profile, startDate: .now, numberOfWeeks: 8)
+        for week in weeks(in: plan) {
+            let scheduledKm = workouts(in: week)
+                .filter { $0.workoutType.isRunType }
+                .reduce(0.0) { $0 + ($1.targetDistanceMeters ?? 0) / 1_000 }
+            let tolerance = max(0.5, week.targetDistanceKm * 0.02)
+            #expect(
+                abs(scheduledKm - week.targetDistanceKm) < tolerance,
+                "Week \(week.weekNumber) (\(runDays)d): scheduled \(scheduledKm) km vs target \(week.targetDistanceKm) km"
+            )
+        }
+    }
+
+    @Test("Reducing run days preserves the long run and drops easy runs first (M29)")
+    func reducingRunDaysKeepsLongRun() {
+        // Future start so every workout is in the future and eligible to be re-slotted.
+        let start = Date().startOfDay.adding(days: 14)
+        let profile = makeProfile(race: .maintainFitness, runDays: 5)
+        let plan = service.generatePlan(
+            profile: profile,
+            startDate: start,
+            numberOfWeeks: 6,
+            runDayIndices: [0, 1, 2, 3, 5]
+        )
+
+        let toDelete = service.applyNewRunDays(to: plan, newDayIndices: [0, 2, 4], profile: profile)
+
+        #expect(!toDelete.isEmpty, "Reducing 5 run days to 3 should surface excess workouts")
+        #expect(
+            !toDelete.contains { $0.workoutType == .longRun },
+            "The long run must never be deleted when reducing run days"
+        )
+        #expect(
+            toDelete.allSatisfy { $0.workoutType == .easy },
+            "Only easy runs should be dropped; dropped types: \(toDelete.map(\.workoutType))"
+        )
+        // Every affected future week must still carry exactly one (kept) long run.
+        for week in weeks(in: plan) {
+            let deletedIDs = Set(toDelete.map(\.id))
+            let survivingLongRuns = workouts(in: week)
+                .filter { $0.workoutType == .longRun && !deletedIDs.contains($0.id) }
+            #expect(survivingLongRuns.count == 1, "Week \(week.weekNumber) should keep its long run")
+        }
+    }
+
+    @Test("Adding run days sizes stub runs against outstanding volume, not the whole week (M30)")
+    func addingRunDaysAccountsForCompletedVolume() {
+        let start = Date().startOfDay.adding(days: 14)
+        let plan = TrainingPlan(
+            targetRace: .maintainFitness,
+            goalTimeSeconds: 1_500,
+            startDate: start,
+            endDate: start.adding(days: 42)
+        )
+        let week = TrainingWeek(weekNumber: 1, startDate: start, phase: .base, targetDistanceKm: 40)
+        // 25 km already run this week, 5 km still on the schedule for a future day.
+        let done = ScheduledWorkout(scheduledDate: start, workoutType: .easy, targetDistanceMeters: 25_000)
+        done.isCompleted = true
+        let remaining = ScheduledWorkout(scheduledDate: start.adding(days: 1), workoutType: .easy, targetDistanceMeters: 5_000)
+        week.workouts = [done, remaining]
+        plan.weeks = [week]
+
+        // Grow to three run days; two stub runs are created for the extra slots.
+        _ = service.applyNewRunDays(to: plan, newDayIndices: [1, 2, 3], profile: nil)
+
+        let totalKm = (week.workouts ?? [])
+            .filter { $0.workoutType.isRunType }
+            .reduce(0.0) { $0 + ($1.targetDistanceMeters ?? 0) / 1_000 }
+        // Outstanding volume was only 10 km, so the week should still total ~40 km,
+        // not balloon past it as it did when completed volume was ignored.
+        #expect(abs(totalKm - 40) < 0.5, "Week totalled \(totalKm) km; expected ~40 km")
+    }
+
+    @Test("Race-week strength is never scheduled on or after race day (M31)")
+    func noStrengthAfterRaceDay() {
+        let profile = makeProfile(race: .halfMarathon, runDays: 4)
+        profile.selectedEquipment = [.bodyweight]
+        profile.strengthFocus = .runningSpecific
+        let start = Date().startOfWeek.adding(weeks: 1)       // a future Monday
+        let raceDate = start.adding(weeks: 5).adding(days: 2) // Wednesday of the final week
+
+        let plan = service.generateRacePlan(
+            profile: profile,
+            startDate: start,
+            raceDate: raceDate,
+            raceName: "Test Half"
+        )
+
+        let all = workouts(in: plan)
+        guard let race = all.first(where: { $0.workoutType == .race }) else {
+            Issue.record("Race plan has no race workout")
+            return
+        }
+        #expect(all.contains { $0.workoutType == .strength }, "Equipment set but no strength scheduled")
+        let raceDay = Calendar.current.startOfDay(for: race.scheduledDate)
+        let offending = all.filter {
+            $0.workoutType == .strength
+                && Calendar.current.startOfDay(for: $0.scheduledDate) >= raceDay
+        }
+        #expect(offending.isEmpty, "Strength scheduled on/after race day: \(offending.map(\.scheduledDate))")
+    }
+
     @Test("Every non-rest, non-race workout has a warm-up defined")
     func allWorkoutsHaveWarmup() {
         let profile = makeProfile(race: .halfMarathon, runDays: 5)
