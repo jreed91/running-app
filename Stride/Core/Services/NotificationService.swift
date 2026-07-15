@@ -216,15 +216,17 @@ final class NotificationService: NSObject {
     }
 
     func triggerSyncedRunTestNotification(unit: UnitPreference = .metric, in context: ModelContext? = nil) async throws {
+        // Build a transient sample run WITHOUT inserting it into the store (M39): the QA
+        // notification must never pollute real stats or sync a fake run to CloudKit. The
+        // tap-to-review flow still works — `notifyNewRunSynced` stores a review snapshot
+        // that `AppContainer` surfaces from the snapshot fallback if the user taps.
         let workout = RunWorkout(
             date: Date(),
             distanceMeters: 5_000,
             durationSeconds: 1_500,
             workoutType: .easy
         )
-        context?.insert(workout)
-        try context?.save()
-        try await notifyNewRunSynced(workout, unit: unit, opensReviewOnTap: context != nil)
+        try await notifyNewRunSynced(workout, unit: unit, opensReviewOnTap: true)
     }
 
     func workoutFromReviewSnapshot(idString: String) -> RunWorkout? {

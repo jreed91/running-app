@@ -41,6 +41,15 @@ final class TrainingPlan {
         return Double(completed) / Double(allWeeks.count)
     }
 
+    /// True when at least one non-rest workout in this plan was completed. Such plans
+    /// carry real history (the "Past Plans" list, `PlanSummaryCard`) and must be preserved
+    /// — deactivated, not deleted — when a new plan supersedes them.
+    var hasLoggedProgress: Bool {
+        (weeks ?? []).contains { week in
+            (week.workouts ?? []).contains { $0.isCompleted && $0.workoutType != .rest }
+        }
+    }
+
     init(
         targetRace: RaceType,
         goalTimeSeconds: Double,

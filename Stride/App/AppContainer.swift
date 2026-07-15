@@ -252,19 +252,46 @@ final class AppContainer: ObservableObject {
             AppLogger.log("Ignored pending review with invalid UUID \(idString)", label: "Notifications", level: .warning)
             return
         }
-        let all = (try? modelContainer.mainContext.fetch(FetchDescriptor<RunWorkout>())) ?? []
+        let context = modelContainer.mainContext
+        let all = (try? context.fetch(FetchDescriptor<RunWorkout>())) ?? []
         let workout: RunWorkout
         if let storedWorkout = all.first(where: { $0.id == uuid }) {
             workout = storedWorkout
         } else if let snapshotWorkout = notificationService.workoutFromReviewSnapshot(idString: idString) {
-            modelContainer.mainContext.insert(snapshotWorkout)
-            try? modelContainer.mainContext.save()
+            // Resurrection guard (M6): the snapshot is a full copy of a synced run. Before
+            // re-inserting it, make sure the run wasn't deliberately deleted (tombstoned) and
+            // isn't already present under a different local id but the same HealthKit source.
+            let hkID = snapshotWorkout.healthKitWorkoutID
+            let tombstoned = (try? context.fetch(FetchDescriptor<DeletedWorkout>())) ?? []
+            let isTombstoned = hkID.map { id in tombstoned.contains { $0.healthKitWorkoutID == id } } ?? false
+            let existingSameSource = hkID.flatMap { id in all.first { $0.healthKitWorkoutID == id } }
+
+            if isTombstoned {
+                AppLogger.log("Skipped resurrecting tombstoned review snapshot id=\(idString)", label: "Notifications", level: .warning)
+                clearPendingReview(idString: idString)
+                return
+            }
+            if let existingSameSource {
+                // Already imported under a new id — surface the real row instead of a duplicate.
+                pendingReviewWorkout = existingSameSource
+                clearPendingReview(idString: idString)
+                return
+            }
+
+            context.insert(snapshotWorkout)
+            try? context.save()
             workout = snapshotWorkout
         } else {
             AppLogger.log("Could not find workout for pending review id=\(idString); fetched \(all.count) workouts", label: "Notifications", level: .warning)
             return
         }
         pendingReviewWorkout = workout
+        clearPendingReview(idString: idString)
+    }
+
+    /// Clears the persisted pending-review pointer and its snapshot once the run has been
+    /// surfaced (or intentionally skipped), so it can't re-trigger on the next launch.
+    private func clearPendingReview(idString: String) {
         UserDefaults.standard.removeObject(forKey: "pendingReviewWorkoutID")
         notificationService.removeReviewSnapshot(idString: idString)
     }

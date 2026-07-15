@@ -20,8 +20,16 @@ final class PlanRepository: PlanRepositoryProtocol {
         self.context = context
     }
 
+    /// Inserts a plan and enforces the single-active-plan invariant: if the incoming
+    /// plan is active, every other plan is deactivated so `fetchActivePlan` can never
+    /// resolve an arbitrary winner among duplicates.
     func save(_ plan: TrainingPlan) throws {
         context.insert(plan)
+        if plan.isActive {
+            for other in try fetchAll() where other.id != plan.id {
+                other.isActive = false
+            }
+        }
         try context.save()
     }
 
@@ -33,8 +41,11 @@ final class PlanRepository: PlanRepositoryProtocol {
     }
 
     func fetchActivePlan() throws -> TrainingPlan? {
+        // Sort newest-first so that if the invariant is ever violated (e.g. a legacy
+        // store with multiple actives) the most recently created plan wins deterministically.
         let descriptor = FetchDescriptor<TrainingPlan>(
-            predicate: #Predicate { $0.isActive }
+            predicate: #Predicate { $0.isActive },
+            sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
         )
         return try context.fetch(descriptor).first
     }

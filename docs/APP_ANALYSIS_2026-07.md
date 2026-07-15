@@ -108,10 +108,12 @@ The doc comment says the returned adapted workout "should [have] its fields copi
 
 **Fix:** compute interval performance from splits or the structured workout segments, not session averages; remove the second `fractionVO2max` multiplication (or derive paces from `predictedTime` for equivalent-effort race distances so the two paths agree); estimate VDOT only from race-effort runs. Add tests asserting agreement with published Daniels tables within tolerance.
 
-### H3. Creating a new plan permanently deletes all past plans — wiping the Plan History feature's data
+### ✅ H3. Creating a new plan permanently deletes all past plans — wiping the Plan History feature's data
 `Stride/Features/Training/PlanSetupView.swift:271, 288-291`; `Stride/Features/Training/NewPlanOnboardingView.swift:600, 629-632`
 
 Both plan-creation flows fetch **every** `TrainingPlan` and delete them all — including completed past plans — yet `TrainingPlanListView.swift:26-30` renders a "Past Plans" section and `PlanSummaryCard` exists specifically to review finished plans. Finishing a half-marathon plan and starting a marathon plan silently erases the entire completed-plan record.
+
+**FIXED:** a new `TrainingPlan.hasLoggedProgress` distinguishes plans worth keeping (any completed non-rest workout) from never-started ones. Both creation flows now deactivate plans with progress (`isActive = false`) and delete only never-started plans. `PlanRepository.save` enforces the single-active invariant (deactivates all others when saving an active plan) and `fetchActivePlan` now resolves the most-recently-created active deterministically. Covered by `PlanHistoryTests`.
 
 **Fix:** deactivate (`isActive = false`) instead of deleting; delete only never-started/abandoned plans. Related: `TrainingPlan.init` always sets `isActive = true` and `PlanRepository.fetchActivePlan` (`PlanRepository.swift:35-40`) resolves multiple actives arbitrarily — repository `save` should own the "only one active plan" invariant.
 
@@ -206,7 +208,7 @@ static let defaultValue: AppContainer = MainActor.assumeIsolated { AppContainer(
 - **M3. Notification mutex has the same TOCTOU hole** — `NotificationService.swift:106-112`: `isBulkScheduling` set after `await isAuthorized`; concurrent reschedules interleave cancels and adds. Also the losing call is silently dropped, leaving stale reminders.
 - **M4. `cancelReminder(for:)` cancels nothing** — `NotificationService.swift:44-48 vs 162-164`: schedules `"morning-<uuid>"` but removes plain `<uuid>`.
 - **M5. Fresh-install import fires one banner per recovered run** — `WorkoutSyncService.swift:114, 171-174`: 90-day lookback + `notifyNewRunSynced` per workout → 50+ simultaneous notifications on reinstall. Batch or suppress on first sync.
-- **M6. Notification-snapshot resurrection duplicates or resurrects runs** — `NotificationService.swift:251-338`; `AppContainer.swift:250-257`: tapping a "Run Synced" banner re-inserts a snapshot `RunWorkout` when the ID isn't found — no tombstone check, no `healthKitWorkoutID` dedup, and no launch-time dedup pass exists for `RunWorkout` (unlike profiles/plans). Deleted runs resurrect; CloudKit race → two rows with the same `id`.
+- ✅ **M6. Notification-snapshot resurrection duplicates or resurrects runs** — `NotificationService.swift:251-338`; `AppContainer.swift:250-257`: tapping a "Run Synced" banner re-inserts a snapshot `RunWorkout` when the ID isn't found — no tombstone check, no `healthKitWorkoutID` dedup, and no launch-time dedup pass exists for `RunWorkout` (unlike profiles/plans). Deleted runs resurrect; CloudKit race → two rows with the same `id`. **FIXED:** `surfacePendingReviewWorkout` now guards the snapshot-insert path — it skips (and clears) a snapshot whose HealthKit source is tombstoned, and surfaces the existing row instead of inserting a duplicate when a run with the same `healthKitWorkoutID` is already present.
 - **M7. 64-notification cap silently truncates long plans** — `NotificationService.swift:103-119`: a 16–18-week plan schedules 80–100 requests; iOS keeps the soonest 64.
 - **M8. Strength merge collapses distinct same-day workouts** — `WorkoutSyncService.swift:317-330`: matches purely on same-day and stamps the HK ID onto the app-logged record, discarding the Watch workout's own time/duration.
 - **M9. HR stats not scoped to the workout** — `HealthKitRepository.swift:657-678`: missing `HKQuery.predicateForObjects(from: workout)` (the distance query at `:594-605` has it); chest-strap or overlapping samples from other sources skew avg/max HR.
@@ -247,14 +249,14 @@ static let defaultValue: AppContainer = MainActor.assumeIsolated { AppContainer(
 - **M36. Address search races** — `RouteGeniusView.swift:198-200`, `RouteGeniusViewModel.swift:107-120`: per-keystroke `MKLocalSearch` tasks aren't cancelled; stale responses clobber newer ones.
 - **M37. Smart Adapt runs as an uncancelled fire-and-forget task** — `PlanTabView.swift:39`: keeps mutating and saving `ScheduledWorkout`s (and resyncing HealthKit) after the plan is deleted or the tab is switched; the mid-loop dedup (`:181-230`) can also delete workouts still queued for mutation in the captured array.
 - **M38. History multi-delete iterates an `IndexSet` against a recomputed array** — `HistoryView.swift:117-136`: `displayedEntries` is re-derived per access mid-loop; offsets can shift. Snapshot once before the loop.
-- **M39. QA helper writes a fake run into the real store** — `NotificationService.swift:218-228` (from `SettingsView.swift:372`): inserts an unmarked 5 km `RunWorkout` that pollutes stats and syncs to CloudKit; the tag-based `clear` can't remove it.
+- ✅ **M39. QA helper writes a fake run into the real store** — `NotificationService.swift:218-228` (from `SettingsView.swift:372`): inserts an unmarked 5 km `RunWorkout` that pollutes stats and syncs to CloudKit; the tag-based `clear` can't remove it. **FIXED:** `triggerSyncedRunTestNotification` now builds a transient sample run and no longer inserts it into the store; the tap-to-review flow rides on the review snapshot (which `AppContainer` surfaces via the snapshot fallback). Covered by `NotificationServiceTests`.
 - **M40. Restore timeout indistinguishable from success** — `WelcomeBackRestoreCoordinator.swift:69`: the Bool from `waitForImport` is discarded, so a 60 s timeout routes a returning user into fresh onboarding instead of a "still syncing" state.
 
 ---
 
 ## 4. Security & privacy
 
-- **S1 (high). ORS API key in plaintext UserDefaults *and* synced through iCloud KVS** — `AppSettings.swift:16, 24-28, 129-140`: `localOnlyStringKeys` is empty ("kept for future secrets") while `orsAPIKey` — a present-day secret — flows into `NSUbiquitousKeyValueStore` and `UserDefaults`. Minimum fix: add the key to `localOnlyStringKeys`; proper fix: Keychain (pattern already exists in `AuthService`). Note the documented `Secrets.plist` path (AGENTS.md, `RouteGeniusService.swift:10-13`) is dead — no code reads that file.
+- ✅ **S1 (high). ORS API key in plaintext UserDefaults *and* synced through iCloud KVS** — `AppSettings.swift:16, 24-28, 129-140`: `localOnlyStringKeys` is empty ("kept for future secrets") while `orsAPIKey` — a present-day secret — flows into `NSUbiquitousKeyValueStore` and `UserDefaults`. Minimum fix: add the key to `localOnlyStringKeys`; proper fix: Keychain (pattern already exists in `AuthService`). Note the documented `Secrets.plist` path (AGENTS.md, `RouteGeniusService.swift:10-13`) is dead — no code reads that file. **FIXED:** added a reusable `KeychainStore` (generic-password, `AfterFirstUnlockThisDeviceOnly`); `AppSettings.orsAPIKey` now reads/writes the Keychain and a one-time migration moves any plaintext token out of UserDefaults/KVS and purges both copies.
 - **S2 (medium). AppLogger persists every log line to the on-disk Pulse store in production** — `AppLogger.swift:28-37`: `LoggerStore.shared.storeMessage` is gated only on `#if canImport(Pulse)`, not `isDiagnosticsEnabled` — and since `activateIfNeeded()` no-ops in production, the 64 MB/7-day retention limits never apply. `privacy: .public` also exposes payloads in sysdiagnose. Logged payloads include workout coordinates (~10 m precision), distances, and source bundle IDs.
 - **S3 (medium). Full GPS traces written to UserDefaults per synced run, mostly never cleaned** — `NotificationService.swift:144-157, 251-255`: `storeReviewSnapshot` serializes the entire `RunWorkout` including route coordinates for *every* import; removed only if that specific notification is tapped. A 90-day import writes dozens of plaintext location traces into the defaults plist.
 - **S4 (low). Pulse remote logging enabled for all TestFlight users** — `PulseIntegrationService.swift:34-41, 92`: sandbox-receipt gating turns on `RemoteLogger` (Bonjour) for every tester, and the dev-only `NSLocalNetworkUsageDescription` ships in the release Info.plist.
@@ -399,9 +401,9 @@ Worth stating so the fixes don't churn what works:
 **P1 — data integrity:**
 7. ✅ H9 + M20/M21: single repository delete path (tombstones for both types, `isCompleted` reset, full reset coverage).
 8. ✅ H8: unify the two linkers; type-filter matches; never overwrite run type.
-9. H3: deactivate rather than delete past plans; enforce single-active-plan in the repository.
-10. M6/M39: tombstone-check the snapshot resurrection path; tag or remove the QA fake-run helper.
-11. S1: move the ORS key out of KVS/UserDefaults (Keychain).
+9. ✅ H3: deactivate rather than delete past plans; enforce single-active-plan in the repository.
+10. ✅ M6/M39: tombstone-check the snapshot resurrection path; tag or remove the QA fake-run helper.
+11. ✅ S1: move the ORS key out of KVS/UserDefaults (Keychain).
 
 **P2 — training-math correctness (the product's core promise):**
 12. H2: fix interval classification, pace double-discount, and VDOT sampling; add Daniels-table tests.

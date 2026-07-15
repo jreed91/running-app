@@ -21,9 +21,11 @@ final class AppSettings {
         }
     }
 
+    /// OpenRouteService token. Backed by the Keychain (see `KeychainStore`) — never
+    /// written to UserDefaults or synced through iCloud KVS, unlike the other settings (S1).
     var orsAPIKey: String {
         didSet {
-            Self.persist(orsAPIKey, forKey: Self.orsAPIKeyKey)
+            KeychainStore.set(orsAPIKey, for: Self.orsAPIKeyAccount)
         }
     }
 
@@ -53,7 +55,11 @@ final class AppSettings {
 
     // Internal so services can read the same key before AppSettings is created.
     static let unitPreferenceKey = "unitPreference"
+    /// Legacy UserDefaults/iCloud-KVS key for the ORS token. Retained only so the
+    /// one-time migration in `loadORSAPIKey()` can find and purge a plaintext copy.
     private static let orsAPIKeyKey      = "orsAPIKey"
+    /// Keychain account under which the ORS token now lives.
+    private static let orsAPIKeyAccount  = "orsAPIKey"
     private static let aiInsightsEnabledKey = "aiInsightsEnabled"
     private static let aiProviderKey     = "aiProvider"
     // Internal so AppContainer can read the same key before AppSettings is created.
@@ -66,7 +72,7 @@ final class AppSettings {
 
         let raw = Self.readString(forKey: Self.unitPreferenceKey) ?? ""
         self.unitPreference = UnitPreference(rawValue: raw) ?? .metric
-        self.orsAPIKey = Self.readString(forKey: Self.orsAPIKeyKey) ?? ""
+        self.orsAPIKey = Self.loadORSAPIKey()
 
         if Self.hasStoredValue(forKey: Self.aiInsightsEnabledKey) {
             self.aiInsightsEnabled = Self.readBool(forKey: Self.aiInsightsEnabledKey)
@@ -93,7 +99,6 @@ final class AppSettings {
         }
 
         Self.persist(unitPreference.rawValue, forKey: Self.unitPreferenceKey)
-        Self.persist(orsAPIKey, forKey: Self.orsAPIKeyKey)
         Self.persist(aiInsightsEnabled, forKey: Self.aiInsightsEnabledKey)
         Self.persist(aiProvider.rawValue, forKey: Self.aiProviderKey)
         Self.persist(iCloudSyncEnabled, forKey: Self.iCloudSyncKey)
@@ -111,6 +116,29 @@ final class AppSettings {
     /// True when AI Coach is enabled and the provider is ready to use.
     var isAICoachReady: Bool {
         aiInsightsEnabled && hasAICredentials
+    }
+
+    /// Reads the ORS token from the Keychain, migrating any plaintext copy that an older
+    /// build left in UserDefaults / iCloud KVS into the Keychain and purging it (S1).
+    private static func loadORSAPIKey() -> String {
+        if let keychainValue = KeychainStore.string(for: orsAPIKeyAccount), !keychainValue.isEmpty {
+            // A synced copy may still linger from a pre-migration build on another device.
+            purgeLegacyORSAPIKey()
+            return keychainValue
+        }
+
+        let legacy = readString(forKey: orsAPIKeyKey) ?? ""
+        if !legacy.isEmpty {
+            KeychainStore.set(legacy, for: orsAPIKeyAccount)
+        }
+        purgeLegacyORSAPIKey()
+        return legacy
+    }
+
+    private static func purgeLegacyORSAPIKey() {
+        defaults.removeObject(forKey: orsAPIKeyKey)
+        ubiquitousStore.removeObject(forKey: orsAPIKeyKey)
+        ubiquitousStore.synchronize()
     }
 
     // MARK: - Shared readers
