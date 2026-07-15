@@ -20,6 +20,11 @@ final class NotificationService: NSObject {
     // can replace the first pending one with the second (same-ID) request.
     private var isBulkScheduling = false
 
+    // A plan whose reschedule request arrived while another bulk pass was in
+    // flight. Replayed by the in-flight caller so the newest request wins
+    // instead of being silently dropped, which left stale reminders (M3).
+    private var pendingBulkPlan: TrainingPlan?
+
     /// Called on MainActor when the user taps a SYNCED_RUN notification.
     /// The argument is the `RunWorkout.id.uuidString` embedded in the notification payload.
     var onSyncedRunTapped: ((String) -> Void)? {
@@ -62,14 +67,6 @@ final class NotificationService: NSObject {
 
     // MARK: Scheduling
 
-    /// Standard pre-workout reminders are disabled.
-    func scheduleReminder(for workout: ScheduledWorkout, minutesBefore: Int = 60) async throws {
-    }
-
-    /// Standard pre-workout reminders are disabled.
-    func scheduleReminders(for plan: TrainingPlan, minutesBefore: Int = 60) async {
-    }
-
     /// Schedules an 8 AM morning reminder on the day of a planned workout.
     func scheduleMorningReminder(for workout: ScheduledWorkout) async throws {
         guard workout.workoutType != .rest else { return }
@@ -80,16 +77,15 @@ final class NotificationService: NSObject {
         content.sound = .default
         content.categoryIdentifier = Category.workoutReminder
 
-        var components = Calendar.current.dateComponents([.year, .month, .day], from: workout.scheduledDate)
-        components.hour = 8
-        components.minute = 0
-        components.second = 0
-
         guard
-            let fireDate = Calendar.current.date(from: components),
+            let fireDate = Self.morningFireDate(for: workout),
             fireDate > Date()
         else { return }
 
+        let components = Calendar.current.dateComponents(
+            [.year, .month, .day, .hour, .minute, .second],
+            from: fireDate
+        )
         let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
         let request = UNNotificationRequest(
             identifier: NotificationID.morning(workout),
@@ -99,23 +95,74 @@ final class NotificationService: NSObject {
         try await center.add(request)
     }
 
-    /// Schedules 8 AM morning reminders for all future non-rest workouts in a plan.
+    /// Schedules 8 AM morning reminders for the soonest future non-rest workouts
+    /// in a plan (capped — see `maxScheduledMorningReminders`).
     func scheduleMorningReminders(for plan: TrainingPlan) async {
-        // Prevent concurrent calls from racing through center.add and delivering
-        // duplicate notifications before iOS can replace the pending request.
-        guard !isBulkScheduling else { return }
-
-        guard await isAuthorized else { return }
+        // Claim the flag before the first suspension point: checking it and then
+        // awaiting isAuthorized before setting it left a window where concurrent
+        // calls interleaved cancels and adds (M3). The losing call is queued and
+        // replayed by the in-flight pass so its request is not silently dropped.
+        if isBulkScheduling {
+            pendingBulkPlan = plan
+            return
+        }
         isBulkScheduling = true
-        defer { isBulkScheduling = false }
+        defer {
+            isBulkScheduling = false
+            pendingBulkPlan = nil
+        }
 
-        await cancelAllMorningReminders()
+        var nextPlan: TrainingPlan? = plan
+        while let plan = nextPlan {
+            guard await isAuthorized else { return }
 
-        for week in plan.weeks ?? [] {
-            for workout in week.workouts ?? [] where !workout.isCompleted {
+            await cancelAllMorningReminders()
+            for workout in Self.morningReminderCandidates(for: plan) {
                 try? await scheduleMorningReminder(for: workout)
             }
+
+            nextPlan = pendingBulkPlan
+            pendingBulkPlan = nil
         }
+    }
+
+    /// iOS keeps at most 64 pending local notifications per app and silently
+    /// discards the rest, so a 16–18-week plan (80–100 reminders) lost its tail
+    /// (M7). Cap what we schedule to the soonest workouts — the cap slides
+    /// forward every reschedule — and leave headroom for synced-run banners.
+    static let maxScheduledMorningReminders = 56
+
+    /// The workouts in `plan` that should get a morning reminder: not completed,
+    /// not rest days, fire date still in the future — soonest first, capped at
+    /// `limit`. Pure so the cap and filtering are unit-testable.
+    static func morningReminderCandidates(
+        for plan: TrainingPlan,
+        now: Date = Date(),
+        calendar: Calendar = .current,
+        limit: Int = maxScheduledMorningReminders
+    ) -> [ScheduledWorkout] {
+        let upcoming = (plan.weeks ?? [])
+            .flatMap { $0.workouts ?? [] }
+            .filter { workout in
+                guard !workout.isCompleted, workout.workoutType != .rest,
+                      let fireDate = morningFireDate(for: workout, calendar: calendar)
+                else { return false }
+                return fireDate > now
+            }
+            .sorted { $0.scheduledDate < $1.scheduledDate }
+        return Array(upcoming.prefix(limit))
+    }
+
+    /// 8 AM on the workout's scheduled day.
+    static func morningFireDate(
+        for workout: ScheduledWorkout,
+        calendar: Calendar = .current
+    ) -> Date? {
+        var components = calendar.dateComponents([.year, .month, .day], from: workout.scheduledDate)
+        components.hour = 8
+        components.minute = 0
+        components.second = 0
+        return calendar.date(from: components)
     }
 
     func cancelMorningReminder(for workout: ScheduledWorkout) {
@@ -157,15 +204,27 @@ final class NotificationService: NSObject {
         try await center.add(request)
     }
 
+    /// Fires a single summary notification for a multi-run import batch —
+    /// a fresh-install recovery can import dozens of runs at once, and one
+    /// banner per run is a notification storm (M5). Not tappable-to-review:
+    /// there is no single run to open.
+    func notifyRunBatchSynced(count: Int) async throws {
+        guard count > 0, await isAuthorized else { return }
+        let content = UNMutableNotificationContent()
+        content.title = "Runs Synced"
+        content.body = "\(count) runs were imported from Apple Health."
+        content.sound = .default
+        content.categoryIdentifier = Category.syncedRun
+        content.userInfo = ["opensReviewOnTap": false]
+        let request = UNNotificationRequest(
+            identifier: "synced-run-batch-\(UUID().uuidString)",
+            content: content,
+            trigger: nil
+        )
+        try await center.add(request)
+    }
+
     // MARK: Cancellation
-
-    func cancelReminder(for workout: ScheduledWorkout) {
-        center.removePendingNotificationRequests(withIdentifiers: [workout.id.uuidString])
-    }
-
-    func cancelAllReminders() {
-        center.removeAllPendingNotificationRequests()
-    }
 
     /// Cancels every pending reminder belonging to `plan` — used when a plan is
     /// deleted so its morning reminders don't keep firing for workouts that no
