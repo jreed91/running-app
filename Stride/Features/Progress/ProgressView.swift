@@ -492,8 +492,7 @@ struct ProgressDashboardView: View {
     private var periodSummaryCard: some View {
         let runs = filteredWorkouts
         let totalMeters = runs.reduce(0) { $0 + $1.distanceMeters }
-        let avgPace = runs.isEmpty ? 0.0
-            : runs.reduce(0) { $0 + $1.averagePaceSecondsPerKm } / Double(runs.count)
+        let avgPace = ProgressStatsService.distanceWeightedAveragePaceSecondsPerKm(for: runs)
         let hrValues = runs.compactMap(\.averageHeartRate)
         let avgHR: Double? = hrValues.isEmpty ? nil : hrValues.reduce(0, +) / Double(hrValues.count)
         let elevValues = runs.compactMap(\.elevationGainMeters).filter { $0 > 0 }
