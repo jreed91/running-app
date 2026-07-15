@@ -64,16 +64,7 @@ final class AppContainer: ObservableObject {
     ) {
         PulseIntegrationService.activateIfNeeded()
 
-        let schema = Schema([
-            UserProfile.self,
-            RunWorkout.self,
-            StrengthWorkout.self,
-            TrainingPlan.self,
-            TrainingWeek.self,
-            ScheduledWorkout.self,
-            SavedRoute.self,
-            DeletedWorkout.self
-        ])
+        let schema = StrideSchema.make()
         // Read the preference set during onboarding / Settings.
         // UserDefaults is checked directly here because AppSettings doesn't
         // exist yet at the point AppContainer is initialized.
@@ -85,7 +76,7 @@ final class AppContainer: ObservableObject {
         // Shared on-disk URL keeps the CloudKit store and any local-fallback store
         // pointing at the same SQLite file. When CloudKit recovers, NSPersistentCloudKitContainer
         // picks up records that were written during an outage and pushes them automatically.
-        let storeURL = storeURLOverride ?? URL.applicationSupportDirectory.appending(path: "Stride.store")
+        let storeURL = storeURLOverride ?? StrideSchema.storeURL
 
         let cloudKitEnabled = forceCloudKit ?? Self.shouldUseCloudKit(syncEnabled: syncEnabled, inMemory: inMemory)
 
@@ -122,18 +113,32 @@ final class AppContainer: ObservableObject {
 
             // Tier 1 — same file, CloudKit disabled. Records written here will be
             // exported to CloudKit automatically once the container succeeds on a later launch.
-            if let c = try? modelContainerFactory(schema, [localConfig]) {
+            // Only attempted when the primary config actually used CloudKit: with CloudKit
+            // off, the primary config IS `localConfig`, so retrying the identical
+            // configuration can't succeed and would just mask a deterministic failure.
+            let tier1Container: ModelContainer? = cloudKitEnabled
+                ? try? modelContainerFactory(schema, [localConfig])
+                : nil
+            if let c = tier1Container {
                 container = c
                 persistenceMode = .localFallback
                 AppLogger.log("Tier1: local-only store OK (data will sync when CloudKit recovers)", label: "AppContainer", level: .notice)
             } else {
-                // Tier 2 — delete the on-disk store and recreate local-only.
-                AppLogger.log("Tier2: deleting store at \(storeURL.path)", label: "AppContainer", level: .warning)
+                // Tier 2 — move the on-disk store aside and recreate local-only.
+                // Never delete: when CloudKit is off this file is the only copy of the
+                // user's data, and a deterministic open failure here is most plausibly a
+                // schema-migration bug — the backup keeps the data recoverable.
+                let backupTag = ".broken-\(Int(Date().timeIntervalSince1970))"
                 for suffix in ["", "-shm", "-wal"] {
-                    try? FileManager.default.removeItem(
-                        at: URL(fileURLWithPath: storeURL.path + suffix)
-                    )
+                    let source = URL(fileURLWithPath: storeURL.path + suffix)
+                    let backup = URL(fileURLWithPath: storeURL.path + backupTag + suffix)
+                    try? FileManager.default.moveItem(at: source, to: backup)
                 }
+                AppLogger.log(
+                    "Tier2: moved store aside to \(storeURL.lastPathComponent + backupTag) and recreating",
+                    label: "AppContainer",
+                    level: .warning
+                )
 
                 if let c = try? modelContainerFactory(schema, [localConfig]) {
                     container = c

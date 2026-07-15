@@ -2,6 +2,8 @@
 
 A full review of the app (all 104 Swift files, ~24.6k lines) covering bugs, design issues, security/privacy, CI/config, and test coverage. Findings were produced by parallel subsystem reviews and the highest-severity items were re-verified directly against the source. Every finding cites `file:line` as of commit `0cc6be7`.
 
+> **Fix tracking:** items marked **✅ FIXED** have been resolved; the note says where. Line numbers in fixed items refer to the original commit and may have drifted.
+
 **Contents**
 1. [Critical bugs](#1-critical-bugs)
 2. [High-severity bugs](#2-high-severity-bugs)
@@ -18,7 +20,9 @@ A full review of the app (all 104 Swift files, ~24.6k lines) covering bugs, desi
 
 ## 1. Critical bugs
 
-### C1. Outdoor GPS distance never accumulates — auto-pause threshold is 500 m/s, not 0.5
+### ✅ C1. Outdoor GPS distance never accumulates — auto-pause threshold is 500 m/s, not 0.5
+
+**FIXED:** threshold corrected to `0.5` and renamed `autoPauseThresholdMetersPerSecond`.
 `Stride/Core/Services/WorkoutTrackerService.swift:48, 253-256`
 
 ```swift
@@ -35,14 +39,18 @@ distanceMeters += delta
 
 **Fix:** change the constant to `0.5`. Add a unit test around `processLocation` (extract it so it is testable — see D-section).
 
-### C2. A second run can never be started — tracker state machine has no path back to `.idle`
+### ✅ C2. A second run can never be started — tracker state machine has no path back to `.idle`
+
+**FIXED:** added `WorkoutTrackerService.prepareForNewWorkout()` (`.finished` → `.idle`), called from `ActiveRunView.onAppear`.
 `Stride/Core/Services/WorkoutTrackerService.swift:65, 106-115`; `Stride/App/AppContainer.swift:167`; `Stride/Features/ActiveRun/ActiveRunView.swift:435-461`
 
 `WorkoutTrackerService` is a single long-lived instance owned by `AppContainer`. `finishWorkout()` sets `trackingState = .finished`; `startWorkout` guards `guard trackingState == .idle else { return }`; **nothing ever resets the state to `.idle`** (verified: the only assignments are `.active`, `.paused`, `.active`, `.finished`). After the first completed run, opening the run screen shows the previous run's frozen metrics and the start button silently does nothing until the app is relaunched.
 
 **Fix:** add a `reset()`/`prepareForNewWorkout()` transition back to `.idle` (called from `finishWorkout` consumers or on `ActiveRunView` appear), and cover the full state machine with unit tests.
 
-### C3. Store-recreation fallback can silently delete all user data
+### ✅ C3. Store-recreation fallback can silently delete all user data (partially fixed)
+
+**FIXED (core danger):** Tier 2 now moves the store aside to `Stride.store.broken-<timestamp>` instead of deleting it, and the identical Tier-1 retry is skipped when CloudKit is off (covered by a new `AppContainerTests` test). *Still open:* distinguishing migration vs. transient failures, and a user-visible recovery alert (only the Settings caption exists).
 `Stride/App/AppContainer.swift:101-141`
 
 When CloudKit is off (user toggle, or **every simulator build**), the primary `ModelConfiguration(schema:url:)` is byte-for-byte identical to the Tier-1 fallback `localConfig`. Any *deterministic* open failure — most plausibly a SwiftData schema-migration failure after an app update — therefore fails twice, and Tier 2 then deletes the store:
@@ -61,14 +69,18 @@ With no CloudKit copy, every run, plan, and profile is gone. The only surface si
 - When CloudKit is disabled, skip the pointless identical Tier-1 retry and go straight to explicit recovery handling.
 - Surface a user-visible alert when recovery mode was entered.
 
-### C4. App Intents open the shared store with an incomplete schema
+### ✅ C4. App Intents open the shared store with an incomplete schema
+
+**FIXED:** both paths now build their schema and store URL from the shared `StrideSchema` (`Stride/Core/Models/StrideSchema.swift`), so they can never drift.
 `Stride/Features/AppIntents/IntentDataProvider.swift:23-34` vs `Stride/App/AppContainer.swift:67-76`
 
 `makeContainer()` builds a `Schema` of **6** models but opens the **same `Stride.store` file** the app opens with **8** models — `StrengthWorkout.self` and `DeletedWorkout.self` are missing. Invoking any Siri/App Intent opens the store against a mismatched model: best case every intent throws; worst case a lightweight migration to the subset model drops the strength-history and deletion-tombstone tables (which would also resurrect previously deleted HealthKit runs).
 
 **Fix:** share one schema constant between `AppContainer` and `IntentDataProvider` so they can never drift.
 
-### C5. Plan generation crashes for short or past race dates
+### ✅ C5. Plan generation crashes for short or past race dates
+
+**FIXED:** `phaseSchedule` now fits phases from race day backwards (taper → peak → build → base) so short horizons shrink instead of trapping on a negative array count; past race dates fall back to a 1-week plan. Regression tests cover 1–5 week plans and past race dates for 5K/HM/marathon.
 `Stride/Core/Services/TrainingPlanService.swift:307-335`, reached via `weeksThroughRaceDate` (`:240-245`)
 
 Each phase count is floored at 1 (or 2 for marathon), so `baseWeeks = totalWeeks - taper - peak - build` goes negative for small `totalWeeks`, and `Array(repeating: .base, count: baseWeeks)` traps on negative counts. A race 2 weeks away → 5K schedule taper=1, peak=1, build=1 → `baseWeeks = -1` → **crash**. A race date in the past also crashes (`weeksThroughRaceDate` floors at 1 → `baseWeeks = -2`). Reachable in production: `AppContainer.rebuildPlan` (`AppContainer.swift:399-411`) regenerates from `Date()` against the *stored* race date, so replanning close to or after race day hits it even if creation UI clamps dates.
@@ -79,7 +91,9 @@ Each phase count is floored at 1 (or 2 for marathon), so `baseWeeks = totalWeeks
 
 ## 2. High-severity bugs
 
-### H1. `adaptWorkout` auto-inserts phantom duplicate workouts on every pace refresh
+### ✅ H1. `adaptWorkout` auto-inserts phantom duplicate workouts on every pace refresh
+
+**FIXED:** all four adapt functions (and `AICoachService.makeScheduledWorkout`) no longer set `.week` on the temporary model; callers already copy fields back as documented.
 `Stride/Core/Services/TrainingPlanService.swift:781, 873, 943, 1005`; exercised by `refreshPaces` (`:1088-1115`) via `AppContainer.refreshPlanAfterWorkout` (`AppContainer.swift:329`)
 
 The doc comment says the returned adapted workout "should [have] its fields copied back … rather than inserting it into the SwiftData context", but every adapt function assigns `adapted.week = scheduled.week`. Relating an unmanaged model to a managed one **auto-inserts it into the context**, so each pace refresh after a completed run appends uncompleted duplicate workouts to the persisted week — and the next refresh adapts the duplicates too, multiplying workouts run after run.
@@ -146,7 +160,9 @@ The tombstone mechanism (`DeletedWorkout`) only works on the canonical run path;
 
 **Fix:** route all deletion through `WorkoutRepository.delete` (extend it to strength + tombstones + `isCompleted` reset) and all import through `WorkoutSyncService` so the exclusion logic exists once.
 
-### H10. Coach-feedback "next session" seeding persists a phantom workout into the plan
+### ✅ H10. Coach-feedback "next session" seeding persists a phantom workout into the plan
+
+**FIXED:** the seeded temporary `ScheduledWorkout` was removed entirely; coach feedback now flows into the adaptation prompt as a plain string via a new `coachFeedback:` parameter on `AICoachService.adaptScheduledWorkoutWithProvider`.
 `Stride/Features/History/RunSummaryView.swift:1362-1376, 1287-1301`
 
 A temporary `ScheduledWorkout` built purely as an LLM prompt input gets `seeded.week = scheduled.week` — the same auto-insert trap as H1 — and survives the subsequent duplicate-pruning (which filters the view's stale `@Query` snapshot). The plan then shows a duplicate workout that also syncs to WorkoutKit.
@@ -160,10 +176,12 @@ Splits are always built per kilometer (`WorkoutTrackerService.swift:172-178`), b
 
 **Fix:** either bucket splits by the user's unit at record time, or label the axis honestly ("km") until splits are re-bucketed for display.
 
-### H12. Medal "PR" logic crowns slower, shorter runs
+### ✅ H12. Medal "PR" logic crowns slower, shorter runs
 `Stride/Features/Progress/MedalsView.swift:77-87`
 
 PRs compare raw `durationSeconds` across a ±10 % distance band: a 4.50 km jog in 22:00 (4:53/km) beats a genuine 5.00 km PR in 23:00 (4:36/km) for the 5K medal. **Fix:** normalize by distance (compare pace, or Riegel-extrapolate to the target distance).
+
+**FIXED (PR #230):** PR ranking normalized via `ProgressStatsService` with tests.
 
 ### H13. Environment-key default builds a hidden, side-effectful AppContainer — and can crash
 `Stride/App/AppContainer.swift:557-561`
@@ -219,7 +237,7 @@ static let defaultValue: AppContainer = MainActor.assumeIsolated { AppContainer(
 - **M32. Weekly volume not conserved for 1–2 run days** — `TrainingPlanService.swift:438-453`: with no easy slots the remainder fraction is silently dropped (1 run day → only 35 % of target scheduled).
 
 ### Aggregation & display
-- **M33. Period "Avg Pace" is an unweighted mean of per-run paces** — `ProgressView.swift:493-496` (verified): one long fast run + one short slow jog average to 6:30/km when the true distance-weighted pace is ~5:09/km. Use Σduration/Σdistance (as `PlanSummaryService` already does).
+- ✅ **M33. Period "Avg Pace" is an unweighted mean of per-run paces** — `ProgressView.swift:493-496` (verified): one long fast run + one short slow jog average to 6:30/km when the true distance-weighted pace is ~5:09/km. Use Σduration/Σdistance (as `PlanSummaryService` already does). **FIXED (PR #230):** distance-weighted via `ProgressStatsService`.
 - **M34. Weekly Summary intent uses a different week start than the app** — `IntentDataProvider.swift:95-103` uses locale default (Sunday in US) vs the app-wide Monday `startOfWeek` (`Date+Extensions.swift:5-10`); Siri and the dashboard disagree by a whole run.
 - **M35. Every run ≥400 m is treated as a VO₂max sample** — `RunSummaryView.swift:52-56`, `ProgressView.swift:59-65`: easy runs systematically depress the "fitness" trend; filter to quality/race efforts like the tempo-insights path does.
 - **M36. Address search races** — `RouteGeniusView.swift:198-200`, `RouteGeniusViewModel.swift:107-120`: per-keystroke `MKLocalSearch` tasks aren't cancelled; stale responses clobber newer ones.
@@ -367,12 +385,12 @@ Worth stating so the fixes don't churn what works:
 ## 10. Prioritized action plan
 
 **P0 — ship-stoppers (small, surgical fixes):**
-1. C1: `autoPauseThresholdMs` 500 → 0.5.
-2. C2: add tracker reset to `.idle`.
-3. C4: share one `Schema` between app and intents.
-4. C5: clamp `phaseSchedule` counts; guard past race dates.
-5. C3: back up instead of deleting the store; remove the identical-config retry.
-6. H1/H10: stop assigning `.week` on prompt/adaptation temporaries (one-line cause, plan-corrupting effect).
+1. ✅ C1: `autoPauseThresholdMs` 500 → 0.5.
+2. ✅ C2: add tracker reset to `.idle`.
+3. ✅ C4: share one `Schema` between app and intents.
+4. ✅ C5: clamp `phaseSchedule` counts; guard past race dates.
+5. ✅ C3: back up instead of deleting the store; remove the identical-config retry.
+6. ✅ H1/H10: stop assigning `.week` on prompt/adaptation temporaries (one-line cause, plan-corrupting effect).
 
 **P1 — data integrity:**
 7. H9 + M20/M21: single repository delete path (tombstones for both types, `isCompleted` reset, full reset coverage).

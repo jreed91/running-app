@@ -66,6 +66,41 @@ struct AppContainerTests {
         #expect((try container.routeRepository.fetchAll()).count == 1)
     }
 
+    @Test("With CloudKit off, a failing store skips the identical retry and is backed up, not deleted")
+    func localOnlyFailureBacksUpStoreBeforeRecreating() throws {
+        let storeURL = Self.makeTemporaryStoreURL()
+        defer { Self.removeStoreArtifacts(at: storeURL) }
+
+        try Data("not a database".utf8).write(to: storeURL)
+
+        var invocationCount = 0
+        let container = AppContainer(
+            syncEnabledOverride: false,
+            forceCloudKit: false,
+            storeURLOverride: storeURL,
+            modelContainerFactory: { schema, configurations in
+                invocationCount += 1
+                if invocationCount == 1 {
+                    throw CocoaError(.fileReadCorruptFile)
+                }
+                return try ModelContainer(for: schema, configurations: configurations)
+            }
+        )
+
+        // Primary local open, then the tier-2 recreate — no identical tier-1 retry between.
+        #expect(invocationCount == 2)
+        #expect(container.persistenceMode == .recreatedLocalFallback)
+
+        // The broken store file was moved aside, not deleted.
+        let directory = storeURL.deletingLastPathComponent()
+        let backups = ((try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? [])
+            .filter { $0.hasPrefix(storeURL.lastPathComponent + ".broken-") }
+        #expect(backups.count == 1)
+        for name in backups {
+            try? FileManager.default.removeItem(at: directory.appendingPathComponent(name))
+        }
+    }
+
     @Test("Repeated persistent-store failures eventually use emergency in-memory mode")
     func repeatedPersistentFailuresUseEmergencyMemory() throws {
         let storeURL = Self.makeTemporaryStoreURL()

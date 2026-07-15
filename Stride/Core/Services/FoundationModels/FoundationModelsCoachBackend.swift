@@ -6,14 +6,16 @@ import FoundationModels
 ///
 /// - Phase 1 (iOS 26): runs `SystemLanguageModel.default` with `@Generable` guided
 ///   generation. No API key, no network, data stays on device.
-/// - Phase 2 (iOS 27): when built with `-D STRIDE_ENABLE_IOS27_MODELS` on the iOS 27
-///   SDK, the heavier cases can be routed to Apple's Private Cloud Compute model
-///   (larger context + deeper reasoning) while keeping the same privacy posture.
+/// - Phase 2 (iOS 27): when built with `-D STRIDE_ENABLE_IOS27_MODELS`, the heavier
+///   cases can be routed to Apple's Private Cloud Compute model (larger context +
+///   deeper reasoning) while keeping the same privacy posture.
 ///
-/// VERIFY-AGAINST-SDK: the symbol names below are taken from the WWDC25 (286/301) and
-/// WWDC26 (241) sessions. Confirm exact signatures against the shipping SDK before
-/// release — especially the streaming and Private Cloud Compute APIs, which are
-/// beta-era. The Phase 2 path is compiled out by default for exactly this reason.
+/// VERIFY-AGAINST-SDK: the Phase 2 symbol names below are taken from the WWDC26 (319)
+/// session and DO NOT exist in the shipping iOS 27 SDK — defining
+/// `STRIDE_ENABLE_IOS27_MODELS` currently fails to compile with
+/// "Cannot find 'PrivateCloudComputeLanguageModel' in scope". The flag must stay
+/// undefined (see project.yml) until the PCC API ships and the names are confirmed.
+/// Until then `useServerModel` safely falls through to the on-device model.
 @available(iOS 26.0, *)
 struct FoundationModelsCoachBackend: OnDeviceCoachGenerating {
 

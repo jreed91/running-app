@@ -82,6 +82,8 @@ struct ActiveRunView: View {
             }
         }
         .onAppear {
+            // Recover from a previous run's terminal state so the start button works.
+            tracker.prepareForNewWorkout()
             metricsAppeared = true
             controlsAppeared = true
             if !reduceMotion {
