@@ -596,7 +596,9 @@ struct NewPlanOnboardingView: View {
         profile.strengthFocus = strengthFocus
         profile.updatedAt = Date()
 
-        // Remove existing plans so there is only ever one plan per user.
+        // Retire existing plans so there is only ever one active plan per user. Plans
+        // with completed workouts are preserved as history (deactivated) rather than
+        // deleted, so the Plan History screen keeps past-plan records (H3).
         let existing = (try? context.fetch(FetchDescriptor<TrainingPlan>())) ?? []
 
         let plan: TrainingPlan
@@ -628,7 +630,11 @@ struct NewPlanOnboardingView: View {
             }
             for previous in existing {
                 try? await container.healthKitRepository.removeWorkoutPlans(for: previous)
-                context.delete(previous)
+                if previous.hasLoggedProgress {
+                    previous.isActive = false
+                } else {
+                    context.delete(previous)
+                }
             }
             try? await container.healthKitRepository.syncWorkoutPlans(for: plan, unitPreference: appSettings.unitPreference)
             try? context.save()
