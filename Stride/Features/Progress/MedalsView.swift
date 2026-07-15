@@ -75,15 +75,11 @@ struct MedalsView: View {
     }
 
     private func prRun(for targetMeters: Double) -> RunWorkout? {
-        let lo = targetMeters * 0.90
-        let hi = targetMeters * 1.10
-        return workouts
-            .filter { w in
-                w.distanceMeters >= lo &&
-                w.distanceMeters <= hi &&
-                eligibleTypes.contains(w.workoutType)
-            }
-            .min(by: { $0.durationSeconds < $1.durationSeconds })
+        ProgressStatsService.personalRecordRun(
+            in: workouts,
+            targetMeters: targetMeters,
+            eligibleTypes: eligibleTypes
+        )
     }
 
     private func medalCard(_ bucket: MedalBucket) -> some View {
