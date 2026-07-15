@@ -102,11 +102,11 @@ The doc comment says the returned adapted workout "should [have] its fields copi
 
 ### H2. The adaptation engine systematically misjudges runners (three compounding math bugs)
 
-1. **Interval sessions always classify as `.struggling`** — `WorkoutAnalyticsService.swift:255-266, 284-287`: `lastIntervalPaceRatio` divides the *whole-session* average pace (warm-up + recovery jogs + cool-down; `RunWorkout.swift:96-98`) by the *rep target* pace. A runner who nails 6×800 m at target still shows a ratio ≈ 1.3 → `.struggling` → reps cut and paces slowed, locking the engine in permanent downgrade mode.
+1. ✅ **Interval sessions always classify as `.struggling`** — `WorkoutAnalyticsService.swift:255-266, 284-287`: `lastIntervalPaceRatio` divided the *whole-session* average pace (warm-up + recovery jogs + cool-down; `RunWorkout.swift:96-98`) by the *rep target* pace. A runner who nailed 6×800 m at target still showed a ratio ≈ 1.3 → `.struggling` → reps cut and paces slowed, locking the engine in permanent downgrade mode. **FIXED:** a new `intervalEffortPace(for:)` derives the rep pace from the fastest third of per-km splits (falling back to the session average only when splits are absent), so on-target intervals now read ≈ 1.0 and classify `onTrack`/`improving` while genuinely slow reps still surface as `.struggling`.
 2. ✅ **Threshold/marathon paces double-discount %VO₂max** — `PaceCalculatorService.swift:121-151`: `speedForFraction` multiplied the intensity fraction (already a %VO₂max, e.g. 0.86 for threshold) by `fractionVO2max(forDurationMinutes:)` *again*. For VDOT 50 this prescribed tempo ≈ 4:36/km vs Daniels ≈ 4:15/km, and a marathon pace ~55 s/km slower than the app's own `predictedTime` for the same VDOT. **FIXED:** the second `fractionVO2max` multiplication (and the now-unused `typicalDuration` plumbing) were removed, so `targetVO2 = fraction · vdot`. VDOT-50 paces now land within Daniels tolerance (threshold ≈ 4:20/km, marathon ≈ 4:38/km, interval ≈ 3:55/km); covered by new `PaceCalculatorTests` Daniels-table assertions.
-3. **VDOT estimated from session averages** — `WorkoutAnalyticsService.swift:199-209`: quality sessions including warm-up/recoveries are treated as race efforts, biasing `currentVDOT` low.
+3. ✅ **VDOT estimated from session averages** — `WorkoutAnalyticsService.swift:199-209`: quality sessions including warm-up/recoveries were treated as race efforts, biasing `currentVDOT` low. **FIXED:** VDOT sampling in both `snapshot` and `tempoInsights` is now restricted to `.race` efforts; tempo/interval averages no longer seed VDOT, and non-racers fall back to the profile 5K estimate instead of an inflated-slow value.
 
-**Fix (remaining — H2.1, H2.3):** compute interval performance from splits or the structured workout segments, not session averages; estimate VDOT only from race-effort runs. Add tests asserting the classifier no longer downgrades on-target interval sessions.
+**Fix (H2 — all resolved):** interval performance is now computed from splits, and VDOT is estimated only from race efforts. `snapshot(now:)` is injectable for deterministic tests, covered by the new `WorkoutAnalyticsServiceTests` (on-target vs. slow interval classification, race-only VDOT, lookback windowing).
 
 ### ✅ H3. Creating a new plan permanently deletes all past plans — wiping the Plan History feature's data
 `Stride/Features/Training/PlanSetupView.swift:271, 288-291`; `Stride/Features/Training/NewPlanOnboardingView.swift:600, 629-632`
@@ -364,7 +364,7 @@ Existing test files cover: PaceCalculator, TrainingPlanService, PlanSummaryServi
 | --- | --- |
 | `WorkoutTrackerService` | C1 (GPS distance), C2 (stuck state machine), M23–M26 |
 | `WorkoutSyncService` | H8 (wrong linking), H9 (resurrection), M1–M8 |
-| `WorkoutAnalyticsService` | H2 (adaptation misclassification) |
+| `WorkoutAnalyticsService` | H2 (adaptation misclassification) — now covered by `WorkoutAnalyticsServiceTests` |
 | `HealthKitRepository` | M9–M13 |
 | `NotificationService` | M3–M7 (also untestable as a singleton — D4) |
 | `WeatherService` | H7 (historical weather) |
@@ -406,7 +406,7 @@ Worth stating so the fixes don't churn what works:
 11. ✅ S1: move the ORS key out of KVS/UserDefaults (Keychain).
 
 **P2 — training-math correctness (the product's core promise):**
-12. H2: ✅ pace double-discount (H2.2) removed with Daniels-table tests; *remaining:* interval classification (H2.1) and VDOT sampling (H2.3).
+12. ✅ H2: pace double-discount (H2.2) removed with Daniels-table tests; interval classification (H2.1) now computed from split efforts; VDOT sampling (H2.3) restricted to race efforts. Covered by `WorkoutAnalyticsServiceTests`.
 13. M28–M32: ✅ M28 cutback/progression curve fixed; *remaining:* M29–M32 (long-run preservation, volume conservation).
 14. ✅ H6: week `endDate` boundary.
 15. H7: historical weather.
