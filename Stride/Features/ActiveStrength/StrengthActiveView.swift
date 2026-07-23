@@ -22,6 +22,7 @@ struct StrengthActiveView: View {
     // Rest timer
     @State private var restTimerActive: Bool = false
     @State private var restTimeRemaining: Int = 0
+    @State private var restDeadline: Date?
     @State private var restTimerTask: Task<Void, Never>?
     private let defaultRestSeconds = 60
 
@@ -110,9 +111,13 @@ struct StrengthActiveView: View {
             VStack(spacing: 2) {
                 Text("Strength Workout")
                     .font(.system(size: 15, weight: .semibold))
-                Text(elapsedTimeString)
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundStyle(.secondary)
+                // Tick on the wall clock so the elapsed time advances on its own
+                // rather than only refreshing as a side effect of logging a set (M27).
+                TimelineView(.periodic(from: startTime, by: 1)) { context in
+                    Text(elapsedTimeString(asOf: context.date))
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Spacer()
@@ -439,8 +444,8 @@ struct StrengthActiveView: View {
         completedSets.contains { !$0.skipped }
     }
 
-    private var elapsedTimeString: String {
-        let elapsed = Int(Date().timeIntervalSince(startTime))
+    private func elapsedTimeString(asOf now: Date) -> String {
+        let elapsed = max(0, Int(now.timeIntervalSince(startTime)))
         let m = elapsed / 60
         let s = elapsed % 60
         return String(format: "%d:%02d", m, s)
@@ -496,14 +501,19 @@ struct StrengthActiveView: View {
 
     private func startRestTimer() {
         restTimerTask?.cancel()
+        let deadline = Date().addingTimeInterval(TimeInterval(defaultRestSeconds))
+        restDeadline = deadline
         restTimeRemaining = defaultRestSeconds
         restTimerActive = true
         restTimerTask = Task { @MainActor in
-            while restTimeRemaining > 0 && restTimerActive {
+            // Derive the remaining time from a fixed deadline each tick so a
+            // suspended app resumes with the correct countdown (M27) rather than
+            // freezing at whatever value it held when it went to the background.
+            while restTimerActive {
+                restTimeRemaining = RestCountdown.secondsRemaining(deadline: deadline, now: Date())
+                if restTimeRemaining <= 0 { break }
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
                 guard !Task.isCancelled else { return }
-                guard restTimerActive else { break }
-                restTimeRemaining = max(0, restTimeRemaining - 1)
             }
             if restTimerActive { endRestTimer() }
         }
@@ -514,6 +524,7 @@ struct StrengthActiveView: View {
         restTimerTask = nil
         restTimerActive = false
         restTimeRemaining = 0
+        restDeadline = nil
     }
 
     /// Leave without persisting anything — the scheduled day stays open (H5).

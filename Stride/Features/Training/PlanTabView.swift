@@ -19,6 +19,7 @@ struct PlanTabView: View {
     @State private var isAdaptingPlan = false
     @State private var smartAdaptProgress = SmartAdaptProgress.idle
     @State private var smartAdaptStreamBuffer = ""
+    @State private var adaptTask: Task<Void, Never>?
 
     private var activePlan: TrainingPlan? { activePlans.first }
 
@@ -36,7 +37,8 @@ struct PlanTabView: View {
                                 progress: smartAdaptProgress,
                                 unavailableReason: smartAdaptUnavailableReason(for: plan)
                             ) {
-                                Task { await adaptRemainingWorkouts(in: plan) }
+                                adaptTask?.cancel()
+                                adaptTask = Task { await adaptRemainingWorkouts(in: plan) }
                             }
 
                             RouteGeniusCard {
@@ -99,6 +101,19 @@ struct PlanTabView: View {
                 )
             }
         }
+        .onDisappear {
+            // Stop adapting if the user leaves the tab so the fire-and-forget task
+            // can't keep mutating and re-syncing a plan that's no longer on screen
+            // (or has since been deleted) (M37).
+            adaptTask?.cancel()
+        }
+    }
+
+    /// A plan is safe to keep mutating only while it's still live in the store and
+    /// active. Once deleted its `modelContext` is nil and touching relationships
+    /// would trap; once deactivated the adaptation is stale.
+    private func isPlanAdaptable(_ plan: TrainingPlan) -> Bool {
+        plan.modelContext != nil && plan.isActive
     }
 
     private func remainingAdaptableWorkouts(in plan: TrainingPlan) -> [ScheduledWorkout] {
@@ -173,12 +188,18 @@ struct PlanTabView: View {
             }
         )
 
+        // The streaming call can take many seconds; bail out if the user left the
+        // tab or the plan was deleted/replaced meanwhile rather than writing stale
+        // adaptations back into the store (M37).
+        guard !Task.isCancelled, isPlanAdaptable(plan) else { return }
+
         guard !adaptedByID.isEmpty else {
             smartAdaptProgress.currentMessage = "The coach response could not be applied. Make sure Apple Intelligence is enabled on this device, then try again."
             return
         }
 
         for (index, workout) in workoutsToAdapt.enumerated() {
+            guard !Task.isCancelled, isPlanAdaptable(plan) else { break }
             guard let adapted = adaptedByID[workout.id] else {
                 smartAdaptProgress.updates.insert(
                     SmartAdaptProgress.Update(
@@ -229,6 +250,7 @@ struct PlanTabView: View {
             try? context.save()
         }
 
+        guard !Task.isCancelled, isPlanAdaptable(plan) else { return }
         try? await container.healthKitRepository.syncWorkoutPlans(for: plan, unitPreference: appSettings.unitPreference)
         smartAdaptProgress.currentMessage = "Plan updated and synced."
     }
