@@ -107,4 +107,30 @@ struct NotificationServiceTests {
         #expect(beforeEight.count == 1)
         #expect(afterEight.isEmpty)
     }
+
+    // MARK: Review-snapshot pruning (S3)
+
+    /// Stale review snapshots (full run copies in UserDefaults) for runs that have
+    /// since imported into the store must be removed, while a snapshot for a run
+    /// still absent from the store is preserved as the tap-to-review fallback.
+    @Test("Pruning removes snapshots for imported runs and keeps still-pending ones")
+    func pruneReviewSnapshotsDropsImportedRuns() throws {
+        let suiteName = "NotificationServiceTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let importedID = UUID()
+        let pendingID = UUID()
+        let prefix = "syncedRunReviewSnapshot."
+        defaults.set(Data([0x1]), forKey: "\(prefix)\(importedID.uuidString)")
+        defaults.set(Data([0x2]), forKey: "\(prefix)\(pendingID.uuidString)")
+        // An unrelated key must be untouched.
+        defaults.set("keep", forKey: "unrelated.key")
+
+        NotificationService.pruneReviewSnapshots(storedRunIDs: [importedID], in: defaults)
+
+        #expect(defaults.data(forKey: "\(prefix)\(importedID.uuidString)") == nil)
+        #expect(defaults.data(forKey: "\(prefix)\(pendingID.uuidString)") != nil)
+        #expect(defaults.string(forKey: "unrelated.key") == "keep")
+    }
 }

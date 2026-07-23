@@ -240,6 +240,13 @@ final class AppContainer: ObservableObject {
     /// Checks UserDefaults for a workout that was synced while the app was not in the foreground
     /// and surfaces it for review. Called at launch so cold-opens also trigger the review sheet.
     func checkForPendingReviewWorkout() {
+        // Drop review snapshots (full run copies in UserDefaults) for runs that
+        // have since imported into the store, so they don't accumulate (S3).
+        let storedRunIDs = Set(
+            ((try? modelContainer.mainContext.fetch(FetchDescriptor<RunWorkout>())) ?? []).map(\.id)
+        )
+        NotificationService.pruneReviewSnapshots(storedRunIDs: storedRunIDs)
+
         guard
             let idString = UserDefaults.standard.string(forKey: "pendingReviewWorkoutID"),
             pendingReviewWorkout == nil
@@ -587,8 +594,23 @@ final class AppContainer: ObservableObject {
 import SwiftUI
 
 private struct AppContainerKey: EnvironmentKey {
-    static let defaultValue: AppContainer = MainActor.assumeIsolated {
-        AppContainer(inMemory: true)
+    // Reached only when a view reads `@Environment(\.appContainer)` without an
+    // ancestor injecting one — a wiring bug. Under the old default such a view
+    // silently bound to a throwaway in-memory container and lost every write with
+    // no error or log. Trap in debug so the missing injection surfaces at once; in
+    // release, `assertionFailure` is a no-op and we hand back a fresh in-memory
+    // container so a shipping build degrades instead of crashing. Computing this at
+    // the access site (a `var`, not a `let`) keeps `assumeIsolated` on the main
+    // actor where SwiftUI evaluates environment reads, rather than trapping on a
+    // stray off-main first touch of a lazily-initialised `static let`.
+    static var defaultValue: AppContainer {
+        MainActor.assumeIsolated {
+            assertionFailure(
+                "appContainer was read without injection — add "
+                + ".environment(\\.appContainer, container) above this view"
+            )
+            return AppContainer(inMemory: true)
+        }
     }
 }
 

@@ -147,11 +147,12 @@ struct OBWelcomeBack: View {
     private let restoreCoordinator = WelcomeBackRestoreCoordinator()
 
     @State private var iCloudIssue: String?
-    // Set true once we have a definitive signal that CloudKit's initial
-    // import has run. Combined with `hasData` below, an empty store after
-    // this point means the user is new (or has no iCloud data) and should
-    // proceed with regular onboarding rather than waiting forever.
+    // Set once the initial-sync wait concludes. `syncOutcome` records *how* it
+    // concluded: a definitive finish (`imported`/`noRemoteData`) lets an empty
+    // store fall through to fresh onboarding, whereas a `timedOut` result keeps
+    // the user on the restore screen so late-arriving iCloud data isn't lost.
     @State private var initialSyncFinished = false
+    @State private var syncOutcome: WelcomeBackRestoreCoordinator.InitialSyncOutcome?
 
     init(onStartFresh: @escaping () -> Void) {
         self.onStartFresh = onStartFresh
@@ -255,7 +256,11 @@ struct OBWelcomeBack: View {
             // decide there is nothing to restore.
             Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 3_000_000_000)
-                if restoreCoordinator.shouldStartFresh(initialSyncFinished: true, hasData: hasData) {
+                // A timed-out wait is inconclusive: keep the returning user on the
+                // restore screen (with its manual "Start fresh" button) instead of
+                // dropping them into new-user onboarding while data may still sync.
+                let outcome = syncOutcome ?? .timedOut
+                if restoreCoordinator.shouldStartFresh(outcome: outcome, hasData: hasData) {
                     onStartFresh()
                 }
             }
@@ -282,6 +287,9 @@ struct OBWelcomeBack: View {
     private func scheduleUnavailableICloudTransition() {
         Task { @MainActor in
             await restoreCoordinator.waitBeforeAutoTransition()
+            // The account is unusable, so no CloudKit records will arrive — a
+            // definitive "no remote data" conclusion, not a timeout.
+            syncOutcome = .noRemoteData
             initialSyncFinished = true
         }
     }
@@ -298,10 +306,15 @@ struct OBWelcomeBack: View {
     ///    never arrives (e.g. CloudKit container failed to initialise).
     @MainActor
     private func waitForInitialSync() async {
-        await restoreCoordinator.waitForInitialSync(
+        let outcome = await restoreCoordinator.waitForInitialSync(
             iCloudSyncEnabled: appSettings.iCloudSyncEnabled,
             waitForImport: waitForCloudKitImportEvent(timeoutNanoseconds:)
         )
+        // Preserve a definitive conclusion reached earlier (e.g. the unusable-iCloud
+        // auto-transition) rather than letting a later timeout overwrite it.
+        if syncOutcome == nil || outcome != .timedOut {
+            syncOutcome = outcome
+        }
         initialSyncFinished = true
     }
 
