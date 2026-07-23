@@ -4,6 +4,11 @@ A full review of the app (all 104 Swift files, ~24.6k lines) covering bugs, desi
 
 > **Fix tracking:** items marked **✅ FIXED** have been resolved; the note says where. Line numbers in fixed items refer to the original commit and may have drifted.
 
+> **Scope:** this document covers *correctness and design defects*. For a
+> forward-looking review of the **product feature set** — features that need
+> improvement and net-new capabilities to build — see
+> [`FEATURE_IMPROVEMENTS_2026-07.md`](./FEATURE_IMPROVEMENTS_2026-07.md).
+
 **Contents**
 1. [Critical bugs](#1-critical-bugs)
 2. [High-severity bugs](#2-high-severity-bugs)
