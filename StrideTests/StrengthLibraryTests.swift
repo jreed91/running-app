@@ -170,6 +170,43 @@ struct StrengthLibraryTests {
         #expect(hasDeadHang)
     }
 
+    // MARK: - Focus-relevance ordering
+
+    @Test("Running-specific focus keeps band work over barbell when the list is capped")
+    func runningSpecificKeepsRelevantEquipmentWhenCapped() {
+        let exercises = StrengthLibrary.exercises(
+            for: [.barbell, .resistanceBands], focus: .runningSpecific, phase: .peak
+        )
+        // The peak running-specific cap (6) leaves room only for the anchors + the highest
+        // priority equipment's moves. Bands outrank barbell for running-specific focus.
+        #expect(exercises.contains { $0.name == "Monster Walk" })
+        #expect(!exercises.contains { $0.name == "Barbell Hip Thrust" })
+    }
+
+    @Test("General-strength focus keeps barbell work over bands when the list is capped")
+    func generalStrengthKeepsCompoundEquipmentWhenCapped() {
+        let exercises = StrengthLibrary.exercises(
+            for: [.barbell, .resistanceBands], focus: .generalStrength, phase: .peak
+        )
+        #expect(exercises.contains { $0.name == "Barbell Hip Thrust" })
+        #expect(!exercises.contains { $0.name == "Monster Walk" })
+    }
+
+    @Test("Equipment priority is focus-dependent, not alphabetical")
+    func prioritizationDependsOnFocus() {
+        let all = StrengthEquipment.allCases
+        let running = StrengthLibrary.prioritizedEquipment(all, focus: .runningSpecific)
+        let general = StrengthLibrary.prioritizedEquipment(all, focus: .generalStrength)
+
+        #expect(running.first == .resistanceBands)
+        #expect(running.last == .barbell)
+        #expect(general.first == .barbell)
+        #expect(general.last == .resistanceBands)
+        // Every selected equipment is preserved, just reordered.
+        #expect(Set(running) == Set(all))
+        #expect(Set(general) == Set(all))
+    }
+
     @Test("Timed exercises have durationSeconds set")
     func timedExercisesHaveDuration() {
         let exercises = StrengthLibrary.exercises(

@@ -670,6 +670,40 @@ private struct PlanOverviewCard: View {
     }
 }
 
+// MARK: - Phase Progress Math
+
+/// Pure, unit-testable math backing `PhaseProgressBar`'s divider markers.
+enum PhaseProgressMath {
+
+    /// Cumulative phase-transition fractions (0–1, exclusive) for a plan's ordered
+    /// per-week phases. Deduplicated so a zero-week phase can't emit a duplicate
+    /// marker — duplicate values would collide as `ForEach(id: \.self)` identities.
+    static func transitionFractions(weekPhases: [TrainingPhase]) -> [CGFloat] {
+        guard !weekPhases.isEmpty else { return [] }
+        let total = CGFloat(weekPhases.count)
+        let ordered: [TrainingPhase] = [.base, .build, .peak]
+        var fractions: [CGFloat] = []
+        var seen: Set<CGFloat> = []
+        for phase in ordered {
+            let through = weekPhases.filter { orderIndex(of: $0) <= orderIndex(of: phase) }.count
+            let fraction = CGFloat(through) / total
+            if fraction > 0, fraction < 1, seen.insert(fraction).inserted {
+                fractions.append(fraction)
+            }
+        }
+        return fractions
+    }
+
+    static func orderIndex(of phase: TrainingPhase) -> Int {
+        switch phase {
+        case .base:  return 0
+        case .build: return 1
+        case .peak:  return 2
+        case .taper: return 3
+        }
+    }
+}
+
 // MARK: - Phase Progress Bar
 
 private struct PhaseProgressBar: View {
@@ -682,25 +716,7 @@ private struct PhaseProgressBar: View {
     /// Cumulative fraction (0–1) at which each phase transition occurs.
     /// Returns up to three fractions for Base→Build, Build→Peak, Peak→Taper.
     private var phaseTransitions: [CGFloat] {
-        guard !weeks.isEmpty else { return [] }
-        let total = CGFloat(weeks.count)
-        var transitions: [CGFloat] = []
-        let ordered: [TrainingPhase] = [.base, .build, .peak]
-        for phase in ordered {
-            let through = weeks.filter { orderIndex(of: $0.phase) <= orderIndex(of: phase) }.count
-            let fraction = CGFloat(through) / total
-            if fraction > 0, fraction < 1 { transitions.append(fraction) }
-        }
-        return transitions
-    }
-
-    private func orderIndex(of phase: TrainingPhase) -> Int {
-        switch phase {
-        case .base:  return 0
-        case .build: return 1
-        case .peak:  return 2
-        case .taper: return 3
-        }
+        PhaseProgressMath.transitionFractions(weekPhases: weeks.map(\.phase))
     }
 
     private var currentPhase: TrainingPhase {

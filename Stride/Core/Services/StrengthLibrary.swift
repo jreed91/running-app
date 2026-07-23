@@ -40,8 +40,10 @@ struct StrengthLibrary: Sendable {
             result += runningSpecificAnchors(sets: sets, reps: reps)
         }
 
-        // Equipment-specific exercises
-        for item in equipment.sorted(by: { $0.rawValue < $1.rawValue }) {
+        // Equipment-specific exercises, added in focus-relevance order so that when the
+        // list is capped below, the most relevant equipment survives instead of whichever
+        // equipment happened to sort first alphabetically.
+        for item in prioritizedEquipment(equipment, focus: focus) {
             result += exercisesFor(item, focus: focus, sets: sets, reps: reps)
         }
 
@@ -51,6 +53,33 @@ struct StrengthLibrary: Sendable {
 
         let maxExercises = maxExerciseCount(phase: phase, focus: focus)
         return Array(result.prefix(maxExercises))
+    }
+
+    // MARK: - Equipment Prioritization
+
+    /// Orders the selected equipment by relevance to the training focus. The exercise
+    /// list is capped in `exercises(for:)`, so this decides which equipment's moves
+    /// survive the cap. Running-specific focus prioritizes glute/posterior-chain and
+    /// single-leg tools; general-strength focus prioritizes heavy compound loading.
+    /// Ties are impossible (each equipment has a distinct rank), so the result is stable.
+    static func prioritizedEquipment(
+        _ equipment: [StrengthEquipment],
+        focus: StrengthFocus
+    ) -> [StrengthEquipment] {
+        equipment.sorted { relevanceRank(of: $0, focus: focus) < relevanceRank(of: $1, focus: focus) }
+    }
+
+    private static func relevanceRank(of equipment: StrengthEquipment, focus: StrengthFocus) -> Int {
+        let order: [StrengthEquipment]
+        switch focus {
+        case .runningSpecific:
+            // Activation/single-leg tools first; heavy general lifting last.
+            order = [.resistanceBands, .bodyweight, .kettlebell, .dumbbells, .pullUpBar, .barbell]
+        case .generalStrength:
+            // Compound loading tools first; activation bands last.
+            order = [.barbell, .dumbbells, .kettlebell, .pullUpBar, .bodyweight, .resistanceBands]
+        }
+        return order.firstIndex(of: equipment) ?? order.count
     }
 
     // MARK: - Phase Volume
