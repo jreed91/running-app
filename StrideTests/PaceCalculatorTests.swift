@@ -26,6 +26,19 @@ struct PaceCalculatorTests {
         #expect(faster > slower)
     }
 
+    @Test("VDOT returns 0 (not NaN/∞) for degenerate input")
+    func vdotDegenerateInput() {
+        // Zero or negative time/distance must not produce ∞/NaN, which would break
+        // callers that guard on `v > 0` and comparators that sort runs by VDOT.
+        let zeroTime = PaceCalculatorService.vdot(distanceMeters: 5_000, timeSeconds: 0)
+        let zeroDistance = PaceCalculatorService.vdot(distanceMeters: 0, timeSeconds: 20 * 60)
+        let negativeTime = PaceCalculatorService.vdot(distanceMeters: 5_000, timeSeconds: -60)
+        #expect(zeroTime == 0)
+        #expect(zeroDistance == 0)
+        #expect(negativeTime == 0)
+        #expect(zeroTime.isFinite && zeroDistance.isFinite && negativeTime.isFinite)
+    }
+
     // MARK: Training paces ordering
 
     @Test("Interval pace is faster than tempo pace")

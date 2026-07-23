@@ -103,8 +103,11 @@ struct PlanSetupView: View {
             if goalRace.usesCustomDistance {
                 Stepper(
                     value: $customDistanceKm,
+                    // The value is stored in km; for imperial users step by half a mile
+                    // (0.5 mi ≈ 0.805 km) so the mile display advances in clean 0.5 mi
+                    // increments rather than the ~0.31 mi jumps a 0.5 km step produced.
                     in: 1...80,
-                    step: appSettings.unitPreference == .imperial ? 0.5 : 1
+                    step: appSettings.unitPreference == .imperial ? 0.5 * 1.609344 : 1
                 ) {
                     LabeledContent("Distance") {
                         Text(

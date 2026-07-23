@@ -6,8 +6,11 @@ import SwiftData
 
 /// A user-saved running route produced by Route Genius.
 ///
-/// Route coordinates and turn-by-turn steps are stored as JSON blobs using
-/// SwiftData external storage so that large arrays stay off the row store.
+/// Route coordinates and turn-by-turn steps are stored as JSON blobs on the row
+/// store. NOTE: these are *not* yet marked `@Attribute(.externalStorage)`, so a very
+/// long route can push a record past the ~1 MB CKRecord limit and silently stop
+/// syncing. Enabling external storage is the correct fix but changes the persistent
+/// store format and must ship with a device-tested CloudKit migration.
 @Model
 final class SavedRoute {
     #Index<SavedRoute>([\.id], [\.createdAt])
@@ -74,13 +77,13 @@ extension SavedRoute {
     /// Decode/encode the route path as ``Coordinate`` array.
     var coordinates: [Coordinate] {
         get { coordinatesData?.decode([Coordinate].self) ?? [] }
-        set { coordinatesData = .encoded(newValue) }
+        set { coordinatesData = .encoded(newValue, keeping: coordinatesData) }
     }
 
     /// Decode/encode the turn-by-turn step list.
     var steps: [RouteStep] {
         get { stepsData?.decode([RouteStep].self) ?? [] }
-        set { stepsData = .encoded(newValue) }
+        set { stepsData = .encoded(newValue, keeping: stepsData) }
     }
 
     /// Convenience accessor for the starting coordinate.

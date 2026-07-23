@@ -61,7 +61,12 @@ final class NotificationService: NSObject {
     var isAuthorized: Bool {
         get async {
             let settings = await center.notificationSettings()
-            return settings.authorizationStatus == .authorized
+            // Provisional (quiet) and ephemeral (App Clip) grants can still deliver
+            // notifications, so treat them as authorized rather than blocking reminders.
+            switch settings.authorizationStatus {
+            case .authorized, .provisional, .ephemeral: return true
+            default: return false
+            }
         }
     }
 

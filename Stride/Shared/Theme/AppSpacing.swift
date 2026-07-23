@@ -3,7 +3,7 @@ import CoreGraphics
 // MARK: - Spacing scale
 //
 // 4pt grid matching the Stride design system (tokens.jsx). Use `AppSpacing.md`
-// (16) as the default card padding.
+// (12) as the default card padding.
 
 enum AppSpacing {
     static let xxs: CGFloat = 2

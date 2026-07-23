@@ -28,11 +28,4 @@ extension Date {
     func adding(weeks: Int) -> Date {
         Calendar.current.date(byAdding: .weekOfYear, value: weeks, to: self) ?? self
     }
-
-    /// Short day-of-week + day number, e.g. "Mon 3".
-    var shortDayLabel: String {
-        let f = DateFormatter()
-        f.dateFormat = "EEE d"
-        return f.string(from: self)
-    }
 }

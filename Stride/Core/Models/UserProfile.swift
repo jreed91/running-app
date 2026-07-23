@@ -100,7 +100,7 @@ extension UserProfile {
     /// Empty means "spread evenly based on weeklyRunDays".
     var preferredRunDayIndices: [Int] {
         get { preferredRunDayIndicesData?.decode([Int].self) ?? [] }
-        set { preferredRunDayIndicesData = newValue.isEmpty ? nil : .encoded(newValue) }
+        set { preferredRunDayIndicesData = newValue.isEmpty ? nil : .encoded(newValue, keeping: preferredRunDayIndicesData) }
     }
 
     var selectedEquipment: [StrengthEquipment] {
@@ -110,7 +110,7 @@ extension UserProfile {
             return rawValues.compactMap { StrengthEquipment(rawValue: $0) }
         }
         set {
-            selectedEquipmentData = newValue.isEmpty ? nil : .encoded(newValue.map(\.rawValue))
+            selectedEquipmentData = newValue.isEmpty ? nil : .encoded(newValue.map(\.rawValue), keeping: selectedEquipmentData)
         }
     }
 
