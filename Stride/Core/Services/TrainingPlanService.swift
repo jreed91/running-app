@@ -732,7 +732,7 @@ struct TrainingPlanService {
         let adaptedPace: Double
         switch snap.performanceTrend {
         case .improving:
-            adaptedReps = min(baseReps + 1, baseReps + 2)
+            adaptedReps = baseReps + 1
             adaptedPace = max(basePace - 2, paces.repetition)
         case .onTrack:
             adaptedReps = baseReps

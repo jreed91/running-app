@@ -336,17 +336,17 @@ Representative: `StrideApp.swift:198,202`, `AppContainer.swift:229,257`, `Workou
 - Weekly load chart hardcodes 15 km = full bar (`DashboardView.swift:381-382`).
 - Recovery-card loading overlay can never appear — flag set and cleared synchronously (`DashboardView.swift:568-595`).
 - Route out-and-back midpoint uses straight-line distance/2 — real routes systematically overshoot (`RouteGeniusService.swift:179-208`); URL-construction failure reported as "no route found" (`:214-216`).
-- `isAuthorized` rejects `.provisional`/`.ephemeral` notification grants (`NotificationService.swift:56-61`).
+- ✅ `isAuthorized` rejects `.provisional`/`.ephemeral` notification grants (`NotificationService.swift:56-61`). **FIXED:** `isAuthorized` now treats `.authorized`, `.provisional`, and `.ephemeral` as authorized, so quiet/App-Clip grants no longer block reminder scheduling.
 - Map camera doesn't refit when a same-coordinate-count route is selected (`RouteMapView.swift:36`).
-- Interval duration estimate counts a recovery after the final rep; dead `min(baseReps+1, baseReps+2)` expression (`TrainingPlanService.swift:706, 751-756`).
-- `AssociateWorkoutSheet` offers strength/cross-training slots as link targets for runs (`AssociateWorkoutSheet.swift:16`).
-- `vdot(distanceMeters:timeSeconds:)` returns ∞/NaN on zero time — add a guard at the primitive (`PaceCalculatorService.swift:46-50`).
+- ✅ Dead `min(baseReps+1, baseReps+2)` expression in interval adaptation (`TrainingPlanService.swift`). **FIXED:** simplified to `baseReps + 1` (the `min` was a no-op — both arguments made `baseReps + 1` the minimum). *Still open:* the separate interval-duration estimate that counts a recovery after the final rep.
+- ✅ `AssociateWorkoutSheet` offers strength/cross-training slots as link targets for runs (`AssociateWorkoutSheet.swift:16`). **FIXED:** the candidate filter now uses `workoutType.isRunType` (the same run-only rule as the canonical linker from H8) instead of merely excluding `.rest`, so a run can no longer be linked to a strength/cross-training day.
+- ✅ `vdot(distanceMeters:timeSeconds:)` returns ∞/NaN on zero time — add a guard at the primitive (`PaceCalculatorService.swift:46-50`). **FIXED:** the primitive now returns `0` for non-positive time or distance, so downstream `v > 0`/`v.isFinite` guards reject it and the VDOT-sort comparator (`PlanTabView`) stays well-defined. Covered by `PaceCalculatorTests`.
 - `Data+JSON` `try?` in both directions: an encode failure (e.g. NaN in a split) silently **wipes** previously stored data; decode failures read as "no data" (`Data+JSON.swift:6-13`).
 - Large route/splits blobs lack `@Attribute(.externalStorage)` despite the doc comment claiming it — long-run records can exceed the ~1 MB CKRecord limit and silently stop syncing (`SavedRoute.swift:9-10, 39-41`; `RunWorkout.swift:32-35`).
 - `HealthKitRepository.save` exports only a bare distance sample — no HR, route, or energy — so Stride-recorded runs look empty in Apple Fitness (`HealthKitRepository.swift:127-160`).
 - `shortDayLabel` allocates a `DateFormatter` per call with a non-localized format (`Date+Extensions.swift:33-37`).
 - Onboarding step counter shows "2/9" on the first step and "9/9" twice (`OnboardingSubviews.swift:387`); skipping the 5K-time step records the untouched default 26:24 as the user's estimate (`OnboardingView.swift:180-182`).
-- `AppSpacing` comment says `md` = 16 but `md = 12` (`AppSpacing.swift:4-6`).
+- ✅ `AppSpacing` comment says `md` = 16 but `md = 12` (`AppSpacing.swift:4-6`). **FIXED:** the doc comment now reads `md` (12).
 - `StrengthLibrary.exercises(for:)` alphabetical sort means the most running-specific equipment is always truncated first (`StrengthLibrary.swift:44-53`).
 - Settings "sync restart" note latches on and never clears (`SettingsView.swift:227-237`).
 - `CloudKitDebugView` renders six unfiltered tables as one JSON `Text` (`CloudKitDebugView.swift:36-48`).

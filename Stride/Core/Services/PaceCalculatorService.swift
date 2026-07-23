@@ -43,7 +43,12 @@ enum PaceCalculatorService {
     // MARK: VDOT from race result
 
     /// Derives VDOT from a known race performance.
+    ///
+    /// Returns 0 for degenerate input (non-positive time or distance) rather than
+    /// ∞/NaN, so callers that guard on `v > 0` / `v.isFinite` reject it cleanly and
+    /// comparators (e.g. sorting workouts by VDOT) stay well-defined.
     static func vdot(distanceMeters: Double, timeSeconds: Double) -> Double {
+        guard timeSeconds > 0, distanceMeters > 0 else { return 0 }
         let timeMinutes = timeSeconds / 60
         let speed = distanceMeters / timeMinutes
         return vo2(forSpeedMetersPerMinute: speed) / fractionVO2max(forDurationMinutes: timeMinutes)

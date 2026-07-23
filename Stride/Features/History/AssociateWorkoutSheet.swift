@@ -12,8 +12,10 @@ struct AssociateWorkoutSheet: View {
     private var scheduledWorkouts: [ScheduledWorkout]
 
     private var unassociated: [ScheduledWorkout] {
+        // Only run-type days can be fulfilled by a run — never offer strength,
+        // cross-training, or rest days as link targets (see WorkoutType.isRunType).
         scheduledWorkouts
-            .filter { $0.completedWorkout == nil && $0.workoutType != .rest }
+            .filter { $0.completedWorkout == nil && $0.workoutType.isRunType }
             .sorted { abs($0.scheduledDate.timeIntervalSince(workout.date)) < abs($1.scheduledDate.timeIntervalSince(workout.date)) }
     }
 
