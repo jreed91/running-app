@@ -501,7 +501,8 @@ struct AICoachChatView: View {
     }
 
     private var openingStatus: AICoachCoachStatus {
-        guard latestRun != nil else { return .dataBacked }
+        // No run history yet: the reply is general guidance, not data-backed.
+        guard latestRun != nil else { return .general }
         if (latestRun?.averageHeartRate ?? 0) >= 155 || (latestRun?.maxHeartRate ?? 0) >= 175 {
             return .watchEffort
         }
@@ -570,14 +571,14 @@ private struct AICoachMiniMetric: Identifiable {
 private enum AICoachCoachStatus {
     case watchEffort
     case actionReady
-    case dataBacked
+    case general
     case setupNeeded
 
     var title: String {
         switch self {
         case .watchEffort: "WATCH EFFORT"
         case .actionReady: "ACTION READY"
-        case .dataBacked: "DATA BACKED"
+        case .general: "COACH"
         case .setupNeeded: "SETUP"
         }
     }
@@ -586,7 +587,7 @@ private enum AICoachCoachStatus {
         switch self {
         case .watchEffort: .warning
         case .actionReady: .success
-        case .dataBacked: .brand
+        case .general: .secondary
         case .setupNeeded: .secondary
         }
     }
