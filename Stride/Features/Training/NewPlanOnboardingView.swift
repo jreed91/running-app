@@ -408,9 +408,12 @@ struct NewPlanOnboardingView: View {
         VStack(spacing: 16) {
             VStack(spacing: 12) {
                 HStack(spacing: 6) {
+                    let weekStart = Date().startOfWeek
                     ForEach(0..<7, id: \.self) { i in
                         let dayLabels = ["M", "T", "W", "T", "F", "S", "S"]
-                        let dayNumbers = [20, 21, 22, 23, 24, 25, 26]
+                        // Real day-of-month numbers for the current (Monday-first)
+                        // week instead of hardcoded literals that read "20…26" forever.
+                        let dayNumber = Calendar.current.component(.day, from: weekStart.adding(days: i))
                         let isOn = selectedDays.contains(i)
                         Button {
                             if isOn { selectedDays.remove(i) } else { selectedDays.insert(i) }
@@ -420,7 +423,7 @@ struct NewPlanOnboardingView: View {
                                     .font(.system(size: 11, weight: .bold))
                                     .kerning(0.6)
                                     .opacity(isOn ? 0.85 : 0.6)
-                                Text("\(dayNumbers[i])")
+                                Text("\(dayNumber)")
                                     .font(.system(size: 15, weight: .bold, design: .monospaced))
                             }
                                 .frame(maxWidth: .infinity)

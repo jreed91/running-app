@@ -386,9 +386,13 @@ struct OnboardingView: View {
             VStack(spacing: 12) {
                 // Day grid
                 HStack(spacing: 8) {
+                    let weekStart = Date().startOfWeek
                     ForEach(0..<7) { i in
                         let labels = ["M","T","W","T","F","S","S"]
-                        let dayNumbers = [20, 21, 22, 23, 24, 25, 26]
+                        // Real day-of-month numbers for the current (Monday-first)
+                        // week instead of hardcoded literals that read "20…26" forever.
+                        let dayDate = weekStart.adding(days: i)
+                        let dayNumber = Calendar.current.component(.day, from: dayDate)
                         let isOn = selectedDays.contains(i)
                         Button {
                             withAnimation(AppAnimation.snappy) {
@@ -400,7 +404,7 @@ struct OnboardingView: View {
                                     .font(.system(size: 11, weight: .bold))
                                     .kerning(0.6)
                                     .opacity(isOn ? 0.85 : 0.6)
-                                Text("\(dayNumbers[i])")
+                                Text("\(dayNumber)")
                                     .font(.system(size: 15, weight: .bold, design: .monospaced))
                             }
                             .frame(maxWidth: .infinity)
@@ -503,7 +507,7 @@ struct OnboardingView: View {
             .adaptiveAnimation(AppAnimation.bouncy, value: permRowsVisible[2])
         }
         .task {
-            await checkExistingPermissions()
+            await refreshPermissionStates()
 
             // All permissions already granted — skip this step automatically
             if healthEnabled && locationEnabled && notificationsEnabled {
@@ -598,27 +602,27 @@ struct OnboardingView: View {
 
     // MARK: - Permissions
 
-    /// Pre-populate enabled flags from actual system authorization status.
-    private func checkExistingPermissions() async {
-        // Location
+    /// Reconciles the row flags with the *actual* system authorization status.
+    /// Location and notification grants are observable, so they're set in both
+    /// directions (a denial flips the row back off). HealthKit read authorization
+    /// is deliberately opaque in iOS — a denial is indistinguishable from
+    /// "not yet asked" — so the only positive signal we can trust is share status,
+    /// and we never flip HealthKit back off from here.
+    private func refreshPermissionStates() async {
         let locStatus = locationManager.authorizationStatus
-        if locStatus == .authorizedWhenInUse || locStatus == .authorizedAlways {
-            locationEnabled = true
-        }
-        // Notifications
-        let notifSettings = await UNUserNotificationCenter.current().notificationSettings()
-        if notifSettings.authorizationStatus == .authorized ||
-           notifSettings.authorizationStatus == .provisional {
-            notificationsEnabled = true
-        }
-        // HealthKit authorization status for reading is opaque; treat as granted
-        // if the store has already been authorized for any write type.
-        if HKHealthStore.isHealthDataAvailable() {
-            let store = HKHealthStore()
-            if let distType = HKQuantityType.quantityType(forIdentifier: .distanceWalkingRunning),
-               store.authorizationStatus(for: distType) == .sharingAuthorized {
-                healthEnabled = true
-            }
+        let notifStatus = await UNUserNotificationCenter.current()
+            .notificationSettings().authorizationStatus
+        let healthShareAuthorized: Bool = {
+            guard HKHealthStore.isHealthDataAvailable(),
+                  let distType = HKQuantityType.quantityType(forIdentifier: .distanceWalkingRunning)
+            else { return false }
+            return HKHealthStore().authorizationStatus(for: distType) == .sharingAuthorized
+        }()
+
+        withAnimation {
+            locationEnabled = (locStatus == .authorizedWhenInUse || locStatus == .authorizedAlways)
+            notificationsEnabled = (notifStatus == .authorized || notifStatus == .provisional)
+            if healthShareAuthorized { healthEnabled = true }
         }
     }
 
@@ -628,7 +632,8 @@ struct OnboardingView: View {
             activePermission = 0
             locationManager.requestWhenInUseAuthorization()
             try? await Task.sleep(nanoseconds: 1_800_000_000)   // time for system dialog
-            withAnimation { locationEnabled = true }
+            // Reflect the user's actual choice instead of assuming a grant.
+            await refreshPermissionStates()
             try? await Task.sleep(nanoseconds: 600_000_000)
         }
 
@@ -639,7 +644,9 @@ struct OnboardingView: View {
                 try? await container.healthKitRepository.requestAuthorization()
                 await container.workoutSyncService.startObserving()
             }
-            withAnimation { healthEnabled = true }
+            // Read authorization is opaque; a share grant is the only signal iOS
+            // exposes, so a fully denied sheet correctly leaves the row off.
+            await refreshPermissionStates()
             try? await Task.sleep(nanoseconds: 600_000_000)
         }
 
@@ -647,7 +654,8 @@ struct OnboardingView: View {
         if !notificationsEnabled {
             activePermission = 2
             try? await NotificationService.shared.requestAuthorization()
-            withAnimation { notificationsEnabled = true }
+            // A denied notification prompt now leaves the row off.
+            await refreshPermissionStates()
             try? await Task.sleep(nanoseconds: 600_000_000)
         }
 

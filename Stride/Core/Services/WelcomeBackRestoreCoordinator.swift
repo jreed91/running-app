@@ -8,6 +8,18 @@ struct WelcomeBackRestoreCoordinator {
         var shouldAutoTransition: Bool
     }
 
+    /// How the initial-sync wait concluded. Only `imported`/`noRemoteData` are
+    /// definitive; `timedOut` means we never heard back and must not be treated as
+    /// "sync finished, store is empty → new user".
+    enum InitialSyncOutcome: Equatable {
+        /// No CloudKit data will ever arrive (sync toggle off, or account unusable).
+        case noRemoteData
+        /// CloudKit signalled that its initial import completed.
+        case imported
+        /// The import never signalled completion before the fallback timeout.
+        case timedOut
+    }
+
     typealias ImportWaiter = @Sendable (UInt64) async -> Bool
     typealias Sleeper = @Sendable (UInt64) async -> Void
 
@@ -57,20 +69,31 @@ struct WelcomeBackRestoreCoordinator {
         await sleep(6_000_000_000)
     }
 
+    @discardableResult
     func waitForInitialSync(
         iCloudSyncEnabled: Bool,
         waitForImport: ImportWaiter
-    ) async {
+    ) async -> InitialSyncOutcome {
         guard iCloudSyncEnabled else {
             await sleep(1_500_000_000)
-            return
+            return .noRemoteData
         }
 
-        _ = await waitForImport(60_000_000_000)
+        let imported = await waitForImport(60_000_000_000)
         await sleep(1_000_000_000)
+        return imported ? .imported : .timedOut
     }
 
-    func shouldStartFresh(initialSyncFinished: Bool, hasData: Bool) -> Bool {
-        initialSyncFinished && !hasData
+    /// Whether an empty store should send the user into fresh onboarding. A
+    /// timeout is inconclusive — a returning user's records may still be arriving
+    /// — so we keep them on the restore screen (which still offers a manual
+    /// "Start fresh") rather than stranding them in new-user onboarding.
+    func shouldStartFresh(outcome: InitialSyncOutcome, hasData: Bool) -> Bool {
+        switch outcome {
+        case .timedOut:
+            return false
+        case .noRemoteData, .imported:
+            return !hasData
+        }
     }
 }
