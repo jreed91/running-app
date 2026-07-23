@@ -390,14 +390,18 @@ struct OBShell<Content: View>: View {
                             ZStack(alignment: .leading) {
                                 Capsule().fill(Color.secondary.opacity(0.12)).frame(height: 4)
                                 Capsule().fill(Color.brand)
-                                    .frame(width: geo.size.width * CGFloat(stepIndex + 1) / CGFloat(total),
+                                    .frame(width: geo.size.width * CGFloat(stepIndex) / CGFloat(total),
                                            height: 4)
                                     .adaptiveAnimation(AppAnimation.bouncy, value: stepIndex)
                             }
                         }
                         .frame(height: 4)
 
-                        Text("\(stepIndex + 1)/\(total)")
+                        // Steps count 1…total (the welcome screen is step 0, uncounted;
+                        // the final "ready" screen is the last step) — so show
+                        // `stepIndex` directly rather than `stepIndex + 1`, which used to
+                        // start at "2/total" and print the last number twice.
+                        Text("\(stepIndex)/\(total)")
                             .font(.system(size: 11, weight: .bold, design: .monospaced))
                             .foregroundStyle(.secondary)
                     }

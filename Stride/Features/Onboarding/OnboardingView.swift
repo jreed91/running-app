@@ -28,6 +28,10 @@ struct OnboardingView: View {
     @State private var fiveKHours = 0
     @State private var fiveKMinutes = 26
     @State private var fiveKSeconds = 24
+    /// True once the user confirms the 5K step (Continue). If they skip it, the
+    /// default 26:24 must not be recorded as their real estimate — a nil estimate
+    /// lets the plan derive VDOT from fitness level/gender instead.
+    @State private var didEnter5KTime = false
     @State private var selectedDays: Set<Int> = [0, 2, 4, 5]
     @State private var longRunOnSaturday = true
 
@@ -178,8 +182,9 @@ struct OnboardingView: View {
                     title: "Your recent 5K time?", subtitle: "Used to compute your VDOT and pace zones. You can skip or update this later.",
                     ctaLabel: "Continue",
                     secondaryLabel: "I don't know my 5K time",
-                    onSecondary: advance,
-                    onBack: retreat, onCTA: advance) {
+                    onSecondary: { didEnter5KTime = false; advance() },
+                    onBack: retreat,
+                    onCTA: { didEnter5KTime = true; advance() }) {
                 timeContent
             }
         case 6:
@@ -691,8 +696,14 @@ struct OnboardingView: View {
             return
         }
 
-        let v = PaceCalculatorService.vdot(distanceMeters: 5_000, timeSeconds: fiveKTimeSeconds)
-        let goalFinishTime = PaceCalculatorService.predictedTime(vdot: v, distanceMeters: effectiveRaceDistanceMeters)
+        // Only treat the 5K entry as real when the user actually confirmed it. If they
+        // skipped, persist a nil estimate and no goal time so the plan derives VDOT from
+        // fitness level rather than the default 26:24.
+        let estimated5K: Double? = didEnter5KTime ? fiveKTimeSeconds : nil
+        let goalFinishTime: Double = estimated5K.map { time in
+            let v = PaceCalculatorService.vdot(distanceMeters: 5_000, timeSeconds: time)
+            return PaceCalculatorService.predictedTime(vdot: v, distanceMeters: effectiveRaceDistanceMeters)
+        } ?? 0
         let profile = UserProfile(
             name: "",
             goalRace: goalRace,
@@ -702,7 +713,7 @@ struct OnboardingView: View {
             weeklyRunDays: max(selectedDays.count, 1),
             fitnessLevel: fitnessLevel,
             gender: .preferNotToShare,
-            currentEstimated5KTimeSeconds: fiveKTimeSeconds,
+            currentEstimated5KTimeSeconds: estimated5K,
             preferredRunDayIndices: selectedDays.sorted()
         )
         profile.customDistanceMeters = goalRace.usesCustomDistance ? effectiveRaceDistanceMeters : nil

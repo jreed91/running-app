@@ -328,7 +328,7 @@ Representative: `StrideApp.swift:198,202`, `AppContainer.swift:229,257`, `Workou
 ## 6. Low-severity bugs & polish
 
 - ✅ Race Fitness card shows green "On goal pace" when there is simply no prediction data (`RaceInsightsView.swift:76-87, 196-208`). **FIXED:** `goalGapSeconds` now returns `Double?` (`nil` when there's no goal or not enough data to predict) instead of `0`, and the hero card only renders the behind/ahead/on-goal line when a real gap exists — no data no longer masquerades as "On goal pace".
-- Imperial custom-distance stepper steps in 0.5 km (~0.31 mi) increments (`PlanSetupView.swift:104-117`).
+- ✅ Imperial custom-distance stepper steps in 0.5 km (~0.31 mi) increments (`PlanSetupView.swift:104-117`). **FIXED:** imperial users now step by 0.5 mi (≈0.805 km in the km-backed value) so the mile display advances in clean half-mile increments.
 - Onboarding "Build My Plan" wedges the spinner if the profile guard fails (`NewPlanOnboardingView.swift:212-216, 581-582`).
 - Strength fullScreenCover can present an empty, undismissable screen if the plan mutates between tap and presentation (`DashboardView.swift:308-312`).
 - `phaseTransitions` `ForEach(id: \.self)` can produce duplicate IDs when a phase has zero weeks (`PlanTabView.swift:662-673`).
@@ -345,7 +345,7 @@ Representative: `StrideApp.swift:198,202`, `AppContainer.swift:229,257`, `Workou
 - ⚠️ Large route/splits blobs lack `@Attribute(.externalStorage)` despite the doc comment claiming it — long-run records can exceed the ~1 MB CKRecord limit and silently stop syncing (`SavedRoute.swift:9-10, 39-41`; `RunWorkout.swift:32-35`). **PARTIAL:** the misleading `SavedRoute` doc comment was corrected to state the blobs are *not* externally stored. Actually enabling `.externalStorage` changes the persistent-store format on a shipping CloudKit app and must ship with a device-tested migration, so it is deferred rather than landed blind.
 - `HealthKitRepository.save` exports only a bare distance sample — no HR, route, or energy — so Stride-recorded runs look empty in Apple Fitness (`HealthKitRepository.swift:127-160`).
 - ✅ `shortDayLabel` allocates a `DateFormatter` per call with a non-localized format (`Date+Extensions.swift:33-37`). **FIXED:** removed — the property had no call sites anywhere in the app (dead code).
-- Onboarding step counter shows "2/9" on the first step and "9/9" twice (`OnboardingSubviews.swift:387`); skipping the 5K-time step records the untouched default 26:24 as the user's estimate (`OnboardingView.swift:180-182`).
+- ✅ Onboarding step counter shows "2/9" on the first step and "9/9" twice (`OnboardingSubviews.swift:387`); skipping the 5K-time step records the untouched default 26:24 as the user's estimate (`OnboardingView.swift:180-182`). **FIXED:** the `OBShell` counter and progress bar now use `stepIndex` (not `stepIndex + 1`), so the shells count 1/9…8/9 and only the final "ready" screen shows 9/9. Skipping the 5K step now records `currentEstimated5KTimeSeconds = nil` and no goal time (tracked via a `didEnter5KTime` flag), so the plan derives VDOT from fitness level/gender instead of persisting the default 26:24.
 - ✅ `AppSpacing` comment says `md` = 16 but `md = 12` (`AppSpacing.swift:4-6`). **FIXED:** the doc comment now reads `md` (12).
 - `StrengthLibrary.exercises(for:)` alphabetical sort means the most running-specific equipment is always truncated first (`StrengthLibrary.swift:44-53`).
 - Settings "sync restart" note latches on and never clears (`SettingsView.swift:227-237`).
