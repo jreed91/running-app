@@ -26,7 +26,7 @@ struct ProgressDashboardView: View {
     enum ProgressTab: String, CaseIterable {
         case stats    = "Stats"
         case insights = "Insights"
-        case medals   = "Medals"
+        case medals   = "Achievements"
     }
 
     enum ChartRange: String, CaseIterable {
@@ -110,7 +110,7 @@ struct ProgressDashboardView: View {
                         .task { progressAppeared = true }
                     }
                 } else {
-                    MedalsView()
+                    AchievementsView()
                 }
             }
             .background(Color.surfacePrimary)

@@ -3,7 +3,7 @@ import Foundation
 // MARK: - ProgressStatsService
 
 /// Pure, stateless helpers for Progress-tab statistics (medal PRs, period
-/// averages) that previously lived inline in view bodies (`MedalsView`,
+/// averages) that previously lived inline in view bodies (`AchievementsView`,
 /// `ProgressView`) and therefore couldn't be unit tested. See AGENTS.md:
 /// business logic belongs in services, not views.
 struct ProgressStatsService: Sendable {
