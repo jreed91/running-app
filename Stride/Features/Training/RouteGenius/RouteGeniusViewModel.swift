@@ -33,6 +33,9 @@ final class RouteGeniusViewModel {
 
     var addressResults: [MKMapItem] = []
     var selectedMapItem: MKMapItem?
+    // nonisolated(unsafe) lets deinit cancel the task without a MainActor hop.
+    // Task.cancel() is thread-safe so this is sound.
+    nonisolated(unsafe) private var searchTask: Task<Void, Never>?
 
     // MARK: State
 
@@ -82,6 +85,7 @@ final class RouteGeniusViewModel {
 
     deinit {
         locationTask?.cancel()
+        searchTask?.cancel()
     }
 
     // MARK: Location
@@ -104,19 +108,41 @@ final class RouteGeniusViewModel {
 
     // MARK: Address search
 
+    /// Debounced address lookup driven by per-keystroke changes.
+    ///
+    /// Each keystroke cancels the previous in-flight search before starting a
+    /// new one, so slow responses for an earlier prefix can never clobber the
+    /// results for what the user has actually typed (M36).
+    func searchAddressDebounced() {
+        searchTask?.cancel()
+        let query = addressQuery
+        searchTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard !Task.isCancelled else { return }
+            await self?.performAddressSearch(for: query)
+        }
+    }
+
+    /// Immediate address lookup (e.g. on submit), cancelling any pending debounce.
     func searchAddress() async {
-        guard !addressQuery.trimmingCharacters(in: .whitespaces).isEmpty else {
+        searchTask?.cancel()
+        await performAddressSearch(for: addressQuery)
+    }
+
+    private func performAddressSearch(for query: String) async {
+        guard !query.trimmingCharacters(in: .whitespaces).isEmpty else {
             addressResults = []
             return
         }
         let request = MKLocalSearch.Request()
-        request.naturalLanguageQuery = addressQuery
+        request.naturalLanguageQuery = query
         let search = MKLocalSearch(request: request)
-        if let response = try? await search.start() {
-            addressResults = Array(response.mapItems.prefix(5))
-        } else {
-            addressResults = []
-        }
+        let response = try? await search.start()
+        guard !Task.isCancelled else { return }
+        // Drop a late response whose query no longer matches the current input,
+        // so a stale result can't replace newer text the user has typed (M36).
+        guard query == addressQuery else { return }
+        addressResults = Array((response?.mapItems ?? []).prefix(5))
     }
 
     func selectAddress(_ item: MKMapItem) {

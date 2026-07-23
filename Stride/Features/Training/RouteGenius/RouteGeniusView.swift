@@ -196,7 +196,7 @@ struct RouteGeniusView: View {
             }
         }
         .onChange(of: viewModel.addressQuery) { _, newValue in
-            if newValue.count > 2 { Task { await viewModel.searchAddress() } }
+            if newValue.count > 2 { viewModel.searchAddressDebounced() }
         }
     }
 
