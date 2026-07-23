@@ -89,9 +89,14 @@ enum PulseIntegrationService {
         #if canImport(Pulse)
         configureLoggerStore()
         configureNetworkLogger()
-        RemoteLogger.shared.initialize(store: .shared)
 
+        // Remote logging advertises the app over Bonjour (`_pulse._tcp`). Restrict
+        // it to local development so a TestFlight tester's device never broadcasts
+        // its diagnostics on the local network, and the dev-only
+        // NSLocalNetworkUsageDescription is never exercised in shipped builds (S4).
+        // The on-disk store above still captures diagnostics for TestFlight QA.
         #if DEBUG
+        RemoteLogger.shared.initialize(store: .shared)
         RemoteLogger.shared.isAutomaticConnectionEnabled = true
         #endif
 

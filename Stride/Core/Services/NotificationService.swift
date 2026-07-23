@@ -312,6 +312,22 @@ final class NotificationService: NSObject {
         UserDefaults.standard.removeObject(forKey: Self.reviewSnapshotKey(idString))
     }
 
+    /// Removes persisted review snapshots for runs already present in the store,
+    /// so full run copies don't accumulate in the defaults plist (S3). A snapshot
+    /// is only a fallback for a run that hasn't imported yet; once the real row
+    /// exists the snapshot is redundant. Injectable `defaults` for testability.
+    nonisolated static func pruneReviewSnapshots(
+        storedRunIDs: Set<UUID>,
+        in defaults: UserDefaults = .standard
+    ) {
+        for key in defaults.dictionaryRepresentation().keys where key.hasPrefix(reviewSnapshotKeyPrefix) {
+            let idString = String(key.dropFirst(reviewSnapshotKeyPrefix.count))
+            if let uuid = UUID(uuidString: idString), storedRunIDs.contains(uuid) {
+                defaults.removeObject(forKey: key)
+            }
+        }
+    }
+
     // MARK: Private
 
     private func syncedRunBody(for workout: RunWorkout, unit: UnitPreference) -> String {
@@ -326,8 +342,10 @@ final class NotificationService: NSObject {
         UserDefaults.standard.set(data, forKey: Self.reviewSnapshotKey(workout.id.uuidString))
     }
 
+    private nonisolated static let reviewSnapshotKeyPrefix = "syncedRunReviewSnapshot."
+
     private nonisolated static func reviewSnapshotKey(_ idString: String) -> String {
-        "syncedRunReviewSnapshot.\(idString)"
+        "\(reviewSnapshotKeyPrefix)\(idString)"
     }
 
     private func reminderBody(for workout: ScheduledWorkout, minutesBefore: Int) -> String {
@@ -367,8 +385,12 @@ final class NotificationService: NSObject {
         let notes: String?
         let healthKitWorkoutID: String?
         let splitsData: Data?
-        let routeData: Data?
         let weatherData: Data?
+        // NOTE: the run's route (raw GPS coordinates) is deliberately NOT persisted
+        // here — writing full location traces into the UserDefaults plist for every
+        // synced run was a privacy leak (S3). The review sheet restored from a
+        // snapshot shows the run without its map; the canonical import keeps the
+        // route on the real stored row.
 
         init(workout: RunWorkout) {
             self.id = workout.id
@@ -384,7 +406,6 @@ final class NotificationService: NSObject {
             self.notes = workout.notes
             self.healthKitWorkoutID = workout.healthKitWorkoutID
             self.splitsData = workout.splitsData
-            self.routeData = workout.routeData
             self.weatherData = workout.weatherData
         }
 
@@ -404,7 +425,6 @@ final class NotificationService: NSObject {
             workout.notes = notes
             workout.healthKitWorkoutID = healthKitWorkoutID
             workout.splitsData = splitsData
-            workout.routeData = routeData
             workout.weatherData = weatherData
             return workout
         }

@@ -240,6 +240,13 @@ final class AppContainer: ObservableObject {
     /// Checks UserDefaults for a workout that was synced while the app was not in the foreground
     /// and surfaces it for review. Called at launch so cold-opens also trigger the review sheet.
     func checkForPendingReviewWorkout() {
+        // Drop review snapshots (full run copies in UserDefaults) for runs that
+        // have since imported into the store, so they don't accumulate (S3).
+        let storedRunIDs = Set(
+            ((try? modelContainer.mainContext.fetch(FetchDescriptor<RunWorkout>())) ?? []).map(\.id)
+        )
+        NotificationService.pruneReviewSnapshots(storedRunIDs: storedRunIDs)
+
         guard
             let idString = UserDefaults.standard.string(forKey: "pendingReviewWorkoutID"),
             pendingReviewWorkout == nil

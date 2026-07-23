@@ -26,15 +26,29 @@ enum AppLogger {
         let text = message()
 
         #if canImport(Pulse)
-        LoggerStore.shared.storeMessage(
-            label: label,
-            level: map(level),
-            message: text
-        )
+        // Only persist to the on-disk Pulse store when diagnostics are enabled
+        // (DEBUG or a TestFlight sandbox build). In App Store production the store
+        // is never activated, so its 64 MB/7-day retention limits never apply —
+        // persisting there would grow an unbounded, uncapped log of coordinates,
+        // distances, and source bundle IDs (S2).
+        if PulseIntegrationService.isDiagnosticsEnabled {
+            LoggerStore.shared.storeMessage(
+                label: label,
+                level: map(level),
+                message: text
+            )
+        }
         #endif
 
-        Logger(subsystem: subsystem, category: label)
-            .log(level: mapToOSLog(level), "\(text, privacy: .public)")
+        // Keep payloads out of sysdiagnose/Console in shipping builds. Developers
+        // attached to Xcode (DEBUG) still see full text; everywhere else the value
+        // is redacted as `<private>` (S2).
+        let logger = Logger(subsystem: subsystem, category: label)
+        #if DEBUG
+        logger.log(level: mapToOSLog(level), "\(text, privacy: .public)")
+        #else
+        logger.log(level: mapToOSLog(level), "\(text, privacy: .private)")
+        #endif
     }
 
     private static func mapToOSLog(_ level: Level) -> OSLogType {
