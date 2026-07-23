@@ -54,22 +54,22 @@ final class RunWorkout {
 
     var splits: [Split] {
         get { splitsData?.decode([Split].self) ?? [] }
-        set { splitsData = .encoded(newValue) }
+        set { splitsData = .encoded(newValue, keeping: splitsData) }
     }
 
     var routeCoordinates: [Coordinate] {
         get { routeData?.decode([Coordinate].self) ?? [] }
-        set { routeData = .encoded(newValue) }
+        set { routeData = .encoded(newValue, keeping: routeData) }
     }
 
     var weather: WorkoutWeather? {
         get { weatherData?.decode(WorkoutWeather.self) }
-        set { weatherData = newValue.flatMap { .encoded($0) } }
+        set { weatherData = newValue.flatMap { .encoded($0, keeping: weatherData) } }
     }
 
     var cachedAIInsight: AICoachInsight? {
         get { cachedAIInsightData?.decode(AICoachInsight.self) }
-        set { cachedAIInsightData = newValue.flatMap { .encoded($0) } }
+        set { cachedAIInsightData = newValue.flatMap { .encoded($0, keeping: cachedAIInsightData) } }
     }
 
     var workoutType: WorkoutType {

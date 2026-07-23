@@ -36,6 +36,6 @@ final class StrengthWorkout {
 extension StrengthWorkout {
     var completedSets: [CompletedStrengthSet] {
         get { completedSetsData?.decode([CompletedStrengthSet].self) ?? [] }
-        set { completedSetsData = newValue.isEmpty ? nil : .encoded(newValue) }
+        set { completedSetsData = newValue.isEmpty ? nil : .encoded(newValue, keeping: completedSetsData) }
     }
 }

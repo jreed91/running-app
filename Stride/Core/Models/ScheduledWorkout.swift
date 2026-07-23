@@ -57,7 +57,7 @@ final class ScheduledWorkout {
 
     var intervals: [WorkoutInterval] {
         get { intervalsData?.decode([WorkoutInterval].self) ?? [] }
-        set { intervalsData = .encoded(newValue) }
+        set { intervalsData = .encoded(newValue, keeping: intervalsData) }
     }
 
     var targetPaceRange: ClosedRange<Double>? {
@@ -67,12 +67,12 @@ final class ScheduledWorkout {
 
     var workoutStructure: WorkoutStructure? {
         get { structureData?.decode(WorkoutStructure.self) }
-        set { structureData = newValue.flatMap { Data.encoded($0) } }
+        set { structureData = newValue.flatMap { Data.encoded($0, keeping: structureData) } }
     }
 
     var strengthPlan: StrengthWorkoutPlan? {
         get { strengthData?.decode(StrengthWorkoutPlan.self) }
-        set { strengthData = newValue.flatMap { Data.encoded($0) } }
+        set { strengthData = newValue.flatMap { Data.encoded($0, keeping: strengthData) } }
     }
 
     var workoutType: WorkoutType {

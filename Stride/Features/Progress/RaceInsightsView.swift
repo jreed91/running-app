@@ -73,8 +73,12 @@ struct RaceInsightsView: View {
         return (pace * (raceDistance / 1_000)).durationString
     }
 
-    private var goalGapSeconds: Double {
-        guard let prof = profile, prof.goalFinishTime > 0 else { return 0 }
+    /// Seconds the predicted finish is behind (+) or ahead (−) of the goal, or
+    /// `nil` when there is no goal or not enough data to make a prediction. Returning
+    /// `nil` (rather than 0) keeps the "On goal pace" state from showing when the
+    /// gap is simply unknown.
+    private var goalGapSeconds: Double? {
+        guard let prof = profile, prof.goalFinishTime > 0 else { return nil }
         let raceDistance = prof.effectiveRaceDistanceMeters
         guard let mostRecent = workouts.last(where: { $0.distanceMeters >= 1_500 }),
               let pace = PaceCalculatorService.predictedRacePaceSecondsPerKm(
@@ -82,7 +86,7 @@ struct RaceInsightsView: View {
                   workoutDurationSeconds: mostRecent.durationSeconds,
                   raceDistanceMeters: raceDistance
               )
-        else { return 0 }
+        else { return nil }
         return pace * (raceDistance / 1_000) - prof.goalFinishTime
     }
 
@@ -117,8 +121,7 @@ struct RaceInsightsView: View {
             tips.append("No quality sessions detected recently. Adding one tempo or interval workout per week accelerates fitness gains.")
         }
 
-        let gap = goalGapSeconds
-        if tips.count < 3, gap > 0 {
+        if tips.count < 3, let gap = goalGapSeconds, gap > 0 {
             let gapMinutes = Int(gap / 60)
             tips.append(String(format: "You're about %d min behind your goal. Weekly threshold workouts are the most effective way to close that gap.", gapMinutes))
         }
@@ -193,18 +196,22 @@ struct RaceInsightsView: View {
                                 .font(.captionStrong)
                                 .foregroundStyle(.secondary)
                         }
-                        if gap > 0 {
-                            Text(String(format: "%.0f sec behind goal", gap))
-                                .font(.captionStrong)
-                                .foregroundStyle(.destructive)
-                        } else if gap < 0 {
-                            Text(String(format: "%.0f sec ahead of goal", -gap))
-                                .font(.captionStrong)
-                                .foregroundStyle(.success)
-                        } else {
-                            Text("On goal pace")
-                                .font(.captionStrong)
-                                .foregroundStyle(.success)
+                        // Only show a goal comparison when a prediction exists; a nil
+                        // gap means "no data", not "on goal pace".
+                        if let gap {
+                            if gap > 0 {
+                                Text(String(format: "%.0f sec behind goal", gap))
+                                    .font(.captionStrong)
+                                    .foregroundStyle(.destructive)
+                            } else if gap < 0 {
+                                Text(String(format: "%.0f sec ahead of goal", -gap))
+                                    .font(.captionStrong)
+                                    .foregroundStyle(.success)
+                            } else {
+                                Text("On goal pace")
+                                    .font(.captionStrong)
+                                    .foregroundStyle(.success)
+                            }
                         }
                     }
                 }
