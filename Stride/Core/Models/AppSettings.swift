@@ -81,6 +81,14 @@ final class AppSettings {
         }
     }
 
+    /// The user's weekly running-distance goal, in metres. Drives the weekly
+    /// progress ring and consistency badges on the Progress → Achievements tab.
+    var weeklyGoalMeters: Double {
+        didSet {
+            persist(weeklyGoalMeters, forKey: Self.weeklyGoalMetersKey)
+        }
+    }
+
     // Internal so services can read the same key before AppSettings is created.
     static let unitPreferenceKey = "unitPreference"
     /// Legacy UserDefaults/iCloud-KVS key for the ORS token. Retained only so the
@@ -93,6 +101,10 @@ final class AppSettings {
     // Internal so AppContainer can read the same key before AppSettings is created.
     static let iCloudSyncKey = "iCloudSyncEnabled"
     static let morningReminderKey = "morningReminderEnabled"
+    static let weeklyGoalMetersKey = "weeklyGoalMeters"
+
+    /// Default weekly goal (20 km) applied when the user has never set one.
+    static let defaultWeeklyGoalMeters = 20_000.0
 
     init(
         defaults: KeyValueStore = UserDefaults.standard,
@@ -112,6 +124,7 @@ final class AppSettings {
         let aiProviderStored = Self.hasStoredValue(forKey: Self.aiProviderKey, defaults: defaults, ubiquitous: ubiquitous)
         let syncStored = Self.hasStoredValue(forKey: Self.iCloudSyncKey, defaults: defaults, ubiquitous: ubiquitous)
         let reminderStored = Self.hasStoredValue(forKey: Self.morningReminderKey, defaults: defaults, ubiquitous: ubiquitous)
+        let weeklyGoalStored = Self.hasStoredValue(forKey: Self.weeklyGoalMetersKey, defaults: defaults, ubiquitous: ubiquitous)
 
         let raw = Self.readString(forKey: Self.unitPreferenceKey, defaults: defaults, ubiquitous: ubiquitous) ?? ""
         self.unitPreference = UnitPreference(rawValue: raw) ?? .metric
@@ -135,6 +148,11 @@ final class AppSettings {
             ? Self.readBool(forKey: Self.morningReminderKey, defaults: defaults, ubiquitous: ubiquitous)
             : true
 
+        // Default to 20 km when the user has never set a weekly goal.
+        self.weeklyGoalMeters = weeklyGoalStored
+            ? (Self.readDouble(forKey: Self.weeklyGoalMetersKey, defaults: defaults, ubiquitous: ubiquitous) ?? Self.defaultWeeklyGoalMeters)
+            : Self.defaultWeeklyGoalMeters
+
         // Write back only the values that already existed somewhere. Seeding a brand-new key
         // into the stores at launch is exactly what clobbers not-yet-synced remote values (M15).
         if unitStored { persist(unitPreference.rawValue, forKey: Self.unitPreferenceKey) }
@@ -142,6 +160,7 @@ final class AppSettings {
         if aiProviderStored { persist(aiProvider.rawValue, forKey: Self.aiProviderKey) }
         if syncStored { persist(iCloudSyncEnabled, forKey: Self.iCloudSyncKey) }
         if reminderStored { persist(morningReminderEnabled, forKey: Self.morningReminderKey) }
+        if weeklyGoalStored { persist(weeklyGoalMeters, forKey: Self.weeklyGoalMetersKey) }
     }
 
     // MARK: - AI readiness
@@ -210,6 +229,10 @@ final class AppSettings {
         Self.persist(value, forKey: key, defaults: defaults, ubiquitous: ubiquitous)
     }
 
+    private func persist(_ value: Double, forKey key: String) {
+        Self.persist(value, forKey: key, defaults: defaults, ubiquitous: ubiquitous)
+    }
+
     private static func persist(_ value: String, forKey key: String, defaults: KeyValueStore, ubiquitous: KeyValueStore) {
         defaults.set(value, forKey: key)
 
@@ -224,6 +247,19 @@ final class AppSettings {
     }
 
     private static func persist(_ value: Bool, forKey key: String, defaults: KeyValueStore, ubiquitous: KeyValueStore) {
+        defaults.set(value, forKey: key)
+
+        guard shouldSyncThroughICloud(key) else {
+            ubiquitous.removeObject(forKey: key)
+            ubiquitous.synchronizeStore()
+            return
+        }
+
+        ubiquitous.set(value, forKey: key)
+        ubiquitous.synchronizeStore()
+    }
+
+    private static func persist(_ value: Double, forKey key: String, defaults: KeyValueStore, ubiquitous: KeyValueStore) {
         defaults.set(value, forKey: key)
 
         guard shouldSyncThroughICloud(key) else {
@@ -272,5 +308,16 @@ final class AppSettings {
             return ubiquitous.bool(forKey: key)
         }
         return defaults.bool(forKey: key)
+    }
+
+    /// Reads a `Double` via `object(forKey:)` so it works uniformly across
+    /// `UserDefaults`, `NSUbiquitousKeyValueStore`, and the in-memory test
+    /// double without widening the `KeyValueStore` protocol. Stored `NSNumber`
+    /// values bridge to `Double` through the `as?` cast.
+    private static func readDouble(forKey key: String, defaults: KeyValueStore, ubiquitous: KeyValueStore) -> Double? {
+        if shouldSyncThroughICloud(key), let value = ubiquitous.object(forKey: key) as? Double {
+            return value
+        }
+        return defaults.object(forKey: key) as? Double
     }
 }

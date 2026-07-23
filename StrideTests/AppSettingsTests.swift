@@ -101,4 +101,41 @@ struct AppSettingsTests {
         #expect(settings.iCloudSyncEnabled == false)
         #expect(ubiquitous.has(AppSettings.iCloudSyncKey) == false)
     }
+
+    // MARK: - Weekly goal (B4)
+
+    @Test("Fresh install defaults the weekly goal to 20 km without seeding iCloud")
+    func weeklyGoalDefaultsWithoutSeeding() {
+        let defaults = InMemoryStore()
+        let ubiquitous = InMemoryStore()
+
+        let settings = AppSettings(defaults: defaults, ubiquitous: ubiquitous)
+
+        #expect(settings.weeklyGoalMeters == AppSettings.defaultWeeklyGoalMeters)
+        #expect(ubiquitous.has(AppSettings.weeklyGoalMetersKey) == false)
+        #expect(defaults.has(AppSettings.weeklyGoalMetersKey) == false)
+    }
+
+    @Test("Changing the weekly goal round-trips through both stores")
+    func weeklyGoalChangeSyncs() {
+        let defaults = InMemoryStore()
+        let ubiquitous = InMemoryStore()
+        let settings = AppSettings(defaults: defaults, ubiquitous: ubiquitous)
+
+        settings.weeklyGoalMeters = 42_000
+
+        #expect(defaults.object(forKey: AppSettings.weeklyGoalMetersKey) as? Double == 42_000)
+        #expect(ubiquitous.object(forKey: AppSettings.weeklyGoalMetersKey) as? Double == 42_000)
+    }
+
+    @Test("A stored weekly goal is read back on launch")
+    func weeklyGoalReadOnLaunch() {
+        let defaults = InMemoryStore()
+        let ubiquitous = InMemoryStore()
+        ubiquitous.set(35_000.0, forKey: AppSettings.weeklyGoalMetersKey)
+
+        let settings = AppSettings(defaults: defaults, ubiquitous: ubiquitous)
+
+        #expect(settings.weeklyGoalMeters == 35_000)
+    }
 }
