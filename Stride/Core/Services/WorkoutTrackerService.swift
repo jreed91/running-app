@@ -44,6 +44,12 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
     private var lastLocation: CLLocation?
     private var lastSplitDistance: Double = 0
 
+    /// Distance unit splits are bucketed in, captured at `startWorkout` from the user's
+    /// preference so an imperial runner gets genuine per-mile splits rather than km
+    /// buckets relabelled "mi" (A1). `splitLengthMeters` is the derived bucket size.
+    private var splitUnit: UnitPreference = .metric
+    private var splitLengthMeters: Double = UnitPreference.metric.splitLengthMeters
+
     /// Wall-clock elapsed time, immune to process suspension / stalled run loops (M23).
     private var stopwatch = WallClockStopwatch()
 
@@ -77,9 +83,11 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
         workoutLocation = location
     }
 
-    func startWorkout(type: WorkoutType) {
+    func startWorkout(type: WorkoutType, distanceUnit: UnitPreference = .metric) {
         guard trackingState == .idle else { return }
         workoutType = type
+        splitUnit = distanceUnit
+        splitLengthMeters = distanceUnit.splitLengthMeters
         startDate = Date()
         reset()
         trackingState = .active
@@ -157,6 +165,7 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
         )
         workout.routeCoordinates = coordinates
         workout.splits = splits
+        workout.splitUnit = splitUnit
         if totalElevationGainMeters > 0 {
             workout.elevationGainMeters = totalElevationGainMeters
         }
@@ -216,11 +225,16 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
     }
 
     private func updateSplitsForIndoor() {
-        let kmCovered = Int(distanceMeters / 1_000)
-        let lastKmCovered = Int(lastSplitDistance / 1_000)
-        guard kmCovered > lastKmCovered else { return }
+        guard SplitBucketing.crossedBoundary(
+            previousMeters: lastSplitDistance,
+            currentMeters: distanceMeters,
+            splitLengthMeters: splitLengthMeters
+        ) else { return }
+        let unitsCovered = SplitBucketing.bucketIndex(
+            distanceMeters: distanceMeters, splitLengthMeters: splitLengthMeters
+        )
         let split = Split(
-            kilometer: kmCovered,
+            kilometer: unitsCovered,
             paceSecondsPerKm: currentPaceSecondsPerKm,
             heartRate: currentHeartRate,
             elevationGainMeters: 0,
@@ -317,12 +331,17 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
                 currentPaceSecondsPerKm = 1_000 / location.speed
             }
 
-            // Record a split every kilometre
-            let kmCovered = Int(distanceMeters / 1_000)
-            let lastKmCovered = Int(lastSplitDistance / 1_000)
-            if kmCovered > lastKmCovered {
+            // Record a split every unit (km or mile) the runner has chosen
+            if SplitBucketing.crossedBoundary(
+                previousMeters: lastSplitDistance,
+                currentMeters: distanceMeters,
+                splitLengthMeters: splitLengthMeters
+            ) {
+                let unitsCovered = SplitBucketing.bucketIndex(
+                    distanceMeters: distanceMeters, splitLengthMeters: splitLengthMeters
+                )
                 let split = Split(
-                    kilometer: kmCovered,
+                    kilometer: unitsCovered,
                     paceSecondsPerKm: currentPaceSecondsPerKm,
                     heartRate: currentHeartRate,
                     elevationGainMeters: currentSplitElevationGainMeters,

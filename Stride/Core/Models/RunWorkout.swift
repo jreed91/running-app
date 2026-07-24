@@ -17,6 +17,10 @@ final class RunWorkout {
     var workoutTypeRaw: String = WorkoutType.easy.rawValue
     /// Raw-backed storage for `workoutLocation` to keep CloudKit fields primitive.
     var workoutLocationRaw: String = WorkoutLocation.outdoor.rawValue
+    /// Distance unit the `splits` were bucketed in at record time. Runs recorded before
+    /// unit-aware bucketing (and every legacy CloudKit record) default to `metric`, so
+    /// their kilometre buckets keep reading honestly as "km" (A1).
+    var splitUnitRaw: String = UnitPreference.metric.rawValue
     /// Absorbs the old CloudKit `workoutType` field so migration can recover it.
     @Attribute(originalName: "workoutType")
     var workoutTypeLegacy: String? = nil
@@ -80,6 +84,12 @@ final class RunWorkout {
     var workoutLocation: WorkoutLocation {
         get { WorkoutLocation(rawValue: workoutLocationRaw) ?? .outdoor }
         set { workoutLocationRaw = newValue.rawValue }
+    }
+
+    /// The distance unit each entry in `splits` represents (one bucket per km or per mile).
+    var splitUnit: UnitPreference {
+        get { UnitPreference(rawValue: splitUnitRaw) ?? .metric }
+        set { splitUnitRaw = newValue.rawValue }
     }
 
     init(

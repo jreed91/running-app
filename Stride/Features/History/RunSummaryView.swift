@@ -65,6 +65,12 @@ struct RunSummaryView: View {
         workout.splits.first { $0.kilometer == km }
     }
 
+    /// Lowercase label for the unit each split bucket represents ("km" / "mi"), read from the
+    /// run's stored `splitUnit` so a mile-bucketed run reads "mi" while legacy km runs read "km".
+    private var splitLabel: String { workout.splitUnit.distanceLabel }
+    /// Uppercase form used in chart/table headers ("KM" / "MI").
+    private var splitLabelUpper: String { workout.splitUnit.splitLabel }
+
     private var recentHistory: [RunWorkout] {
         allWorkouts.filter { $0.id != workout.id }
     }
@@ -1488,7 +1494,7 @@ struct RunSummaryView: View {
                             overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
                         ) {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("km \(km)")
+                                Text("\(splitLabel) \(km)")
                                     .font(.caption2).foregroundStyle(.secondary)
                                 Text(split.paceSecondsPerKm.paceString(unit: appSettings.unitPreference))
                                     .font(.caption).bold()
@@ -1546,7 +1552,7 @@ struct RunSummaryView: View {
                             overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
                         ) {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("km \(km)")
+                                Text("\(splitLabel) \(km)")
                                     .font(.caption2).foregroundStyle(.secondary)
                                 Text("\(Int(hr)) bpm")
                                     .font(.caption).bold()
@@ -1589,7 +1595,7 @@ struct RunSummaryView: View {
                             overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
                         ) {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("km \(km)")
+                                Text("\(splitLabel) \(km)")
                                     .font(.caption2).foregroundStyle(.secondary)
                                 Text("\(gain >= 0 ? "+" : "")\(Int(gain)) \(appSettings.unitPreference.elevationLabel)")
                                     .font(.caption).bold()
@@ -1610,7 +1616,7 @@ struct RunSummaryView: View {
     private var splitsTable: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("KM")
+                Text(splitLabelUpper)
                     .frame(width: 36, alignment: .leading)
                 Spacer()
                 Text("PACE")
