@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// A fixed-size, deterministic run card rendered to an image for sharing (B5).
 ///
@@ -8,9 +9,17 @@ import SwiftUI
 /// size is small (points) and the caller renders it at ×3 scale to export a ~1080×1350 image.
 struct RunShareCardView: View {
     let model: ShareCardModel
+    /// Pre-rendered map snapshot (tiles + route baked in) shown behind the route. Supplied by the
+    /// caller because `MKMapSnapshotter` is async; `nil` for indoor runs or when the snapshot
+    /// failed (offline), in which case the panel falls back to a drawn polyline.
+    var routeMapImage: UIImage?
 
     /// Card design size in points. Rendered at ×3 → ~1080×1350 px (Instagram-portrait 4:5).
     static let size = CGSize(width: 360, height: 450)
+
+    /// Size (points) of the route panel — the card is `size.width` wide with 20 pt padding each
+    /// side. The caller requests a map snapshot at exactly this size so it maps 1:1 in the panel.
+    static let routePanelSize = CGSize(width: size.width - 40, height: 150)
 
     private let accent = Color.brand
     private let backgroundTop = Color(red: 0.07, green: 0.08, blue: 0.10)
@@ -22,7 +31,7 @@ struct RunShareCardView: View {
         VStack(alignment: .leading, spacing: 0) {
             wordmark
             routePanel
-                .frame(height: 150)
+                .frame(height: Self.routePanelSize.height)
                 .padding(.top, 14)
             distanceHeadline
                 .padding(.top, 18)
@@ -63,7 +72,13 @@ struct RunShareCardView: View {
         ZStack {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Color.white.opacity(0.05))
-            if model.hasRoute {
+            if let routeMapImage {
+                // Map tiles + route already baked into the snapshot; just present it.
+                Image(uiImage: routeMapImage)
+                    .resizable()
+                    .scaledToFill()
+            } else if model.hasRoute {
+                // Snapshot unavailable (offline): fall back to the self-drawn polyline.
                 RoutePolylineShape(points: model.routePoints)
                     .stroke(
                         accent,
@@ -82,6 +97,7 @@ struct RunShareCardView: View {
             }
         }
         .frame(maxWidth: .infinity)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private var distanceHeadline: some View {

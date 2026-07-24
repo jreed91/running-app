@@ -196,12 +196,13 @@ existing history + `ProgressStatsService` aggregates.
 
 **IN PROGRESS:** implementing v1 run share cards. A share button in the
 `RunSummaryView` toolbar renders a fixed-size card (headline distance/time/pace,
-a self-drawn route polyline from `routeCoordinates` with a route-less fallback
-for indoor runs, avg HR + elevation when present, a splits summary labelled in
+the route over a dark `MKMapSnapshotter` map background via `RouteSnapshotService`
+— falling back to a self-drawn polyline when offline, and to a route-less panel
+for indoor runs — avg HR + elevation when present, a splits summary labelled in
 the run's stored `splitUnit`, and Stride branding) to a PNG via `ImageRenderer`
 and presents it through `ShareLink`. Card→display mapping lives in a pure,
-unit-tested model per AGENTS.md. *Deferred:* History swipe-to-share, milestone/
-medal cards, and real map-snapshot backgrounds.
+unit-tested model per AGENTS.md. *Deferred:* History swipe-to-share and
+milestone/medal cards.
 
 No `ShareLink` / share-card generation anywhere. Runners share runs; a
 rendered share card (map + splits + stats, or a milestone medal) is a low-cost

@@ -2,6 +2,7 @@ import SwiftUI
 import MapKit
 import Charts
 import SwiftData
+import UIKit
 
 // This screen is a large, pre-existing composite view (run map, charts, splits, AI
 // coach) that already exceeds SwiftLint's file_length limit. Disable the rule here
@@ -101,11 +102,21 @@ struct RunSummaryView: View {
     }
 
     /// Renders the shareable run card (B5) to an image so the toolbar `ShareLink` has an item
-    /// ready. Runs in the view's main-actor context (`ImageRenderer` requirement) once per run,
-    /// since a saved run's data is static.
-    private func renderShareCard() {
+    /// ready. First awaits a map snapshot of the route (async `MKMapSnapshotter`) to composite
+    /// behind the route, then renders the card via `ImageRenderer` (×3 → ~1080×1350). Runs once
+    /// per run, since a saved run's data is static.
+    private func renderShareCard() async {
         let model = ShareCardModel.make(from: workout, unit: appSettings.unitPreference)
-        let renderer = ImageRenderer(content: RunShareCardView(model: model))
+        let mapImage = await RouteSnapshotService.routeSnapshot(
+            coordinates: workout.routeCoordinates,
+            size: RunShareCardView.routePanelSize,
+            scale: 3,
+            lineColor: UIColor(.brand),
+            lineWidth: 3
+        )
+        let renderer = ImageRenderer(
+            content: RunShareCardView(model: model, routeMapImage: mapImage)
+        )
         renderer.scale = 3
         if let uiImage = renderer.uiImage {
             shareCardImage = Image(uiImage: uiImage)
@@ -178,7 +189,7 @@ struct RunSummaryView: View {
             .frame(maxWidth: .infinity)
         }
         .task(id: workout.id) {
-            renderShareCard()
+            await renderShareCard()
             await loadHeartRateZones()
         }
         .background(Color.surfacePrimary.ignoresSafeArea())
