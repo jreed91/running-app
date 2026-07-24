@@ -1,0 +1,13 @@
+# Nested SwiftLint config for the unit-test target.
+#
+# Test bodies use throwaway locals whose names carry no meaning beyond the two
+# lines they live in (`var c = DateComponents()`), which the app-wide
+# `identifier_name.min_length` correctly rejects in production code. Relaxing it
+# here keeps the test sources linted for everything else.
+identifier_name:
+  min_length: 1
+
+# Tests deliberately force-unwrap fixtures they have just constructed; a crash in
+# a test is a test failure, not a user-facing one.
+force_unwrapping:
+  severity: warning

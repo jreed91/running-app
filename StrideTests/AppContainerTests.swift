@@ -96,12 +96,54 @@ struct AppContainerTests {
         let backups = ((try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? [])
             .filter { $0.hasPrefix(storeURL.lastPathComponent + ".broken-") }
         #expect(backups.count == 1)
+
+        // The user is told, and the alert names the file their data is kept in.
+        #expect(container.storeRecoveryNotice == .storeMovedAside(backupName: backups.first))
+
         for name in backups {
             try? FileManager.default.removeItem(at: directory.appendingPathComponent(name))
         }
     }
 
-    @Test("Repeated persistent-store failures eventually use emergency in-memory mode")
+    @Test("A transient failure leaves the store file untouched and runs in-memory")
+    func transientFailureNeverMovesTheStoreAside() throws {
+        let storeURL = Self.makeTemporaryStoreURL()
+        defer { Self.removeStoreArtifacts(at: storeURL) }
+
+        let originalContents = Data("existing database".utf8)
+        try originalContents.write(to: storeURL)
+
+        var invocationCount = 0
+        let container = AppContainer(
+            syncEnabledOverride: true,
+            forceCloudKit: true,
+            storeURLOverride: storeURL,
+            modelContainerFactory: { schema, configurations in
+                invocationCount += 1
+                // A full disk is the archetypal failure that clears up on its own.
+                if invocationCount < 3 {
+                    throw CocoaError(.fileWriteOutOfSpace)
+                }
+                return try ModelContainer(for: schema, configurations: configurations)
+            }
+        )
+
+        // Primary open, tier-1 local retry, then straight to in-memory — no recreate
+        // attempt, because that would have meant renaming the user's database first.
+        #expect(invocationCount == 3)
+        #expect(container.persistenceMode == .emergencyInMemory)
+        #expect(container.storeRecoveryNotice == .runningInMemory)
+
+        // The store is exactly as it was, and nothing was set aside.
+        let contentsAfterLaunch = try Data(contentsOf: storeURL)
+        #expect(contentsAfterLaunch == originalContents)
+        let directory = storeURL.deletingLastPathComponent()
+        let backups = ((try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? [])
+            .filter { $0.hasPrefix(storeURL.lastPathComponent + ".broken-") }
+        #expect(backups.isEmpty)
+    }
+
+    @Test("Repeated failures on an unreadable store end in emergency in-memory mode")
     func repeatedPersistentFailuresUseEmergencyMemory() throws {
         let storeURL = Self.makeTemporaryStoreURL()
         defer { Self.removeStoreArtifacts(at: storeURL) }
@@ -114,7 +156,8 @@ struct AppContainerTests {
             modelContainerFactory: { schema, configurations in
                 invocationCount += 1
                 if invocationCount < 4 {
-                    throw CocoaError(.fileWriteUnknown)
+                    // Incompatible version hash — the file genuinely cannot be read.
+                    throw NSError(domain: NSCocoaErrorDomain, code: 134_100, userInfo: [:])
                 }
                 return try ModelContainer(for: schema, configurations: configurations)
             }
@@ -122,6 +165,13 @@ struct AppContainerTests {
 
         #expect(invocationCount == 4)
         #expect(container.persistenceMode == .emergencyInMemory)
+        #expect(container.storeRecoveryNotice == .runningInMemory)
+
+        let directory = storeURL.deletingLastPathComponent()
+        for name in ((try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? [])
+        where name.hasPrefix(storeURL.lastPathComponent + ".broken-") {
+            try? FileManager.default.removeItem(at: directory.appendingPathComponent(name))
+        }
     }
 
     private static func makeTemporaryStoreURL() -> URL {

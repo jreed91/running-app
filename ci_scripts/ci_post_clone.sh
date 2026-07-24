@@ -22,8 +22,33 @@ cd "$CI_PRIMARY_REPOSITORY_PATH"
 # CI_BUILD_NUMBER is provided by Xcode Cloud and increments with every build.
 # Fall back to the git commit count when running outside Xcode Cloud.
 BUILD_NUMBER="${CI_BUILD_NUMBER:-$(git rev-list --count HEAD)}"
-echo "--- Setting build number to $BUILD_NUMBER ---"
-sed -i '' "s/CURRENT_PROJECT_VERSION: .*/CURRENT_PROJECT_VERSION: $BUILD_NUMBER/" project.yml
+
+# The build number is written to the xcconfig that project.yml's `configFiles`
+# points at. This used to be an in-place `sed` against project.yml itself, which
+# matched on that YAML file's exact key formatting and failed silently if it ever
+# changed — producing a duplicate build number that TestFlight only rejects after
+# a complete archive. Rewriting the whole xcconfig removes the pattern match, and
+# the verification below turns any remaining failure into a hard error here.
+VERSION_XCCONFIG="ci_scripts/Version.xcconfig"
+
+MARKETING_VERSION="$(sed -n 's/^[[:space:]]*MARKETING_VERSION[[:space:]]*=[[:space:]]*//p' "$VERSION_XCCONFIG" | head -1 | tr -d '[:space:]')"
+if [ -z "$MARKETING_VERSION" ]; then
+    echo "Error: could not read MARKETING_VERSION from $VERSION_XCCONFIG" >&2
+    exit 1
+fi
+
+echo "--- Setting version to $MARKETING_VERSION ($BUILD_NUMBER) ---"
+cat > "$VERSION_XCCONFIG" <<EOF
+// Generated during CI by ci_scripts/ci_post_clone.sh. The committed version of
+// this file documents why it exists and holds the checked-in defaults.
+MARKETING_VERSION = $MARKETING_VERSION
+CURRENT_PROJECT_VERSION = $BUILD_NUMBER
+EOF
+
+grep -q "^CURRENT_PROJECT_VERSION = ${BUILD_NUMBER}$" "$VERSION_XCCONFIG" || {
+    echo "Error: failed to write build number $BUILD_NUMBER to $VERSION_XCCONFIG" >&2
+    exit 1
+}
 
 xcodegen generate
 

@@ -18,7 +18,6 @@ struct SettingsView: View {
     private var activePlans: [TrainingPlan]
 
     @State private var showResetConfirmation = false
-    @State private var showSyncRestartNote = false
     @State private var showPulseConsole = false
     @State private var notificationTestStatus: String?
     #if DEBUG
@@ -28,6 +27,12 @@ struct SettingsView: View {
     #endif
 
     private var profile: UserProfile? { profiles.first }
+
+    /// True only while the live iCloud-sync preference differs from the one the
+    /// running store was opened with — toggling back makes the note disappear.
+    private var syncRestartPending: Bool {
+        appSettings.iCloudSyncEnabled != container.syncPreferenceAtLaunch
+    }
     private var persistenceStatusText: String {
         switch container.persistenceMode {
         case .cloudKit:
@@ -265,11 +270,8 @@ struct SettingsView: View {
                 Toggle("", isOn: Bindable(appSettings).iCloudSyncEnabled)
                     .labelsHidden()
                     .tint(.brand)
-                    .onChange(of: appSettings.iCloudSyncEnabled) { _, _ in
-                        showSyncRestartNote = true
-                    }
             }
-            if showSyncRestartNote {
+            if syncRestartPending {
                 Text("Restart the app for this change to take effect.")
                     .font(.caption)
                     .foregroundStyle(.secondary)

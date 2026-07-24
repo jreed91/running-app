@@ -26,6 +26,7 @@ struct RouteGeniusService: Sendable {
         case invalidResponse
         case noRouteFound
         case decodingError
+        case invalidRequestURL
 
         var errorDescription: String? {
             switch self {
@@ -49,6 +50,8 @@ struct RouteGeniusService: Sendable {
                 return "No route could be generated for the given parameters. Try a different starting point or distance."
             case .decodingError:
                 return "Unexpected response from routing service."
+            case .invalidRequestURL:
+                return "Route service address is misconfigured. Please report this if it keeps happening."
             }
         }
     }
@@ -58,7 +61,11 @@ struct RouteGeniusService: Sendable {
     private let baseURL = "https://api.openrouteservice.org"
     private let session: any StrideURLSessionProtocol
 
-    init(session: any StrideURLSessionProtocol = PulseIntegrationService.makeURLSession()) {
+    /// Defaults to a plain `URLSession` so the service fails closed: a diagnostics-
+    /// capturing session is only ever used when a caller asks for one, and callers
+    /// obtain it from `PulseIntegrationService.makeInstrumentedURLSession()`, which
+    /// guarantees header/query redaction is installed first (S5).
+    init(session: any StrideURLSessionProtocol = URLSession(configuration: .default)) {
         self.session = session
     }
 
@@ -169,6 +176,50 @@ struct RouteGeniusService: Sendable {
 
     // MARK: Out-and-back generation
 
+    /// Typical ratio of walked road distance to straight-line distance between two
+    /// nearby urban points. Placing the turnaround at the full half-distance as the
+    /// crow flies makes the routed leg — and therefore the finished out-and-back —
+    /// systematically longer than the runner asked for, so the first guess is
+    /// shortened by this factor.
+    static let assumedDetourFactor = 1.25
+
+    /// Tolerance, as a fraction of the target, within which a routed leg is accepted
+    /// without spending another request refining it.
+    static let outAndBackTolerance = 0.1
+
+    /// Straight-line turnaround offset to try first for a given total distance.
+    static func initialTurnaroundOffsetMeters(targetTotalMeters: Double) -> Double {
+        max(targetTotalMeters, 0) / 2 / assumedDetourFactor
+    }
+
+    /// Corrected straight-line turnaround offset given how long the routed leg
+    /// actually came back.
+    ///
+    /// Scales the previous offset by how far off the routed leg was, then clamps the
+    /// correction to half/double so one pathological response cannot fling the
+    /// turnaround point into the next county.
+    static func refinedTurnaroundOffsetMeters(
+        previousOffsetMeters: Double,
+        routedLegMeters: Double,
+        targetLegMeters: Double
+    ) -> Double {
+        guard routedLegMeters > 0, previousOffsetMeters > 0, targetLegMeters > 0 else {
+            return previousOffsetMeters
+        }
+        let ratio = min(max(targetLegMeters / routedLegMeters, 0.5), 2.0)
+        return previousOffsetMeters * ratio
+    }
+
+    /// Whether a routed leg is close enough to the target to stop refining.
+    static func isLegWithinTolerance(
+        routedLegMeters: Double,
+        targetLegMeters: Double,
+        tolerance: Double = outAndBackTolerance
+    ) -> Bool {
+        guard targetLegMeters > 0 else { return true }
+        return abs(routedLegMeters - targetLegMeters) / targetLegMeters <= tolerance
+    }
+
     private func generateOutAndBack(
         start: CLLocationCoordinate2D,
         distanceMeters: Double,
@@ -176,17 +227,29 @@ struct RouteGeniusService: Sendable {
         bearing: Double,
         label: String
     ) async throws -> GeneratedRoute {
-        let midpoint = coordinate(from: start, bearing: bearing, distanceMeters: distanceMeters / 2)
+        let targetLegMeters = distanceMeters / 2
+        var offsetMeters = Self.initialTurnaroundOffsetMeters(targetTotalMeters: distanceMeters)
 
-        let body: [String: Any] = [
-            "coordinates": [
-                [start.longitude, start.latitude],
-                [midpoint.longitude, midpoint.latitude]
-            ]
-        ]
+        // One correction round at most: each attempt is a network request, and three
+        // route options are generated concurrently against a rate-limited API.
+        var outLeg = try await fetchOutLeg(
+            start: start, bearing: bearing, offsetMeters: offsetMeters, apiKey: apiKey, label: label
+        )
 
-        // Fetch the outward leg.
-        let outLeg = try await fetchRoute(body: body, apiKey: apiKey, label: label)
+        if !Self.isLegWithinTolerance(routedLegMeters: outLeg.distanceMeters, targetLegMeters: targetLegMeters) {
+            offsetMeters = Self.refinedTurnaroundOffsetMeters(
+                previousOffsetMeters: offsetMeters,
+                routedLegMeters: outLeg.distanceMeters,
+                targetLegMeters: targetLegMeters
+            )
+            if let refined = try? await fetchOutLeg(
+                start: start, bearing: bearing, offsetMeters: offsetMeters, apiKey: apiKey, label: label
+            ) {
+                let previousMiss = abs(outLeg.distanceMeters - targetLegMeters)
+                let refinedMiss = abs(refined.distanceMeters - targetLegMeters)
+                if refinedMiss < previousMiss { outLeg = refined }
+            }
+        }
 
         // Build the return leg by reversing the outward coordinates.
         let returnCoords = Array(outLeg.coordinates.reversed())
@@ -208,11 +271,30 @@ struct RouteGeniusService: Sendable {
         )
     }
 
+    private func fetchOutLeg(
+        start: CLLocationCoordinate2D,
+        bearing: Double,
+        offsetMeters: Double,
+        apiKey: String,
+        label: String
+    ) async throws -> GeneratedRoute {
+        let turnaround = coordinate(from: start, bearing: bearing, distanceMeters: offsetMeters)
+        let body: [String: Any] = [
+            "coordinates": [
+                [start.longitude, start.latitude],
+                [turnaround.longitude, turnaround.latitude]
+            ]
+        ]
+        return try await fetchRoute(body: body, apiKey: apiKey, label: label)
+    }
+
     // MARK: Network
 
     private func fetchRoute(body: [String: Any], apiKey: String, label: String) async throws -> GeneratedRoute {
+        // A failure here is a bug in the configured base URL, not an absence of
+        // walkable roads — report it as its own error rather than "no route found".
         guard let url = URL(string: "\(baseURL)/v2/directions/foot-walking/json") else {
-            throw RouteError.noRouteFound
+            throw RouteError.invalidRequestURL
         }
 
         var request = URLRequest(url: url)

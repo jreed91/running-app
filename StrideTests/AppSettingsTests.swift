@@ -138,4 +138,52 @@ struct AppSettingsTests {
 
         #expect(settings.weeklyGoalMeters == 35_000)
     }
+
+    // MARK: - M15: mid-session changes arriving from another device
+
+    @Test("A value that lands in iCloud while running is adopted")
+    func externalChangeIsAdopted() {
+        let defaults = InMemoryStore()
+        let ubiquitous = InMemoryStore()
+        let settings = AppSettings(defaults: defaults, ubiquitous: ubiquitous)
+        #expect(settings.unitPreference == .metric)
+
+        // Another device switches to miles; iCloud KVS delivers it mid-session.
+        ubiquitous.set(UnitPreference.imperial.rawValue, forKey: AppSettings.unitPreferenceKey)
+        ubiquitous.set(50_000.0, forKey: AppSettings.weeklyGoalMetersKey)
+        ubiquitous.set(false, forKey: AppSettings.morningReminderKey)
+        settings.applyExternalValues()
+
+        #expect(settings.unitPreference == .imperial)
+        #expect(settings.weeklyGoalMeters == 50_000)
+        #expect(settings.morningReminderEnabled == false)
+    }
+
+    @Test("An external change with nothing new leaves settings alone")
+    func externalChangeWithoutNewValuesIsANoOp() {
+        let defaults = InMemoryStore()
+        let ubiquitous = InMemoryStore()
+        let settings = AppSettings(defaults: defaults, ubiquitous: ubiquitous)
+
+        settings.weeklyGoalMeters = 30_000
+        settings.applyExternalValues()
+
+        #expect(settings.weeklyGoalMeters == 30_000)
+        #expect(settings.unitPreference == .metric)
+    }
+
+    @Test("The device-local sync toggle is never changed by a remote value (M16)")
+    func externalChangeDoesNotFlipTheSyncToggle() {
+        let defaults = InMemoryStore()
+        let ubiquitous = InMemoryStore()
+        let settings = AppSettings(defaults: defaults, ubiquitous: ubiquitous)
+        #expect(settings.iCloudSyncEnabled == true)
+
+        // Even if a stale copy of the toggle somehow reaches iCloud KVS, turning sync
+        // off on one device must not cascade and disable persistence everywhere.
+        ubiquitous.set(false, forKey: AppSettings.iCloudSyncKey)
+        settings.applyExternalValues()
+
+        #expect(settings.iCloudSyncEnabled == true)
+    }
 }

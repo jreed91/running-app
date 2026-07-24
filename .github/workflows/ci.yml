@@ -18,6 +18,19 @@ env:
   SCHEME: Stride
   SIMULATOR: iPhone 17
   IOS_VERSION: "27.0"
+  # Stop Homebrew from refreshing its formula index mid-job: without this, two
+  # steps in the same run — or the lint and test jobs of the same commit — can
+  # resolve different versions of the same tool.
+  HOMEBREW_NO_AUTO_UPDATE: "1"
+  HOMEBREW_NO_INSTALL_CLEANUP: "1"
+  # Exact versions the pipeline is known to work with. When set, the install steps
+  # fail loudly if Homebrew resolves anything else, so a toolchain bump becomes a
+  # deliberate commit rather than a silent change under the build. Leave empty to
+  # accept whatever Homebrew provides; fill in from a green run's "Print tool
+  # versions" output to lock the pipeline down.
+  SWIFTLINT_VERSION: ""
+  XCODEGEN_VERSION: ""
+  XCBEAUTIFY_VERSION: ""
 
 jobs:
   # ── Change detection ────────────────────────────────────────────────────────
@@ -41,7 +54,7 @@ jobs:
               - 'StrideTests/**'
               - 'StrideUITests/**'
               - 'project.yml'
-              - 'ci_scripts/Package.resolved'
+              - 'ci_scripts/**'
               - '.github/workflows/ci.yml'
 
   # ── Lint ────────────────────────────────────────────────────────────────────
@@ -65,7 +78,14 @@ jobs:
 
       - name: Install SwiftLint
         if: github.event_name != 'pull_request' || steps.swift_changes.outputs.swift == 'true'
-        run: brew install swiftlint
+        run: |
+          brew install swiftlint
+          installed=$(swiftlint version)
+          echo "swiftlint $installed"
+          if [[ -n "$SWIFTLINT_VERSION" && "$installed" != "$SWIFTLINT_VERSION" ]]; then
+            echo "::error::SwiftLint $installed does not match the pinned SWIFTLINT_VERSION=$SWIFTLINT_VERSION."
+            exit 1
+          fi
 
       - name: Run SwiftLint
         if: github.event_name != 'pull_request' || steps.swift_changes.outputs.swift == 'true'
@@ -102,7 +122,20 @@ jobs:
         run: xcodebuild -version
 
       - name: Install XcodeGen and xcbeautify
-        run: brew install xcodegen xcbeautify
+        run: |
+          brew install xcodegen xcbeautify
+          xcodegen_installed=$(xcodegen --version | awk '{print $NF}')
+          xcbeautify_installed=$(xcbeautify --version)
+          echo "xcodegen $xcodegen_installed"
+          echo "xcbeautify $xcbeautify_installed"
+          if [[ -n "$XCODEGEN_VERSION" && "$xcodegen_installed" != "$XCODEGEN_VERSION" ]]; then
+            echo "::error::XcodeGen $xcodegen_installed does not match the pinned XCODEGEN_VERSION=$XCODEGEN_VERSION."
+            exit 1
+          fi
+          if [[ -n "$XCBEAUTIFY_VERSION" && "$xcbeautify_installed" != "$XCBEAUTIFY_VERSION" ]]; then
+            echo "::error::xcbeautify $xcbeautify_installed does not match the pinned XCBEAUTIFY_VERSION=$XCBEAUTIFY_VERSION."
+            exit 1
+          fi
 
       - name: Generate Xcode project
         run: xcodegen generate
@@ -233,7 +266,20 @@ jobs:
           sudo xcode-select -switch "$XCODE"
 
       - name: Install XcodeGen and xcbeautify
-        run: brew install xcodegen xcbeautify
+        run: |
+          brew install xcodegen xcbeautify
+          xcodegen_installed=$(xcodegen --version | awk '{print $NF}')
+          xcbeautify_installed=$(xcbeautify --version)
+          echo "xcodegen $xcodegen_installed"
+          echo "xcbeautify $xcbeautify_installed"
+          if [[ -n "$XCODEGEN_VERSION" && "$xcodegen_installed" != "$XCODEGEN_VERSION" ]]; then
+            echo "::error::XcodeGen $xcodegen_installed does not match the pinned XCODEGEN_VERSION=$XCODEGEN_VERSION."
+            exit 1
+          fi
+          if [[ -n "$XCBEAUTIFY_VERSION" && "$xcbeautify_installed" != "$XCBEAUTIFY_VERSION" ]]; then
+            echo "::error::xcbeautify $xcbeautify_installed does not match the pinned XCBEAUTIFY_VERSION=$XCBEAUTIFY_VERSION."
+            exit 1
+          fi
 
       - name: Generate Xcode project
         run: xcodegen generate
