@@ -23,4 +23,24 @@ enum SplitBucketing {
         bucketIndex(distanceMeters: currentMeters, splitLengthMeters: splitLengthMeters)
             > bucketIndex(distanceMeters: previousMeters, splitLengthMeters: splitLengthMeters)
     }
+
+    // MARK: - Split pace (N7)
+
+    /// The average pace across one split bucket — Δtime ÷ Δdistance — in seconds per
+    /// kilometre, regardless of the bucket's own unit.
+    ///
+    /// This is what the split chart, the splits table, and the share card's "fastest
+    /// split" callout all claim to show. The tracker used to store whatever
+    /// `currentPaceSecondsPerKm` happened to hold at the instant a boundary was
+    /// crossed: outdoors the *instantaneous* speed of a single GPS fix, indoors the
+    /// *cumulative session average* (so every indoor split reported the same number
+    /// and a negative-split run rendered flat).
+    ///
+    /// Returns `nil` for a bucket with no measurable distance or non-positive
+    /// elapsed time, so callers fall back rather than store an infinite pace.
+    static func splitPaceSecondsPerKm(deltaSeconds: Double, deltaMeters: Double) -> Double? {
+        guard deltaSeconds > 0, deltaMeters > 0,
+              deltaSeconds.isFinite, deltaMeters.isFinite else { return nil }
+        return deltaSeconds / deltaMeters * 1_000
+    }
 }

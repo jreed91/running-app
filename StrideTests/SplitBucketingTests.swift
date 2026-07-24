@@ -58,6 +58,67 @@ struct SplitBucketingTests {
     }
 }
 
+// MARK: - Split pace (N7)
+//
+// A split's pace has to be that split's own average — Δtime ÷ Δdistance — not the
+// instantaneous GPS speed (outdoor) or the cumulative session average (indoor) that
+// happened to be showing when the boundary was crossed.
+
+struct SplitPaceTests {
+
+    @Test("Split pace is the bucket's own average, in seconds per km")
+    func paceFromDeltas() {
+        // 1 000 m in 5:00 → 300 s/km.
+        let kmPace = SplitBucketing.splitPaceSecondsPerKm(deltaSeconds: 300, deltaMeters: 1_000)
+        #expect(abs((kmPace ?? 0) - 300) < 0.001)
+        // A mile bucket run in 8:00 → 8:00/mi ≈ 298.3 s/km.
+        let milePace = SplitBucketing.splitPaceSecondsPerKm(
+            deltaSeconds: 480, deltaMeters: UnitPreference.imperial.splitLengthMeters
+        )
+        #expect(milePace != nil)
+        #expect(abs((milePace ?? 0) - 298.26) < 0.1)
+    }
+
+    @Test("Consecutive buckets report different paces for a negative-split run")
+    func negativeSplitIsVisible() {
+        // Cumulative: km 1 in 330 s, km 2 in a further 300 s, km 3 in a further 285 s.
+        let boundaries: [(elapsed: Double, meters: Double)] = [
+            (330, 1_000), (630, 2_000), (915, 3_000)
+        ]
+        var previous = (elapsed: 0.0, meters: 0.0)
+        var paces: [Double] = []
+        for boundary in boundaries {
+            let pace = SplitBucketing.splitPaceSecondsPerKm(
+                deltaSeconds: boundary.elapsed - previous.elapsed,
+                deltaMeters: boundary.meters - previous.meters
+            )
+            #expect(pace != nil)
+            paces.append(pace ?? 0)
+            previous = boundary
+        }
+        #expect(zip(paces, [330.0, 300.0, 285.0]).allSatisfy { abs($0 - $1) < 0.001 })
+        // The cumulative average — what the indoor path used to store for every split
+        // — would have reported the same rising number three times instead.
+        #expect(paces[0] > paces[1] && paces[1] > paces[2])
+    }
+
+    @Test("Overshooting the boundary is priced at the distance actually covered")
+    func overshootUsesRealDistance() {
+        // A fix lands at 1 040 m rather than exactly 1 000 m.
+        let pace = SplitBucketing.splitPaceSecondsPerKm(deltaSeconds: 312, deltaMeters: 1_040)
+        #expect(abs((pace ?? 0) - 300) < 0.001)
+    }
+
+    @Test("Degenerate buckets return nil instead of an infinite or zero pace")
+    func degenerateBuckets() {
+        #expect(SplitBucketing.splitPaceSecondsPerKm(deltaSeconds: 300, deltaMeters: 0) == nil)
+        #expect(SplitBucketing.splitPaceSecondsPerKm(deltaSeconds: 0, deltaMeters: 1_000) == nil)
+        #expect(SplitBucketing.splitPaceSecondsPerKm(deltaSeconds: -5, deltaMeters: 1_000) == nil)
+        #expect(SplitBucketing.splitPaceSecondsPerKm(deltaSeconds: 300, deltaMeters: -1_000) == nil)
+        #expect(SplitBucketing.splitPaceSecondsPerKm(deltaSeconds: .infinity, deltaMeters: 1_000) == nil)
+    }
+}
+
 // MARK: - RunWorkout split-unit tagging
 
 struct RunWorkoutSplitUnitTests {
