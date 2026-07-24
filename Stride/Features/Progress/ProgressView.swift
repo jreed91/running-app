@@ -92,6 +92,10 @@ struct ProgressDashboardView: View {
                                 .opacity(progressAppeared ? 1 : 0)
                                 .offset(y: progressAppeared ? 0 : 18)
                                 .adaptiveAnimation(AppAnimation.entrance.delay(0.25), value: progressAppeared)
+                            heartRateZoneChart
+                                .opacity(progressAppeared ? 1 : 0)
+                                .offset(y: progressAppeared ? 0 : 18)
+                                .adaptiveAnimation(AppAnimation.entrance.delay(0.28), value: progressAppeared)
                             elevationTrendChart
                                 .opacity(progressAppeared ? 1 : 0)
                                 .offset(y: progressAppeared ? 0 : 18)
@@ -385,6 +389,64 @@ struct ProgressDashboardView: View {
                 }
                 .chartYAxisLabel("bpm")
                 .chartXSelection(value: $selectedHRDate)
+            }
+        }
+    }
+
+    // MARK: - Heart-rate zone distribution
+
+    /// The runner's max HR (explicit or age-estimated), needed to bucket samples into zones.
+    private var maxHeartRate: Double? { profile?.effectiveMaxHeartRate.map(Double.init) }
+
+    /// Aggregate time-in-zone across the selected period, from each run's persisted HR samples.
+    /// Runs imported before HR samples were persisted simply don't contribute (no per-run
+    /// on-demand fetch here — that would be too costly for the whole list).
+    private var aggregateZoneSlices: [HRZoneSlice] {
+        guard let maxHR = maxHeartRate else { return [] }
+        let perRun = filteredWorkouts.compactMap { run -> [HRZoneSlice]? in
+            let samples = run.heartRateSamples
+            guard !samples.isEmpty else { return nil }
+            return HeartRateZoneService.timeInZones(
+                bpmSamples: samples, totalSeconds: run.durationSeconds, maxHR: maxHR
+            )
+        }
+        return perRun.isEmpty ? [] : HeartRateZoneService.aggregate(perRun)
+    }
+
+    private var heartRateZoneChart: some View {
+        let slices = aggregateZoneSlices
+        let total = slices.reduce(0) { $0 + $1.seconds }
+        return chartCard("TIME IN HEART-RATE ZONES") {
+            if maxHeartRate == nil {
+                emptyDataPlaceholder("Set your max HR in Settings to see heart-rate zones")
+            } else if total <= 0 {
+                emptyDataPlaceholder("No heart-rate zone data in this period")
+            } else {
+                VStack(spacing: 10) {
+                    Chart(slices) { slice in
+                        BarMark(
+                            x: .value("Minutes", slice.seconds / 60),
+                            y: .value("Zone", slice.zone.shortName)
+                        )
+                        .foregroundStyle(slice.zone.color)
+                        .cornerRadius(4)
+                    }
+                    .chartYScale(domain: HRZone.allCases.reversed().map(\.shortName))
+                    .chartXAxisLabel("minutes")
+                    .frame(height: 150)
+                    ForEach(slices.reversed()) { slice in
+                        let pct = total > 0 ? slice.seconds / total : 0
+                        HStack(spacing: 10) {
+                            Circle().fill(slice.zone.color).frame(width: 9, height: 9)
+                            Text(slice.zone.displayTitle).font(.caption)
+                            Spacer()
+                            Text(slice.seconds.durationString).font(.caption).monospacedDigit()
+                            Text("\(Int((pct * 100).rounded()))%")
+                                .font(.caption2).foregroundStyle(.secondary)
+                                .frame(width: 38, alignment: .trailing)
+                        }
+                    }
+                }
             }
         }
     }

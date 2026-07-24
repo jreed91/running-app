@@ -172,6 +172,9 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
         if !hrSamples.isEmpty {
             workout.averageHeartRate = hrSamples.reduce(0, +) / Double(hrSamples.count)
             workout.maxHeartRate = hrSamples.max()
+            // Persist the raw series (previously discarded) so the time-in-zone
+            // breakdown can be computed for app-recorded runs (A6).
+            workout.heartRateSamples = hrSamples
         }
         return workout
     }

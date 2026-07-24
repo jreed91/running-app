@@ -33,6 +33,11 @@ protocol HealthKitRepositoryProtocol: Sendable {
         to endDate: Date,
         existingIDs: Set<String>
     ) async throws -> [StrengthWorkout]
+    /// Fetches the raw heart-rate bpm sample series for a previously-imported workout,
+    /// identified by its HealthKit UUID string. Used to backfill the time-in-zone chart
+    /// for runs imported before HR samples were persisted (A6). Returns `[]` if the
+    /// workout or its samples can't be found.
+    func fetchHeartRateSamples(forWorkoutID id: String) async -> [Double]
     /// Enables HealthKit background delivery for running workouts at `.immediate` frequency.
     /// Safe to call multiple times — HealthKit is idempotent.
     func enableBackgroundDelivery() async throws
@@ -530,6 +535,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             }
 
             let hrStats = try? await fetchHeartRateStats(for: hkWorkout)
+            let hrSamples = (try? await fetchHeartRateSamples(for: hkWorkout)) ?? []
             let elevation = elevationGain(from: hkWorkout)
             let coordinates = await fetchRouteCoordinates(for: hkWorkout)
 
@@ -543,6 +549,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             )
             run.averageHeartRate = hrStats?.avg
             run.maxHeartRate = hrStats?.max
+            if !hrSamples.isEmpty { run.heartRateSamples = hrSamples }
             run.elevationGainMeters = elevation
             run.healthKitWorkoutID = hkID
             if !coordinates.isEmpty { run.routeCoordinates = coordinates }
@@ -721,6 +728,51 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             avg: stats?.averageQuantity()?.doubleValue(for: bpmUnit),
             max: stats?.maximumQuantity()?.doubleValue(for: bpmUnit)
         )
+    }
+
+    /// Raw heart-rate bpm samples for a workout, in chronological order, scoped to the
+    /// samples associated with the workout (like the HR-stats query).
+    private func fetchHeartRateSamples(for workout: HKWorkout) async throws -> [Double] {
+        let hrType = HKQuantityType(.heartRate)
+        let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+            HKQuery.predicateForObjects(from: workout),
+            HKQuery.predicateForSamples(
+                withStart: workout.startDate, end: workout.endDate, options: .strictStartDate
+            )
+        ])
+        let bpmUnit = HKUnit(from: "count/min")
+        let samples: [HKSample] = try await withCheckedThrowingContinuation { cont in
+            let query = HKSampleQuery(
+                sampleType: hrType,
+                predicate: predicate,
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]
+            ) { _, result, error in
+                if let error { cont.resume(throwing: error) }
+                else { cont.resume(returning: result ?? []) }
+            }
+            store.execute(query)
+        }
+        return samples.compactMap { ($0 as? HKQuantitySample)?.quantity.doubleValue(for: bpmUnit) }
+    }
+
+    func fetchHeartRateSamples(forWorkoutID id: String) async -> [Double] {
+        guard let uuid = UUID(uuidString: id) else { return [] }
+        let workoutPredicate = HKQuery.predicateForObject(with: uuid)
+        let workout: HKWorkout? = try? await withCheckedThrowingContinuation { cont in
+            let query = HKSampleQuery(
+                sampleType: .workoutType(),
+                predicate: workoutPredicate,
+                limit: 1,
+                sortDescriptors: nil
+            ) { _, result, error in
+                if let error { cont.resume(throwing: error) }
+                else { cont.resume(returning: (result as? [HKWorkout])?.first) }
+            }
+            store.execute(query)
+        }
+        guard let workout else { return [] }
+        return (try? await fetchHeartRateSamples(for: workout)) ?? []
     }
 
     /// Reads cumulative elevation ascended from the workout's metadata.

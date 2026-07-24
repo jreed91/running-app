@@ -35,6 +35,10 @@ final class RunWorkout {
     /// JSON-encoded `[Split]`.
     var splitsData: Data?
 
+    /// JSON-encoded `[Double]` of raw heart-rate bpm samples captured during the run
+    /// (app-recorded) or fetched from HealthKit. Backs the time-in-zone breakdown (A6).
+    var heartRateSamplesData: Data?
+
     /// JSON-encoded `[Coordinate]`.
     var routeData: Data?
 
@@ -64,6 +68,12 @@ final class RunWorkout {
     var routeCoordinates: [Coordinate] {
         get { routeData?.decode([Coordinate].self) ?? [] }
         set { routeData = .encoded(newValue, keeping: routeData) }
+    }
+
+    /// Raw heart-rate bpm samples for this run (empty if none captured/available).
+    var heartRateSamples: [Double] {
+        get { heartRateSamplesData?.decode([Double].self) ?? [] }
+        set { heartRateSamplesData = newValue.isEmpty ? nil : .encoded(newValue, keeping: heartRateSamplesData) }
     }
 
     var weather: WorkoutWeather? {

@@ -35,6 +35,13 @@ struct OnboardingView: View {
     @State private var selectedDays: Set<Int> = [0, 2, 4, 5]
     @State private var longRunOnSaturday = true
 
+    // HR-zone calibration (shown on the Calibrate step). Age drives the Tanaka max-HR
+    // estimate; an explicit override decouples it. Both are optional — untouched values
+    // are not forced onto the profile.
+    @State private var age = 30
+    @State private var maxHROverride: Int? = nil
+    @State private var didEnterHR = false
+
     // Strength step state
     @State private var selectedEquipment: Set<StrengthEquipment> = []
     @State private var strengthFocus: StrengthFocus = .runningSpecific
@@ -381,7 +388,41 @@ struct OnboardingView: View {
                 in: RoundedRectangle(cornerRadius: 16)
             )
             .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color.brand.opacity(0.28), lineWidth: 0.5))
+
+            hrCalibrationCard
         }
+    }
+
+    /// Optional age + max-HR entry used for heart-rate training zones.
+    private var onboardingMaxHR: Int { maxHROverride ?? UserProfile.estimatedMaxHeartRate(forAge: age) }
+
+    private var hrCalibrationCard: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Text("Age")
+                    .font(.system(size: 14, weight: .semibold))
+                Spacer()
+                Text("\(age)").font(.system(size: 14, weight: .bold)).monospacedDigit().foregroundStyle(.secondary)
+                Stepper("", value: Binding(get: { age }, set: { age = $0; didEnterHR = true }), in: 10...100)
+                    .labelsHidden()
+            }
+            Divider()
+            HStack {
+                Text("Max HR")
+                    .font(.system(size: 14, weight: .semibold))
+                Spacer()
+                Text("\(onboardingMaxHR) bpm").font(.system(size: 14, weight: .bold)).monospacedDigit().foregroundStyle(.secondary)
+                Stepper("", value: Binding(get: { onboardingMaxHR }, set: { maxHROverride = $0; didEnterHR = true }), in: 120...220)
+                    .labelsHidden()
+            }
+            Text("Sets your heart-rate zones. Estimated from age (208 − 0.7 × age) — adjust if you know your true max.")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
     }
 
     // MARK: - Schedule content
@@ -719,6 +760,12 @@ struct OnboardingView: View {
         profile.customDistanceMeters = goalRace.usesCustomDistance ? effectiveRaceDistanceMeters : nil
         profile.selectedEquipment = Array(selectedEquipment)
         profile.strengthFocus = strengthFocus
+        // Only record HR-zone inputs if the user actually engaged with them; otherwise leave
+        // them nil so no zones are shown until the user opts in (Settings › Heart Rate Zones).
+        if didEnterHR {
+            profile.age = age
+            profile.maxHeartRateBPM = maxHROverride
+        }
         context.insert(profile)
         let plan: TrainingPlan
         if goalRace.isGoalRace {

@@ -84,6 +84,8 @@ final class MockHealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sen
         existingIDs: Set<String>
     ) async throws -> [StrengthWorkout] { [] }
 
+    func fetchHeartRateSamples(forWorkoutID id: String) async -> [Double] { [] }
+
     func enableBackgroundDelivery() async throws {
         lock.withLock { _enableCalls += 1 }
         if let gate = enableGate { await gate.wait() }

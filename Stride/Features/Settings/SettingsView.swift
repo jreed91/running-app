@@ -53,6 +53,7 @@ struct SettingsView: View {
                     accountCard
                     unitsCard
                     if let profile { trainingCard(profile) }
+                    if let profile { heartRateCard(profile) }
                     appCard
                     dataCard
                     routeGeniusCard
@@ -212,6 +213,46 @@ struct SettingsView: View {
                     ForEach(Gender.allCases, id: \.self) { Text($0.displayName).tag($0) }
                 }
                 .labelsHidden()
+            }
+        }
+    }
+
+    // MARK: - Heart Rate card
+
+    private func heartRateCard(_ profile: UserProfile) -> some View {
+        settingsSection("Heart Rate Zones") {
+            settingsRow(icon: .heart, iconColor: .zoneTempo, title: "Age") {
+                HStack(spacing: 10) {
+                    Text("\(ageBinding(for: profile).wrappedValue)")
+                        .font(.bodyRegular).foregroundStyle(.secondary)
+                        .monospacedDigit()
+                    Stepper("", value: ageBinding(for: profile), in: 10...100)
+                        .labelsHidden()
+                }
+            }
+            rowDivider
+            settingsRow(icon: .bolt, iconColor: .zoneInterval, title: "Max HR") {
+                HStack(spacing: 10) {
+                    Text("\(maxHRBinding(for: profile).wrappedValue) bpm")
+                        .font(.bodyRegular).foregroundStyle(.secondary)
+                        .monospacedDigit()
+                    Stepper("", value: maxHRBinding(for: profile), in: 120...220)
+                        .labelsHidden()
+                }
+            }
+            if profile.maxHeartRateBPM != nil {
+                rowDivider
+                Button {
+                    profile.maxHeartRateBPM = nil
+                    persistProfileEdit(profile)
+                } label: {
+                    HStack {
+                        Text("Reset to age estimate (\(UserProfile.estimatedMaxHeartRate(forAge: profile.age ?? 30)) bpm)")
+                            .font(.caption).foregroundStyle(.brand)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 16).padding(.vertical, 12)
+                }
             }
         }
     }
@@ -635,6 +676,32 @@ struct SettingsView: View {
             set: { newValue in
                 guard profile.gender != newValue else { return }
                 profile.gender = newValue
+                persistProfileEdit(profile)
+            }
+        )
+    }
+
+    /// Age drives the Tanaka max-HR estimate. Defaults to 30 until the user sets it; once the
+    /// user has an explicit Max HR, changing age no longer moves it (the estimate is decoupled).
+    private func ageBinding(for profile: UserProfile) -> Binding<Int> {
+        Binding(
+            get: { profile.age ?? 30 },
+            set: { newValue in
+                guard profile.age != newValue else { return }
+                profile.age = newValue
+                persistProfileEdit(profile)
+            }
+        )
+    }
+
+    /// Max HR shows the effective value (explicit → age estimate → 190 default). Editing it
+    /// stores an explicit `maxHeartRateBPM`, overriding the age estimate.
+    private func maxHRBinding(for profile: UserProfile) -> Binding<Int> {
+        Binding(
+            get: { profile.effectiveMaxHeartRate ?? 190 },
+            set: { newValue in
+                guard profile.maxHeartRateBPM != newValue else { return }
+                profile.maxHeartRateBPM = newValue
                 persistProfileEdit(profile)
             }
         )
