@@ -352,6 +352,11 @@ struct AICoachChatView: View {
         isWaitingForCoach = true
         defer { isWaitingForCoach = false }
 
+        // The metric chips and status badge summarize the run the conversation
+        // opened on. They belong to the first coach reply only — repeating them on
+        // every answer implies each reply is freshly grounded in that same data.
+        let isOpeningReply = !messages.contains { $0.sender == .coach }
+
         do {
             let reply = try await container.aiCoachService.chatWithProvider(
                 provider: appSettings.aiProvider,
@@ -363,8 +368,8 @@ struct AICoachChatView: View {
                     AICoachChatMessage(
                         sender: .coach,
                         text: reply,
-                        metrics: openingMetrics,
-                        status: openingStatus
+                        metrics: isOpeningReply ? openingMetrics : [],
+                        status: isOpeningReply ? openingStatus : nil
                     )
                 )
             }

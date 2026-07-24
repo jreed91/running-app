@@ -21,10 +21,77 @@ final class AppContainer: ObservableObject {
         case emergencyInMemory
     }
 
+    /// A store-open problem worth interrupting the user for.
+    ///
+    /// `.localFallback` is deliberately absent: the file is intact, the data is all
+    /// there, and it re-syncs when CloudKit recovers, so there is nothing for the
+    /// user to do. The two cases here are the ones where they could otherwise be
+    /// left staring at an empty app with no idea why.
+    enum StoreRecoveryNotice: Identifiable, Equatable {
+        /// The old store could not be migrated and was set aside under this filename.
+        case storeMovedAside(backupName: String?)
+        /// Nothing could be opened on disk; this launch is running from memory.
+        case runningInMemory
+
+        init?(mode: PersistenceMode, movedAsideStoreName: String?) {
+            switch mode {
+            case .recreatedLocalFallback:
+                self = .storeMovedAside(backupName: movedAsideStoreName)
+            case .emergencyInMemory:
+                self = .runningInMemory
+            case .cloudKit, .inMemory, .localOnly, .localFallback:
+                return nil
+            }
+        }
+
+        var id: String {
+            switch self {
+            case .storeMovedAside: "storeMovedAside"
+            case .runningInMemory: "runningInMemory"
+            }
+        }
+
+        var title: String {
+            switch self {
+            case .storeMovedAside: "Your training data couldn't be opened"
+            case .runningInMemory: "Running without saved data"
+            }
+        }
+
+        var message: String {
+            switch self {
+            case .storeMovedAside(let backupName):
+                let location = backupName.map { " It's kept on this device as \($0)." } ?? ""
+                return """
+                Stride started with a fresh, empty database because your existing one \
+                couldn't be read by this version.\(location) Nothing was deleted — if you \
+                had iCloud Sync on, your data will come back down from iCloud shortly.
+                """
+            case .runningInMemory:
+                return """
+                Stride couldn't open its database this time, so anything you record now \
+                will not be saved. Your existing data has been left untouched. Please \
+                restart the app; if this keeps happening, restart your device.
+                """
+            }
+        }
+    }
+
     // MARK: SwiftData
 
     let modelContainer: ModelContainer
     let persistenceMode: PersistenceMode
+
+    /// Set when the persistent store could not be opened normally, so the UI can tell
+    /// the user what happened instead of silently running on a different store (C3).
+    /// Cleared once acknowledged.
+    @Published var storeRecoveryNotice: StoreRecoveryNotice?
+
+    /// The iCloud-sync preference the store was actually opened with. Settings
+    /// compares the live preference against this to decide whether a restart is
+    /// genuinely still pending, so the "restart to apply" note clears itself when
+    /// the user toggles back rather than latching for the rest of the session.
+    let syncPreferenceAtLaunch: Bool
 
     // MARK: Repositories
 
@@ -97,6 +164,7 @@ final class AppContainer: ObservableObject {
         let localConfig = ModelConfiguration(schema: schema, url: storeURL)
         let container: ModelContainer
         let persistenceMode: PersistenceMode
+        var movedAsideStoreName: String? = nil
         do {
             container = try modelContainerFactory(schema, [config])
             if inMemory {
@@ -123,11 +191,16 @@ final class AppContainer: ObservableObject {
                 container = c
                 persistenceMode = .localFallback
                 AppLogger.log("Tier1: local-only store OK (data will sync when CloudKit recovers)", label: "AppContainer", level: .notice)
-            } else {
+            } else if Self.isLikelyMigrationFailure(primaryError) {
                 // Tier 2 — move the on-disk store aside and recreate local-only.
-                // Never delete: when CloudKit is off this file is the only copy of the
-                // user's data, and a deterministic open failure here is most plausibly a
-                // schema-migration bug — the backup keeps the data recoverable.
+                //
+                // Only reached for errors that identify the file as unreadable by this
+                // build (schema/migration failures). A transient problem — the device
+                // locked with file protection on, a disk that is momentarily full, a
+                // CloudKit hiccup — must never reach here: renaming the store on a
+                // failure that would have cleared itself next launch is how a user's
+                // whole history "disappears". Never delete either, so even a genuine
+                // migration bug leaves the data recoverable.
                 let backupTag = ".broken-\(Int(Date().timeIntervalSince1970))"
                 for suffix in ["", "-shm", "-wal"] {
                     let source = URL(fileURLWithPath: storeURL.path + suffix)
@@ -135,7 +208,7 @@ final class AppContainer: ObservableObject {
                     try? FileManager.default.moveItem(at: source, to: backup)
                 }
                 AppLogger.log(
-                    "Tier2: moved store aside to \(storeURL.lastPathComponent + backupTag) and recreating",
+                    "Tier2: migration failure — moved store aside to \(storeURL.lastPathComponent + backupTag) and recreating",
                     label: "AppContainer",
                     level: .warning
                 )
@@ -143,23 +216,37 @@ final class AppContainer: ObservableObject {
                 if let c = try? modelContainerFactory(schema, [localConfig]) {
                     container = c
                     persistenceMode = .recreatedLocalFallback
+                    movedAsideStoreName = storeURL.lastPathComponent + backupTag
                     AppLogger.log("Tier2: fresh local store created OK", label: "AppContainer", level: .notice)
                 } else {
-                    // Tier 3 — in-memory; data won't persist but the app won't crash on launch.
-                    AppLogger.log("Tier3: all persistent tiers failed — using in-memory store", label: "AppContainer", level: .critical)
-                    let memConfig = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-                    do {
-                        container = try modelContainerFactory(schema, [memConfig])
-                        persistenceMode = .emergencyInMemory
-                    } catch let tier3Error {
-                        fatalError("[AppContainer] In-memory ModelContainer failed — SwiftData is broken on this device: \(tier3Error)")
-                    }
+                    (container, persistenceMode) = Self.openEmergencyInMemoryStore(
+                        schema: schema,
+                        factory: modelContainerFactory
+                    )
                 }
+            } else {
+                // Tier 3 — the failure looks transient, so the on-disk store is left
+                // exactly as it is and this launch runs from memory. Nothing persists
+                // this session, but the next launch gets another shot at the real file.
+                AppLogger.log(
+                    "Store open failed with a non-migration error — leaving the file intact and running in-memory for this launch",
+                    label: "AppContainer",
+                    level: .critical
+                )
+                (container, persistenceMode) = Self.openEmergencyInMemoryStore(
+                    schema: schema,
+                    factory: modelContainerFactory
+                )
             }
         }
 
         self.modelContainer = container
         self.persistenceMode = persistenceMode
+        self.syncPreferenceAtLaunch = syncEnabled
+        self.storeRecoveryNotice = StoreRecoveryNotice(
+            mode: persistenceMode,
+            movedAsideStoreName: movedAsideStoreName
+        )
 
         let context = container.mainContext
         self.workoutRepository = WorkoutRepository(context: context)
@@ -173,7 +260,9 @@ final class AppContainer: ObservableObject {
         let notifications = NotificationService.shared
         self.notificationService = notifications
         self.workoutAnalyticsService = WorkoutAnalyticsService()
-        self.routeGeniusService = RouteGeniusService()
+        self.routeGeniusService = RouteGeniusService(
+            session: PulseIntegrationService.makeInstrumentedURLSession()
+        )
         let weather = WeatherService()
         self.weatherService = weather
         self.aiCoachService = AICoachService()
@@ -202,6 +291,58 @@ final class AppContainer: ObservableObject {
             notifications.onSyncedRunTapped = { [weak self] idString in
                 self?.surfacePendingReviewWorkout(idString: idString)
             }
+        }
+    }
+
+    // MARK: - Store failure classification
+
+    /// Cocoa error codes that mean "this file cannot be read by this build", as
+    /// opposed to "this failed right now and might not next time".
+    ///
+    /// Core Data groups migration failures in 134100–134199 (incompatible version
+    /// hash, missing source/mapping model, inferred-mapping failures, entity-policy
+    /// failures). 134020 is `NSPersistentStoreIncompatibleSchemaError`, which SwiftData
+    /// raises when the declared schema does not match what is on disk. 259 is
+    /// `NSFileReadCorruptFileError`: a corrupt store will not un-corrupt itself, so
+    /// it belongs here too, and it is what a truncated or non-database file reports.
+    private static let unreadableStoreErrorCodes: Set<Int> = Set(134_100...134_199).union([134_020, 259])
+
+    /// Whether a store-open failure means the file itself is incompatible, as opposed
+    /// to something that could clear up on its own.
+    ///
+    /// Only a definite match moves the user's store aside — an unrecognised error is
+    /// treated as transient, which is the safe direction to be wrong in: a needless
+    /// in-memory launch is annoying, a needlessly renamed database looks like data loss.
+    static func isLikelyMigrationFailure(_ error: Error) -> Bool {
+        var current: NSError? = error as NSError
+        var depth = 0
+        while let nsError = current, depth < 8 {
+            if nsError.domain == NSCocoaErrorDomain, unreadableStoreErrorCodes.contains(nsError.code) {
+                return true
+            }
+            // Core Data reports batch failures with the real causes in `NSDetailedErrors`.
+            if let detailed = nsError.userInfo[NSDetailedErrorsKey] as? [NSError],
+               detailed.contains(where: { $0.domain == NSCocoaErrorDomain && unreadableStoreErrorCodes.contains($0.code) }) {
+                return true
+            }
+            current = nsError.userInfo[NSUnderlyingErrorKey] as? NSError
+            depth += 1
+        }
+        return false
+    }
+
+    /// Last-resort in-memory store. Traps only if even that fails, which means
+    /// SwiftData itself is unusable on the device and there is nothing left to try.
+    private static func openEmergencyInMemoryStore(
+        schema: Schema,
+        factory: (Schema, [ModelConfiguration]) throws -> ModelContainer
+    ) -> (ModelContainer, PersistenceMode) {
+        AppLogger.log("Falling back to an in-memory store — data will not persist this launch", label: "AppContainer", level: .critical)
+        let memConfig = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        do {
+            return (try factory(schema, [memConfig]), .emergencyInMemory)
+        } catch {
+            fatalError("[AppContainer] In-memory ModelContainer failed — SwiftData is broken on this device: \(error)")
         }
     }
 

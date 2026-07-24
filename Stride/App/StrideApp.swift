@@ -8,9 +8,20 @@ import HealthKit
 struct StrideApp: App {
 
     @UIApplicationDelegateAdaptor(StrideAppDelegate.self) private var appDelegate
-    @StateObject private var container = AppContainer(inMemory: UITestingSupport.isEnabled)
-    @State private var appSettings = AppSettings()
-    @State private var authService = AuthService()
+    @StateObject private var container: AppContainer
+    @State private var appSettings: AppSettings
+    @State private var authService: AuthService
+
+    init() {
+        // Must run before anything below: AppContainer and AppSettings both read
+        // UserDefaults / iCloud KVS during their own initialization, so clearing
+        // UI-test state from a later hook would be too late to matter.
+        UITestingSupport.prepareIfNeeded()
+
+        _container = StateObject(wrappedValue: AppContainer(inMemory: UITestingSupport.isEnabled))
+        _appSettings = State(initialValue: AppSettings())
+        _authService = State(initialValue: AuthService())
+    }
 
     var body: some Scene {
         WindowGroup {

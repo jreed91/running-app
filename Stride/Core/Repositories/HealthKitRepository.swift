@@ -102,7 +102,8 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
     private static let shareTypes: Set<HKSampleType> = [
         HKObjectType.workoutType(),
         HKQuantityType(.distanceWalkingRunning),
-        HKQuantityType(.heartRate)
+        HKQuantityType(.heartRate),
+        HKSeriesType.workoutRoute()
     ]
 
     private static let readTypes: Set<HKObjectType> = [
@@ -131,22 +132,33 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
 
     @MainActor func save(_ workout: RunWorkout) async throws -> String {
         let isIndoor = workout.workoutLocation == .indoor
+        let start = workout.date
+        let end = start.addingTimeInterval(workout.durationSeconds)
+
         let config = HKWorkoutConfiguration()
         config.activityType = .running
         config.locationType = isIndoor ? .indoor : .outdoor
 
         let builder = HKWorkoutBuilder(healthStore: store, configuration: config, device: .local())
-        try await builder.beginCollection(at: workout.date)
+        try await builder.beginCollection(at: start)
 
-        let distanceSample = HKQuantitySample(
-            type: HKQuantityType(.distanceWalkingRunning),
-            quantity: HKQuantity(unit: .meter(), doubleValue: workout.distanceMeters),
-            start: workout.date,
-            end: workout.date.addingTimeInterval(workout.durationSeconds)
-        )
-        try await builder.addSamples([distanceSample])
+        var samples: [HKSample] = [
+            HKQuantitySample(
+                type: HKQuantityType(.distanceWalkingRunning),
+                quantity: HKQuantity(unit: .meter(), doubleValue: workout.distanceMeters),
+                start: start,
+                end: end
+            )
+        ]
 
-        try await builder.endCollection(at: workout.date.addingTimeInterval(workout.durationSeconds))
+        // Heart rate captured during the run: without these, an exported workout
+        // shows a distance and nothing else in the Fitness app, and Stride's own
+        // re-import can't rebuild time-in-zone from it.
+        samples.append(contentsOf: Self.heartRateSamples(bpms: workout.heartRateSamples, start: start, end: end))
+
+        try await builder.addSamples(samples)
+
+        try await builder.endCollection(at: end)
 
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             builder.addMetadata([
@@ -161,7 +173,71 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         guard let hkWorkout = try await builder.finishWorkout() else {
             throw HKError(.errorNoData)
         }
+
+        // The GPS trace is attached after the workout exists, since a route series
+        // has to be associated with a saved workout. A route failure must not lose
+        // the workout that was already written, so it is logged rather than thrown.
+        if !isIndoor {
+            do {
+                try await saveRoute(coordinates: workout.routeCoordinates, for: hkWorkout, start: start, end: end)
+            } catch {
+                AppLogger.log("Failed to attach workout route to HealthKit: \(error)", label: "HealthKit", level: .error)
+            }
+        }
+
         return hkWorkout.uuid.uuidString
+    }
+
+    /// Evenly spaced timestamps for `count` samples spanning `start...end`.
+    ///
+    /// Stride stores heart-rate readings and route points as ordered arrays without
+    /// their own timestamps, so they are laid back out across the workout's duration
+    /// on export. Pure and deterministic so it can be tested directly.
+    static func sampleTimestamps(count: Int, start: Date, end: Date) -> [Date] {
+        guard count > 0 else { return [] }
+        guard count > 1 else { return [start] }
+        let span = max(end.timeIntervalSince(start), 0)
+        let step = span / Double(count - 1)
+        return (0..<count).map { start.addingTimeInterval(step * Double($0)) }
+    }
+
+    private static func heartRateSamples(bpms: [Double], start: Date, end: Date) -> [HKQuantitySample] {
+        guard !bpms.isEmpty else { return [] }
+        let type = HKQuantityType(.heartRate)
+        let unit = HKUnit.count().unitDivided(by: .minute())
+        let timestamps = sampleTimestamps(count: bpms.count, start: start, end: end)
+        return zip(bpms, timestamps).compactMap { bpm, timestamp in
+            guard bpm > 0 else { return nil }
+            return HKQuantitySample(
+                type: type,
+                quantity: HKQuantity(unit: unit, doubleValue: bpm),
+                start: timestamp,
+                end: timestamp
+            )
+        }
+    }
+
+    @MainActor
+    private func saveRoute(
+        coordinates: [Coordinate],
+        for hkWorkout: HKWorkout,
+        start: Date,
+        end: Date
+    ) async throws {
+        guard coordinates.count > 1 else { return }
+        let timestamps = Self.sampleTimestamps(count: coordinates.count, start: start, end: end)
+        let locations = zip(coordinates, timestamps).map { coordinate, timestamp in
+            CLLocation(
+                coordinate: coordinate.clCoordinate,
+                altitude: 0,
+                horizontalAccuracy: 10,
+                verticalAccuracy: -1,
+                timestamp: timestamp
+            )
+        }
+        let routeBuilder = HKWorkoutRouteBuilder(healthStore: store, device: .local())
+        try await routeBuilder.insertRouteData(locations)
+        _ = try await routeBuilder.finishRoute(with: hkWorkout, metadata: nil)
     }
 
     // MARK: - Workout plans (WorkoutKit)

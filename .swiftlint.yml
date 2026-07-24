@@ -1,9 +1,11 @@
 included:
   - Stride
-  # NOTE: StrideTests/StrideUITests are intentionally not linted yet — enabling
-  # them requires first clearing existing error-level violations in the test
-  # sources (e.g. single-character identifiers vs. `identifier_name.min_length`),
-  # otherwise the full-tree lint on push would fail.
+  # Test sources are linted too. The only error-level rule they legitimately break
+  # is `identifier_name.min_length` (throwaway `var c` DateComponents builders), so
+  # nested `.swiftlint.yml` files in each test directory relax just that rule rather
+  # than weakening it for the app.
+  - StrideTests
+  - StrideUITests
 
 excluded:
   - Stride/Resources

@@ -1,0 +1,7 @@
+# Nested SwiftLint config for the UI-test target. See StrideTests/.swiftlint.yml
+# for why `identifier_name` is relaxed for test sources only.
+identifier_name:
+  min_length: 1
+
+force_unwrapping:
+  severity: warning

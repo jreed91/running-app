@@ -2,14 +2,58 @@ import SwiftUI
 import SwiftData
 
 struct CloudKitDebugView: View {
+    /// Cap on records fetched per table.
+    ///
+    /// Every query on this screen was previously unbounded and each table was
+    /// serialized into a single monospaced blob, so a season's worth of scheduled
+    /// workouts meant thousands of rows rendered at once whenever Settings opened
+    /// this screen. The cap plus per-record disclosure keeps it usable on real data.
+    static let recordLimit = 50
+
     @Environment(AppSettings.self) private var appSettings
 
-    @Query(sort: \UserProfile.updatedAt, order: .reverse) private var profiles: [UserProfile]
-    @Query(sort: \TrainingPlan.createdAt, order: .reverse) private var plans: [TrainingPlan]
-    @Query(sort: \TrainingWeek.weekNumber, order: .forward) private var weeks: [TrainingWeek]
-    @Query(sort: \ScheduledWorkout.scheduledDate, order: .forward) private var scheduledWorkouts: [ScheduledWorkout]
-    @Query(sort: \RunWorkout.date, order: .reverse) private var runWorkouts: [RunWorkout]
-    @Query(sort: \SavedRoute.createdAt, order: .reverse) private var savedRoutes: [SavedRoute]
+    @Query(CloudKitDebugView.profilesDescriptor) private var profiles: [UserProfile]
+    @Query(CloudKitDebugView.plansDescriptor) private var plans: [TrainingPlan]
+    @Query(CloudKitDebugView.weeksDescriptor) private var weeks: [TrainingWeek]
+    @Query(CloudKitDebugView.scheduledWorkoutsDescriptor) private var scheduledWorkouts: [ScheduledWorkout]
+    @Query(CloudKitDebugView.runWorkoutsDescriptor) private var runWorkouts: [RunWorkout]
+    @Query(CloudKitDebugView.savedRoutesDescriptor) private var savedRoutes: [SavedRoute]
+
+    private static var profilesDescriptor: FetchDescriptor<UserProfile> {
+        var descriptor = FetchDescriptor<UserProfile>(sortBy: [SortDescriptor(\.updatedAt, order: .reverse)])
+        descriptor.fetchLimit = recordLimit
+        return descriptor
+    }
+
+    private static var plansDescriptor: FetchDescriptor<TrainingPlan> {
+        var descriptor = FetchDescriptor<TrainingPlan>(sortBy: [SortDescriptor(\.createdAt, order: .reverse)])
+        descriptor.fetchLimit = recordLimit
+        return descriptor
+    }
+
+    private static var weeksDescriptor: FetchDescriptor<TrainingWeek> {
+        var descriptor = FetchDescriptor<TrainingWeek>(sortBy: [SortDescriptor(\.weekNumber, order: .forward)])
+        descriptor.fetchLimit = recordLimit
+        return descriptor
+    }
+
+    private static var scheduledWorkoutsDescriptor: FetchDescriptor<ScheduledWorkout> {
+        var descriptor = FetchDescriptor<ScheduledWorkout>(sortBy: [SortDescriptor(\.scheduledDate, order: .reverse)])
+        descriptor.fetchLimit = recordLimit
+        return descriptor
+    }
+
+    private static var runWorkoutsDescriptor: FetchDescriptor<RunWorkout> {
+        var descriptor = FetchDescriptor<RunWorkout>(sortBy: [SortDescriptor(\.date, order: .reverse)])
+        descriptor.fetchLimit = recordLimit
+        return descriptor
+    }
+
+    private static var savedRoutesDescriptor: FetchDescriptor<SavedRoute> {
+        var descriptor = FetchDescriptor<SavedRoute>(sortBy: [SortDescriptor(\.createdAt, order: .reverse)])
+        descriptor.fetchLimit = recordLimit
+        return descriptor
+    }
 
     var body: some View {
         List {
@@ -19,7 +63,7 @@ struct CloudKitDebugView: View {
             } header: {
                 Text("CloudKit Status")
             } footer: {
-                Text("This screen shows all local SwiftData records mirrored by CloudKit plus iCloud key-value settings.")
+                Text("This screen shows local SwiftData records mirrored by CloudKit plus iCloud key-value settings. Each table is capped at \(Self.recordLimit) records.")
             }
 
             recordSection(title: "User Profiles", records: profiles.map(profilePayload))
@@ -34,15 +78,27 @@ struct CloudKitDebugView: View {
 
     @ViewBuilder
     private func recordSection(title: String, records: [[String: Any]]) -> some View {
-        Section(title) {
+        Section {
             if records.isEmpty {
                 Text("No records")
                     .foregroundStyle(.secondary)
             } else {
-                labeled("Count", value: "\(records.count)")
-                Text(prettyPrinted(records) ?? "Unable to serialize records.")
-                    .font(.system(size: 11, design: .monospaced))
-                    .textSelection(.enabled)
+                labeled("Showing", value: "\(records.count)")
+                // One collapsed row per record: the whole table is no longer laid
+                // out as a single giant Text every time the screen appears.
+                ForEach(Array(records.enumerated()), id: \.offset) { index, record in
+                    DisclosureGroup("Record \(index + 1)") {
+                        Text(prettyPrinted(record) ?? "Unable to serialize record.")
+                            .font(.system(size: 11, design: .monospaced))
+                            .textSelection(.enabled)
+                    }
+                }
+            }
+        } header: {
+            Text(title)
+        } footer: {
+            if records.count >= Self.recordLimit {
+                Text("Capped at \(Self.recordLimit) records.")
             }
         }
     }
@@ -154,7 +210,7 @@ struct CloudKitDebugView: View {
         ]
     }
 
-    private func prettyPrinted(_ value: [[String: Any]]) -> String? {
+    private func prettyPrinted(_ value: [String: Any]) -> String? {
         guard JSONSerialization.isValidJSONObject(value) else { return nil }
         guard let data = try? JSONSerialization.data(withJSONObject: value, options: [.prettyPrinted, .sortedKeys]) else {
             return nil

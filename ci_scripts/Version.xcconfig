@@ -1,0 +1,15 @@
+// Single source of truth for the app's version and build number.
+//
+// Wired into every configuration through `configFiles` in project.yml, which is
+// why CURRENT_PROJECT_VERSION and MARKETING_VERSION are deliberately absent from
+// that file's `settings.base` — a project-level build setting would override the
+// xcconfig and silently win.
+//
+// CI overwrites CURRENT_PROJECT_VERSION here (see ci_scripts/ci_post_clone.sh).
+// That replaced an in-place `sed` against project.yml, which depended on the
+// exact key formatting of a YAML file that nothing stopped anyone from
+// reformatting, and which failed silently — a missed substitution produced a
+// duplicate build number that TestFlight rejects only after a full archive.
+
+MARKETING_VERSION = 1.0
+CURRENT_PROJECT_VERSION = 2

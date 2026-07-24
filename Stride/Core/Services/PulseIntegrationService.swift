@@ -51,6 +51,21 @@ enum PulseIntegrationService {
         #endif
     }
 
+    /// Returns a diagnostics-capturing session with redaction guaranteed to be in
+    /// place first.
+    ///
+    /// `makeURLSession()` alone can hand back a `URLSessionProxy` before
+    /// `activateIfNeeded()` has installed the `NetworkLogger` redaction rules, which
+    /// would record `Authorization` headers verbatim. Composition roots should build
+    /// their sessions through this entry point rather than `makeURLSession()` (S5).
+    @MainActor
+    static func makeInstrumentedURLSession(
+        configuration: URLSessionConfiguration = .default
+    ) -> any StrideURLSessionProtocol {
+        activateIfNeeded()
+        return makeURLSession(configuration: configuration)
+    }
+
     static func makeNetworkLoggingDelegate() -> (any URLSessionTaskDelegate)? {
         #if canImport(Pulse)
         guard isDiagnosticsEnabled else { return nil }

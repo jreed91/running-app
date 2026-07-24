@@ -45,6 +45,7 @@ struct NewPlanOnboardingView: View {
     @State private var strengthFocus: StrengthFocus = .runningSpecific
 
     @State private var isCreatingPlan = false
+    @State private var planErrorMessage: String?
 
     private let totalSteps = 6
 
@@ -126,6 +127,17 @@ struct NewPlanOnboardingView: View {
         .animation(.easeInOut(duration: 0.3), value: step)
         .ignoresSafeArea()
         .onAppear { loadFromProfile() }
+        .alert(
+            "Couldn't build your plan",
+            isPresented: Binding(
+                get: { planErrorMessage != nil },
+                set: { if !$0 { planErrorMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { planErrorMessage = nil }
+        } message: {
+            Text(planErrorMessage ?? "")
+        }
     }
 
     @ViewBuilder
@@ -582,7 +594,13 @@ struct NewPlanOnboardingView: View {
     // MARK: - Plan generation
 
     private func generatePlan() {
-        guard let profile else { return }
+        // Without a profile there is nothing to build a plan from. Clear the spinner
+        // and tell the user instead of leaving "Build My Plan" wedged forever.
+        guard let profile else {
+            isCreatingPlan = false
+            planErrorMessage = "We couldn't find your runner profile. Close this screen and try again."
+            return
+        }
 
         let sortedDays = selectedDays.sorted()
 
@@ -626,7 +644,15 @@ struct NewPlanOnboardingView: View {
             )
         }
         context.insert(plan)
-        try? context.save()
+        do {
+            try context.save()
+        } catch {
+            context.delete(plan)
+            isCreatingPlan = false
+            planErrorMessage = "Your plan couldn't be saved. Please try again.\n\n\(error.localizedDescription)"
+            AppLogger.log("Failed to save generated plan: \(error)", label: "onboarding", level: .error)
+            return
+        }
 
         Task {
             if appSettings.morningReminderEnabled {

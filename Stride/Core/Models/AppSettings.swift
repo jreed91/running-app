@@ -161,6 +161,65 @@ final class AppSettings {
         if syncStored { persist(iCloudSyncEnabled, forKey: Self.iCloudSyncKey) }
         if reminderStored { persist(morningReminderEnabled, forKey: Self.morningReminderKey) }
         if weeklyGoalStored { persist(weeklyGoalMeters, forKey: Self.weeklyGoalMetersKey) }
+
+        observeExternalChanges()
+    }
+
+    // MARK: - External (iCloud KVS) changes
+
+    /// Applies settings that iCloud key-value storage delivers from another device
+    /// while this one is already running (M15).
+    ///
+    /// The launch-time snapshot only reconciles at cold start, so a unit change made
+    /// on an iPad used to sit invisible on an iPhone that stayed open — and worse,
+    /// the next local write on the iPhone would push the stale value back out.
+    private func observeExternalChanges() {
+        Task { @MainActor [weak self] in
+            // `Notification` is not Sendable, so the element is discarded and every
+            // value is re-read from the store instead — the same pattern `AuthService`
+            // uses for credential revocation.
+            for await _ in NotificationCenter.default.notifications(
+                named: NSUbiquitousKeyValueStore.didChangeExternallyNotification
+            ) {
+                guard let self else { return }
+                self.applyExternalValues()
+            }
+        }
+    }
+
+    /// Re-reads every iCloud-synced setting and adopts any that changed remotely.
+    ///
+    /// Internal so tests can drive it directly with a `KeyValueStore` double, which
+    /// cannot post the real system notification.
+    func applyExternalValues() {
+        // The iCloud-sync toggle is deliberately device-local (M16) and the ORS token
+        // lives in the Keychain (S1), so neither participates here.
+        if let raw = Self.readString(forKey: Self.unitPreferenceKey, defaults: defaults, ubiquitous: ubiquitous),
+           let value = UnitPreference(rawValue: raw),
+           value != unitPreference {
+            unitPreference = value
+        }
+
+        if Self.hasStoredValue(forKey: Self.aiInsightsEnabledKey, defaults: defaults, ubiquitous: ubiquitous) {
+            let value = Self.readBool(forKey: Self.aiInsightsEnabledKey, defaults: defaults, ubiquitous: ubiquitous)
+            if value != aiInsightsEnabled { aiInsightsEnabled = value }
+        }
+
+        if let raw = Self.readString(forKey: Self.aiProviderKey, defaults: defaults, ubiquitous: ubiquitous),
+           let value = AIProvider(rawValue: raw),
+           value != aiProvider {
+            aiProvider = value
+        }
+
+        if Self.hasStoredValue(forKey: Self.morningReminderKey, defaults: defaults, ubiquitous: ubiquitous) {
+            let value = Self.readBool(forKey: Self.morningReminderKey, defaults: defaults, ubiquitous: ubiquitous)
+            if value != morningReminderEnabled { morningReminderEnabled = value }
+        }
+
+        if let value = Self.readDouble(forKey: Self.weeklyGoalMetersKey, defaults: defaults, ubiquitous: ubiquitous),
+           value != weeklyGoalMeters {
+            weeklyGoalMeters = value
+        }
     }
 
     // MARK: - AI readiness

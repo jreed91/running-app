@@ -234,7 +234,10 @@ struct DashboardView: View {
     @Environment(\.modelContext) private var context
     @Query private var profiles: [UserProfile]
     @State private var showActiveRun = false
-    @State private var showStrengthWorkout = false
+    /// The strength workout to present. Captured at tap time and driven through
+    /// `fullScreenCover(item:)` so the cover can never open onto an empty,
+    /// undismissable screen when the selected day changes mid-presentation.
+    @State private var strengthWorkout: ScheduledWorkout?
     /// The scheduled workout to fulfill when the active-run sheet is a planned run
     /// (set by "Start This Workout"); `nil` for a free run (H4).
     @State private var activeRunScheduled: ScheduledWorkout?
@@ -243,6 +246,7 @@ struct DashboardView: View {
     /// (dismissed or acted on). Used to limit the prompt to once per week.
     @AppStorage("missedWorkoutPromptFlaggedDate") private var missedWorkoutPromptFlaggedInterval: Double = 0
     @State private var isHandlingRecovery = false
+    @State private var recoveryErrorMessage: String?
 
     @Namespace private var workoutCardNamespace
     @State private var dashboardAppeared = false
@@ -308,10 +312,19 @@ struct DashboardView: View {
             .fullScreenCover(isPresented: $showActiveRun) {
                 ActiveRunView(scheduledWorkout: activeRunScheduled)
             }
-            .fullScreenCover(isPresented: $showStrengthWorkout) {
-                if let workout = workoutForSelectedDate, workout.workoutType == .strength {
-                    StrengthActiveView(scheduledWorkout: workout)
-                }
+            .fullScreenCover(item: $strengthWorkout) { workout in
+                StrengthActiveView(scheduledWorkout: workout)
+            }
+            .alert(
+                "Couldn't update your plan",
+                isPresented: Binding(
+                    get: { recoveryErrorMessage != nil },
+                    set: { if !$0 { recoveryErrorMessage = nil } }
+                )
+            ) {
+                Button("OK", role: .cancel) { recoveryErrorMessage = nil }
+            } message: {
+                Text(recoveryErrorMessage ?? "")
             }
         }
     }
@@ -355,10 +368,38 @@ struct DashboardView: View {
         .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
     }
 
+    /// Distance in meters that fills a weekly-load bar to the top.
+    ///
+    /// Derived from the runner's own week rather than a fixed 15 km: the longest
+    /// day actually logged, and the plan's average target per run day, whichever
+    /// is bigger. The 3 km floor keeps a very light week from making a short
+    /// shakeout look like a peak effort.
+    private var weeklyLoadScaleMeters: Double {
+        let cal = Calendar.current
+        let monday = Date().startOfWeek
+
+        let longestLoggedDay = (0..<7).reduce(0.0) { longest, offset in
+            let day = monday.adding(days: offset)
+            let dayTotal = recentWorkouts
+                .filter { cal.isDate($0.date, inSameDayAs: day) }
+                .reduce(0.0) { $0 + $1.distanceMeters }
+            return max(longest, dayTotal)
+        }
+
+        var plannedPerRunDay = 0.0
+        if let week = activePlan?.currentWeek, week.targetDistanceKm > 0 {
+            let runDays = (week.workouts ?? []).filter { $0.workoutType != .rest }.count
+            plannedPerRunDay = week.targetDistanceKm * 1_000 / Double(max(runDays, 1))
+        }
+
+        return max(longestLoggedDay, plannedPerRunDay, 3_000)
+    }
+
     private var weeklyLoadChart: some View {
         let today = Date()
         let cal = Calendar.current
         let monday = today.startOfWeek
+        let scale = weeklyLoadScaleMeters
 
         // Build 7-day bars based on actual run data this week
         let bars: [(fraction: CGFloat, color: Color, isActive: Bool)] = (0..<7).map { offset in
@@ -381,8 +422,7 @@ struct DashboardView: View {
             default:                    color = .zoneEasy
             }
 
-            // Normalize: 15km = full bar
-            let fraction = CGFloat(min(dist / 15_000, 1.0))
+            let fraction = CGFloat(min(dist / scale, 1.0))
             return (fraction, color, isToday && dist == 0)
         }
 
@@ -419,7 +459,7 @@ struct DashboardView: View {
                 if Calendar.current.isDateInToday(selectedDate) && !workout.isCompleted {
                     Button {
                         if workout.workoutType == .strength {
-                            showStrengthWorkout = true
+                            strengthWorkout = workout
                         } else {
                             activeRunScheduled = workout
                             showActiveRun = true
@@ -571,32 +611,43 @@ struct DashboardView: View {
     // MARK: - Missed Workout Recovery
 
     private func handlePickUp(info: MissedWorkoutInfo) {
-        guard let plan = activePlan else { return }
-        isHandlingRecovery = true
-        do {
+        guard let plan = activePlan, !isHandlingRecovery else { return }
+        runRecovery(failureMessage: "We couldn't move your missed workouts forward.") {
             try container.shiftMissedWorkoutsForward(plan: plan, by: info.daysToShift, context: context)
-            missedWorkoutPromptFlaggedInterval = Date().timeIntervalSince1970
-        } catch {
-            AppLogger.log("Recovery shift failed: \(error)", label: "Dashboard", level: .error)
         }
-        isHandlingRecovery = false
     }
 
     private func handleRebuild() {
-        guard let plan = activePlan, let profile = profiles.first else { return }
-        isHandlingRecovery = true
-        do {
+        guard let plan = activePlan, let profile = profiles.first, !isHandlingRecovery else { return }
+        runRecovery(failureMessage: "We couldn't rebuild your plan.") {
             try container.rebuildPlan(
                 replacing: plan,
                 profile: profile,
                 context: context,
                 unitPreference: appSettings.unitPreference
             )
-            missedWorkoutPromptFlaggedInterval = Date().timeIntervalSince1970
-        } catch {
-            AppLogger.log("Plan rebuild failed: \(error)", label: "Dashboard", level: .error)
         }
-        isHandlingRecovery = false
+    }
+
+    /// Runs a plan-recovery mutation with the card's loading state applied.
+    ///
+    /// The work itself is synchronous main-actor SwiftData work, so it is hopped
+    /// through a `Task` — that yields a render pass between raising the flag and
+    /// doing the work, which is what makes `MissedWorkoutsRecoveryCard`'s loading
+    /// overlay reachable at all. Failures now surface in an alert instead of only
+    /// reaching the log.
+    private func runRecovery(failureMessage: String, _ work: @escaping () throws -> Void) {
+        isHandlingRecovery = true
+        Task { @MainActor in
+            defer { isHandlingRecovery = false }
+            do {
+                try work()
+                missedWorkoutPromptFlaggedInterval = Date().timeIntervalSince1970
+            } catch {
+                recoveryErrorMessage = "\(failureMessage)\n\n\(error.localizedDescription)"
+                AppLogger.log("Plan recovery failed: \(error)", label: "Dashboard", level: .error)
+            }
+        }
     }
 }
 
