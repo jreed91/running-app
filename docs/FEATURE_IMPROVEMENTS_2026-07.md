@@ -1,8 +1,9 @@
 # Stride Feature-Improvement Analysis — July 2026
 
-A product-feature review of Stride, distinct from the bug/design audit in
-[`APP_ANALYSIS_2026-07.md`](./APP_ANALYSIS_2026-07.md) (which tracks correctness
-defects, most now fixed) and the operational review in
+A product-feature review of Stride, distinct from the bug/design audits in
+[`APP_ANALYSIS_2026-07.md`](./APP_ANALYSIS_2026-07.md) (first pass, all numbered
+bugs fixed) and [`APP_ANALYSIS_2026-07-24.md`](./APP_ANALYSIS_2026-07-24.md)
+(second pass, currently open defects and UX issues), and from the operational review in
 [`REPO_ANALYSIS.md`](./REPO_ANALYSIS.md) (CI, secrets, test depth). This document
 asks a different question: **as a running-coach product, where is the existing
 feature set thin, and what should be built next?**
