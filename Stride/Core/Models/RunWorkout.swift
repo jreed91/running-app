@@ -17,6 +17,10 @@ final class RunWorkout {
     var workoutTypeRaw: String = WorkoutType.easy.rawValue
     /// Raw-backed storage for `workoutLocation` to keep CloudKit fields primitive.
     var workoutLocationRaw: String = WorkoutLocation.outdoor.rawValue
+    /// Distance unit the `splits` were bucketed in at record time. Runs recorded before
+    /// unit-aware bucketing (and every legacy CloudKit record) default to `metric`, so
+    /// their kilometre buckets keep reading honestly as "km" (A1).
+    var splitUnitRaw: String = UnitPreference.metric.rawValue
     /// Absorbs the old CloudKit `workoutType` field so migration can recover it.
     @Attribute(originalName: "workoutType")
     var workoutTypeLegacy: String? = nil
@@ -30,6 +34,10 @@ final class RunWorkout {
 
     /// JSON-encoded `[Split]`.
     var splitsData: Data?
+
+    /// JSON-encoded `[Double]` of raw heart-rate bpm samples captured during the run
+    /// (app-recorded) or fetched from HealthKit. Backs the time-in-zone breakdown (A6).
+    var heartRateSamplesData: Data?
 
     /// JSON-encoded `[Coordinate]`.
     var routeData: Data?
@@ -62,6 +70,12 @@ final class RunWorkout {
         set { routeData = .encoded(newValue, keeping: routeData) }
     }
 
+    /// Raw heart-rate bpm samples for this run (empty if none captured/available).
+    var heartRateSamples: [Double] {
+        get { heartRateSamplesData?.decode([Double].self) ?? [] }
+        set { heartRateSamplesData = newValue.isEmpty ? nil : .encoded(newValue, keeping: heartRateSamplesData) }
+    }
+
     var weather: WorkoutWeather? {
         get { weatherData?.decode(WorkoutWeather.self) }
         set { weatherData = newValue.flatMap { .encoded($0, keeping: weatherData) } }
@@ -80,6 +94,12 @@ final class RunWorkout {
     var workoutLocation: WorkoutLocation {
         get { WorkoutLocation(rawValue: workoutLocationRaw) ?? .outdoor }
         set { workoutLocationRaw = newValue.rawValue }
+    }
+
+    /// The distance unit each entry in `splits` represents (one bucket per km or per mile).
+    var splitUnit: UnitPreference {
+        get { UnitPreference(rawValue: splitUnitRaw) ?? .metric }
+        set { splitUnitRaw = newValue.rawValue }
     }
 
     init(

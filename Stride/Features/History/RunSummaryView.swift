@@ -38,6 +38,7 @@ struct RunSummaryView: View {
     @State private var isApplyingNextSessionFeedback = false
     @State private var nextSessionUpdateMessage: String?
     @State private var coachChatRequest: AICoachChatRequest?
+    @State private var zoneSlices: [HRZoneSlice] = []
 
     private var matchedScheduled: ScheduledWorkout? {
         scheduledWorkouts.first { $0.completedWorkout?.id == workout.id }
@@ -63,6 +64,37 @@ struct RunSummaryView: View {
 
     private func split(forKm km: Int) -> Split? {
         workout.splits.first { $0.kilometer == km }
+    }
+
+    /// Lowercase label for the unit each split bucket represents ("km" / "mi"), read from the
+    /// run's stored `splitUnit` so a mile-bucketed run reads "mi" while legacy km runs read "km".
+    private var splitLabel: String { workout.splitUnit.distanceLabel }
+    /// Uppercase form used in chart/table headers ("KM" / "MI").
+    private var splitLabelUpper: String { workout.splitUnit.splitLabel }
+
+    /// The runner's max HR (explicit or age-estimated) needed to compute HR zones.
+    private var maxHeartRate: Double? {
+        profiles.first?.effectiveMaxHeartRate.map(Double.init)
+    }
+
+    /// Loads the time-in-zone breakdown for this run: uses persisted HR samples when present,
+    /// otherwise backfills from HealthKit on demand for older imported runs (A6). No-op when the
+    /// runner has no max HR configured.
+    private func loadHeartRateZones() async {
+        guard let maxHR = maxHeartRate else { zoneSlices = []; return }
+        var samples = workout.heartRateSamples
+        if samples.isEmpty, let hkID = workout.healthKitWorkoutID {
+            samples = await container.healthKitRepository.fetchHeartRateSamples(forWorkoutID: hkID)
+            if !samples.isEmpty {
+                workout.heartRateSamples = samples   // cache so we don't re-fetch next time
+                try? context.save()
+            }
+        }
+        zoneSlices = HeartRateZoneService.timeInZones(
+            bpmSamples: samples,
+            totalSeconds: workout.durationSeconds,
+            maxHR: maxHR
+        )
     }
 
     private var recentHistory: [RunWorkout] {
@@ -122,11 +154,15 @@ struct RunSummaryView: View {
                     if hasSplitElevation { splitElevationChart }
                     splitsTable
                 }
+                if !zoneSlices.isEmpty, zoneSlices.contains(where: { $0.seconds > 0 }) {
+                    heartRateZoneSection
+                }
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 32)
             .frame(maxWidth: .infinity)
         }
+        .task(id: workout.id) { await loadHeartRateZones() }
         .background(Color.surfacePrimary.ignoresSafeArea())
         .navigationTitle(displayType.displayName)
         .navigationBarTitleDisplayMode(.inline)
@@ -1488,7 +1524,7 @@ struct RunSummaryView: View {
                             overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
                         ) {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("km \(km)")
+                                Text("\(splitLabel) \(km)")
                                     .font(.caption2).foregroundStyle(.secondary)
                                 Text(split.paceSecondsPerKm.paceString(unit: appSettings.unitPreference))
                                     .font(.caption).bold()
@@ -1546,7 +1582,7 @@ struct RunSummaryView: View {
                             overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
                         ) {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("km \(km)")
+                                Text("\(splitLabel) \(km)")
                                     .font(.caption2).foregroundStyle(.secondary)
                                 Text("\(Int(hr)) bpm")
                                     .font(.caption).bold()
@@ -1589,7 +1625,7 @@ struct RunSummaryView: View {
                             overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
                         ) {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("km \(km)")
+                                Text("\(splitLabel) \(km)")
                                     .font(.caption2).foregroundStyle(.secondary)
                                 Text("\(gain >= 0 ? "+" : "")\(Int(gain)) \(appSettings.unitPreference.elevationLabel)")
                                     .font(.caption).bold()
@@ -1610,7 +1646,7 @@ struct RunSummaryView: View {
     private var splitsTable: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("KM")
+                Text(splitLabelUpper)
                     .frame(width: 36, alignment: .leading)
                 Spacer()
                 Text("PACE")
@@ -1666,6 +1702,60 @@ struct RunSummaryView: View {
         } else {
             Text("—").foregroundStyle(.secondary)
         }
+    }
+
+    // MARK: Heart-rate zone section
+
+    private var heartRateZoneSection: some View {
+        let total = zoneSlices.reduce(0) { $0 + $1.seconds }
+        return VStack(alignment: .leading, spacing: 12) {
+            Text("TIME IN HEART-RATE ZONES")
+                .font(.sectionHeader).foregroundStyle(.secondary).padding(.horizontal, 4)
+            // Stacked proportion bar.
+            GeometryReader { geo in
+                HStack(spacing: 2) {
+                    ForEach(zoneSlices) { slice in
+                        if slice.seconds > 0 {
+                            slice.zone.color
+                                .frame(width: max(3, geo.size.width * CGFloat(slice.seconds / max(total, 1))))
+                        }
+                    }
+                }
+                .clipShape(Capsule())
+            }
+            .frame(height: 14)
+            .accessibilityHidden(true)
+            // Per-zone rows, hardest zone first.
+            VStack(spacing: 8) {
+                ForEach(zoneSlices.reversed()) { slice in
+                    zoneRow(slice, total: total)
+                }
+            }
+        }
+        .padding(16)
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func zoneRow(_ slice: HRZoneSlice, total: Double) -> some View {
+        let pct = total > 0 ? slice.seconds / total : 0
+        let bounds = maxHeartRate.map { HeartRateZoneService.bounds(for: slice.zone, maxHR: $0) }
+        return HStack(spacing: 10) {
+            Circle().fill(slice.zone.color).frame(width: 10, height: 10)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(slice.zone.displayTitle).font(.caption).bold()
+                if let bounds {
+                    Text("\(bounds.lower)–\(bounds.upper) bpm")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+            Text(slice.seconds.durationString).font(.caption).monospacedDigit()
+            Text("\(Int((pct * 100).rounded()))%")
+                .font(.caption2).foregroundStyle(.secondary)
+                .frame(width: 38, alignment: .trailing)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(slice.zone.displayTitle), \(Int((pct * 100).rounded())) percent")
     }
 
     // MARK: Planned Workout Section

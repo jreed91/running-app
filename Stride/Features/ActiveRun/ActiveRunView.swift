@@ -385,7 +385,7 @@ struct ActiveRunView: View {
                 } else {
                     filledControlButton(size: 84, tintColor: zoneColor) {
                         tracker.setLocation(selectedLocation)
-                        tracker.startWorkout(type: startType)
+                        tracker.startWorkout(type: startType, distanceUnit: appSettings.unitPreference)
                     } label: {
                         StrideIcon(name: .play, size: 28, color: zoneColor, strokeWeight: 2.2)
                     }

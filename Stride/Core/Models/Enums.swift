@@ -235,6 +235,17 @@ enum UnitPreference: String, CaseIterable, Sendable {
         }
     }
 
+    /// Uppercased distance label used as a split/segment header (e.g. "KM" / "MI").
+    var splitLabel: String { distanceLabel.uppercased() }
+
+    /// Length in metres of one split bucket in this unit: 1 km or 1 mile.
+    var splitLengthMeters: Double {
+        switch self {
+        case .metric:   return 1_000
+        case .imperial: return 1_609.344
+        }
+    }
+
     var paceLabel: String {
         switch self {
         case .metric: return "min/km"

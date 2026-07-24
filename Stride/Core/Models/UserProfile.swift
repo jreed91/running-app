@@ -29,6 +29,11 @@ final class UserProfile {
     @Attribute(originalName: "fitnessLevel")
     var fitnessLevelLegacy: String? = nil
     var currentEstimated5KTimeSeconds: Double?
+    /// Optional age, used only to suggest a max HR (Tanaka). Nil when the user hasn't entered it.
+    var age: Int?
+    /// User's max heart rate in bpm, driving the HR-zone breakdowns (A6). Nil until set; a value
+    /// entered by the user overrides the age-based estimate.
+    var maxHeartRateBPM: Int?
     /// JSON-encoded `[Int]` backing store for preferred run weekdays.
     /// Access via the `preferredRunDayIndices` extension property — never persist `[Int]` directly.
     var preferredRunDayIndicesData: Data?
@@ -86,6 +91,19 @@ extension UserProfile {
     var gender: Gender {
         get { Gender(rawValue: genderRaw) ?? .preferNotToShare }
         set { genderRaw = newValue.rawValue }
+    }
+
+    /// Tanaka (2001) age-predicted maximum heart rate: 208 − 0.7·age.
+    static func estimatedMaxHeartRate(forAge age: Int) -> Int {
+        Int((208.0 - 0.7 * Double(age)).rounded())
+    }
+
+    /// Effective max HR for zone math: an explicit user value wins, else the age-based
+    /// estimate, else nil (no zones can be computed until one is available).
+    var effectiveMaxHeartRate: Int? {
+        if let maxHeartRateBPM, maxHeartRateBPM > 0 { return maxHeartRateBPM }
+        if let age, age > 0 { return Self.estimatedMaxHeartRate(forAge: age) }
+        return nil
     }
 
     /// The goal race distance in meters, honoring a user-defined custom distance.
