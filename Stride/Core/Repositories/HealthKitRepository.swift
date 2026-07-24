@@ -311,7 +311,11 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         let warmupGoal: WorkoutGoal = structure.warmup.distanceMeters
             .map { distanceGoal(meters: $0, unitPreference: unitPreference) } ?? .open
         let warmupName: String? = structure.warmup.label.isEmpty ? nil : structure.warmup.label
-        let warmupStep = WorkoutStep(goal: warmupGoal, alert: nil, displayName: warmupName)
+        let warmupStep = WorkoutStep(
+            goal: warmupGoal,
+            alert: paceAlert(secondsPerKm: structure.warmup.targetPaceSecondsPerKm),
+            displayName: warmupName
+        )
 
         let blocks: [IntervalBlock] = structure.mainSets.map { set in
             let workGoal: WorkoutGoal
@@ -322,20 +326,26 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             } else {
                 workGoal = .open
             }
-            let workStep = IntervalStep(.work, goal: workGoal, alert: nil)
+            // Attach the segment's target pace as a speed alert so the Watch
+            // coaches pace per rep, not just when to switch steps.
+            let workStep = IntervalStep(
+                .work,
+                goal: workGoal,
+                alert: paceAlert(secondsPerKm: set.workSegment.targetPaceSecondsPerKm)
+            )
 
             var steps: [IntervalStep] = [workStep]
             if let recDur = set.recoverySegment.durationSeconds, recDur > 0 {
                 steps.append(IntervalStep(
                     .recovery,
                     goal: .time(recDur, UnitDuration.seconds),
-                    alert: nil
+                    alert: paceAlert(secondsPerKm: set.recoverySegment.targetPaceSecondsPerKm)
                 ))
             } else if let recDist = set.recoverySegment.distanceMeters, recDist > 0 {
                 steps.append(IntervalStep(
                     .recovery,
                     goal: distanceGoal(meters: recDist, unitPreference: unitPreference),
-                    alert: nil
+                    alert: paceAlert(secondsPerKm: set.recoverySegment.targetPaceSecondsPerKm)
                 ))
             }
 
@@ -345,7 +355,11 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         let cooldownGoal: WorkoutGoal = structure.cooldown.distanceMeters
             .map { distanceGoal(meters: $0, unitPreference: unitPreference) } ?? .open
         let cooldownName: String? = structure.cooldown.label.isEmpty ? nil : structure.cooldown.label
-        let cooldownStep = WorkoutStep(goal: cooldownGoal, alert: nil, displayName: cooldownName)
+        let cooldownStep = WorkoutStep(
+            goal: cooldownGoal,
+            alert: paceAlert(secondsPerKm: structure.cooldown.targetPaceSecondsPerKm),
+            displayName: cooldownName
+        )
 
         return CustomWorkout(
             activity: .running,
@@ -412,6 +426,18 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         case .imperial:
             return .distance(meters / 1_609.344, UnitLength.miles)
         }
+    }
+
+    /// Builds a WorkoutKit speed-range alert from a segment's target pace so the
+    /// scheduled Watch workout coaches pace, not just structure. Returns `nil`
+    /// (no alert) when the segment prescribes no pace, e.g. an open recovery.
+    private func paceAlert(secondsPerKm pace: Double?) -> (any WorkoutAlert)? {
+        guard let pace,
+              let range = WorkoutPaceAlert.speedRangeMetersPerSecond(forPaceSecondsPerKm: pace)
+        else { return nil }
+        let lower = Measurement(value: range.lowerBound, unit: UnitSpeed.metersPerSecond)
+        let upper = Measurement(value: range.upperBound, unit: UnitSpeed.metersPerSecond)
+        return SpeedRangeAlert(target: lower...upper, metric: .current)
     }
 
     // MARK: - Background delivery & observer

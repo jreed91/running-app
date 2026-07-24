@@ -21,6 +21,11 @@ struct ActiveRunView: View {
     @State private var metricsAppeared = false
     @State private var selectedLocation: WorkoutLocation = .outdoor
 
+    /// Guided structured-workout state, present only when this run fulfils a
+    /// scheduled workout that carries a multi-segment `WorkoutStructure` (A4).
+    /// Flat easy runs and free runs leave this `nil` and are unchanged.
+    @State private var guided: GuidedWorkoutState?
+
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var tracker: WorkoutTrackerService { container.workoutTrackerService }
@@ -90,6 +95,15 @@ struct ActiveRunView: View {
                         .padding(.horizontal, 22)
                         .padding(.top, 22)
                 }
+                if let guidedBinding = Binding($guided) {
+                    GuidedWorkoutBanner(
+                        tracker: tracker,
+                        guided: guidedBinding,
+                        unit: appSettings.unitPreference
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.top, 18)
+                }
                 metricsGrid
                 Spacer()
                 controls
@@ -98,6 +112,11 @@ struct ActiveRunView: View {
         .onAppear {
             // Recover from a previous run's terminal state so the start button works.
             tracker.prepareForNewWorkout()
+            // Build the guided-workout stepper when this run fulfils a structured
+            // scheduled workout (A4); a nil/flat structure leaves guided mode off.
+            if let structure = scheduledWorkout?.workoutStructure, !structure.mainSets.isEmpty {
+                guided = GuidedWorkoutState(structure: structure)
+            }
             // Default the indoor/outdoor toggle to the scheduled workout's location.
             if let scheduledLocation = scheduledWorkout?.workoutLocation {
                 selectedLocation = scheduledLocation
@@ -297,7 +316,13 @@ struct ActiveRunView: View {
             }
             metricCell(value: "--", unit: "spm", label: "Cadence")
             metricCell(value: "--", unit: "m", label: "Elev Gain")
-            metricCell(value: "1", label: "Lap")
+            if let guided {
+                // Repurpose the previously dead hardcoded "Lap" cell to show
+                // progress through the guided workout's steps (A4).
+                metricCell(value: "\(guided.stepNumber)/\(guided.stepCount)", label: "Step")
+            } else {
+                metricCell(value: "--", label: "Lap")
+            }
         }
         .padding(20)
         .background(
