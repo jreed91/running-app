@@ -47,7 +47,7 @@ jobs:
   # ── Lint ────────────────────────────────────────────────────────────────────
   lint:
     name: Lint (SwiftLint)
-    runs-on: macos-26
+    runs-on: macos-27
 
     steps:
       - uses: actions/checkout@v4
@@ -122,12 +122,21 @@ jobs:
 
       - name: Boot simulator
         run: |
+          # Prefer the pinned iOS runtime, but fall back to any available iOS
+          # runtime that hosts the named device so a runner-image bump (e.g.
+          # iOS 27.0 -> 27.1) does not fail the pipeline.
           UDID=$(xcrun simctl list devices available -j \
             | jq -r --arg name "$SIMULATOR" --arg os "com.apple.CoreSimulator.SimRuntime.iOS-${IOS_VERSION//./-}" \
-              '.devices[$os][] | select(.name == $name) | .udid' \
+              '.devices[$os][]? | select(.name == $name) | .udid' \
             | head -1)
           if [[ -z "$UDID" ]]; then
-            echo "::error::No available simulator named '$SIMULATOR' for iOS $IOS_VERSION was found."
+            echo "::warning::No '$SIMULATOR' simulator for the pinned iOS $IOS_VERSION runtime; falling back to any available iOS runtime."
+            UDID=$(xcrun simctl list devices available -j \
+              | jq -r --arg name "$SIMULATOR" \
+                '[.devices | to_entries[] | select(.key | contains("iOS")) | .value[] | select(.name == $name)] | .[0].udid // empty')
+          fi
+          if [[ -z "$UDID" ]]; then
+            echo "::error::No available simulator named '$SIMULATOR' for any iOS runtime was found."
             echo "Available devices:"
             xcrun simctl list devices available
             exit 1
