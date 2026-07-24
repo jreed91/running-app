@@ -1442,7 +1442,7 @@ struct RunSummaryView: View {
                 && !scheduled.isCompleted
                 && scheduled.completedWorkout == nil
                 && scheduled.completedStrengthWorkout == nil
-                && isRunWorkout(scheduled.workoutType)
+                && scheduled.workoutType.isRunType
                 && scheduled.scheduledDate >= today
         }
 
@@ -1492,15 +1492,6 @@ struct RunSummaryView: View {
             return 3
         case .rest, .crossTraining, .strength:
             return 4
-        }
-    }
-
-    private func isRunWorkout(_ type: WorkoutType) -> Bool {
-        switch type {
-        case .easy, .tempo, .interval, .longRun, .race:
-            return true
-        case .rest, .crossTraining, .strength:
-            return false
         }
     }
 

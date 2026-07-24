@@ -4,6 +4,14 @@ A full review of the app (all 104 Swift files, ~24.6k lines) covering bugs, desi
 
 > **Fix tracking:** items marked **✅ FIXED** have been resolved; the note says where. Line numbers in fixed items refer to the original commit and may have drifted.
 
+> **Superseded for new findings:** every numbered bug in this document is now
+> fixed. A second-pass review taken after those fixes landed — covering new
+> defects (several of them created by the fixes themselves), UX issues, and the
+> design items §5 left open — is in
+> [`APP_ANALYSIS_2026-07-24.md`](./APP_ANALYSIS_2026-07-24.md). Sections 5
+> (design), 7 (CI/config), and 8 (test coverage) below are still live; that
+> document re-verifies which of their items remain open.
+
 > **Scope:** this document covers *correctness and design defects*. For a
 > forward-looking review of the **product feature set** — features that need
 > improvement and net-new capabilities to build — see

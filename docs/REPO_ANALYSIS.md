@@ -25,7 +25,7 @@ This repository has a strong foundation: clear domain modeling, sensible service
 
 ## 1) Product & architecture
 
-### Gap 1.1 — No repository-level architecture docs for contributors
+### ✅ Gap 1.1 — No repository-level architecture docs for contributors
 - There is no `README.md` at repository root (discoverability and onboarding gap for developers and reviewers).
 
 **Improvements**
@@ -35,6 +35,12 @@ This repository has a strong foundation: clear domain modeling, sensible service
   - Testing commands
   - Release flow and Xcode Cloud notes
 - Add `docs/adr/` for architecture decisions (CloudKit fallback strategy, plan adaptation rules).
+
+**MOSTLY FIXED:** `README.md` (setup, architecture map, testing, CI/release) and
+`AGENTS.md` (the canonical contributor/agent guide, now including an index of the
+`docs/` reviews) both exist. *Still open:* no `docs/adr/` — the CloudKit fallback
+tiers and plan-adaptation rules are documented only in the analysis docs and in
+source comments.
 
 ### Gap 1.2 — Hardcoded environment/business constants in app code
 - IDs/identifiers are directly in source and project config (bundle/team/container values).

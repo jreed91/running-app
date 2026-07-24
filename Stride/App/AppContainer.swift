@@ -532,9 +532,16 @@ final class AppContainer: ObservableObject {
 
     // MARK: - Missed workout recovery
 
-    /// Shifts all future uncompleted non-rest workouts forward by `days` calendar days.
+    /// Shifts all future uncompleted training workouts forward by `days` calendar days.
     /// Extends `plan.endDate` if any shifted workout falls beyond it.
     /// Race workouts are excluded when the plan has a fixed raceDate.
+    ///
+    /// Strength and cross-training move with the runs. Holding them still while the
+    /// runs slid past them dropped runs onto gym days, and the plan's same-day
+    /// duplicate pruning then deleted the strength session outright (N6). Shifting
+    /// the whole week by one delta preserves the spacing the plan was built with —
+    /// which is the point of "pick up where I left off". Rest days stay put: they
+    /// are gaps, not sessions, and nothing is lost by leaving them.
     func shiftMissedWorkoutsForward(
         plan: TrainingPlan,
         by days: Int,
@@ -549,7 +556,7 @@ final class AppContainer: ObservableObject {
             guard !w.isCompleted else { return false }
             guard w.scheduledDate >= startOfToday else { return false }
             let type = w.workoutType
-            if type == .rest || type == .strength || type == .crossTraining { return false }
+            if type == .rest { return false }
             if hasFixedRace && type == .race { return false }
             return true
         }
@@ -568,8 +575,15 @@ final class AppContainer: ObservableObject {
         try context.save()
     }
 
-    /// Deletes the active plan and generates a fresh one starting from today,
+    /// Retires the active plan and generates a fresh one starting from today,
     /// preserving the original race date, goal time, and race type.
+    ///
+    /// The plan being replaced is **deactivated, never deleted** (N1). Deleting it
+    /// cascaded through its weeks and every `ScheduledWorkout` in them, including
+    /// completed ones — erasing the block from Plan History and unlinking the runs
+    /// that fulfilled it. That is the same data loss H3 fixed for the plan-creation
+    /// flows, and it fired from a button the app offers a runner who has fallen
+    /// behind. Deleting a plan stays a deliberate action in the Plan History list.
     func rebuildPlan(
         replacing oldPlan: TrainingPlan,
         profile: UserProfile,
@@ -606,9 +620,17 @@ final class AppContainer: ObservableObject {
         newPlan.goalTimeSeconds = oldPlan.goalTimeSeconds
         newPlan.targetRace = oldPlan.targetRace
 
-        try planRepository.delete(oldPlan)
+        // `save` enforces the single-active invariant by deactivating every other
+        // plan, which retires `oldPlan` while keeping it (and its history) in the store.
         try planRepository.save(newPlan)
         try planRepository.setActive(newPlan)
+
+        // The scheduler only clears entries for the plan it is syncing, so the retired
+        // plan's workouts would otherwise stay on the Watch alongside the new block's.
+        // Fire-and-forget: a failure here must not fail the rebuild the user asked for.
+        Task { @MainActor [healthKitRepository] in
+            try? await healthKitRepository.removeWorkoutPlans(for: oldPlan)
+        }
     }
 
     // MARK: Preview support

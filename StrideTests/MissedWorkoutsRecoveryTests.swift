@@ -172,19 +172,92 @@ struct MissedWorkoutsRecoveryTests {
 
     // MARK: rebuildPlan
 
-    @Test("rebuildPlan deletes old plan and creates a new active plan")
-    func rebuildDeletesOldAndCreatesNew() throws {
+    @Test("rebuildPlan retires the old plan and creates a new active plan")
+    func rebuildRetiresOldAndCreatesNew() throws {
+        let container = makeContainer()
+        let context = container.modelContainer.mainContext
+        let profile = makeProfile(in: context)
+        let today = Date()
+        let oldPlan = try makePlan(container: container, profile: profile, startDate: today.adding(weeks: -2))
+        let oldPlanID = oldPlan.id
+
+        try container.rebuildPlan(replacing: oldPlan, profile: profile, context: context)
+
+        let allPlans = try container.planRepository.fetchAll()
+        // N1: the replaced plan is kept as history, not deleted.
+        #expect(allPlans.count == 2)
+        #expect(allPlans.filter(\.isActive).count == 1)
+        #expect(allPlans.first(where: { $0.id == oldPlanID })?.isActive == false)
+        let active = try container.planRepository.fetchActivePlan()
+        #expect(active != nil)
+        #expect(active?.id != oldPlanID)
+    }
+
+    @Test("rebuildPlan preserves the replaced plan's completed workouts as history")
+    func rebuildPreservesCompletedHistory() throws {
         let container = makeContainer()
         let context = container.modelContainer.mainContext
         let profile = makeProfile(in: context)
         let today = Date()
         let oldPlan = try makePlan(container: container, profile: profile, startDate: today.adding(weeks: -2))
 
+        // Complete one of the plan's workouts so the block carries real history.
+        let pastWorkouts = (oldPlan.weeks ?? [])
+            .flatMap { $0.workouts ?? [] }
+            .filter { $0.workoutType.isRunType }
+            .sorted { $0.scheduledDate < $1.scheduledDate }
+        guard let completed = pastWorkouts.first else {
+            Issue.record("Generated plan had no run workouts to complete")
+            return
+        }
+        let run = RunWorkout(
+            date: completed.scheduledDate,
+            distanceMeters: 5_000,
+            durationSeconds: 1_500,
+            workoutType: .easy
+        )
+        context.insert(run)
+        completed.completedWorkout = run
+        completed.isCompleted = true
+        try context.save()
+
         try container.rebuildPlan(replacing: oldPlan, profile: profile, context: context)
 
-        let allPlans = try container.planRepository.fetchAll()
-        #expect(allPlans.count == 1)
-        #expect(allPlans.first?.isActive == true)
+        // The old block, its weeks, its completed day, and the run's link all survive.
+        #expect(oldPlan.hasLoggedProgress == true)
+        #expect(completed.isCompleted == true)
+        #expect(run.scheduledWorkout?.id == completed.id)
+        let storedRuns = try context.fetch(FetchDescriptor<RunWorkout>())
+        #expect(storedRuns.contains { $0.id == run.id })
+    }
+
+    @Test("shiftMissedWorkoutsForward moves strength days with the runs")
+    func shiftMovesStrengthWorkouts() throws {
+        let container = makeContainer()
+        let context = container.modelContainer.mainContext
+        let profile = makeProfile(in: context)
+        profile.selectedEquipment = [.bodyweight]
+        let today = Date()
+        let plan = try makePlan(container: container, profile: profile, startDate: today.adding(weeks: -2))
+
+        let startOfToday = Calendar.current.startOfDay(for: today)
+        let strength = (plan.weeks ?? [])
+            .flatMap { $0.workouts ?? [] }
+            .filter { $0.workoutType == .strength && !$0.isCompleted && $0.scheduledDate >= startOfToday }
+        guard !strength.isEmpty else { return }
+        let originalDates = strength.map(\.scheduledDate)
+
+        try container.shiftMissedWorkoutsForward(plan: plan, by: 4, context: context)
+
+        // N6: holding strength still while runs slid past it dropped runs onto gym
+        // days, and the plan's duplicate pruning then deleted the gym session.
+        for (index, workout) in strength.enumerated() {
+            let expected = Calendar.current.date(byAdding: .day, value: 4, to: originalDates[index])
+            #expect(
+                expected.map { Calendar.current.isDate(workout.scheduledDate, inSameDayAs: $0) } == true,
+                "Strength workout at index \(index) should shift with the runs"
+            )
+        }
     }
 
     @Test("rebuildPlan uses generateRacePlan when plan has a raceDate")

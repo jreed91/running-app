@@ -45,7 +45,18 @@ actor IntentModelActor {
         )
         descriptor.fetchLimit = 10
         let workouts = try modelContext.fetch(descriptor)
-        guard let w = workouts.first(where: { $0.workoutType != .rest }) else { return nil }
+        // Only the active plan can answer "what am I running today". Retired plans keep
+        // their future days (they are preserved as history, not deleted), so without
+        // this filter Siri could read out a workout from a plan the runner replaced.
+        // A workout with no plan at all is legacy data and stays eligible.
+        let live = workouts.filter { workout in
+            guard let plan = workout.week?.plan else { return true }
+            return plan.isActive
+        }
+        // Prefer an actual run; fall back to any other session (strength, cross-training)
+        // so a gym day still answers rather than reporting nothing scheduled.
+        guard let w = live.first(where: { $0.workoutType.isRunType })
+            ?? live.first(where: { $0.workoutType != .rest }) else { return nil }
         return TodaysRunData(
             workoutType: w.workoutType,
             distanceMeters: w.targetDistanceMeters,

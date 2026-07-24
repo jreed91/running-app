@@ -131,6 +131,15 @@ struct ContentView: View {
     @State private var hasRunRestorePermissionCheck = false
     @State private var isRunningRestorePermissionCheck = false
 
+    /// Store-recovery notice taken from the container once and cleared there, so the
+    /// alert is driven by local state and can't reappear if the root is rebuilt.
+    ///
+    /// It lives here rather than on `MainTabView` because the case it exists for —
+    /// a store that could not be migrated and was recreated empty — leaves no
+    /// `UserProfile`, so the app shows `OnboardingView` and `MainTabView` is never
+    /// mounted. Presented at the root, it reaches the user in both branches (N5).
+    @State private var recoveryNotice: AppContainer.StoreRecoveryNotice?
+
     @Environment(\.scenePhase) private var scenePhase
 
     private let restoreLocationManager = CLLocationManager()
@@ -142,6 +151,23 @@ struct ContentView: View {
             } else {
                 MainTabView()
             }
+        }
+        .task {
+            guard let notice = container.storeRecoveryNotice else { return }
+            container.storeRecoveryNotice = nil
+            recoveryNotice = notice
+        }
+        .alert(
+            recoveryNotice?.title ?? "",
+            isPresented: Binding(
+                get: { recoveryNotice != nil },
+                set: { if !$0 { recoveryNotice = nil } }
+            ),
+            presenting: recoveryNotice
+        ) { _ in
+            Button("OK", role: .cancel) { recoveryNotice = nil }
+        } message: { notice in
+            Text(notice.message)
         }
         .task(id: activePlans.first?.id) {
             deduplicate()
@@ -207,11 +233,8 @@ struct ContentView: View {
         ProfileRestoreDeduplicator.applyLegacyFieldsToRelated(in: context)
         ProfileRestoreDeduplicator.repairRelationships(in: context)
         try? ProfileRestoreDeduplicator.deduplicate(profiles, in: context)
-        // Active plans: newest-first → drop everything after index 0
-        if activePlans.count > 1 {
-            activePlans.dropFirst().forEach { context.delete($0) }
-            try? context.save()
-        }
+        // `activePlans` is sorted newest-first, so index 0 is the plan to keep.
+        ProfileRestoreDeduplicator.retireDuplicateActivePlans(activePlans, in: context)
     }
 
     @MainActor
@@ -439,6 +462,31 @@ enum ProfileRestoreDeduplicator {
         }
 
         if dirty { try? context.save() }
+    }
+
+    /// Restores the single-active-plan invariant by **deactivating** every plan after
+    /// the first, which the caller supplies newest-first.
+    ///
+    /// These duplicates are not corrupt data: two active plans is what a CloudKit
+    /// multi-device race produces, when a plan created on one device arrives while
+    /// another device's plan is still active. Deleting the loser — as this did — threw
+    /// away a real training block, its weeks, and every completed workout in them,
+    /// on a path that runs at every launch (N2). Deactivating keeps the block in
+    /// Plan History and is just as effective at making `fetchActivePlan` deterministic.
+    ///
+    /// - Returns: how many plans were retired.
+    @MainActor
+    @discardableResult
+    static func retireDuplicateActivePlans(
+        _ activePlansNewestFirst: [TrainingPlan],
+        in context: ModelContext
+    ) -> Int {
+        guard activePlansNewestFirst.count > 1 else { return 0 }
+        let toRetire = activePlansNewestFirst.dropFirst().filter(\.isActive)
+        guard !toRetire.isEmpty else { return 0 }
+        toRetire.forEach { $0.isActive = false }
+        try? context.save()
+        return toRetire.count
     }
 
     @MainActor

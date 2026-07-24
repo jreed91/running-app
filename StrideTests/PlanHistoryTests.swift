@@ -112,4 +112,76 @@ struct PlanHistoryTests {
         let resolved = try container.planRepository.fetchActivePlan()
         #expect(resolved?.id == newer.id)
     }
+
+    // MARK: - Launch-time duplicate-active dedup (N2)
+
+    @Test("Duplicate active plans are deactivated, never deleted")
+    func duplicateActivePlansAreRetiredNotDeleted() throws {
+        let container = AppContainer.preview()
+        let context = container.modelContainer.mainContext
+
+        // The CloudKit multi-device shape: two active plans, both carrying real work.
+        let newer = try makePlan(in: context, completeFirstWorkout: true, isActive: true)
+        newer.createdAt = Date(timeIntervalSince1970: 2_000)
+        let older = try makePlan(in: context, completeFirstWorkout: true, isActive: true)
+        older.createdAt = Date(timeIntervalSince1970: 1_000)
+        try context.save()
+
+        let retired = ProfileRestoreDeduplicator.retireDuplicateActivePlans(
+            [newer, older],   // caller passes newest-first
+            in: context
+        )
+
+        #expect(retired == 1)
+        #expect(newer.isActive == true)
+        #expect(older.isActive == false)
+
+        // Nothing was destroyed: both plans, and the completed work in them, survive.
+        let allPlans = try context.fetch(FetchDescriptor<TrainingPlan>())
+        #expect(allPlans.count == 2)
+        #expect(older.hasLoggedProgress == true)
+        let resolvedActive = try container.planRepository.fetchActivePlan()
+        #expect(resolvedActive?.id == newer.id)
+    }
+
+    @Test("A single active plan is left alone")
+    func singleActivePlanIsUntouched() throws {
+        let context = AppContainer.preview().modelContainer.mainContext
+
+        let only = try makePlan(in: context, completeFirstWorkout: false, isActive: true)
+
+        let retired = ProfileRestoreDeduplicator.retireDuplicateActivePlans([only], in: context)
+
+        #expect(retired == 0)
+        #expect(only.isActive == true)
+    }
+
+    // MARK: - Link targets (N1/N2 keep retired plans in the store)
+
+    @Test("Imported workouts never link to a retired plan's days")
+    func retiredPlanDaysAreNotLinkTargets() throws {
+        let context = AppContainer.preview().modelContainer.mainContext
+
+        let active = try makePlan(in: context, completeFirstWorkout: false, isActive: true)
+        let retired = try makePlan(in: context, completeFirstWorkout: false, isActive: false)
+
+        let runDays = { (plan: TrainingPlan) -> ScheduledWorkout? in
+            (plan.weeks ?? []).flatMap { $0.workouts ?? [] }.first { $0.workoutType.isRunType }
+        }
+        guard let activeDay = runDays(active), let retiredDay = runDays(retired) else {
+            Issue.record("Test plans had no run-type scheduled workouts")
+            return
+        }
+
+        #expect(WorkoutSyncService.belongsToLivePlan(activeDay) == true)
+        #expect(WorkoutSyncService.belongsToLivePlan(retiredDay) == false)
+    }
+
+    @Test("A workout with no plan stays eligible for linking")
+    func orphanedWorkoutIsStillEligible() {
+        // Legacy/orphaned rows predate the relationship; excluding them would silently
+        // stop linking on older stores.
+        let orphan = ScheduledWorkout(scheduledDate: Date(), workoutType: .easy)
+        #expect(WorkoutSyncService.belongsToLivePlan(orphan) == true)
+    }
 }

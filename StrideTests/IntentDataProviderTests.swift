@@ -36,4 +36,50 @@ struct IntentDataProviderTests {
 
         #expect(abs(summary.totalMeters - 5_000) < 0.01)
     }
+
+    /// N13: retired plans keep their future days (they are preserved as history rather
+    /// than deleted), so "Today's Run" has to ask the *active* plan or Siri can read out
+    /// a workout from a plan the runner already replaced.
+    @Test("Today's Run ignores a retired plan's day and reads the active plan's")
+    func todaysRunUsesTheActivePlan() async throws {
+        let schema = StrideSchema.make()
+        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [config])
+        let context = container.mainContext
+
+        let today = Date().startOfDay
+
+        func addPlan(isActive: Bool, workoutType: WorkoutType, distanceMeters: Double, hour: Double) {
+            let plan = TrainingPlan(
+                targetRace: .fiveK,
+                goalTimeSeconds: 1_500,
+                startDate: today,
+                endDate: today.adding(days: 6)
+            )
+            plan.isActive = isActive
+            context.insert(plan)
+            let week = TrainingWeek(weekNumber: 1, startDate: today, phase: .base, targetDistanceKm: 20)
+            context.insert(week)
+            week.plan = plan
+            let workout = ScheduledWorkout(
+                scheduledDate: today.addingTimeInterval(hour * 3_600),
+                workoutType: workoutType,
+                targetDistanceMeters: distanceMeters
+            )
+            context.insert(workout)
+            workout.week = week
+        }
+
+        // The retired plan's day is earlier, so it sorts first and an unscoped fetch
+        // would return it.
+        addPlan(isActive: false, workoutType: .interval, distanceMeters: 8_000, hour: 5)
+        addPlan(isActive: true, workoutType: .easy, distanceMeters: 5_000, hour: 6)
+        try context.save()
+
+        let actor = IntentModelActor(modelContainer: container)
+        let data = try await actor.todaysRun()
+
+        #expect(data?.workoutType == .easy)
+        #expect(data?.distanceMeters == 5_000)
+    }
 }
