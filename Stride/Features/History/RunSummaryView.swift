@@ -39,6 +39,9 @@ struct RunSummaryView: View {
     @State private var nextSessionUpdateMessage: String?
     @State private var coachChatRequest: AICoachChatRequest?
     @State private var zoneSlices: [HRZoneSlice] = []
+    /// Pre-rendered share card (B5), built off the run's data so the toolbar `ShareLink` has an
+    /// item ready. `nil` until the first render completes.
+    @State private var shareCardImage: Image?
 
     private var matchedScheduled: ScheduledWorkout? {
         scheduledWorkouts.first { $0.completedWorkout?.id == workout.id }
@@ -95,6 +98,18 @@ struct RunSummaryView: View {
             totalSeconds: workout.durationSeconds,
             maxHR: maxHR
         )
+    }
+
+    /// Renders the shareable run card (B5) to an image so the toolbar `ShareLink` has an item
+    /// ready. Runs in the view's main-actor context (`ImageRenderer` requirement) once per run,
+    /// since a saved run's data is static.
+    private func renderShareCard() {
+        let model = ShareCardModel.make(from: workout, unit: appSettings.unitPreference)
+        let renderer = ImageRenderer(content: RunShareCardView(model: model))
+        renderer.scale = 3
+        if let uiImage = renderer.uiImage {
+            shareCardImage = Image(uiImage: uiImage)
+        }
     }
 
     private var recentHistory: [RunWorkout] {
@@ -162,7 +177,10 @@ struct RunSummaryView: View {
             .padding(.bottom, 32)
             .frame(maxWidth: .infinity)
         }
-        .task(id: workout.id) { await loadHeartRateZones() }
+        .task(id: workout.id) {
+            renderShareCard()
+            await loadHeartRateZones()
+        }
         .background(Color.surfacePrimary.ignoresSafeArea())
         .navigationTitle(displayType.displayName)
         .navigationBarTitleDisplayMode(.inline)
@@ -174,6 +192,17 @@ struct RunSummaryView: View {
                     Image(systemName: "xmark")
                 }
                 .accessibilityLabel("Close")
+            }
+            if let shareCardImage {
+                ToolbarItem(placement: .primaryAction) {
+                    ShareLink(
+                        item: shareCardImage,
+                        preview: SharePreview("Run summary", image: shareCardImage)
+                    ) {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                    .accessibilityLabel("Share run")
+                }
             }
             ToolbarItem(placement: .primaryAction) {
                 Button(role: .destructive) {

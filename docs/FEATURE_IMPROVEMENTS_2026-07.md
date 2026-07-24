@@ -12,6 +12,11 @@ Every observation cites `file:line` as of commit `f9db64a`. Items are rated by
 grouped into: (A) existing features that need improvement, and (B) new features
 that would meaningfully expand the product.
 
+> **Status tracking:** items marked **✅ SHIPPED** have since been built (the note
+> says where, with the landing commit). **🔨 IN PROGRESS** marks the feature
+> currently being implemented. `file:line` references in shipped items point at
+> the original analysis commit and may have drifted.
+
 **Contents**
 1. [Current feature inventory](#1-current-feature-inventory)
 2. [A. Existing features that need improvement](#2-a-existing-features-that-need-improvement)
@@ -51,7 +56,17 @@ a **watchOS companion / WatchConnectivity**, **GPX/route export or run sharing**
 Features the app already has, but that are shallow enough to undercut the
 product's "coach" promise.
 
-### A1. Splits are kilometer-only end to end — imperial users get no real mile splits *(high impact, low effort)*
+### ✅ A1. Splits are kilometer-only end to end — imperial users get no real mile splits *(high impact, low effort)*
+
+**SHIPPED (commit `e0fead7`):** splits are now bucketed by the user's distance
+unit at record time. `WorkoutTrackerService` captures `splitUnit`/`splitLengthMeters`
+from the preference at `startWorkout`, buckets via the pure, unit-tested
+`SplitBucketing` helper (`Core/Services/SplitBucketing.swift`, `SplitBucketingTests`),
+and stamps `RunWorkout.splitUnit` so the run detail view labels each bucket "km"/"mi"
+honestly (resolving `APP_ANALYSIS` H11 at the source rather than by relabelling).
+Imperial runners get genuine per-mile splits. *Still open:* HealthKit-imported
+runs don't synthesize splits at all (empty `splits` array) — a separate gap, not A1.
+
 `Core/Services/WorkoutTrackerService.swift:172-178` buckets splits per kilometer
 at record time; the display layer was only patched to *label* them "km"
 (`APP_ANALYSIS` H11) rather than re-bucket. An imperial runner therefore never
@@ -94,7 +109,14 @@ readiness. **Improve:** capture cadence and per-zone time from HealthKit at
 import, add HR zones to the profile, and feed both into `WorkoutAnalyticsService`
 and the coach prompt.
 
-### A6. Heart-rate zones are computed for pacing but never surfaced to the user *(medium impact, low effort)*
+### ✅ A6. Heart-rate zones are computed for pacing but never surfaced to the user *(medium impact, low effort)*
+
+**SHIPPED (commit `0bd672a`):** the profile now carries a max HR (explicit or
+age-estimated via `effectiveMaxHeartRate`), a pure `HeartRateZoneService.timeInZones`
+computes the per-zone breakdown, and `RunSummaryView` renders a "time in zone"
+section. App-recorded runs persist their raw HR series (`RunWorkout.heartRateSamples`);
+older imported runs backfill samples from HealthKit on demand and cache them.
+
 "Zone" logic exists only inside pace/plan math (`TrainingPlanService`,
 `PaceCalculatorService`); there is no user-facing HR-zone model, no
 max-HR/threshold-HR in `UserProfile`, and no zone breakdown on the run detail or
@@ -110,7 +132,12 @@ scheduled workout's target distance. **Improve:** add a target-distance-aware
 "today's run route" suggestion (pull distance from the scheduled workout),
 surface an elevation profile, and let a `SavedRoute` be attached to a plan day.
 
-### A8. Progress "Medals" is a thin achievement layer *(medium impact, low effort)*
+### ✅ A8. Progress "Medals" is a thin achievement layer *(medium impact, low effort)*
+
+**SHIPPED (commit `a8d8a77`, via B4):** the thin distance-PR medals layer was
+expanded into a proper achievements/streak system — run streaks, a weekly goal
+with a progress ring, and consistency badges. See B4.
+
 `Features/Progress/MedalsView.swift` (128 lines) is distance-PR medals only.
 There are no streaks, no volume milestones (first 50 km week, 1000 km lifetime),
 no consistency badges — the retention mechanics a training app leans on.
@@ -153,13 +180,29 @@ workouts but can't *start* a run from the wrist or show live coaching there —
 the single biggest platform gap for a running product. Large effort, but the
 domain models are already CloudKit-shared and Watch-import-aware.
 
-### B4. Streaks, goals & consistency system *(high impact, low-medium effort)*
+### ✅ B4. Streaks, goals & consistency system *(high impact, low-medium effort)*
+
+**SHIPPED (commit `a8d8a77`):** an Achievements surface now tracks a run-streak
+counter, a user-set weekly distance/time goal with a progress ring, and
+consistency badges, built on the existing history + `ProgressStatsService`
+aggregates. This also delivers the retention layer A8 called for.
+
 No streak or weekly-goal tracking exists beyond plan adherence. A run-streak
 counter, a user-set weekly distance/time goal with a progress ring, and
 consistency badges are proven retention features and are cheap on top of the
 existing history + `ProgressStatsService` aggregates.
 
-### B5. Run & achievement sharing *(medium impact, low-medium effort)*
+### 🔨 B5. Run & achievement sharing *(medium impact, low-medium effort)*
+
+**IN PROGRESS:** implementing v1 run share cards. A share button in the
+`RunSummaryView` toolbar renders a fixed-size card (headline distance/time/pace,
+a self-drawn route polyline from `routeCoordinates` with a route-less fallback
+for indoor runs, avg HR + elevation when present, a splits summary labelled in
+the run's stored `splitUnit`, and Stride branding) to a PNG via `ImageRenderer`
+and presents it through `ShareLink`. Card→display mapping lives in a pure,
+unit-tested model per AGENTS.md. *Deferred:* History swipe-to-share, milestone/
+medal cards, and real map-snapshot backgrounds.
+
 No `ShareLink` / share-card generation anywhere. Runners share runs; a
 rendered share card (map + splits + stats, or a milestone medal) is a low-cost
 growth lever built entirely from data already on `RunWorkout`.
@@ -196,22 +239,22 @@ Sequenced for user-visible impact per unit of effort, reusing existing models.
 **P0 — close the "coach vs. logger" gap (core loop):**
 1. **A4** guided structured-workout execution (reads existing `WorkoutStructure`).
 2. **A3** in-run audio/voice cues + haptics (pairs with A4).
-3. **A1 + A2** real mile splits + working laps (unblocks interval feedback).
+3. **✅ A1** real mile splits *(shipped)* **+ A2** working laps (unblocks interval feedback).
 
 **P1 — glanceable + platform surfaces (high impact, reuse existing data):**
 4. **B1** Widgets (reuse `IntentDataProvider`).
 5. **B2** Live Activity / Dynamic Island (reuse `WorkoutTrackerService`).
-6. **B4** streaks & goals (reuse `ProgressStatsService`).
+6. **✅ B4** streaks & goals *(shipped)*.
 
 **P2 — depth in data & coaching:**
-7. **A5 + A6** cadence + HR-zone capture and display; feed the coach.
+7. **A5** cadence capture **+ ✅ A6** HR-zone display *(shipped)*; feed the coach.
 8. **A10** race-day hub (countdown, goal splits, result capture).
 9. **B7** recovery/readiness score.
 
 **P3 — reach & retention:**
-10. **B5 + B6** run/achievement sharing and GPX export.
+10. **🔨 B5** run/achievement sharing *(in progress)* **+ B6** GPX export.
 11. **A7** target-distance-aware routes with elevation.
-12. **A8 + A9** expanded achievements and coaching-moment notifications.
+12. **✅ A8** expanded achievements *(shipped via B4)* **+ A9** coaching-moment notifications.
 
 **P4 — larger bets:**
 13. **B3** watchOS companion.
