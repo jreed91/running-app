@@ -777,7 +777,8 @@ struct TrainingPlanService {
         )
 
         let totalWorkDist    = Double(adaptedReps) * baseDist
-        let totalRecovery    = Double(adaptedReps) * baseRecovery
+        // Only reps - 1 recovery jogs: the last rep is followed by the cool-down.
+        let totalRecovery    = intervalSet.totalRecoverySeconds
         let totalDist        = warmupDist + totalWorkDist + cooldownDist
         let warmupDuration   = warmupDist   / 1_000 * paces.easyRange.upperBound
         let workDuration     = totalWorkDist / 1_000 * adaptedPace

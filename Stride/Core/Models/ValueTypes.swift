@@ -64,6 +64,17 @@ struct WorkoutSet: Codable, Hashable, Sendable {
     var recoverySegment: WorkoutSegment
     /// Human-readable label, e.g. "VO2max Intervals", "Tempo Block".
     var label: String
+
+    /// Total recovery time across the whole set, in seconds.
+    ///
+    /// There are only `repetitions - 1` recovery jogs: the final repetition is
+    /// followed by the cool-down, not another recovery, so a recovery is never
+    /// counted after the last rep. Returns 0 when there is a single rep (or none)
+    /// or when the recovery segment has no duration.
+    var totalRecoverySeconds: Double {
+        guard repetitions > 1, let recovery = recoverySegment.durationSeconds else { return 0 }
+        return Double(repetitions - 1) * recovery
+    }
 }
 
 // MARK: - WorkoutStructure
