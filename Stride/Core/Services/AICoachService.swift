@@ -594,17 +594,17 @@ struct AICoachService: Sendable {
             let warmupDistance = min(1_500, max(800, distance * 0.20))
             let cooldownDistance = min(1_500, max(600, distance * 0.15))
             let totalDistance = max(distance, warmupDistance + cooldownDistance + (Double(repetitions) * workDistance))
-            let totalDuration = (totalDistance / 1_000 * pace) + (Double(repetitions) * recoverySeconds)
+            let intervalSet = WorkoutSet(
+                repetitions: repetitions,
+                workSegment: WorkoutSegment(distanceMeters: workDistance, durationSeconds: nil, targetPaceSecondsPerKm: interval?.targetPaceSecondsPerKm ?? pace, label: "Interval"),
+                recoverySegment: WorkoutSegment(distanceMeters: nil, durationSeconds: recoverySeconds, targetPaceSecondsPerKm: nil, label: "Recovery jog"),
+                label: "Interval Set"
+            )
+            // Only reps - 1 recovery jogs: the last rep is followed by the cool-down.
+            let totalDuration = (totalDistance / 1_000 * pace) + intervalSet.totalRecoverySeconds
             return WorkoutStructure(
                 warmup: WorkoutSegment(distanceMeters: warmupDistance, durationSeconds: nil, targetPaceSecondsPerKm: easyPace, label: "Warm-up"),
-                mainSets: [
-                    WorkoutSet(
-                        repetitions: repetitions,
-                        workSegment: WorkoutSegment(distanceMeters: workDistance, durationSeconds: nil, targetPaceSecondsPerKm: interval?.targetPaceSecondsPerKm ?? pace, label: "Interval"),
-                        recoverySegment: WorkoutSegment(distanceMeters: nil, durationSeconds: recoverySeconds, targetPaceSecondsPerKm: nil, label: "Recovery jog"),
-                        label: "Interval Set"
-                    )
-                ],
+                mainSets: [intervalSet],
                 cooldown: WorkoutSegment(distanceMeters: cooldownDistance, durationSeconds: nil, targetPaceSecondsPerKm: easyPace, label: "Cool-down"),
                 totalEstimatedDistanceMeters: totalDistance,
                 totalEstimatedDurationSeconds: totalDuration
