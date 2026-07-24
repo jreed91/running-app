@@ -12,9 +12,23 @@ struct ActiveRunView: View {
     /// run back to the plan so the day is marked complete (H4).
     var scheduledWorkout: ScheduledWorkout? = nil
 
-    @Query private var profiles: [UserProfile]
-    @Query private var activePlans: [TrainingPlan]
+    // Both queries are filtered and sorted to match every other reader in the app.
+    // Unfiltered, `activePlans.first` was whatever SwiftData returned — and since
+    // finished plans are now retained as history, that was regularly a *past* plan,
+    // so finishing a run re-derived paces for a completed block while the real
+    // active plan was never refreshed (N3).
+    @Query(sort: \UserProfile.updatedAt, order: .reverse)
+    private var profiles: [UserProfile]
+    @Query(
+        filter: #Predicate<TrainingPlan> { $0.isActive },
+        sort: \TrainingPlan.createdAt, order: .reverse
+    )
+    private var activePlans: [TrainingPlan]
     @State private var showFinishConfirmation = false
+    @State private var saveErrorMessage: String?
+    /// The finished run awaiting persistence, kept so a failed save can be retried
+    /// without re-finishing the (one-shot) tracker.
+    @State private var pendingSave: RunWorkout?
     @State private var recPulse = false
     @State private var heartPulse = false
     @State private var controlsAppeared = false
@@ -132,6 +146,22 @@ struct ActiveRunView: View {
         .confirmationDialog("Finish workout?", isPresented: $showFinishConfirmation, titleVisibility: .visible) {
             Button("Finish", role: .destructive) { finishAndSave() }
             Button("Cancel", role: .cancel) {}
+        }
+        // A failed save used to lose the run silently: the tracker has already moved
+        // to `.finished` by this point, so there is nothing left to recover from (N15).
+        // Stay on the screen so "Try Again" can re-attempt the save with the workout
+        // still in hand.
+        .alert(
+            "Couldn't save your run",
+            isPresented: Binding(
+                get: { saveErrorMessage != nil },
+                set: { if !$0 { saveErrorMessage = nil } }
+            )
+        ) {
+            Button("Try Again") { retrySave() }
+            Button("Discard", role: .destructive) { discardUnsavedRun() }
+        } message: {
+            Text(saveErrorMessage ?? "")
         }
     }
 
@@ -479,7 +509,38 @@ struct ActiveRunView: View {
     // MARK: - Actions
 
     private func finishAndSave() {
-        guard let workout = tracker.finishWorkout() else { dismiss(); return }
+        // `finishWorkout()` is one-shot — it transitions the tracker to `.finished`
+        // and a second call returns nil — so the run is held in `pendingSave` and a
+        // failed save is retried from there rather than re-finishing the tracker.
+        guard let workout = pendingSave ?? tracker.finishWorkout() else { dismiss(); return }
+        pendingSave = workout
+        persistFinishedRun(workout)
+    }
+
+    private func retrySave() {
+        saveErrorMessage = nil
+        guard let workout = pendingSave else { dismiss(); return }
+        persistFinishedRun(workout)
+    }
+
+    private func discardUnsavedRun() {
+        saveErrorMessage = nil
+        // Undo the link too, or the scheduled day is left marked complete with no
+        // run behind it (the relationship nullifies when the run is deleted).
+        if let scheduled = scheduledWorkout {
+            scheduled.completedWorkout = nil
+            scheduled.linkedRunWorkoutID = nil
+            scheduled.isCompleted = false
+        }
+        if let workout = pendingSave {
+            context.delete(workout)
+            pendingSave = nil
+        }
+        try? context.save()
+        dismiss()
+    }
+
+    private func persistFinishedRun(_ workout: RunWorkout) {
         context.insert(workout)
         // Link the run back to its scheduled day so the plan marks it complete
         // and the calendar/recovery card don't nag about a workout that was done (H4).
@@ -490,7 +551,27 @@ struct ActiveRunView: View {
             scheduled.linkedRunWorkoutID = workout.id
             scheduled.isCompleted = true
         }
-        try? context.save()
+
+        // The run only exists in memory until this succeeds. Surface a failure and
+        // stay on the screen instead of dismissing over a lost workout (N15).
+        do {
+            try context.save()
+        } catch {
+            AppLogger.log(
+                "Failed to save finished run \(workout.id): \(error.localizedDescription)",
+                label: "ActiveRun",
+                level: .error
+            )
+            saveErrorMessage = """
+            Your run couldn't be saved to this device. It's still here — try again, \
+            or discard it.
+
+            \(error.localizedDescription)
+            """
+            return
+        }
+        pendingSave = nil
+
         Task { @MainActor in
             if let hkID = try? await container.healthKitRepository.save(workout) {
                 workout.healthKitWorkoutID = hkID

@@ -95,9 +95,25 @@ final class WorkoutSyncService {
         await handleNewWorkoutsDetected(source: "startup")
     }
 
+    /// Runs one import pass on demand, for screens that want fresh data when they
+    /// open (History) rather than waiting for the observer.
+    ///
+    /// This exists so those screens don't hand-roll their own importer: a second
+    /// copy of this logic drifted from the canonical rules — it never linked
+    /// imported runs to their scheduled day, so plan days stayed "missed" after a
+    /// run the user had actually done, and it deduplicated strength sessions by
+    /// calendar day, re-introducing the same-day merge M8 fixed (N4).
+    ///
+    /// - Parameter lookbackDays: how far back to look, as a positive number of days.
+    ///   Defaults to the standard window; a fresh store always uses the 90-day
+    ///   recovery window regardless of what is requested here.
+    func syncNow(lookbackDays: Int? = nil, source: String = "manual") async {
+        await handleNewWorkoutsDetected(source: source, lookbackDays: lookbackDays)
+    }
+
     // MARK: Private
 
-    private func handleNewWorkoutsDetected(source: String) async {
+    private func handleNewWorkoutsDetected(source: String, lookbackDays: Int? = nil) async {
         // A trigger that lands mid-sync must not be dropped: the in-flight pass
         // snapshotted its existing-ID set before the workout that fired this
         // trigger existed, so it can miss it. Queue exactly one follow-up pass
@@ -116,13 +132,13 @@ final class WorkoutSyncService {
 
         var currentSource: String? = source
         while let source = currentSource {
-            await runSyncPass(source: source)
+            await runSyncPass(source: source, lookbackDays: lookbackDays)
             currentSource = pendingSyncSource
             pendingSyncSource = nil
         }
     }
 
-    private func runSyncPass(source: String) async {
+    private func runSyncPass(source: String, lookbackDays: Int? = nil) async {
         let existingIDs: Set<String>
         do {
             let stored = try context.fetch(FetchDescriptor<RunWorkout>())
@@ -140,9 +156,12 @@ final class WorkoutSyncService {
 
         // On a fresh install or reinstall the local store is empty, so look back up to 90 days
         // to recover runs that may not have synced to CloudKit before the app was removed.
-        // For normal syncs (store already has data) keep the window short for performance.
-        let lookbackDays = existingIDs.isEmpty ? -90 : -7
-        let cutoff = Calendar.current.date(byAdding: .day, value: lookbackDays, to: Date()) ?? Date()
+        // For normal syncs (store already has data) keep the window short for performance,
+        // unless the caller asked for a wider one.
+        let window = existingIDs.isEmpty
+            ? Self.freshInstallLookbackDays
+            : max(Self.defaultLookbackDays, lookbackDays ?? 0)
+        let cutoff = Calendar.current.date(byAdding: .day, value: -window, to: Date()) ?? Date()
 
         var newWorkouts: [RunWorkout]
         do {
@@ -222,6 +241,13 @@ final class WorkoutSyncService {
         await syncStrengthWorkouts(source: source, lookbackCutoff: cutoff)
     }
 
+    /// Days of history a routine sync looks back over.
+    static let defaultLookbackDays = 7
+
+    /// Days of history a sync looks back over when the local store holds no runs at
+    /// all — a fresh install or reinstall, where CloudKit may not have everything.
+    static let freshInstallLookbackDays = 90
+
     /// Imports larger than this send one summary notification instead of a
     /// banner per run. Small batches (a normal day's sync) keep the per-run
     /// banner with its tap-to-review flow.
@@ -266,8 +292,13 @@ final class WorkoutSyncService {
             predicate: #Predicate { $0.isCompleted == false }
         )
         guard let allIncomplete = try? context.fetch(descriptor) else { return }
-        // Keep only run-type slots not already linked to another run.
-        var available = allIncomplete.filter { $0.completedWorkout == nil && $0.workoutType.isRunType }
+        // Keep only run-type slots not already linked to another run, and only from a
+        // plan that is still active — retired plans keep their future workouts, and
+        // without this filter a new run could complete a day in a plan the runner has
+        // already moved on from (N1/N2 keep those plans in the store).
+        var available = allIncomplete.filter {
+            $0.completedWorkout == nil && $0.workoutType.isRunType && Self.belongsToLivePlan($0)
+        }
 
         let calendar = Calendar.current
         for run in toLink {
@@ -371,6 +402,17 @@ final class WorkoutSyncService {
         )
     }
 
+    /// Whether a scheduled workout is a legitimate link target: it belongs to the
+    /// active plan, or to no plan at all.
+    ///
+    /// A workout with no plan is legacy/orphaned data and stays eligible — excluding
+    /// it would silently stop linking on stores that predate the relationship. Only
+    /// an explicitly *retired* plan's days are off limits.
+    static func belongsToLivePlan(_ scheduled: ScheduledWorkout) -> Bool {
+        guard let plan = scheduled.week?.plan else { return true }
+        return plan.isActive
+    }
+
     /// Two strength sessions are treated as the same physical workout — and so
     /// deduplicated on import — only when their start times fall within this
     /// window. Generous enough to absorb the lag between finishing a session and
@@ -390,7 +432,9 @@ final class WorkoutSyncService {
         )
         guard let allIncomplete = try? context.fetch(descriptor) else { return }
         var available = allIncomplete.filter {
-            $0.completedStrengthWorkout == nil && $0.workoutType == .strength
+            $0.completedStrengthWorkout == nil
+                && $0.workoutType == .strength
+                && Self.belongsToLivePlan($0)
         }
         let calendar = Calendar.current
         var dirty = false

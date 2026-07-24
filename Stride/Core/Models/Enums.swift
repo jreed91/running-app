@@ -155,6 +155,26 @@ enum WorkoutType: String, Codable, CaseIterable, Sendable {
         case .rest, .crossTraining, .strength: return false
         }
     }
+
+    /// The kind of session a workout type represents.
+    ///
+    /// A training day can legitimately hold one session of each kind — a plan pairs
+    /// an easy run with a gym session, and a missed-workout shift can move a run
+    /// onto a strength day. Duplicate detection must therefore compare like with
+    /// like: collapsing "every workout on this date" into one silently deletes the
+    /// runner's strength session (N6).
+    enum SessionKind: String, Sendable {
+        case run, strength, crossTraining, rest
+    }
+
+    var sessionKind: SessionKind {
+        switch self {
+        case .easy, .tempo, .interval, .longRun, .race: return .run
+        case .strength:      return .strength
+        case .crossTraining: return .crossTraining
+        case .rest:          return .rest
+        }
+    }
 }
 
 // MARK: - TrainingPhase

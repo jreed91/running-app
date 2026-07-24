@@ -320,50 +320,25 @@ struct PlanTabView: View {
         "\(workout.workoutType.displayName) on \(workout.scheduledDate.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))"
     }
 
+    /// Deletes same-day duplicates, one week at a time. The rule for what counts as a
+    /// duplicate lives in ``PlanDuplicateResolver`` so it can be tested directly.
     @MainActor
     @discardableResult
     private func removeSameDayDuplicateWorkouts(in plan: TrainingPlan) -> Int {
-        let calendar = Calendar.current
         var removed = 0
 
         for week in plan.weeks ?? [] {
-            let grouped = Dictionary(grouping: week.workouts ?? []) {
-                calendar.startOfDay(for: $0.scheduledDate)
-            }
-            for sameDayWorkouts in grouped.values where sameDayWorkouts.count > 1 {
-                let kept = sameDayWorkouts.sorted(by: duplicatePreference).first
-                for workout in sameDayWorkouts where workout.id != kept?.id {
-                    context.delete(workout)
-                    removed += 1
-                }
-            }
-            week.workouts = (week.workouts ?? []).filter { workout in
-                !grouped.values.contains { sameDayWorkouts in
-                    sameDayWorkouts.count > 1
-                        && sameDayWorkouts.contains { $0.id == workout.id }
-                        && sameDayWorkouts.sorted(by: duplicatePreference).first?.id != workout.id
-                }
+            let redundant = PlanDuplicateResolver.redundantWorkouts(in: week.workouts ?? [])
+            guard !redundant.isEmpty else { continue }
+            let redundantIDs = Set(redundant.map(\.id))
+            week.workouts = (week.workouts ?? []).filter { !redundantIDs.contains($0.id) }
+            for workout in redundant {
+                context.delete(workout)
+                removed += 1
             }
         }
 
         return removed
-    }
-
-    private func duplicatePreference(_ lhs: ScheduledWorkout, _ rhs: ScheduledWorkout) -> Bool {
-        duplicatePriority(lhs) < duplicatePriority(rhs)
-    }
-
-    private func duplicatePriority(_ workout: ScheduledWorkout) -> Int {
-        if workout.isCompleted { return 0 }
-        switch workout.workoutType {
-        case .race: return 1
-        case .longRun: return 2
-        case .tempo, .interval: return 3
-        case .easy: return 4
-        case .strength: return 5
-        case .crossTraining: return 6
-        case .rest: return 7
-        }
     }
 }
 

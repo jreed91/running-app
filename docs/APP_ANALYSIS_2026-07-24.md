@@ -16,6 +16,10 @@ Two kinds of finding are recorded:
 > **Fix tracking:** mark items **✅ FIXED** with a note on where, in the same
 > style as the July document. Line numbers in fixed items refer to this
 > document's commit and may drift.
+>
+> **Status:** the Priority-1 group (data loss: N1, N2, N6, N15) and the cheap
+> Priority-2 items (N3, N4, N5, plus the plan-scoping half of N13) are fixed —
+> see §8. Everything else below is open.
 
 > **Scope:** correctness, UX, and hygiene. Product/feature gaps live in
 > [`FEATURE_IMPROVEMENTS_2026-07.md`](./FEATURE_IMPROVEMENTS_2026-07.md);
@@ -40,7 +44,17 @@ The first three share a root cause: **H3 changed the plan lifecycle from
 plans now persist as inactive rows, which two of those paths delete outright and
 a third silently mistakes for the active plan.
 
-### N1. "Rebuild my plan" still deletes the plan it replaces
+### ✅ N1. "Rebuild my plan" still deletes the plan it replaces
+
+**FIXED:** `rebuildPlan` no longer deletes anything. `PlanRepository.save(newPlan)`
+already enforces the single-active invariant by deactivating every other plan, so
+the replaced block is retired and stays in Plan History with its completed
+workouts and their run links intact. The retired plan's WorkoutKit entries are
+removed on a fire-and-forget task, which the delete path never did (they were
+orphaned on the Watch with no way left to find them). Covered by
+`MissedWorkoutsRecoveryTests` (`rebuildRetiresOldAndCreatesNew`,
+`rebuildPreservesCompletedHistory`).
+
 `Stride/App/AppContainer.swift:573-612` (delete at `:609`); invoked from
 `Stride/Features/Dashboard/DashboardView.swift:620-630`
 
@@ -63,7 +77,14 @@ from a card the app itself puts in front of a user who has fallen behind.
 `PlanRepository.save`, which already enforces the single-active invariant.
 Deletion should stay a deliberate swipe in Plan History.
 
-### N2. Launch-time dedup deletes duplicate active plans instead of deactivating them
+### ✅ N2. Launch-time dedup deletes duplicate active plans instead of deactivating them
+
+**FIXED:** the rule moved out of the view into
+`ProfileRestoreDeduplicator.retireDuplicateActivePlans(_:in:)` (where the profile
+dedup already lives) and now sets `isActive = false` on every plan after the
+first instead of deleting it. Covered by `PlanHistoryTests`
+(`duplicateActivePlansAreRetiredNotDeleted`, `singleActivePlanIsUntouched`).
+
 `Stride/App/StrideApp.swift:205-215`
 
 ```swift
@@ -84,7 +105,22 @@ deleting; the plan path does not.
 "only one active" invariant is preserved and nothing is destroyed. Add a
 `PlanHistoryTests` case for the two-active-plans restore shape.
 
-### N3. `ActiveRunView` refreshes paces on an arbitrary plan
+### ✅ N3. `ActiveRunView` refreshes paces on an arbitrary plan
+
+**FIXED:** both queries now match the rest of the app — plans filtered to
+`isActive` and sorted by `createdAt` descending, profiles sorted by `updatedAt`
+descending.
+
+**Related, fixed with it:** retiring plans instead of deleting them means their
+future days stay in the store, so the automated paths that pick a scheduled
+workout had to learn to ignore them. `WorkoutSyncService.belongsToLivePlan(_:)`
+now gates both linkers (a run can no longer complete a retired plan's day), and
+`IntentModelActor.todaysRun()` filters the same way so Siri can't read out a
+workout from a replaced plan — the plan-scoping half of N13. Workouts with no
+plan at all stay eligible, since excluding them would silently break linking on
+legacy stores. Covered by `PlanHistoryTests`, `WorkoutSyncServiceTests`
+(`syncNowIgnoresRetiredPlanDays`), and `IntentDataProviderTests`.
+
 `Stride/Features/ActiveRun/ActiveRunView.swift:16, 505-514`
 
 ```swift
@@ -108,7 +144,16 @@ and sort profiles by `updatedAt` descending, matching the rest of the app.
 Better: resolve both through `AppContainer`/`PlanRepository.fetchActivePlan()` so
 there is one definition of "the active plan".
 
-### N4. The History tab is a second, divergent HealthKit importer
+### ✅ N4. The History tab is a second, divergent HealthKit importer
+
+**FIXED:** the local import is gone. `WorkoutSyncService` gained
+`syncNow(lookbackDays:source:)` — the same pass the observer runs, with a caller-
+supplied window — and History calls it with 60 days. Linking, tombstones, strength
+merge-by-start-time, weather attach, notification batching, and the review sheet
+are now identical no matter which screen triggers the import, and an authorization
+failure is logged instead of swallowed. Covered by `WorkoutSyncServiceTests`
+(`syncNowLinksImportedRunToPlan`).
+
 `Stride/Features/History/HistoryView.swift:134-186`
 
 Opening History runs its own 60-day import that bypasses `WorkoutSyncService`
@@ -135,7 +180,12 @@ entirely, and it differs from the canonical path in four ways:
 lookback window). One importer, one set of rules — the D3 recommendation, now
 with a concrete second offender.
 
-### N5. The store-recovery alert cannot appear in the case it was written for
+### ✅ N5. The store-recovery alert cannot appear in the case it was written for
+
+**FIXED:** the `.task`/`.alert` pair moved from `MainTabView` up to `ContentView`,
+above the onboarding/tab-bar branch, so the notice presents whichever screen the
+launch lands on. `MainTabView` keeps a comment pointing at the new home.
+
 `Stride/Features/Dashboard/MainTabView.swift:38-54`; root switch at
 `Stride/App/StrideApp.swift:138-145`
 
@@ -158,7 +208,25 @@ happens on a device whose profile hasn't loaded.
 `ContentView` itself) so it presents over onboarding as well. Add a test that
 asserts the notice survives to a view presented when `profiles.isEmpty`.
 
-### N6. Smart Adapt deletes any second workout scheduled on the same day — including strength
+### ✅ N6. Smart Adapt deletes any second workout scheduled on the same day — including strength
+
+**FIXED,** both halves:
+
+- **The rule.** Duplicate detection moved out of `PlanTabView` into the pure
+  `PlanDuplicateResolver`, which groups by day **and** `WorkoutType.SessionKind`
+  (run / strength / cross-training / rest). Only a second session *of the same
+  kind* is a duplicate, so a paired run + gym day survives adaptation. Covered by
+  `PlanDuplicateResolverTests`.
+- **The collision.** `shiftMissedWorkoutsForward` now moves strength and
+  cross-training with the runs rather than holding them still, so "pick up where
+  I left off" preserves the week's spacing instead of dropping runs onto gym days.
+  Rest days still stay put. Covered by `MissedWorkoutsRecoveryTests`
+  (`shiftMovesStrengthWorkouts`).
+
+*Still open:* a large shift can still place a session on or after a fixed race
+date, and N12 (a day holding two sessions shows only one on the dashboard) now
+matters more, since same-day pairs are no longer silently pruned away.
+
 `Stride/Features/Training/PlanTabView.swift:322-366`
 
 `removeSameDayDuplicateWorkouts` groups **all** of a week's workouts by calendar
@@ -303,7 +371,13 @@ renders. The other session is unreachable from the dashboard entirely.
 **Fix:** return all workouts for the day, render them as a small stack, and give
 `DayCell` an indicator that can express two sessions.
 
-### N13. The Siri "Today's Run" intent ignores plan state
+### ⚠️ N13. The Siri "Today's Run" intent ignores plan state
+
+**PARTIALLY FIXED:** `todaysRun()` now filters to the active plan (see N3) and
+prefers a run-type session over a strength/cross-training day. *Still open:* the
+`TodaysRunIntent` dialog still says "You have a **Strength** run today" when a gym
+day is all that's scheduled — the wording needs to branch on the type.
+
 `Stride/Features/AppIntents/IntentDataProvider.swift:34-54`
 
 `todaysRun()` queries `ScheduledWorkout` by date with no join to the active plan,
@@ -329,8 +403,16 @@ Fitness, and exists only in Stride. It also leaves dedup leaning entirely on the
 the importer reads at `:668-673`) and store the returned UUID in
 `healthKitWorkoutID`, which also makes the merge exact instead of heuristic.
 
-### N15. The highest-stakes save in the app is `try?`
+### ✅ N15. The highest-stakes save in the app is `try?`
 `Stride/Features/ActiveRun/ActiveRunView.swift:493, 497, 513`
+
+**FIXED:** the finish path splits into `finishAndSave` / `persistFinishedRun`, with
+the run held in `pendingSave` because `finishWorkout()` is one-shot. A failed save
+logs, raises a "Couldn't save your run" alert, and keeps the screen up with **Try
+Again** / **Discard** — where Discard also unlinks the scheduled day rather than
+leaving it marked complete with no run behind it. The follow-on writes (HealthKit
+export, weather, pace refresh) still use `try?`: they enrich a run that is already
+safely persisted. The other 33 `try? context.save()` sites (D5) are untouched.
 
 ```swift
 context.insert(workout)
@@ -527,8 +609,9 @@ longer exists.
 `Secrets.plist.example` or repurpose it.
 
 ### N27. Duplicated logic that now has a canonical home
-- `RunSummaryView.isRunWorkout(_:)` (`:1498-1505`) duplicates `WorkoutType.isRunType`
+- ✅ `RunSummaryView.isRunWorkout(_:)` (`:1498-1505`) duplicated `WorkoutType.isRunType`
   (`Enums.swift:152-157`), added by H8 precisely to be the single definition.
+  **FIXED:** the copy was deleted and the call site uses `isRunType`.
 - `AppContainer.attachWeather` (`:364-377`) and `WorkoutSyncService.attachWeather`
   (`:416-420`) are the same function; the D2 note called this out and both remain.
 - Five near-identical markdown sanitizers still live in `RunSummaryView`
@@ -598,11 +681,11 @@ The gaps line up exactly with where this pass found bugs:
 | --- | --- |
 | `WorkoutTrackerService.processLocation` / split construction | N7 (split pace), N8 (GPS filtering) — the tracker still has no test file; `WallClockStopwatchTests` and `SplitBucketingTests` cover the extracted helpers only |
 | HealthKit → `RunWorkout` mapping (`fetchImportableWorkouts`, `inferWorkoutType`) | N9 (no splits), N10 (absolute threshold) |
-| The `HistoryView` import path | N4 — `WorkoutSyncServiceTests` covers the canonical path only, so the divergent copy is invisible to CI |
-| Active-plan resolution across views | N3, N13 — a single test asserting every "active plan" reader agrees would pin this |
-| Plan-lifecycle destructive paths (`rebuildPlan`, launch dedup) | N1, N2 — `PlanHistoryTests` covers creation, not recovery or dedup |
-| Same-day duplicate pruning | N6 — no test asserts a strength session survives adaptation |
-| View-level presentation of `StoreRecoveryNotice` | N5 — `AppContainerTests` asserts the notice is *raised*, nothing asserts it is *shown* |
+| ~~The `HistoryView` import path~~ | N4 — closed: there is now one importer, and `syncNow` is tested for linking and retired-plan scoping |
+| ~~Active-plan resolution across views~~ | N3/N13 — partly closed: `belongsToLivePlan` and the intent are tested. A test asserting *every* `@Query` reader agrees would still be worth having |
+| ~~Plan-lifecycle destructive paths~~ | N1/N2 — closed: `MissedWorkoutsRecoveryTests` and `PlanHistoryTests` now assert nothing is deleted |
+| ~~Same-day duplicate pruning~~ | N6 — closed by `PlanDuplicateResolverTests` |
+| View-level presentation of `StoreRecoveryNotice` | N5 — the alert moved to the root, but this is still view code with no test; `AppContainerTests` only asserts the notice is *raised* |
 
 Two structural notes: `AppContainer.rebuildPlan`/`shiftMissedWorkoutsForward` do
 real date math and deletion policy on the DI container (D2), which is why N1 and
@@ -655,25 +738,27 @@ next pass doesn't churn them:
 
 ## 8. Prioritized action plan
 
-**1 — Stop losing data (do first, all small):**
-- N1 rebuild-plan deletes the plan → deactivate.
-- N2 launch dedup deletes plans → deactivate.
-- N6 same-day pruning deletes strength → scope by kind; make the shift
-  collision-aware. Consider deleting both pruners (N29).
-- N15 run-finish `try?` → real error handling.
+**1 — Stop losing data — ✅ DONE:**
+- ✅ N1 rebuild-plan deletes the plan → deactivate.
+- ✅ N2 launch dedup deletes plans → deactivate.
+- ✅ N6 same-day pruning deletes strength → scoped by kind; the shift now moves
+  strength with the runs. (N29 — deleting the pruners outright — still open.)
+- ✅ N15 run-finish `try?` → real error handling.
 
 **2 — Correctness the user can see:**
-- N3 unfiltered active-plan query (one line, plus a shared accessor).
-- N4 fold `HistoryView`'s importer into `WorkoutSyncService`.
-- N5 present the store-recovery notice at the root.
-- N7 real split pace + N8 GPS filtering, with tests.
+- ✅ N3 unfiltered active-plan query, plus the retired-plan scoping the fixes above
+  made necessary (both linkers and the Siri intent).
+- ✅ N4 fold `HistoryView`'s importer into `WorkoutSyncService`.
+- ✅ N5 present the store-recovery notice at the root.
+- N7 real split pace + N8 GPS filtering, with tests. **Next.**
 - N9/N10 import splits and classify types relative to the runner.
 
 **3 — UX debt with outsized impact:**
 - N17 discard-run, N18 accessibility (the finish control first — it blocks a core
-  action), N19 Dynamic Type, N20 elevation/cadence, N24 start a missed workout.
+  action), N19 Dynamic Type, N20 elevation/cadence, N24 start a missed workout,
+  N12 (a day can now legitimately hold two sessions — the dashboard must show both).
 
 **4 — Hygiene:**
-- N11 full reset, N13 intent scoping, N14 strength → HealthKit, N16 reminder
+- N11 full reset, N13 dialog wording, N14 strength → HealthKit, N16 reminder
   toggle, N21 lazy share card, N22/N23/N25 honest UI states.
-- N26 (code half), N27–N30 cleanup, N31 CI pins and lint thresholds.
+- N26 (code half), N27 (remainder)–N30 cleanup, N31 CI pins and lint thresholds.

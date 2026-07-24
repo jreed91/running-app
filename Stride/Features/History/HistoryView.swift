@@ -31,7 +31,6 @@ struct HistoryView: View {
     @Query(sort: [SortDescriptor(\StrengthWorkout.date, order: .reverse)])
     private var allStrengthWorkouts: [StrengthWorkout]
 
-    @Environment(\.modelContext) private var context
     @Environment(\.appContainer) private var container
 
     @State private var isSyncing = false
@@ -131,6 +130,14 @@ struct HistoryView: View {
 
     // MARK: Auto-sync
 
+    /// Refreshes from HealthKit when the tab opens, through the **canonical** importer.
+    ///
+    /// This screen used to run its own import, which diverged from `WorkoutSyncService`
+    /// in ways the user felt: imported runs were never linked to their scheduled day
+    /// (so the plan kept showing a workout as missed after it had been run), strength
+    /// sessions were deduplicated by calendar day (collapsing a morning app-log and an
+    /// evening Watch session), and no review banner was raised. Since History usually
+    /// imports first, its rules were the ones that won (N4).
     @MainActor
     private func syncRecentHealthKitWorkouts() async {
         guard !UITestingSupport.isEnabled else { return }
@@ -140,49 +147,17 @@ struct HistoryView: View {
         defer { isSyncing = false }
         do {
             try await repo.requestAuthorization()
-            let cutoff = Calendar.current.date(byAdding: .day, value: -60, to: Date()) ?? Date()
-
-            // Union deletion tombstones so runs the user removed don't resurrect on sync.
-            let tombstonedIDs = Set(
-                ((try? context.fetch(FetchDescriptor<DeletedWorkout>())) ?? []).map(\.healthKitWorkoutID)
-            )
-            let existingRunIDs = Set(allRunWorkouts.compactMap(\.healthKitWorkoutID)).union(tombstonedIDs)
-            let newRunWorkouts = try await repo.fetchImportableWorkouts(
-                from: cutoff, to: Date(), existingIDs: existingRunIDs
-            )
-            for workout in newRunWorkouts { context.insert(workout) }
-            if !newRunWorkouts.isEmpty {
-                try context.save()
-                for workout in newRunWorkouts {
-                    if let coordinate = workout.routeCoordinates.first {
-                        await container.attachWeather(to: workout, coordinate: coordinate)
-                    }
-                }
-            }
-
-            let existingStrengthIDs = Set(allStrengthWorkouts.compactMap(\.healthKitWorkoutID))
-                .union(tombstonedIDs)
-            let hkStrengthWorkouts = try await repo.fetchImportableStrengthWorkouts(
-                from: cutoff, to: Date(), existingIDs: existingStrengthIDs
-            )
-            var unlinked = allStrengthWorkouts.filter { $0.healthKitWorkoutID == nil }
-            var toInsert: [StrengthWorkout] = []
-            for hkWorkout in hkStrengthWorkouts {
-                let hkDay = Calendar.current.startOfDay(for: hkWorkout.date)
-                if let idx = unlinked.firstIndex(where: {
-                    Calendar.current.startOfDay(for: $0.date) == hkDay
-                }) {
-                    unlinked[idx].healthKitWorkoutID = hkWorkout.healthKitWorkoutID
-                    unlinked.remove(at: idx)
-                } else {
-                    toInsert.append(hkWorkout)
-                }
-            }
-            for workout in toInsert { context.insert(workout) }
-            if !hkStrengthWorkouts.isEmpty { try context.save() }
         } catch {
-            // Silent failure — background sync shouldn't interrupt the user
+            AppLogger.log(
+                "History sync skipped — HealthKit authorization failed: \(error.localizedDescription)",
+                label: "HealthKit",
+                level: .warning
+            )
+            return
         }
+        // A wider window than a routine sync: opening History is an explicit "show me
+        // everything" gesture, and it is the screen where a missing run is noticed.
+        await container.workoutSyncService.syncNow(lookbackDays: 60, source: "history")
     }
 }
 

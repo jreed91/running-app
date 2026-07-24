@@ -201,6 +201,91 @@ struct WorkoutSyncServiceTests {
         UserDefaults.standard.removeObject(forKey: "pendingReviewWorkoutID")
     }
 
+    // MARK: On-demand sync + linking (N4)
+
+    /// Builds an active (or retired) plan with a single uncompleted run scheduled today.
+    private func makePlanWithTodaysRun(in context: ModelContext, isActive: Bool) throws -> ScheduledWorkout {
+        let today = Date().startOfDay
+        let plan = TrainingPlan(
+            targetRace: .fiveK,
+            goalTimeSeconds: 1_500,
+            startDate: today,
+            endDate: today.adding(days: 6)
+        )
+        plan.isActive = isActive
+        context.insert(plan)
+
+        let week = TrainingWeek(weekNumber: 1, startDate: today, phase: .base, targetDistanceKm: 20)
+        context.insert(week)
+        week.plan = plan
+
+        let scheduled = ScheduledWorkout(
+            scheduledDate: today,
+            workoutType: .easy,
+            targetDistanceMeters: 5_000
+        )
+        context.insert(scheduled)
+        scheduled.week = week
+
+        try context.save()
+        return scheduled
+    }
+
+    /// N4: `HistoryView` used to import on its own and never link, so a run the user
+    /// had actually done left its planned day showing as missed — and because that
+    /// import usually ran first, the canonical pass then skipped the run as existing.
+    @Test("syncNow imports through the canonical path and links the run to its planned day (N4)")
+    func syncNowLinksImportedRunToPlan() async throws {
+        let mock = MockHealthKitRepository()
+        let (service, context) = makeService(mock: mock)
+        let scheduled = try makePlanWithTodaysRun(in: context, isActive: true)
+
+        let run = RunWorkout(
+            date: Date(),
+            distanceMeters: 5_000,
+            durationSeconds: 1_500,
+            workoutType: .easy
+        )
+        run.healthKitWorkoutID = UUID().uuidString
+        mock.runFetchResults = [[run]]
+
+        await service.syncNow(lookbackDays: 60, source: "test")
+
+        #expect(scheduled.isCompleted == true)
+        #expect(scheduled.completedWorkout?.id == run.id)
+        #expect(run.scheduledWorkout?.id == scheduled.id)
+
+        UserDefaults.standard.removeObject(forKey: "pendingReviewWorkoutID")
+    }
+
+    /// N1/N2 keep retired plans in the store, so their future days must stop
+    /// attracting imported runs.
+    @Test("An imported run never completes a retired plan's day")
+    func syncNowIgnoresRetiredPlanDays() async throws {
+        let mock = MockHealthKitRepository()
+        let (service, context) = makeService(mock: mock)
+        let retiredDay = try makePlanWithTodaysRun(in: context, isActive: false)
+
+        let run = RunWorkout(
+            date: Date(),
+            distanceMeters: 5_000,
+            durationSeconds: 1_500,
+            workoutType: .easy
+        )
+        run.healthKitWorkoutID = UUID().uuidString
+        mock.runFetchResults = [[run]]
+
+        await service.syncNow(source: "test")
+
+        #expect(retiredDay.isCompleted == false)
+        #expect(retiredDay.completedWorkout == nil)
+        // The run itself still imports — it just isn't credited to a retired plan.
+        let stored = try context.fetch(FetchDescriptor<RunWorkout>())
+        #expect(stored.contains { $0.healthKitWorkoutID == run.healthKitWorkoutID })
+
+        UserDefaults.standard.removeObject(forKey: "pendingReviewWorkoutID")
+    }
+
     // MARK: Notification batching (M5)
 
     @Test("Imports collapse to one summary notification only above the per-run banner limit (M5)")
