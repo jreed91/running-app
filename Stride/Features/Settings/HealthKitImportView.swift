@@ -121,7 +121,8 @@ struct HealthKitImportView: View {
             let newWorkouts = try await repo.fetchImportableWorkouts(
                 from: startDate,
                 to: Date(),
-                existingIDs: existingIDs
+                existingIDs: existingIDs,
+                context: WorkoutImportContext.resolve(from: context)
             )
 
             for workout in newWorkouts {

@@ -3,6 +3,28 @@ import HealthKit
 import CoreLocation
 @preconcurrency import WorkoutKit
 
+// MARK: - Import context
+
+/// What the importer needs to know about the runner to interpret raw HealthKit data:
+/// their own training paces, so a run's type is classified relative to them rather
+/// than against one absolute threshold (N10), and the unit its splits are bucketed
+/// in, matching how the live tracker records them (N9).
+///
+/// Both are optional in effect: with no pace estimate a run is `.easy` unless its
+/// distance makes it a long run, and the split unit defaults to metric.
+struct WorkoutImportContext: Sendable {
+    var paces: TrainingPaces?
+    var splitUnit: UnitPreference
+
+    init(paces: TrainingPaces? = nil, splitUnit: UnitPreference = .metric) {
+        self.paces = paces
+        self.splitUnit = splitUnit
+    }
+
+    /// No runner context available — used by callers that have no profile to hand.
+    static let unknownRunner = WorkoutImportContext()
+}
+
 // MARK: - Protocol
 
 protocol HealthKitRepositoryProtocol: Sendable {
@@ -19,11 +41,13 @@ protocol HealthKitRepositoryProtocol: Sendable {
     /// Removes all WorkoutKit scheduled compositions for the plan.
     @MainActor func removeWorkoutPlans(for plan: TrainingPlan) async throws
     /// Fetches running workouts from HealthKit, converts them to RunWorkout models,
-    /// and skips any whose HK UUID is already in `existingIDs`.
+    /// and skips any whose HK UUID is already in `existingIDs`. `context` supplies the
+    /// runner's paces and split unit; pass `.unknownRunner` when neither is known.
     @MainActor func fetchImportableWorkouts(
         from startDate: Date,
         to endDate: Date,
-        existingIDs: Set<String>
+        existingIDs: Set<String>,
+        context: WorkoutImportContext
     ) async throws -> [RunWorkout]
     /// Fetches strength workouts (traditional, functional, core) from HealthKit,
     /// converts them to StrengthWorkout models, and skips any whose HK UUID is
@@ -603,7 +627,8 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
     @MainActor func fetchImportableWorkouts(
         from startDate: Date,
         to endDate: Date,
-        existingIDs: Set<String>
+        existingIDs: Set<String>,
+        context: WorkoutImportContext = .unknownRunner
     ) async throws -> [RunWorkout] {
         let hkWorkouts = try await fetchWorkouts(from: startDate, to: endDate)
         var result: [RunWorkout] = []
@@ -641,12 +666,26 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             let elevation = elevationGain(from: hkWorkout)
             let coordinates = await fetchRouteCoordinates(for: hkWorkout)
 
+            // HealthKit's distance samples carry their own timestamps, so an imported
+            // run can be bucketed into real splits instead of arriving with none (N9).
+            let distancePoints = (try? await fetchDistanceSeries(for: hkWorkout)) ?? []
+            let splits = SplitBucketing.splits(
+                from: distancePoints,
+                splitLengthMeters: context.splitUnit.splitLengthMeters,
+                heartRateSamples: hrSamples,
+                totalDurationSeconds: hkWorkout.duration
+            )
+
             let isIndoor = (hkWorkout.metadata?[HKMetadataKeyIndoorWorkout] as? Bool) ?? false
             let run = RunWorkout(
                 date: hkWorkout.startDate,
                 distanceMeters: distanceMeters,
                 durationSeconds: hkWorkout.duration,
-                workoutType: inferWorkoutType(distanceMeters: distanceMeters, durationSeconds: hkWorkout.duration),
+                workoutType: Self.inferWorkoutType(
+                    distanceMeters: distanceMeters,
+                    durationSeconds: hkWorkout.duration,
+                    paces: context.paces
+                ),
                 workoutLocation: isIndoor ? .indoor : .outdoor
             )
             run.averageHeartRate = hrStats?.avg
@@ -655,6 +694,10 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             run.elevationGainMeters = elevation
             run.healthKitWorkoutID = hkID
             if !coordinates.isEmpty { run.routeCoordinates = coordinates }
+            if !splits.isEmpty {
+                run.splits = splits
+                run.splitUnit = context.splitUnit
+            }
             result.append(run)
         }
         AppLogger.log(
@@ -753,6 +796,43 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             store.execute(query)
         }
         return stats?.sumQuantity()?.doubleValue(for: .meter()) ?? 0
+    }
+
+    /// The workout's distance readings as a cumulative series, in workout-relative
+    /// seconds. Each `HKQuantitySample` covers an interval and carries its own
+    /// timestamps, which is what lets an imported run be bucketed into splits (N9);
+    /// the cumulative sum is taken at each sample's end, where its distance is complete.
+    private func fetchDistanceSeries(for workout: HKWorkout) async throws -> [SplitBucketing.DistancePoint] {
+        let distanceType = HKQuantityType(.distanceWalkingRunning)
+        let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+            HKQuery.predicateForObjects(from: workout),
+            HKQuery.predicateForSamples(
+                withStart: workout.startDate,
+                end: workout.endDate,
+                options: [.strictStartDate, .strictEndDate]
+            )
+        ])
+        let samples: [HKSample] = try await withCheckedThrowingContinuation { cont in
+            let query = HKSampleQuery(
+                sampleType: distanceType,
+                predicate: predicate,
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]
+            ) { _, result, error in
+                if let error { cont.resume(throwing: error) }
+                else { cont.resume(returning: result ?? []) }
+            }
+            store.execute(query)
+        }
+        var cumulativeMeters: Double = 0
+        return samples.compactMap { sample in
+            guard let quantity = (sample as? HKQuantitySample)?.quantity else { return nil }
+            cumulativeMeters += quantity.doubleValue(for: .meter())
+            return SplitBucketing.DistancePoint(
+                elapsedSeconds: sample.endDate.timeIntervalSince(workout.startDate),
+                cumulativeMeters: cumulativeMeters
+            )
+        }
     }
 
     private func fetchRouteCoordinates(for workout: HKWorkout) async -> [Coordinate] {
@@ -888,14 +968,34 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
 
     // MARK: - Helpers
 
-    /// Infers a broad workout type from distance and pace.
-    /// Apple Health has no concept of Easy/Tempo/LongRun, so we approximate.
-    private func inferWorkoutType(distanceMeters: Double, durationSeconds: Double) -> WorkoutType {
-        let distanceKm = distanceMeters / 1_000
-        let paceSecPerKm = distanceMeters > 0 ? durationSeconds / distanceMeters * 1_000 : 400
-        if distanceKm >= 16 { return .longRun }
-        if paceSecPerKm < 320 { return .tempo }
-        return .easy
+    /// Infers a broad workout type from a run's distance and average pace.
+    ///
+    /// Apple Health has no concept of Easy/Tempo/LongRun, so this approximates — but
+    /// relative to the runner's own training paces rather than one absolute threshold
+    /// (N10). The old rule (`< 5:20/km ⇒ tempo`) was runner-independent and fed
+    /// decisions that matter: `ProgressStatsService.estimatedVDOT` only samples
+    /// quality sessions, and `RunSummaryView.tempoInsights` only renders for `.tempo`.
+    /// A sub-20 5K runner had every easy run labelled "Tempo", inflating the VO₂-max
+    /// trend with easy efforts, while a 6:00/km beginner never produced a quality
+    /// session at all, so their estimated VO₂-max chart stayed empty no matter how
+    /// much they ran.
+    ///
+    /// Marathon pace is the boundary between a quality effort and an easy run: it sits
+    /// well clear of the top of the easy band, and a recorded tempo session includes
+    /// its warm-up and cool-down, so its average lands slower than the prescribed
+    /// threshold pace. With no pace estimate for the runner there is nothing to
+    /// classify against, so a run is `.easy` unless its distance makes it a long run.
+    /// Intervals are not inferred: distinguishing them needs the workout's structure
+    /// (HealthKit events / lap markers), not an average.
+    static func inferWorkoutType(
+        distanceMeters: Double,
+        durationSeconds: Double,
+        paces: TrainingPaces?
+    ) -> WorkoutType {
+        if distanceMeters / 1_000 >= 16 { return .longRun }
+        guard let paces, distanceMeters > 0, durationSeconds > 0 else { return .easy }
+        let paceSecPerKm = durationSeconds / distanceMeters * 1_000
+        return paceSecPerKm <= paces.marathon ? .tempo : .easy
     }
 
     private func logRecentWorkoutDiagnostics(from startDate: Date, to endDate: Date) async {
