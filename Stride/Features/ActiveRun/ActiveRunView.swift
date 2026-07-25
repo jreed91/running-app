@@ -143,9 +143,16 @@ struct ActiveRunView: View {
                 heartPulse = true
             }
         }
+        // "Finish" used to be the only outcome, so a mis-tapped start that ran for
+        // twelve seconds was saved, exported to HealthKit, and marked its scheduled
+        // day complete. Strength sessions have had a discard option since H5; runs
+        // get one here (N17).
         .confirmationDialog("Finish workout?", isPresented: $showFinishConfirmation, titleVisibility: .visible) {
-            Button("Finish", role: .destructive) { finishAndSave() }
+            Button("Finish & Save") { finishAndSave() }
+            Button("Discard Run", role: .destructive) { discardRunWithoutSaving() }
             Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Discarding throws this run away — it won't be saved to Stride or Health.")
         }
         // A failed save used to lose the run silently: the tracker has already moved
         // to `.finished` by this point, so there is nothing left to recover from (N15).
@@ -174,6 +181,9 @@ struct ActiveRunView: View {
 
             Spacer()
 
+            // The idle state used to show a "Lock" pill here. It was decorative — it
+            // read as a control to assistive tech and to anyone who tapped it, and
+            // locked nothing (N18). Removed rather than faked.
             if tracker.trackingState == .active || tracker.trackingState == .paused {
                 glassPill {
                     Circle()
@@ -190,13 +200,8 @@ struct ActiveRunView: View {
                         .font(.system(size: 13, weight: .bold, design: .monospaced))
                         .kerning(1)
                 }
-            } else {
-                glassPill {
-                    StrideIcon(name: .lock, size: 14, color: .white, strokeWeight: 2.2)
-                    Text("Lock")
-                        .font(.system(size: 12, weight: .bold))
-                        .kerning(0.5)
-                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(tracker.trackingState == .paused ? "Run paused" : "Recording run")
             }
         }
         .padding(.horizontal, 22)
@@ -221,6 +226,10 @@ struct ActiveRunView: View {
             .opacity(isIdle ? 1.0 : 0.55)
         }
         .buttonStyle(.plain)
+        .disabled(!isIdle)
+        .accessibilityLabel("Workout location")
+        .accessibilityValue(selectedLocation.displayName)
+        .accessibilityHint("Switches between outdoor GPS and indoor tracking. Only before the run starts.")
         .adaptiveAnimation(AppAnimation.gentle, value: selectedLocation.rawValue)
     }
 
@@ -263,6 +272,9 @@ struct ActiveRunView: View {
                 .foregroundStyle(.white.opacity(0.85))
         }
         .padding(.top, 18)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Current pace")
+        .accessibilityValue(tracker.currentPaceSecondsPerKm.paceString(unit: appSettings.unitPreference))
     }
 
     private var paceUnitLabel: String {
@@ -325,6 +337,9 @@ struct ActiveRunView: View {
             }
             .frame(height: 20)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Pace against your target range")
+        .accessibilityValue("\(currentZone.rawValue) zone")
     }
 
     // MARK: - Metrics grid
@@ -344,14 +359,24 @@ struct ActiveRunView: View {
             } else {
                 metricCell(value: "--", label: "Heart Rate")
             }
-            metricCell(value: "--", unit: "spm", label: "Cadence")
-            metricCell(value: "--", unit: "m", label: "Elev Gain")
+            // Cadence and elevation were hardcoded `--` while the app already had
+            // both numbers: elevation was accumulated but unpublished, and the
+            // pedometer reports cadence on every run (N20).
+            metricCell(value: cadenceValue, unit: "spm", label: "Cadence")
+            metricCell(value: elevationValue, unit: elevationUnitLabel, label: "Elev Gain")
             if let guided {
                 // Repurpose the previously dead hardcoded "Lap" cell to show
                 // progress through the guided workout's steps (A4).
                 metricCell(value: "\(guided.stepNumber)/\(guided.stepCount)", label: "Step")
             } else {
-                metricCell(value: "--", label: "Lap")
+                // The "Lap" cell was dead too — there is no lap marker in the app, and
+                // the flag button that would have set one did nothing (N18/N20). Show
+                // average pace instead, which complements the live hero pace.
+                metricCell(
+                    value: averagePaceSecondsPerKm.paceValueString(unit: appSettings.unitPreference),
+                    unit: appSettings.unitPreference == .metric ? "/km" : "/mi",
+                    label: "Avg Pace"
+                )
             }
         }
         .padding(20)
@@ -368,6 +393,29 @@ struct ActiveRunView: View {
         .opacity(metricsAppeared ? 1 : 0)
         .scaleEffect(metricsAppeared ? 1 : 0.92)
         .adaptiveAnimation(AppAnimation.entrance.delay(0.1), value: metricsAppeared)
+    }
+
+    /// Live cadence for the metric grid, `--` until the pedometer reports a sample.
+    private var cadenceValue: String {
+        guard let cadence = tracker.currentCadenceStepsPerMinute, cadence > 0 else { return "--" }
+        return "\(Int(cadence.rounded()))"
+    }
+
+    /// Elevation gained so far, in the runner's own unit.
+    private var elevationValue: String {
+        let gain = tracker.elevationGainMeters.elevationValue(unit: appSettings.unitPreference)
+        return String(format: "%.0f", gain)
+    }
+
+    private var elevationUnitLabel: String {
+        appSettings.unitPreference == .metric ? "m" : "ft"
+    }
+
+    /// Session-average pace in seconds per km, or 0 before any distance is recorded
+    /// (`paceValueString` renders that as `--:--`).
+    private var averagePaceSecondsPerKm: Double {
+        guard tracker.distanceMeters > 0, tracker.elapsedSeconds > 0 else { return 0 }
+        return tracker.elapsedSeconds / tracker.distanceMeters * 1_000
     }
 
     private func heartRateCell(bpm: Int) -> some View {
@@ -391,6 +439,10 @@ struct ActiveRunView: View {
                 .kerning(1.2)
                 .foregroundStyle(.white.opacity(0.55))
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Heart rate")
+        .accessibilityValue("\(bpm) beats per minute")
+        .accessibilityIdentifier(Self.metricIdentifier("Heart Rate"))
     }
 
     private func metricCell(value: String, unit: String? = nil, label: String) -> some View {
@@ -411,16 +463,44 @@ struct ActiveRunView: View {
                 .kerning(1.2)
                 .foregroundStyle(.white.opacity(0.55))
         }
+        // Without this a six-cell grid reads to VoiceOver as twelve loose fragments
+        // ("5.2", "DISTANCE", "27:14", "TIME", …) with no pairing (N18).
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+        .accessibilityValue(spokenMetric(value: value, unit: unit))
+        .accessibilityIdentifier(Self.metricIdentifier(label))
+    }
+
+    /// Stable identifier for a metric cell, e.g. `activeRun.metric.Distance`. Merging
+    /// each cell into one accessibility element hides the inner `Text`s, so
+    /// `StrideUITests` matches on these identifiers rather than on the uppercased label.
+    private static func metricIdentifier(_ label: String) -> String {
+        "activeRun.metric." + label.replacingOccurrences(of: " ", with: "")
+    }
+
+    /// Spoken form of a metric cell's value: a placeholder reads as "no data yet"
+    /// rather than a run of dashes, and abbreviated units are spelled out.
+    private func spokenMetric(value: String, unit: String?) -> String {
+        guard value != "--", value != "--:--" else { return "No data yet" }
+        guard let unit else { return value }
+        let spoken: String
+        switch unit {
+        case "spm": spoken = "steps per minute"
+        case "m":   spoken = "metres"
+        case "ft":  spoken = "feet"
+        case "/km": spoken = "per kilometre"
+        case "/mi": spoken = "per mile"
+        default:    spoken = unit
+        }
+        return "\(value) \(spoken)"
     }
 
     // MARK: - Controls
 
     private var controls: some View {
+        // The flag/lap button that used to sit on the left is gone: it had no action,
+        // and the "Lap" cell it would have driven was hardcoded to `--` (N18/N20).
         HStack(spacing: 22) {
-            glassControlButton(size: 64) {
-                StrideIcon(name: .flag, size: 22, color: .white, strokeWeight: 2.2)
-            }
-
             // Primary pause/play
             Group {
                 if tracker.trackingState == .active {
@@ -429,6 +509,7 @@ struct ActiveRunView: View {
                     } label: {
                         StrideIcon(name: .pause, size: 28, color: zoneColor, strokeWeight: 2.2)
                     }
+                    .accessibilityLabel("Pause run")
                     .transition(.scale(scale: 0.7).combined(with: .opacity))
                 } else if tracker.trackingState == .paused {
                     filledControlButton(size: 84, tintColor: zoneColor) {
@@ -436,6 +517,7 @@ struct ActiveRunView: View {
                     } label: {
                         StrideIcon(name: .play, size: 28, color: zoneColor, strokeWeight: 2.2)
                     }
+                    .accessibilityLabel("Resume run")
                     .transition(.scale(scale: 0.7).combined(with: .opacity))
                 } else {
                     filledControlButton(size: 84, tintColor: zoneColor) {
@@ -444,15 +526,27 @@ struct ActiveRunView: View {
                     } label: {
                         StrideIcon(name: .play, size: 28, color: zoneColor, strokeWeight: 2.2)
                     }
+                    .accessibilityLabel("Start run")
+                    .accessibilityIdentifier("activeRun.start")
                     .transition(.scale(scale: 0.7).combined(with: .opacity))
                 }
             }
             .adaptiveAnimation(AppAnimation.bouncy, value: tracker.trackingState == .active)
 
-            glassControlButton(size: 64) {
-                StrideIcon(name: .stop, size: 22, color: .white, strokeWeight: 2.2)
+            // A `.onTapGesture` on a decorative `ZStack` meant VoiceOver users could
+            // not end a run at all — the app's most important control was invisible
+            // to assistive tech. It is a `Button` now (N18).
+            Button {
+                showFinishConfirmation = true
+            } label: {
+                glassControlButton(size: 64) {
+                    StrideIcon(name: .stop, size: 22, color: .white, strokeWeight: 2.2)
+                }
             }
-            .onTapGesture { showFinishConfirmation = true }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Finish run")
+            .accessibilityHint("Choose to save or discard this run")
+            .accessibilityIdentifier("activeRun.finish")
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 40)
@@ -517,6 +611,18 @@ struct ActiveRunView: View {
         persistFinishedRun(workout)
     }
 
+    /// Ends tracking and throws the run away without persisting it (N17).
+    ///
+    /// Nothing has been inserted into the context at this point — the insert and the
+    /// scheduled-day link both happen in `persistFinishedRun` — so stopping the
+    /// tracker and dismissing is the whole job.
+    private func discardRunWithoutSaving() {
+        _ = tracker.finishWorkout()
+        pendingSave = nil
+        AppLogger.log("Run discarded from the finish dialog; nothing saved", label: "ActiveRun")
+        dismiss()
+    }
+
     private func retrySave() {
         saveErrorMessage = nil
         guard let workout = pendingSave else { dismiss(); return }
@@ -544,12 +650,25 @@ struct ActiveRunView: View {
         context.insert(workout)
         // Link the run back to its scheduled day so the plan marks it complete
         // and the calendar/recovery card don't nag about a workout that was done (H4).
+        //
+        // A run that doesn't clear the shared effort floor is still saved — the runner
+        // can see and delete it — but it must not complete a planned session, the same
+        // way the importer refuses to import a tiny HealthKit shell (N17).
         if let scheduled = scheduledWorkout {
-            workout.scheduledWorkout = scheduled
-            workout.linkedScheduledWorkoutID = scheduled.id
-            scheduled.completedWorkout = workout
-            scheduled.linkedRunWorkoutID = workout.id
-            scheduled.isCompleted = true
+            if RunEffortPolicy.canCompleteScheduledWorkout(workout) {
+                workout.scheduledWorkout = scheduled
+                workout.linkedScheduledWorkoutID = scheduled.id
+                scheduled.completedWorkout = workout
+                scheduled.linkedRunWorkoutID = workout.id
+                scheduled.isCompleted = true
+            } else {
+                AppLogger.log(
+                    "Run \(workout.id) is below the effort floor "
+                        + "(\(Int(workout.distanceMeters)) m / \(Int(workout.durationSeconds)) s); "
+                        + "saved without completing the scheduled workout",
+                    label: "ActiveRun"
+                )
+            }
         }
 
         // The run only exists in memory until this succeeds. Surface a failure and

@@ -17,9 +17,10 @@ Two kinds of finding are recorded:
 > style as the July document. Line numbers in fixed items refer to this
 > document's commit and may drift.
 >
-> **Status:** Priority 1 (data loss: N1, N2, N6, N15) and Priority 2
-> (N3, N4, N5, N7, N8, N9, N10, plus the plan-scoping half of N13) are fixed —
-> see §8. Priority 3 (UX debt) is the next block; everything else below is open.
+> **Status:** Priority 1 (data loss: N1, N2, N6, N15), Priority 2
+> (N3, N4, N5, N7, N8, N9, N10, plus the plan-scoping half of N13), and Priority 3
+> (UX debt: N12, N17, N19, N20, N24, plus the blocking half of N18) are fixed —
+> see §8. Priority 4 (hygiene) is the next block; everything else below is open.
 
 > **Scope:** correctness, UX, and hygiene. Product/feature gaps live in
 > [`FEATURE_IMPROVEMENTS_2026-07.md`](./FEATURE_IMPROVEMENTS_2026-07.md);
@@ -224,8 +225,8 @@ asserts the notice survives to a view presented when `profiles.isEmpty`.
   (`shiftMovesStrengthWorkouts`).
 
 *Still open:* a large shift can still place a session on or after a fixed race
-date, and N12 (a day holding two sessions shows only one on the dashboard) now
-matters more, since same-day pairs are no longer silently pruned away.
+date. (N12 — the dashboard showing only one of a day's two sessions — is fixed, so
+same-day pairs are now both visible as well as both retained.)
 
 `Stride/Features/Training/PlanTabView.swift:322-366`
 
@@ -396,7 +397,16 @@ Every SwiftData type is deleted, but nothing outside it:
 WorkoutKit plans for every plan being deleted, clears the pending-review keys,
 and *then* deletes the models.
 
-### N12. A day can hold two scheduled workouts but every surface shows one
+### ✅ N12. A day can hold two scheduled workouts but every surface shows one
+
+**FIXED:** day resolution moved out of the view into the pure `ScheduledDayResolver`,
+which returns **every** session scheduled on a date in a stable order (runs first,
+then strength, cross-training, rest; ties broken by time then ID, because
+relationship order is undefined). The week strip's `DayCell` now draws one indicator
+per session — the long-run pill narrows to a dot on a shared day — and the
+selected-day card renders a stack, so each session has its own card and its own start
+button. Covered by `ScheduledDayResolverTests`.
+
 `Stride/Features/Dashboard/DashboardView.swift:106-114, 575-595`
 
 ```swift
@@ -490,7 +500,16 @@ disabling; only the *scheduling* step needs a plan.
 
 ## 3. UX issues
 
-### N17. There is no way to discard an accidental run
+### ✅ N17. There is no way to discard an accidental run
+
+**FIXED,** both halves. The finish dialog now offers **Finish & Save** /
+**Discard Run** / **Cancel**, and discarding just stops the tracker — nothing is
+inserted into the context or linked until `persistFinishedRun`, so there is nothing
+to unwind. The floor is shared rather than duplicated: `RunEffortPolicy` owns the
+"real run" rule (>100 m **and** ≥30 s), `HealthKitRepository.isImportableWorkout`
+delegates to it, and a finished run below it is still saved but no longer completes
+the scheduled day it was started from. Covered by `RunEffortPolicyTests`.
+
 `Stride/Features/ActiveRun/ActiveRunView.swift:132-135, 481-516`
 
 The finish dialog offers only **Finish** and **Cancel**; "Finish" always saves.
@@ -503,7 +522,27 @@ protection in H5 (discard option + `hasLoggedWork` guard); runs never did.
 day for a run under a minimum distance/duration (the importer already has
 `isImportableWorkout` — reuse the same floor).
 
-### N18. Accessibility is still largely absent, and one gap blocks a core action
+### ⚠️ N18. Accessibility is still largely absent, and one gap blocks a core action
+
+**PARTIALLY FIXED** — the blocking gap and both dead controls are closed:
+
+- The finish control is a real `Button` with a label and hint, and carries
+  `activeRun.finish` for the UI test. Ending a run no longer requires sight.
+- The flag/lap button and the "Lock" pill are **deleted** rather than faked; the
+  metric cell the flag would have driven now shows average pace (see N20).
+- Each metric cell is one accessibility element with a label, a spoken value
+  ("no data yet" instead of a run of dashes, units spelled out), and a stable
+  `activeRun.metric.*` identifier. The hero pace, pace meter, REC pill, and the
+  indoor/outdoor toggle are labelled too, and the toggle is `.disabled` when it is
+  inert instead of silently swallowing taps.
+- Calendar day cells are `Button`s that read as "Tuesday March 14, Tempo, completed"
+  and carry the `.isSelected` trait; the week chevrons are labelled
+  "Previous week"/"Next week".
+
+*Still open:* charts and metric cells outside the run HUD, icon-only toolbar buttons
+in the other feature modules, and localization (all user-facing strings are still
+literals — D8).
+
 `Stride/Features/ActiveRun/ActiveRunView.swift:390-425`;
 `Stride/Features/Dashboard/DashboardView.swift:57-88`
 
@@ -522,7 +561,19 @@ day for a run under a minimum distance/duration (the importer already has
 the two dead controls (or implement lap), and add `accessibilityLabel`/`Value` to
 the metric grid and charts.
 
-### N19. Dynamic Type is still disabled app-wide by font shadowing
+### ✅ N19. Dynamic Type is still disabled app-wide by font shadowing
+
+**FIXED:** the shadowing `static let caption` is gone, so all ~115 `.font(.caption)`
+call sites resolve to SwiftUI's own token — 12pt regular at the default content size,
+i.e. no visual change, but scaling from there. Every `ds*` and legacy UI alias is now
+built from the text style whose default size matches the design token
+(`Font.system(.subheadline, weight: .semibold)` for `bodyStrong`, `.caption2` for
+`sectionHeader`, and so on), so the whole UI scale tracks the user's setting. The
+`metric*` tokens stay deliberately fixed — a 120pt HUD hero and the fixed-height
+metric grid have nowhere to grow — and that choice is now documented in the file. A
+SwiftLint `custom_rules` entry (`no_builtin_font_shadowing`, error severity) fails the
+build if any built-in `Font` static is re-declared again.
+
 `Stride/Shared/Theme/AppFonts.swift:52-57`
 
 ```swift
@@ -539,7 +590,17 @@ exists to avoid this, and then does it anyway for the legacy aliases.
 `Font.system(.caption)`), migrate call sites mechanically, and add a
 SwiftLint `custom_rules` entry banning re-declaration of built-in font names.
 
-### N20. Live metrics show "--" for data the app already has
+### ✅ N20. Live metrics show "--" for data the app already has
+
+**FIXED:** `elevationGainMeters` is `@Published` (it was already being accumulated) and
+the cell shows it in the runner's own unit. Cadence comes from `CMPedometer`, which now
+runs on **both** paths — indoors it is still the distance source, outdoors it is read
+for cadence only, so distance stays with GPS. It starts and stops with the run's active
+segments alongside the existing pause/resume banking, and needs no new permission
+(`NSMotionUsageDescription` already says "to measure cadence during runs"). The dead
+Lap cell is replaced by average pace, which complements the live hero pace; the flag
+button that would have driven a lap is deleted (N18).
+
 `Stride/Features/ActiveRun/ActiveRunView.swift:302-326`
 
 The in-run grid hardcodes `--` for **Elev Gain** and **Cadence**, and (without a
@@ -599,7 +660,16 @@ according to a plan that says nothing about that day.
 **Fix:** distinguish "explicit rest day in the plan", "outside the plan", and "no
 plan", and show a neutral/CTA card for the latter two.
 
-### N24. A missed workout can only be started on the day it was scheduled
+### ✅ N24. A missed workout can only be started on the day it was scheduled
+
+**FIXED:** `ScheduledDayResolver.canStart(workoutScheduledOn:)` allows today **and one
+day late** — the same tolerance `WorkoutSyncService` applies when it links an imported
+run — judged by calendar day rather than elapsed hours, so a 23:30 session is still
+startable at 00:30. Future days stay unstartable so the plan isn't run out of order,
+and the button names the day it belongs to ("Start Yesterday's Workout"). Anything
+further behind than that is the recovery card's job. Covered by
+`ScheduledDayResolverTests`.
+
 `Stride/Features/Dashboard/DashboardView.swift:459`
 
 ```swift
@@ -728,6 +798,8 @@ The gaps line up exactly with where this pass found bugs:
 | ~~Plan-lifecycle destructive paths~~ | N1/N2 — closed: `MissedWorkoutsRecoveryTests` and `PlanHistoryTests` now assert nothing is deleted |
 | ~~Same-day duplicate pruning~~ | N6 — closed by `PlanDuplicateResolverTests` |
 | View-level presentation of `StoreRecoveryNotice` | N5 — the alert moved to the root, but this is still view code with no test; `AppContainerTests` only asserts the notice is *raised* |
+| ~~Dashboard day resolution and the start-button window~~ | N12/N24 — closed: both rules live in `ScheduledDayResolver` and are tested (`ScheduledDayResolverTests`). The rendering of a two-session stack is still untested view code |
+| ~~The minimum-effort floor for app-recorded runs~~ | N17 — closed: `RunEffortPolicyTests` pins the floor and asserts the importer and the run-finish path agree on it |
 
 Two structural notes: `AppContainer.rebuildPlan`/`shiftMissedWorkoutsForward` do
 real date math and deletion policy on the DI container (D2), which is why N1 and
@@ -749,7 +821,7 @@ Confirmed still present at `75c0e27`. Details in the original document.
 | **D5** pervasive `try? context.save()` | Open — 34 sites; see N15 for the one that loses user data. |
 | **D6** unfiltered `@Query`/full-table fetches | Open. `RunSummaryView.swift:19-20`, `DashboardView.swift:228`, `HistoryView.swift:28-32`, `AICoachChatView.swift:11` all still fetch whole tables; `MissedWorkoutDetector()` is still constructed inside a body-evaluated property (`DashboardView.swift:256-267`). |
 | **D7** dead code & drift | Open — see N27/N28. |
-| **D8** accessibility & localization | Open — see N18/N19. All user-facing strings remain unlocalized literals. |
+| **D8** accessibility & localization | Partly closed. Dynamic Type works again (N19) and the run HUD + week strip are labelled and button-based (N18); charts, the other feature modules' icon-only buttons, and localization are still open. |
 | **S4** remainder | Open (config). `NSLocalNetworkUsageDescription`/`NSBonjourServices` still ship in the shared `project.yml`. |
 | **`.externalStorage` blobs** | Open (deliberately deferred; needs a device-tested migration). |
 | **CI toolchain pinning / lint thresholds** | Open — see N31. |
@@ -769,8 +841,10 @@ next pass doesn't churn them:
 - **The pure-service layer keeps growing**: `SplitBucketing`, `WallClockStopwatch`,
   `RestCountdown`, `GuidedWorkoutState`, `HeartRateZoneService`,
   `ShareCardModel`, `StreakGoalService`, `ProgressStatsService`,
-  `WorkoutPaceAlert` are all UI-free, `Sendable`, and directly tested. This is
-  the pattern the remaining view-embedded math should follow.
+  `WorkoutPaceAlert`, `LocationQualityFilter`, `PlanDuplicateResolver`,
+  `ScheduledDayResolver`, `RunEffortPolicy` are all UI-free, `Sendable`, and
+  directly tested. This is the pattern the remaining view-embedded math should
+  follow.
 - **`GuidedWorkoutState`** in particular is a model implementation: the whole
   state machine is pure, the view only renders and forwards.
 - **Deletion has one owner** for runs and strength (`WorkoutRepository.delete`),
@@ -796,12 +870,17 @@ next pass doesn't churn them:
 - ✅ N9/N10 import splits and classify types relative to the runner. (Backfilling
   splits onto already-imported runs is the one piece left; see N9.)
 
-**3 — UX debt with outsized impact — next:**
-- N17 discard-run, N18 accessibility (the finish control first — it blocks a core
-  action), N19 Dynamic Type, N20 elevation/cadence, N24 start a missed workout,
-  N12 (a day can now legitimately hold two sessions — the dashboard must show both).
+**3 — UX debt with outsized impact — ✅ DONE:**
+- ✅ N17 discard-run, with the importer's effort floor now shared by the run-finish path.
+- ⚠️ N18 accessibility: the finish control (the blocking one), both dead controls, the
+  metric grid, and the week strip. Charts, the other modules' icon-only buttons, and
+  localization are still open.
+- ✅ N19 Dynamic Type, with a SwiftLint rule to keep it that way.
+- ✅ N20 elevation and cadence, and the dead Lap cell replaced by average pace.
+- ✅ N24 start a missed workout (today and one day late).
+- ✅ N12 a day's sessions all render, via the pure `ScheduledDayResolver`.
 
-**4 — Hygiene:**
+**4 — Hygiene — next:**
 - N11 full reset, N13 dialog wording, N14 strength → HealthKit, N16 reminder
   toggle, N21 lazy share card, N22/N23/N25 honest UI states.
 - N26 (code half), N27 (remainder)–N30 cleanup, N31 CI pins and lint thresholds.

@@ -74,6 +74,15 @@ extension Double {
         }
     }
 
+    /// Formats seconds-per-km as a bare "M:SS" in the given unit, with no unit label.
+    /// For compact metric cells that carry their own label.
+    func paceValueString(unit: UnitPreference) -> String {
+        guard self > 0, isFinite else { return "--:--" }
+        let perUnit = unit == .metric ? self : self * 1.60934
+        let total = Int(perUnit)
+        return String(format: "%d:%02d", total / 60, total % 60)
+    }
+
     /// Formats a weekly distance in km into the given unit for display.
     func weeklyDistanceString(unit: UnitPreference) -> String {
         switch unit {

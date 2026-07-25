@@ -50,41 +50,50 @@ struct WeekCalendarView: View {
 
     private var dayStrip: some View {
         HStack(spacing: 0) {
-            navChevron(systemImage: "chevron.left") {
+            navChevron(icon: .chevronLeft, label: "Previous week") {
                 weekStart = weekStart.adding(weeks: -1)
             }
 
+            // Day cells were `.onTapGesture` on a `Rectangle` content shape, so they
+            // were not buttons to assistive tech and exposed no label — `StrideIcon`
+            // is a raw `Canvas` and the date/indicator read as loose fragments (N18).
             ForEach(0..<7, id: \.self) { offset in
                 let date = weekStart.adding(days: offset)
-                DayCell(
-                    date: date,
-                    workout: workout(on: date),
-                    isSelected: cal.isDate(date, inSameDayAs: selectedDate)
-                )
-                .frame(maxWidth: .infinity)
-                .contentShape(Rectangle())
-                .onTapGesture {
+                Button {
                     withAnimation(AppAnimation.bouncy) {
                         selectedDate = date
                     }
+                } label: {
+                    DayCell(
+                        date: date,
+                        workouts: workouts(on: date),
+                        isSelected: cal.isDate(date, inSameDayAs: selectedDate)
+                    )
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
             }
 
-            navChevron(systemImage: "chevron.right") {
+            navChevron(icon: .chevronRight, label: "Next week") {
                 weekStart = weekStart.adding(weeks: 1)
             }
         }
         .padding(.bottom, 8)
     }
 
-    private func navChevron(systemImage: String, action: @escaping () -> Void) -> some View {
+    private func navChevron(
+        icon: StrideIconName,
+        label: String,
+        action: @escaping () -> Void
+    ) -> some View {
         Button {
             withAnimation(AppAnimation.bouncy) { action() }
         } label: {
-            let iconName: StrideIconName = systemImage == "chevron.left" ? .chevronLeft : .chevronRight
-            StrideIcon(name: iconName, size: 13, color: .secondary, strokeWeight: 2)
+            StrideIcon(name: icon, size: 13, color: .secondary, strokeWeight: 2)
                 .frame(width: 28, height: 44)
         }
+        .accessibilityLabel(label)
     }
 
     private var monthRangeLabel: String {
@@ -103,14 +112,11 @@ struct WeekCalendarView: View {
         return "Week \(week.weekNumber) of \(plan.totalWeeks)"
     }
 
-    private func workout(on date: Date) -> ScheduledWorkout? {
-        guard let plan = activePlan else { return nil }
-        for week in plan.weeks ?? [] {
-            for w in week.workouts ?? [] where cal.isDate(w.scheduledDate, inSameDayAs: date) {
-                return w
-            }
-        }
-        return nil
+    /// Every session the plan schedules on `date`. A day can hold a run *and* a gym
+    /// session, so the strip resolves all of them rather than the arbitrary first
+    /// match an unordered relationship happened to yield (N12).
+    private func workouts(on date: Date) -> [ScheduledWorkout] {
+        ScheduledDayResolver.workouts(on: date, in: activePlan, calendar: cal)
     }
 }
 
@@ -118,11 +124,17 @@ struct WeekCalendarView: View {
 
 private struct DayCell: View {
     let date: Date
-    let workout: ScheduledWorkout?
+    /// Every session scheduled on this day, runs first (N12).
+    let workouts: [ScheduledWorkout]
     let isSelected: Bool
 
     private let cal = Calendar.current
     private var isToday: Bool { cal.isDateInToday(date) }
+
+    /// The day's real sessions — an explicit rest day gets no indicator.
+    private var sessions: [ScheduledWorkout] {
+        workouts.filter { $0.workoutType != .rest }
+    }
 
     var body: some View {
         VStack(spacing: 4) {
@@ -145,23 +157,52 @@ private struct DayCell: View {
                 .frame(height: 10)
         }
         .padding(.vertical, 4)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityDescription)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
+
+    /// One indicator per session, so a paired run + gym day is visible instead of
+    /// showing whichever of the two the relationship happened to return first (N12).
+    @ViewBuilder
+    private var indicatorArea: some View {
+        if sessions.isEmpty {
+            Color.clear
+        } else {
+            HStack(spacing: 3) {
+                ForEach(sessions.prefix(2)) { session in
+                    indicator(for: session)
+                }
+            }
+        }
     }
 
     @ViewBuilder
-    private var indicatorArea: some View {
-        if let w = workout, w.workoutType != .rest {
-            if w.isCompleted {
-                StrideIcon(name: .check, size: 8, color: dotColor(for: w.workoutType), strokeWeight: 2.5)
-            } else {
-                // Long run gets a wider pill indicator
-                let isLong = w.workoutType == .longRun
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(dotColor(for: w.workoutType))
-                    .frame(width: isLong ? 12 : 6, height: 6)
-            }
+    private func indicator(for workout: ScheduledWorkout) -> some View {
+        if workout.isCompleted {
+            StrideIcon(name: .check, size: 8, color: dotColor(for: workout.workoutType), strokeWeight: 2.5)
         } else {
-            Color.clear
+            // Long run gets a wider pill indicator — unless the day is shared, where
+            // two full-width pills wouldn't fit under a 32pt date circle.
+            let isLong = workout.workoutType == .longRun && sessions.count == 1
+            RoundedRectangle(cornerRadius: 3)
+                .fill(dotColor(for: workout.workoutType))
+                .frame(width: isLong ? 12 : 6, height: 6)
         }
+    }
+
+    /// Spoken description of the day: its date, then each session and whether it is
+    /// done. Without it VoiceOver read a bare day number and a decorative dot (N18).
+    private var accessibilityDescription: String {
+        let day = date.formatted(.dateTime.weekday(.wide).month(.wide).day())
+        guard !sessions.isEmpty else {
+            let isRestDay = workouts.contains { $0.workoutType == .rest }
+            return "\(day), \(isRestDay ? "rest day" : "nothing scheduled")"
+        }
+        let list = sessions
+            .map { "\($0.workoutType.displayName)\($0.isCompleted ? ", completed" : "")" }
+            .joined(separator: ", ")
+        return "\(day), \(list)"
     }
 
     private var circleBackground: Color {
@@ -446,43 +487,31 @@ struct DashboardView: View {
                 .adaptiveAnimation(AppAnimation.bouncy, value: selectedDate)
 
             Group {
-            if let workout = workoutForSelectedDate {
-                NavigationLink {
-                    WorkoutDetailView(workout: workout)
-                        .navigationTransition(.zoom(sourceID: workout.persistentModelID, in: workoutCardNamespace))
-                } label: {
-                    WorkoutCardView(workout: workout)
-                        .matchedTransitionSource(id: workout.persistentModelID, in: workoutCardNamespace)
-                }
-                .buttonStyle(.plain)
-
-                if Calendar.current.isDateInToday(selectedDate) && !workout.isCompleted {
-                    Button {
-                        if workout.workoutType == .strength {
-                            strengthWorkout = workout
-                        } else {
-                            activeRunScheduled = workout
-                            showActiveRun = true
-                        }
-                    } label: {
-                        HStack(spacing: 10) {
-                            StrideIcon(name: .play, size: 18, color: .white, strokeWeight: 2.2)
-                            Text(workout.workoutType == .strength ? "Start Strength Workout" : "Start This Workout")
-                                .font(.system(size: 17, weight: .bold))
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                    }
-                    .foregroundStyle(.white)
-                    .background(
-                        RoundedRectangle(cornerRadius: 18)
-                            .fill(Color.brand)
-                            .shadow(color: Color.brand.opacity(0.4), radius: 14, y: 6)
-                    )
-                    .buttonStyle(.plain)
-                }
-            } else {
+            // A day can hold more than one session — a plan pairs a run with a gym
+            // day, and "pick up where I left off" shifts a run onto one. Render every
+            // session instead of an arbitrary first match, which left the other one
+            // unreachable from the dashboard entirely (N12).
+            if sessionsForSelectedDate.isEmpty {
                 restDayCard
+            } else {
+                ForEach(sessionsForSelectedDate) { workout in
+                    VStack(alignment: .leading, spacing: 10) {
+                        NavigationLink {
+                            WorkoutDetailView(workout: workout)
+                                .navigationTransition(
+                                    .zoom(sourceID: workout.persistentModelID, in: workoutCardNamespace)
+                                )
+                        } label: {
+                            WorkoutCardView(workout: workout)
+                                .matchedTransitionSource(id: workout.persistentModelID, in: workoutCardNamespace)
+                        }
+                        .buttonStyle(.plain)
+
+                        if canStartSelectedDay && !workout.isCompleted {
+                            startButton(for: workout)
+                        }
+                    }
+                }
             }
             }
             .id(selectedDate)
@@ -492,6 +521,48 @@ struct DashboardView: View {
             ))
             .adaptiveAnimation(AppAnimation.bouncy, value: selectedDate)
         }
+    }
+
+    /// Start control for one of the selected day's sessions.
+    ///
+    /// Also offered for a session missed by a day: the linker already accepts a
+    /// one-day-late completion, so refusing to *start* one made the UI stricter than
+    /// the data model and left "run it untracked and hope the importer links it" as
+    /// the only way to finish yesterday's tempo (N24). The title names the day so a
+    /// late start is never ambiguous.
+    private func startButton(for workout: ScheduledWorkout) -> some View {
+        Button {
+            if workout.workoutType == .strength {
+                strengthWorkout = workout
+            } else {
+                activeRunScheduled = workout
+                showActiveRun = true
+            }
+        } label: {
+            HStack(spacing: 10) {
+                StrideIcon(name: .play, size: 18, color: .white, strokeWeight: 2.2)
+                Text(startButtonTitle(for: workout))
+                    .font(.system(size: 17, weight: .bold))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+        }
+        .foregroundStyle(.white)
+        .background(
+            RoundedRectangle(cornerRadius: 18)
+                .fill(Color.brand)
+                .shadow(color: Color.brand.opacity(0.4), radius: 14, y: 6)
+        )
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("dashboard.startScheduledWorkout.\(workout.workoutType.sessionKind.rawValue)")
+    }
+
+    private func startButtonTitle(for workout: ScheduledWorkout) -> String {
+        let isStrength = workout.workoutType == .strength
+        if Calendar.current.isDateInToday(selectedDate) {
+            return isStrength ? "Start Strength Workout" : "Start This Workout"
+        }
+        return isStrength ? "Start Yesterday's Strength Workout" : "Start Yesterday's Workout"
     }
 
     private var restDayCard: some View {
@@ -572,26 +643,19 @@ struct DashboardView: View {
         return selectedDate.formatted(.dateTime.weekday(.wide).month().day())
     }
 
-    private var workoutForSelectedDate: ScheduledWorkout? {
-        guard let plan = activePlan else { return nil }
-        for week in plan.weeks ?? [] {
-            for w in week.workouts ?? []
-            where Calendar.current.isDate(w.scheduledDate, inSameDayAs: selectedDate) {
-                return w.workoutType == .rest ? nil : w
-            }
-        }
-        return nil
+    /// Sessions scheduled on the selected day, excluding an explicit rest day.
+    private var sessionsForSelectedDate: [ScheduledWorkout] {
+        ScheduledDayResolver.sessions(on: selectedDate, in: activePlan)
+    }
+
+    /// Whether the selected day's sessions can still be started (today, or one day
+    /// late — the same tolerance the sync linker applies).
+    private var canStartSelectedDay: Bool {
+        ScheduledDayResolver.canStart(workoutScheduledOn: selectedDate)
     }
 
     private func workoutOnDay(_ date: Date) -> ScheduledWorkout? {
-        guard let plan = activePlan else { return nil }
-        let cal = Calendar.current
-        for week in plan.weeks ?? [] {
-            for w in week.workouts ?? [] where cal.isDate(w.scheduledDate, inSameDayAs: date) {
-                return w
-            }
-        }
-        return nil
+        ScheduledDayResolver.workouts(on: date, in: activePlan).first
     }
 
     private var weekDistanceString: String {

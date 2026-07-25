@@ -613,12 +613,12 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
     // MARK: - Import workouts from HealthKit
 
     /// Whether a HealthKit running workout carries enough substance to import,
-    /// as opposed to a tiny "shell" left by an accidental start/stop. A genuine
-    /// run has both a real distance **and** a non-trivial duration; a 0 m,
-    /// 30-second entry (previously admitted by an `||` guard) is noise that
-    /// pollutes pace/VDOT stats.
+    /// as opposed to a tiny "shell" left by an accidental start/stop.
+    ///
+    /// Delegates to ``RunEffortPolicy`` so the importer and the in-app run finish
+    /// path share one floor rather than each carrying their own (N17).
     static func isImportableWorkout(distanceMeters: Double, durationSeconds: Double) -> Bool {
-        distanceMeters > 100 && durationSeconds >= 30
+        RunEffortPolicy.isRealRun(distanceMeters: distanceMeters, durationSeconds: durationSeconds)
     }
 
     /// Fetches running workouts from HealthKit in the given range, converts each to a
