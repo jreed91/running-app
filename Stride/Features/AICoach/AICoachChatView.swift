@@ -416,14 +416,9 @@ struct AICoachChatView: View {
     }
 
     private func markdownText(_ text: String) -> AttributedString {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let attributed = try? AttributedString(
-            markdown: trimmed,
-            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-        ) {
-            return attributed
-        }
-        return AttributedString(trimmed.replacingOccurrences(of: "**", with: ""))
+        // A sixth copy of the same fallback, and the weakest of them — it stripped only
+        // `**`, so a backtick or heading marker showed up raw in chat (N27).
+        CoachMarkdown.attributed(text)
     }
 
     private var providerMessages: [AIProviderChatMessage] {

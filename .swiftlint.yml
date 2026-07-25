@@ -42,7 +42,11 @@ line_length:
 
 type_body_length:
   warning: 300
-  error: 2000
+  # The only type above this is RunSummaryView (~1,900 lines), which carries an
+  # explicit file-level `swiftlint:disable type_body_length` alongside its
+  # file_length one; the next largest is TrainingPlanService at ~1,000. The old
+  # 2000 error was unreachable in practice (N31).
+  error: 1100
 
 file_length:
   warning: 400
@@ -52,11 +56,15 @@ file_length:
 
 function_body_length:
   warning: 60
-  error: 350
+  # StrideIcon.draw — a flat switch of drawing commands, one case per icon — was
+  # the only function over 350 and made the lint job fail; it now carries a
+  # scoped disable, and the next longest function is ~100 lines (N31).
+  error: 150
 
 cyclomatic_complexity:
   warning: 10
-  error: 80
+  # Worst measured is 33; 80 could never fire (N31).
+  error: 40
 
 identifier_name:
   min_length: 2

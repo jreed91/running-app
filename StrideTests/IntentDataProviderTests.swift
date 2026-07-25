@@ -82,4 +82,24 @@ struct IntentDataProviderTests {
         #expect(data?.workoutType == .easy)
         #expect(data?.distanceMeters == 5_000)
     }
+
+    /// N13 (dialog half): `todaysRun()` falls back to a gym or cross-training day when
+    /// nothing is scheduled to be run, so the spoken answer has to branch on the session
+    /// kind instead of calling everything a run.
+    @Test("Siri's answer only calls run types runs")
+    func dialogWordsEachSessionKind() {
+        func text(_ type: WorkoutType) -> String {
+            TodaysRunIntent.dialogText(
+                for: TodaysRunData(workoutType: type, distanceMeters: nil, notes: nil)
+            )
+        }
+
+        #expect(text(.tempo) == "You have a Tempo run today.")
+        #expect(text(.longRun) == "You have a Long Run today.")
+        #expect(text(.race) == "You have a Race today.")
+        #expect(text(.strength) == "You have a Strength session today.")
+        #expect(!text(.crossTraining).contains("run"))
+        #expect(text(.rest) == "Today is a rest day.")
+        #expect(TodaysRunIntent.dialogText(for: nil) == "No run scheduled for today.")
+    }
 }

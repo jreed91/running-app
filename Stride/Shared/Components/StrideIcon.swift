@@ -56,6 +56,12 @@ struct StrideIcon: View {
 
     // MARK: - Drawing
 
+    // One case per icon, each a short run of literal path commands on the 24 pt design
+    // grid. It reads as a table, and splitting it into per-icon helpers would spread
+    // that table across the file without making any single icon clearer. This is the
+    // one function in the app over the length limit, and it was failing the lint job
+    // at error level (N31).
+    // swiftlint:disable:next function_body_length
     private func draw(_ ctx: GraphicsContext) {
         // Scale from the 24pt design grid to the requested size
         var ctx = ctx

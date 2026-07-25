@@ -227,7 +227,10 @@ final class WorkoutSyncService {
                     try? await notificationService.notifyNewRunSynced(workout, unit: unit)
                 }
                 if let first = newWorkouts.first {
-                    UserDefaults.standard.set(first.id.uuidString, forKey: "pendingReviewWorkoutID")
+                    UserDefaults.standard.set(
+                        first.id.uuidString,
+                        forKey: NotificationService.pendingReviewWorkoutIDKey
+                    )
                 }
                 onWorkoutsSynced?(newWorkouts)
             }
@@ -458,10 +461,10 @@ final class WorkoutSyncService {
         if dirty { try? context.save() }
     }
 
+    /// Delegates to the one definition on `WeatherService` (N27) — this used to be a
+    /// second, quieter copy of `AppContainer.attachWeather`.
     private func attachWeather(to workout: RunWorkout, coordinate: Coordinate) async {
-        guard let summary = await weatherService.fetchWeather(at: coordinate, date: workout.date) else { return }
-        workout.weather = summary
-        try? context.save()
+        await weatherService.attach(to: workout, coordinate: coordinate, context: context)
     }
 }
 

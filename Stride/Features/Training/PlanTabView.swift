@@ -161,12 +161,14 @@ struct PlanTabView: View {
             smartAdaptStreamBuffer = ""
         }
 
-        let removedBefore = removeSameDayDuplicateWorkouts(in: plan)
+        // Smart Adapt no longer prunes the plan first (N29). The pruning existed to
+        // clean up phantom workouts that H1/H10 auto-inserted by relating an unmanaged
+        // model to a persisted week; those producers are gone, so all it could still do
+        // was delete real sessions during an ordinary AI operation. A day that genuinely
+        // holds two sessions now simply shows both (N12).
         let workoutsToAdapt = remainingAdaptableWorkouts(in: plan)
         smartAdaptProgress = SmartAdaptProgress(
-            currentMessage: removedBefore > 0
-                ? "Removed \(removedBefore) duplicate same-day workout\(removedBefore == 1 ? "" : "s")."
-                : "Preparing \(workoutsToAdapt.count) workout\(workoutsToAdapt.count == 1 ? "" : "s") for adaptation.",
+            currentMessage: "Preparing \(workoutsToAdapt.count) workout\(workoutsToAdapt.count == 1 ? "" : "s") for adaptation.",
             completedCount: 0,
             totalCount: workoutsToAdapt.count,
             updates: []
@@ -236,17 +238,6 @@ struct PlanTabView: View {
                 at: 0
             )
             smartAdaptProgress.updates = Array(smartAdaptProgress.updates.prefix(4))
-
-            let removedAfter = removeSameDayDuplicateWorkouts(in: plan)
-            if removedAfter > 0 {
-                smartAdaptProgress.updates.insert(
-                    SmartAdaptProgress.Update(
-                        title: "Schedule cleanup",
-                        message: "Removed \(removedAfter) same-day duplicate workout\(removedAfter == 1 ? "" : "s")."
-                    ),
-                    at: 0
-                )
-            }
             try? context.save()
         }
 
@@ -318,27 +309,6 @@ struct PlanTabView: View {
 
     private func workoutLabel(_ workout: ScheduledWorkout) -> String {
         "\(workout.workoutType.displayName) on \(workout.scheduledDate.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))"
-    }
-
-    /// Deletes same-day duplicates, one week at a time. The rule for what counts as a
-    /// duplicate lives in ``PlanDuplicateResolver`` so it can be tested directly.
-    @MainActor
-    @discardableResult
-    private func removeSameDayDuplicateWorkouts(in plan: TrainingPlan) -> Int {
-        var removed = 0
-
-        for week in plan.weeks ?? [] {
-            let redundant = PlanDuplicateResolver.redundantWorkouts(in: week.workouts ?? [])
-            guard !redundant.isEmpty else { continue }
-            let redundantIDs = Set(redundant.map(\.id))
-            week.workouts = (week.workouts ?? []).filter { !redundantIDs.contains($0.id) }
-            for workout in redundant {
-                context.delete(workout)
-                removed += 1
-            }
-        }
-
-        return removed
     }
 }
 

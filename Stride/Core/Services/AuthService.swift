@@ -19,8 +19,18 @@ final class AuthService {
         let stored = Self.loadFromKeychain()
         appleUserID = stored
         isSignedIn = stored != nil
+        // `await self?.listenForRevocation()` looks weak but isn't: the optional chain
+        // resolves once and the call then holds a strong `self` for the lifetime of an
+        // infinite `for await`, so the service could never deallocate (N30). Iterating
+        // here and re-checking `self` each time — the shape
+        // `AppSettings.observeExternalChanges` uses — actually keeps it weak.
         Task { @MainActor [weak self] in
-            await self?.listenForRevocation()
+            for await _ in NotificationCenter.default.notifications(
+                named: ASAuthorizationAppleIDProvider.credentialRevokedNotification
+            ) {
+                guard let self else { return }
+                self.signOutSilently()
+            }
         }
     }
 
@@ -57,14 +67,6 @@ final class AuthService {
         appleUserID = nil
         isSignedIn = false
         welcomeBackPending = false
-    }
-
-    private func listenForRevocation() async {
-        for await _ in NotificationCenter.default.notifications(
-            named: ASAuthorizationAppleIDProvider.credentialRevokedNotification
-        ) {
-            signOutSilently()
-        }
     }
 
     // MARK: - Keychain

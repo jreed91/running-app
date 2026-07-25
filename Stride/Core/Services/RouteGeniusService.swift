@@ -7,10 +7,12 @@ import CoreLocation
 ///
 /// ORS docs: https://openrouteservice.org/dev/#/api-docs/v2/directions/{profile}/json/post
 ///
-/// **API key setup**: add a `Secrets.plist` to the app bundle with the key
-/// `ORSAPIKey` containing your ORS token.  Copy `Secrets.plist.example` as a
-/// starting point.  The simulator build accepts an empty key so the UI renders,
-/// but actual route generation requires a valid token.
+/// **API key setup**: the runner pastes their ORS token into
+/// **Settings → Route Genius → ORS API Key**, which stores it in the Keychain via
+/// `KeychainStore` and reads it back through `AppSettings.orsAPIKey`. There is no
+/// bundled secrets file — the `Secrets.plist` path this comment used to document was
+/// never read by any code (N26). The simulator build accepts an empty key so the UI
+/// renders, but actual route generation requires a valid token.
 struct RouteGeniusService: Sendable {
 
     // MARK: Errors
@@ -31,7 +33,7 @@ struct RouteGeniusService: Sendable {
         var errorDescription: String? {
             switch self {
             case .missingAPIKey:
-                return "ORS API key not configured. See Secrets.plist.example."
+                return "ORS API key not configured. Add it in Settings → Route Genius."
             case .networkError(let error):
                 return "Network error: \(error.localizedDescription)"
             case .unauthorized:

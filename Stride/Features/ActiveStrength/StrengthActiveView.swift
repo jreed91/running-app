@@ -5,6 +5,7 @@ import SwiftData
 
 struct StrengthActiveView: View {
     @Environment(\.modelContext) private var context
+    @Environment(\.appContainer) private var container
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -550,6 +551,23 @@ struct StrengthActiveView: View {
             scheduled.linkedStrengthWorkoutID = strengthWorkout.id
         }
         try? context.save()
+        exportToHealthKit(strengthWorkout)
         dismiss()
+    }
+
+    /// Mirrors what a finished run does: the session is already safely in the store,
+    /// so the export enriches it rather than gating it (N14). Without this a strength
+    /// session logged in Stride earns no Activity-ring credit and never reaches Fitness,
+    /// and the Watch-vs-app merge has only the ±3 h heuristic to work with.
+    private func exportToHealthKit(_ workout: StrengthWorkout) {
+        Task { @MainActor in
+            do {
+                workout.healthKitWorkoutID = try await container.healthKitRepository.save(workout)
+                try? context.save()
+            } catch {
+                AppLogger.log("Failed to export strength workout to HealthKit: \(error)",
+                              label: "HealthKit", level: .error)
+            }
+        }
     }
 }
