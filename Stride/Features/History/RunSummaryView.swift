@@ -106,6 +106,42 @@ struct RunSummaryView: View {
         )
     }
 
+    /// Buckets splits onto a run that was imported before the importer built them (N9).
+    ///
+    /// Imports have carried real splits since that fix, but older imported runs have none,
+    /// so this screen hides the split charts and the splits table for them permanently.
+    /// This is the same lazy shape `loadHeartRateZones` uses: one query on open, cached
+    /// onto the run so it never runs twice. It deliberately runs *after* the HR load, so a
+    /// just-backfilled heart-rate series gives each split its own heart rate — exactly what
+    /// the importer does.
+    ///
+    /// Splits are bucketed in the runner's current unit, since a run imported before splits
+    /// existed has no recorded bucket unit of its own.
+    private func backfillSplits() async {
+        let unit = appSettings.unitPreference
+        guard SplitBackfill.needsSplits(workout, splitLengthMeters: unit.splitLengthMeters),
+              let hkID = workout.healthKitWorkoutID else { return }
+
+        let points = await container.healthKitRepository.fetchDistanceSeries(forWorkoutID: hkID)
+        let splits = SplitBucketing.splits(
+            from: points,
+            splitLengthMeters: unit.splitLengthMeters,
+            heartRateSamples: workout.heartRateSamples,
+            totalDurationSeconds: workout.durationSeconds
+        )
+        guard !splits.isEmpty else { return }
+
+        workout.splits = splits
+        workout.splitUnit = unit
+        do {
+            try context.save()
+        } catch {
+            // The splits are on the in-memory model either way, so the screen shows them
+            // for this visit; only the cache is lost.
+            AppLogger.log("Split backfill save failed: \(error)", label: "HealthKit", level: .error)
+        }
+    }
+
     /// Renders the shareable run card (B5) and presents the share sheet.
     ///
     /// A map snapshot (`MKMapSnapshotter`) plus a ×3 `ImageRenderer` pass (~1080×1350)
@@ -200,9 +236,11 @@ struct RunSummaryView: View {
             .frame(maxWidth: .infinity)
         }
         .task(id: workout.id) {
-            // Heart-rate zones are content on the screen, so they load first and alone;
-            // the share card renders on demand (N21).
+            // Heart-rate zones are content on the screen, so they load first; the share
+            // card renders on demand (N21). Splits follow the HR load so a backfilled
+            // heart-rate series can be bucketed into them (N9).
             await loadHeartRateZones()
+            await backfillSplits()
         }
         .background(Color.surfacePrimary.ignoresSafeArea())
         .navigationTitle(displayType.displayName)
@@ -568,6 +606,11 @@ struct RunSummaryView: View {
         .padding(.vertical, 14)
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
         .gridCellColumns(colSpan ? 2 : 1)
+        // One element per cell, or the grid reads as loose fragments with no pairing
+        // between a number and the metric it belongs to (N18).
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+        .accessibilityValue(SpokenMetric.spoken(value: value, unit: unit))
     }
 
     private func hrTone(_ value: Double) -> Color? {
@@ -1552,6 +1595,40 @@ struct RunSummaryView: View {
             }
         }
         .chartXSelection(value: $selectedSplitPaceKm)
+        .chartAccessibility("Split pace chart", splitPaceSummary)
+    }
+
+    // MARK: Split chart accessibility (N18)
+
+    /// Accessibility points for a split chart: each bucket labelled the way the axis
+    /// labels it ("km 3"), with the value the chart plots.
+    private func splitPoints(
+        _ splits: [Split],
+        value: (Split) -> Double
+    ) -> [ChartAccessibility.Point] {
+        splits.map { ChartAccessibility.Point(label: "\(splitLabel) \($0.kilometer)", value: value($0)) }
+    }
+
+    private var splitPaceSummary: String {
+        ChartAccessibility.summary(splitPoints(workout.splits) { $0.paceSecondsPerKm }) {
+            SpokenMetric.spoken(measurement: $0.paceString(unit: appSettings.unitPreference))
+        }
+    }
+
+    private func splitHeartRateSummary(_ splits: [Split]) -> String {
+        ChartAccessibility.summary(splitPoints(splits) { $0.heartRate ?? 0 }) {
+            "\(Int($0)) beats per minute"
+        }
+    }
+
+    private var splitElevationSummary: String {
+        ChartAccessibility.summary(
+            splitPoints(workout.splits) {
+                $0.elevationGainMeters.elevationValue(unit: appSettings.unitPreference)
+            }
+        ) {
+            SpokenMetric.spoken(value: "\(Int($0))", unit: appSettings.unitPreference.elevationLabel)
+        }
     }
 
     // MARK: Split HR chart
@@ -1594,6 +1671,7 @@ struct RunSummaryView: View {
         .frame(height: 120)
         .chartYAxisLabel("bpm")
         .chartXSelection(value: $selectedSplitHRKm)
+        .chartAccessibility("Split heart rate chart", splitHeartRateSummary(hrSplits))
     }
 
     // MARK: Split elevation chart
@@ -1634,6 +1712,7 @@ struct RunSummaryView: View {
         .frame(height: 100)
         .chartYAxisLabel(appSettings.unitPreference.elevationLabel)
         .chartXSelection(value: $selectedSplitElevKm)
+        .chartAccessibility("Split elevation chart", splitElevationSummary)
     }
 
     // MARK: Splits table

@@ -171,6 +171,24 @@ struct WorkoutRowView: View {
         workout.scheduledWorkout?.workoutType ?? workout.workoutType
     }
 
+    /// One spoken sentence per row, rather than the six loose fragments the stacks produce
+    /// ("Tempo", "Tue, Mar 3", "5.2 km", "4:32", "12°C") plus a "link" glyph read as the
+    /// word "link" (N18). The pace is restated with its unit, which the visible label
+    /// strips for space, and the icons are said in words.
+    private var rowDescription: String {
+        var parts = [
+            displayType.displayName,
+            workout.date.formatted(.dateTime.weekday(.wide).month(.wide).day()),
+            workout.distanceMeters.distanceString(unit: appSettings.unitPreference),
+            workout.averagePaceSecondsPerKm.paceString(unit: appSettings.unitPreference)
+        ]
+        if workout.scheduledWorkout != nil { parts.append("linked to a planned workout") }
+        if let weather = workout.weather {
+            parts.append(weather.temperatureString(unit: appSettings.unitPreference))
+        }
+        return parts.joined(separator: ", ")
+    }
+
     var body: some View {
         HStack(spacing: 14) {
             ZStack {
@@ -218,6 +236,8 @@ struct WorkoutRowView: View {
             }
         }
         .padding(.vertical, 6)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(rowDescription)
     }
 }
 
@@ -233,6 +253,21 @@ struct StrengthWorkoutRowView: View {
     private var durationLabel: String {
         let minutes = Int(workout.durationSeconds) / 60
         return "\(minutes) min"
+    }
+
+    /// The row as one spoken sentence, with the link and Apple Health glyphs said in
+    /// words instead of read as "link" and "heart fill" (N18).
+    private var rowDescription: String {
+        var parts = [
+            title,
+            workout.date.formatted(.dateTime.weekday(.wide).month(.wide).day()),
+            "\(Int(workout.durationSeconds) / 60) minutes"
+        ]
+        let setCount = workout.completedSets.count
+        if setCount > 0 { parts.append("\(setCount) sets") }
+        if workout.scheduledWorkout != nil { parts.append("linked to a planned workout") }
+        if workout.healthKitWorkoutID != nil { parts.append("from Apple Health") }
+        return parts.joined(separator: ", ")
     }
 
     var body: some View {
@@ -279,5 +314,7 @@ struct StrengthWorkoutRowView: View {
             }
         }
         .padding(.vertical, 6)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(rowDescription)
     }
 }

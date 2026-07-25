@@ -21,9 +21,11 @@ Two kinds of finding are recorded:
 > (N3, N4, N5, N7, N8, N9, N10, plus the plan-scoping half of N13), Priority 3
 > (UX debt: N12, N17, N19, N20, N24, plus the blocking half of N18), and Priority 4
 > (hygiene: N11, N13's dialog, N14, N16, N21, N22, N23, N25, N26's code half,
-> N27–N30, and the lint half of N31) are fixed — see §8. What remains open:
-> N18's accessibility remainder, N9's split backfill for already-imported runs,
-> N31's two unobserved toolchain pins, and the §6 carry-overs.
+> N27–N30, and the lint half of N31) are fixed — see §8. A third pass then closed
+> **N9's split backfill** and the rest of **N18** bar localization, and bounded two of
+> D6's full-table queries. What remains open: **localization** (the last of N18/D8),
+> N31's two unobserved toolchain pins, and the §6 carry-overs (D6's two remaining
+> readers among them).
 
 > **Scope:** correctness, UX, and hygiene. Product/feature gaps live in
 > [`FEATURE_IMPROVEMENTS_2026-07.md`](./FEATURE_IMPROVEMENTS_2026-07.md);
@@ -328,9 +330,17 @@ interpolates the moment each boundary is crossed inside the sample spanning it a
 drops any bucket whose timing can't be established rather than storing a zero
 pace. Buckets use the runner's own unit, and each split carries a heart rate
 averaged over the matching window of the run's HR series. Covered by
-`ImportedSplitsTests`. *Still open:* runs imported before this change keep their
-empty splits — a lazy backfill, like `loadHeartRateZones` does for HR, is the
-remaining half.
+`ImportedSplitsTests`.
+
+**The backfill half is now fixed too.** Opening a run that predates the change fetches
+its distance series once — `HealthKitRepository.fetchDistanceSeries(forWorkoutID:)`, the
+twin of the HR fetch, both now resolving the workout through one `hkWorkout(withID:)` —
+buckets it through the same `SplitBucketing.splits`, and caches the result on the run, so
+the split charts and the splits table appear where they had been permanently hidden. It
+runs *after* `loadHeartRateZones`, so a just-backfilled heart-rate series gives each split
+its own heart rate, exactly as an import does. `SplitBackfill.needsSplits` holds the "is
+this worth a query?" rule — no splits yet, a HealthKit id to fetch from, and at least one
+whole bucket covered — and is covered by `SplitBackfillTests`.
 
 `Stride/Core/Repositories/HealthKitRepository.swift:604-665`
 
@@ -554,7 +564,8 @@ day for a run under a minimum distance/duration (the importer already has
 
 ### ⚠️ N18. Accessibility is still largely absent, and one gap blocks a core action
 
-**PARTIALLY FIXED** — the blocking gap and both dead controls are closed:
+**PARTIALLY FIXED** — everything but localization is now closed. The blocking gap and both
+dead controls went first:
 
 - The finish control is a real `Button` with a label and hint, and carries
   `activeRun.finish` for the UI test. Ending a run no longer requires sight.
@@ -569,9 +580,30 @@ day for a run under a minimum distance/duration (the importer already has
   and carry the `.isSelected` trait; the week chevrons are labelled
   "Previous week"/"Next week".
 
-*Still open:* charts and metric cells outside the run HUD, icon-only toolbar buttons
-in the other feature modules, and localization (all user-facing strings are still
-literals — D8).
+**Then the remainder, bar localization:**
+
+- **Every chart speaks its data.** `ChartAccessibility.summary` builds one spoken shape for
+  all ten (`ChartAccessibilityTests`): how many values, where the series starts and ends,
+  and its extremes — applied through a `chartAccessibility(_:_:)` modifier that also
+  collapses the chart's anonymous marks into one element, since a `Chart` carrying a
+  `chartXSelection` overlay often exposed nothing at all. Each chart's summary is built in
+  a named property rather than inline, keeping the view bodies (and the type-checker's
+  work) as they were.
+- **Metric cells outside the run HUD** — the run detail stats grid, the Progress period
+  summary and its header, the strength summary — are one element each with a label and a
+  spoken value, and the run HUD's own "spell the units out, say *no data yet* instead of
+  reading dashes" rule moved out of `ActiveRunView` into `SpokenMetric` so there is one
+  definition (`SpokenMetricTests`). It also translates a value that carries its unit
+  inline, so "5.2 km" is heard as "5.2 kilometres".
+- **The icon-only buttons in the other modules** are labelled: the coach chat's send
+  button, the strength session's end button, Route Genius's clear-search button, and
+  onboarding's back chevron. The chat's decorative `sparkles` and the search glass are
+  hidden from assistive tech instead of read out as "sparkles" and "magnifying glass".
+- **History rows read as one sentence** ("Tempo, Tuesday March 3, 5.2 km, 4:32 min/km,
+  linked to a planned workout") rather than five loose fragments plus a glyph announced as
+  the word "link"; the strength row says "from Apple Health" for its heart icon.
+
+*Still open:* localization — all user-facing strings are still literals (D8).
 
 `Stride/Features/ActiveRun/ActiveRunView.swift:390-425`;
 `Stride/Features/Dashboard/DashboardView.swift:57-88`
@@ -896,7 +928,7 @@ The gaps line up exactly with where this pass found bugs:
 | Untested behaviour | Findings it would have caught |
 | --- | --- |
 | ~~`WorkoutTrackerService.processLocation` / split construction~~ | N7/N8 — mostly closed: the split-pace math (`SplitPaceTests`) and the fix accept/reject decision (`LocationQualityFilterTests`) are extracted and tested. `processLocation` itself — which now composes them — still has no test, because the tracker owns `CLLocationManager` directly |
-| ~~HealthKit → `RunWorkout` mapping (`inferWorkoutType`, split building)~~ | N9/N10 — closed for the pure halves: `ImportedSplitsTests` and `WorkoutTypeInferenceTests`. The HealthKit queries feeding them (`fetchDistanceSeries`) are still untested — they need a store fake |
+| ~~HealthKit → `RunWorkout` mapping (`inferWorkoutType`, split building)~~ | N9/N10 — closed for the pure halves: `ImportedSplitsTests`, `WorkoutTypeInferenceTests`, and `SplitBackfillTests` for the backfill's selection rule. The HealthKit queries feeding them (`fetchDistanceSeries`, now also reachable by workout id) are still untested — they need a store fake |
 | ~~The `HistoryView` import path~~ | N4 — closed: there is now one importer, and `syncNow` is tested for linking and retired-plan scoping |
 | ~~Active-plan resolution across views~~ | N3/N13 — partly closed: `belongsToLivePlan` and the intent are tested. A test asserting *every* `@Query` reader agrees would still be worth having |
 | ~~Plan-lifecycle destructive paths~~ | N1/N2 — closed: `MissedWorkoutsRecoveryTests` and `PlanHistoryTests` now assert nothing is deleted |
@@ -923,9 +955,9 @@ Confirmed still present at `75c0e27`. Details in the original document.
 | **D3** no choke point for invariants | Open, and worse than recorded: N4 is a third importer, N1/N2 a second and third plan-deletion policy. |
 | **D4** observation & DI foot-guns | Mostly open. `AppContainer` is still `ObservableObject` behind a custom `EnvironmentKey`; `NotificationService` is still a callback-carrying singleton; N30 is the `AuthService` half. |
 | **D5** pervasive `try? context.save()` | Open — 34 sites; see N15 for the one that loses user data. |
-| **D6** unfiltered `@Query`/full-table fetches | Open. `RunSummaryView.swift:19-20`, `DashboardView.swift:228`, `HistoryView.swift:28-32`, `AICoachChatView.swift:11` all still fetch whole tables; `MissedWorkoutDetector()` is still constructed inside a body-evaluated property (`DashboardView.swift:256-267`). |
+| **D6** unfiltered `@Query`/full-table fetches | Partly closed. The dashboard (60 newest runs) and the coach chat (8, the number its prompt reads) now fetch through a bounded `FetchDescriptor`, and `MissedWorkoutDetector.detect` is `static`, so nothing is constructed in a body-evaluated property. Still open by design-decision: `RunSummaryView.swift:19-20` — its "previous best tempo" is an all-time figure, so capping the fetch would quietly change a number the user sees — and `HistoryView.swift:28-32`, whose list pages through the full set. Both want the targeted-fetch refactor D1 implies, not a cap. |
 | **D7** dead code & drift | Open — see N27/N28. |
-| **D8** accessibility & localization | Partly closed. Dynamic Type works again (N19) and the run HUD + week strip are labelled and button-based (N18); charts, the other feature modules' icon-only buttons, and localization are still open. |
+| **D8** accessibility & localization | Mostly closed. Dynamic Type works again (N19); the run HUD, week strip, charts, metric cells, history rows, and the other modules' icon-only buttons are all labelled and button-based (N18). Localization is still open — every user-facing string is a literal. |
 | **S4** remainder | Open (config). `NSLocalNetworkUsageDescription`/`NSBonjourServices` still ship in the shared `project.yml`. |
 | **`.externalStorage` blobs** | Open (deliberately deferred; needs a device-tested migration). |
 | **CI toolchain pinning / lint thresholds** | Open — see N31. |
@@ -946,9 +978,11 @@ next pass doesn't churn them:
   `RestCountdown`, `GuidedWorkoutState`, `HeartRateZoneService`,
   `ShareCardModel`, `StreakGoalService`, `ProgressStatsService`,
   `WorkoutPaceAlert`, `LocationQualityFilter`, `ScheduledDayResolver`,
-  `RunEffortPolicy`, `CoachMarkdown`, `HeartRateBackfill` are all UI-free,
+  `RunEffortPolicy`, `CoachMarkdown`, `HeartRateBackfill`, `SplitBackfill`,
+  `ChartAccessibility`, `SpokenMetric` are all UI-free,
   `Sendable`, and directly tested. This is the pattern the remaining view-embedded math should
-  follow.
+  follow — the last three show it applies to presentation rules (what a chart or a metric
+  cell *sounds like*) just as well as to maths.
 - **`GuidedWorkoutState`** in particular is a model implementation: the whole
   state machine is pure, the view only renders and forwards.
 - **Deletion has one owner** for runs and strength (`WorkoutRepository.delete`),
@@ -971,14 +1005,16 @@ next pass doesn't churn them:
 - ✅ N4 fold `HistoryView`'s importer into `WorkoutSyncService`.
 - ✅ N5 present the store-recovery notice at the root.
 - ✅ N7 real split pace + N8 GPS filtering, with tests.
-- ✅ N9/N10 import splits and classify types relative to the runner. (Backfilling
-  splits onto already-imported runs is the one piece left; see N9.)
+- ✅ N9/N10 import splits and classify types relative to the runner, and ✅ backfill
+  splits onto runs imported before that landed (`SplitBackfill` + a HealthKit
+  distance-series fetch by workout id).
 
 **3 — UX debt with outsized impact — ✅ DONE:**
 - ✅ N17 discard-run, with the importer's effort floor now shared by the run-finish path.
-- ⚠️ N18 accessibility: the finish control (the blocking one), both dead controls, the
-  metric grid, and the week strip. Charts, the other modules' icon-only buttons, and
-  localization are still open.
+- ⚠️ N18 accessibility: the finish control (the blocking one), both dead controls, the run
+  HUD's metric grid, and the week strip; then all ten charts (`ChartAccessibility`), the
+  metric cells in the other modules (`SpokenMetric`), the remaining icon-only buttons, and
+  the history rows. Only localization is still open.
 - ✅ N19 Dynamic Type, with a SwiftLint rule to keep it that way.
 - ✅ N20 elevation and cadence, and the dead Lap cell replaced by average pace.
 - ✅ N24 start a missed workout (today and one day late).
@@ -993,9 +1029,11 @@ next pass doesn't churn them:
   a run that reaches the test job.
 
 **5 — What's left after this pass:**
-- N18's accessibility remainder: charts, the other feature modules' icon-only
-  buttons, and localization (D8).
-- N9's remaining half: backfilling splits onto runs imported before splits existed.
-  The HR half of that shape now exists as `HeartRateBackfill` (N25) and is the
-  pattern to copy.
-- The §6 carry-overs (D1–D7 structural work, `.externalStorage`, S4).
+- **Localization** — the last of N18/D8, and now the only accessibility work left. Every
+  user-facing string is a literal, including the spoken labels and summaries the fixes
+  above added, so this is the natural next step rather than a separate track.
+- N31's two toolchain pins (`XCODEGEN_VERSION`, `XCBEAUTIFY_VERSION`), which still need a
+  CI run that reaches the test job.
+- The §6 carry-overs: D1–D5/D7 structural work, D6's two remaining full-table readers
+  (`RunSummaryView`, `HistoryView` — both need targeted fetches rather than a cap, see
+  §6), `.externalStorage`, and S4's plist keys.

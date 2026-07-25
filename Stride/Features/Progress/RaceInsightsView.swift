@@ -292,11 +292,25 @@ struct RaceInsightsView: View {
                     }
                 }
                 .chartXSelection(value: $selectedPredictionDate)
+                .chartAccessibility("Predicted race pace chart", predictedPaceSummary)
                 Text("Lower is faster")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    /// Spoken summary of the prediction series (N18); built here rather than inline so the
+    /// chart body stays one expression.
+    private var predictedPaceSummary: String {
+        ChartAccessibility.summary(
+            pacePredictionPoints.map {
+                ChartAccessibility.Point(
+                    label: $0.date.formatted(.dateTime.month(.abbreviated).day()),
+                    value: $0.predictedPaceSecondsPerKm
+                )
+            }
+        ) { SpokenMetric.spoken(measurement: $0.paceString(unit: appSettings.unitPreference)) }
     }
 
     // MARK: - Card 3: Training Zones

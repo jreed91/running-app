@@ -22,7 +22,7 @@ struct MissedWorkoutDetector {
     /// "Consecutive" is evaluated from the most-recent missed workout backwards: a completed
     /// non-rest workout anywhere in the streak resets it, so a gap from weeks ago that the user
     /// has since recovered from will not re-trigger the banner.
-    func detect(in plan: TrainingPlan, today: Date = .now) -> MissedWorkoutInfo? {
+    static func detect(in plan: TrainingPlan, today: Date = .now) -> MissedWorkoutInfo? {
         let startOfToday = Calendar.current.startOfDay(for: today)
 
         // Flatten all workouts from the plan's weeks.

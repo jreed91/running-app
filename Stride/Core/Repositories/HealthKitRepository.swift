@@ -67,6 +67,12 @@ protocol HealthKitRepositoryProtocol: Sendable {
     /// for runs imported before HR samples were persisted (A6). Returns `[]` if the
     /// workout or its samples can't be found.
     func fetchHeartRateSamples(forWorkoutID id: String) async -> [Double]
+    /// Fetches the cumulative distance series for a previously-imported workout,
+    /// identified by its HealthKit UUID string. Used to backfill splits onto runs
+    /// imported before the importer bucketed them (N9), the same way
+    /// `fetchHeartRateSamples(forWorkoutID:)` backfills heart rate. Returns `[]` if the
+    /// workout or its samples can't be found.
+    func fetchDistanceSeries(forWorkoutID id: String) async -> [SplitBucketing.DistancePoint]
     /// Enables HealthKit background delivery for running workouts at `.immediate` frequency.
     /// Safe to call multiple times — HealthKit is idempotent.
     func enableBackgroundDelivery() async throws
@@ -976,12 +982,24 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
     }
 
     func fetchHeartRateSamples(forWorkoutID id: String) async -> [Double] {
-        guard let uuid = UUID(uuidString: id) else { return [] }
-        let workoutPredicate = HKQuery.predicateForObject(with: uuid)
-        let workout: HKWorkout? = try? await withCheckedThrowingContinuation { cont in
+        guard let workout = await hkWorkout(withID: id) else { return [] }
+        return (try? await fetchHeartRateSamples(for: workout)) ?? []
+    }
+
+    func fetchDistanceSeries(forWorkoutID id: String) async -> [SplitBucketing.DistancePoint] {
+        guard let workout = await hkWorkout(withID: id) else { return [] }
+        return (try? await fetchDistanceSeries(for: workout)) ?? []
+    }
+
+    /// Resolves a stored HealthKit UUID string back to its workout, so samples can be
+    /// re-read for a run that is already in the store. Returns `nil` once the source
+    /// workout is gone (deleted in Health, or written by an app that has been removed).
+    private func hkWorkout(withID id: String) async -> HKWorkout? {
+        guard let uuid = UUID(uuidString: id) else { return nil }
+        return try? await withCheckedThrowingContinuation { cont in
             let query = HKSampleQuery(
                 sampleType: .workoutType(),
-                predicate: workoutPredicate,
+                predicate: HKQuery.predicateForObject(with: uuid),
                 limit: 1,
                 sortDescriptors: nil
             ) { _, result, error in
@@ -990,8 +1008,6 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             }
             store.execute(query)
         }
-        guard let workout else { return [] }
-        return (try? await fetchHeartRateSamples(for: workout)) ?? []
     }
 
     /// Reads cumulative elevation ascended from the workout's metadata.

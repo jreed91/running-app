@@ -384,6 +384,7 @@ struct OBShell<Content: View>: View {
                             }
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("Back")
                         .accessibilityIdentifier("onboarding.back.\(stepIndex)")
 
                         GeometryReader { geo in

@@ -467,7 +467,7 @@ struct ActiveRunView: View {
         // ("5.2", "DISTANCE", "27:14", "TIME", …) with no pairing (N18).
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
-        .accessibilityValue(spokenMetric(value: value, unit: unit))
+        .accessibilityValue(SpokenMetric.spoken(value: value, unit: unit))
         .accessibilityIdentifier(Self.metricIdentifier(label))
     }
 
@@ -476,23 +476,6 @@ struct ActiveRunView: View {
     /// `StrideUITests` matches on these identifiers rather than on the uppercased label.
     private static func metricIdentifier(_ label: String) -> String {
         "activeRun.metric." + label.replacingOccurrences(of: " ", with: "")
-    }
-
-    /// Spoken form of a metric cell's value: a placeholder reads as "no data yet"
-    /// rather than a run of dashes, and abbreviated units are spelled out.
-    private func spokenMetric(value: String, unit: String?) -> String {
-        guard value != "--", value != "--:--" else { return "No data yet" }
-        guard let unit else { return value }
-        let spoken: String
-        switch unit {
-        case "spm": spoken = "steps per minute"
-        case "m":   spoken = "metres"
-        case "ft":  spoken = "feet"
-        case "/km": spoken = "per kilometre"
-        case "/mi": spoken = "per mile"
-        default:    spoken = unit
-        }
-        return "\(value) \(spoken)"
     }
 
     // MARK: - Controls

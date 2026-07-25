@@ -79,6 +79,11 @@ struct StrengthSummaryView: View {
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
+        // Paired rather than read as two loose fragments, and labelled in sentence case
+        // rather than the uppercase the layout uses (N18).
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label.capitalized)
+        .accessibilityValue(SpokenMetric.spoken(measurement: value))
     }
 
     // MARK: - Completed sets

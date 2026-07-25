@@ -8,7 +8,24 @@ struct AICoachChatView: View {
     @Environment(AppSettings.self) private var appSettings
     @Environment(\.appContainer) private var container
 
-    @Query(sort: [SortDescriptor(\RunWorkout.date, order: .reverse)])
+    /// How many recent runs the coach prompt summarises. Also the fetch limit below —
+    /// the prompt is the only consumer of more than the newest run.
+    private static let promptRunCount = 8
+
+    /// Newest runs only. This used to fetch the entire runs table on every open of the
+    /// chat, for a prompt that reads eight of them (D6).
+    ///
+    /// Nothing here needs a true total: the header's "Runs" count is only rendered when
+    /// there is no latest run at all, which means this fetch came back empty.
+    static var recentRunsDescriptor: FetchDescriptor<RunWorkout> {
+        var descriptor = FetchDescriptor<RunWorkout>(
+            sortBy: [SortDescriptor(\RunWorkout.date, order: .reverse)]
+        )
+        descriptor.fetchLimit = promptRunCount
+        return descriptor
+    }
+
+    @Query(AICoachChatView.recentRunsDescriptor)
     private var recentRuns: [RunWorkout]
 
     @Query(
@@ -73,6 +90,8 @@ struct AICoachChatView: View {
                         .foregroundStyle(.brand)
                         .frame(width: 36, height: 36)
                         .background(.surfaceSecondary, in: Circle())
+                        // Decoration, not a control — it reads as "sparkles" otherwise.
+                        .accessibilityHidden(true)
                 }
             }
             .task {
@@ -176,6 +195,7 @@ struct AICoachChatView: View {
             }
             .buttonStyle(.plain)
             .disabled(!canSendDraft || isWaitingForCoach)
+            .accessibilityLabel("Send message")
         }
         .padding(.leading, 16)
         .padding(.trailing, 10)
@@ -481,7 +501,7 @@ struct AICoachChatView: View {
         } ?? "Active plan: none."
 
         let recent = recentRuns
-            .prefix(8)
+            .prefix(Self.promptRunCount)
             .map { run in
                 let hr = run.averageHeartRate.map { "\(Int($0.rounded())) bpm" } ?? "n/a"
                 return "\(run.date.formatted(date: .abbreviated, time: .omitted)) | \(run.workoutType.displayName) | \(run.distanceMeters.distanceString(unit: unit)) | \(run.averagePaceSecondsPerKm.paceString(unit: unit)) | avg HR \(hr)"

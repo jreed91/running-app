@@ -4,7 +4,6 @@ import Foundation
 
 struct MissedWorkoutDetectorTests {
 
-    private let detector = MissedWorkoutDetector()
     private let service = TrainingPlanService()
 
     private func date(_ year: Int, _ month: Int, _ day: Int) -> Date {
@@ -45,14 +44,14 @@ struct MissedWorkoutDetectorTests {
             startDate: date(2026, 4, 1),
             endDate: date(2026, 5, 1)
         )
-        let result = detector.detect(in: plan, today: date(2026, 5, 1))
+        let result = MissedWorkoutDetector.detect(in: plan, today: date(2026, 5, 1))
         #expect(result == nil)
     }
 
     @Test("Future-only plan returns nil")
     func futurePlanReturnsNil() {
         let plan = makePlan(startDate: date(2026, 5, 10))
-        let result = detector.detect(in: plan, today: date(2026, 5, 8))
+        let result = MissedWorkoutDetector.detect(in: plan, today: date(2026, 5, 8))
         #expect(result == nil)
     }
 
@@ -64,7 +63,7 @@ struct MissedWorkoutDetectorTests {
         let today = date(2026, 5, 1)
         pastNonRest(in: plan, before: today).forEach { $0.isCompleted = true }
 
-        let result = detector.detect(in: plan, today: today)
+        let result = MissedWorkoutDetector.detect(in: plan, today: today)
         #expect(result == nil)
     }
 
@@ -75,7 +74,7 @@ struct MissedWorkoutDetectorTests {
         let past = pastNonRest(in: plan, before: today)
         past.dropLast(1).forEach { $0.isCompleted = true }
 
-        let result = detector.detect(in: plan, today: today)
+        let result = MissedWorkoutDetector.detect(in: plan, today: today)
         #expect(result == nil)
     }
 
@@ -87,7 +86,7 @@ struct MissedWorkoutDetectorTests {
         guard past.count >= 2 else { return }
         past.dropLast(2).forEach { $0.isCompleted = true }
 
-        let result = detector.detect(in: plan, today: today)
+        let result = MissedWorkoutDetector.detect(in: plan, today: today)
         #expect(result != nil)
         #expect(result?.count == 2)
     }
@@ -100,7 +99,7 @@ struct MissedWorkoutDetectorTests {
         guard past.count >= 2 else { return }
 
         // Leave all as not completed (default)
-        let result = detector.detect(in: plan, today: today)
+        let result = MissedWorkoutDetector.detect(in: plan, today: today)
         #expect(result != nil)
         #expect(result?.count == past.count)
     }
@@ -122,7 +121,7 @@ struct MissedWorkoutDetectorTests {
         }
         last.isCompleted = true
 
-        let result = detector.detect(in: plan, today: today)
+        let result = MissedWorkoutDetector.detect(in: plan, today: today)
         #expect(result == nil)
     }
 
@@ -139,7 +138,7 @@ struct MissedWorkoutDetectorTests {
         past[past.count - 2].isCompleted = true
         past[past.count - 1].isCompleted = false
 
-        let result = detector.detect(in: plan, today: today)
+        let result = MissedWorkoutDetector.detect(in: plan, today: today)
         #expect(result == nil)
     }
 
@@ -154,7 +153,7 @@ struct MissedWorkoutDetectorTests {
         let past = pastNonRest(in: plan, before: today)
         guard let first = past.first else { return }
 
-        let result = detector.detect(in: plan, today: today)
+        let result = MissedWorkoutDetector.detect(in: plan, today: today)
         #expect(result != nil)
 
         let expected = Calendar.current.dateComponents(
@@ -176,7 +175,7 @@ struct MissedWorkoutDetectorTests {
         guard past.count >= 2 else { return }
         past.dropLast(1).forEach { $0.isCompleted = true }
         // Only 1 trailing miss — should not trigger
-        let result = detector.detect(in: plan, today: today)
+        let result = MissedWorkoutDetector.detect(in: plan, today: today)
         #expect(result == nil)
     }
 }
