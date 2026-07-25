@@ -48,6 +48,59 @@ private struct FakeOnDeviceCoach: OnDeviceCoachGenerating {
     }
 }
 
+/// Captures the prompt the service builds so tests can assert on what the coach is told.
+private actor PromptRecorder {
+    private(set) var prompt = ""
+
+    func record(_ prompt: String) {
+        self.prompt = prompt
+    }
+}
+
+private struct RecordingOnDeviceCoach: OnDeviceCoachGenerating {
+    let recorder: PromptRecorder
+    let insight: AICoachStructuredResponse
+
+    func isAvailable() async -> Bool { true }
+    func unavailableReason() async -> String? { nil }
+
+    func generateCoachInsight(
+        instructions: String,
+        prompt: String,
+        useServerModel: Bool,
+        onPartial: @escaping @Sendable (String) -> Void
+    ) async throws -> AICoachStructuredResponse {
+        await recorder.record(prompt)
+        return insight
+    }
+
+    func generateWorkoutAdaptation(
+        instructions: String,
+        prompt: String,
+        useServerModel: Bool
+    ) async throws -> AIWorkoutAdaptationResponse {
+        throw OnDeviceCoachError.unavailable
+    }
+
+    func generatePlanAdaptation(
+        instructions: String,
+        prompt: String,
+        useServerModel: Bool,
+        onPartial: @escaping @Sendable (String) -> Void
+    ) async throws -> AIWorkoutPlanAdaptationResponse {
+        AIWorkoutPlanAdaptationResponse(adaptations: [])
+    }
+
+    func generateChatReply(
+        instructions: String,
+        context: String,
+        messages: [AIProviderChatMessage],
+        useServerModel: Bool
+    ) async throws -> String {
+        ""
+    }
+}
+
 private func sampleStructured() -> AICoachStructuredResponse {
     AICoachStructuredResponse(
         headline: "Strong Negative Split",
@@ -111,6 +164,73 @@ struct FoundationModelsCoachServiceTests {
         // Local fallback is not an AI/model result, so it is not marked apiReady.
         #expect(insight.apiReady == false)
         #expect(insight.headline == "On-Device Summary")
+    }
+
+    @Test("The insight prompt carries the run's splits and heart-rate zone breakdown")
+    func promptIncludesSplitsAndZones() async {
+        let recorder = PromptRecorder()
+        let backend = RecordingOnDeviceCoach(recorder: recorder, insight: sampleStructured())
+        let service = AICoachService(onDeviceBackend: backend)
+
+        let workout = RunWorkout(date: Date(), distanceMeters: 4_000, durationSeconds: 1_240, workoutType: .easy)
+        workout.splits = [
+            Split(kilometer: 1, paceSecondsPerKm: 300, heartRate: 138, elevationGainMeters: 5, cumulativeDistanceMeters: 1_000),
+            Split(kilometer: 2, paceSecondsPerKm: 305, heartRate: 145, elevationGainMeters: 3, cumulativeDistanceMeters: 2_000),
+            Split(kilometer: 3, paceSecondsPerKm: 315, heartRate: 152, elevationGainMeters: 0, cumulativeDistanceMeters: 3_000),
+            Split(kilometer: 4, paceSecondsPerKm: 320, heartRate: 158, elevationGainMeters: -4, cumulativeDistanceMeters: 4_000)
+        ]
+        let profile = UserProfile(
+            name: "Runner",
+            goalRace: .fiveK,
+            goalFinishTime: 1_500,
+            weeklyRunDays: 4,
+            fitnessLevel: .intermediate
+        )
+        profile.maxHeartRateBPM = 190
+        let zones = HeartRateZoneService.timeInZones(
+            bpmSamples: [120, 130, 140, 150, 160, 175],
+            totalSeconds: workout.durationSeconds,
+            maxHR: 190
+        )
+
+        _ = await service.evaluateWithProvider(
+            workout: workout,
+            recentHistory: [],
+            profile: profile,
+            provider: .appleOnDevice,
+            heartRateZones: zones
+        )
+
+        let prompt = await recorder.prompt
+        #expect(prompt.contains("km 1: pace 5:00 min/km, hr 138"))
+        #expect(prompt.contains("km 4: pace 5:20 min/km, hr 158"))
+        #expect(prompt.contains("Split trend:"))
+        #expect(prompt.contains("fastest km 1"))
+        #expect(prompt.contains("positive split"))
+        #expect(prompt.contains("Time in heart-rate zones:"))
+        #expect(prompt.contains("Zones derived from max HR 190 bpm."))
+        #expect(prompt.contains("Z5 Max (171-190 bpm)"))
+        #expect(prompt.contains("Heart rate sat mostly in"))
+    }
+
+    @Test("Without zone data the prompt says so rather than dropping the section")
+    func promptWithoutZoneData() async {
+        let recorder = PromptRecorder()
+        let backend = RecordingOnDeviceCoach(recorder: recorder, insight: sampleStructured())
+        let service = AICoachService(onDeviceBackend: backend)
+        let workout = RunWorkout(date: Date(), distanceMeters: 8_000, durationSeconds: 2_500, workoutType: .easy)
+
+        _ = await service.evaluateWithProvider(
+            workout: workout,
+            recentHistory: [],
+            profile: nil,
+            provider: .appleOnDevice
+        )
+
+        let prompt = await recorder.prompt
+        #expect(prompt.contains("No heart-rate zone data."))
+        #expect(prompt.contains("No split data."))
+        #expect(prompt.contains("Not enough splits to derive a trend."))
     }
 
     @Test("With no backend at all, evaluation degrades to the local heuristic insight")

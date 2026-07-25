@@ -275,7 +275,8 @@ struct RunSummaryView: View {
                 paceInsightsSection
                 weatherSection
                 plannedWorkoutSection
-                aiCoachSection
+                // Splits and heart-rate zones come before the coaching read: they are the
+                // evidence the insight is written from, and the insight now cites them.
                 if !workout.splits.isEmpty {
                     splitsSection
                     splitsTable
@@ -283,6 +284,7 @@ struct RunSummaryView: View {
                 if !zoneSlices.isEmpty, zoneSlices.contains(where: { $0.seconds > 0 }) {
                     heartRateZoneSection
                 }
+                aiCoachSection
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 32)
@@ -1382,12 +1384,20 @@ struct RunSummaryView: View {
             aiStreamBuffer = ""
         }
 
+        // The coach cites the zone breakdown, so make sure it exists before asking. Normally
+        // the on-open task has already filled it; this covers a tap that lands first, and a
+        // run whose heart-rate samples still need the HealthKit backfill.
+        if zoneSlices.isEmpty {
+            await loadHeartRateZones()
+        }
+
         let historySlice = Array(recentHistory.prefix(Self.insightHistoryRunCount))
         let result = await container.aiCoachService.evaluateWithProvider(
             workout: workout,
             recentHistory: historySlice,
             profile: profiles.first,
             provider: appSettings.aiProvider,
+            heartRateZones: zoneSlices,
             unitPreference: appSettings.unitPreference,
             onChunk: { chunk in
                 Task { @MainActor in
