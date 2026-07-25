@@ -398,7 +398,7 @@ final class WorkoutSyncService {
 
         for workout in toInsert { context.insert(workout) }
         linkStrengthToScheduledWorkouts(toInsert)
-        try? context.save()
+        context.saveOrLog("imported strength workouts")
         AppLogger.log(
             "Strength sync (\(source)): merged=\(hkWorkouts.count - toInsert.count), inserted=\(toInsert.count).",
             label: "HealthKit",
@@ -458,7 +458,7 @@ final class WorkoutSyncService {
                 dirty = true
             }
         }
-        if dirty { try? context.save() }
+        if dirty { context.saveOrLog("strength-to-plan links") }
     }
 
     /// Delegates to the one definition on `WeatherService` (N27) — this used to be a

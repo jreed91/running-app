@@ -663,7 +663,7 @@ struct NewPlanOnboardingView: View {
                 previous.isActive = false
             }
             try? await container.healthKitRepository.syncWorkoutPlans(for: plan, unitPreference: appSettings.unitPreference)
-            try? context.save()
+            context.saveOrLog("the new plan's WorkoutKit ids")
             isCreatingPlan = false
             dismiss()
         }

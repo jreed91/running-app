@@ -552,7 +552,7 @@ struct StrengthActiveView: View {
             scheduled.isCompleted = true
             scheduled.linkedStrengthWorkoutID = strengthWorkout.id
         }
-        try? context.save()
+        context.saveOrLog("the finished strength session")
         exportToHealthKit(strengthWorkout)
         dismiss()
     }
@@ -565,7 +565,7 @@ struct StrengthActiveView: View {
         Task { @MainActor in
             do {
                 workout.healthKitWorkoutID = try await container.healthKitRepository.save(workout)
-                try? context.save()
+                context.saveOrLog("the strength session's HealthKit id")
             } catch {
                 AppLogger.log("Failed to export strength workout to HealthKit: \(error)",
                               label: "HealthKit", level: .error)

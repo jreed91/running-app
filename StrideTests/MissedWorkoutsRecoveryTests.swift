@@ -260,6 +260,53 @@ struct MissedWorkoutsRecoveryTests {
         }
     }
 
+    @Test("shiftMissedWorkoutsForward never moves a session onto or past a fixed race date")
+    func shiftIsClampedByRaceDate() throws {
+        let container = makeContainer()
+        let context = container.modelContainer.mainContext
+        let profile = makeProfile(in: context)
+        let today = Date()
+        let raceDate = today.startOfDay.adding(days: 21)
+
+        let plan = container.trainingPlanService.generateRacePlan(
+            profile: profile,
+            startDate: today.adding(weeks: -2),
+            raceDate: raceDate,
+            raceName: "Test Race",
+            runDayIndices: [0, 2, 4, 5]
+        )
+        try container.planRepository.save(plan)
+
+        let raceWorkouts = (plan.weeks ?? [])
+            .flatMap { $0.workouts ?? [] }
+            .filter { $0.workoutType == .race }
+        let raceDates = raceWorkouts.map(\.scheduledDate)
+
+        // Far more than the block has room for: unclamped this pushed the whole
+        // remaining plan over race day (N6).
+        let outcome = try container.shiftMissedWorkoutsForward(plan: plan, by: 60, context: context)
+
+        #expect(outcome.requestedDays == 60)
+        #expect(outcome.wasClampedByRace)
+        #expect(outcome.appliedDays < 60)
+
+        let startOfRaceDay = Calendar.current.startOfDay(for: raceDate)
+        let movable = (plan.weeks ?? [])
+            .flatMap { $0.workouts ?? [] }
+            .filter { !$0.isCompleted && $0.workoutType != .rest && $0.workoutType != .race }
+        for workout in movable {
+            #expect(
+                workout.scheduledDate < startOfRaceDay,
+                "A \(workout.workoutType) session landed on or after race day"
+            )
+        }
+
+        // The race itself is excluded from the shift and must not have drifted.
+        for (index, workout) in raceWorkouts.enumerated() {
+            #expect(Calendar.current.isDate(workout.scheduledDate, inSameDayAs: raceDates[index]))
+        }
+    }
+
     @Test("rebuildPlan uses generateRacePlan when plan has a raceDate")
     func rebuildWithRaceDateUsesRacePlan() throws {
         let container = makeContainer()

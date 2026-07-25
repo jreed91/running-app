@@ -141,7 +141,7 @@ struct RunSummaryView: View {
             samples = await container.healthKitRepository.fetchHeartRateSamples(forWorkoutID: hkID)
             if !samples.isEmpty {
                 workout.heartRateSamples = samples   // cache so we don't re-fetch next time
-                try? context.save()
+                context.saveOrLog("backfilled heart-rate samples")
             }
         }
         zoneSlices = HeartRateZoneService.timeInZones(
@@ -1214,7 +1214,7 @@ struct RunSummaryView: View {
             withAnimation(AppAnimation.snappy) {
                 workout.aiCoachReaction = isActive ? nil : reaction
             }
-            try? context.save()
+            context.saveOrLog("the coach-insight reaction")
         } label: {
             Image(systemName: reaction == .up ? "hand.thumbsup" : "hand.thumbsdown")
                 .font(.system(size: 18, weight: .semibold))
@@ -1398,7 +1398,7 @@ struct RunSummaryView: View {
         aiInsight = result
         if result.apiReady {
             workout.cachedAIInsight = result
-            try? context.save()
+            context.saveOrLog("the cached coach insight")
         }
     }
 
@@ -1443,7 +1443,7 @@ struct RunSummaryView: View {
         // workouts a removed code path used to insert, and with the producer gone the
         // only thing it could still delete was a real scheduled run.
         apply(adapted, to: nextWorkout)
-        try? context.save()
+        context.saveOrLog("the coach-adapted next session")
 
         if let plan = nextWorkout.week?.plan {
             try? await container.healthKitRepository.removeWorkoutPlans(for: plan)

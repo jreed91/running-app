@@ -717,7 +717,7 @@ struct SettingsView: View {
 
     private func persistProfileEdit(_ profile: UserProfile) {
         profile.updatedAt = Date()
-        try? context.save()
+        context.saveOrLog("a profile edit")
     }
 
     private func resetAll() {
@@ -778,13 +778,13 @@ enum DebugRunGenerator {
                 context.insert(makeWorkout(date: date, type: slot.type, progressFactor: progressFactor))
             }
         }
-        try? context.save()
+        context.saveOrLog("sample run history")
     }
 
     static func clear(context: ModelContext) {
         guard let all = try? context.fetch(FetchDescriptor<RunWorkout>()) else { return }
         all.filter { $0.notes == tag }.forEach { context.delete($0) }
-        try? context.save()
+        context.saveOrLog("the removal of sample data")
     }
 
     static func completePlan(upTo cutoff: Date, plan: TrainingPlan, context: ModelContext) {
@@ -803,7 +803,7 @@ enum DebugRunGenerator {
                 workout.isCompleted = true
             }
         }
-        try? context.save()
+        context.saveOrLog("sample plan progress")
     }
 
     static func resetPlanProgress(plan: TrainingPlan, context: ModelContext) {
@@ -815,7 +815,7 @@ enum DebugRunGenerator {
                 workout.isCompleted = false
             }
         }
-        try? context.save()
+        context.saveOrLog("the reset of sample plan progress")
     }
 
     private static func makeWorkout(date: Date, type: WorkoutType, progressFactor: Double) -> RunWorkout {

@@ -73,7 +73,7 @@ struct TrainingPlanListView: View {
                     container.notificationService.cancelReminders(for: plan)
                     context.delete(plan)
                 }
-                try? context.save()
+                context.saveOrLog("deleted plans")
             }
         }
     }
