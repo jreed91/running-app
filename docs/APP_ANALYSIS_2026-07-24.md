@@ -991,7 +991,7 @@ Confirmed still present at `75c0e27`. Details in the original document.
 
 | Item | Status today |
 | --- | --- |
-| **D1** business logic in views | ⚠️ **Partly closed.** Both named offenders are out. `PlanTabView`'s streaming-JSON parser is `SmartAdaptSummaryStream` — a character-level state machine reading a deliberately incomplete document, whose escape handling and stop-at-`]` rule had no test home in a view body (`SmartAdaptSummaryStreamTests`, including a monotonic growing-buffer case: re-scanning a longer prefix may never lose or reorder what a shorter one already published). The pruning rules went with N29. `ProgressDashboardView`'s period arithmetic — range filter, weekly buckets, VDOT series, and the summary card's six aggregates — is `ProgressPeriodStats` (`ProgressPeriodStatsTests`), which also fixes the shape the inline version got wrong: every average is now optional, so "no run recorded heart rate" is distinguishable from "the average is zero", and each divides by its own sample count rather than the period's run count. The two adaptation filters (Smart Adapt's batch, the run summary's next session) were near-duplicate rules written from opposite directions and are now one `AdaptableWorkoutSelector` (`AdaptableWorkoutSelectorTests`). *Still open:* `RunSummaryView` is ~2,195 lines and still holds `tempoInsights`, the share/HR-zone orchestration, and the coach-feedback prompt assembly. |
+| **D1** business logic in views | ⚠️ **Partly closed.** Both named offenders are out. `PlanTabView`'s streaming-JSON parser is `SmartAdaptSummaryStream` — a character-level state machine reading a deliberately incomplete document, whose escape handling and stop-at-`]` rule had no test home in a view body (`SmartAdaptSummaryStreamTests`, including a monotonic growing-buffer case: re-scanning a longer prefix may never lose or reorder what a shorter one already published). The pruning rules went with N29. `ProgressDashboardView`'s period arithmetic — range filter, weekly buckets, VDOT series, and the summary card's six aggregates — is `ProgressPeriodStats` (`ProgressPeriodStatsTests`), which also fixes the shape the inline version got wrong: every average is now optional, so "no run recorded heart rate" is distinguishable from "the average is zero", and each divides by its own sample count rather than the period's run count. The two adaptation filters (Smart Adapt's batch, the run summary's next session) were near-duplicate rules written from opposite directions and are now one `AdaptableWorkoutSelector` (`AdaptableWorkoutSelectorTests`). `RunSummaryView` gave up its two remaining rules as well: `CoachInsightText` owns the full-analysis body (including the fallback the card composes when the model returns no `fullAnalysis`, and the three-item cap on it) and the feedback prompt handed back to the coach, which now strips markup rather than spending prompt budget on asterisks; `SplitChartMetric` owns which split charts a run can offer, so the splits table's HR column and the chart's HR tab can no longer disagree (`CoachInsightTextTests`, `SplitChartMetricTests`). *Still open:* the file is ~2,130 lines. What is left in it is view code and thin delegation — `tempoInsights` already calls `WorkoutAnalyticsService`, the HR-zone and split backfills already call `HeartRateZoneService`/`SplitBackfill` — so the remainder is a file-splitting job, not an extraction one. |
 | **D2** `AppContainer` god object | ⚠️ **Partly closed.** The date math is out: `shiftMissedWorkoutsForward`'s clamp is `MissedWorkoutShift`, and `rebuildPlan`'s "how many weeks are left of the old block" is `PlanRebuildWindow` (`PlanRebuildWindowTests` — the inclusive span, the round-up, and the already-expired block that must still yield a plan). `attachWeather` delegates to `WeatherService` (N27). *Still open:* the container is the orchestration point for all of it, and N1's plan lifecycle still lives there. |
 | **D3** no choke point for invariants | Open, and worse than recorded: N4 is a third importer, N1/N2 a second and third plan-deletion policy. |
 | **D4** observation & DI foot-guns | Mostly open. `AppContainer` is still `ObservableObject` behind a custom `EnvironmentKey`; `NotificationService` is still a callback-carrying singleton; N30 is the `AuthService` half. |
@@ -1021,7 +1021,8 @@ next pass doesn't churn them:
   `WorkoutPaceAlert`, `LocationQualityFilter`, `ScheduledDayResolver`,
   `RunEffortPolicy`, `CoachMarkdown`, `HeartRateBackfill`, `SplitBackfill`,
   `ChartAccessibility`, `SpokenMetric`, `MissedWorkoutShift`, `SmartAdaptSummaryStream`,
-  `AdaptableWorkoutSelector`, `ProgressPeriodStats`, `PlanRebuildWindow` are all UI-free,
+  `AdaptableWorkoutSelector`, `ProgressPeriodStats`, `PlanRebuildWindow`,
+  `CoachInsightText`, `SplitChartMetric` are all UI-free,
   `Sendable`, and directly tested. This is the pattern the remaining view-embedded math should
   follow — `SpokenMetric` and `ChartAccessibility` show it applies to presentation rules
   (what a chart or a metric cell *sounds like*) just as well as to maths, and
@@ -1079,12 +1080,15 @@ next pass doesn't churn them:
 - N31's two toolchain pins (`XCODEGEN_VERSION`, `XCBEAUTIFY_VERSION`), which still need a
   CI run that reaches the test job.
 - The §6 carry-overs that are still open: D3 and D4 structural work, the remainder of
-  D1 (`RunSummaryView`'s size) and D2 (the container as orchestration point),
-  `.externalStorage`, and S4's plist keys. (D5, D6, and D7 are closed; D8 is down to
-  localization.) A fifth pass took D1's and D2's testable halves: the Smart Adapt
-  stream parser, the two adaptation filters, the Progress tab's period arithmetic, and
-  the rebuild window are pure services with tests, and the duplicated apply-adaptation
-  field copy has one owner.
+  D1 (`RunSummaryView`'s *size* — the logic is out, splitting the file is what's left)
+  and D2 (the container as orchestration point), `.externalStorage`, and S4's plist
+  keys. (D5, D6, and D7 are closed; D8 is down to localization.) A fifth pass took D1's
+  and D2's testable halves: the Smart Adapt stream parser, the two adaptation filters,
+  the Progress tab's period arithmetic, the rebuild window, the coach-insight prose, and
+  the split-chart availability rule are pure services with tests, and the duplicated
+  apply-adaptation field copy has one owner.
+- **CI was not running at all** — the finding that pass turned up, and the one that
+  matters most, since it means none of the above has been exercised by a build. See N31.
 - **S4's remainder is config-only and small**: `NSLocalNetworkUsageDescription` and
   `NSBonjourServices: _pulse._tcp` still ship in the App Store Info.plist even though
   `PulseIntegrationService.activateIfNeeded` only starts `RemoteLogger` under `#if DEBUG`,
