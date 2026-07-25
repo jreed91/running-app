@@ -42,16 +42,16 @@ line_length:
 
 type_body_length:
   warning: 300
-  # The only type above this is RunSummaryView (~1,900 lines), which carries an
-  # explicit file-level `swiftlint:disable type_body_length` alongside its
-  # file_length one; the next largest is TrainingPlanService at ~1,000. The old
-  # 2000 error was unreachable in practice (N31).
+  # The largest type is now TrainingPlanService at ~1,000 lines. RunSummaryView was
+  # the exception this threshold used to be written around — it is split across
+  # `RunSummaryView+*.swift` extensions and no longer carries a disable of either
+  # this rule or file_length (D1). The old 2000 error was unreachable (N31).
   error: 1100
 
 file_length:
   warning: 400
-  # The only file above this is RunSummaryView.swift, which carries an explicit
-  # `swiftlint:disable file_length`; the previous 2000 error was unreachable.
+  # No file carries a `swiftlint:disable file_length` any more; the previous 2000
+  # error was unreachable in practice (N31).
   error: 1500
 
 function_body_length:

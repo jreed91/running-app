@@ -26,10 +26,12 @@ Two kinds of finding are recorded:
 > closed **N6's race-date remainder** (the last open half of a Priority 1 item) and
 > **D5**. A fifth took the testable halves of **D1** and **D2** and closed **D7**
 > (`SmartAdaptSummaryStream`, `AdaptableWorkoutSelector`, `ProgressPeriodStats`,
-> `PlanRebuildWindow`, `ScheduledWorkout.applyAdaptation`). What remains open:
-> **localization** (the last of N18/D8), N31's two unobserved toolchain pins, and the
-> remaining §6 carry-overs (D1's `RunSummaryView` size, D2's orchestration, D3, D4,
-> `.externalStorage`, S4).
+> `PlanRebuildWindow`, `ScheduledWorkout.applyAdaptation`). A sixth closed the rest of
+> **D1** (`RunSummaryView` is eleven files and carries no lint exemption), **D3**
+> (`PlanRepository` has no `delete` left to route around `AppContainer.deletePlan`), and
+> **S4** (the Pulse local-network keys are stripped from every non-Debug build). What
+> remains open: **localization** (the last of N18/D8), N31's two unobserved toolchain
+> pins, and the remaining §6 carry-overs (D2's orchestration, D4, `.externalStorage`).
 
 > **Scope:** correctness, UX, and hygiene. Product/feature gaps live in
 > [`FEATURE_IMPROVEMENTS_2026-07.md`](./FEATURE_IMPROVEMENTS_2026-07.md);
@@ -980,8 +982,9 @@ Both structural notes are now closed. `AppContainer.rebuildPlan`'s date math mov
 to `PlanRebuildWindow`, following `shiftMissedWorkoutsForward`'s share of it into
 `MissedWorkoutShift` (D2). View-embedded stat math — for years the least tested code in
 the app — is out of the Progress tab into `ProgressPeriodStats`, and the two adaptation
-filters and the Smart Adapt stream parser are out of their views as well (D1). What is
-left of D1 is `RunSummaryView`'s size rather than untested arithmetic.
+filters and the Smart Adapt stream parser are out of their views as well (D1). What was
+left of D1 was `RunSummaryView`'s size rather than untested arithmetic, and a sixth pass
+split the screen across eleven files.
 
 ---
 
@@ -991,15 +994,15 @@ Confirmed still present at `75c0e27`. Details in the original document.
 
 | Item | Status today |
 | --- | --- |
-| **D1** business logic in views | ⚠️ **Partly closed.** Both named offenders are out. `PlanTabView`'s streaming-JSON parser is `SmartAdaptSummaryStream` — a character-level state machine reading a deliberately incomplete document, whose escape handling and stop-at-`]` rule had no test home in a view body (`SmartAdaptSummaryStreamTests`, including a monotonic growing-buffer case: re-scanning a longer prefix may never lose or reorder what a shorter one already published). The pruning rules went with N29. `ProgressDashboardView`'s period arithmetic — range filter, weekly buckets, VDOT series, and the summary card's six aggregates — is `ProgressPeriodStats` (`ProgressPeriodStatsTests`), which also fixes the shape the inline version got wrong: every average is now optional, so "no run recorded heart rate" is distinguishable from "the average is zero", and each divides by its own sample count rather than the period's run count. The two adaptation filters (Smart Adapt's batch, the run summary's next session) were near-duplicate rules written from opposite directions and are now one `AdaptableWorkoutSelector` (`AdaptableWorkoutSelectorTests`). `RunSummaryView` gave up its two remaining rules as well: `CoachInsightText` owns the full-analysis body (including the fallback the card composes when the model returns no `fullAnalysis`, and the three-item cap on it) and the feedback prompt handed back to the coach, which now strips markup rather than spending prompt budget on asterisks; `SplitChartMetric` owns which split charts a run can offer, so the splits table's HR column and the chart's HR tab can no longer disagree (`CoachInsightTextTests`, `SplitChartMetricTests`). *Still open:* the file is ~2,130 lines. What is left in it is view code and thin delegation — `tempoInsights` already calls `WorkoutAnalyticsService`, the HR-zone and split backfills already call `HeartRateZoneService`/`SplitBackfill` — so the remainder is a file-splitting job, not an extraction one. |
+| **D1** business logic in views | ⚠️ **Partly closed.** Both named offenders are out. `PlanTabView`'s streaming-JSON parser is `SmartAdaptSummaryStream` — a character-level state machine reading a deliberately incomplete document, whose escape handling and stop-at-`]` rule had no test home in a view body (`SmartAdaptSummaryStreamTests`, including a monotonic growing-buffer case: re-scanning a longer prefix may never lose or reorder what a shorter one already published). The pruning rules went with N29. `ProgressDashboardView`'s period arithmetic — range filter, weekly buckets, VDOT series, and the summary card's six aggregates — is `ProgressPeriodStats` (`ProgressPeriodStatsTests`), which also fixes the shape the inline version got wrong: every average is now optional, so "no run recorded heart rate" is distinguishable from "the average is zero", and each divides by its own sample count rather than the period's run count. The two adaptation filters (Smart Adapt's batch, the run summary's next session) were near-duplicate rules written from opposite directions and are now one `AdaptableWorkoutSelector` (`AdaptableWorkoutSelectorTests`). `RunSummaryView` gave up its two remaining rules as well: `CoachInsightText` owns the full-analysis body (including the fallback the card composes when the model returns no `fullAnalysis`, and the three-item cap on it) and the feedback prompt handed back to the coach, which now strips markup rather than spending prompt budget on asterisks; `SplitChartMetric` owns which split charts a run can offer, so the splits table's HR column and the chart's HR tab can no longer disagree (`CoachInsightTextTests`, `SplitChartMetricTests`). ✅ **Now closed.** The remainder really was a file-splitting job, and it is done: the screen is `RunSummaryView.swift` (state, derived values, the three on-demand loads, `body` — ~370 lines) plus ten `RunSummaryView+*.swift` extensions, one per section — Overview, TempoInsights, CoachCard, CoachSection, CoachStreaming, CoachComponents, Splits, HeartRateZones, PlannedWorkout, Chrome. Every section moved verbatim; the only edit to the code itself is that a member drops `private` where a sibling file reads it. The `swiftlint:disable file_length type_body_length` banner is gone with it, so no file in the repo carries a length exemption any more and the thresholds N31 set from the next-worst code now apply to this screen too. |
 | **D2** `AppContainer` god object | ⚠️ **Partly closed.** The date math is out: `shiftMissedWorkoutsForward`'s clamp is `MissedWorkoutShift`, and `rebuildPlan`'s "how many weeks are left of the old block" is `PlanRebuildWindow` (`PlanRebuildWindowTests` — the inclusive span, the round-up, and the already-expired block that must still yield a plan). `attachWeather` delegates to `WeatherService` (N27). *Still open:* the container is the orchestration point for all of it, and N1's plan lifecycle still lives there. |
-| **D3** no choke point for invariants | ⚠️ **Mostly closed.** The offenders recorded here are gone: N4 folded the third importer into `WorkoutSyncService`, and N1/N2 made retirement — not deletion — the plan lifecycle. A fifth pass audited every remaining `context.delete` site for the invariants each one skips, and found two live gaps. **Plan teardown had two copies:** the Plan History swipe and the plan-detail dialog each removed the Watch entries and reminders before deleting the record, correctly and independently; `AppContainer.deletePlan(_:context:)` is now the one owner, next to `resetAllData` which does the same thing for every plan at once. **The debug "Clear Seeded Runs" button** deleted its runs through the context directly, so the days "Mark Workouts Complete" had linked — the button directly above it — stayed `isCompleted` with no run behind them; the `.nullify` rule clears the relationship and nothing else. It now repairs the day the way `WorkoutRepository.delete` does. *Still open:* the pattern rather than an instance — `PlanRepository.delete` is still a bare `context.delete`, so the choke point is a convention rather than something the type system enforces. |
+| **D3** no choke point for invariants | ⚠️ **Mostly closed.** The offenders recorded here are gone: N4 folded the third importer into `WorkoutSyncService`, and N1/N2 made retirement — not deletion — the plan lifecycle. A fifth pass audited every remaining `context.delete` site for the invariants each one skips, and found two live gaps. **Plan teardown had two copies:** the Plan History swipe and the plan-detail dialog each removed the Watch entries and reminders before deleting the record, correctly and independently; `AppContainer.deletePlan(_:context:)` is now the one owner, next to `resetAllData` which does the same thing for every plan at once. **The debug "Clear Seeded Runs" button** deleted its runs through the context directly, so the days "Mark Workouts Complete" had linked — the button directly above it — stayed `isCompleted` with no run behind them; the `.nullify` rule clears the relationship and nothing else. It now repairs the day the way `WorkoutRepository.delete` does. ✅ **Now closed.** `PlanRepository` no longer has a `delete` at all — not on the protocol, not on the implementation. A plan owns two things the store cannot reach (its WorkoutKit entries on the Watch, up to 56 scheduled morning reminders), so the only correct teardown is `AppContainer.deletePlan(_:context:)`, and removing the repository method is what makes routing around it a compile error rather than a convention someone has to know about. `PersistenceGraphTests.repositoriesDeleteModels` deletes through the container instead. |
 | **D4** observation & DI foot-guns | Mostly open. `AppContainer` is still `ObservableObject` behind a custom `EnvironmentKey`; `NotificationService` is still a callback-carrying singleton; N30 is the `AuthService` half. |
 | **D5** pervasive `try? context.save()` | ✅ **Closed.** All 35 sites now go through `ModelContext.saveOrLog(_:)`, which keeps the best-effort semantics — most of these are a preference toggle, a cached insight, a weather snapshot, and making them `throws` would push error handling into views with nothing useful to do with it — and adds the trace that was missing. The defect was never that they don't propagate; it is that a store which had started rejecting writes (disk full, CloudKit schema mismatch, one model failing validation) was indistinguishable from a working one, from the user's side *and* from Pulse. Each call names what it was saving, so the log line identifies the site. The two places where a failure must reach the user still use `do`/`catch`: the run-finish save (N15) and the dashboard's plan-recovery mutations. Covered by `ModelContextSaveTests`. |
 | **D6** unfiltered `@Query`/full-table fetches | ✅ **Closed** for all four readers, and none of them by simply capping a fetch. The dashboard takes the 60 newest runs and the coach chat the 8 its prompt reads. `RunSummaryView` replaced its two whole-table queries with three narrow ones: the plan day found by the run's own id (`linkedRunWorkoutID`) instead of scanning every `ScheduledWorkout`, the newest 51 runs for the two coach requests, and *tempo + race runs only* for `tempoInsights` — which consults nothing else, so the all-time "previous best tempo" is unchanged (pinned by `WorkoutAnalyticsServiceTests`). `HistoryView`'s list moved into a child view initialised with the page size, so each side fetches `limit + 1` rows and the extra row answers "is there more?" without counting the table. `MissedWorkoutDetector.detect` is `static`, so nothing is constructed in a body-evaluated property. *Deliberately left whole-table:* `ProgressView` and `RaceInsightsView`, whose charts are range- or all-time-scoped; they want the same child-view treatment if it ever measures. |
 | **D7** dead code & drift | Mostly closed — see N27/N28. One duplicate outlived them: the eight-field copy that applies an AI adaptation onto a persisted workout was written out in `PlanTabView` and again in `RunSummaryView`, which is a field-drops-off-one-of-them bug waiting to happen. It is now `ScheduledWorkout.applyAdaptation(from:)`. |
 | **D8** accessibility & localization | Mostly closed. Dynamic Type works again (N19); the run HUD, week strip, charts, metric cells, history rows, and the other modules' icon-only buttons are all labelled and button-based (N18). Localization is still open — every user-facing string is a literal. |
-| **S4** remainder | Open (config). `NSLocalNetworkUsageDescription`/`NSBonjourServices` still ship in the shared `project.yml`. |
+| **S4** remainder | ✅ **Closed.** The keys still live in the one `info.properties` block XcodeGen writes for every configuration — but a `Strip debug-only Info.plist keys` post-build phase deletes `NSLocalNetworkUsageDescription` and `NSBonjourServices` from the built bundle in every configuration except Debug, which is the only one `RemoteLogger` is compiled into. The bundle's Info.plist is written before that phase and code-signed after it, so what ships no longer declares a local-network capability the app cannot exercise. |
 | **`.externalStorage` blobs** | Open (deliberately deferred; needs a device-tested migration). |
 | **CI toolchain pinning / lint thresholds** | Open — see N31. |
 
@@ -1079,21 +1082,23 @@ next pass doesn't churn them:
   above added, so this is the natural next step rather than a separate track.
 - N31's two toolchain pins (`XCODEGEN_VERSION`, `XCBEAUTIFY_VERSION`), which still need a
   CI run that reaches the test job.
-- The §6 carry-overs that are still open: D4's structural work, D3's remaining
-  convention (deletion has one owner per model now, but nothing enforces it), the remainder of
-  D1 (`RunSummaryView`'s *size* — the logic is out, splitting the file is what's left)
-  and D2 (the container as orchestration point), `.externalStorage`, and S4's plist
-  keys. (D5, D6, and D7 are closed; D8 is down to localization.) A fifth pass took D1's
-  and D2's testable halves: the Smart Adapt stream parser, the two adaptation filters,
-  the Progress tab's period arithmetic, the rebuild window, the coach-insight prose, and
-  the split-chart availability rule are pure services with tests, and the duplicated
-  apply-adaptation field copy has one owner.
+- The §6 carry-overs that are still open: D4's structural work and the remainder of D2
+  (the container as orchestration point), plus `.externalStorage`. (D1, D3, D5, D6, D7,
+  and S4 are closed; D8 is down to localization.) A fifth pass took D1's and D2's
+  testable halves: the Smart Adapt stream parser, the two adaptation filters, the
+  Progress tab's period arithmetic, the rebuild window, the coach-insight prose, and the
+  split-chart availability rule are pure services with tests, and the duplicated
+  apply-adaptation field copy has one owner. A sixth finished D1 by splitting
+  `RunSummaryView` into eleven files, and closed D3 by deleting `PlanRepository.delete`
+  so `AppContainer.deletePlan` is the only way to remove a plan.
 - **CI was not running at all** — the finding that pass turned up, and the one that
   matters most, since it means none of the above has been exercised by a build. See N31.
-- **S4's remainder is config-only and small**: `NSLocalNetworkUsageDescription` and
-  `NSBonjourServices: _pulse._tcp` still ship in the App Store Info.plist even though
+- ✅ **S4's remainder is closed**: `NSLocalNetworkUsageDescription` and
+  `NSBonjourServices: _pulse._tcp` were shipping in the App Store Info.plist even though
   `PulseIntegrationService.activateIfNeeded` only starts `RemoteLogger` under `#if DEBUG`,
-  so the shipped app declares a capability it never exercises. XcodeGen writes one
-  `info.properties` block for every configuration, so making the keys debug-only needs a
-  per-config mechanism rather than a one-line edit — worth doing next to a build that
-  can actually be archived and checked.
+  so the shipped app declared a capability it never exercises. XcodeGen writes one
+  `info.properties` block for every configuration, so the per-config mechanism is a
+  post-build phase: `Strip debug-only Info.plist keys` removes both keys from the built
+  bundle whenever `CONFIGURATION` is not Debug, before code signing. The keys stay in
+  `project.yml` because Debug — the configuration RemoteLogger exists in — still needs
+  them. Worth confirming against the first archive that gets built.
