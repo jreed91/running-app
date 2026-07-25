@@ -83,6 +83,13 @@ extension Double {
         return String(format: "%d:%02d", total / 60, total % 60)
     }
 
+    /// Converts a seconds-per-kilometre figure into seconds per the display unit, for
+    /// comparing or differencing paces without formatting them. Uses the same factor as
+    /// ``paceStringImperial`` so a delta always agrees with the paces shown beside it.
+    func paceSecondsValue(unit: UnitPreference) -> Double {
+        unit == .metric ? self : self * 1.60934
+    }
+
     /// Formats a weekly distance in km into the given unit for display.
     func weeklyDistanceString(unit: UnitPreference) -> String {
         switch unit {

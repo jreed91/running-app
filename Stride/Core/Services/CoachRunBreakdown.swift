@@ -79,9 +79,9 @@ enum CoachRunBreakdown {
         return SplitTrend(
             fastest: fastest,
             slowest: slowest,
-            spreadSeconds: displaySeconds(slowest.paceSecondsPerKm - fastest.paceSecondsPerKm, unit: unit),
-            consistencySeconds: displaySeconds(variance.squareRoot(), unit: unit),
-            secondHalfDeltaSeconds: displaySeconds(secondHalf - firstHalf, unit: unit)
+            spreadSeconds: (slowest.paceSecondsPerKm - fastest.paceSecondsPerKm).paceSecondsValue(unit: unit),
+            consistencySeconds: variance.squareRoot().paceSecondsValue(unit: unit),
+            secondHalfDeltaSeconds: (secondHalf - firstHalf).paceSecondsValue(unit: unit)
         )
     }
 
@@ -174,11 +174,6 @@ enum CoachRunBreakdown {
     }
 
     // MARK: - Helpers
-
-    /// Converts a seconds-per-kilometre figure into seconds per the display unit.
-    private static func displaySeconds(_ secondsPerKm: Double, unit: UnitPreference) -> Double {
-        unit == .metric ? secondsPerKm : secondsPerKm * 1.60934
-    }
 
     private static func secondsString(_ value: Double) -> String {
         "\(Int(value.rounded()))s"
