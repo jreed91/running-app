@@ -52,22 +52,21 @@ struct ProgressDashboardView: View {
         }
     }
 
-    private struct VO2Point: Identifiable {
-        let id = UUID()
-        let date: Date
-        let vdot: Double
-    }
+    // The period arithmetic — which runs are in range, what they total, how they bucket
+    // by week, and the VDOT series — lives in `ProgressPeriodStats` rather than in these
+    // body-evaluated properties (D1). What's left here is the range the runner picked
+    // and the unit they read it in.
 
     private var filteredWorkouts: [RunWorkout] {
-        let cutoff = Date().addingTimeInterval(-Double(selectedRange.days) * 86_400)
-        return workouts.filter { $0.date >= cutoff }
+        ProgressPeriodStats.runs(in: workouts, withinDays: selectedRange.days)
     }
 
-    private var vo2Points: [VO2Point] {
-        filteredWorkouts.compactMap { w in
-            guard let v = ProgressStatsService.estimatedVDOT(for: w) else { return nil }
-            return VO2Point(date: w.date, vdot: v)
-        }
+    private var vo2Points: [ProgressPeriodStats.VDOTSample] {
+        ProgressPeriodStats.vdotSamples(for: filteredWorkouts)
+    }
+
+    private var periodSummary: ProgressPeriodStats.Summary {
+        ProgressPeriodStats.summary(for: filteredWorkouts)
     }
 
     var body: some View {
@@ -146,20 +145,20 @@ struct ProgressDashboardView: View {
     // MARK: - Summary header
 
     private var summaryHeader: some View {
-        HStack(spacing: 0) {
+        let summary = periodSummary
+        return HStack(spacing: 0) {
             summaryStatCell(
-                value: "\(filteredWorkouts.count)",
+                value: "\(summary.runCount)",
                 label: "Runs"
             )
             Divider().frame(height: 40)
             summaryStatCell(
-                value: filteredWorkouts.reduce(0) { $0 + $1.distanceMeters }
-                    .distanceString(unit: appSettings.unitPreference),
+                value: summary.totalDistanceMeters.distanceString(unit: appSettings.unitPreference),
                 label: "Distance"
             )
             Divider().frame(height: 40)
             summaryStatCell(
-                value: vo2Points.last.map { String(format: "%.0f", $0.vdot) } ?? "--",
+                value: summary.latestVDOT.map { String(format: "%.0f", $0) } ?? "--",
                 label: "VDOT"
             )
         }
@@ -263,21 +262,21 @@ struct ProgressDashboardView: View {
     private var weeklyVolumeChart: some View {
         chartCard("WEEKLY VOLUME") {
             Chart {
-                ForEach(weeklyBuckets, id: \.week) { bucket in
+                ForEach(weeklyBuckets, id: \.weekStart) { bucket in
                     BarMark(
-                        x: .value("Week", bucket.week, unit: .weekOfYear),
-                        y: .value(appSettings.unitPreference.distanceLabel, bucket.distanceValue)
+                        x: .value("Week", bucket.weekStart, unit: .weekOfYear),
+                        y: .value(appSettings.unitPreference.distanceLabel, distanceValue(bucket.meters))
                     )
                     .foregroundStyle(Color.brand.gradient)
                     .cornerRadius(4)
                 }
                 if let selected = selectedVolumeDate, let bucket = closestWeekBucket(to: selected) {
-                    selectionRule(x: .value("Week", bucket.week)) {
+                    selectionRule(x: .value("Week", bucket.weekStart)) {
                         tooltipContainer {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(bucket.week, format: .dateTime.month(.abbreviated).day())
+                                Text(bucket.weekStart, format: .dateTime.month(.abbreviated).day())
                                     .font(.caption2).foregroundStyle(.secondary)
-                                Text(String(format: "%.1f %@", bucket.distanceValue, appSettings.unitPreference.distanceLabel))
+                                Text(String(format: "%.1f %@", distanceValue(bucket.meters), appSettings.unitPreference.distanceLabel))
                                     .font(.caption).bold()
                             }
                         }
@@ -308,7 +307,7 @@ struct ProgressDashboardView: View {
     private var weeklyVolumeSummary: String {
         ChartAccessibility.summary(
             weeklyBuckets.map {
-                ChartAccessibility.Point(label: "week of \(pointLabel($0.week))", value: $0.distanceValue)
+                ChartAccessibility.Point(label: "week of \(pointLabel($0.weekStart))", value: distanceValue($0.meters))
             }
         ) {
             SpokenMetric.spoken(
@@ -625,7 +624,7 @@ struct ProgressDashboardView: View {
                 emptyDataPlaceholder("Not enough run data in this period")
             } else {
                 Chart {
-                    ForEach(vo2Points) { point in
+                    ForEach(vo2Points, id: \.date) { point in
                         LineMark(
                             x: .value("Date", point.date),
                             y: .value("VDOT", point.vdot)
@@ -638,7 +637,7 @@ struct ProgressDashboardView: View {
                         )
                         .foregroundStyle(Color.brandSecondary)
                         .symbolSize(
-                            selectedVO2Date.flatMap { closestVO2Point(to: $0) }?.id == point.id ? 80 : 36
+                            selectedVO2Date.flatMap { closestVO2Point(to: $0) } == point ? 80 : 36
                         )
                     }
                     if let selected = selectedVO2Date,
@@ -673,34 +672,29 @@ struct ProgressDashboardView: View {
     // MARK: - Period summary card
 
     private var periodSummaryCard: some View {
-        let runs = filteredWorkouts
-        let totalMeters = runs.reduce(0) { $0 + $1.distanceMeters }
-        let avgPace = ProgressStatsService.distanceWeightedAveragePaceSecondsPerKm(for: runs)
-        let hrValues = runs.compactMap(\.averageHeartRate)
-        let avgHR: Double? = hrValues.isEmpty ? nil : hrValues.reduce(0, +) / Double(hrValues.count)
-        let elevValues = runs.compactMap(\.elevationGainMeters).filter { $0 > 0 }
-        let avgElev: Double? = elevValues.isEmpty ? nil : elevValues.reduce(0, +) / Double(elevValues.count)
-        let avgVO2: Double? = vo2Points.isEmpty ? nil
-            : vo2Points.reduce(0) { $0 + $1.vdot } / Double(vo2Points.count)
+        let summary = periodSummary
 
         return chartCard("PERIOD SUMMARY") {
             LazyVGrid(columns: [.init(.flexible()), .init(.flexible())], spacing: 10) {
-                summaryCell(value: "\(runs.count)", label: "Runs")
-                summaryCell(value: totalMeters.distanceString(unit: appSettings.unitPreference), label: "Total Distance")
+                summaryCell(value: "\(summary.runCount)", label: "Runs")
                 summaryCell(
-                    value: avgPace > 0 ? avgPace.paceString(unit: appSettings.unitPreference) : "--",
+                    value: summary.totalDistanceMeters.distanceString(unit: appSettings.unitPreference),
+                    label: "Total Distance"
+                )
+                summaryCell(
+                    value: summary.averagePaceSecondsPerKm.map { $0.paceString(unit: appSettings.unitPreference) } ?? "--",
                     label: "Avg Pace"
                 )
                 summaryCell(
-                    value: avgHR.map { "\(Int($0)) bpm" } ?? "--",
+                    value: summary.averageHeartRate.map { "\(Int($0)) bpm" } ?? "--",
                     label: "Avg Heart Rate"
                 )
                 summaryCell(
-                    value: avgElev.map { $0.elevationString(unit: appSettings.unitPreference) } ?? "--",
+                    value: summary.averageElevationGainMeters.map { $0.elevationString(unit: appSettings.unitPreference) } ?? "--",
                     label: "Avg Elevation"
                 )
                 summaryCell(
-                    value: avgVO2.map { String(format: "%.1f", $0) } ?? "--",
+                    value: summary.averageVDOT.map { String(format: "%.1f", $0) } ?? "--",
                     label: "Avg VO₂ Max"
                 )
             }
@@ -744,11 +738,13 @@ struct ProgressDashboardView: View {
         list.min(by: { abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date)) })
     }
 
-    private func closestWeekBucket(to date: Date) -> WeekBucket? {
-        weeklyBuckets.min(by: { abs($0.week.timeIntervalSince(date)) < abs($1.week.timeIntervalSince(date)) })
+    private func closestWeekBucket(to date: Date) -> ProgressPeriodStats.WeeklyDistance? {
+        weeklyBuckets.min(by: {
+            abs($0.weekStart.timeIntervalSince(date)) < abs($1.weekStart.timeIntervalSince(date))
+        })
     }
 
-    private func closestVO2Point(to date: Date) -> VO2Point? {
+    private func closestVO2Point(to date: Date) -> ProgressPeriodStats.VDOTSample? {
         vo2Points.min(by: { abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date)) })
     }
 
@@ -778,26 +774,13 @@ struct ProgressDashboardView: View {
 
     // MARK: - Weekly buckets
 
-    private struct WeekBucket: Identifiable {
-        let id = UUID()
-        let week: Date
-        let distanceValue: Double
+    private var weeklyBuckets: [ProgressPeriodStats.WeeklyDistance] {
+        ProgressPeriodStats.weeklyDistances(for: filteredWorkouts)
     }
 
-    private var weeklyBuckets: [WeekBucket] {
-        var byWeek: [Date: Double] = [:]
-        for workout in filteredWorkouts {
-            let key = workout.date.startOfWeek
-            byWeek[key, default: 0] += workout.distanceMeters
-        }
-        return byWeek.map { key, meters -> WeekBucket in
-            let value: Double
-            switch appSettings.unitPreference {
-            case .metric: value = meters / 1_000
-            case .imperial: value = meters / 1_609.344
-            }
-            return WeekBucket(week: key, distanceValue: value)
-        }
-        .sorted { $0.week < $1.week }
+    /// A bucket's distance in the runner's own unit. The bucketing itself stays in
+    /// metres so the maths has nothing display-shaped in it (D1).
+    private func distanceValue(_ meters: Double) -> Double {
+        meters.distanceValue(unit: appSettings.unitPreference)
     }
 }

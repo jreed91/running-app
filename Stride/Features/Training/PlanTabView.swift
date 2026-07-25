@@ -117,18 +117,7 @@ struct PlanTabView: View {
     }
 
     private func remainingAdaptableWorkouts(in plan: TrainingPlan) -> [ScheduledWorkout] {
-        let today = Calendar.current.startOfDay(for: Date())
-        return (plan.weeks ?? [])
-            .flatMap { $0.workouts ?? [] }
-            .filter {
-                !$0.isCompleted
-                    && $0.workoutType != .rest
-                    && $0.workoutType != .race
-                    && $0.workoutType != .crossTraining
-                    && $0.workoutType != .strength
-                    && $0.scheduledDate >= today
-            }
-            .sorted { $0.scheduledDate < $1.scheduledDate }
+        AdaptableWorkoutSelector.adaptableWorkouts(in: plan)
     }
 
     private func smartAdaptUnavailableReason(for plan: TrainingPlan) -> String? {
@@ -214,14 +203,7 @@ struct PlanTabView: View {
                 continue
             }
 
-            workout.workoutType = adapted.workoutType
-            workout.workoutStructure = adapted.workoutStructure
-            workout.targetDistanceMeters = adapted.targetDistanceMeters
-            workout.targetPaceLowerBound = adapted.targetPaceLowerBound
-            workout.targetPaceUpperBound = adapted.targetPaceUpperBound
-            workout.notes = adapted.notes
-            workout.intervals = adapted.intervals
-            workout.healthKitPlanID = nil
+            workout.applyAdaptation(from: adapted)
 
             let response = adapted.notes?.trimmingCharacters(in: .whitespacesAndNewlines)
             smartAdaptProgress.completedCount = index + 1
@@ -249,62 +231,14 @@ struct PlanTabView: View {
     @MainActor
     private func appendSmartAdaptSummaryChunk(_ chunk: String) {
         smartAdaptStreamBuffer += chunk
-        let summaries = extractStreamingSummaries(from: smartAdaptStreamBuffer)
+        let summaries = SmartAdaptSummaryStream.summaries(in: smartAdaptStreamBuffer)
         guard !summaries.isEmpty else {
             smartAdaptProgress.currentMessage = "Reading coach summary..."
             return
         }
 
-        smartAdaptProgress.streamingSummaries = Array(summaries.prefix(4))
+        smartAdaptProgress.streamingSummaries = Array(summaries.prefix(SmartAdaptSummaryStream.displayLimit))
         smartAdaptProgress.currentMessage = summaries.last ?? "Reviewing plan changes..."
-    }
-
-    private func extractStreamingSummaries(from text: String) -> [String] {
-        guard let keyRange = text.range(of: "\"summary\""),
-              let arrayStart = text[keyRange.upperBound...].firstIndex(of: "[") else {
-            return []
-        }
-
-        var summaries: [String] = []
-        var current = ""
-        var isInsideString = false
-        var isEscaping = false
-        var index = text.index(after: arrayStart)
-
-        while index < text.endIndex {
-            let character = text[index]
-
-            if isInsideString {
-                if isEscaping {
-                    switch character {
-                    case "n": current.append("\n")
-                    case "r": current.append("\r")
-                    case "t": current.append("\t")
-                    default: current.append(character)
-                    }
-                    isEscaping = false
-                } else if character == "\\" {
-                    isEscaping = true
-                } else if character == "\"" {
-                    let summary = current.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !summary.isEmpty {
-                        summaries.append(summary)
-                    }
-                    current = ""
-                    isInsideString = false
-                } else {
-                    current.append(character)
-                }
-            } else if character == "\"" {
-                isInsideString = true
-            } else if character == "]" {
-                break
-            }
-
-            text.formIndex(after: &index)
-        }
-
-        return summaries
     }
 
     private func workoutLabel(_ workout: ScheduledWorkout) -> String {
