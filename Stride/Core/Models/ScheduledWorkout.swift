@@ -103,3 +103,35 @@ final class ScheduledWorkout {
         self.isCompleted = false
     }
 }
+
+// MARK: - Adaptation
+
+extension ScheduledWorkout {
+
+    /// Copies an AI-adapted session's prescription onto this persisted workout.
+    ///
+    /// The coach returns an **unmanaged** `ScheduledWorkout` describing what to run.
+    /// It is never inserted or related to a week — doing that auto-inserts it and leaves
+    /// a phantom duplicate in the plan — so the adaptation is applied field by field to
+    /// the row that already exists.
+    ///
+    /// Which fields those are was written out twice, in `PlanTabView`'s Smart Adapt loop
+    /// and in `RunSummaryView`'s apply-coach-feedback path (D1/D7). Two hand-maintained
+    /// copies of an eight-field assignment is a field-drops-off-one-of-them bug waiting
+    /// to happen, and the field most likely to be forgotten is the last one:
+    /// `healthKitPlanID` is cleared because the workout now on the Watch describes the
+    /// *old* prescription, so it has to be re-synced rather than matched.
+    ///
+    /// Identity, scheduling, and completion state are deliberately untouched: the coach
+    /// changes what the session is, never when it is or whether it happened.
+    func applyAdaptation(from adapted: ScheduledWorkout) {
+        workoutType = adapted.workoutType
+        workoutStructure = adapted.workoutStructure
+        targetDistanceMeters = adapted.targetDistanceMeters
+        targetPaceLowerBound = adapted.targetPaceLowerBound
+        targetPaceUpperBound = adapted.targetPaceUpperBound
+        notes = adapted.notes
+        intervals = adapted.intervals
+        healthKitPlanID = nil
+    }
+}

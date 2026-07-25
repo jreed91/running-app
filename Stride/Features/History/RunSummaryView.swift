@@ -1442,7 +1442,7 @@ struct RunSummaryView: View {
         // "duplicate" future runs afterwards (N29). That pruner cleaned up phantom
         // workouts a removed code path used to insert, and with the producer gone the
         // only thing it could still delete was a real scheduled run.
-        apply(adapted, to: nextWorkout)
+        nextWorkout.applyAdaptation(from: adapted)
         context.saveOrLog("the coach-adapted next session")
 
         if let plan = nextWorkout.week?.plan {
@@ -1453,32 +1453,20 @@ struct RunSummaryView: View {
         nextSessionUpdateMessage = "Updated \(workoutLabel(nextWorkout)) in your plan."
     }
 
+    /// The soonest planned run the coach's feedback can be applied to.
+    ///
+    /// Bounded below by the session this run fulfilled, so feedback on Tuesday's tempo
+    /// never rewrites Tuesday's tempo. Everything else — run types only, never the race,
+    /// nothing completed, nothing in the past — is the shared rule (D1).
     private func nextWorkoutForFeedback() -> ScheduledWorkout? {
-        guard let plan = planForNextSessionUpdate else { return nil }
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
         let completedDate = matchedScheduled?.scheduledDate
             ?? workout.scheduledWorkout?.scheduledDate
             ?? workout.date
 
-        let weeks = plan.weeks ?? []
-        let workouts = weeks.flatMap { $0.workouts ?? [] }
-        let candidates = workouts.filter { scheduled in
-            guard !scheduled.isCompleted else { return false }
-            guard scheduled.scheduledDate >= today else { return false }
-            guard scheduled.scheduledDate > completedDate else { return false }
-
-            switch scheduled.workoutType {
-            case .easy, .tempo, .interval, .longRun:
-                return true
-            case .race, .rest, .crossTraining, .strength:
-                return false
-            }
-        }
-
-        return candidates.sorted { lhs, rhs in
-            lhs.scheduledDate < rhs.scheduledDate
-        }.first
+        return AdaptableWorkoutSelector.nextAdaptableWorkout(
+            in: planForNextSessionUpdate,
+            after: completedDate
+        )
     }
 
     /// Coach feedback as plain prompt text. Passed to the adaptation request as a
@@ -1496,18 +1484,6 @@ struct RunSummaryView: View {
             .filter { !$0.isEmpty }
             .joined(separator: " ")
     }
-
-    private func apply(_ adapted: ScheduledWorkout, to scheduled: ScheduledWorkout) {
-        scheduled.workoutType = adapted.workoutType
-        scheduled.workoutStructure = adapted.workoutStructure
-        scheduled.targetDistanceMeters = adapted.targetDistanceMeters
-        scheduled.targetPaceLowerBound = adapted.targetPaceLowerBound
-        scheduled.targetPaceUpperBound = adapted.targetPaceUpperBound
-        scheduled.notes = adapted.notes
-        scheduled.intervals = adapted.intervals
-        scheduled.healthKitPlanID = nil
-    }
-
 
     private func workoutLabel(_ workout: ScheduledWorkout) -> String {
         let date = workout.scheduledDate.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())

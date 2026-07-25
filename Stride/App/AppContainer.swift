@@ -617,14 +617,10 @@ final class AppContainer: ObservableObject {
                 unitPreference: unitPreference
             )
         } else {
-            let remainingDays = Calendar.current.dateComponents(
-                [.day], from: startDate, to: oldPlan.endDate
-            ).day ?? 0
-            let remainingWeeks = max(1, Int(ceil(Double(remainingDays + 1) / 7.0)))
             newPlan = trainingPlanService.generatePlan(
                 profile: profile,
                 startDate: startDate,
-                numberOfWeeks: remainingWeeks,
+                numberOfWeeks: PlanRebuildWindow.remainingWeeks(from: startDate, to: oldPlan.endDate),
                 runDayIndices: runDayIndices,
                 unitPreference: unitPreference
             )

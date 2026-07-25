@@ -24,8 +24,12 @@ Two kinds of finding are recorded:
 > N27–N30, and the lint half of N31) are fixed — see §8. A third pass then closed
 > **N9's split backfill**, the rest of **N18** bar localization, and **D6**. A fourth
 > closed **N6's race-date remainder** (the last open half of a Priority 1 item) and
-> **D5**. What remains open: **localization** (the last of N18/D8), N31's two unobserved
-> toolchain pins, and the remaining §6 carry-overs (D1–D4, D7, `.externalStorage`, S4).
+> **D5**. A fifth took the testable halves of **D1** and **D2** and closed **D7**
+> (`SmartAdaptSummaryStream`, `AdaptableWorkoutSelector`, `ProgressPeriodStats`,
+> `PlanRebuildWindow`, `ScheduledWorkout.applyAdaptation`). What remains open:
+> **localization** (the last of N18/D8), N31's two unobserved toolchain pins, and the
+> remaining §6 carry-overs (D1's `RunSummaryView` size, D2's orchestration, D3, D4,
+> `.externalStorage`, S4).
 
 > **Scope:** correctness, UX, and hygiene. Product/feature gaps live in
 > [`FEATURE_IMPROVEMENTS_2026-07.md`](./FEATURE_IMPROVEMENTS_2026-07.md);
@@ -949,10 +953,12 @@ The gaps line up exactly with where this pass found bugs:
 | ~~Dashboard day resolution and the start-button window~~ | N12/N24 — closed: both rules live in `ScheduledDayResolver` and are tested (`ScheduledDayResolverTests`). The rendering of a two-session stack is still untested view code |
 | ~~The minimum-effort floor for app-recorded runs~~ | N17 — closed: `RunEffortPolicyTests` pins the floor and asserts the importer and the run-finish path agree on it |
 
-Two structural notes: `AppContainer.rebuildPlan` still does real date math on the DI
-container (D2) — `shiftMissedWorkoutsForward`'s share of it moved out to the pure
-`MissedWorkoutShift`, which is what finally gave N6's race-date half a test home; and
-view-embedded stat math remains the least tested code in the app (D1).
+Both structural notes are now closed. `AppContainer.rebuildPlan`'s date math moved out
+to `PlanRebuildWindow`, following `shiftMissedWorkoutsForward`'s share of it into
+`MissedWorkoutShift` (D2). View-embedded stat math — for years the least tested code in
+the app — is out of the Progress tab into `ProgressPeriodStats`, and the two adaptation
+filters and the Smart Adapt stream parser are out of their views as well (D1). What is
+left of D1 is `RunSummaryView`'s size rather than untested arithmetic.
 
 ---
 
@@ -962,13 +968,13 @@ Confirmed still present at `75c0e27`. Details in the original document.
 
 | Item | Status today |
 | --- | --- |
-| **D1** business logic in views | Open. `RunSummaryView` 2,142 lines; `PlanTabView` still owns the streaming-JSON parser (`:258-430`) and the pruning rules. |
-| **D2** `AppContainer` god object | Open. `attachWeather`, `shiftMissedWorkoutsForward`, `rebuildPlan` unchanged — and N1 lives there. |
+| **D1** business logic in views | ⚠️ **Partly closed.** Both named offenders are out. `PlanTabView`'s streaming-JSON parser is `SmartAdaptSummaryStream` — a character-level state machine reading a deliberately incomplete document, whose escape handling and stop-at-`]` rule had no test home in a view body (`SmartAdaptSummaryStreamTests`, including a monotonic growing-buffer case: re-scanning a longer prefix may never lose or reorder what a shorter one already published). The pruning rules went with N29. `ProgressDashboardView`'s period arithmetic — range filter, weekly buckets, VDOT series, and the summary card's six aggregates — is `ProgressPeriodStats` (`ProgressPeriodStatsTests`), which also fixes the shape the inline version got wrong: every average is now optional, so "no run recorded heart rate" is distinguishable from "the average is zero", and each divides by its own sample count rather than the period's run count. The two adaptation filters (Smart Adapt's batch, the run summary's next session) were near-duplicate rules written from opposite directions and are now one `AdaptableWorkoutSelector` (`AdaptableWorkoutSelectorTests`). *Still open:* `RunSummaryView` is ~2,195 lines and still holds `tempoInsights`, the share/HR-zone orchestration, and the coach-feedback prompt assembly. |
+| **D2** `AppContainer` god object | ⚠️ **Partly closed.** The date math is out: `shiftMissedWorkoutsForward`'s clamp is `MissedWorkoutShift`, and `rebuildPlan`'s "how many weeks are left of the old block" is `PlanRebuildWindow` (`PlanRebuildWindowTests` — the inclusive span, the round-up, and the already-expired block that must still yield a plan). `attachWeather` delegates to `WeatherService` (N27). *Still open:* the container is the orchestration point for all of it, and N1's plan lifecycle still lives there. |
 | **D3** no choke point for invariants | Open, and worse than recorded: N4 is a third importer, N1/N2 a second and third plan-deletion policy. |
 | **D4** observation & DI foot-guns | Mostly open. `AppContainer` is still `ObservableObject` behind a custom `EnvironmentKey`; `NotificationService` is still a callback-carrying singleton; N30 is the `AuthService` half. |
 | **D5** pervasive `try? context.save()` | ✅ **Closed.** All 35 sites now go through `ModelContext.saveOrLog(_:)`, which keeps the best-effort semantics — most of these are a preference toggle, a cached insight, a weather snapshot, and making them `throws` would push error handling into views with nothing useful to do with it — and adds the trace that was missing. The defect was never that they don't propagate; it is that a store which had started rejecting writes (disk full, CloudKit schema mismatch, one model failing validation) was indistinguishable from a working one, from the user's side *and* from Pulse. Each call names what it was saving, so the log line identifies the site. The two places where a failure must reach the user still use `do`/`catch`: the run-finish save (N15) and the dashboard's plan-recovery mutations. Covered by `ModelContextSaveTests`. |
 | **D6** unfiltered `@Query`/full-table fetches | ✅ **Closed** for all four readers, and none of them by simply capping a fetch. The dashboard takes the 60 newest runs and the coach chat the 8 its prompt reads. `RunSummaryView` replaced its two whole-table queries with three narrow ones: the plan day found by the run's own id (`linkedRunWorkoutID`) instead of scanning every `ScheduledWorkout`, the newest 51 runs for the two coach requests, and *tempo + race runs only* for `tempoInsights` — which consults nothing else, so the all-time "previous best tempo" is unchanged (pinned by `WorkoutAnalyticsServiceTests`). `HistoryView`'s list moved into a child view initialised with the page size, so each side fetches `limit + 1` rows and the extra row answers "is there more?" without counting the table. `MissedWorkoutDetector.detect` is `static`, so nothing is constructed in a body-evaluated property. *Deliberately left whole-table:* `ProgressView` and `RaceInsightsView`, whose charts are range- or all-time-scoped; they want the same child-view treatment if it ever measures. |
-| **D7** dead code & drift | Open — see N27/N28. |
+| **D7** dead code & drift | Mostly closed — see N27/N28. One duplicate outlived them: the eight-field copy that applies an AI adaptation onto a persisted workout was written out in `PlanTabView` and again in `RunSummaryView`, which is a field-drops-off-one-of-them bug waiting to happen. It is now `ScheduledWorkout.applyAdaptation(from:)`. |
 | **D8** accessibility & localization | Mostly closed. Dynamic Type works again (N19); the run HUD, week strip, charts, metric cells, history rows, and the other modules' icon-only buttons are all labelled and button-based (N18). Localization is still open — every user-facing string is a literal. |
 | **S4** remainder | Open (config). `NSLocalNetworkUsageDescription`/`NSBonjourServices` still ship in the shared `project.yml`. |
 | **`.externalStorage` blobs** | Open (deliberately deferred; needs a device-tested migration). |
@@ -991,10 +997,12 @@ next pass doesn't churn them:
   `ShareCardModel`, `StreakGoalService`, `ProgressStatsService`,
   `WorkoutPaceAlert`, `LocationQualityFilter`, `ScheduledDayResolver`,
   `RunEffortPolicy`, `CoachMarkdown`, `HeartRateBackfill`, `SplitBackfill`,
-  `ChartAccessibility`, `SpokenMetric`, `MissedWorkoutShift` are all UI-free,
+  `ChartAccessibility`, `SpokenMetric`, `MissedWorkoutShift`, `SmartAdaptSummaryStream`,
+  `AdaptableWorkoutSelector`, `ProgressPeriodStats`, `PlanRebuildWindow` are all UI-free,
   `Sendable`, and directly tested. This is the pattern the remaining view-embedded math should
-  follow — the last three show it applies to presentation rules (what a chart or a metric
-  cell *sounds like*) just as well as to maths.
+  follow — `SpokenMetric` and `ChartAccessibility` show it applies to presentation rules
+  (what a chart or a metric cell *sounds like*) just as well as to maths, and
+  `SmartAdaptSummaryStream` shows it applies to parsing.
 - **`GuidedWorkoutState`** in particular is a model implementation: the whole
   state machine is pure, the view only renders and forwards.
 - **Deletion has one owner** for runs and strength (`WorkoutRepository.delete`),
@@ -1047,9 +1055,13 @@ next pass doesn't churn them:
   above added, so this is the natural next step rather than a separate track.
 - N31's two toolchain pins (`XCODEGEN_VERSION`, `XCBEAUTIFY_VERSION`), which still need a
   CI run that reaches the test job.
-- The §6 carry-overs that are still open: D1–D4 and D7 structural work,
-  `.externalStorage`, and S4's plist keys. (D5 and D6 are closed; D8 is down to
-  localization.)
+- The §6 carry-overs that are still open: D3 and D4 structural work, the remainder of
+  D1 (`RunSummaryView`'s size) and D2 (the container as orchestration point),
+  `.externalStorage`, and S4's plist keys. (D5, D6, and D7 are closed; D8 is down to
+  localization.) A fifth pass took D1's and D2's testable halves: the Smart Adapt
+  stream parser, the two adaptation filters, the Progress tab's period arithmetic, and
+  the rebuild window are pure services with tests, and the duplicated apply-adaptation
+  field copy has one owner.
 - **S4's remainder is config-only and small**: `NSLocalNetworkUsageDescription` and
   `NSBonjourServices: _pulse._tcp` still ship in the App Store Info.plist even though
   `PulseIntegrationService.activateIfNeeded` only starts `RemoteLogger` under `#if DEBUG`,
