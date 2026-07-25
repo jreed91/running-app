@@ -203,6 +203,8 @@ Splits are always built per kilometer (`WorkoutTrackerService.swift:172-178`), b
 
 **FIXED:** the splits pace/HR/elevation charts and the splits table now label their per-kilometer buckets "km"/"KM" regardless of the user's distance preference (the axis, rule-mark tooltips, and column header), so a 10 km run no longer reads as ten miles. Pace and elevation values inside each bucket are still shown in the preferred unit (the pace header "Pace per mi" correctly describes the min/mi *rate*).
 
+**Superseded by A1** (`docs/FEATURE_IMPROVEMENTS_2026-07.md`): splits are now bucketed in the runner's own unit at record time and stamped onto `RunWorkout.splitUnit`, so every chart mark, tooltip, and table header labels buckets from that stored unit — "mi 4" on a mile-bucketed run, still "km 4" on a legacy kilometre-bucketed one — instead of being pinned to "km".
+
 **Fix:** either bucket splits by the user's unit at record time, or label the axis honestly ("km") until splits are re-bucketed for display.
 
 ### ✅ H12. Medal "PR" logic crowns slower, shorter runs

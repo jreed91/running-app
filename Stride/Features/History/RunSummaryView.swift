@@ -274,7 +274,8 @@ struct RunSummaryView: View {
                 paceInsightsSection
                 weatherSection
                 plannedWorkoutSection
-                aiCoachSection
+                // Splits and heart-rate zones come before the coaching read: they are the
+                // evidence the insight is written from, and the insight now cites them.
                 if !workout.splits.isEmpty {
                     splitsSection
                     splitsTable
@@ -282,6 +283,7 @@ struct RunSummaryView: View {
                 if !zoneSlices.isEmpty, zoneSlices.contains(where: { $0.seconds > 0 }) {
                     heartRateZoneSection
                 }
+                aiCoachSection
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 32)
@@ -1357,12 +1359,20 @@ struct RunSummaryView: View {
             aiStreamBuffer = ""
         }
 
+        // The coach cites the zone breakdown, so make sure it exists before asking. Normally
+        // the on-open task has already filled it; this covers a tap that lands first, and a
+        // run whose heart-rate samples still need the HealthKit backfill.
+        if zoneSlices.isEmpty {
+            await loadHeartRateZones()
+        }
+
         let historySlice = Array(recentHistory.prefix(Self.insightHistoryRunCount))
         let result = await container.aiCoachService.evaluateWithProvider(
             workout: workout,
             recentHistory: historySlice,
             profile: profiles.first,
             provider: appSettings.aiProvider,
+            heartRateZones: zoneSlices,
             unitPreference: appSettings.unitPreference,
             onChunk: { chunk in
                 Task { @MainActor in
@@ -1482,6 +1492,15 @@ struct RunSummaryView: View {
         SplitChartMetric.available(for: workout.splits)
     }
 
+    /// The pace chart's footnote names the dashed baseline and its pace, since the line
+    /// carries no in-plot label. Only this run knows its own average, so the metric's
+    /// static footnote stands in when there isn't one.
+    private func splitFootnote(_ metric: SplitChartMetric) -> String {
+        guard metric == .pace, let average = averageSplitPace else { return metric.footnote }
+        let pace = average.paceString(unit: appSettings.unitPreference)
+        return "Above the dashed line ran faster than this run's \(pace) average"
+    }
+
     /// The splits card: a tab row that actually switches the chart under it.
     ///
     /// The three tabs were previously a static picture with all three charts stacked
@@ -1506,7 +1525,7 @@ struct RunSummaryView: View {
                 case .heartRate: splitHRChart
                 case .elevation: splitElevationChart
                 }
-                Text(metric.footnote).font(.caption).foregroundStyle(.secondary)
+                Text(splitFootnote(metric)).font(.caption).foregroundStyle(.secondary)
             }
             .padding(16)
             .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
@@ -1515,52 +1534,128 @@ struct RunSummaryView: View {
 
     // MARK: Split pace chart
 
-    // Splits are always recorded per kilometer (`WorkoutTrackerService` buckets
-    // every 1000 m), so the bucket axis, tooltips, and table column are labelled
-    // "km" regardless of the user's distance preference. Labelling a 10 km run's
-    // ten buckets "MI 1 … MI 10" implied a 10-mile run. The pace and elevation
-    // values shown inside each bucket are still converted to the preferred unit.
+    /// This run's average split pace, the line the pace bars are drawn against.
+    private var averageSplitPace: Double? {
+        SplitPaceStats.averagePaceSecondsPerKm(workout.splits)
+    }
+
+    private var splitPaceYDomain: AutomaticScaleDomain {
+        workout.splits.count > 1 && averageSplitPace != nil
+            ? .automatic(includesZero: false, reversed: true)
+            : .automatic
+    }
+
+    /// Pace per split, as deviation from the run's own average.
+    ///
+    /// This was zero-anchored absolute-pace bars, which is close to unreadable for pace: a
+    /// 30-second spread between the fastest and slowest split is a few percent of a bar
+    /// that starts at 0:00, so every split looked identical — and because a bigger number
+    /// means a slower split, the tallest bar was the *worst* one. Bars now run from the
+    /// average pace to each split's pace on a reversed, zero-free scale, so faster splits
+    /// rise above the dashed average line and slower ones hang below it, coloured to match.
+    ///
+    /// Bucket labels come from the run's stored `splitUnit`, so a mile-bucketed run reads
+    /// "mi 4" and a legacy kilometre-bucketed one still reads "km 4".
     private var splitPaceChart: some View {
-        Chart {
+        // Deviation bars need something to deviate from, and a lone split is its own
+        // average — that run keeps a plain zero-anchored bar, which is honest when there is
+        // nothing to compare it with.
+        let average = workout.splits.count > 1 ? averageSplitPace : nil
+        return Chart {
             ForEach(workout.splits, id: \.kilometer) { split in
-                BarMark(
-                    x: .value("km", split.kilometer),
-                    y: .value("Pace", split.paceSecondsPerKm)
-                )
-                .foregroundStyle(selectedSplitPaceKm == split.kilometer ? Color.brand : Color.brand.opacity(selectedSplitPaceKm == nil ? 1.0 : 0.5))
+                let tone = splitPaceTone(split.paceSecondsPerKm, average: average)
+                    .opacity(selectedSplitPaceKm == nil || selectedSplitPaceKm == split.kilometer ? 1.0 : 0.4)
+                if let average {
+                    BarMark(
+                        x: .value(splitLabelUpper, split.kilometer),
+                        yStart: .value("Average", average),
+                        yEnd: .value("Pace", split.paceSecondsPerKm),
+                        width: .ratio(0.62)
+                    )
+                    .foregroundStyle(tone)
+                    .cornerRadius(3)
+                } else {
+                    BarMark(
+                        x: .value(splitLabelUpper, split.kilometer),
+                        y: .value("Pace", split.paceSecondsPerKm),
+                        width: .ratio(0.62)
+                    )
+                    .foregroundStyle(tone)
+                    .cornerRadius(3)
+                }
             }
+
+            if let average {
+                // Deliberately unlabelled inside the plot: an annotation pinned to the line
+                // collides with whichever bar happens to sit at that edge. The footnote
+                // under the chart names the line and its pace instead.
+                RuleMark(y: .value("Average", average))
+                    .foregroundStyle(.secondary.opacity(0.5))
+                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
+            }
+
             if let km = selectedSplitPaceKm, let split = split(forKm: km) {
-                RuleMark(x: .value("km", km))
+                RuleMark(x: .value(splitLabelUpper, km))
                     .foregroundStyle(.secondary.opacity(0.4))
                     .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
                     .annotation(
                         position: .top,
                         overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
                     ) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("\(splitLabel) \(km)")
-                                .font(.caption2).foregroundStyle(.secondary)
-                            Text(split.paceSecondsPerKm.paceString(unit: appSettings.unitPreference))
-                                .font(.caption).bold()
-                        }
-                        .padding(.horizontal, 8).padding(.vertical, 5)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                        splitPaceTooltip(split, average: average)
                     }
             }
         }
-        .frame(height: 120)
+        .frame(height: 140)
+        // Zero is meaningless for a pace comparison, and reversing the axis puts the faster
+        // splits on top. The single-bar fallback keeps the plain upright scale, where a bar
+        // hanging from the top edge would just look broken.
+        .chartYScale(domain: splitPaceYDomain)
         .chartYAxis {
-            AxisMarks { value in
+            AxisMarks(values: .automatic(desiredCount: 4)) { value in
+                AxisGridLine()
                 AxisValueLabel {
                     if let secs = value.as(Double.self) {
-                        Text(secs.paceString(unit: appSettings.unitPreference)
-                            .replacingOccurrences(of: " \(appSettings.unitPreference.paceLabel)", with: ""))
+                        Text(secs.paceValueString(unit: appSettings.unitPreference))
                     }
                 }
             }
         }
         .chartXSelection(value: $selectedSplitPaceKm)
         .chartAccessibility("Split pace chart", splitPaceSummary)
+    }
+
+    private func splitPaceTooltip(_ split: Split, average: Double?) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("\(splitLabel) \(split.kilometer)")
+                .font(.caption2).foregroundStyle(.secondary)
+            Text(split.paceSecondsPerKm.paceString(unit: appSettings.unitPreference))
+                .font(.caption).bold()
+            if let average {
+                Text(
+                    SplitPaceStats.deltaLabel(
+                        pace: split.paceSecondsPerKm,
+                        average: average,
+                        unit: appSettings.unitPreference
+                    )
+                )
+                .font(.caption2)
+                .foregroundStyle(splitPaceTone(split.paceSecondsPerKm, average: average))
+            }
+        }
+        .padding(.horizontal, 8).padding(.vertical, 5)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    /// Faster than this run's average reads as a gain, slower as a caution, and anything
+    /// inside the on-pace tolerance stays neutral so an even run looks even.
+    private func splitPaceTone(_ pace: Double, average: Double?) -> Color {
+        guard let average else { return .brand }
+        switch SplitPaceStats.comparison(pace: pace, average: average, unit: appSettings.unitPreference) {
+        case .faster: return .success
+        case .onPace: return .brand
+        case .slower: return .warning
+        }
     }
 
     // MARK: Split chart accessibility (N18)
@@ -1574,10 +1669,16 @@ struct RunSummaryView: View {
         splits.map { ChartAccessibility.Point(label: "\(splitLabel) \($0.kilometer)", value: value($0)) }
     }
 
+    /// The chart is read against the run's average now, so the spoken summary names it
+    /// first — otherwise a VoiceOver user gets the split values with nothing to judge them
+    /// against, which is exactly what the bars show sighted users.
     private var splitPaceSummary: String {
-        ChartAccessibility.summary(splitPoints(workout.splits) { $0.paceSecondsPerKm }) {
+        let values = ChartAccessibility.summary(splitPoints(workout.splits) { $0.paceSecondsPerKm }) {
             SpokenMetric.spoken(measurement: $0.paceString(unit: appSettings.unitPreference))
         }
+        guard let average = averageSplitPace else { return values }
+        let spokenAverage = SpokenMetric.spoken(measurement: average.paceString(unit: appSettings.unitPreference))
+        return "Average \(spokenAverage). \(values)"
     }
 
     private func splitHeartRateSummary(_ splits: [Split]) -> String {
@@ -1603,19 +1704,19 @@ struct RunSummaryView: View {
         return Chart {
             ForEach(hrSplits, id: \.kilometer) { split in
                 LineMark(
-                    x: .value("km", split.kilometer),
+                    x: .value(splitLabelUpper, split.kilometer),
                     y: .value("bpm", split.heartRate ?? 0)
                 )
                 .foregroundStyle(.zoneInterval)
                 PointMark(
-                    x: .value("km", split.kilometer),
+                    x: .value(splitLabelUpper, split.kilometer),
                     y: .value("bpm", split.heartRate ?? 0)
                 )
                 .foregroundStyle(.zoneInterval)
                 .symbolSize(selectedSplitHRKm == split.kilometer ? 80 : 36)
             }
             if let km = selectedSplitHRKm, let split = split(forKm: km), let hr = split.heartRate {
-                RuleMark(x: .value("km", km))
+                RuleMark(x: .value(splitLabelUpper, km))
                     .foregroundStyle(.secondary.opacity(0.4))
                     .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
                     .annotation(
@@ -1646,7 +1747,7 @@ struct RunSummaryView: View {
             ForEach(workout.splits, id: \.kilometer) { split in
                 let gain = split.elevationGainMeters.elevationValue(unit: appSettings.unitPreference)
                 BarMark(
-                    x: .value("km", split.kilometer),
+                    x: .value(splitLabelUpper, split.kilometer),
                     y: .value(appSettings.unitPreference.elevationLabel, gain)
                 )
                 .foregroundStyle(
@@ -1656,7 +1757,7 @@ struct RunSummaryView: View {
             }
             if let km = selectedSplitElevKm, let split = split(forKm: km) {
                 let gain = split.elevationGainMeters.elevationValue(unit: appSettings.unitPreference)
-                RuleMark(x: .value("km", km))
+                RuleMark(x: .value(splitLabelUpper, km))
                     .foregroundStyle(.secondary.opacity(0.4))
                     .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
                     .annotation(

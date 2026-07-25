@@ -19,9 +19,13 @@ enum SplitChartMetric: String, CaseIterable, Hashable, Sendable {
     var tabTitle: String { rawValue }
 
     /// The line under the chart explaining how to read it.
+    ///
+    /// The pace chart plots each split against the run's own average, so the view replaces
+    /// this with a footnote naming that average's pace; this wording is what's left when the
+    /// run has no average to name.
     var footnote: String {
         switch self {
-        case .pace:      return "Lower = faster"
+        case .pace:      return "Above the dashed line ran faster than this run's average"
         case .heartRate: return "Average heart rate in each split"
         case .elevation: return "Gain within each split"
         }

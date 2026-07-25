@@ -249,12 +249,16 @@ struct AICoachService: Sendable {
         )
     }
 
+    /// - Parameter heartRateZones: this run's time-in-zone breakdown, as shown on the run
+    ///   summary. Passed in rather than derived here because computing it needs the runner's
+    ///   max HR and, for older imported runs, a HealthKit backfill the view already owns.
     @MainActor
     func evaluateWithProvider(
         workout: RunWorkout,
         recentHistory: [RunWorkout],
         profile: UserProfile?,
         provider: AIProvider,
+        heartRateZones: [HRZoneSlice] = [],
         unitPreference: UnitPreference = .metric,
         onChunk: @escaping @Sendable (String) -> Void = { _ in }
     ) async -> AICoachInsight {
@@ -262,12 +266,14 @@ struct AICoachService: Sendable {
             workout: workout,
             recentHistory: recentHistory,
             profile: profile,
+            heartRateZones: heartRateZones,
             unitPreference: unitPreference
         )
         let details = makeWorkoutDetails(
             workout: workout,
             recentHistory: recentHistory,
             profile: profile,
+            heartRateZones: heartRateZones,
             unitPreference: unitPreference
         )
 
@@ -592,6 +598,7 @@ struct AICoachService: Sendable {
         workout: RunWorkout,
         recentHistory: [RunWorkout],
         profile: UserProfile?,
+        heartRateZones: [HRZoneSlice],
         unitPreference: UnitPreference
     ) -> (summary: String, focusAreas: [String]) {
         let drift = paceDriftPercent(for: workout)
@@ -633,6 +640,20 @@ struct AICoachService: Sendable {
             }
         }
 
+        // The split table and the zone breakdown both sit above the coach card on the run
+        // summary, so the read has to speak to them.
+        let breakdown = breakdownContext(
+            workout: workout,
+            heartRateZones: heartRateZones,
+            // The pace-drift bit above already frames the fade, so the half-to-half
+            // comparison is only worth repeating when drift was not computed (fewer than
+            // four splits).
+            includeHalfComparison: drift == nil,
+            unitPreference: unitPreference
+        )
+        summaryBits.append(contentsOf: breakdown.summaryBits)
+        focus.append(contentsOf: breakdown.focusAreas)
+
         if let averageRecentPace {
             let delta = workout.averagePaceSecondsPerKm - averageRecentPace
             if delta < -8 {
@@ -666,6 +687,44 @@ struct AICoachService: Sendable {
             .joined(separator: " ")
 
         return (summary: summary.isEmpty ? "No local summary available." : summary, focusAreas: Array(focus.prefix(3)))
+    }
+
+    /// Summary sentences and focus items drawn from the run's splits and its time-in-zone
+    /// breakdown — the two blocks the run summary shows directly above the coaching read.
+    private func breakdownContext(
+        workout: RunWorkout,
+        heartRateZones: [HRZoneSlice],
+        includeHalfComparison: Bool,
+        unitPreference: UnitPreference
+    ) -> (summaryBits: [String], focusAreas: [String]) {
+        var summaryBits: [String] = []
+        var focus: [String] = []
+
+        if let trend = CoachRunBreakdown.splitTrend(splits: workout.splits, unit: unitPreference) {
+            let splitLabel = workout.splitUnit.distanceLabel
+            summaryBits.append(
+                includeHalfComparison
+                    ? CoachRunBreakdown.splitTrendSentence(trend, splitLabel: splitLabel, unit: unitPreference)
+                    : CoachRunBreakdown.splitRangeSentence(trend, splitLabel: splitLabel, unit: unitPreference)
+            )
+        }
+
+        if let zoneSentence = CoachRunBreakdown.zoneSentence(heartRateZones) {
+            summaryBits.append(zoneSentence)
+        }
+
+        // An easy or long run that spent a big share of its time at threshold or above is
+        // the one zone read that changes the next session's advice.
+        if let hardShare = CoachRunBreakdown.hardEffortShare(heartRateZones),
+           hardShare >= 0.20,
+           workout.workoutType == .easy || workout.workoutType == .longRun {
+            focus.append(
+                "Hold the next \(workout.workoutType.displayName.lowercased()) by effort in Z1–Z2 — "
+                    + "\(Int((hardShare * 100).rounded()))% of this one sat at threshold or harder."
+            )
+        }
+
+        return (summaryBits: summaryBits, focusAreas: focus)
     }
 
     /// A label for the goal race that appends the concrete distance for
@@ -893,6 +952,7 @@ struct AICoachService: Sendable {
         workout: RunWorkout,
         recentHistory: [RunWorkout],
         profile: UserProfile?,
+        heartRateZones: [HRZoneSlice],
         unitPreference: UnitPreference
     ) -> String {
         let date = workout.date.formatted(date: .abbreviated, time: .shortened)
@@ -907,10 +967,23 @@ struct AICoachService: Sendable {
             "Goal race: \(raceLabel(race: $0.goalRace, distanceMeters: $0.effectiveRaceDistanceMeters, unitPreference: unitPreference)), fitness level: \($0.fitnessLevel.displayName), run days/week: \($0.weeklyRunDays)"
         } ?? "No athlete profile available."
 
-        let splits = workout.splits.prefix(10).map {
-            "\(splitDistanceLabel(split: $0, unitPreference: unitPreference)): pace \($0.paceSecondsPerKm.paceString(unit: unitPreference)), hr \($0.heartRate.map { String(Int($0)) } ?? "n/a"), elev \($0.elevationGainMeters.elevationString(unit: unitPreference))"
-        }.joined(separator: "\n")
-        let splitSection = splits.isEmpty ? "No split data." : splits
+        // Splits and zones are what the runner sees immediately above the coach card, so the
+        // prompt carries the same two blocks: every split (middle ones dropped only on very
+        // long runs), the derived pacing trend, and the time-in-zone table.
+        let splitLabel = workout.splitUnit.distanceLabel
+        let splitSection = CoachRunBreakdown.splitSection(
+            splits: workout.splits,
+            unit: unitPreference,
+            splitLabel: splitLabel
+        )
+        let splitTrendSection = CoachRunBreakdown
+            .splitTrend(splits: workout.splits, unit: unitPreference)
+            .map { CoachRunBreakdown.splitTrendLine($0, splitLabel: splitLabel, unit: unitPreference) }
+            ?? "Not enough splits to derive a trend."
+        let zoneSection = CoachRunBreakdown.zoneSection(
+            heartRateZones,
+            maxHR: profile?.effectiveMaxHeartRate.map(Double.init)
+        )
 
         let recent = recentHistory.prefix(5).map { run in
             "\(run.date.formatted(date: .abbreviated, time: .omitted)) • \(run.workoutType.displayName) • \(run.distanceMeters.distanceString(unit: unitPreference)) • \(run.averagePaceSecondsPerKm.paceString(unit: unitPreference))"
@@ -929,21 +1002,17 @@ struct AICoachService: Sendable {
         Weather: \(weather)
         \(profileContext)
 
-        Splits:
+        Splits (one per \(splitLabel)):
         \(splitSection)
+
+        Split trend: \(splitTrendSection)
+
+        Time in heart-rate zones:
+        \(zoneSection)
 
         Recent history:
         \(recentSection)
         """
-    }
-
-    private func splitDistanceLabel(split: Split, unitPreference: UnitPreference) -> String {
-        if split.cumulativeDistanceMeters > 0 {
-            return split.cumulativeDistanceMeters.distanceString(unit: unitPreference)
-        }
-
-        let distanceMeters = Double(split.kilometer) * 1_000
-        return distanceMeters.distanceString(unit: unitPreference)
     }
 }
 
@@ -961,11 +1030,14 @@ extension AICoachService {
     You are an expert running coach analysing a single completed run. Give concise, \
     practical, evidence-based feedback grounded only in the supplied data. Cite this \
     run's actual pace, splits, distance, terrain, and conditions, and tailor the read \
-    to what is distinctive about this session rather than generic advice. Vary the \
-    lead focus run to run (pacing execution, split trends, structure, terrain, \
-    conditions, or recovery load). Treat heart rate as supporting context, not a \
-    problem, unless it is clearly and substantially abnormal for this run type. Avoid \
-    medical advice or clinical claims and never mention that you are an AI.
+    to what is distinctive about this session rather than generic advice. Use the \
+    per-split table, the split trend, and the time-in-heart-rate-zone breakdown: name \
+    specific splits and zones so the read matches the charts the runner is looking at. \
+    Vary the lead focus run to run (pacing execution, split trends, zone distribution, \
+    structure, terrain, conditions, or recovery load). Treat heart rate as supporting \
+    context, not a problem, unless it is clearly and substantially abnormal for this \
+    run type. Avoid medical advice or clinical claims and never mention that you are \
+    an AI.
     """
 
     static func insightPrompt(summary: String, focusAreas: [String], details: String) -> String {
