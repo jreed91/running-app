@@ -133,4 +133,28 @@ struct NotificationServiceTests {
         #expect(defaults.data(forKey: "\(prefix)\(pendingID.uuidString)") != nil)
         #expect(defaults.string(forKey: "unrelated.key") == "keep")
     }
+
+    /// "Reset All Data" has to drop *every* snapshot, including ones for runs that
+    /// never imported — otherwise the next launch re-inserts a run the user just
+    /// deleted from the snapshot fallback (N11).
+    @Test("Reset clears the pending-review pointer and every snapshot")
+    func clearAllReviewStateRemovesPointerAndSnapshots() throws {
+        let suiteName = "NotificationServiceTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let pendingID = UUID()
+        let prefix = "syncedRunReviewSnapshot."
+        defaults.set(Data([0x1]), forKey: "\(prefix)\(UUID().uuidString)")
+        defaults.set(Data([0x2]), forKey: "\(prefix)\(pendingID.uuidString)")
+        defaults.set(pendingID.uuidString, forKey: NotificationService.pendingReviewWorkoutIDKey)
+        defaults.set("keep", forKey: "unrelated.key")
+
+        NotificationService.clearAllReviewState(in: defaults)
+
+        let remaining = defaults.dictionaryRepresentation().keys.filter { $0.hasPrefix(prefix) }
+        #expect(remaining.isEmpty)
+        #expect(defaults.string(forKey: NotificationService.pendingReviewWorkoutIDKey) == nil)
+        #expect(defaults.string(forKey: "unrelated.key") == "keep")
+    }
 }

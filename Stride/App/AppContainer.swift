@@ -361,19 +361,15 @@ final class AppContainer: ObservableObject {
 
     /// Fetches weather for the given coordinate and attaches it to the workout, then saves.
     /// Silently no-ops if WeatherKit is unavailable or the workout has no coordinate.
+    ///
+    /// The body lives on `WeatherService` so the importer's copy and this one can't
+    /// drift (N27).
     func attachWeather(to workout: RunWorkout, coordinate: Coordinate) async {
-        AppLogger.log(
-            "Attaching weather to workout \(workout.id) at (\(String(format: "%.4f", coordinate.latitude)), \(String(format: "%.4f", coordinate.longitude)))",
-            label: "WeatherKit",
-            level: .debug
+        await weatherService.attach(
+            to: workout,
+            coordinate: coordinate,
+            context: modelContainer.mainContext
         )
-        guard let summary = await weatherService.fetchWeather(at: coordinate, date: workout.date) else {
-            AppLogger.log("Weather fetch returned nil for workout \(workout.id) — skipping attach", label: "WeatherKit", level: .warning)
-            return
-        }
-        workout.weather = summary
-        try? modelContainer.mainContext.save()
-        AppLogger.log("Weather attached to workout \(workout.id)", label: "WeatherKit", level: .info)
     }
 
     // MARK: - Workout Review
@@ -389,7 +385,7 @@ final class AppContainer: ObservableObject {
         NotificationService.pruneReviewSnapshots(storedRunIDs: storedRunIDs)
 
         guard
-            let idString = UserDefaults.standard.string(forKey: "pendingReviewWorkoutID"),
+            let idString = UserDefaults.standard.string(forKey: NotificationService.pendingReviewWorkoutIDKey),
             pendingReviewWorkout == nil
         else { return }
         surfacePendingReviewWorkout(idString: idString)
@@ -440,7 +436,7 @@ final class AppContainer: ObservableObject {
     /// Clears the persisted pending-review pointer and its snapshot once the run has been
     /// surfaced (or intentionally skipped), so it can't re-trigger on the next launch.
     private func clearPendingReview(idString: String) {
-        UserDefaults.standard.removeObject(forKey: "pendingReviewWorkoutID")
+        UserDefaults.standard.removeObject(forKey: NotificationService.pendingReviewWorkoutIDKey)
         notificationService.removeReviewSnapshot(idString: idString)
     }
 
@@ -630,6 +626,50 @@ final class AppContainer: ObservableObject {
         // Fire-and-forget: a failure here must not fail the rebuild the user asked for.
         Task { @MainActor [healthKitRepository] in
             try? await healthKitRepository.removeWorkoutPlans(for: oldPlan)
+        }
+    }
+
+    // MARK: - Reset
+
+    /// Everything **Settings → Reset All Data** has to tear down, in one place (N11).
+    ///
+    /// Deleting the SwiftData rows was only the visible half of a reset. Left behind,
+    /// each of these outlives the data it describes:
+    ///
+    /// - up to 56 pending morning reminders keep firing for a plan that no longer exists;
+    /// - the plan's WorkoutKit entries stay on the Watch and in Fitness, so the app
+    ///   drops to onboarding while the Watch still offers last week's workouts;
+    /// - the pending-review pointer and its snapshot can re-insert a deleted run on
+    ///   the next launch, which is a reset that undoes itself.
+    ///
+    /// Order matters: the Watch entries are found through the plans that own them, so
+    /// they have to be removed *before* the models are deleted.
+    func resetAllData(context: ModelContext) async {
+        await notificationService.cancelAllMorningReminders()
+
+        let plans = (try? context.fetch(FetchDescriptor<TrainingPlan>())) ?? []
+        for plan in plans {
+            // Best-effort per plan: an unauthorized or unsupported scheduler must not
+            // stop the reset the user explicitly confirmed.
+            try? await healthKitRepository.removeWorkoutPlans(for: plan)
+        }
+
+        NotificationService.clearAllReviewState()
+        pendingReviewWorkout = nil
+
+        do {
+            try context.delete(model: RunWorkout.self)
+            try context.delete(model: StrengthWorkout.self)
+            try context.delete(model: ScheduledWorkout.self)
+            try context.delete(model: TrainingWeek.self)
+            try context.delete(model: TrainingPlan.self)
+            try context.delete(model: UserProfile.self)
+            try context.delete(model: SavedRoute.self)
+            try context.delete(model: DeletedWorkout.self)
+            try context.save()
+            AppLogger.log("Reset All Data completed for \(plans.count) plan(s).", label: "Data", level: .notice)
+        } catch {
+            AppLogger.log("Reset All Data failed: \(error)", label: "Data", level: .error)
         }
     }
 

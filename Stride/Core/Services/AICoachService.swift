@@ -1,5 +1,15 @@
 import Foundation
 
+/// A runner's thumbs-up/down on a coach insight.
+///
+/// Lives here rather than inside the run-summary view because it is persisted on the
+/// run (N22): the row used to write to view state that nothing read, so the rating
+/// vanished the moment the screen was dismissed.
+enum AICoachReaction: String, Codable, Sendable {
+    case up
+    case down
+}
+
 struct AICoachInsight: Codable, Sendable {
     let headline: String
     let summary: String
@@ -25,21 +35,6 @@ struct AICoachEvidenceItem: Codable, Hashable, Sendable {
         self.delta = delta
         self.tone = tone
     }
-
-    enum CodingKeys: String, CodingKey {
-        case label
-        case value
-        case delta
-        case tone
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        label = container.decodeFlexibleStringIfPresent(forKey: .label) ?? "Metric"
-        value = container.decodeFlexibleStringIfPresent(forKey: .value) ?? "N/A"
-        delta = container.decodeFlexibleStringIfPresent(forKey: .delta)
-        tone = container.decodeFlexibleStringIfPresent(forKey: .tone) ?? "neutral"
-    }
 }
 
 struct AICoachActionItem: Codable, Hashable, Sendable {
@@ -56,44 +51,23 @@ struct AICoachActionItem: Codable, Hashable, Sendable {
         self.metric = metric
         self.tone = tone
     }
-
-    enum CodingKeys: String, CodingKey {
-        case title
-        case detail
-        case priority
-        case metric
-        case tone
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        title = container.decodeFlexibleStringIfPresent(forKey: .title) ?? "Adjust effort"
-        detail = container.decodeFlexibleStringIfPresent(forKey: .detail) ?? "Keep the next run controlled and easy."
-        priority = container.decodeFlexibleStringIfPresent(forKey: .priority) ?? "Medium"
-        metric = container.decodeFlexibleStringIfPresent(forKey: .metric)
-        tone = container.decodeFlexibleStringIfPresent(forKey: .tone)
-    }
 }
 
-struct AICoachStructuredResponse: Decodable, Sendable {
-    struct NextWorkout: Decodable, Sendable {
+/// The coach's analysis in the shape the UI consumes.
+///
+/// Once produced by parsing free-form model JSON; now only ever built by the
+/// Foundation Models backend's guided generation (`GeneratedCoachInsight`). The
+/// tolerant `Decodable` machinery that went with the JSON path — flexible
+/// string/int coercion, alternate `action_items`/`actions` keys, per-field defaults —
+/// had no remaining caller and has been removed (N28).
+struct AICoachStructuredResponse: Sendable {
+    struct NextWorkout: Sendable {
         let title: String
         let rationale: String
 
         init(title: String, rationale: String) {
             self.title = title
             self.rationale = rationale
-        }
-
-        enum CodingKeys: String, CodingKey {
-            case title
-            case rationale
-        }
-
-        init(from decoder: Decoder) throws {
-            let container = try decoder.container(keyedBy: CodingKeys.self)
-            title = container.decodeFlexibleStringIfPresent(forKey: .title) ?? "Next easy run"
-            rationale = container.decodeFlexibleStringIfPresent(forKey: .rationale) ?? "Keep the next session controlled so the training plan stays on track."
         }
     }
 
@@ -104,17 +78,6 @@ struct AICoachStructuredResponse: Decodable, Sendable {
     let evidence: [AICoachEvidenceItem]
     let actionItems: [AICoachActionItem]
     let nextWorkout: NextWorkout
-
-    enum CodingKeys: String, CodingKey {
-        case headline
-        case summary
-        case fullAnalysis = "full_analysis"
-        case confidence
-        case evidence
-        case actionItems = "action_items"
-        case actions
-        case nextWorkout = "next_workout"
-    }
 
     init(
         headline: String,
@@ -132,54 +95,6 @@ struct AICoachStructuredResponse: Decodable, Sendable {
         self.evidence = evidence
         self.actionItems = actionItems
         self.nextWorkout = nextWorkout
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        headline = container.decodeFlexibleStringIfPresent(forKey: .headline) ?? "Workout analysis"
-        summary = container.decodeFlexibleStringIfPresent(forKey: .summary)
-            ?? container.decodeFlexibleStringIfPresent(forKey: .fullAnalysis)
-            ?? ""
-        fullAnalysis = container.decodeFlexibleStringIfPresent(forKey: .fullAnalysis)
-        confidence = container.decodeFlexibleIntIfPresent(forKey: .confidence) ?? 0
-        evidence = (try? container.decodeIfPresent([AICoachEvidenceItem].self, forKey: .evidence)) ?? []
-        actionItems = (try? container.decodeIfPresent([AICoachActionItem].self, forKey: .actionItems))
-            ?? (try? container.decodeIfPresent([AICoachActionItem].self, forKey: .actions))
-            ?? []
-        nextWorkout = (try? container.decodeIfPresent(NextWorkout.self, forKey: .nextWorkout))
-            ?? NextWorkout(title: "Next easy run", rationale: "Keep the next session controlled so the training plan stays on track.")
-    }
-}
-
-private extension KeyedDecodingContainer {
-    func decodeFlexibleStringIfPresent(forKey key: Key) -> String? {
-        if let value = try? decodeIfPresent(String.self, forKey: key) {
-            return value
-        }
-        if let value = try? decodeIfPresent(Int.self, forKey: key) {
-            return String(value)
-        }
-        if let value = try? decodeIfPresent(Double.self, forKey: key) {
-            return value.rounded() == value ? String(Int(value)) : String(value)
-        }
-        if let value = try? decodeIfPresent(Bool.self, forKey: key) {
-            return value ? "true" : "false"
-        }
-        return nil
-    }
-
-    func decodeFlexibleIntIfPresent(forKey key: Key) -> Int? {
-        if let value = try? decodeIfPresent(Int.self, forKey: key) {
-            return value
-        }
-        if let value = try? decodeIfPresent(Double.self, forKey: key) {
-            return Int(value.rounded())
-        }
-        if let value = try? decodeIfPresent(String.self, forKey: key) {
-            let digits = value.filter { $0.isNumber }
-            return Int(digits)
-        }
-        return nil
     }
 }
 

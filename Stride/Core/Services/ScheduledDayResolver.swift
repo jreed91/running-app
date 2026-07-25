@@ -46,6 +46,42 @@ enum ScheduledDayResolver {
         workouts(on: date, in: plan, calendar: calendar).filter { $0.workoutType != .rest }
     }
 
+    /// What a day means when it holds no session to start.
+    ///
+    /// The dashboard rendered the same "Rest day · Recovery is part of training" card
+    /// for all three of these (N23), so scrolling to next month — or opening the app
+    /// before ever making a plan — told the runner they were resting according to a
+    /// plan that says nothing about that day.
+    enum DayState: Equatable {
+        /// The plan schedules work: one or more non-rest sessions.
+        case scheduled
+        /// The plan covers this day and asks for nothing — a genuine rest day.
+        case rest
+        /// There is an active plan, but this date falls outside its range.
+        case outsidePlan
+        /// No active plan at all.
+        case noPlan
+    }
+
+    /// Classifies `date` against the plan. Pure, so the three empty cases can be tested
+    /// without a view.
+    static func dayState(
+        on date: Date,
+        in plan: TrainingPlan?,
+        calendar: Calendar = .current
+    ) -> DayState {
+        guard let plan else { return .noPlan }
+        guard sessions(on: date, in: plan, calendar: calendar).isEmpty else { return .scheduled }
+
+        let day = calendar.startOfDay(for: date)
+        let start = calendar.startOfDay(for: plan.startDate)
+        let end = calendar.startOfDay(for: plan.endDate)
+        // A plan whose end precedes its start is malformed rather than empty; it covers
+        // no days, so every date is outside it.
+        guard start <= end else { return .outsidePlan }
+        return (start...end).contains(day) ? .rest : .outsidePlan
+    }
+
     /// Whether an uncompleted session scheduled on `date` can be started now.
     ///
     /// Today, plus one day late — the same tolerance `WorkoutSyncService` applies when

@@ -492,7 +492,13 @@ struct DashboardView: View {
             // session instead of an arbitrary first match, which left the other one
             // unreachable from the dashboard entirely (N12).
             if sessionsForSelectedDate.isEmpty {
-                restDayCard
+                // "Nothing scheduled" is three different things, and calling them all a
+                // rest day claimed a plan said something it never said (N23).
+                switch selectedDayState {
+                case .rest, .scheduled: restDayCard
+                case .outsidePlan:      outsidePlanCard
+                case .noPlan:           noPlanCard
+                }
             } else {
                 ForEach(sessionsForSelectedDate) { workout in
                     VStack(alignment: .leading, spacing: 10) {
@@ -566,17 +572,55 @@ struct DashboardView: View {
     }
 
     private var restDayCard: some View {
+        emptyDayCard(
+            icon: .moon,
+            tint: .zoneEasy,
+            title: "Rest day",
+            subtitle: "Recovery is part of training."
+        )
+    }
+
+    /// Shown for a date the active plan doesn't cover — scrolling to next month is not
+    /// the plan prescribing rest (N23).
+    private var outsidePlanCard: some View {
+        emptyDayCard(
+            icon: .calendar,
+            tint: .secondary,
+            title: "Outside your plan",
+            subtitle: activePlan.map { plan in
+                "Your plan runs \(plan.startDate.formatted(.dateTime.month().day())) – "
+                    + "\(plan.endDate.formatted(.dateTime.month().day()))."
+            } ?? "This day isn't part of your training plan."
+        )
+    }
+
+    /// Shown when there is no active plan at all — a CTA, not a rest day (N23).
+    private var noPlanCard: some View {
+        emptyDayCard(
+            icon: .calendar,
+            tint: .brand,
+            title: "No training plan yet",
+            subtitle: "Create a plan in the Plan tab, or start a free run below."
+        )
+    }
+
+    private func emptyDayCard(
+        icon: StrideIconName,
+        tint: Color,
+        title: String,
+        subtitle: String
+    ) -> some View {
         HStack(spacing: 14) {
             ZStack {
                 Circle()
-                    .fill(Color.zoneEasy.opacity(0.15))
+                    .fill(tint.opacity(0.15))
                     .frame(width: 48, height: 48)
-                StrideIcon(name: .moon, size: 22, color: .zoneEasy, strokeWeight: 2.2)
+                StrideIcon(name: icon, size: 22, color: tint, strokeWeight: 2.2)
             }
             VStack(alignment: .leading, spacing: 3) {
-                Text("Rest day")
+                Text(title)
                     .font(.bodyStrong)
-                Text("Recovery is part of training.")
+                Text(subtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -587,16 +631,18 @@ struct DashboardView: View {
             RoundedRectangle(cornerRadius: 18)
                 .fill(
                     LinearGradient(
-                        colors: [Color.zoneEasy.opacity(0.12), Color.zoneEasy.opacity(0.04)],
+                        colors: [tint.opacity(0.12), tint.opacity(0.04)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 18)
-                        .strokeBorder(Color.zoneEasy.opacity(0.2), lineWidth: 0.5)
+                        .strokeBorder(tint.opacity(0.2), lineWidth: 0.5)
                 )
         )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title). \(subtitle)")
     }
 
     // MARK: - Free Run Button
@@ -646,6 +692,12 @@ struct DashboardView: View {
     /// Sessions scheduled on the selected day, excluding an explicit rest day.
     private var sessionsForSelectedDate: [ScheduledWorkout] {
         ScheduledDayResolver.sessions(on: selectedDate, in: activePlan)
+    }
+
+    /// What the selected day means when it holds no session: an actual rest day, a date
+    /// outside the plan, or no plan at all (N23).
+    private var selectedDayState: ScheduledDayResolver.DayState {
+        ScheduledDayResolver.dayState(on: selectedDate, in: activePlan)
     }
 
     /// Whether the selected day's sessions can still be started (today, or one day

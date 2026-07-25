@@ -325,12 +325,31 @@ final class NotificationService: NSObject {
         storedRunIDs: Set<UUID>,
         in defaults: UserDefaults = .standard
     ) {
-        for key in defaults.dictionaryRepresentation().keys where key.hasPrefix(reviewSnapshotKeyPrefix) {
+        for key in reviewSnapshotKeys(in: defaults) {
             let idString = String(key.dropFirst(reviewSnapshotKeyPrefix.count))
             if let uuid = UUID(uuidString: idString), storedRunIDs.contains(uuid) {
                 defaults.removeObject(forKey: key)
             }
         }
+    }
+
+    /// Drops the pending-review pointer **and every stored snapshot**, whether or
+    /// not the run it describes is in the store.
+    ///
+    /// "Reset All Data" (N11) needs this: a snapshot is a full copy of a run, so a
+    /// reset that only clears SwiftData leaves the next launch free to resurrect a
+    /// run the user just deleted (`AppContainer.surfacePendingReviewWorkout`
+    /// re-inserts from the snapshot when the row is missing — which, after a reset,
+    /// it always is).
+    nonisolated static func clearAllReviewState(in defaults: UserDefaults = .standard) {
+        defaults.removeObject(forKey: pendingReviewWorkoutIDKey)
+        for key in reviewSnapshotKeys(in: defaults) {
+            defaults.removeObject(forKey: key)
+        }
+    }
+
+    private nonisolated static func reviewSnapshotKeys(in defaults: UserDefaults) -> [String] {
+        defaults.dictionaryRepresentation().keys.filter { $0.hasPrefix(reviewSnapshotKeyPrefix) }
     }
 
     // MARK: Private
@@ -348,6 +367,12 @@ final class NotificationService: NSObject {
     }
 
     private nonisolated static let reviewSnapshotKeyPrefix = "syncedRunReviewSnapshot."
+
+    /// Defaults key holding the id of a run synced outside the foreground, waiting
+    /// to be surfaced for review. Shared so the writers (`handleSyncedRunTap`,
+    /// `WorkoutSyncService`) and the readers/clearers (`AppContainer`, `StrideApp`,
+    /// `clearAllReviewState`) can't drift apart on the spelling.
+    nonisolated static let pendingReviewWorkoutIDKey = "pendingReviewWorkoutID"
 
     private nonisolated static func reviewSnapshotKey(_ idString: String) -> String {
         "\(reviewSnapshotKeyPrefix)\(idString)"
@@ -368,7 +393,7 @@ final class NotificationService: NSObject {
     }
 
     private func handleSyncedRunTap(workoutID: String) {
-        UserDefaults.standard.set(workoutID, forKey: "pendingReviewWorkoutID")
+        UserDefaults.standard.set(workoutID, forKey: Self.pendingReviewWorkoutIDKey)
         guard let onSyncedRunTapped else {
             bufferedSyncedRunTapID = workoutID
             return

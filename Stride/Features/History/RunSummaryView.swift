@@ -5,9 +5,11 @@ import SwiftData
 import UIKit
 
 // This screen is a large, pre-existing composite view (run map, charts, splits, AI
-// coach) that already exceeds SwiftLint's file_length limit. Disable the rule here
-// rather than force a risky split; a proper decomposition is tracked separately.
-// swiftlint:disable file_length
+// coach) that already exceeds SwiftLint's file_length and type_body_length limits.
+// Disable the rules here rather than force a risky split; a proper decomposition is
+// tracked separately (D1). The exemption is what lets the project-wide thresholds be
+// set from the *next* largest type instead of from this one (N31).
+// swiftlint:disable file_length type_body_length
 
 struct RunSummaryView: View {
     let workout: RunWorkout
@@ -29,20 +31,23 @@ struct RunSummaryView: View {
     @State private var selectedSplitPaceKm: Int? = nil
     @State private var selectedSplitHRKm: Int? = nil
     @State private var selectedSplitElevKm: Int? = nil
+    /// Which split chart the tab row is showing (N22).
+    @State private var selectedSplitMetric: SplitMetric = .pace
     @State private var showDeleteConfirmation = false
     @State private var showAssociateSheet = false
     @State private var aiInsight: AICoachInsight?
     @State private var isLoadingAIInsight = false
     @State private var aiStreamBuffer = ""
     @State private var showFullAIAnalysis = false
-    @State private var aiReaction: AIReaction?
     @State private var isApplyingNextSessionFeedback = false
     @State private var nextSessionUpdateMessage: String?
     @State private var coachChatRequest: AICoachChatRequest?
     @State private var zoneSlices: [HRZoneSlice] = []
-    /// Pre-rendered share card (B5), built off the run's data so the toolbar `ShareLink` has an
-    /// item ready. `nil` until the first render completes.
-    @State private var shareCardImage: Image?
+    /// The rendered share card (B5), non-nil only while the share sheet is up. Rendering
+    /// is deferred until the user taps Share (N21) — the map snapshot plus a ×3
+    /// `ImageRenderer` pass is far too expensive to run on every run-detail open.
+    @State private var shareCard: ShareCardImage?
+    @State private var isRenderingShareCard = false
 
     private var matchedScheduled: ScheduledWorkout? {
         scheduledWorkouts.first { $0.completedWorkout?.id == workout.id }
@@ -101,11 +106,17 @@ struct RunSummaryView: View {
         )
     }
 
-    /// Renders the shareable run card (B5) to an image so the toolbar `ShareLink` has an item
-    /// ready. First awaits a map snapshot of the route (async `MKMapSnapshotter`) to composite
-    /// behind the route, then renders the card via `ImageRenderer` (×3 → ~1080×1350). Runs once
-    /// per run, since a saved run's data is static.
+    /// Renders the shareable run card (B5) and presents the share sheet.
+    ///
+    /// A map snapshot (`MKMapSnapshotter`) plus a ×3 `ImageRenderer` pass (~1080×1350)
+    /// used to run on every open of this screen, ahead of the heart-rate zones the user
+    /// actually looks at, for a card most opens never share (N21). It now runs only when
+    /// Share is tapped.
     private func renderShareCard() async {
+        guard !isRenderingShareCard else { return }
+        isRenderingShareCard = true
+        defer { isRenderingShareCard = false }
+
         let model = ShareCardModel.make(from: workout, unit: appSettings.unitPreference)
         let mapImage = await RouteSnapshotService.routeSnapshot(
             coordinates: workout.routeCoordinates,
@@ -118,9 +129,11 @@ struct RunSummaryView: View {
             content: RunShareCardView(model: model, routeMapImage: mapImage)
         )
         renderer.scale = 3
-        if let uiImage = renderer.uiImage {
-            shareCardImage = Image(uiImage: uiImage)
+        guard let uiImage = renderer.uiImage else {
+            AppLogger.log("Share card render produced no image", label: "Share", level: .error)
+            return
         }
+        shareCard = ShareCardImage(image: uiImage)
     }
 
     private var recentHistory: [RunWorkout] {
@@ -175,9 +188,7 @@ struct RunSummaryView: View {
                 plannedWorkoutSection
                 aiCoachSection
                 if !workout.splits.isEmpty {
-                    splitPaceChart
-                    if hasSplitHR { splitHRChart }
-                    if hasSplitElevation { splitElevationChart }
+                    splitsSection
                     splitsTable
                 }
                 if !zoneSlices.isEmpty, zoneSlices.contains(where: { $0.seconds > 0 }) {
@@ -189,7 +200,8 @@ struct RunSummaryView: View {
             .frame(maxWidth: .infinity)
         }
         .task(id: workout.id) {
-            await renderShareCard()
+            // Heart-rate zones are content on the screen, so they load first and alone;
+            // the share card renders on demand (N21).
             await loadHeartRateZones()
         }
         .background(Color.surfacePrimary.ignoresSafeArea())
@@ -204,16 +216,20 @@ struct RunSummaryView: View {
                 }
                 .accessibilityLabel("Close")
             }
-            if let shareCardImage {
-                ToolbarItem(placement: .primaryAction) {
-                    ShareLink(
-                        item: shareCardImage,
-                        preview: SharePreview("Run summary", image: shareCardImage)
-                    ) {
+            ToolbarItem(placement: .primaryAction) {
+                // Always present, rather than popping into the toolbar seconds after the
+                // screen appears once a pre-render finished (N21).
+                Button {
+                    Task { await renderShareCard() }
+                } label: {
+                    if isRenderingShareCard {
+                        ProgressView()
+                    } else {
                         Image(systemName: "square.and.arrow.up")
                     }
-                    .accessibilityLabel("Share run")
                 }
+                .disabled(isRenderingShareCard)
+                .accessibilityLabel("Share run")
             }
             ToolbarItem(placement: .primaryAction) {
                 Button(role: .destructive) {
@@ -226,6 +242,9 @@ struct RunSummaryView: View {
         }
         .sheet(isPresented: $showAssociateSheet) {
             AssociateWorkoutSheet(workout: workout)
+        }
+        .sheet(item: $shareCard) { card in
+            ShareSheet(image: card.image)
         }
         .sheet(item: $coachChatRequest) { request in
             AICoachChatView(workout: workout, initialPrompt: request.prompt)
@@ -820,7 +839,13 @@ struct RunSummaryView: View {
                 .padding(.horizontal, 4)
 
                 if isLoadingAIInsight {
-                    aiCoachSkeletonSection
+                    // Show the coach's text the moment it arrives instead of a skeleton
+                    // over an already-populated buffer (N22).
+                    if aiStreamBuffer.isEmpty {
+                        aiCoachSkeletonSection
+                    } else {
+                        aiStreamingPreviewCard
+                    }
                 } else if let aiInsight {
                     if aiInsight.apiReady {
                         aiCoachingReadCard(aiInsight)
@@ -1082,19 +1107,28 @@ struct RunSummaryView: View {
             .joined(separator: " ")
     }
 
-    private func reactionButton(_ reaction: AIReaction) -> some View {
-        Button {
+    /// Thumbs-up/down on the coach insight, stored on the run (N22).
+    ///
+    /// The rating used to live in view state that nothing read — not persisted, not sent
+    /// anywhere, gone on dismiss. It now survives, and a second tap on the active thumb
+    /// clears it.
+    private func reactionButton(_ reaction: AICoachReaction) -> some View {
+        let isActive = workout.aiCoachReaction == reaction
+        return Button {
             withAnimation(AppAnimation.snappy) {
-                aiReaction = aiReaction == reaction ? nil : reaction
+                workout.aiCoachReaction = isActive ? nil : reaction
             }
+            try? context.save()
         } label: {
             Image(systemName: reaction == .up ? "hand.thumbsup" : "hand.thumbsdown")
                 .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(aiReaction == reaction ? Color.brand : Color.secondary)
+                .foregroundStyle(isActive ? Color.brand : Color.secondary)
                 .frame(width: 48, height: 48)
                 .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(reaction == .up ? "Helpful" : "Not helpful")
+        .accessibilityAddTraits(isActive ? [.isButton, .isSelected] : .isButton)
     }
 
     private func aiAttribution(_ insight: AICoachInsight) -> some View {
@@ -1140,6 +1174,36 @@ struct RunSummaryView: View {
     }
 
     // MARK: Skeleton loading
+
+    /// The partial coaching text as it streams in.
+    ///
+    /// `aiStreamBuffer` was accumulated and never rendered (N22), so the runner watched a
+    /// shimmering skeleton while the analysis was already in memory. The full card still
+    /// replaces this once the structured insight is decoded.
+    private var aiStreamingPreviewCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                SparkleShape()
+                    .fill(Color.brand)
+                    .frame(width: 14, height: 14)
+                Text("COACHING READ")
+                    .font(.system(size: 11, weight: .bold))
+                    .kerning(1.4)
+                    .foregroundStyle(.brand)
+                Spacer()
+                ProgressView().controlSize(.small)
+            }
+            Text(markdownText(aiStreamBuffer))
+                .font(.system(size: 14))
+                .lineSpacing(3)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Coach analysis, still writing")
+    }
 
     private var aiCoachSkeletonSection: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -1198,100 +1262,14 @@ struct RunSummaryView: View {
         }
     }
 
+    // Both of these used to be spelled out here and again inside each nested row type;
+    // `CoachMarkdown` is now the one definition (N27).
     private func normalizedMarkdownText(_ text: String) -> String {
-        var output = text
-        let replacements = ["**", "__", "`", "###", "##", "#", ">", "_"]
-        replacements.forEach { output = output.replacingOccurrences(of: $0, with: "") }
-
-        let prefixes = ["- ", "* ", "+ "]
-        for prefix in prefixes where output.hasPrefix(prefix) {
-            output.removeFirst(prefix.count)
-        }
-
-        if let range = output.range(of: #"^\d+\.\s+"#, options: .regularExpression) {
-            output.removeSubrange(range)
-        }
-
-        return output.trimmingCharacters(in: .whitespacesAndNewlines)
+        CoachMarkdown.stripped(text)
     }
 
     private func markdownText(_ text: String) -> AttributedString {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let attributed = try? AttributedString(
-            markdown: trimmed,
-            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-        ) {
-            return attributed
-        }
-        return AttributedString(normalizedMarkdownText(text))
-    }
-
-    private struct AIActionItemRow: View {
-        let action: AICoachActionItem
-
-        var body: some View {
-            HStack(alignment: .top, spacing: 10) {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(priorityColor)
-                    .font(.caption)
-                    .padding(.top, 2)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
-                        Text(Self.markdownText(action.title))
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.primary)
-                        Text(cleaned(action.priority).uppercased())
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(priorityColor)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
-                            .background(priorityColor.opacity(0.12), in: Capsule())
-                    }
-
-                    Text(Self.markdownText(action.detail))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .padding(10)
-            .background(.surfaceTertiary, in: RoundedRectangle(cornerRadius: 10))
-        }
-
-        private var priorityColor: Color {
-            switch action.priority.lowercased() {
-            case "high":
-                return .warning
-            case "low":
-                return .secondary
-            default:
-                return .success
-            }
-        }
-
-        private func cleaned(_ text: String) -> String {
-            var output = text
-            ["**", "__", "`", "###", "##", "#", ">", "_"].forEach {
-                output = output.replacingOccurrences(of: $0, with: "")
-            }
-            return output.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-
-        private static func markdownText(_ text: String) -> AttributedString {
-            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            if let attributed = try? AttributedString(
-                markdown: trimmed,
-                options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-            ) {
-                return attributed
-            }
-            var output = trimmed
-            ["**", "__", "`", "###", "##", "#", ">", "_"].forEach {
-                output = output.replacingOccurrences(of: $0, with: "")
-            }
-            return AttributedString(output)
-        }
+        CoachMarkdown.attributed(text)
     }
 
     @MainActor
@@ -1364,8 +1342,11 @@ struct RunSummaryView: View {
             return
         }
 
+        // Applying coach feedback edits the next session in place; it no longer prunes
+        // "duplicate" future runs afterwards (N29). That pruner cleaned up phantom
+        // workouts a removed code path used to insert, and with the producer gone the
+        // only thing it could still delete was a real scheduled run.
         apply(adapted, to: nextWorkout)
-        removeDuplicateFutureRuns(preserving: nextWorkout)
         try? context.save()
 
         if let plan = nextWorkout.week?.plan {
@@ -1431,69 +1412,6 @@ struct RunSummaryView: View {
         scheduled.healthKitPlanID = nil
     }
 
-    private func removeDuplicateFutureRuns(preserving keeper: ScheduledWorkout) {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
-        let planID = keeper.week?.plan?.id
-
-        let futureRuns = scheduledWorkouts.filter { scheduled in
-            guard let planID else { return false }
-            return scheduled.week?.plan?.id == planID
-                && !scheduled.isCompleted
-                && scheduled.completedWorkout == nil
-                && scheduled.completedStrengthWorkout == nil
-                && scheduled.workoutType.isRunType
-                && scheduled.scheduledDate >= today
-        }
-
-        let runsByDay = Dictionary(grouping: futureRuns) { scheduled in
-            calendar.startOfDay(for: scheduled.scheduledDate)
-        }
-
-        let duplicates = runsByDay.values.flatMap { sameDayRuns -> [ScheduledWorkout] in
-            guard sameDayRuns.count > 1 else { return [] }
-            let keeperForDay = preferredRun(from: sameDayRuns, preserving: keeper.id)
-            return sameDayRuns.filter { $0.id != keeperForDay.id }
-        }
-
-        for duplicate in duplicates {
-            duplicate.week?.workouts?.removeAll { $0.id == duplicate.id }
-            context.delete(duplicate)
-        }
-    }
-
-    private func preferredRun(
-        from workouts: [ScheduledWorkout],
-        preserving preservedID: UUID
-    ) -> ScheduledWorkout {
-        if let preserved = workouts.first(where: { $0.id == preservedID }) {
-            return preserved
-        }
-
-        return workouts.sorted { lhs, rhs in
-            let lhsPriority = runPriority(lhs.workoutType)
-            let rhsPriority = runPriority(rhs.workoutType)
-            if lhsPriority != rhsPriority {
-                return lhsPriority < rhsPriority
-            }
-            return lhs.scheduledDate < rhs.scheduledDate
-        }.first ?? workouts[0]
-    }
-
-    private func runPriority(_ type: WorkoutType) -> Int {
-        switch type {
-        case .race:
-            return 0
-        case .interval, .tempo:
-            return 1
-        case .longRun:
-            return 2
-        case .easy:
-            return 3
-        case .rest, .crossTraining, .strength:
-            return 4
-        }
-    }
 
     private func workoutLabel(_ workout: ScheduledWorkout) -> String {
         let date = workout.scheduledDate.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
@@ -1519,6 +1437,74 @@ struct RunSummaryView: View {
         ]
     }
 
+    // MARK: Splits section
+
+    /// The metrics the splits card can chart. Only ones this run actually has data for
+    /// are offered (N22) — the tab row used to show all three whether or not the run
+    /// carried heart rate or elevation.
+    private enum SplitMetric: String, CaseIterable, Hashable {
+        case pace = "Pace"
+        case heartRate = "HR"
+        case elevation = "Elev"
+
+        var tabTitle: String { rawValue }
+
+        var footnote: String {
+            switch self {
+            case .pace:      return "Lower = faster"
+            case .heartRate: return "Average heart rate in each split"
+            case .elevation: return "Gain within each split"
+            }
+        }
+    }
+
+    private var availableSplitMetrics: [SplitMetric] {
+        var metrics: [SplitMetric] = [.pace]
+        if hasSplitHR { metrics.append(.heartRate) }
+        if hasSplitElevation { metrics.append(.elevation) }
+        return metrics
+    }
+
+    private func splitMetricHeading(_ metric: SplitMetric) -> String {
+        let unit = appSettings.unitPreference.distanceLabel
+        switch metric {
+        case .pace:      return "Pace per \(unit)"
+        case .heartRate: return "Heart rate per \(unit)"
+        case .elevation: return "Elevation per \(unit)"
+        }
+    }
+
+    /// The splits card: a tab row that actually switches the chart under it.
+    ///
+    /// The three tabs were previously a static picture with all three charts stacked
+    /// below regardless of which one appeared selected (N22).
+    private var splitsSection: some View {
+        let metric = availableSplitMetrics.contains(selectedSplitMetric) ? selectedSplitMetric : .pace
+        return VStack(alignment: .leading, spacing: 8) {
+            sectionHeader(title: "Splits")
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 10) {
+                    Text(splitMetricHeading(metric))
+                        .font(.system(size: 13, weight: .bold))
+                    Spacer()
+                    if availableSplitMetrics.count > 1 {
+                        ForEach(availableSplitMetrics, id: \.self) { option in
+                            splitTab(option, active: option == metric)
+                        }
+                    }
+                }
+                switch metric {
+                case .pace:      splitPaceChart
+                case .heartRate: splitHRChart
+                case .elevation: splitElevationChart
+                }
+                Text(metric.footnote).font(.caption).foregroundStyle(.secondary)
+            }
+            .padding(16)
+            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
+        }
+    }
+
     // MARK: Split pace chart
 
     // Splits are always recorded per kilometer (`WorkoutTrackerService` buckets
@@ -1527,149 +1513,127 @@ struct RunSummaryView: View {
     // ten buckets "MI 1 … MI 10" implied a 10-mile run. The pace and elevation
     // values shown inside each bucket are still converted to the preferred unit.
     private var splitPaceChart: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: "Splits")
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 10) {
-                    Text("Pace per \(appSettings.unitPreference.distanceLabel)")
-                        .font(.system(size: 13, weight: .bold))
-                    Spacer()
-                    splitTab("Pace", active: true)
-                    splitTab("HR", active: false)
-                    splitTab("Elev", active: false)
-                }
-            Chart {
-                ForEach(workout.splits, id: \.kilometer) { split in
-                    BarMark(
-                        x: .value("km", split.kilometer),
-                        y: .value("Pace", split.paceSecondsPerKm)
-                    )
-                    .foregroundStyle(selectedSplitPaceKm == split.kilometer ? Color.brand : Color.brand.opacity(selectedSplitPaceKm == nil ? 1.0 : 0.5))
-                }
-                if let km = selectedSplitPaceKm, let split = split(forKm: km) {
-                    RuleMark(x: .value("km", km))
-                        .foregroundStyle(.secondary.opacity(0.4))
-                        .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
-                        .annotation(
-                            position: .top,
-                            overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
-                        ) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("\(splitLabel) \(km)")
-                                    .font(.caption2).foregroundStyle(.secondary)
-                                Text(split.paceSecondsPerKm.paceString(unit: appSettings.unitPreference))
-                                    .font(.caption).bold()
-                            }
-                            .padding(.horizontal, 8).padding(.vertical, 5)
-                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-                        }
-                }
+        Chart {
+            ForEach(workout.splits, id: \.kilometer) { split in
+                BarMark(
+                    x: .value("km", split.kilometer),
+                    y: .value("Pace", split.paceSecondsPerKm)
+                )
+                .foregroundStyle(selectedSplitPaceKm == split.kilometer ? Color.brand : Color.brand.opacity(selectedSplitPaceKm == nil ? 1.0 : 0.5))
             }
-            .frame(height: 120)
-            .chartYAxis {
-                AxisMarks { value in
-                    AxisValueLabel {
-                        if let secs = value.as(Double.self) {
-                            Text(secs.paceString(unit: appSettings.unitPreference)
-                                .replacingOccurrences(of: " \(appSettings.unitPreference.paceLabel)", with: ""))
+            if let km = selectedSplitPaceKm, let split = split(forKm: km) {
+                RuleMark(x: .value("km", km))
+                    .foregroundStyle(.secondary.opacity(0.4))
+                    .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
+                    .annotation(
+                        position: .top,
+                        overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
+                    ) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("\(splitLabel) \(km)")
+                                .font(.caption2).foregroundStyle(.secondary)
+                            Text(split.paceSecondsPerKm.paceString(unit: appSettings.unitPreference))
+                                .font(.caption).bold()
                         }
+                        .padding(.horizontal, 8).padding(.vertical, 5)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                    }
+            }
+        }
+        .frame(height: 120)
+        .chartYAxis {
+            AxisMarks { value in
+                AxisValueLabel {
+                    if let secs = value.as(Double.self) {
+                        Text(secs.paceString(unit: appSettings.unitPreference)
+                            .replacingOccurrences(of: " \(appSettings.unitPreference.paceLabel)", with: ""))
                     }
                 }
             }
-            .chartXSelection(value: $selectedSplitPaceKm)
-            Text("Lower = faster").font(.caption).foregroundStyle(.secondary)
-            }
-            .padding(16)
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
         }
+        .chartXSelection(value: $selectedSplitPaceKm)
     }
 
     // MARK: Split HR chart
 
     private var splitHRChart: some View {
         let hrSplits = workout.splits.filter { $0.heartRate != nil }
-        return VStack(alignment: .leading, spacing: 8) {
-            Text("HEART RATE BY SPLIT").font(.sectionHeader).foregroundStyle(.secondary).padding(.horizontal, 4)
-            Chart {
-                ForEach(hrSplits, id: \.kilometer) { split in
-                    LineMark(
-                        x: .value("km", split.kilometer),
-                        y: .value("bpm", split.heartRate ?? 0)
-                    )
-                    .foregroundStyle(.zoneInterval)
-                    PointMark(
-                        x: .value("km", split.kilometer),
-                        y: .value("bpm", split.heartRate ?? 0)
-                    )
-                    .foregroundStyle(.zoneInterval)
-                    .symbolSize(selectedSplitHRKm == split.kilometer ? 80 : 36)
-                }
-                if let km = selectedSplitHRKm, let split = split(forKm: km), let hr = split.heartRate {
-                    RuleMark(x: .value("km", km))
-                        .foregroundStyle(.secondary.opacity(0.4))
-                        .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
-                        .annotation(
-                            position: .top,
-                            overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
-                        ) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("\(splitLabel) \(km)")
-                                    .font(.caption2).foregroundStyle(.secondary)
-                                Text("\(Int(hr)) bpm")
-                                    .font(.caption).bold()
-                            }
-                            .padding(.horizontal, 8).padding(.vertical, 5)
-                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-                        }
-                }
+        return Chart {
+            ForEach(hrSplits, id: \.kilometer) { split in
+                LineMark(
+                    x: .value("km", split.kilometer),
+                    y: .value("bpm", split.heartRate ?? 0)
+                )
+                .foregroundStyle(.zoneInterval)
+                PointMark(
+                    x: .value("km", split.kilometer),
+                    y: .value("bpm", split.heartRate ?? 0)
+                )
+                .foregroundStyle(.zoneInterval)
+                .symbolSize(selectedSplitHRKm == split.kilometer ? 80 : 36)
             }
-            .frame(height: 120)
-            .chartYAxisLabel("bpm")
-            .chartXSelection(value: $selectedSplitHRKm)
+            if let km = selectedSplitHRKm, let split = split(forKm: km), let hr = split.heartRate {
+                RuleMark(x: .value("km", km))
+                    .foregroundStyle(.secondary.opacity(0.4))
+                    .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
+                    .annotation(
+                        position: .top,
+                        overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
+                    ) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("\(splitLabel) \(km)")
+                                .font(.caption2).foregroundStyle(.secondary)
+                            Text("\(Int(hr)) bpm")
+                                .font(.caption).bold()
+                        }
+                        .padding(.horizontal, 8).padding(.vertical, 5)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                    }
+            }
         }
+        .frame(height: 120)
+        .chartYAxisLabel("bpm")
+        .chartXSelection(value: $selectedSplitHRKm)
     }
 
     // MARK: Split elevation chart
 
     private var splitElevationChart: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("ELEVATION BY SPLIT").font(.sectionHeader).foregroundStyle(.secondary).padding(.horizontal, 4)
-            Chart {
-                ForEach(workout.splits, id: \.kilometer) { split in
-                    let gain = split.elevationGainMeters.elevationValue(unit: appSettings.unitPreference)
-                    BarMark(
-                        x: .value("km", split.kilometer),
-                        y: .value(appSettings.unitPreference.elevationLabel, gain)
-                    )
-                    .foregroundStyle(
-                        (gain >= 0 ? Color.success : Color.destructive)
-                            .opacity(selectedSplitElevKm == nil || selectedSplitElevKm == split.kilometer ? 1.0 : 0.5)
-                    )
-                }
-                if let km = selectedSplitElevKm, let split = split(forKm: km) {
-                    let gain = split.elevationGainMeters.elevationValue(unit: appSettings.unitPreference)
-                    RuleMark(x: .value("km", km))
-                        .foregroundStyle(.secondary.opacity(0.4))
-                        .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
-                        .annotation(
-                            position: .top,
-                            overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
-                        ) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("\(splitLabel) \(km)")
-                                    .font(.caption2).foregroundStyle(.secondary)
-                                Text("\(gain >= 0 ? "+" : "")\(Int(gain)) \(appSettings.unitPreference.elevationLabel)")
-                                    .font(.caption).bold()
-                            }
-                            .padding(.horizontal, 8).padding(.vertical, 5)
-                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-                        }
-                }
+        Chart {
+            ForEach(workout.splits, id: \.kilometer) { split in
+                let gain = split.elevationGainMeters.elevationValue(unit: appSettings.unitPreference)
+                BarMark(
+                    x: .value("km", split.kilometer),
+                    y: .value(appSettings.unitPreference.elevationLabel, gain)
+                )
+                .foregroundStyle(
+                    (gain >= 0 ? Color.success : Color.destructive)
+                        .opacity(selectedSplitElevKm == nil || selectedSplitElevKm == split.kilometer ? 1.0 : 0.5)
+                )
             }
-            .frame(height: 100)
-            .chartYAxisLabel(appSettings.unitPreference.elevationLabel)
-            .chartXSelection(value: $selectedSplitElevKm)
+            if let km = selectedSplitElevKm, let split = split(forKm: km) {
+                let gain = split.elevationGainMeters.elevationValue(unit: appSettings.unitPreference)
+                RuleMark(x: .value("km", km))
+                    .foregroundStyle(.secondary.opacity(0.4))
+                    .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
+                    .annotation(
+                        position: .top,
+                        overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
+                    ) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("\(splitLabel) \(km)")
+                                .font(.caption2).foregroundStyle(.secondary)
+                            Text("\(gain >= 0 ? "+" : "")\(Int(gain)) \(appSettings.unitPreference.elevationLabel)")
+                                .font(.caption).bold()
+                        }
+                        .padding(.horizontal, 8).padding(.vertical, 5)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                    }
+            }
         }
+        .frame(height: 100)
+        .chartYAxisLabel(appSettings.unitPreference.elevationLabel)
+        .chartXSelection(value: $selectedSplitElevKm)
     }
 
     // MARK: Splits table
@@ -1960,13 +1924,19 @@ struct RunSummaryView: View {
         .padding(.top, 10)
     }
 
-    private func splitTab(_ title: String, active: Bool) -> some View {
-        Text(title)
-            .font(.system(size: 11, weight: .bold))
-            .foregroundStyle(active ? Color.brand : Color.secondary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
-            .background(active ? Color.brand.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+    private func splitTab(_ metric: SplitMetric, active: Bool) -> some View {
+        Button {
+            selectedSplitMetric = metric
+        } label: {
+            Text(metric.tabTitle)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(active ? Color.brand : Color.secondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(active ? Color.brand.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(active ? [.isButton, .isSelected] : .isButton)
     }
 
     private func confidenceChip(_ value: Int) -> some View {
@@ -2016,11 +1986,6 @@ struct RunSummaryView: View {
         default:
             return .secondary
         }
-    }
-
-    private enum AIReaction {
-        case up
-        case down
     }
 
     private struct AICoachChatRequest: Identifiable {
@@ -2096,18 +2061,7 @@ struct RunSummaryView: View {
         }
 
         private static func markdownText(_ text: String) -> AttributedString {
-            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            if let attributed = try? AttributedString(
-                markdown: trimmed,
-                options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-            ) {
-                return attributed
-            }
-            var output = trimmed
-            ["**", "__", "`", "###", "##", "#", ">", "_"].forEach {
-                output = output.replacingOccurrences(of: $0, with: "")
-            }
-            return AttributedString(output)
+            CoachMarkdown.attributed(text)
         }
     }
 

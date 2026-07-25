@@ -149,4 +149,50 @@ struct ScheduledDayResolverTests {
             )
         )
     }
+
+    // MARK: - Day state (N23)
+
+    /// "Nothing scheduled" is three different things, and the dashboard used to render
+    /// the same "Rest day · Recovery is part of training" card for all of them.
+    @Test("An empty day inside the plan is a rest day")
+    func emptyDayInsidePlanIsRest() throws {
+        let context = AppContainer.preview().modelContainer.mainContext
+        let plan = try makePlan(in: context, sessions: [(0, .tempo, false)])
+
+        // Tuesday holds nothing but is inside the plan's week.
+        let tuesday = monday.addingTimeInterval(86_400)
+        #expect(ScheduledDayResolver.dayState(on: tuesday, in: plan) == .rest)
+    }
+
+    @Test("An explicit rest row is a rest day, not scheduled work")
+    func explicitRestRowIsRest() throws {
+        let context = AppContainer.preview().modelContainer.mainContext
+        let plan = try makePlan(in: context, sessions: [(0, .rest, false)])
+
+        #expect(ScheduledDayResolver.dayState(on: monday, in: plan) == .rest)
+    }
+
+    @Test("A date past the plan's end is outside it, not a rest day")
+    func dateBeyondPlanIsOutside() throws {
+        let context = AppContainer.preview().modelContainer.mainContext
+        let plan = try makePlan(in: context, sessions: [(0, .tempo, false)])
+
+        let nextMonth = monday.addingTimeInterval(40 * 86_400)
+        #expect(ScheduledDayResolver.dayState(on: nextMonth, in: plan) == .outsidePlan)
+        let beforeStart = monday.addingTimeInterval(-86_400)
+        #expect(ScheduledDayResolver.dayState(on: beforeStart, in: plan) == .outsidePlan)
+    }
+
+    @Test("With no plan, no day is a rest day")
+    func noPlanIsItsOwnState() {
+        #expect(ScheduledDayResolver.dayState(on: monday, in: nil) == .noPlan)
+    }
+
+    @Test("A day with work is scheduled")
+    func dayWithWorkIsScheduled() throws {
+        let context = AppContainer.preview().modelContainer.mainContext
+        let plan = try makePlan(in: context, sessions: [(0, .tempo, false)])
+
+        #expect(ScheduledDayResolver.dayState(on: monday, in: plan) == .scheduled)
+    }
 }

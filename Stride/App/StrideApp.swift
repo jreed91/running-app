@@ -50,7 +50,9 @@ struct StrideApp: App {
                 ))
                 .onChange(of: container.pendingReviewWorkout) { _, newValue in
                     if newValue == nil {
-                        UserDefaults.standard.removeObject(forKey: "pendingReviewWorkoutID")
+                        UserDefaults.standard.removeObject(
+                            forKey: NotificationService.pendingReviewWorkoutIDKey
+                        )
                     }
                 }
         }

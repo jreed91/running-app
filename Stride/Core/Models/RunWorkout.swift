@@ -58,6 +58,10 @@ final class RunWorkout {
     /// JSON-encoded ``AICoachInsight`` cached after first load.
     var cachedAIInsightData: Data?
 
+    /// Raw-backed storage for the runner's thumbs-up/down on the cached insight (N22).
+    /// Optional so the CloudKit schema stays additive for existing records.
+    var aiCoachReactionRaw: String?
+
     // MARK: Computed helpers (not persisted)
 
     var splits: [Split] {
@@ -84,6 +88,12 @@ final class RunWorkout {
     var cachedAIInsight: AICoachInsight? {
         get { cachedAIInsightData?.decode(AICoachInsight.self) }
         set { cachedAIInsightData = newValue.flatMap { .encoded($0, keeping: cachedAIInsightData) } }
+    }
+
+    /// The runner's rating of this run's coach insight, if they gave one (N22).
+    var aiCoachReaction: AICoachReaction? {
+        get { aiCoachReactionRaw.flatMap(AICoachReaction.init(rawValue:)) }
+        set { aiCoachReactionRaw = newValue?.rawValue }
     }
 
     var workoutType: WorkoutType {

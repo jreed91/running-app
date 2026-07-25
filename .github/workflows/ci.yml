@@ -26,9 +26,14 @@ env:
   # Exact versions the pipeline is known to work with. When set, the install steps
   # fail loudly if Homebrew resolves anything else, so a toolchain bump becomes a
   # deliberate commit rather than a silent change under the build. Leave empty to
-  # accept whatever Homebrew provides; fill in from a green run's "Print tool
-  # versions" output to lock the pipeline down.
-  SWIFTLINT_VERSION: ""
+  # accept whatever Homebrew provides.
+  #
+  # SwiftLint is pinned to the version the lint job actually resolved on the
+  # macOS runner (Homebrew poured swiftlint 0.65.0). XcodeGen and xcbeautify have
+  # no observed value yet: the test job is gated on `needs: lint`, and lint has
+  # been failing, so its install step has never run. Fill these two in from the
+  # first run that reaches "Install XcodeGen and xcbeautify" (N31).
+  SWIFTLINT_VERSION: "0.65.0"
   XCODEGEN_VERSION: ""
   XCBEAUTIFY_VERSION: ""
 

@@ -10,7 +10,14 @@ struct ProgressDashboardView: View {
     private var profile: UserProfile? { profiles.first }
 
     @Environment(AppSettings.self) private var appSettings
+    @Environment(\.appContainer) private var container
+    @Environment(\.modelContext) private var context
     @State private var selectedRange: ChartRange = .threeMonths
+
+    /// HealthKit ids already asked for HR samples this session, so a run whose source
+    /// workout is gone isn't re-queried on every period change (N25).
+    @State private var attemptedBackfillIDs: Set<String> = []
+    @State private var isBackfillingHeartRate = false
 
     @State private var selectedVolumeDate: Date? = nil
     @State private var selectedPaceDate: Date? = nil
@@ -112,6 +119,7 @@ struct ProgressDashboardView: View {
                         .padding()
                         .frame(maxWidth: .infinity)
                         .task { progressAppeared = true }
+                        .task(id: selectedRange) { await backfillHeartRateSamples() }
                     }
                 } else {
                     AchievementsView()
@@ -398,9 +406,37 @@ struct ProgressDashboardView: View {
     /// The runner's max HR (explicit or age-estimated), needed to bucket samples into zones.
     private var maxHeartRate: Double? { profile?.effectiveMaxHeartRate.map(Double.init) }
 
+    /// Fills in HR samples for runs in the visible period that don't have any (N25).
+    ///
+    /// Imports have persisted samples since N9, but runs imported before that carry
+    /// none, and this chart only reads persisted samples — so it stayed empty and then
+    /// partially filled as the runner happened to open individual runs, which reads as a
+    /// bug. Bounded by `HeartRateBackfill.maximumRunsPerPass` and by
+    /// `attemptedBackfillIDs`, so a run whose HealthKit source is gone is asked once.
+    private func backfillHeartRateSamples() async {
+        guard maxHeartRate != nil, !isBackfillingHeartRate else { return }
+        let candidates = HeartRateBackfill.runsNeedingSamples(
+            in: filteredWorkouts,
+            alreadyAttempted: attemptedBackfillIDs
+        )
+        guard !candidates.isEmpty else { return }
+
+        isBackfillingHeartRate = true
+        defer { isBackfillingHeartRate = false }
+
+        var didChange = false
+        for run in candidates {
+            guard let hkID = run.healthKitWorkoutID else { continue }
+            attemptedBackfillIDs.insert(hkID)
+            let samples = await container.healthKitRepository.fetchHeartRateSamples(forWorkoutID: hkID)
+            guard !samples.isEmpty else { continue }
+            run.heartRateSamples = samples
+            didChange = true
+        }
+        if didChange { try? context.save() }
+    }
+
     /// Aggregate time-in-zone across the selected period, from each run's persisted HR samples.
-    /// Runs imported before HR samples were persisted simply don't contribute (no per-run
-    /// on-demand fetch here — that would be too costly for the whole list).
     private var aggregateZoneSlices: [HRZoneSlice] {
         guard let maxHR = maxHeartRate else { return [] }
         let perRun = filteredWorkouts.compactMap { run -> [HRZoneSlice]? in
@@ -420,7 +456,20 @@ struct ProgressDashboardView: View {
             if maxHeartRate == nil {
                 emptyDataPlaceholder("Set your max HR in Settings to see heart-rate zones")
             } else if total <= 0 {
-                emptyDataPlaceholder("No heart-rate zone data in this period")
+                if isBackfillingHeartRate {
+                    // Say what's happening rather than claiming there is no data while
+                    // it is being fetched (N25).
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text("Loading heart-rate data…")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 24)
+                } else {
+                    emptyDataPlaceholder("No heart-rate zone data in this period")
+                }
             } else {
                 VStack(spacing: 10) {
                     Chart(slices) { slice in

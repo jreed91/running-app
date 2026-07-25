@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 import WeatherKit
 import CoreLocation
 
@@ -146,5 +147,38 @@ final class WeatherService: Sendable {
         )
         return result
         #endif
+    }
+}
+
+// MARK: - Attaching weather to a run
+
+extension WeatherService {
+
+    /// Fetches the conditions at a run's start and stores them on the run.
+    ///
+    /// One definition for both callers (N27): `AppContainer` used for the app's own
+    /// finish path and `WorkoutSyncService` for imports carried byte-identical copies
+    /// of this, so a change to logging or save behaviour only ever landed in one of
+    /// them. No-ops silently when WeatherKit has nothing — weather is supplemental and
+    /// must never block a run being saved.
+    @MainActor
+    func attach(to workout: RunWorkout, coordinate: Coordinate, context: ModelContext) async {
+        AppLogger.log(
+            "Attaching weather to workout \(workout.id) at "
+                + "(\(String(format: "%.4f", coordinate.latitude)), \(String(format: "%.4f", coordinate.longitude)))",
+            label: "WeatherKit",
+            level: .debug
+        )
+        guard let summary = await fetchWeather(at: coordinate, date: workout.date) else {
+            AppLogger.log(
+                "Weather fetch returned nil for workout \(workout.id) — skipping attach",
+                label: "WeatherKit",
+                level: .warning
+            )
+            return
+        }
+        workout.weather = summary
+        try? context.save()
+        AppLogger.log("Weather attached to workout \(workout.id)", label: "WeatherKit", level: .info)
     }
 }

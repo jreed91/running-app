@@ -63,7 +63,7 @@ struct SettingsView: View {
                     dataCard
                     routeGeniusCard
                     aiCoachCard
-                    if DataMigrationService.showsTestFlightDiagnostics {
+                    if BuildEnvironment.showsTestFlightDiagnostics {
                         notificationTestingCard
                     }
                     aboutCard
@@ -297,16 +297,22 @@ struct SettingsView: View {
                     .labelsHidden()
                     .tint(.brand)
                     .onChange(of: appSettings.morningReminderEnabled) { _, enabled in
-                        guard let plan = activePlans.first else { return }
+                        // Only *scheduling* needs a plan (N16). Guarding the whole block on
+                        // one meant turning the toggle off while a plan was being replaced
+                        // left the already-scheduled reminders firing, and turning it on
+                        // never asked for permission — a toggle that disagreed with reality
+                        // until the next launch reconciled it.
+                        let plan = activePlans.first
                         Task {
-                            if enabled {
-                                if !(await container.notificationService.isAuthorized) {
-                                    try? await container.notificationService.requestAuthorization()
-                                }
-                                await container.notificationService.scheduleMorningReminders(for: plan)
-                            } else {
+                            guard enabled else {
                                 await container.notificationService.cancelAllMorningReminders()
+                                return
                             }
+                            if !(await container.notificationService.isAuthorized) {
+                                try? await container.notificationService.requestAuthorization()
+                            }
+                            guard let plan else { return }
+                            await container.notificationService.scheduleMorningReminders(for: plan)
                         }
                     }
             }
@@ -328,7 +334,7 @@ struct SettingsView: View {
             .buttonStyle(.plain)
             .foregroundStyle(.primary)
 
-            if DataMigrationService.showsTestFlightDiagnostics {
+            if BuildEnvironment.showsTestFlightDiagnostics {
                 rowDivider
                 NavigationLink {
                     CloudKitDebugView()
@@ -482,7 +488,7 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
             #if canImport(PulseUI)
-            if DataMigrationService.showsTestFlightDiagnostics {
+            if BuildEnvironment.showsTestFlightDiagnostics {
                 rowDivider
                 Button {
                     showPulseConsole = true
@@ -715,18 +721,10 @@ struct SettingsView: View {
     }
 
     private func resetAll() {
-        // Clear every persisted model type so "Reset All Data" leaves a true clean slate.
-        // Missing StrengthWorkout, ScheduledWorkout/TrainingWeek, and DeletedWorkout tombstones
-        // previously left orphaned records and blocked re-importing runs after a reset.
-        try? context.delete(model: RunWorkout.self)
-        try? context.delete(model: StrengthWorkout.self)
-        try? context.delete(model: ScheduledWorkout.self)
-        try? context.delete(model: TrainingWeek.self)
-        try? context.delete(model: TrainingPlan.self)
-        try? context.delete(model: UserProfile.self)
-        try? context.delete(model: SavedRoute.self)
-        try? context.delete(model: DeletedWorkout.self)
-        try? context.save()
+        // The whole routine — reminders, Watch entries, pending-review defaults, then
+        // the models — lives in `AppContainer.resetAllData` (N11). Clearing only the
+        // store left reminders firing and a deleted run able to resurrect itself.
+        Task { await container.resetAllData(context: context) }
     }
 
     #if DEBUG

@@ -18,9 +18,12 @@ Two kinds of finding are recorded:
 > document's commit and may drift.
 >
 > **Status:** Priority 1 (data loss: N1, N2, N6, N15), Priority 2
-> (N3, N4, N5, N7, N8, N9, N10, plus the plan-scoping half of N13), and Priority 3
-> (UX debt: N12, N17, N19, N20, N24, plus the blocking half of N18) are fixed —
-> see §8. Priority 4 (hygiene) is the next block; everything else below is open.
+> (N3, N4, N5, N7, N8, N9, N10, plus the plan-scoping half of N13), Priority 3
+> (UX debt: N12, N17, N19, N20, N24, plus the blocking half of N18), and Priority 4
+> (hygiene: N11, N13's dialog, N14, N16, N21, N22, N23, N25, N26's code half,
+> N27–N30, and the lint half of N31) are fixed — see §8. What remains open:
+> N18's accessibility remainder, N9's split backfill for already-imported runs,
+> N31's two unobserved toolchain pins, and the §6 carry-overs.
 
 > **Scope:** correctness, UX, and hygiene. Product/feature gaps live in
 > [`FEATURE_IMPROVEMENTS_2026-07.md`](./FEATURE_IMPROVEMENTS_2026-07.md);
@@ -216,8 +219,9 @@ asserts the notice survives to a view presented when `profiles.isEmpty`.
 - **The rule.** Duplicate detection moved out of `PlanTabView` into the pure
   `PlanDuplicateResolver`, which groups by day **and** `WorkoutType.SessionKind`
   (run / strength / cross-training / rest). Only a second session *of the same
-  kind* is a duplicate, so a paired run + gym day survives adaptation. Covered by
-  `PlanDuplicateResolverTests`.
+  kind* is a duplicate, so a paired run + gym day survives adaptation.
+  *Superseded by N29:* pruning is gone entirely, and the resolver with it — nothing
+  deletes a "duplicate" now, and `ScheduledDayResolver` renders both sessions.
 - **The collision.** `shiftMissedWorkoutsForward` now moves strength and
   cross-training with the runs rather than holding them still, so "pick up where
   I left off" preserves the week's spacing instead of dropping runs onto gym days.
@@ -379,7 +383,18 @@ run. `.interval` and `.race` are never inferred at all.
 bands — and default to `.easy` when there is no profile estimate. Structure
 (HealthKit workout events / lap markers) can distinguish intervals.
 
-### N11. "Reset All Data" only resets the database
+### ✅ N11. "Reset All Data" only resets the database
+
+**FIXED:** the whole teardown is one routine, `AppContainer.resetAllData(context:)`.
+It cancels every morning reminder, removes the WorkoutKit entries for **each** plan
+being deleted (before the models go, since the entries are found through the plans
+that own them), clears the pending-review pointer and every review snapshot via the
+new `NotificationService.clearAllReviewState`, and only then deletes the models —
+logging the outcome instead of swallowing it. Settings just calls it. The
+pending-review defaults key is now a shared constant so its five call sites can't
+drift. Covered by `NotificationServiceTests`
+(`clearAllReviewStateRemovesPointerAndSnapshots`).
+
 `Stride/Features/Settings/SettingsView.swift:717-730`
 
 Every SwiftData type is deleted, but nothing outside it:
@@ -423,12 +438,13 @@ renders. The other session is unreachable from the dashboard entirely.
 **Fix:** return all workouts for the day, render them as a small stack, and give
 `DayCell` an indicator that can express two sessions.
 
-### ⚠️ N13. The Siri "Today's Run" intent ignores plan state
+### ✅ N13. The Siri "Today's Run" intent ignores plan state
 
-**PARTIALLY FIXED:** `todaysRun()` now filters to the active plan (see N3) and
-prefers a run-type session over a strength/cross-training day. *Still open:* the
-`TodaysRunIntent` dialog still says "You have a **Strength** run today" when a gym
-day is all that's scheduled — the wording needs to branch on the type.
+**FIXED:** `todaysRun()` filters to the active plan (see N3) and prefers a run-type
+session over a strength/cross-training day, and `TodaysRunIntent.dialogText(for:)`
+now words the answer by session kind — a gym day is "a Strength session", cross
+training is named as itself, and "Long Run"/"Race" aren't suffixed with "run".
+Covered by `IntentDataProviderTests` (`dialogWordsEachSessionKind`).
 
 `Stride/Features/AppIntents/IntentDataProvider.swift:34-54`
 
@@ -441,7 +457,16 @@ workout including `.strength`, and `TodaysRunIntent.dialog` then says
 **Fix:** filter to `workout.week?.plan?.isActive == true` (or fetch the active
 plan first and walk its weeks), prefer run types, and word the dialog by type.
 
-### N14. App-logged strength sessions never reach HealthKit
+### ✅ N14. App-logged strength sessions never reach HealthKit
+
+**FIXED:** `HealthKitRepository.save(_ workout: StrengthWorkout)` writes an
+`HKWorkout` with `.traditionalStrengthTraining` — the activity type the importer
+already reads back — and `finishAndSave` stores the returned UUID in
+`healthKitWorkoutID`. App-logged sessions now earn Activity-ring credit and appear in
+Fitness, and because the id lands in the importer's `existingIDs`, the Watch-vs-app
+merge is by identity rather than the ±3 h heuristic. The export follows the run path:
+the session is already safely in the store, so a failure is logged, not fatal.
+
 `Stride/Features/ActiveStrength/StrengthActiveView.swift:536-554`
 
 `finishAndSave` inserts a `StrengthWorkout` locally and stops. Runs recorded in
@@ -478,7 +503,12 @@ cannot be recovered from it. There are 34 `try? context.save()` sites app-wide
 (D5); this one deserves a real `do/catch` with an alert and a retry now, before
 the broader cleanup.
 
-### N16. The morning-reminder toggle does nothing without an active plan
+### ✅ N16. The morning-reminder toggle does nothing without an active plan
+
+**FIXED:** the plan guard now wraps only the *scheduling* step. Disabling always
+cancels, enabling always requests authorization, and a missing plan just means there
+is nothing to schedule.
+
 `Stride/Features/Settings/SettingsView.swift:295-311`
 
 ```swift
@@ -614,7 +644,15 @@ path with no new permission.
 `CMPedometerData.currentCadence`; remove the dead Lap cell or wire it to the flag
 button from N18.
 
-### N21. Every run-detail open renders a share card nobody asked for
+### ✅ N21. Every run-detail open renders a share card nobody asked for
+
+**FIXED:** the map snapshot and the ×3 `ImageRenderer` pass run only when Share is
+tapped. The `.task` now loads heart-rate zones and nothing else, and the share
+control is a permanently-present toolbar button (showing a spinner while it renders)
+rather than one that pops in seconds after the screen appears. `ShareLink` needs its
+item up front, which is what forced the pre-render, so the rendered card is presented
+through a small `ShareSheet` (`UIActivityViewController`) instead — still one tap.
+
 `Stride/Features/History/RunSummaryView.swift:105-124, 186-189`
 
 ```swift
@@ -632,7 +670,20 @@ into the toolbar seconds after the screen appears.
 **Fix:** render on demand (or lazily via `ShareLink`'s async item), and load HR
 zones first. Keep the pre-render only if a measurement shows it is cheap.
 
-### N22. The run summary presents three affordances that do nothing
+### ✅ N22. The run summary presents three affordances that do nothing
+
+**FIXED,** all three:
+
+- **The tabs are real.** `SplitMetric` drives which chart the splits card shows, the
+  tabs are `Button`s carrying `.isSelected`, and only metrics the run actually has
+  data for are offered — the row used to show HR and Elev whether or not the run
+  carried either.
+- **The reaction is persisted.** `AICoachReaction` moved out of the view onto the run
+  (`RunWorkout.aiCoachReaction`, optional and additive for CloudKit), so a rating
+  survives dismissal instead of dying with the view state.
+- **The stream renders.** While the coach is generating, the accumulated text is
+  shown in place of the skeleton rather than being buffered and thrown away.
+
 `Stride/Features/History/RunSummaryView.swift:1546-1548, 1085-1098, 36 + 1513-1516`
 
 - **Fake tabs**: `splitTab("Pace", active: true)`, `splitTab("HR", active: false)`,
@@ -648,7 +699,14 @@ zones first. Keep the pre-render only if a measurement shows it is cheap.
 **Fix:** make the tabs real (or delete them), drop the reaction row or persist it
 onto the insight, and render the buffer in the skeleton area.
 
-### N23. "Rest day" is shown for days that are not rest days
+### ✅ N23. "Rest day" is shown for days that are not rest days
+
+**FIXED:** `ScheduledDayResolver.dayState(on:in:)` classifies a day as `.scheduled`,
+`.rest`, `.outsidePlan`, or `.noPlan`, and the dashboard renders a distinct card for
+each of the last three — the out-of-plan card names the plan's date range, and the
+no-plan card points at the Plan tab instead of claiming a rest day. Covered by
+`ScheduledDayResolverTests`.
+
 `Stride/Features/Dashboard/DashboardView.swift:497-529, 575-584`
 
 `workoutForSelectedDate` returns `nil` for a rest day, for any date outside the
@@ -685,7 +743,15 @@ summary. The linker itself already accepts a one-day-late completion
 **Fix:** allow starting a past uncompleted workout (today and yesterday at
 minimum), with the card making the date explicit.
 
-### N25. Aggregate time-in-zone stays empty for imported runs
+### ✅ N25. Aggregate time-in-zone stays empty for imported runs
+
+**FIXED:** imports have persisted HR samples since N9, and runs imported before that
+are now backfilled from the Progress tab itself. `HeartRateBackfill.runsNeedingSamples`
+picks the candidates — no persisted samples, a HealthKit id to fetch from, newest
+first, capped per pass and never re-asking for a run whose source is gone — and the
+chart says "Loading heart-rate data…" while a pass runs instead of claiming there is
+none. Covered by `HeartRateBackfillTests`.
+
 `Stride/Features/Progress/ProgressView.swift:403-414`
 
 The Progress chart only uses `run.heartRateSamples` that are already persisted,
@@ -716,29 +782,46 @@ longer exists.
 
 **FIXED (docs half):** `AGENTS.md` and `README.md` now document the real path
 (Settings → Route Genius → paste token, stored in the Keychain).
-**Still open (code half):** update the `RouteGeniusService` doc comment and the
-`missingAPIKey` error string to point at Settings, and either delete
-`Secrets.plist.example` or repurpose it.
+**FIXED (code half):** the `RouteGeniusService` doc comment describes the Keychain
+path, `missingAPIKey` now reads "Add it in Settings → Route Genius", and
+`Secrets.plist.example` — which pointed at a directory that hasn't existed for two
+renames — is deleted.
 
-### N27. Duplicated logic that now has a canonical home
+### ✅ N27. Duplicated logic that now has a canonical home
 - ✅ `RunSummaryView.isRunWorkout(_:)` (`:1498-1505`) duplicated `WorkoutType.isRunType`
   (`Enums.swift:152-157`), added by H8 precisely to be the single definition.
   **FIXED:** the copy was deleted and the call site uses `isRunType`.
-- `AppContainer.attachWeather` (`:364-377`) and `WorkoutSyncService.attachWeather`
-  (`:416-420`) are the same function; the D2 note called this out and both remain.
-- Five near-identical markdown sanitizers still live in `RunSummaryView`
-  (`:1201-1226`, `:1281-1296`, `:2107-2127`).
-- `DataMigrationService` (`:1-26`) contains no migration logic — it is TestFlight
-  receipt detection, duplicated from `PulseIntegrationService.swift:34-41`. The
-  name actively misleads.
+- ✅ `AppContainer.attachWeather` and `WorkoutSyncService.attachWeather` were the same
+  function. **FIXED:** the body is `WeatherService.attach(to:coordinate:context:)`;
+  both call sites delegate, so the importer now gets the same logging the app path had.
+- ✅ The markdown sanitizers — six of them once the chat view is counted, and the chat
+  view's stripped only `**` — are now `CoachMarkdown.stripped`/`.attributed`, covered
+  by `CoachMarkdownTests`.
+- ✅ `DataMigrationService` contained no migration logic. **FIXED:** renamed to
+  `BuildEnvironment`, which is what it is.
 
-### N28. Dead code
-- `RunSummaryView.AIActionItemRow` (`:1229-1298`) — declared, never instantiated.
-- `RunSummaryView.aiStreamBuffer` — write-only (see N22).
-- `AICoachService`'s fault-tolerant JSON decoding machinery (`:36-184`) is dead
-  post-guided-generation and was already noted as buggy in D7.
+### ✅ N28. Dead code
+- ✅ `RunSummaryView.AIActionItemRow` — deleted.
+- ✅ `RunSummaryView.aiStreamBuffer` — no longer write-only; it renders (N22).
+- ✅ `AICoachService`'s fault-tolerant JSON decoding — the flexible string/int
+  coercion, the alternate `action_items`/`actions` keys, and the per-field defaults —
+  is deleted. Nothing has decoded these from JSON since guided generation landed;
+  the structured response is only ever built by the Foundation Models backend, so
+  `AICoachStructuredResponse` is no longer `Decodable` at all. `AICoachInsight` and
+  its items keep `Codable` (they are cached on the run) with synthesized conformances,
+  whose keys match the hand-written ones exactly, so cached insights still decode.
 
-### N29. Duplicate-pruning outlived its producer
+### ✅ N29. Duplicate-pruning outlived its producer
+
+**FIXED:** both pruners are gone — the Smart Adapt pass no longer prunes before and
+after adapting, and applying coach feedback no longer deletes "duplicate" future
+runs. The producers really are absent: the only remaining unmanaged `ScheduledWorkout`
+is `AICoachService.makeScheduledWorkout`, whose result is copied field-by-field onto
+the persisted workout and discarded, never related to a week. `PlanDuplicateResolver`
+and its tests went with them; the rule they encoded (N6) only ever existed to decide
+what to delete, and nothing deletes now. A day that genuinely holds two sessions is no
+longer a problem to clean up — `ScheduledDayResolver` renders both (N12).
+
 `Stride/Features/Training/PlanTabView.swift:322-349`;
 `Stride/Features/History/RunSummaryView.swift:1434-1463`
 
@@ -749,7 +832,11 @@ source of the duplicates it was written to clean up — and, per N6, with an
 over-broad rule. Removing them (after confirming no other path relates an
 unmanaged model to a persisted week) is a net reduction in data-loss surface.
 
-### N30. `AuthService` instances never deallocate
+### ✅ N30. `AuthService` instances never deallocate
+
+**FIXED:** the revocation listener iterates inline and re-checks `self` on each
+element, the shape `AppSettings.observeExternalChanges` already used.
+
 `Stride/Core/Services/AuthService.swift:22-25, 62-68`
 
 ```swift
@@ -762,7 +849,24 @@ the call then holds a strong `self` for the lifetime of an infinite
 impact is small, but the same pattern in `AppSettings.observeExternalChanges`
 (`:176-188`) does hold it weakly across iterations and is the version to copy.
 
-### N31. CI toolchain pins are still empty and lint thresholds are still unreachable
+### ⚠️ N31. CI toolchain pins are still empty and lint thresholds are still unreachable
+
+**MOSTLY FIXED.** The lint half is done, and doing it turned up something this
+document missed: **the lint job was failing at error level**, so no run has reached
+the test job in weeks. `StrideIcon.draw` — one flat switch of drawing commands, one
+case per icon — spans 384 lines against a 350 error. It now carries a documented
+`swiftlint:disable:next function_body_length`, and `RunSummaryView` carries
+`type_body_length` alongside the `file_length` disable it already had. With those two
+exempted the thresholds are set from the next-worst real code, measured from the run's
+own output: `type_body_length` 2000 → 1100 (worst remaining ~1,000),
+`function_body_length` 350 → 150 (worst remaining ~100), `cyclomatic_complexity`
+80 → 40 (worst measured 33).
+
+`SWIFTLINT_VERSION` is pinned to `0.65.0`, the version the lint job's Homebrew step
+actually poured. *Still open:* `XCODEGEN_VERSION` and `XCBEAUTIFY_VERSION` have no
+observed value to pin — their install step lives in the test job, which `needs: lint`
+has been skipping. Fill them in from the first run that gets that far.
+
 `.github/workflows/*.yml:31-33`; `.swiftlint.yml:39-58`
 
 `SWIFTLINT_VERSION`, `XCODEGEN_VERSION`, and `XCBEAUTIFY_VERSION` ship as `""`,
@@ -796,7 +900,7 @@ The gaps line up exactly with where this pass found bugs:
 | ~~The `HistoryView` import path~~ | N4 — closed: there is now one importer, and `syncNow` is tested for linking and retired-plan scoping |
 | ~~Active-plan resolution across views~~ | N3/N13 — partly closed: `belongsToLivePlan` and the intent are tested. A test asserting *every* `@Query` reader agrees would still be worth having |
 | ~~Plan-lifecycle destructive paths~~ | N1/N2 — closed: `MissedWorkoutsRecoveryTests` and `PlanHistoryTests` now assert nothing is deleted |
-| ~~Same-day duplicate pruning~~ | N6 — closed by `PlanDuplicateResolverTests` |
+| ~~Same-day duplicate pruning~~ | N6 — closed, then removed outright by N29: nothing prunes, so there is no rule left to test |
 | View-level presentation of `StoreRecoveryNotice` | N5 — the alert moved to the root, but this is still view code with no test; `AppContainerTests` only asserts the notice is *raised* |
 | ~~Dashboard day resolution and the start-button window~~ | N12/N24 — closed: both rules live in `ScheduledDayResolver` and are tested (`ScheduledDayResolverTests`). The rendering of a two-session stack is still untested view code |
 | ~~The minimum-effort floor for app-recorded runs~~ | N17 — closed: `RunEffortPolicyTests` pins the floor and asserts the importer and the run-finish path agree on it |
@@ -841,9 +945,9 @@ next pass doesn't churn them:
 - **The pure-service layer keeps growing**: `SplitBucketing`, `WallClockStopwatch`,
   `RestCountdown`, `GuidedWorkoutState`, `HeartRateZoneService`,
   `ShareCardModel`, `StreakGoalService`, `ProgressStatsService`,
-  `WorkoutPaceAlert`, `LocationQualityFilter`, `PlanDuplicateResolver`,
-  `ScheduledDayResolver`, `RunEffortPolicy` are all UI-free, `Sendable`, and
-  directly tested. This is the pattern the remaining view-embedded math should
+  `WorkoutPaceAlert`, `LocationQualityFilter`, `ScheduledDayResolver`,
+  `RunEffortPolicy`, `CoachMarkdown`, `HeartRateBackfill` are all UI-free,
+  `Sendable`, and directly tested. This is the pattern the remaining view-embedded math should
   follow.
 - **`GuidedWorkoutState`** in particular is a model implementation: the whole
   state machine is pure, the view only renders and forwards.
@@ -880,7 +984,18 @@ next pass doesn't churn them:
 - ✅ N24 start a missed workout (today and one day late).
 - ✅ N12 a day's sessions all render, via the pure `ScheduledDayResolver`.
 
-**4 — Hygiene — next:**
-- N11 full reset, N13 dialog wording, N14 strength → HealthKit, N16 reminder
-  toggle, N21 lazy share card, N22/N23/N25 honest UI states.
-- N26 (code half), N27 (remainder)–N30 cleanup, N31 CI pins and lint thresholds.
+**4 — Hygiene — ✅ DONE (bar two toolchain pins):**
+- ✅ N11 full reset, ✅ N13 dialog wording, ✅ N14 strength → HealthKit, ✅ N16 reminder
+  toggle, ✅ N21 lazy share card, ✅ N22/N23/N25 honest UI states.
+- ✅ N26 (code half), ✅ N27 (remainder)–N30 cleanup.
+- ⚠️ N31: lint thresholds tightened and the error-level violation that had been
+  failing every lint run fixed; SwiftLint pinned. XcodeGen/xcbeautify pins still need
+  a run that reaches the test job.
+
+**5 — What's left after this pass:**
+- N18's accessibility remainder: charts, the other feature modules' icon-only
+  buttons, and localization (D8).
+- N9's remaining half: backfilling splits onto runs imported before splits existed.
+  The HR half of that shape now exists as `HeartRateBackfill` (N25) and is the
+  pattern to copy.
+- The §6 carry-overs (D1–D7 structural work, `.externalStorage`, S4).

@@ -34,6 +34,11 @@ protocol HealthKitRepositoryProtocol: Sendable {
     var isAuthorized: Bool { get }
     func requestAuthorization() async throws
     @MainActor func save(_ workout: RunWorkout) async throws -> String
+    /// Writes an app-logged strength session to HealthKit and returns its HK UUID string.
+    /// Without this a session logged in Stride earns no Activity-ring credit and never
+    /// appears in Fitness (N14); the returned id also makes the Watch-vs-app merge exact
+    /// instead of leaning on the ±3 h time heuristic.
+    @MainActor func save(_ workout: StrengthWorkout) async throws -> String
     func fetchWorkouts(from startDate: Date, to endDate: Date) async throws -> [HKWorkout]
     /// Schedules each non-rest future workout in the plan as a WorkoutKit composition
     /// so it appears in the Apple Watch Workout app and the Fitness app.
@@ -209,6 +214,38 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             }
         }
 
+        return hkWorkout.uuid.uuidString
+    }
+
+    /// Exports an app-logged strength session (N14).
+    ///
+    /// The activity type matches what the importer reads back
+    /// (`fetchStrengthHKWorkouts`), so a session written here is recognised as the
+    /// same session if it ever comes back through an import, and the returned UUID
+    /// lets `WorkoutSyncService` merge by identity rather than by the ±3 h
+    /// same-session heuristic.
+    @MainActor func save(_ workout: StrengthWorkout) async throws -> String {
+        let start = workout.date
+        let end = start.addingTimeInterval(workout.durationSeconds)
+
+        let config = HKWorkoutConfiguration()
+        config.activityType = .traditionalStrengthTraining
+
+        let builder = HKWorkoutBuilder(healthStore: store, configuration: config, device: .local())
+        try await builder.beginCollection(at: start)
+
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            builder.addMetadata(["StrideWorkoutID": workout.id.uuidString]) { _, error in
+                if let error { continuation.resume(throwing: error) }
+                else { continuation.resume() }
+            }
+        }
+
+        try await builder.endCollection(at: end)
+
+        guard let hkWorkout = try await builder.finishWorkout() else {
+            throw HKError(.errorNoData)
+        }
         return hkWorkout.uuid.uuidString
     }
 

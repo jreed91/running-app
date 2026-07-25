@@ -61,6 +61,16 @@ final class MockHealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sen
 
     @MainActor func save(_ workout: RunWorkout) async throws -> String { UUID().uuidString }
 
+    /// Records the strength sessions exported to HealthKit (N14).
+    @MainActor private(set) var savedStrengthWorkouts: [StrengthWorkout] = []
+    @MainActor var strengthSaveError: Error?
+
+    @MainActor func save(_ workout: StrengthWorkout) async throws -> String {
+        if let strengthSaveError { throw strengthSaveError }
+        savedStrengthWorkouts.append(workout)
+        return UUID().uuidString
+    }
+
     func fetchWorkouts(from startDate: Date, to endDate: Date) async throws -> [HKWorkout] { [] }
 
     @MainActor func syncWorkoutPlans(for plan: TrainingPlan, unitPreference: UnitPreference) async throws {}

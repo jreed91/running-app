@@ -1,10 +1,13 @@
 import Foundation
 
-// MARK: - DataMigrationService
+// MARK: - BuildEnvironment
 
-enum DataMigrationService {
-
-    // MARK: - TestFlight detection
+/// How this binary was distributed, and what that means for what the app exposes.
+///
+/// Formerly `DataMigrationService`, which contained no migration logic at all — the
+/// name promised something the type never did, and the same receipt check lived a
+/// second time in `PulseIntegrationService` (N27). Both now read this.
+enum BuildEnvironment {
 
     /// `true` when the running binary was distributed via TestFlight.
     ///
@@ -16,6 +19,8 @@ enum DataMigrationService {
         return receiptURL.lastPathComponent == "sandboxReceipt"
     }
 
+    /// Whether to surface diagnostic affordances (CloudKit debug data, notification
+    /// test harness) that must never reach an App Store build.
     static var showsTestFlightDiagnostics: Bool {
         #if targetEnvironment(simulator)
         true
