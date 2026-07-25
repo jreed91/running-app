@@ -175,4 +175,33 @@ struct WorkoutAnalyticsServiceTests {
 
         #expect(insights.previousVDOT == nil, "prior tempos are not race efforts and must not seed previousVDOT")
     }
+
+    /// `RunSummaryView` passes a history already narrowed to tempo and race runs, so it can
+    /// keep the all-time "previous best tempo" without fetching every run in the store (D6).
+    /// This pins that equivalence: if `tempoInsights` ever starts consulting another type,
+    /// this test fails rather than the screen quietly losing data.
+    @Test("Tempo insights consult only tempo and race history")
+    func tempoInsightsIgnoreOtherWorkoutTypes() {
+        let profile = makeProfile()
+        let thisTempo = makeRun(type: .tempo, date: now, distanceMeters: 6_000, durationSeconds: 26 * 60)
+        let priorTempo = makeRun(type: .tempo, date: daysAgo(10), distanceMeters: 6_000, durationSeconds: 25 * 60)
+        let priorRace = makeRun(type: .race, date: daysAgo(20), distanceMeters: 5_000, durationSeconds: 21 * 60)
+        let noise = [
+            makeRun(type: .easy, date: daysAgo(2), distanceMeters: 8_000, durationSeconds: 48 * 60),
+            makeRun(type: .longRun, date: daysAgo(5), distanceMeters: 18_000, durationSeconds: 100 * 60),
+            makeRun(type: .interval, date: daysAgo(7), distanceMeters: 7_000, durationSeconds: 32 * 60)
+        ]
+
+        let narrow = service.tempoInsights(
+            for: thisTempo, history: [priorTempo, priorRace], profile: profile
+        )
+        let full = service.tempoInsights(
+            for: thisTempo, history: [priorTempo, priorRace] + noise, profile: profile
+        )
+
+        #expect(narrow == full)
+        #expect(narrow.previousBestTempoSecondsPerKm == priorTempo.averagePaceSecondsPerKm)
+        #expect(narrow.recentTempoCount == 1)
+        #expect(narrow.previousVDOT != nil)
+    }
 }

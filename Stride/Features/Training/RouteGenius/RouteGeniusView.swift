@@ -140,7 +140,9 @@ struct RouteGeniusView: View {
     private var addressSearchField: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
                 TextField("Search address…", text: $viewModel.addressQuery)
                     .autocorrectionDisabled()
                     .onSubmit { Task { await viewModel.searchAddress() } }
@@ -152,6 +154,7 @@ struct RouteGeniusView: View {
                     } label: {
                         Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
                     }
+                    .accessibilityLabel("Clear address search")
                 }
             }
             .padding(10)

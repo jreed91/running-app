@@ -100,6 +100,8 @@ final class MockHealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sen
 
     func fetchHeartRateSamples(forWorkoutID id: String) async -> [Double] { [] }
 
+    func fetchDistanceSeries(forWorkoutID id: String) async -> [SplitBucketing.DistancePoint] { [] }
+
     func enableBackgroundDelivery() async throws {
         lock.withLock { _enableCalls += 1 }
         if let gate = enableGate { await gate.wait() }

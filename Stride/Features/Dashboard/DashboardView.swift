@@ -266,7 +266,18 @@ struct DashboardView: View {
     )
     private var activePlans: [TrainingPlan]
 
-    @Query(sort: \RunWorkout.date, order: .reverse)
+    /// The dashboard reads runs only for *this week* — the seven load bars and the two
+    /// week totals — so the newest 60 is far more than it can use, where the unbounded
+    /// query loaded every run ever logged on every render (D6).
+    static var recentRunsDescriptor: FetchDescriptor<RunWorkout> {
+        var descriptor = FetchDescriptor<RunWorkout>(
+            sortBy: [SortDescriptor(\RunWorkout.date, order: .reverse)]
+        )
+        descriptor.fetchLimit = 60
+        return descriptor
+    }
+
+    @Query(DashboardView.recentRunsDescriptor)
     private var recentWorkouts: [RunWorkout]
 
     @Environment(AppSettings.self) private var appSettings
@@ -296,7 +307,7 @@ struct DashboardView: View {
 
     private var missedWorkoutInfo: MissedWorkoutInfo? {
         guard let plan = activePlan else { return nil }
-        guard let info = MissedWorkoutDetector().detect(in: plan) else { return nil }
+        guard let info = MissedWorkoutDetector.detect(in: plan) else { return nil }
         // Only surface the rearrange-workouts prompt once per week. If the user
         // already flagged it this week (dismissed or acted on it), stay hidden
         // until the next week begins.

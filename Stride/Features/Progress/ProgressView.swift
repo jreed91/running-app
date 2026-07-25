@@ -179,6 +179,9 @@ struct ProgressDashboardView: View {
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+        .accessibilityValue(SpokenMetric.spoken(measurement: value))
     }
 
     // MARK: - Range picker
@@ -288,7 +291,72 @@ struct ProgressDashboardView: View {
                 }
             }
             .chartXSelection(value: $selectedVolumeDate)
+            .chartAccessibility("Weekly volume chart", weeklyVolumeSummary)
         }
+    }
+
+    /// Short spoken date label for a chart point, matching what the tooltip shows.
+    private func pointLabel(_ date: Date) -> String {
+        date.formatted(.dateTime.month(.abbreviated).day())
+    }
+
+    // MARK: - Chart accessibility summaries (N18)
+    //
+    // Each chart's spoken summary is built here rather than inline in the view body:
+    // one call per chart keeps the bodies readable and the type-checker's work small.
+
+    private var weeklyVolumeSummary: String {
+        ChartAccessibility.summary(
+            weeklyBuckets.map {
+                ChartAccessibility.Point(label: "week of \(pointLabel($0.week))", value: $0.distanceValue)
+            }
+        ) {
+            SpokenMetric.spoken(
+                value: String(format: "%.1f", $0),
+                unit: appSettings.unitPreference.distanceLabel
+            )
+        }
+    }
+
+    private func paceSummary(_ runs: [RunWorkout]) -> String {
+        ChartAccessibility.summary(
+            runs.map {
+                ChartAccessibility.Point(label: pointLabel($0.date), value: $0.averagePaceSecondsPerKm)
+            }
+        ) { SpokenMetric.spoken(measurement: $0.paceString(unit: appSettings.unitPreference)) }
+    }
+
+    private func heartRateSummary(_ runs: [RunWorkout]) -> String {
+        ChartAccessibility.summary(
+            runs.map {
+                ChartAccessibility.Point(label: pointLabel($0.date), value: $0.averageHeartRate ?? 0)
+            }
+        ) { "\(Int($0)) beats per minute" }
+    }
+
+    private func zoneSummary(_ slices: [HRZoneSlice]) -> String {
+        ChartAccessibility.summary(
+            slices.map { ChartAccessibility.Point(label: $0.zone.displayTitle, value: $0.seconds) }
+        ) { "\(Int(($0 / 60).rounded())) minutes" }
+    }
+
+    private func elevationSummary(_ runs: [RunWorkout]) -> String {
+        ChartAccessibility.summary(
+            runs.map {
+                ChartAccessibility.Point(
+                    label: pointLabel($0.date),
+                    value: ($0.elevationGainMeters ?? 0).elevationValue(unit: appSettings.unitPreference)
+                )
+            }
+        ) {
+            SpokenMetric.spoken(value: "\(Int($0))", unit: appSettings.unitPreference.elevationLabel)
+        }
+    }
+
+    private var vo2Summary: String {
+        ChartAccessibility.summary(
+            vo2Points.map { ChartAccessibility.Point(label: pointLabel($0.date), value: $0.vdot) }
+        ) { String(format: "%.1f", $0) }
     }
 
     // MARK: - Pace trend chart
@@ -342,6 +410,7 @@ struct ProgressDashboardView: View {
                     }
                 }
                 .chartXSelection(value: $selectedPaceDate)
+                .chartAccessibility("Average pace chart", paceSummary(paceWorkouts))
                 Text("Lower is faster")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -397,6 +466,7 @@ struct ProgressDashboardView: View {
                 }
                 .chartYAxisLabel("bpm")
                 .chartXSelection(value: $selectedHRDate)
+                .chartAccessibility("Average heart rate chart", heartRateSummary(withHR))
             }
         }
     }
@@ -483,6 +553,7 @@ struct ProgressDashboardView: View {
                     .chartYScale(domain: HRZone.allCases.reversed().map(\.shortName))
                     .chartXAxisLabel("minutes")
                     .frame(height: 150)
+                    .chartAccessibility("Time in heart-rate zones chart", zoneSummary(slices))
                     ForEach(slices.reversed()) { slice in
                         let pct = total > 0 ? slice.seconds / total : 0
                         HStack(spacing: 10) {
@@ -541,6 +612,7 @@ struct ProgressDashboardView: View {
                 }
                 .chartYAxisLabel(appSettings.unitPreference.elevationLabel)
                 .chartXSelection(value: $selectedElevationDate)
+                .chartAccessibility("Elevation gain chart", elevationSummary(withElev))
             }
         }
     }
@@ -590,6 +662,7 @@ struct ProgressDashboardView: View {
                     }
                 }
                 .chartXSelection(value: $selectedVO2Date)
+                .chartAccessibility("Estimated VO₂ max chart", vo2Summary)
                 Text("Higher is better fitness")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -647,6 +720,11 @@ struct ProgressDashboardView: View {
         .frame(maxWidth: .infinity)
         .padding(12)
         .background(Color.surfaceTertiary, in: RoundedRectangle(cornerRadius: 10))
+        // One element per cell, and a "--" placeholder is spoken as such rather than as
+        // a pair of dashes (N18).
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+        .accessibilityValue(SpokenMetric.spoken(measurement: value))
     }
 
     private func emptyDataPlaceholder(_ message: String) -> some View {

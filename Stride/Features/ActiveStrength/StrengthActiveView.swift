@@ -106,6 +106,8 @@ struct StrengthActiveView: View {
             }
             .padding(10)
             .background(.surfaceSecondary, in: Circle())
+            .accessibilityLabel("End session")
+            .accessibilityHint("Asks whether to save or discard this strength session.")
 
             Spacer()
 
