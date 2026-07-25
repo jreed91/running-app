@@ -787,14 +787,14 @@ struct OnboardingView: View {
             )
         }
         context.insert(plan)
-        try? context.save()
+        context.saveOrLog("the plan created during onboarding")
 
         Task {
             if appSettings.morningReminderEnabled {
                 await container.notificationService.scheduleMorningReminders(for: plan)
             }
             try? await container.healthKitRepository.syncWorkoutPlans(for: plan, unitPreference: appSettings.unitPreference)
-            try? context.save()
+            context.saveOrLog("the new plan's WorkoutKit ids")
             isCreatingPlan = false
         }
     }

@@ -298,7 +298,17 @@ struct DashboardView: View {
     /// (dismissed or acted on). Used to limit the prompt to once per week.
     @AppStorage("missedWorkoutPromptFlaggedDate") private var missedWorkoutPromptFlaggedInterval: Double = 0
     @State private var isHandlingRecovery = false
-    @State private var recoveryErrorMessage: String?
+    @State private var recoveryAlert: RecoveryAlert?
+
+    /// What a plan recovery has to tell the runner: a failure, or a success that did
+    /// less than the button promised — today, a shift race day left no room for (N6).
+    ///
+    /// One piece of state and one `.alert`, because two `.alert` modifiers on the same
+    /// view do not reliably both present.
+    private struct RecoveryAlert {
+        let title: String
+        let message: String
+    }
 
     @Namespace private var workoutCardNamespace
     @State private var dashboardAppeared = false
@@ -368,15 +378,15 @@ struct DashboardView: View {
                 StrengthActiveView(scheduledWorkout: workout)
             }
             .alert(
-                "Couldn't update your plan",
+                recoveryAlert?.title ?? "",
                 isPresented: Binding(
-                    get: { recoveryErrorMessage != nil },
-                    set: { if !$0 { recoveryErrorMessage = nil } }
+                    get: { recoveryAlert != nil },
+                    set: { if !$0 { recoveryAlert = nil } }
                 )
             ) {
-                Button("OK", role: .cancel) { recoveryErrorMessage = nil }
+                Button("OK", role: .cancel) { recoveryAlert = nil }
             } message: {
-                Text(recoveryErrorMessage ?? "")
+                Text(recoveryAlert?.message ?? "")
             }
         }
     }
@@ -740,8 +750,33 @@ struct DashboardView: View {
     private func handlePickUp(info: MissedWorkoutInfo) {
         guard let plan = activePlan, !isHandlingRecovery else { return }
         runRecovery(failureMessage: "We couldn't move your missed workouts forward.") {
-            try container.shiftMissedWorkoutsForward(plan: plan, by: info.daysToShift, context: context)
+            let outcome = try container.shiftMissedWorkoutsForward(
+                plan: plan,
+                by: info.daysToShift,
+                context: context
+            )
+            // A shift the race date blocked outright changed nothing, so the card has
+            // to stay: Rebuild is the only recovery left and hiding the prompt for a
+            // week would take it away.
+            return (notice: pickUpNotice(for: outcome), flagPrompt: !outcome.isNoOp)
         }
+    }
+
+    /// What to tell the runner when race day limited the shift they asked for (N6).
+    private func pickUpNotice(for outcome: MissedWorkoutShift.Outcome) -> String? {
+        guard outcome.wasClampedByRace else { return nil }
+        guard !outcome.wasBlockedByRace else {
+            return """
+            Your remaining sessions are already as close to race day as they can go, \
+            so nothing moved. Rebuild My Plan will fit a fresh block into the time you \
+            have left.
+            """
+        }
+        let dayWord = outcome.appliedDays == 1 ? "day" : "days"
+        return """
+        Moved your remaining sessions forward by \(outcome.appliedDays) \(dayWord) — \
+        any further and they'd land on or after race day.
+        """
     }
 
     private func handleRebuild() {
@@ -753,6 +788,7 @@ struct DashboardView: View {
                 context: context,
                 unitPreference: appSettings.unitPreference
             )
+            return (notice: nil, flagPrompt: true)
         }
     }
 
@@ -763,15 +799,29 @@ struct DashboardView: View {
     /// doing the work, which is what makes `MissedWorkoutsRecoveryCard`'s loading
     /// overlay reachable at all. Failures now surface in an alert instead of only
     /// reaching the log.
-    private func runRecovery(failureMessage: String, _ work: @escaping () throws -> Void) {
+    ///
+    /// The work reports back whether it did anything the runner should be told about,
+    /// and whether the prompt has earned its once-a-week dismissal.
+    private func runRecovery(
+        failureMessage: String,
+        _ work: @escaping () throws -> (notice: String?, flagPrompt: Bool)
+    ) {
         isHandlingRecovery = true
         Task { @MainActor in
             defer { isHandlingRecovery = false }
             do {
-                try work()
-                missedWorkoutPromptFlaggedInterval = Date().timeIntervalSince1970
+                let result = try work()
+                if result.flagPrompt {
+                    missedWorkoutPromptFlaggedInterval = Date().timeIntervalSince1970
+                }
+                recoveryAlert = result.notice.map {
+                    RecoveryAlert(title: "Race day is in the way", message: $0)
+                }
             } catch {
-                recoveryErrorMessage = "\(failureMessage)\n\n\(error.localizedDescription)"
+                recoveryAlert = RecoveryAlert(
+                    title: "Couldn't update your plan",
+                    message: "\(failureMessage)\n\n\(error.localizedDescription)"
+                )
                 AppLogger.log("Plan recovery failed: \(error)", label: "Dashboard", level: .error)
             }
         }

@@ -61,7 +61,7 @@ struct PlanDetailView: View {
                     try? await container.healthKitRepository.removeWorkoutPlans(for: plan)
                     container.notificationService.cancelReminders(for: plan)
                     context.delete(plan)
-                    try? context.save()
+                    context.saveOrLog("a deleted plan")
                 }
             }
             Button("Cancel", role: .cancel) {}

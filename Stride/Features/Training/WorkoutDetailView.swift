@@ -85,7 +85,7 @@ struct WorkoutDetailView: View {
         workout.workoutLocation = location
         // Clear the stale WorkoutKit plan so the next sync reschedules with the new location.
         workout.healthKitPlanID = nil
-        try? context.save()
+        context.saveOrLog("the workout's indoor/outdoor change")
         if let plan = workout.week?.plan {
             try? await container.healthKitRepository.syncWorkoutPlans(for: plan, unitPreference: appSettings.unitPreference)
         }

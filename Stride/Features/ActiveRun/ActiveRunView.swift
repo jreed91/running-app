@@ -625,7 +625,7 @@ struct ActiveRunView: View {
             context.delete(workout)
             pendingSave = nil
         }
-        try? context.save()
+        context.saveOrLog("the discard of an unsaved run")
         dismiss()
     }
 
@@ -677,7 +677,7 @@ struct ActiveRunView: View {
         Task { @MainActor in
             if let hkID = try? await container.healthKitRepository.save(workout) {
                 workout.healthKitWorkoutID = hkID
-                try? context.save()
+                context.saveOrLog("the run's HealthKit id")
             }
         }
         if let coordinate = tracker.coordinates.first {
@@ -693,7 +693,7 @@ struct ActiveRunView: View {
                 profile: profile,
                 unitPreference: appSettings.unitPreference
             )
-            try? context.save()
+            context.saveOrLog("training paces refreshed after the run")
         }
         dismiss()
     }

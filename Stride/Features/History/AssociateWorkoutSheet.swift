@@ -55,7 +55,7 @@ struct AssociateWorkoutSheet: View {
         scheduled.isCompleted = true
         scheduled.linkedRunWorkoutID = workout.id
         workout.linkedScheduledWorkoutID = scheduled.id
-        try? context.save()
+        context.saveOrLog("the manual run-to-plan link")
         dismiss()
     }
 }

@@ -178,7 +178,7 @@ extension WeatherService {
             return
         }
         workout.weather = summary
-        try? context.save()
+        context.saveOrLog("the run's weather snapshot")
         AppLogger.log("Weather attached to workout \(workout.id)", label: "WeatherKit", level: .info)
     }
 }

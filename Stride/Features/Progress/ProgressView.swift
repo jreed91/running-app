@@ -503,7 +503,7 @@ struct ProgressDashboardView: View {
             run.heartRateSamples = samples
             didChange = true
         }
-        if didChange { try? context.save() }
+        if didChange { context.saveOrLog("backfilled heart-rate samples") }
     }
 
     /// Aggregate time-in-zone across the selected period, from each run's persisted HR samples.

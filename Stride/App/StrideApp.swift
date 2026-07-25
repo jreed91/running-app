@@ -254,7 +254,7 @@ struct ContentView: View {
                 for: plan,
                 unitPreference: appSettings.unitPreference
             )
-            try? context.save()
+            context.saveOrLog("the WorkoutKit plan ids")
             AppLogger.log("Active plan synced to WorkoutKit.", label: "WorkoutKit", level: .info)
         } catch {
             AppLogger.log(
@@ -340,7 +340,7 @@ enum ProfileRestoreDeduplicator {
             }
             profile.fitnessLevelLegacy = nil
         }
-        if dirty { try? context.save() }
+        if dirty { context.saveOrLog("the profile enum migration") }
     }
 
     /// Applies the same legacy-field recovery to RunWorkout, ScheduledWorkout,
@@ -425,7 +425,7 @@ enum ProfileRestoreDeduplicator {
             }
         }
 
-        if dirty { try? context.save() }
+        if dirty { context.saveOrLog("the route enum migration") }
     }
 
     /// Re-stitches RunWorkout ↔ ScheduledWorkout relationships using the primitive ID backup
@@ -463,7 +463,7 @@ enum ProfileRestoreDeduplicator {
             dirty = true
         }
 
-        if dirty { try? context.save() }
+        if dirty { context.saveOrLog("restored run-to-plan links") }
     }
 
     /// Restores the single-active-plan invariant by **deactivating** every plan after
@@ -487,7 +487,7 @@ enum ProfileRestoreDeduplicator {
         let toRetire = activePlansNewestFirst.dropFirst().filter(\.isActive)
         guard !toRetire.isEmpty else { return 0 }
         toRetire.forEach { $0.isActive = false }
-        try? context.save()
+        context.saveOrLog("retired duplicate active plans")
         return toRetire.count
     }
 

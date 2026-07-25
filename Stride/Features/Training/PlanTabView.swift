@@ -173,7 +173,7 @@ struct PlanTabView: View {
             totalCount: workoutsToAdapt.count,
             updates: []
         )
-        try? context.save()
+        context.saveOrLog("the plan before Smart Adapt")
         try? await container.healthKitRepository.removeWorkoutPlans(for: plan)
 
         smartAdaptProgress.currentMessage = "Streaming coach response..."
@@ -238,7 +238,7 @@ struct PlanTabView: View {
                 at: 0
             )
             smartAdaptProgress.updates = Array(smartAdaptProgress.updates.prefix(4))
-            try? context.save()
+            context.saveOrLog("a Smart Adapt workout update")
         }
 
         guard !Task.isCancelled, isPlanAdaptable(plan) else { return }

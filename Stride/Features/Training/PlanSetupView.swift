@@ -285,7 +285,7 @@ struct PlanSetupView: View {
             unitPreference: appSettings.unitPreference
         )
         context.insert(plan)
-        try? context.save()
+        context.saveOrLog("the plan created in setup")
 
         Task {
             if appSettings.morningReminderEnabled {
@@ -296,7 +296,7 @@ struct PlanSetupView: View {
                 previous.isActive = false
             }
             try? await container.healthKitRepository.syncWorkoutPlans(for: plan, unitPreference: appSettings.unitPreference)
-            try? context.save()
+            context.saveOrLog("the new plan's WorkoutKit ids")
             isGenerating = false
             dismiss()
         }

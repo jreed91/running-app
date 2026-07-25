@@ -22,9 +22,10 @@ Two kinds of finding are recorded:
 > (UX debt: N12, N17, N19, N20, N24, plus the blocking half of N18), and Priority 4
 > (hygiene: N11, N13's dialog, N14, N16, N21, N22, N23, N25, N26's code half,
 > N27–N30, and the lint half of N31) are fixed — see §8. A third pass then closed
-> **N9's split backfill**, the rest of **N18** bar localization, and **D6**. What remains
-> open: **localization** (the last of N18/D8), N31's two unobserved toolchain pins, and the
-> remaining §6 carry-overs.
+> **N9's split backfill**, the rest of **N18** bar localization, and **D6**. A fourth
+> closed **N6's race-date remainder** (the last open half of a Priority 1 item) and
+> **D5**. What remains open: **localization** (the last of N18/D8), N31's two unobserved
+> toolchain pins, and the remaining §6 carry-overs (D1–D4, D7, `.externalStorage`, S4).
 
 > **Scope:** correctness, UX, and hygiene. Product/feature gaps live in
 > [`FEATURE_IMPROVEMENTS_2026-07.md`](./FEATURE_IMPROVEMENTS_2026-07.md);
@@ -229,9 +230,20 @@ asserts the notice survives to a view presented when `profiles.isEmpty`.
   Rest days still stay put. Covered by `MissedWorkoutsRecoveryTests`
   (`shiftMovesStrengthWorkouts`).
 
-*Still open:* a large shift can still place a session on or after a fixed race
-date. (N12 — the dashboard showing only one of a day's two sessions — is fixed, so
-same-day pairs are now both visible as well as both retained.)
+**The race-date remainder is now fixed too.** Holding the race workout still was never
+enough on its own — the rest of the block slid straight over it, so a runner four days
+behind could end up with a tempo session on race morning and a long run the day after
+the finish. `MissedWorkoutShift.resolve` clamps the requested shift to the headroom
+that actually exists between the last movable session and the day *before* the race,
+so the shift stays uniform (the whole point: it preserves the spacing the plan was
+generated with) and simply travels less far. A shift the race blocks outright changes
+nothing, leaves the recovery card up — Rebuild is the only recovery left, and hiding
+the prompt for a week would take it away — and says so. Covered by
+`MissedWorkoutShiftTests` and a plan-level
+`MissedWorkoutsRecoveryTests.shiftIsClampedByRaceDate`.
+
+(N12 — the dashboard showing only one of a day's two sessions — is fixed, so same-day
+pairs are now both visible as well as both retained.)
 
 `Stride/Features/Training/PlanTabView.swift:322-366`
 
@@ -497,8 +509,9 @@ the run held in `pendingSave` because `finishWorkout()` is one-shot. A failed sa
 logs, raises a "Couldn't save your run" alert, and keeps the screen up with **Try
 Again** / **Discard** — where Discard also unlinks the scheduled day rather than
 leaving it marked complete with no run behind it. The follow-on writes (HealthKit
-export, weather, pace refresh) still use `try?`: they enrich a run that is already
-safely persisted. The other 33 `try? context.save()` sites (D5) are untouched.
+export, weather, pace refresh) stay best-effort: they enrich a run that is already
+safely persisted. They — and the other 32 sites — now go through `saveOrLog`, so a
+failure is logged rather than silent (D5).
 
 ```swift
 context.insert(workout)
@@ -936,10 +949,10 @@ The gaps line up exactly with where this pass found bugs:
 | ~~Dashboard day resolution and the start-button window~~ | N12/N24 — closed: both rules live in `ScheduledDayResolver` and are tested (`ScheduledDayResolverTests`). The rendering of a two-session stack is still untested view code |
 | ~~The minimum-effort floor for app-recorded runs~~ | N17 — closed: `RunEffortPolicyTests` pins the floor and asserts the importer and the run-finish path agree on it |
 
-Two structural notes: `AppContainer.rebuildPlan`/`shiftMissedWorkoutsForward` do
-real date math and deletion policy on the DI container (D2), which is why N1 and
-N6 have no natural test home; and view-embedded stat math remains the least
-tested code in the app (D1).
+Two structural notes: `AppContainer.rebuildPlan` still does real date math on the DI
+container (D2) — `shiftMissedWorkoutsForward`'s share of it moved out to the pure
+`MissedWorkoutShift`, which is what finally gave N6's race-date half a test home; and
+view-embedded stat math remains the least tested code in the app (D1).
 
 ---
 
@@ -953,7 +966,7 @@ Confirmed still present at `75c0e27`. Details in the original document.
 | **D2** `AppContainer` god object | Open. `attachWeather`, `shiftMissedWorkoutsForward`, `rebuildPlan` unchanged — and N1 lives there. |
 | **D3** no choke point for invariants | Open, and worse than recorded: N4 is a third importer, N1/N2 a second and third plan-deletion policy. |
 | **D4** observation & DI foot-guns | Mostly open. `AppContainer` is still `ObservableObject` behind a custom `EnvironmentKey`; `NotificationService` is still a callback-carrying singleton; N30 is the `AuthService` half. |
-| **D5** pervasive `try? context.save()` | Open — 34 sites; see N15 for the one that loses user data. |
+| **D5** pervasive `try? context.save()` | ✅ **Closed.** All 35 sites now go through `ModelContext.saveOrLog(_:)`, which keeps the best-effort semantics — most of these are a preference toggle, a cached insight, a weather snapshot, and making them `throws` would push error handling into views with nothing useful to do with it — and adds the trace that was missing. The defect was never that they don't propagate; it is that a store which had started rejecting writes (disk full, CloudKit schema mismatch, one model failing validation) was indistinguishable from a working one, from the user's side *and* from Pulse. Each call names what it was saving, so the log line identifies the site. The two places where a failure must reach the user still use `do`/`catch`: the run-finish save (N15) and the dashboard's plan-recovery mutations. Covered by `ModelContextSaveTests`. |
 | **D6** unfiltered `@Query`/full-table fetches | ✅ **Closed** for all four readers, and none of them by simply capping a fetch. The dashboard takes the 60 newest runs and the coach chat the 8 its prompt reads. `RunSummaryView` replaced its two whole-table queries with three narrow ones: the plan day found by the run's own id (`linkedRunWorkoutID`) instead of scanning every `ScheduledWorkout`, the newest 51 runs for the two coach requests, and *tempo + race runs only* for `tempoInsights` — which consults nothing else, so the all-time "previous best tempo" is unchanged (pinned by `WorkoutAnalyticsServiceTests`). `HistoryView`'s list moved into a child view initialised with the page size, so each side fetches `limit + 1` rows and the extra row answers "is there more?" without counting the table. `MissedWorkoutDetector.detect` is `static`, so nothing is constructed in a body-evaluated property. *Deliberately left whole-table:* `ProgressView` and `RaceInsightsView`, whose charts are range- or all-time-scoped; they want the same child-view treatment if it ever measures. |
 | **D7** dead code & drift | Open — see N27/N28. |
 | **D8** accessibility & localization | Mostly closed. Dynamic Type works again (N19); the run HUD, week strip, charts, metric cells, history rows, and the other modules' icon-only buttons are all labelled and button-based (N18). Localization is still open — every user-facing string is a literal. |
@@ -978,7 +991,7 @@ next pass doesn't churn them:
   `ShareCardModel`, `StreakGoalService`, `ProgressStatsService`,
   `WorkoutPaceAlert`, `LocationQualityFilter`, `ScheduledDayResolver`,
   `RunEffortPolicy`, `CoachMarkdown`, `HeartRateBackfill`, `SplitBackfill`,
-  `ChartAccessibility`, `SpokenMetric` are all UI-free,
+  `ChartAccessibility`, `SpokenMetric`, `MissedWorkoutShift` are all UI-free,
   `Sendable`, and directly tested. This is the pattern the remaining view-embedded math should
   follow — the last three show it applies to presentation rules (what a chart or a metric
   cell *sounds like*) just as well as to maths.
@@ -994,8 +1007,9 @@ next pass doesn't churn them:
 **1 — Stop losing data — ✅ DONE:**
 - ✅ N1 rebuild-plan deletes the plan → deactivate.
 - ✅ N2 launch dedup deletes plans → deactivate.
-- ✅ N6 same-day pruning deletes strength → scoped by kind; the shift now moves
-  strength with the runs. (N29 — deleting the pruners outright — still open.)
+- ✅ N6 same-day pruning deletes strength → scoped by kind, then removed outright by
+  N29; the shift moves strength with the runs and is now clamped so it can never carry
+  a session onto or past a fixed race date (`MissedWorkoutShift`).
 - ✅ N15 run-finish `try?` → real error handling.
 
 **2 — Correctness the user can see — ✅ DONE:**
@@ -1033,5 +1047,13 @@ next pass doesn't churn them:
   above added, so this is the natural next step rather than a separate track.
 - N31's two toolchain pins (`XCODEGEN_VERSION`, `XCBEAUTIFY_VERSION`), which still need a
   CI run that reaches the test job.
-- The §6 carry-overs that are still open: D1–D5 and D7 structural work,
-  `.externalStorage`, and S4's plist keys. (D6 is closed; D8 is down to localization.)
+- The §6 carry-overs that are still open: D1–D4 and D7 structural work,
+  `.externalStorage`, and S4's plist keys. (D5 and D6 are closed; D8 is down to
+  localization.)
+- **S4's remainder is config-only and small**: `NSLocalNetworkUsageDescription` and
+  `NSBonjourServices: _pulse._tcp` still ship in the App Store Info.plist even though
+  `PulseIntegrationService.activateIfNeeded` only starts `RemoteLogger` under `#if DEBUG`,
+  so the shipped app declares a capability it never exercises. XcodeGen writes one
+  `info.properties` block for every configuration, so making the keys debug-only needs a
+  per-config mechanism rather than a one-line edit — worth doing next to a build that
+  can actually be archived and checked.

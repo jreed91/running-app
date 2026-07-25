@@ -423,7 +423,7 @@ final class AppContainer: ObservableObject {
             }
 
             context.insert(snapshotWorkout)
-            try? context.save()
+            context.saveOrLog("the restored review snapshot")
             workout = snapshotWorkout
         } else {
             AppLogger.log("Could not find workout for pending review id=\(idString); fetched \(all.count) workouts", label: "Notifications", level: .warning)
@@ -538,12 +538,21 @@ final class AppContainer: ObservableObject {
     /// the whole week by one delta preserves the spacing the plan was built with —
     /// which is the point of "pick up where I left off". Rest days stay put: they
     /// are gaps, not sessions, and nothing is lost by leaving them.
+    ///
+    /// Holding the race still was never enough on its own: the rest of the block slid
+    /// straight over it, so a runner four days behind could end up with a tempo session
+    /// on race morning. `MissedWorkoutShift` clamps the request to the room that exists
+    /// before race day, and the returned outcome tells the caller how much of the
+    /// request survived so the UI can say so.
+    ///
+    /// - Returns: What the shift resolved to. `Outcome.isNoOp` means nothing moved and
+    ///   nothing was saved.
+    @discardableResult
     func shiftMissedWorkoutsForward(
         plan: TrainingPlan,
         by days: Int,
         context: ModelContext
-    ) throws {
-        guard days > 0 else { return }
+    ) throws -> MissedWorkoutShift.Outcome {
         let startOfToday = Calendar.current.startOfDay(for: Date())
         let hasFixedRace = plan.raceDate != nil
 
@@ -557,9 +566,16 @@ final class AppContainer: ObservableObject {
             return true
         }
 
+        let outcome = MissedWorkoutShift.resolve(
+            requestedDays: days,
+            lastMovableDate: toShift.map(\.scheduledDate).max(),
+            raceDate: plan.raceDate
+        )
+        guard !outcome.isNoOp else { return outcome }
+
         for workout in toShift {
             workout.scheduledDate = Calendar.current.date(
-                byAdding: .day, value: days, to: workout.scheduledDate
+                byAdding: .day, value: outcome.appliedDays, to: workout.scheduledDate
             ) ?? workout.scheduledDate
         }
 
@@ -569,6 +585,7 @@ final class AppContainer: ObservableObject {
         }
 
         try context.save()
+        return outcome
     }
 
     /// Retires the active plan and generates a fresh one starting from today,
