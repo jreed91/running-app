@@ -3,7 +3,7 @@ import Foundation
 // MARK: - TempoInsights
 
 /// Pace insights derived from a single completed tempo run.
-struct TempoInsights: Sendable {
+struct TempoInsights: Sendable, Equatable {
     /// Actual average pace achieved during the tempo run (sec/km).
     let achievedPaceSecondsPerKm: Double
     /// VDOT-derived threshold pace target based on prior quality runs (sec/km). Nil when history is insufficient.
@@ -144,6 +144,12 @@ struct WorkoutAnalyticsService: Sendable {
     /// Produces ``TempoInsights`` for a completed tempo run given workout history and runner profile.
     /// `history` should include all runs **excluding** the workout being analysed so that
     /// comparisons reflect the state before this session.
+    ///
+    /// Only `.tempo` and `.race` runs are consulted — an all-time best tempo pace, the count
+    /// of tempos in the last eight weeks, and race efforts inside six weeks — so a caller may
+    /// pass a history already narrowed to those two types. `RunSummaryView` does exactly
+    /// that, which is how it keeps the all-time comparison without fetching every run in the
+    /// store (D6); `WorkoutAnalyticsServiceTests` pins the equivalence.
     func tempoInsights(for workout: RunWorkout, history: [RunWorkout], profile: UserProfile) -> TempoInsights {
         let now = workout.date
 

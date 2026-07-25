@@ -25,45 +25,19 @@ private enum HistoryEntry: Identifiable {
 // MARK: - HistoryView
 
 struct HistoryView: View {
-    @Query(sort: [SortDescriptor(\RunWorkout.date, order: .reverse)])
-    private var allRunWorkouts: [RunWorkout]
-
-    @Query(sort: [SortDescriptor(\StrengthWorkout.date, order: .reverse)])
-    private var allStrengthWorkouts: [StrengthWorkout]
-
     @Environment(\.appContainer) private var container
 
     @State private var isSyncing = false
-    @State private var displayLimit = 20
-
-    private let pageSize = 20
-
-    private var sortedEntries: [HistoryEntry] {
-        let runs = allRunWorkouts.map { HistoryEntry.run($0) }
-        let strength = allStrengthWorkouts.map { HistoryEntry.strength($0) }
-        return (runs + strength).sorted { $0.date > $1.date }
-    }
-
-    private var displayedEntries: [HistoryEntry] {
-        Array(sortedEntries.prefix(displayLimit))
-    }
+    /// How many entries the list is currently showing. Held here, and passed *into* the
+    /// list, because a `@Query`'s fetch limit is fixed when the view is initialised — so
+    /// paging means re-initialising a child view with a bigger limit (D6). The list itself
+    /// used to fetch both whole tables to show twenty rows.
+    @State private var displayLimit = HistoryEntryList.pageSize
 
     var body: some View {
         NavigationStack {
-            List {
-                ForEach(Array(displayedEntries.enumerated()), id: \.element.id) { index, entry in
-                    entryRow(for: entry, index: index)
-                }
-                .onDelete(perform: deleteEntries)
-
-                if displayedEntries.count < sortedEntries.count {
-                    HStack {
-                        Spacer()
-                        ProgressView()
-                        Spacer()
-                    }
-                    .listRowSeparator(.hidden)
-                }
+            HistoryEntryList(limit: displayLimit, isSyncing: isSyncing) {
+                displayLimit += HistoryEntryList.pageSize
             }
             .navigationTitle("History")
             .toolbar {
@@ -74,56 +48,8 @@ struct HistoryView: View {
                     }
                 }
             }
-            .overlay {
-                if allRunWorkouts.isEmpty && allStrengthWorkouts.isEmpty && !isSyncing {
-                    ContentUnavailableView(
-                        "No workouts yet",
-                        systemImage: "figure.run.circle",
-                        description: Text("Start a workout or sync from Apple Health.")
-                    )
-                }
-            }
             .task {
                 await syncRecentHealthKitWorkouts()
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func entryRow(for entry: HistoryEntry, index: Int) -> some View {
-        switch entry {
-        case .run(let workout):
-            NavigationLink { RunSummaryView(workout: workout) } label: {
-                WorkoutRowView(workout: workout)
-            }
-            .onAppear { loadMoreIfNeeded(index: index) }
-        case .strength(let workout):
-            NavigationLink { StrengthSummaryView(workout: workout) } label: {
-                StrengthWorkoutRowView(workout: workout)
-            }
-            .onAppear { loadMoreIfNeeded(index: index) }
-        }
-    }
-
-    private func loadMoreIfNeeded(index: Int) {
-        if index >= displayedEntries.count - 5 {
-            displayLimit = min(displayLimit + pageSize, sortedEntries.count)
-        }
-    }
-
-    // MARK: Delete
-
-    private func deleteEntries(at offsets: IndexSet) {
-        // Snapshot the entries before deleting: `displayedEntries` is recomputed on every
-        // access, so mutating the store mid-loop would shift the offsets we're iterating.
-        // All invariant repair (tombstones, scheduled-day reset) lives in the repository.
-        let entries = displayedEntries
-        for index in offsets where entries.indices.contains(index) {
-            switch entries[index] {
-            case .run(let workout):
-                try? container.workoutRepository.delete(workout)
-            case .strength(let workout):
-                try? container.workoutRepository.delete(workout)
             }
         }
     }
@@ -158,6 +84,130 @@ struct HistoryView: View {
         // A wider window than a routine sync: opening History is an explicit "show me
         // everything" gesture, and it is the screen where a missing run is noticed.
         await container.workoutSyncService.syncNow(lookbackDays: 60, source: "history")
+    }
+}
+
+// MARK: - HistoryEntryList
+
+/// The merged run + strength list, fetching only as far as it displays.
+///
+/// Both queries are built in `init` from the caller's `limit`, which is what makes paging
+/// possible at all: `@Query` resolves its descriptor once per view initialisation, so a
+/// growing page size has to arrive as a new value from the parent (D6).
+///
+/// Each side fetches one row *beyond* the page. That extra row is never displayed — it is
+/// how the list knows more history exists without counting the whole table, which is the
+/// question the old full-table fetch was really answering.
+private struct HistoryEntryList: View {
+    static let pageSize = 20
+
+    private let limit: Int
+    private let isSyncing: Bool
+    private let loadMore: () -> Void
+
+    @Environment(\.appContainer) private var container
+
+    @Query private var runs: [RunWorkout]
+    @Query private var strengthWorkouts: [StrengthWorkout]
+
+    init(limit: Int, isSyncing: Bool, loadMore: @escaping () -> Void) {
+        self.limit = limit
+        self.isSyncing = isSyncing
+        self.loadMore = loadMore
+
+        var runDescriptor = FetchDescriptor<RunWorkout>(
+            sortBy: [SortDescriptor(\.date, order: .reverse)]
+        )
+        runDescriptor.fetchLimit = limit + 1
+        _runs = Query(runDescriptor)
+
+        var strengthDescriptor = FetchDescriptor<StrengthWorkout>(
+            sortBy: [SortDescriptor(\.date, order: .reverse)]
+        )
+        strengthDescriptor.fetchLimit = limit + 1
+        _strengthWorkouts = Query(strengthDescriptor)
+    }
+
+    /// Newest-first merge of both fetches. Either type can supply the whole page, which is
+    /// why each is fetched to the full limit rather than to some share of it.
+    private var entries: [HistoryEntry] {
+        let merged = runs.map { HistoryEntry.run($0) } + strengthWorkouts.map { HistoryEntry.strength($0) }
+        return merged.sorted { $0.date > $1.date }
+    }
+
+    private var displayedEntries: [HistoryEntry] {
+        Array(entries.prefix(limit))
+    }
+
+    /// True when at least one entry exists beyond the page — the extra row each fetch asked
+    /// for. Never a claim about *how many* remain, which nothing on this screen needs.
+    private var hasMore: Bool {
+        entries.count > limit
+    }
+
+    var body: some View {
+        List {
+            ForEach(Array(displayedEntries.enumerated()), id: \.element.id) { index, entry in
+                entryRow(for: entry, index: index)
+            }
+            .onDelete(perform: deleteEntries)
+
+            if hasMore {
+                HStack {
+                    Spacer()
+                    ProgressView()
+                    Spacer()
+                }
+                .listRowSeparator(.hidden)
+            }
+        }
+        .overlay {
+            if entries.isEmpty && !isSyncing {
+                ContentUnavailableView(
+                    "No workouts yet",
+                    systemImage: "figure.run.circle",
+                    description: Text("Start a workout or sync from Apple Health.")
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func entryRow(for entry: HistoryEntry, index: Int) -> some View {
+        switch entry {
+        case .run(let workout):
+            NavigationLink { RunSummaryView(workout: workout) } label: {
+                WorkoutRowView(workout: workout)
+            }
+            .onAppear { loadMoreIfNeeded(index: index) }
+        case .strength(let workout):
+            NavigationLink { StrengthSummaryView(workout: workout) } label: {
+                StrengthWorkoutRowView(workout: workout)
+            }
+            .onAppear { loadMoreIfNeeded(index: index) }
+        }
+    }
+
+    private func loadMoreIfNeeded(index: Int) {
+        guard hasMore, index >= displayedEntries.count - 5 else { return }
+        loadMore()
+    }
+
+    // MARK: Delete
+
+    private func deleteEntries(at offsets: IndexSet) {
+        // Snapshot the entries before deleting: `displayedEntries` is recomputed on every
+        // access, so mutating the store mid-loop would shift the offsets we're iterating.
+        // All invariant repair (tombstones, scheduled-day reset) lives in the repository.
+        let entries = displayedEntries
+        for index in offsets where entries.indices.contains(index) {
+            switch entries[index] {
+            case .run(let workout):
+                try? container.workoutRepository.delete(workout)
+            case .strength(let workout):
+                try? container.workoutRepository.delete(workout)
+            }
+        }
     }
 }
 

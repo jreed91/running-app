@@ -18,8 +18,16 @@ struct RunSummaryView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appContainer) private var container
-    @Query private var scheduledWorkouts: [ScheduledWorkout]
-    @Query(sort: \RunWorkout.date, order: .reverse) private var allWorkouts: [RunWorkout]
+    /// The plan day this run fulfilled, found by the run's own id — where this screen used
+    /// to fetch **every** `ScheduledWorkout` in the store and scan it (D6).
+    @Query private var scheduledLinkingThisRun: [ScheduledWorkout]
+    /// The newest runs, for the two coach requests. One more than the longest slice either
+    /// takes, so dropping this run from the list can never shorten it (D6).
+    @Query private var recentRuns: [RunWorkout]
+    /// Every tempo and race run, all-time — the only history `tempoInsights` consults, so
+    /// this preserves its all-time "previous best tempo" while replacing a whole-table
+    /// fetch with a narrow one (D6).
+    @Query private var qualityRuns: [RunWorkout]
     @Query private var profiles: [UserProfile]
     @Query(
         filter: #Predicate<TrainingPlan> { $0.isActive },
@@ -49,8 +57,45 @@ struct RunSummaryView: View {
     @State private var shareCard: ShareCardImage?
     @State private var isRenderingShareCard = false
 
+    /// Runs the coach's per-run insight summarises.
+    private static let insightHistoryRunCount = 8
+    /// Runs the coach's plan-adaptation request summarises.
+    private static let adaptationHistoryRunCount = 50
+
+    init(workout: RunWorkout) {
+        self.workout = workout
+
+        // Every linker writes the scalar id alongside the relationship
+        // (`WorkoutSyncService`, `AssociateWorkoutSheet`, the run-finish path) and
+        // `WorkoutRepository` clears both on delete, so this is a faithful mirror of the
+        // relationship — and the same field `repairRelationships` restores from.
+        // Typed as `UUID?` so the predicate compares like for like against the optional
+        // stored property.
+        let runID: UUID? = workout.id
+        var linked = FetchDescriptor<ScheduledWorkout>(
+            predicate: #Predicate { $0.linkedRunWorkoutID == runID }
+        )
+        linked.fetchLimit = 1
+        _scheduledLinkingThisRun = Query(linked)
+
+        var recent = FetchDescriptor<RunWorkout>(sortBy: [SortDescriptor(\.date, order: .reverse)])
+        recent.fetchLimit = Self.adaptationHistoryRunCount + 1
+        _recentRuns = Query(recent)
+
+        let tempo = WorkoutType.tempo.rawValue
+        let race = WorkoutType.race.rawValue
+        _qualityRuns = Query(
+            FetchDescriptor<RunWorkout>(
+                predicate: #Predicate { $0.workoutTypeRaw == tempo || $0.workoutTypeRaw == race },
+                sortBy: [SortDescriptor(\.date, order: .reverse)]
+            )
+        )
+    }
+
+    /// The plan day this run fulfilled. The relationship is the fast path; the id-matched
+    /// query covers a CloudKit restore that landed the scalar backup before the reference.
     private var matchedScheduled: ScheduledWorkout? {
-        scheduledWorkouts.first { $0.completedWorkout?.id == workout.id }
+        workout.scheduledWorkout ?? scheduledLinkingThisRun.first
     }
 
     private var planForNextSessionUpdate: TrainingPlan? {
@@ -173,14 +218,22 @@ struct RunSummaryView: View {
     }
 
     private var recentHistory: [RunWorkout] {
-        allWorkouts.filter { $0.id != workout.id }
+        recentRuns.filter { $0.id != workout.id }
+    }
+
+    /// The tempo and race runs before this one. `tempoInsights` consults only those two
+    /// types — an all-time best tempo and races inside six weeks — which is why the narrow
+    /// query above can stand in for the whole table; `WorkoutAnalyticsServiceTests` pins
+    /// that so a future widening of the rule fails a test rather than this screen.
+    private var qualityHistory: [RunWorkout] {
+        qualityRuns.filter { $0.id != workout.id }
     }
 
     private var tempoInsights: TempoInsights? {
         guard displayType == .tempo, let profile = profiles.first else { return nil }
         return WorkoutAnalyticsService().tempoInsights(
             for: workout,
-            history: recentHistory,
+            history: qualityHistory,
             profile: profile
         )
     }
@@ -1329,7 +1382,7 @@ struct RunSummaryView: View {
             aiStreamBuffer = ""
         }
 
-        let historySlice = Array(recentHistory.prefix(8))
+        let historySlice = Array(recentHistory.prefix(Self.insightHistoryRunCount))
         let result = await container.aiCoachService.evaluateWithProvider(
             workout: workout,
             recentHistory: historySlice,
@@ -1375,7 +1428,7 @@ struct RunSummaryView: View {
 
         guard let adapted = await container.aiCoachService.adaptScheduledWorkoutWithProvider(
             scheduled: nextWorkout,
-            recentHistory: Array(allWorkouts.prefix(50)),
+            recentHistory: Array(recentRuns.prefix(Self.adaptationHistoryRunCount)),
             profile: profile,
             provider: appSettings.aiProvider,
             unitPreference: appSettings.unitPreference,

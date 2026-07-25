@@ -22,10 +22,9 @@ Two kinds of finding are recorded:
 > (UX debt: N12, N17, N19, N20, N24, plus the blocking half of N18), and Priority 4
 > (hygiene: N11, N13's dialog, N14, N16, N21, N22, N23, N25, N26's code half,
 > N27–N30, and the lint half of N31) are fixed — see §8. A third pass then closed
-> **N9's split backfill** and the rest of **N18** bar localization, and bounded two of
-> D6's full-table queries. What remains open: **localization** (the last of N18/D8),
-> N31's two unobserved toolchain pins, and the §6 carry-overs (D6's two remaining
-> readers among them).
+> **N9's split backfill**, the rest of **N18** bar localization, and **D6**. What remains
+> open: **localization** (the last of N18/D8), N31's two unobserved toolchain pins, and the
+> remaining §6 carry-overs.
 
 > **Scope:** correctness, UX, and hygiene. Product/feature gaps live in
 > [`FEATURE_IMPROVEMENTS_2026-07.md`](./FEATURE_IMPROVEMENTS_2026-07.md);
@@ -955,7 +954,7 @@ Confirmed still present at `75c0e27`. Details in the original document.
 | **D3** no choke point for invariants | Open, and worse than recorded: N4 is a third importer, N1/N2 a second and third plan-deletion policy. |
 | **D4** observation & DI foot-guns | Mostly open. `AppContainer` is still `ObservableObject` behind a custom `EnvironmentKey`; `NotificationService` is still a callback-carrying singleton; N30 is the `AuthService` half. |
 | **D5** pervasive `try? context.save()` | Open — 34 sites; see N15 for the one that loses user data. |
-| **D6** unfiltered `@Query`/full-table fetches | Partly closed. The dashboard (60 newest runs) and the coach chat (8, the number its prompt reads) now fetch through a bounded `FetchDescriptor`, and `MissedWorkoutDetector.detect` is `static`, so nothing is constructed in a body-evaluated property. Still open by design-decision: `RunSummaryView.swift:19-20` — its "previous best tempo" is an all-time figure, so capping the fetch would quietly change a number the user sees — and `HistoryView.swift:28-32`, whose list pages through the full set. Both want the targeted-fetch refactor D1 implies, not a cap. |
+| **D6** unfiltered `@Query`/full-table fetches | ✅ **Closed** for all four readers, and none of them by simply capping a fetch. The dashboard takes the 60 newest runs and the coach chat the 8 its prompt reads. `RunSummaryView` replaced its two whole-table queries with three narrow ones: the plan day found by the run's own id (`linkedRunWorkoutID`) instead of scanning every `ScheduledWorkout`, the newest 51 runs for the two coach requests, and *tempo + race runs only* for `tempoInsights` — which consults nothing else, so the all-time "previous best tempo" is unchanged (pinned by `WorkoutAnalyticsServiceTests`). `HistoryView`'s list moved into a child view initialised with the page size, so each side fetches `limit + 1` rows and the extra row answers "is there more?" without counting the table. `MissedWorkoutDetector.detect` is `static`, so nothing is constructed in a body-evaluated property. *Deliberately left whole-table:* `ProgressView` and `RaceInsightsView`, whose charts are range- or all-time-scoped; they want the same child-view treatment if it ever measures. |
 | **D7** dead code & drift | Open — see N27/N28. |
 | **D8** accessibility & localization | Mostly closed. Dynamic Type works again (N19); the run HUD, week strip, charts, metric cells, history rows, and the other modules' icon-only buttons are all labelled and button-based (N18). Localization is still open — every user-facing string is a literal. |
 | **S4** remainder | Open (config). `NSLocalNetworkUsageDescription`/`NSBonjourServices` still ship in the shared `project.yml`. |
@@ -1034,6 +1033,5 @@ next pass doesn't churn them:
   above added, so this is the natural next step rather than a separate track.
 - N31's two toolchain pins (`XCODEGEN_VERSION`, `XCBEAUTIFY_VERSION`), which still need a
   CI run that reaches the test job.
-- The §6 carry-overs: D1–D5/D7 structural work, D6's two remaining full-table readers
-  (`RunSummaryView`, `HistoryView` — both need targeted fetches rather than a cap, see
-  §6), `.externalStorage`, and S4's plist keys.
+- The §6 carry-overs that are still open: D1–D5 and D7 structural work,
+  `.externalStorage`, and S4's plist keys. (D6 is closed; D8 is down to localization.)
