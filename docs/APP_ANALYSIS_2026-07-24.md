@@ -897,7 +897,7 @@ the call then holds a strong `self` for the lifetime of an infinite
 impact is small, but the same pattern in `AppSettings.observeExternalChanges`
 (`:176-188`) does hold it weakly across iterations and is the version to copy.
 
-### ⚠️ N31. CI toolchain pins are still empty and lint thresholds are still unreachable
+### ⚠️ N31. CI toolchain pins are still empty, lint thresholds were unreachable — and no macOS job was being scheduled at all
 
 **MOSTLY FIXED.** The lint half is done, and doing it turned up something this
 document missed: **the lint job was failing at error level**, so no run has reached
@@ -914,6 +914,29 @@ own output: `type_body_length` 2000 → 1100 (worst remaining ~1,000),
 actually poured. *Still open:* `XCODEGEN_VERSION` and `XCBEAUTIFY_VERSION` have no
 observed value to pin — their install step lives in the test job, which `needs: lint`
 has been skipping. Fill them in from the first run that gets that far.
+
+**The stated reason above is wrong, and the real one is worse.** A fifth pass read the
+Actions API instead of the workflow file and found the macOS side of CI has not been
+*running at all* — not failing, unscheduled. Every macOS job was labelled `macos-27`,
+which never provisions: those jobs are assigned no runner (`runner_id: 0`,
+`runner_name: ""`) and sit queued until GitHub times them out. Run `30050008858` is the
+clearest sample, because it straddles the change: its lint job on **`macos-26`** picked
+up a runner in three seconds and passed in sixteen, while its test job on **`macos-27`**
+waited *exactly* twenty-four hours and was cancelled. Once lint moved to `macos-27` too
+it began queueing for hours and being cancelled by the next push's concurrency group
+(runs `30133817520`, `30140006521`, `30160865168` — all the same shape). So nothing has
+been linted, built, tested, or archived in this repo for as long as that label has been
+in place, and the lint-threshold work N31 describes has never actually been exercised by
+a run.
+
+**FIXED:** all three macOS jobs move to `macos-26`, the label with observed provisioning
+— and the image that poured the pinned SwiftLint 0.65.0 in the first place, so the pin
+stays honest. Each also gains a `timeout-minutes` so a hung `xcodebuild` costs an hour
+rather than a day. The two toolchain pins stay empty by necessity: they need a real
+observation, and the run that produces one is now possible for the first time. If
+`macos-26` turns out not to carry an Xcode 27 toolchain, the existing "Select Xcode"
+step says so with the list of installed Xcodes inside the first minute — which is the
+diagnostic this pipeline has been unable to produce.
 
 `.github/workflows/*.yml:31-33`; `.swiftlint.yml:39-58`
 
