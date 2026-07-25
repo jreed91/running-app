@@ -17,9 +17,9 @@ Two kinds of finding are recorded:
 > style as the July document. Line numbers in fixed items refer to this
 > document's commit and may drift.
 >
-> **Status:** the Priority-1 group (data loss: N1, N2, N6, N15) and the cheap
-> Priority-2 items (N3, N4, N5, plus the plan-scoping half of N13) are fixed —
-> see §8. Everything else below is open.
+> **Status:** Priority 1 (data loss: N1, N2, N6, N15) and Priority 2
+> (N3, N4, N5, N7, N8, N9, N10, plus the plan-scoping half of N13) are fixed —
+> see §8. Priority 3 (UX debt) is the next block; everything else below is open.
 
 > **Scope:** correctness, UX, and hygiene. Product/feature gaps live in
 > [`FEATURE_IMPROVEMENTS_2026-07.md`](./FEATURE_IMPROVEMENTS_2026-07.md);
@@ -254,7 +254,14 @@ the pruning exists to clean up phantom workouts whose producers were removed.
 
 ## 2. Medium-severity bugs
 
-### N7. A split's pace is not that split's pace
+### ✅ N7. A split's pace is not that split's pace
+
+**FIXED:** both paths now close a bucket with its own Δtime ÷ Δdistance via
+`SplitBucketing.splitPaceSecondsPerKm`, with the bucket's opening elapsed time and
+distance tracked alongside `lastSplitDistance`. `currentPaceSecondsPerKm` is now
+HUD-only and smoothed, since nothing derived reads it. Covered by `SplitPaceTests`,
+including the negative-split case the indoor path could not express.
+
 `Stride/Core/Services/WorkoutTrackerService.swift:333-356` (outdoor),
 `:216-248` (indoor)
 
@@ -281,7 +288,18 @@ existing bucket state and compute the split pace from the deltas. Keep
 `currentPaceSecondsPerKm` (smoothed) for the live HUD only. This is pure math
 around `SplitBucketing` and should get direct unit tests.
 
-### N8. No GPS quality filtering on the tracking path
+### ✅ N8. No GPS quality filtering on the tracking path
+
+**FIXED:** `LocationQualityFilter` is a pure accept/reject decision over accuracy
+(invalid or worse than 25 m), staleness (older than 15 s — the cached fix Core
+Location replays when updates start), and implied speed (faster than 12.5 m/s, or
+a jump with no elapsed time). `processLocation` applies it before a fix reaches
+the route or the distance total, and counts discards by reason for one debug line
+at finish. Pausing an outdoor run now also clears `lastLocation`, so distance
+covered while paused is no longer measured against the pre-pause fix and added on
+resume — the outdoor twin of the pedometer replay M24 fixed. Covered by
+`LocationQualityFilterTests`.
+
 `Stride/Core/Services/WorkoutTrackerService.swift:312-359`
 
 `processLocation` appends every fix to `coordinates` and accumulates
@@ -297,7 +315,18 @@ fixes older than a few seconds, and ignore deltas implying an impossible speed.
 Extract the accept/reject decision as a pure function and test it — the tracker
 still has no unit tests for `processLocation` (see §5).
 
-### N9. Imported runs have no splits at all
+### ✅ N9. Imported runs have no splits at all
+
+**FIXED:** the importer reads the workout's `distanceWalkingRunning` series
+(`fetchDistanceSeries`) and buckets it through `SplitBucketing.splits`, which
+interpolates the moment each boundary is crossed inside the sample spanning it and
+drops any bucket whose timing can't be established rather than storing a zero
+pace. Buckets use the runner's own unit, and each split carries a heart rate
+averaged over the matching window of the run's HR series. Covered by
+`ImportedSplitsTests`. *Still open:* runs imported before this change keep their
+empty splits — a lazy backfill, like `loadHeartRateZones` does for HR, is the
+remaining half.
+
 `Stride/Core/Repositories/HealthKitRepository.swift:604-665`
 
 The importer builds heart rate, elevation, and the route, but never
@@ -314,7 +343,20 @@ to query (`fetchDistanceMeters(for:)`, `:728`) carry per-sample timestamps.
 `SplitBucketing`, set `splitUnit` from the user's preference), and backfill
 lazily for already-imported runs the same way `loadHeartRateZones` backfills HR.
 
-### N10. Workout-type inference uses an absolute pace threshold
+### ✅ N10. Workout-type inference uses an absolute pace threshold
+
+**FIXED:** `inferWorkoutType` is now static, takes the runner's `TrainingPaces`,
+and classifies a run as quality only if its average is at or inside **marathon
+pace** — clear of the top of the easy band, and slow enough to admit a tempo
+session recorded with its warm-up and cool-down. With no 5 K estimate on the
+profile there is nothing to classify against, so the run is `.easy` unless its
+distance makes it a long run. Intervals are still not inferred; that needs the
+workout's structure, not an average. The paces and the split unit travel together
+in a `WorkoutImportContext` resolved from the store
+(`WorkoutImportContext.resolve(from:)`), so the background sync and the manual
+Settings import agree. Covered by `WorkoutTypeInferenceTests` and a
+`WorkoutSyncServiceTests` case asserting the context is resolved and forwarded.
+
 `Stride/Core/Repositories/HealthKitRepository.swift:893-899`
 
 ```swift
@@ -679,8 +721,8 @@ The gaps line up exactly with where this pass found bugs:
 
 | Untested behaviour | Findings it would have caught |
 | --- | --- |
-| `WorkoutTrackerService.processLocation` / split construction | N7 (split pace), N8 (GPS filtering) — the tracker still has no test file; `WallClockStopwatchTests` and `SplitBucketingTests` cover the extracted helpers only |
-| HealthKit → `RunWorkout` mapping (`fetchImportableWorkouts`, `inferWorkoutType`) | N9 (no splits), N10 (absolute threshold) |
+| ~~`WorkoutTrackerService.processLocation` / split construction~~ | N7/N8 — mostly closed: the split-pace math (`SplitPaceTests`) and the fix accept/reject decision (`LocationQualityFilterTests`) are extracted and tested. `processLocation` itself — which now composes them — still has no test, because the tracker owns `CLLocationManager` directly |
+| ~~HealthKit → `RunWorkout` mapping (`inferWorkoutType`, split building)~~ | N9/N10 — closed for the pure halves: `ImportedSplitsTests` and `WorkoutTypeInferenceTests`. The HealthKit queries feeding them (`fetchDistanceSeries`) are still untested — they need a store fake |
 | ~~The `HistoryView` import path~~ | N4 — closed: there is now one importer, and `syncNow` is tested for linking and retired-plan scoping |
 | ~~Active-plan resolution across views~~ | N3/N13 — partly closed: `belongsToLivePlan` and the intent are tested. A test asserting *every* `@Query` reader agrees would still be worth having |
 | ~~Plan-lifecycle destructive paths~~ | N1/N2 — closed: `MissedWorkoutsRecoveryTests` and `PlanHistoryTests` now assert nothing is deleted |
@@ -745,15 +787,16 @@ next pass doesn't churn them:
   strength with the runs. (N29 — deleting the pruners outright — still open.)
 - ✅ N15 run-finish `try?` → real error handling.
 
-**2 — Correctness the user can see:**
+**2 — Correctness the user can see — ✅ DONE:**
 - ✅ N3 unfiltered active-plan query, plus the retired-plan scoping the fixes above
   made necessary (both linkers and the Siri intent).
 - ✅ N4 fold `HistoryView`'s importer into `WorkoutSyncService`.
 - ✅ N5 present the store-recovery notice at the root.
-- N7 real split pace + N8 GPS filtering, with tests. **Next.**
-- N9/N10 import splits and classify types relative to the runner.
+- ✅ N7 real split pace + N8 GPS filtering, with tests.
+- ✅ N9/N10 import splits and classify types relative to the runner. (Backfilling
+  splits onto already-imported runs is the one piece left; see N9.)
 
-**3 — UX debt with outsized impact:**
+**3 — UX debt with outsized impact — next:**
 - N17 discard-run, N18 accessibility (the finish control first — it blocks a core
   action), N19 Dynamic Type, N20 elevation/cadence, N24 start a missed workout,
   N12 (a day can now legitimately hold two sessions — the dashboard must show both).

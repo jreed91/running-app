@@ -45,6 +45,8 @@ final class MockHealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sen
     @MainActor var runFetchGate: AsyncGate?
     @MainActor var runFetchResults: [[RunWorkout]] = []
     @MainActor private(set) var runFetchCalls = 0
+    /// The runner context the service passed to the last import (N9/N10).
+    @MainActor private(set) var lastImportContext: WorkoutImportContext?
     @MainActor private(set) var registerCalls = 0
     @MainActor private(set) var observerHandler: (@Sendable (_ completion: @escaping @Sendable () -> Void) -> Void)?
 
@@ -69,9 +71,11 @@ final class MockHealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sen
     func fetchImportableWorkouts(
         from startDate: Date,
         to endDate: Date,
-        existingIDs: Set<String>
+        existingIDs: Set<String>,
+        context: WorkoutImportContext
     ) async throws -> [RunWorkout] {
         runFetchCalls += 1
+        lastImportContext = context
         if let gate = runFetchGate { await gate.wait() }
         guard !runFetchResults.isEmpty else { return [] }
         return runFetchResults.removeFirst()
@@ -284,6 +288,54 @@ struct WorkoutSyncServiceTests {
         #expect(stored.contains { $0.healthKitWorkoutID == run.healthKitWorkoutID })
 
         UserDefaults.standard.removeObject(forKey: "pendingReviewWorkoutID")
+    }
+
+    // MARK: Runner context handed to the importer (N9/N10)
+
+    private func insertProfile(
+        in context: ModelContext,
+        estimated5KSeconds: Double?
+    ) throws {
+        let profile = UserProfile(
+            name: "Test",
+            goalRace: .fiveK,
+            goalFinishTime: 1_500,
+            weeklyRunDays: 4,
+            fitnessLevel: .intermediate,
+            currentEstimated5KTimeSeconds: estimated5KSeconds
+        )
+        context.insert(profile)
+        try context.save()
+    }
+
+    /// N10: the importer classifies a run's type against the runner's own training
+    /// paces, so the sync pass has to resolve them from the store — otherwise every
+    /// import falls back to "no idea who this runner is".
+    @Test("The sync pass hands the runner's own paces to the importer (N10)")
+    func syncResolvesRunnerPaces() async throws {
+        let mock = MockHealthKitRepository()
+        let (service, context) = makeService(mock: mock)
+        try insertProfile(in: context, estimated5KSeconds: 1_200)
+        mock.runFetchResults = [[]]
+
+        await service.syncNow(source: "test")
+
+        let expected = PaceCalculatorService.trainingPaces(from5KTimeSeconds: 1_200)
+        #expect(mock.lastImportContext?.paces?.marathon == expected.marathon)
+        #expect(mock.lastImportContext?.paces?.threshold == expected.threshold)
+    }
+
+    @Test("With no 5 K estimate the importer is given nothing to classify against")
+    func syncWithoutEstimateSendsNoPaces() async throws {
+        let mock = MockHealthKitRepository()
+        let (service, context) = makeService(mock: mock)
+        try insertProfile(in: context, estimated5KSeconds: nil)
+        mock.runFetchResults = [[]]
+
+        await service.syncNow(source: "test")
+
+        #expect(mock.lastImportContext != nil)
+        #expect(mock.lastImportContext?.paces == nil)
     }
 
     // MARK: Notification batching (M5)

@@ -44,6 +44,18 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
     private var lastLocation: CLLocation?
     private var lastSplitDistance: Double = 0
 
+    /// Elapsed time and cumulative distance at the moment the current split bucket
+    /// opened. A split's pace is Δtime ÷ Δdistance across the bucket (N7), not the
+    /// instantaneous or session-average pace that happened to be showing when the
+    /// boundary was crossed.
+    private var splitStartElapsedSeconds: Double = 0
+    private var splitStartDistanceMeters: Double = 0
+
+    /// GPS fixes discarded by `LocationQualityFilter` during this run, by reason.
+    /// Logged once at finish so a run recorded through bad reception is diagnosable
+    /// from Pulse without a per-fix log line.
+    private var rejectedFixCounts: [LocationQualityFilter.Rejection: Int] = [:]
+
     /// Distance unit splits are bucketed in, captured at `startWorkout` from the user's
     /// preference so an imperial runner gets genuine per-mile splits rather than km
     /// buckets relabelled "mi" (A1). `splitLengthMeters` is the derived bucket size.
@@ -67,6 +79,11 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
 
     private let locationManager = CLLocationManager()
     private let autoPauseThresholdMetersPerSecond: Double = 0.5  // below this ≈ standing still
+
+    /// Weight given to the newest fix in the live pace HUD. A raw `1_000 / speed`
+    /// reading swings hard fix-to-fix; splits no longer depend on this value (N7),
+    /// so the displayed number can be smoothed.
+    private let paceSmoothingFactor: Double = 0.3
 
     private let hkStore = HKHealthStore()
     private var hrQuery: HKAnchoredObjectQuery?
@@ -111,6 +128,11 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
         timer?.invalidate()
         if workoutLocation == .outdoor {
             locationManager.stopUpdatingLocation()
+            // Forget the last fix so the first one after resuming opens a fresh
+            // segment: otherwise the distance walked while paused is measured
+            // against the pre-pause location and added to the run — the outdoor
+            // twin of the pedometer replay M24 fixed.
+            lastLocation = nil
         } else {
             // Bank distance covered so far; the next pedometer segment starts fresh
             // from its own resume date so paused walking is not replayed (M24).
@@ -155,6 +177,7 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
         stopwatch.pause(at: Date())
         elapsedSeconds = stopwatch.accumulated
         trackingState = .finished
+        logRejectedFixSummary()
 
         let workout = RunWorkout(
             date: startDate,
@@ -192,10 +215,43 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
         hrSamples = []
         lastLocation = nil
         lastSplitDistance = 0
+        splitStartElapsedSeconds = 0
+        splitStartDistanceMeters = 0
         totalElevationGainMeters = 0
         currentSplitElevationGainMeters = 0
         indoorDistanceBaselineMeters = 0
         pedometerActive = false
+        rejectedFixCounts = [:]
+    }
+
+    /// Opens a new split bucket at the current elapsed time and distance.
+    private func openNextSplitBucket(atElapsed elapsed: Double) {
+        lastSplitDistance = distanceMeters
+        splitStartElapsedSeconds = elapsed
+        splitStartDistanceMeters = distanceMeters
+    }
+
+    /// Average pace across the split bucket that just closed, falling back to the live
+    /// pace only when the bucket has no usable deltas (e.g. a resumed indoor segment
+    /// that reports its whole distance in one callback).
+    private func closingSplitPace(atElapsed elapsed: Double) -> Double {
+        SplitBucketing.splitPaceSecondsPerKm(
+            deltaSeconds: elapsed - splitStartElapsedSeconds,
+            deltaMeters: distanceMeters - splitStartDistanceMeters
+        ) ?? currentPaceSecondsPerKm
+    }
+
+    private func logRejectedFixSummary() {
+        guard !rejectedFixCounts.isEmpty else { return }
+        let summary = rejectedFixCounts
+            .sorted { $0.value > $1.value }
+            .map { "\($0.key.rawValue)=\($0.value)" }
+            .joined(separator: ", ")
+        AppLogger.log(
+            "Discarded low-quality GPS fixes during this run: \(summary)",
+            label: "WorkoutTrackerService",
+            level: .debug
+        )
     }
 
     // MARK: - Pedometer (indoor)
@@ -236,15 +292,19 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
         let unitsCovered = SplitBucketing.bucketIndex(
             distanceMeters: distanceMeters, splitLengthMeters: splitLengthMeters
         )
+        // `currentPaceSecondsPerKm` on this path is the cumulative session average,
+        // so using it made every indoor split report the same number (N7). Take the
+        // bucket's own Δtime ÷ Δdistance instead.
+        let elapsed = stopwatch.elapsed(at: Date())
         let split = Split(
             kilometer: unitsCovered,
-            paceSecondsPerKm: currentPaceSecondsPerKm,
+            paceSecondsPerKm: closingSplitPace(atElapsed: elapsed),
             heartRate: currentHeartRate,
             elevationGainMeters: 0,
             cumulativeDistanceMeters: distanceMeters
         )
         splits.append(split)
-        lastSplitDistance = distanceMeters
+        openNextSplitBucket(atElapsed: elapsed)
     }
 
     // MARK: - Heart rate
@@ -310,9 +370,26 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
     }
 
     private func processLocation(_ location: CLLocation) {
+        let now = Date()
+        let previous = lastLocation
+
+        // Reject unusable fixes before they reach the route or the distance total:
+        // an invalid/imprecise reading, a cached one replayed when updates start, or
+        // a jump no runner could have made is jitter, not distance (N8).
+        let fix = LocationQualityFilter.Fix(
+            horizontalAccuracy: location.horizontalAccuracy,
+            ageSeconds: now.timeIntervalSince(location.timestamp),
+            distanceFromPreviousMeters: previous.map { location.distance(from: $0) },
+            secondsSincePreviousFix: previous.map { location.timestamp.timeIntervalSince($0.timestamp) }
+        )
+        if let rejection = LocationQualityFilter.rejection(for: fix) {
+            rejectedFixCounts[rejection, default: 0] += 1
+            return
+        }
+
         coordinates.append(Coordinate(location.coordinate))
 
-        if let last = lastLocation {
+        if let last = previous {
             let delta = location.distance(from: last)
 
             // Auto-pause: stop accumulating distance if nearly stationary
@@ -331,7 +408,13 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
             currentSplitElevationGainMeters += ascent
 
             if location.speed > 0 {
-                currentPaceSecondsPerKm = 1_000 / location.speed
+                // Live HUD only — smoothed so a single fix can't make the number jump.
+                // Splits take their own Δtime ÷ Δdistance below (N7).
+                let instantaneous = 1_000 / location.speed
+                currentPaceSecondsPerKm = currentPaceSecondsPerKm > 0
+                    ? currentPaceSecondsPerKm * (1 - paceSmoothingFactor)
+                        + instantaneous * paceSmoothingFactor
+                    : instantaneous
             }
 
             // Record a split every unit (km or mile) the runner has chosen
@@ -343,15 +426,16 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
                 let unitsCovered = SplitBucketing.bucketIndex(
                     distanceMeters: distanceMeters, splitLengthMeters: splitLengthMeters
                 )
+                let elapsed = stopwatch.elapsed(at: now)
                 let split = Split(
                     kilometer: unitsCovered,
-                    paceSecondsPerKm: currentPaceSecondsPerKm,
+                    paceSecondsPerKm: closingSplitPace(atElapsed: elapsed),
                     heartRate: currentHeartRate,
                     elevationGainMeters: currentSplitElevationGainMeters,
                     cumulativeDistanceMeters: distanceMeters
                 )
                 splits.append(split)
-                lastSplitDistance = distanceMeters
+                openNextSplitBucket(atElapsed: elapsed)
                 currentSplitElevationGainMeters = 0
             }
         }

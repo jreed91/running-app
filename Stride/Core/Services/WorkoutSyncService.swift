@@ -272,7 +272,8 @@ final class WorkoutSyncService {
         return try await healthKitRepository.fetchImportableWorkouts(
             from: cutoff,
             to: Date(),
-            existingIDs: existingIDs
+            existingIDs: existingIDs,
+            context: WorkoutImportContext.resolve(from: context)
         )
     }
 
@@ -461,5 +462,30 @@ final class WorkoutSyncService {
         guard let summary = await weatherService.fetchWeather(at: coordinate, date: workout.date) else { return }
         workout.weather = summary
         try? context.save()
+    }
+}
+
+// MARK: - Import context resolution
+
+extension WorkoutImportContext {
+
+    /// Reads the runner's context out of the store so every importer classifies and
+    /// buckets imported runs the same way: training paces derived from the most
+    /// recently updated profile's 5 K estimate (N10) and the unit the runner reads
+    /// their splits in (N9). A store with no profile — or a profile with no estimate
+    /// — yields `.unknownRunner` paces, which classify every run as easy rather than
+    /// guessing.
+    @MainActor
+    static func resolve(from context: ModelContext) -> WorkoutImportContext {
+        var descriptor = FetchDescriptor<UserProfile>(
+            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+        )
+        descriptor.fetchLimit = 1
+        let estimate = (try? context.fetch(descriptor))?.first?.currentEstimated5KTimeSeconds
+        var paces: TrainingPaces?
+        if let estimate, estimate > 0 {
+            paces = PaceCalculatorService.trainingPaces(from5KTimeSeconds: estimate)
+        }
+        return WorkoutImportContext(paces: paces, splitUnit: AppSettings.syncedUnitPreference())
     }
 }
