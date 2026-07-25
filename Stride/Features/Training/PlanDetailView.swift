@@ -54,15 +54,9 @@ struct PlanDetailView: View {
         ) {
             Button("Delete Plan", role: .destructive) {
                 dismiss()
-                Task {
-                    // Tear down the Watch plans and reminders before deleting the
-                    // record, otherwise they orphan (still scheduled, but no plan
-                    // to find them from).
-                    try? await container.healthKitRepository.removeWorkoutPlans(for: plan)
-                    container.notificationService.cancelReminders(for: plan)
-                    context.delete(plan)
-                    context.saveOrLog("a deleted plan")
-                }
+                // `deletePlan` owns the order: the Watch entries and reminders are
+                // reachable only through the plan, so they go before the record does (D3).
+                Task { await container.deletePlan(plan, context: context) }
             }
             Button("Cancel", role: .cancel) {}
         } message: {

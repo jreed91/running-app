@@ -781,9 +781,28 @@ enum DebugRunGenerator {
         context.saveOrLog("sample run history")
     }
 
+    /// Removes every seeded run, repairing the plan days they were linked to.
+    ///
+    /// "Mark Workouts Complete" links its generated runs to scheduled days and sets
+    /// `isCompleted`, and it sits directly above this button. Deleting the runs on their
+    /// own left those days still marked complete with no run behind them — the exact
+    /// invariant `WorkoutRepository.delete` exists to repair, skipped because this path
+    /// deletes through the context directly (D3). The relationship's `.nullify` rule
+    /// clears `completedWorkout` and nothing else. The scalar backup is cleared too, for
+    /// the seeded runs that carry one.
+    ///
+    /// No tombstone is written: seeded runs are local inventions with no
+    /// `healthKitWorkoutID`, so there is no import to suppress.
     static func clear(context: ModelContext) {
         guard let all = try? context.fetch(FetchDescriptor<RunWorkout>()) else { return }
-        all.filter { $0.notes == tag }.forEach { context.delete($0) }
+        for run in all where run.notes == tag {
+            if let scheduled = run.scheduledWorkout {
+                scheduled.completedWorkout = nil
+                scheduled.linkedRunWorkoutID = nil
+                scheduled.isCompleted = false
+            }
+            context.delete(run)
+        }
         context.saveOrLog("the removal of sample data")
     }
 
