@@ -54,8 +54,12 @@ final class StrideUITests: XCTestCase {
         startFreeRun.tap()
 
         XCTAssertTrue(app.staticTexts["EASY ZONE"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["DISTANCE"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["TIME"].waitForExistence(timeout: 5))
+        // Each metric cell is a single accessibility element now, so its inner
+        // "DISTANCE"/"TIME" labels are no longer separate static texts (N18). Match on
+        // the cell identifiers instead, and check the finish control is a real button.
+        XCTAssertTrue(app.descendants(matching: .any)["activeRun.metric.Distance"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["activeRun.metric.Time"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["activeRun.finish"].waitForExistence(timeout: 5))
     }
 
     private func completeOnboarding() {

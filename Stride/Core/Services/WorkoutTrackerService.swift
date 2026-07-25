@@ -36,6 +36,20 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
     @Published private(set) var coordinates: [Coordinate] = []
     @Published private(set) var splits: [Split] = []
 
+    /// Elevation gain accumulated across the whole run, in metres.
+    ///
+    /// Published because the live HUD showed a hardcoded `--` for elevation while
+    /// this number was already being accumulated (N20). Also the value stored on the
+    /// finished `RunWorkout`.
+    @Published private(set) var elevationGainMeters: Double = 0
+
+    /// Live cadence in steps per minute, or `nil` before the first pedometer sample.
+    ///
+    /// `CMPedometer` reports cadence in steps per *second* and needs no permission
+    /// beyond the motion access the indoor path already requests, so the HUD's
+    /// second hardcoded `--` can show a real number on outdoor runs too (N20).
+    @Published private(set) var currentCadenceStepsPerMinute: Double?
+
     // MARK: Private
 
     private var workoutType: WorkoutType = .easy
@@ -65,10 +79,10 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
     /// Wall-clock elapsed time, immune to process suspension / stalled run loops (M23).
     private var stopwatch = WallClockStopwatch()
 
-    /// Elevation gain accumulated across the whole run and the current split bucket.
-    /// (M26 — a split's gain is the sum of positive altitude deltas within the km,
-    /// not just the delta between its final two GPS fixes.)
-    private var totalElevationGainMeters: Double = 0
+    /// Elevation gain accumulated across the current split bucket. (M26 — a split's
+    /// gain is the sum of positive altitude deltas within the km, not just the delta
+    /// between its final two GPS fixes.) The whole-run total is the published
+    /// `elevationGainMeters`.
     private var currentSplitElevationGainMeters: Double = 0
 
     /// Distance banked from active segments before the current indoor resume, so
@@ -115,9 +129,10 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
         if workoutLocation == .outdoor {
             configureLocationManager()
             locationManager.startUpdatingLocation()
-        } else {
-            startPedometerUpdates(from: startDate)
         }
+        // The pedometer runs on both paths: indoors it is the distance source,
+        // outdoors it is read for cadence only (N20).
+        startPedometerUpdates(from: startDate)
     }
 
     func pauseWorkout() {
@@ -137,8 +152,8 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
             // Bank distance covered so far; the next pedometer segment starts fresh
             // from its own resume date so paused walking is not replayed (M24).
             indoorDistanceBaselineMeters = distanceMeters
-            stopPedometerUpdates()
         }
+        stopPedometerUpdates()
         if let q = hrQuery { hkStore.stop(q) }
     }
 
@@ -150,9 +165,8 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
         startHeartRateQuery(from: Date())
         if workoutLocation == .outdoor {
             locationManager.startUpdatingLocation()
-        } else {
-            startPedometerUpdates(from: Date())
         }
+        startPedometerUpdates(from: Date())
     }
 
     /// Returns the tracker to `.idle` after a finished workout so a new one can start.
@@ -170,9 +184,8 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
         timer?.invalidate()
         if workoutLocation == .outdoor {
             locationManager.stopUpdatingLocation()
-        } else {
-            stopPedometerUpdates()
         }
+        stopPedometerUpdates()
         if let q = hrQuery { hkStore.stop(q); hrQuery = nil }
         stopwatch.pause(at: Date())
         elapsedSeconds = stopwatch.accumulated
@@ -189,8 +202,8 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
         workout.routeCoordinates = coordinates
         workout.splits = splits
         workout.splitUnit = splitUnit
-        if totalElevationGainMeters > 0 {
-            workout.elevationGainMeters = totalElevationGainMeters
+        if elevationGainMeters > 0 {
+            workout.elevationGainMeters = elevationGainMeters
         }
         if !hrSamples.isEmpty {
             workout.averageHeartRate = hrSamples.reduce(0, +) / Double(hrSamples.count)
@@ -217,8 +230,9 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
         lastSplitDistance = 0
         splitStartElapsedSeconds = 0
         splitStartDistanceMeters = 0
-        totalElevationGainMeters = 0
+        elevationGainMeters = 0
         currentSplitElevationGainMeters = 0
+        currentCadenceStepsPerMinute = nil
         indoorDistanceBaselineMeters = 0
         pedometerActive = false
         rejectedFixCounts = [:]
@@ -254,10 +268,17 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
         )
     }
 
-    // MARK: - Pedometer (indoor)
+    // MARK: - Pedometer (distance indoors, cadence on every run)
 
+    /// Starts pedometer updates for the segment beginning at `segmentStart`.
+    ///
+    /// Indoors the pedometer is the distance source. Outdoors it runs too, but only
+    /// cadence is read from it — distance stays with GPS (N20).
     private func startPedometerUpdates(from segmentStart: Date) {
-        guard CMPedometer.isDistanceAvailable(), !pedometerActive else { return }
+        guard !pedometerActive else { return }
+        let providesDistance = workoutLocation == .indoor
+        guard CMPedometer.isCadenceAvailable()
+            || (providesDistance && CMPedometer.isDistanceAvailable()) else { return }
         pedometerActive = true
         let baseline = indoorDistanceBaselineMeters
         pedometer.startUpdates(from: segmentStart) { [weak self] data, error in
@@ -265,8 +286,15 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
             // `distance` is cumulative since `segmentStart`; add the distance banked
             // before this segment so a pause/resume never replays or drops meters (M24).
             let meters = baseline + (data.distance?.doubleValue ?? 0)
+            // Read off `CMPedometerData` here: it is not `Sendable`, so only the
+            // extracted numbers cross into the main-actor task.
+            let stepsPerMinute = data.currentCadence.map { $0.doubleValue * 60 }
             Task { @MainActor [weak self] in
                 guard let self, self.trackingState == .active else { return }
+                if let stepsPerMinute, stepsPerMinute > 0 {
+                    self.currentCadenceStepsPerMinute = stepsPerMinute
+                }
+                guard providesDistance else { return }
                 self.distanceMeters = meters
                 // Guard the divisor, not the elapsed time (M25) — otherwise the first
                 // callbacks (meters == 0) produce a +inf pace.
@@ -404,7 +432,7 @@ final class WorkoutTrackerService: NSObject, ObservableObject {
             // current split so a steady climb is recorded, not just the last
             // fix-to-fix delta (M26).
             let ascent = max(0, location.altitude - last.altitude)
-            totalElevationGainMeters += ascent
+            elevationGainMeters += ascent
             currentSplitElevationGainMeters += ascent
 
             if location.speed > 0 {

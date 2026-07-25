@@ -60,3 +60,14 @@ cyclomatic_complexity:
 
 identifier_name:
   min_length: 2
+
+custom_rules:
+  # A `static let caption = Font.system(size: 12)` in a Font extension shadows
+  # SwiftUI's own dynamic-type token at every `.font(.caption)` call site in the
+  # app — hundreds of them — and silently disables Dynamic Type with no warning
+  # from the compiler (N19). Design-system tokens carry a `ds` prefix instead.
+  no_builtin_font_shadowing:
+    name: "Built-in Font token shadowed"
+    regex: 'static\s+(?:let|var)\s+(largeTitle|title|title2|title3|headline|subheadline|body|callout|footnote|caption|caption2)\s*(?::\s*Font\s*)?=\s*Font'
+    message: "Don't re-declare one of SwiftUI's Font statics — it shadows the dynamic-type token app-wide. Use a `ds`-prefixed name (see Stride/Shared/Theme/AppFonts.swift)."
+    severity: error
