@@ -65,15 +65,11 @@ struct TrainingPlanListView: View {
         .onDelete { offsets in
             let toDelete = offsets.map { sectionPlans[$0] }
             Task {
+                // `deletePlan` owns the order: the Watch entries and reminders are
+                // reachable only through the plan, so they go before the record does (D3).
                 for plan in toDelete {
-                    // Remove the Watch plans and reminders before deleting the
-                    // record, otherwise they orphan (still scheduled, but no plan
-                    // to find them from).
-                    try? await container.healthKitRepository.removeWorkoutPlans(for: plan)
-                    container.notificationService.cancelReminders(for: plan)
-                    context.delete(plan)
+                    await container.deletePlan(plan, context: context)
                 }
-                context.saveOrLog("deleted plans")
             }
         }
     }

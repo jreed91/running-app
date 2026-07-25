@@ -18,6 +18,22 @@ env:
   SCHEME: Stride
   SIMULATOR: iPhone 17
   IOS_VERSION: "27.0"
+  # NOTE ON THE macOS RUNNER LABEL (repeated on each macOS job, since `runs-on`
+  # cannot read the `env` context and so has to carry the literal):
+  #
+  # Every macOS job runs on `macos-26`, not `macos-27`. `macos-27` does not
+  # provision — jobs labelled with it are never assigned a runner (`runner_id: 0`)
+  # and sit queued until GitHub times them out. Run 30050008858's test job waited
+  # exactly 24 hours before being cancelled; once lint moved to the same label it
+  # began queueing for hours as well and was cancelled by the next push's
+  # concurrency group. Between those two changes no macOS job of any kind ran, so
+  # nothing has been linted, built, tested, or archived since. `macos-26` is
+  # assigned in seconds, and it is the image that poured the pinned SwiftLint
+  # 0.65.0 below.
+  #
+  # If the toolchain this project needs only ships on a newer image, the fix is a
+  # label that exists — not this one. "Select Xcode" already fails loudly, inside
+  # the first minute, when the image carries no Xcode 27.
   # Stop Homebrew from refreshing its formula index mid-job: without this, two
   # steps in the same run — or the lint and test jobs of the same commit — can
   # resolve different versions of the same tool.
@@ -29,10 +45,12 @@ env:
   # accept whatever Homebrew provides.
   #
   # SwiftLint is pinned to the version the lint job actually resolved on the
-  # macOS runner (Homebrew poured swiftlint 0.65.0). XcodeGen and xcbeautify have
-  # no observed value yet: the test job is gated on `needs: lint`, and lint has
-  # been failing, so its install step has never run. Fill these two in from the
-  # first run that reaches "Install XcodeGen and xcbeautify" (N31).
+  # macOS runner (Homebrew poured swiftlint 0.65.0 on `macos-26`). XcodeGen and
+  # xcbeautify have no observed value yet: their install step lives in the test
+  # job, which is gated on `needs: lint`, and no macOS job has been scheduled at
+  # all while the labels pointed at `macos-27` (see the runner-label note below).
+  # Fill these two in from the first run that reaches "Install XcodeGen and
+  # xcbeautify" (N31).
   SWIFTLINT_VERSION: "0.65.0"
   XCODEGEN_VERSION: ""
   XCBEAUTIFY_VERSION: ""
@@ -65,7 +83,8 @@ jobs:
   # ── Lint ────────────────────────────────────────────────────────────────────
   lint:
     name: Lint (SwiftLint)
-    runs-on: macos-27
+    runs-on: macos-26      # see the runner-label note in `env` above
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v4
@@ -105,7 +124,8 @@ jobs:
   # ── Build & Test (iOS) ──────────────────────────────────────────────────────
   test-ios:
     name: Test — iOS
-    runs-on: macos-27
+    runs-on: macos-26      # see the runner-label note in `env` above
+    timeout-minutes: 60
     needs: [changes, lint]
     if: needs.changes.outputs.ios == 'true'
 
@@ -251,7 +271,8 @@ jobs:
   # ── Archive (release build) ─────────────────────────────────────────────────
   archive:
     name: Archive
-    runs-on: macos-27
+    runs-on: macos-26      # see the runner-label note in `env` above
+    timeout-minutes: 60
     needs: [changes, test-ios]
     # Only archive on pushes to main (not PRs)
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'

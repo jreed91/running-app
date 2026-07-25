@@ -40,7 +40,7 @@ struct RunSummaryView: View {
     @State private var selectedSplitHRKm: Int? = nil
     @State private var selectedSplitElevKm: Int? = nil
     /// Which split chart the tab row is showing (N22).
-    @State private var selectedSplitMetric: SplitMetric = .pace
+    @State private var selectedSplitMetric: SplitChartMetric = .pace
     @State private var showDeleteConfirmation = false
     @State private var showAssociateSheet = false
     @State private var aiInsight: AICoachInsight?
@@ -108,12 +108,11 @@ struct RunSummaryView: View {
         ProgressStatsService.estimatedVDOT(for: workout)
     }
 
+    /// Whether the splits table shows an HR column. Asked of `SplitChartMetric` rather
+    /// than re-tested here, so the table and the chart tabs can never disagree about
+    /// whether this run carries per-split heart rate.
     private var hasSplitHR: Bool {
-        workout.splits.contains { $0.heartRate != nil }
-    }
-
-    private var hasSplitElevation: Bool {
-        workout.splits.contains { $0.elevationGainMeters != 0 }
+        availableSplitMetrics.contains(.heartRate)
     }
 
     private func split(forKm km: Int) -> Split? {
@@ -1167,7 +1166,7 @@ struct RunSummaryView: View {
                 .kerning(1.1)
                 .foregroundStyle(.secondary)
 
-            Text(markdownText(fullAnalysisText(for: insight)))
+            Text(markdownText(CoachInsightText.fullAnalysis(for: insight)))
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
                 .lineSpacing(3)
@@ -1178,30 +1177,6 @@ struct RunSummaryView: View {
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
     }
 
-    private func fullAnalysisText(for insight: AICoachInsight) -> String {
-        if let fullAnalysis = insight.fullAnalysis?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !fullAnalysis.isEmpty {
-            return fullAnalysis
-        }
-
-        let actionSummary = insight.actionItems
-            .prefix(3)
-            .map { "\($0.title): \($0.detail)" }
-            .joined(separator: " ")
-        let nextWorkoutParts: [String?] = [
-            "Next session: \(insight.nextWorkoutSuggestion).",
-            insight.nextWorkoutRationale
-        ]
-        let nextWorkout = nextWorkoutParts
-            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            .joined(separator: " ")
-
-        return [insight.summary, actionSummary, nextWorkout]
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            .joined(separator: " ")
-    }
 
     /// Thumbs-up/down on the coach insight, stored on the run (N22).
     ///
@@ -1432,7 +1407,11 @@ struct RunSummaryView: View {
             profile: profile,
             provider: appSettings.aiProvider,
             unitPreference: appSettings.unitPreference,
-            coachFeedback: coachFeedbackPromptText(insight: insight)
+            coachFeedback: CoachInsightText.feedbackPrompt(
+                insight: insight,
+                completedType: displayType,
+                completedOn: workout.date
+            )
         ) else {
             nextSessionUpdateMessage = "The coach feedback could not be applied. Try refreshing the AI analysis."
             return
@@ -1442,7 +1421,7 @@ struct RunSummaryView: View {
         // "duplicate" future runs afterwards (N29). That pruner cleaned up phantom
         // workouts a removed code path used to insert, and with the producer gone the
         // only thing it could still delete was a real scheduled run.
-        apply(adapted, to: nextWorkout)
+        nextWorkout.applyAdaptation(from: adapted)
         context.saveOrLog("the coach-adapted next session")
 
         if let plan = nextWorkout.week?.plan {
@@ -1453,59 +1432,20 @@ struct RunSummaryView: View {
         nextSessionUpdateMessage = "Updated \(workoutLabel(nextWorkout)) in your plan."
     }
 
+    /// The soonest planned run the coach's feedback can be applied to.
+    ///
+    /// Bounded below by the session this run fulfilled, so feedback on Tuesday's tempo
+    /// never rewrites Tuesday's tempo. Everything else — run types only, never the race,
+    /// nothing completed, nothing in the past — is the shared rule (D1).
     private func nextWorkoutForFeedback() -> ScheduledWorkout? {
-        guard let plan = planForNextSessionUpdate else { return nil }
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
         let completedDate = matchedScheduled?.scheduledDate
             ?? workout.scheduledWorkout?.scheduledDate
             ?? workout.date
 
-        let weeks = plan.weeks ?? []
-        let workouts = weeks.flatMap { $0.workouts ?? [] }
-        let candidates = workouts.filter { scheduled in
-            guard !scheduled.isCompleted else { return false }
-            guard scheduled.scheduledDate >= today else { return false }
-            guard scheduled.scheduledDate > completedDate else { return false }
-
-            switch scheduled.workoutType {
-            case .easy, .tempo, .interval, .longRun:
-                return true
-            case .race, .rest, .crossTraining, .strength:
-                return false
-            }
-        }
-
-        return candidates.sorted { lhs, rhs in
-            lhs.scheduledDate < rhs.scheduledDate
-        }.first
-    }
-
-    /// Coach feedback as plain prompt text. Passed to the adaptation request as a
-    /// string instead of seeding a temporary ScheduledWorkout: relating an unmanaged
-    /// model to a persisted week auto-inserts it, leaving a phantom duplicate in the plan.
-    private func coachFeedbackPromptText(insight: AICoachInsight) -> String {
-        [
-            "AI Coach feedback from completed \(displayType.displayName.lowercased()) on \(workout.date.formatted(date: .abbreviated, time: .omitted)):",
-            normalizedMarkdownText(insight.headline),
-            normalizedMarkdownText(insight.summary),
-            "Next session suggestion: \(normalizedMarkdownText(insight.nextWorkoutSuggestion))",
-            insight.nextWorkoutRationale.map { "Rationale: \(normalizedMarkdownText($0))" }
-        ]
-            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            .joined(separator: " ")
-    }
-
-    private func apply(_ adapted: ScheduledWorkout, to scheduled: ScheduledWorkout) {
-        scheduled.workoutType = adapted.workoutType
-        scheduled.workoutStructure = adapted.workoutStructure
-        scheduled.targetDistanceMeters = adapted.targetDistanceMeters
-        scheduled.targetPaceLowerBound = adapted.targetPaceLowerBound
-        scheduled.targetPaceUpperBound = adapted.targetPaceUpperBound
-        scheduled.notes = adapted.notes
-        scheduled.intervals = adapted.intervals
-        scheduled.healthKitPlanID = nil
+        return AdaptableWorkoutSelector.nextAdaptableWorkout(
+            in: planForNextSessionUpdate,
+            after: completedDate
+        )
     }
 
 
@@ -1535,39 +1475,11 @@ struct RunSummaryView: View {
 
     // MARK: Splits section
 
-    /// The metrics the splits card can chart. Only ones this run actually has data for
-    /// are offered (N22) — the tab row used to show all three whether or not the run
-    /// carried heart rate or elevation.
-    private enum SplitMetric: String, CaseIterable, Hashable {
-        case pace = "Pace"
-        case heartRate = "HR"
-        case elevation = "Elev"
-
-        var tabTitle: String { rawValue }
-
-        var footnote: String {
-            switch self {
-            case .pace:      return "Lower = faster"
-            case .heartRate: return "Average heart rate in each split"
-            case .elevation: return "Gain within each split"
-            }
-        }
-    }
-
-    private var availableSplitMetrics: [SplitMetric] {
-        var metrics: [SplitMetric] = [.pace]
-        if hasSplitHR { metrics.append(.heartRate) }
-        if hasSplitElevation { metrics.append(.elevation) }
-        return metrics
-    }
-
-    private func splitMetricHeading(_ metric: SplitMetric) -> String {
-        let unit = appSettings.unitPreference.distanceLabel
-        switch metric {
-        case .pace:      return "Pace per \(unit)"
-        case .heartRate: return "Heart rate per \(unit)"
-        case .elevation: return "Elevation per \(unit)"
-        }
+    /// The metrics this run's splits can chart. The rule lives in `SplitChartMetric`
+    /// (N22/D1) so "does this run carry per-split heart rate or elevation?" can be tested
+    /// without the view.
+    private var availableSplitMetrics: [SplitChartMetric] {
+        SplitChartMetric.available(for: workout.splits)
     }
 
     /// The splits card: a tab row that actually switches the chart under it.
@@ -1575,12 +1487,12 @@ struct RunSummaryView: View {
     /// The three tabs were previously a static picture with all three charts stacked
     /// below regardless of which one appeared selected (N22).
     private var splitsSection: some View {
-        let metric = availableSplitMetrics.contains(selectedSplitMetric) ? selectedSplitMetric : .pace
+        let metric = SplitChartMetric.resolved(selection: selectedSplitMetric, in: availableSplitMetrics)
         return VStack(alignment: .leading, spacing: 8) {
             sectionHeader(title: "Splits")
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 10) {
-                    Text(splitMetricHeading(metric))
+                    Text(metric.heading(unit: appSettings.unitPreference))
                         .font(.system(size: 13, weight: .bold))
                     Spacer()
                     if availableSplitMetrics.count > 1 {
@@ -2056,7 +1968,7 @@ struct RunSummaryView: View {
         .padding(.top, 10)
     }
 
-    private func splitTab(_ metric: SplitMetric, active: Bool) -> some View {
+    private func splitTab(_ metric: SplitChartMetric, active: Bool) -> some View {
         Button {
             selectedSplitMetric = metric
         } label: {

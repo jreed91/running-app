@@ -56,6 +56,17 @@ extension Double {
         (self * 1_000).distanceString(unit: unit)
     }
 
+    /// Converts metres to the user's preferred distance unit (kilometres or miles).
+    ///
+    /// The numeric sibling of ``distanceString(unit:)``, for chart values that are
+    /// plotted rather than printed — the same split ``elevationValue(unit:)`` makes.
+    func distanceValue(unit: UnitPreference) -> Double {
+        switch unit {
+        case .metric:   return self / 1_000
+        case .imperial: return self / 1_609.344
+        }
+    }
+
     /// Formats meters as a distance string in the given unit, e.g. "10.5 km" or "6.5 mi".
     func distanceString(unit: UnitPreference) -> String {
         switch unit {

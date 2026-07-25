@@ -617,14 +617,10 @@ final class AppContainer: ObservableObject {
                 unitPreference: unitPreference
             )
         } else {
-            let remainingDays = Calendar.current.dateComponents(
-                [.day], from: startDate, to: oldPlan.endDate
-            ).day ?? 0
-            let remainingWeeks = max(1, Int(ceil(Double(remainingDays + 1) / 7.0)))
             newPlan = trainingPlanService.generatePlan(
                 profile: profile,
                 startDate: startDate,
-                numberOfWeeks: remainingWeeks,
+                numberOfWeeks: PlanRebuildWindow.remainingWeeks(from: startDate, to: oldPlan.endDate),
                 runDayIndices: runDayIndices,
                 unitPreference: unitPreference
             )
@@ -644,6 +640,30 @@ final class AppContainer: ObservableObject {
         Task { @MainActor [healthKitRepository] in
             try? await healthKitRepository.removeWorkoutPlans(for: oldPlan)
         }
+    }
+
+    // MARK: - Plan deletion
+
+    /// Everything deliberately deleting one plan has to tear down, in one place (D3).
+    ///
+    /// A plan owns state outside its own row: WorkoutKit entries on the Watch and in
+    /// Fitness, and up to 56 scheduled morning reminders. Both are reachable only
+    /// *through* the plan, so deleting the record first strands them — still scheduled,
+    /// with nothing left to find them from. That is the same orphaning N1 fixed for the
+    /// rebuild path and N11 for the full reset; this is the third and last place a plan
+    /// is deliberately destroyed.
+    ///
+    /// It had two copies, in the Plan History swipe and the plan detail dialog, each
+    /// correct and each independently maintained. `resetAllData` is a fourth statement of
+    /// the same order of operations, over every plan at once.
+    ///
+    /// Best-effort on the teardown steps: an unauthorized or unsupported scheduler must
+    /// not block the deletion the user explicitly confirmed.
+    func deletePlan(_ plan: TrainingPlan, context: ModelContext) async {
+        try? await healthKitRepository.removeWorkoutPlans(for: plan)
+        notificationService.cancelReminders(for: plan)
+        context.delete(plan)
+        context.saveOrLog("a deleted plan")
     }
 
     // MARK: - Reset

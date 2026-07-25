@@ -145,6 +145,24 @@ source comments.
   - SwiftLint/format check (if adopted)
   - optional coverage threshold (start modestly, e.g., 50–60%).
 
+### Gap 5.3 — The gates exist but were not being scheduled ✅ FIXED
+
+Everything Gap 5.1 asks for now exists in `.github/workflows/ci.yml` — lint, unit
+tests, UI tests, archive. None of it had been *running*: all three macOS jobs were
+labelled `macos-27`, a runner image that never provisions, so they were assigned no
+runner and sat queued until GitHub timed them out (24 hours, in the one run that was
+left alone long enough to reach the limit). A quality gate that is never scheduled
+reads as a green pipeline from the repository page while gating nothing.
+
+**FIXED:** the macOS jobs move to `macos-26`, which provisions in seconds, and each
+carries a `timeout-minutes` so a hung `xcodebuild` cannot burn a day. Full detail, with
+the run IDs, in [`APP_ANALYSIS_2026-07-24.md`](./APP_ANALYSIS_2026-07-24.md) §N31.
+
+*Worth carrying forward:* job-scheduling health is invisible from inside the workflow
+file, which is why this survived several passes that read the YAML. Checking that the
+last run on `main` actually produced a lint and test job — not merely that the workflow
+exists — belongs in whatever review looks at CI next.
+
 ### Gap 5.2 — Project generation dependency installed every run
 - `brew install xcodegen` each post-clone can add build time and variability.
 
