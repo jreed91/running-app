@@ -39,12 +39,18 @@ GPS, HealthKit, WeatherKit, CloudKit, and background delivery behavior require d
 
 The Xcode project is generated from `project.yml` using XcodeGen. Edit `project.yml` to add targets, files, capabilities, packages, or build settings. Do not hand-edit the generated `.xcodeproj`.
 
-- Targets: `Stride` (app), `StrideWidgets` (widget extension — the run's Live Activity),
-  `StrideTests`, `StrideUITests`. The app embeds the extension via a target dependency.
-- `StrideWidgets` compiles `Stride/Core/Models/RunActivityAttributes.swift` and
-  `Stride/Resources/Assets.xcassets` from the app's tree: ActivityKit matches the two sides
-  on the attributes *type*, and a widget bundle cannot read the app's asset catalog. Keep
-  that file free of app-only dependencies or the extension stops building.
+- Targets: `Stride` (app), `StrideWidgets` (widget extension — the run's Live Activity plus
+  the Home Screen / Lock Screen widgets), `StrideTests`, `StrideUITests`. The app embeds the
+  extension via a target dependency.
+- `StrideWidgets` compiles `Stride/Core/Models/RunActivityAttributes.swift`,
+  `Stride/Core/Models/WidgetSnapshot.swift` and `Stride/Resources/Assets.xcassets` from the
+  app's tree: ActivityKit matches the two sides on the attributes *type*, the snapshot is the
+  payload the app publishes for the widgets to read, and a widget bundle cannot read the app's
+  asset catalog. Keep both Swift files free of app-only dependencies (Foundation only) or the
+  extension stops building.
+- App Group `group.com.running.stride` is the only channel between the app and the extension —
+  a widget runs in its own process with its own container. Both targets declare it; see
+  "Widget data flow" below.
 - iOS deployment target: 27.0
 - Xcode version in config: 27.0
 - Swift: 6.0 with `SWIFT_STRICT_CONCURRENCY: complete`
@@ -87,7 +93,7 @@ Business logic belongs in services or repositories, not directly in SwiftUI view
 | `Stride/Core/Services/` | Plan generation, pace math, workout tracking/sync, notifications, analytics, routes, weather, AI coach, migration, logging |
 | `Stride/Features/` | SwiftUI feature modules: Dashboard, Training, ActiveRun, ActiveStrength, History, Progress, Settings, Onboarding, AppIntents |
 | `Stride/Shared/` | Reusable components, extensions, icons, theme primitives |
-| `StrideWidgets/` | Widget extension target — today just the run's Live Activity (Lock Screen + Dynamic Island) |
+| `StrideWidgets/` | Widget extension target — the run's Live Activity (Lock Screen + Dynamic Island) and the Home Screen / Lock Screen widgets |
 | `StrideTests/` | Unit tests using Swift Testing (`@Test`, `#expect`) |
 | `StrideUITests/` | UI tests using XCTest and `XCUIApplication` |
 | `ci_scripts/` | Xcode Cloud helper scripts |
@@ -132,6 +138,41 @@ Business logic belongs in services or repositories, not directly in SwiftUI view
 - `AppContainer` falls back from CloudKit to local storage and then emergency in-memory storage if needed.
 - `WorkoutSyncService` imports HealthKit workouts and can surface pending review workouts through `AppContainer.pendingReviewWorkout`.
 - Simulator builds intentionally disable CloudKit in `AppContainer.shouldUseCloudKit`.
+
+## Widget Data Flow
+
+The widget extension **cannot read the SwiftData store.** It is a separate process with its
+own container, so the app publishes a snapshot and the extension renders it:
+
+```text
+SwiftData  →  WidgetSnapshotBuilder  →  WidgetSnapshot  →  App Group file
+(app)          (pure, tested)            (Codable)          WidgetSnapshotStore
+                                                                  ↓
+                                             StrideSnapshotProvider  →  the four widgets
+                                             (StrideWidgets, read-only)
+```
+
+Rules that fall out of it, and that a change here has to keep:
+
+- **The snapshot ships finished strings, not raw metres and seconds** — the same choice
+  `RunActivityAttributes.ContentState` makes. The app owns the unit preference and every
+  formatter in the repo; the extension owns neither.
+- **Except for dates.** Anything whose wording depends on *when it is read* — "Today", a race
+  countdown — is stored as a `Date` and resolved at render time (`WidgetRelativeDay`,
+  `RaceCountdown.daysRemaining(asOf:)`). The app is not running at midnight to rewrite the
+  file, and the provider's timeline crosses each midnight itself.
+- **All content decisions live in `WidgetSnapshotBuilder`**, which is pure and takes an
+  injectable `now`/`calendar`. The extension does no logic beyond reading the file, so this is
+  the whole of the widgets' testable surface (`StrideTests/WidgetSnapshotBuilderTests.swift`).
+- **`WidgetRefreshService` only reloads WidgetKit when the snapshot actually changed.**
+  Reloads are budgeted per widget per day; spending one on every foreground would mean the
+  reload right after a run is the one that gets dropped.
+- Refresh triggers: launch and active-plan change (`ContentView`), scene phase active and
+  background (`ContentView`), and immediately after a run is saved (`ActiveRunView`).
+  `AppContainer.resetAllData` clears the snapshot so the Home Screen is not the one place
+  deleted data survives.
+- A widget's `kind` string (`StrideWidgetKind`) is persistent identity. Changing one orphans
+  every already-placed instance of that widget.
 
 ## Testing
 
@@ -183,6 +224,7 @@ Strict concurrency is enabled. Key patterns:
 - The app version and build number live in `ci_scripts/Version.xcconfig` (wired in via `configFiles`), not in `project.yml`'s `settings.base` — a project-level build setting would override the xcconfig.
 - XcodeGen writes **one** `info:` / `entitlements:` block for every configuration, so anything whose value must differ between Debug and the archive needs a per-config build setting expanded from that block (entitlements go through build-setting expansion at packaging time). `aps-environment` is the live example: it reads `$(APS_ENVIRONMENT)`, which is `development` in Debug and `production` in Release. Hardcoding `development` there fails the Xcode Cloud archive at "Exporting for App Store Distribution", because an App Store profile only ever carries `production`. Info.plist keys can't use that trick, which is why the Pulse local-network keys are removed by a post-build script instead.
 - **A new signed bundle needs an App ID registered before it can be exported.** Every target that ships inside the app — today that is the `StrideWidgets` extension — is signed separately and needs its own identifier at [developer.apple.com → Identifiers](https://developer.apple.com/account/resources/identifiers). Xcode Cloud's signing proxy is read-only, so automatic signing there can find an App ID but never create one: an unregistered identifier archives cleanly and then fails all three "Exporting for … Distribution" steps with `Automatic signing cannot register bundle identifier`. Register the identifier (and enable any capability the target's entitlements ask for) *before* the first archive, and again after any rename.
+- **The App Group is a registration of its own.** `group.com.running.stride` must exist under [Identifiers → App Groups](https://developer.apple.com/account/resources/identifiers) and the **App Groups** capability must be enabled on *both* App IDs (`com.running.stride` and `com.running.stride.StrideWidgets`) before either can be exported. It fails exactly the way an unregistered bundle identifier does, and for the same reason: automatic signing can look a group up but never create one. Locally, a missing group is silent rather than fatal — `FileManager.containerURL(forSecurityApplicationGroupIdentifier:)` returns `nil`, the app skips its write, and the widgets show their "Open Stride to sync" card forever. If widgets are permanently empty on device, check this first.
 - Keep secrets out of git and out of `UserDefaults`/iCloud KVS. Tokens belong in the Keychain via `KeychainStore`, the way the OpenRouteService key is handled.
 - **User-facing text is localizable.** `Text("…")`, `Button("…")`, `.navigationTitle("…")`
   and friends take a `LocalizedStringKey`, so a literal written there is extracted into
