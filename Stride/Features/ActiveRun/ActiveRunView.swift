@@ -431,6 +431,11 @@ struct ActiveRunView: View {
         )
         .padding(.horizontal, 16)
         .padding(.top, 26)
+        // Three fixed-width columns above a hero that already fills the screen: this
+        // grid is one of the two places in the app that genuinely cannot reflow, so
+        // it is clamped rather than left to overflow (U2). Its fonts are the fixed
+        // `metric*` tokens; the clamp covers anything nested that isn't.
+        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
         .opacity(metricsAppeared ? 1 : 0)
         .scaleEffect(metricsAppeared ? 1 : 0.92)
         .adaptiveAnimation(AppAnimation.entrance.delay(0.1), value: metricsAppeared)

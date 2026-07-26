@@ -16,14 +16,14 @@ extension RunSummaryView {
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: "link")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.dsSubhead.weight(.semibold))
                     .foregroundStyle(.brand)
                 Text("Link to a planned workout")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.dsSubhead.weight(.semibold))
                     .foregroundStyle(.brand)
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.dsCaption2.weight(.semibold))
                     .foregroundStyle(.secondary)
             }
             .padding(.horizontal, 14)
@@ -44,7 +44,7 @@ extension RunSummaryView {
                     .shadow(color: workoutTone.opacity(0.35), radius: 0, x: 0, y: 0)
                     .overlay(Circle().stroke(workoutTone.opacity(0.25), lineWidth: 6))
                 Text("\(displayType.localizedName) run")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.dsCaption2.weight(.bold))
                     .kerning(1.4)
                     .textCase(.uppercase)
                     .foregroundStyle(workoutTone)
@@ -52,19 +52,21 @@ extension RunSummaryView {
                     .fill(Color.secondary.opacity(0.45))
                     .frame(width: 3, height: 3)
                 Text(workout.date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute()))
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.dsCaption2.weight(.semibold))
                     .foregroundStyle(.secondary)
             }
 
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(titleMetric.value)
-                    .font(.system(size: 56, weight: .semibold, design: .monospaced))
+                    // The card's hero number keeps its 56pt design size and scales
+                    // from there, rather than snapping down to `dsLargeTitle` (U2).
+                    .font(.system(size: heroMetricSize, weight: .semibold, design: .monospaced))
                     .kerning(-2.2)
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
                 Text(titleMetric.unit)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.dsCallout.weight(.semibold))
                     .foregroundStyle(.secondary)
             }
 
@@ -85,10 +87,10 @@ extension RunSummaryView {
     private func metricInline(value: String, label: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
             Text(value)
-                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                .font(.dsFootnote.weight(.semibold).monospaced())
                 .foregroundStyle(.primary)
             Text(label)
-                .font(.system(size: 13, weight: .medium))
+                .font(.dsFootnote.weight(.medium))
                 .foregroundStyle(.secondary)
         }
     }
@@ -113,7 +115,7 @@ extension RunSummaryView {
                             .stroke(.brand, lineWidth: 4)
                     }
                     Text(routeName)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.dsCaption2.weight(.semibold))
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
                         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
@@ -159,19 +161,19 @@ extension RunSummaryView {
         VStack(alignment: .leading, spacing: 2) {
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text(value)
-                    .font(.system(size: 24, weight: .semibold, design: .monospaced))
+                    .font(.dsTitle2.weight(.semibold).monospaced())
                     .kerning(-0.5)
                     .foregroundStyle(tone ?? .primary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
                 if let unit {
                     Text(unit)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.dsCaption.weight(.medium))
                         .foregroundStyle(.secondary)
                 }
             }
             Text(label)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.dsCaption2.weight(.semibold))
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
@@ -202,7 +204,7 @@ extension RunSummaryView {
                     // Icon + condition description
                     VStack(spacing: 6) {
                         Image(systemName: w.conditionSymbol)
-                            .font(.system(size: 32))
+                            .font(.system(size: weatherGlyphSize))
                             .symbolRenderingMode(.multicolor)
                         Text(w.conditionDescription)
                             .font(.caption)

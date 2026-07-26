@@ -30,6 +30,13 @@ struct AchievementsView: View {
     @State private var appeared = false
     @State private var editingGoal = false
 
+    // Symbols sized by `.font` and the circles behind them have to scale *together*,
+    // or the glyph outgrows its badge at large content sizes (U2). `@ScaledMetric`
+    // was unused anywhere in the app before this.
+    @ScaledMetric(relativeTo: .largeTitle) private var streakBadgeSize: CGFloat = 64
+    @ScaledMetric(relativeTo: .title2) private var badgeCircleSize: CGFloat = 52
+    @ScaledMetric(relativeTo: .largeTitle) private var medalGlyphSize: CGFloat = 34
+
     private let eligibleTypes: Set<WorkoutType> = [.easy, .tempo, .interval, .longRun, .race]
 
     // MARK: Derived stats
@@ -93,9 +100,9 @@ struct AchievementsView: View {
             ZStack {
                 Circle()
                     .fill(streak.current > 0 ? Color.warning.opacity(0.15) : Color.secondary.opacity(0.12))
-                    .frame(width: 64, height: 64)
+                    .frame(width: streakBadgeSize, height: streakBadgeSize)
                 Image(systemName: "flame.fill")
-                    .font(.system(size: 30))
+                    .font(.system(size: streakBadgeSize * 0.47))
                     .foregroundStyle(streak.current > 0 ? Color.warning : Color.secondary.opacity(0.35))
             }
 
@@ -154,7 +161,7 @@ struct AchievementsView: View {
                 editingGoal = true
             } label: {
                 Image(systemName: "slider.horizontal.3")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.dsCallout.weight(.semibold))
                     .foregroundStyle(.brand)
                     .padding(AppSpacing.sm)
                     .background(Color.brand.opacity(0.12), in: Circle())
@@ -198,9 +205,9 @@ struct AchievementsView: View {
             ZStack {
                 Circle()
                     .fill(badge.isEarned ? Color.brand.opacity(0.16) : Color.secondary.opacity(0.10))
-                    .frame(width: 52, height: 52)
+                    .frame(width: badgeCircleSize, height: badgeCircleSize)
                 Image(systemName: badge.isEarned ? systemImage : "lock.fill")
-                    .font(.system(size: 22))
+                    .font(.system(size: badgeCircleSize * 0.42))
                     .foregroundStyle(badge.isEarned ? Color.brand : Color.secondary.opacity(0.4))
             }
 
@@ -273,9 +280,9 @@ struct AchievementsView: View {
     private func medalCard(_ bucket: MedalBucket) -> some View {
         HStack(spacing: AppSpacing.lg) {
             Image(systemName: "medal.fill")
-                .font(.system(size: 34))
+                .font(.system(size: medalGlyphSize))
                 .foregroundStyle(bucket.bestRun != nil ? Color.warning : Color.secondary.opacity(0.25))
-                .frame(width: 44)
+                .frame(width: medalGlyphSize * 1.3)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(bucket.name)
@@ -330,7 +337,7 @@ private struct ProgressRing: View {
                 .rotationEffect(.degrees(-90))
             if isComplete {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.dsTitle3.weight(.bold))
                     .foregroundStyle(Color.success)
             } else {
                 Text("\(Int(fraction * 100))%")

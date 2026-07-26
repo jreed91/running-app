@@ -30,6 +30,11 @@ struct StrengthActiveView: View {
     // Session timing
     @State private var startTime: Date = Date()
 
+    // Symbols sized by `.font` scale with the circles behind them, so the glyph
+    // can't outgrow its badge at large content sizes (U2).
+    @ScaledMetric(relativeTo: .title2) private var exerciseBadgeSize: CGFloat = 52
+    @ScaledMetric(relativeTo: .largeTitle) private var completionGlyphSize: CGFloat = 64
+
     // Confirmation
     @State private var showFinishConfirmation: Bool = false
     @State private var showSkipConfirmation: Bool = false
@@ -105,7 +110,7 @@ struct StrengthActiveView: View {
         HStack {
             Button { showFinishConfirmation = true } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.dsCallout.weight(.semibold))
                     .foregroundStyle(.secondary)
             }
             .padding(10)
@@ -117,12 +122,12 @@ struct StrengthActiveView: View {
 
             VStack(spacing: 2) {
                 Text("Strength Workout")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.dsSubhead.weight(.semibold))
                 // Tick on the wall clock so the elapsed time advances on its own
                 // rather than only refreshing as a side effect of logging a set (M27).
                 TimelineView(.periodic(from: startTime, by: 1)) { context in
                     Text(elapsedTimeString(asOf: context.date))
-                        .font(.system(size: 12, design: .monospaced))
+                        .font(.dsCaption.monospaced())
                         .foregroundStyle(.secondary)
                 }
             }
@@ -154,12 +159,12 @@ struct StrengthActiveView: View {
 
             HStack {
                 Text("Exercise \(currentExerciseIndex + 1) of \(exercises.count)")
-                    .font(.system(size: 12))
+                    .font(.dsCaption)
                     .foregroundStyle(.secondary)
                 Spacer()
                 if let exercise = currentExercise {
                     Text("Set \(currentSetIndex + 1) of \(exercise.sets)")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.dsCaption.weight(.semibold))
                         .foregroundStyle(Color.brand)
                 }
             }
@@ -173,11 +178,11 @@ struct StrengthActiveView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(exercise.name)
-                        .font(.system(size: 22, weight: .bold))
+                        .font(.dsTitle2)
                     HStack(spacing: 6) {
                         ForEach(exercise.muscleGroups.prefix(3), id: \.self) { group in
                             Text(group)
-                                .font(.system(size: 11, weight: .medium))
+                                .font(.dsCaption2.weight(.medium))
                                 .padding(.horizontal, 7)
                                 .padding(.vertical, 3)
                                 .background(Color.brand.opacity(0.12), in: Capsule())
@@ -189,9 +194,9 @@ struct StrengthActiveView: View {
                 ZStack {
                     Circle()
                         .fill(Color.brand.opacity(0.12))
-                        .frame(width: 52, height: 52)
+                        .frame(width: exerciseBadgeSize, height: exerciseBadgeSize)
                     Image(systemName: "figure.strengthtraining.traditional")
-                        .font(.system(size: 24))
+                        .font(.system(size: exerciseBadgeSize * 0.46))
                         .foregroundStyle(Color.brand)
                 }
             }
@@ -208,7 +213,7 @@ struct StrengthActiveView: View {
 
             if let notes = exercise.notes {
                 Text(notes)
-                    .font(.system(size: 13))
+                    .font(.dsFootnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -222,7 +227,7 @@ struct StrengthActiveView: View {
     private func logSetCard(exercise: StrengthExercise) -> some View {
         VStack(spacing: 16) {
             Text("LOG SET \(currentSetIndex + 1)")
-                .font(.system(size: 11, weight: .semibold))
+                .font(.dsCaption2.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -230,9 +235,9 @@ struct StrengthActiveView: View {
                 // Timed exercise — just log completion with no rep count
                 VStack(spacing: 8) {
                     Text("Hold for \(durationSeconds) seconds")
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.dsHeadline)
                     Text("Tap below when done")
-                        .font(.system(size: 13))
+                        .font(.dsFootnote)
                         .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity)
@@ -241,23 +246,23 @@ struct StrengthActiveView: View {
                 VStack(spacing: 12) {
                     HStack {
                         Text("Reps completed")
-                            .font(.system(size: 15))
+                            .font(.dsSubhead)
                             .foregroundStyle(.secondary)
                         Spacer()
                         Stepper("\(repInput)", value: $repInput, in: 0...99)
                             .labelsHidden()
                         Text("\(repInput)")
-                            .font(.system(size: 22, weight: .bold, design: .monospaced))
+                            .font(.dsTitle2.monospaced())
                             .frame(minWidth: 40, alignment: .center)
                     }
 
                     HStack {
                         Text("Weight / resistance")
-                            .font(.system(size: 15))
+                            .font(.dsSubhead)
                             .foregroundStyle(.secondary)
                         Spacer()
                         TextField(exercise.targetWeight ?? "Optional", text: $weightInput)
-                            .font(.system(size: 15))
+                            .font(.dsSubhead)
                             .multilineTextAlignment(.trailing)
                             .frame(maxWidth: 120)
                     }
@@ -268,7 +273,7 @@ struct StrengthActiveView: View {
                 logSet(exercise: exercise)
             } label: {
                 Text(exercise.durationSeconds != nil ? "Done — Next Set" : "Log Set")
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.dsCallout.weight(.bold))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
             }
@@ -279,7 +284,7 @@ struct StrengthActiveView: View {
                 skipSet()
             } label: {
                 Text("Skip")
-                    .font(.system(size: 14))
+                    .font(.dsSubhead)
                     .foregroundStyle(.secondary)
             }
         }
@@ -292,7 +297,7 @@ struct StrengthActiveView: View {
     private var restTimerCard: some View {
         VStack(spacing: 16) {
             Text("REST")
-                .font(.system(size: 11, weight: .semibold))
+                .font(.dsCaption2.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -308,9 +313,9 @@ struct StrengthActiveView: View {
                     .animation(.linear(duration: 1), value: restTimeRemaining)
                 VStack(spacing: 2) {
                     Text("\(restTimeRemaining)")
-                        .font(.system(size: 28, weight: .bold, design: .monospaced))
+                        .font(.dsTitle1.monospaced())
                     Text("sec")
-                        .font(.system(size: 11))
+                        .font(.dsCaption2)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -319,7 +324,7 @@ struct StrengthActiveView: View {
                 endRestTimer()
             } label: {
                 Text("Skip Rest")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.dsSubhead.weight(.semibold))
                     .foregroundStyle(Color.brand)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
@@ -344,24 +349,24 @@ struct StrengthActiveView: View {
         if !setsForCurrentExercise.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 Text("COMPLETED SETS")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.dsCaption2.weight(.semibold))
                     .foregroundStyle(.secondary)
                 ForEach(Array(setsForCurrentExercise.enumerated()), id: \.offset) { _, set in
                     HStack {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundStyle(Color.brand)
-                            .font(.system(size: 14))
+                            .font(.dsSubhead)
                         Text("Set \(set.setIndex + 1)")
-                            .font(.system(size: 14))
+                            .font(.dsSubhead)
                         Spacer()
                         if set.completedReps > 0 {
                             Text("\(set.completedReps) reps")
-                                .font(.system(size: 13))
+                                .font(.dsFootnote)
                                 .foregroundStyle(.secondary)
                         }
                         if let weight = set.actualWeight, !weight.isEmpty {
                             Text("· \(weight)")
-                                .font(.system(size: 13))
+                                .font(.dsFootnote)
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -379,12 +384,12 @@ struct StrengthActiveView: View {
         VStack(spacing: 20) {
             Spacer()
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 64))
+                .font(.system(size: completionGlyphSize))
                 .foregroundStyle(Color.brand)
             Text("All exercises done!")
-                .font(.system(size: 22, weight: .bold))
+                .font(.dsTitle2)
             Text("Tap Finish to save your workout.")
-                .font(.system(size: 15))
+                .font(.dsSubhead)
                 .foregroundStyle(.secondary)
             Spacer()
         }
@@ -397,9 +402,9 @@ struct StrengthActiveView: View {
         VStack(spacing: 12) {
             Spacer()
             Text("No exercises planned")
-                .font(.system(size: 17, weight: .semibold))
+                .font(.dsHeadline)
             Text("This strength workout has no exercise data.")
-                .font(.system(size: 14))
+                .font(.dsSubhead)
                 .foregroundStyle(.secondary)
             Spacer()
         }
@@ -413,7 +418,7 @@ struct StrengthActiveView: View {
             showFinishConfirmation = true
         } label: {
             Text("Finish Workout")
-                .font(.system(size: 17, weight: .bold))
+                .font(.dsHeadline.weight(.bold))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
         }
@@ -429,10 +434,10 @@ struct StrengthActiveView: View {
     private func statPill(label: String, value: String) -> some View {
         VStack(spacing: 3) {
             Text(label)
-                .font(.system(size: 10, weight: .semibold))
+                .font(.dsCaption2.weight(.semibold))
                 .foregroundStyle(.secondary)
             Text(value)
-                .font(.system(size: 15, weight: .bold))
+                .font(.dsSubhead.weight(.bold))
         }
     }
 

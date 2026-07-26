@@ -18,8 +18,8 @@ ratios are computed from `Stride/Resources/Assets.xcassets`, not eyeballed.
 | VoiceOver labelling | 🟢 Strong | N18/D8 work paid off; charts, metric cells, day cells all speak well |
 | Error recovery in the run flow | 🟢 Strong | Save-retry, discard, race-clamp notices are genuinely well designed |
 | Information architecture | 🟢 Good | Tab split is sensible; empty states are specific, not generic |
-| Design-system adoption | 🔴 Failing | Tokens exist and are ~unused; 3 of 5 scales are dead code |
-| Dynamic Type | 🔴 Failing | 296 fixed font sizes; text does not scale app-wide (9pt floor fixed) |
+| Design-system adoption | 🟠 Partial | ✅ Type scale adopted app-wide; radius and elevation scales still dead |
+| Dynamic Type | 🟢 Fixed | ✅ 262 sites on `ds*`, `@ScaledMetric` on badges, 2 grids clamped |
 | Colour contrast | 🟢 Fixed | ✅ CTAs, HUD, dark-mode zone collisions, high-contrast variants |
 | Haptics | 🟢 Fixed | ✅ `sensoryFeedback` on run, guided steps, splits, strength sets |
 | iOS 26/27 API adoption | 🟠 Started | ✅ `Tab` builder, native `Color.mix`; glass and Live Activity still absent |
@@ -27,8 +27,10 @@ ratios are computed from `Stride/Resources/Assets.xcassets`, not eyeballed.
 | History discoverability | 🟢 Fixed | ✅ Search, pull-to-refresh, first-sync loading state |
 
 **Pass 1 (2026-07-26) closed:** the whole of Tier 1, plus §5a, §5d, §8, §9 and most
-of §10. Still open: the §1/§2 typography migration (Tier 2) and the Tier 4 feature
-work (Live Activity, spoken splits, `tabViewBottomAccessory`).
+of §10. **Pass 2** closed Tier 2 — the type-scale migration and the SwiftLint rule
+that holds it. Still open: the radius and elevation halves of §1, the rest of §7
+(glass, `GeometryReader`s), and all of Tier 4 (Live Activity, spoken splits,
+`tabViewBottomAccessory`).
 
 ---
 
@@ -61,6 +63,12 @@ complaint: **the `ds*` type scale was created specifically to fix Dynamic Type
 explaining why `ds`-prefixed tokens exist; the SwiftLint `custom_rules` entry
 (`.swiftlint.yml:72`) guards against the *old* bug returning, but nothing pushes
 call sites onto the new tokens.
+
+🟠 **PARTIALLY FIXED** — the type scale is done and guarded (see §2); the radius and
+elevation scales are not. Those two are a *design* call rather than a mechanical
+one: 212 `cornerRadius:` literals span 13 values and the two most common card radii
+(18 and 22) exist nowhere in `AppRadius`'s six, so snapping them changes how the app
+looks. That needs a decision on the scale itself, not a script.
 
 **Fix.** Treat this as a mechanical migration, not a redesign. Map
 `.font(.system(size: 17, weight: .bold))` → `.dsHeadline.weight(.bold)`,
@@ -112,10 +120,31 @@ don't."* That rule is right. The code does not implement it — the `metric*`
 tokens (correctly fixed) are used 12 times, while UI copy that should scale uses
 raw fixed sizes 296 times.
 
-🟠 **PARTIALLY FIXED** — the sub-floor sizes are gone: the run HUD's 9pt metric
-captions now use a new fixed `Font.metricLabel` (11pt, Apple's floor) and the pace
-meter's 10pt scale labels moved to 11pt (`AppFonts.swift`, `ActiveRunView.swift`).
-The 296-site migration onto `ds*` is still open and is the Tier 2 work.
+✅ **FIXED.**
+
+- **262 call sites** moved onto the `ds*` scale, snapped to the nearest text style
+  (17 → `dsHeadline`/`dsBody` by weight, 15/14 → `dsSubhead`, 13 → `dsFootnote`,
+  12 → `dsCaption`, 9–11 → a new `dsCaption2`). Monospaced faces keep their design
+  via `.monospaced()`; the one rounded face uses `system(_:design:weight:)`, which is
+  also a text style and also scales.
+- **The sub-floor sizes are gone.** The run HUD's 9pt captions use a new fixed
+  `Font.metricLabel` at Apple's 11pt floor, and the pace meter's 10pt labels moved
+  to 11pt.
+- **`@ScaledMetric` is now used** (it was 0) on the seven symbol-in-circle pairs
+  where a fixed diameter would have been outgrown by scaling type: the streak,
+  badge and medal glyphs, the strength exercise badge and completion mark, the
+  weather glyph, the run summary's 56pt hero number, and the Settings avatar. Each
+  pair derives the glyph from the container so the ratio holds at every size.
+- **`dynamicTypeSize` is now used** (it was 0) on exactly the two layouts §2 names
+  as unable to reflow: the run HUD metric grid and the week calendar strip, both
+  clamped at `.accessibility1`.
+- **A SwiftLint rule keeps it done.** `no_fixed_font_size` fails the build on a
+  literal `.font(.system(size: 12…))`. A size derived from a `@ScaledMetric` or a
+  caller's parameter still passes, and the five files where a fixed size *is* the
+  point are excluded by path: `AppFonts` itself, the two Active Run HUD files, the
+  share card (it renders a fixed-size PNG), and `StrideIcon`.
+
+What stays fixed, deliberately: the Active Run HUD and `RunShareCardView`.
 
 **Fix.** Migrate per §1. Keep `metricHero`/`metricXL` fixed and add
 `.dynamicTypeSize(...(.accessibility1))` clamps on the two fixed-height grids
@@ -484,9 +513,10 @@ than fetching everything and filtering in `filteredWorkouts` (`:60`).
 3. ✅ `.sensoryFeedback` on run/pause/finish/segment/set (§4)
 4. ✅ Confirmation or undo on the two unguarded swipe-deletes (§6)
 
-**Tier 2 — the systemic typography fix** — the next pass
-5. Migrate 296 fixed sizes onto `ds*`, add `@ScaledMetric`, clamp the two fixed grids (§1, §2)
-6. Add SwiftLint rules so it holds
+**Tier 2 — the systemic typography fix** — ✅ **DONE**
+5. ✅ Migrate 296 fixed sizes onto `ds*`, add `@ScaledMetric`, clamp the two fixed grids (§2)
+6. ✅ Add a SwiftLint rule so it holds (`no_fixed_font_size`). The radius and
+   elevation scales (§1) are still unadopted and still unguarded.
 
 **Tier 3 — platform conformance**
 7. 🟠 `Tab` API ✅, native `Color.mix` ✅; `glassEffect` and the `GeometryReader`

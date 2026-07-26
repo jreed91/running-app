@@ -59,7 +59,7 @@ struct OBWelcome: View {
                 Spacer(minLength: 40)
 
                 Text("WELCOME TO STRIDE.")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.dsCaption2.weight(.bold))
                     .kerning(1.8)
                     .foregroundStyle(.brand)
                     .opacity(appeared ? 1 : 0)
@@ -69,7 +69,7 @@ struct OBWelcome: View {
                 Spacer().frame(height: 10)
 
                 Text("Training plans that\nadapt to your pace.")
-                    .font(.system(size: 34, weight: .heavy))
+                    .font(.dsLargeTitle.weight(.heavy))
                     .kerning(-0.95)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.primary)
@@ -94,7 +94,7 @@ struct OBWelcome: View {
 
                 Button(action: onStart) {
                     HStack(spacing: 10) {
-                        Text("Get started").font(.system(size: 17, weight: .bold))
+                        Text("Get started").font(.dsHeadline.weight(.bold))
                         StrideIcon(name: .chevronRight, size: 15, color: .onFill, strokeWeight: 2.6)
                     }
                     .frame(maxWidth: .infinity)
@@ -182,12 +182,12 @@ struct OBWelcomeBack: View {
                 Spacer(minLength: 40)
 
                 Text("WELCOME BACK.")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.dsCaption2.weight(.bold))
                     .kerning(1.8)
                     .foregroundStyle(.brand)
                 Spacer().frame(height: 10)
                 Text(hasData ? "Your training plan\nis ready." : "Checking\niCloud…")
-                    .font(.system(size: 34, weight: .heavy))
+                    .font(.dsLargeTitle.weight(.heavy))
                     .kerning(-0.95)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.primary)
@@ -222,7 +222,7 @@ struct OBWelcomeBack: View {
                         authService.welcomeBackPending = false
                     } label: {
                         HStack(spacing: 10) {
-                            Text("Continue to Dashboard").font(.system(size: 17, weight: .bold))
+                            Text("Continue to Dashboard").font(.dsHeadline.weight(.bold))
                             StrideIcon(name: .chevronRight, size: 15, color: .onFill, strokeWeight: 2.6)
                         }
                         .frame(maxWidth: .infinity)
@@ -237,7 +237,7 @@ struct OBWelcomeBack: View {
 
                 Button(action: onStartFresh) {
                     Text("Start fresh instead")
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.dsSubhead.weight(.medium))
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
@@ -403,7 +403,7 @@ struct OBShell<Content: View>: View {
                         // `stepIndex` directly rather than `stepIndex + 1`, which used to
                         // start at "2/total" and print the last number twice.
                         Text("\(stepIndex)/\(total)")
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .font(.dsCaption2.weight(.bold).monospaced())
                             .foregroundStyle(.secondary)
                     }
                     .padding(.horizontal, 20)
@@ -416,11 +416,11 @@ struct OBShell<Content: View>: View {
                         // Header
                         VStack(alignment: .leading, spacing: 8) {
                             Text(kicker.uppercased())
-                                .font(.system(size: 12, weight: .bold))
+                                .font(.dsCaption.weight(.bold))
                                 .kerning(1.6)
                                 .foregroundStyle(.brand)
                             Text(title)
-                                .font(.system(size: 32, weight: .heavy))
+                                .font(.dsTitle1.weight(.heavy))
                                 .kerning(-0.8)
                                 .foregroundStyle(.primary)
                             Text(subtitle)
@@ -440,7 +440,7 @@ struct OBShell<Content: View>: View {
             VStack(spacing: 10) {
                 Button(action: onCTA) {
                     HStack(spacing: 10) {
-                        Text(ctaLabel).font(.system(size: 17, weight: .bold))
+                        Text(ctaLabel).font(.dsHeadline.weight(.bold))
                         StrideIcon(name: .chevronRight, size: 14, color: .onFill, strokeWeight: 2.6)
                     }
                     .frame(maxWidth: .infinity)
@@ -461,7 +461,7 @@ struct OBShell<Content: View>: View {
                 if let secondaryLabel, let onSecondary {
                     Button(action: onSecondary) {
                         Text(secondaryLabel)
-                            .font(.system(size: 14, weight: .medium))
+                            .font(.dsSubhead.weight(.medium))
                             .foregroundStyle(.secondary)
                             .padding(.vertical, 6)
                     }
@@ -533,7 +533,7 @@ struct OBRaceCard: View {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(race.localizedName).font(.bodyStrong)
                         Text(distanceLabel)
-                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                            .font(.dsCaption.weight(.semibold).monospaced())
                             .foregroundStyle(.secondary)
                     }
                     Text("\(desc) · \(race.typicalWeeks.lowerBound)–\(race.typicalWeeks.upperBound) wks")
@@ -582,7 +582,7 @@ struct OBCustomDistanceCard: View {
                     .foregroundStyle(.secondary)
                 Spacer()
                 Text(displayValue)
-                    .font(.system(size: 18, weight: .bold, design: .monospaced))
+                    .font(.dsHeadline.weight(.bold).monospaced())
                     .foregroundStyle(.brand)
             }
 
@@ -595,7 +595,7 @@ struct OBCustomDistanceCard: View {
                     let isOn = abs(distanceKm - pick.km) < 0.05
                     Button { distanceKm = pick.km } label: {
                         Text(pick.label)
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.dsFootnote.weight(.semibold))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
                             .background(
@@ -789,7 +789,7 @@ struct OBFitnessRow: View {
                     .frame(width: 28, height: 22)
 
                     Text(selection.title)
-                        .font(.system(size: 17, weight: .bold))
+                        .font(.dsHeadline.weight(.bold))
                         .kerning(-0.3)
                         .foregroundStyle(.primary)
 
@@ -798,13 +798,13 @@ struct OBFitnessRow: View {
                 }
 
                 Text(selection.subtitle)
-                    .font(.system(size: 13))
+                    .font(.dsFootnote)
                     .kerning(-0.1)
                     .foregroundStyle(.secondary)
                     .padding(.leading, 38)
 
                 Text(planStartLabel)
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .font(.dsCaption.weight(.semibold).monospaced())
                     .foregroundStyle(.secondary.opacity(0.75))
                     .padding(.leading, 38)
             }
@@ -849,7 +849,7 @@ struct OBLevelRow: View {
                         }
                         return String(format: "%.0f km/wk base", km)
                     }())
-                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .font(.dsCaption.weight(.semibold).monospaced())
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -875,14 +875,14 @@ struct OBTimeWheelColumn: View {
     var body: some View {
         VStack(spacing: 6) {
             Text(label)
-                .font(.system(size: 11, weight: .bold))
+                .font(.dsCaption2.weight(.bold))
                 .kerning(1.2)
                 .foregroundStyle(.secondary)
 
             Picker(label, selection: $value) {
                 ForEach(range, id: \.self) { option in
                     Text(String(format: "%02d", option))
-                        .font(.system(size: 28, weight: .bold, design: .monospaced))
+                        .font(.dsTitle1.monospaced())
                         .foregroundStyle(isMuted ? .secondary : .primary)
                         .tag(option)
                 }
@@ -910,7 +910,7 @@ struct OBWheelColumnStyle: ViewModifier {
     func body(content: Content) -> some View {
         VStack(spacing: 6) {
             Text(label)
-                .font(.system(size: 11, weight: .bold))
+                .font(.dsCaption2.weight(.bold))
                 .kerning(1.2)
                 .foregroundStyle(.secondary)
 
@@ -944,11 +944,11 @@ struct OBPaceCell: View {
             Circle().fill(color).frame(width: 8, height: 8)
             VStack(alignment: .leading, spacing: 2) {
                 Text(zone.uppercased())
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.dsCaption2.weight(.bold))
                     .kerning(0.8)
                     .foregroundStyle(color)
                 Text(pace)
-                    .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                    .font(.dsSubhead.weight(.semibold).monospaced())
             }
             Spacer()
         }
@@ -1076,7 +1076,7 @@ struct OBReady: View {
                     }
                     .frame(height: 4)
                     Text("\(progressTotal)/\(progressTotal)")
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .font(.dsCaption2.weight(.bold).monospaced())
                         .foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, 20)
@@ -1088,11 +1088,11 @@ struct OBReady: View {
                         // Header
                         VStack(alignment: .leading, spacing: 8) {
                             Text("YOUR PLAN")
-                                .font(.system(size: 11, weight: .bold))
+                                .font(.dsCaption2.weight(.bold))
                                 .kerning(1.6)
                                 .foregroundStyle(.brand)
                             Text("\(planWeeks)-week \(goalRace.localizedName) plan\nbuilt for you.")
-                                .font(.system(size: 28, weight: .heavy))
+                                .font(.dsTitle1.weight(.heavy))
                                 .kerning(-0.7)
                                 .foregroundStyle(.primary)
                                 .lineSpacing(-2)
@@ -1131,7 +1131,7 @@ struct OBReady: View {
                         ProgressView().tint(.onFill)
                     } else {
                         HStack(spacing: 10) {
-                            Text("Start training").font(.system(size: 17, weight: .bold))
+                            Text("Start training").font(.dsHeadline.weight(.bold))
                             StrideIcon(name: .chevronRight, size: 15, color: .onFill, strokeWeight: 2.6)
                         }
                     }
@@ -1164,11 +1164,11 @@ private struct OBSummaryStat: View {
     var body: some View {
         VStack(spacing: 6) {
             Text(label)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.dsCaption2.weight(.semibold))
                 .kerning(0.6)
                 .foregroundStyle(.secondary)
             Text(value)
-                .font(.system(size: 22, weight: .bold, design: .monospaced))
+                .font(.dsTitle2.monospaced())
                 .kerning(-0.5)
                 .foregroundStyle(.primary)
         }
@@ -1234,7 +1234,7 @@ private struct WeeklyMileageChart: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("WEEKLY \(unit == .imperial ? "MILEAGE" : "KILOMETRES")")
-                .font(.system(size: 11, weight: .bold))
+                .font(.dsCaption2.weight(.bold))
                 .kerning(1.2)
                 .foregroundStyle(.secondary)
 
@@ -1242,7 +1242,7 @@ private struct WeeklyMileageChart: View {
                 ForEach(Array(bars.enumerated()), id: \.element.n) { index, bar in
                     VStack(spacing: 4) {
                         Text("\(bar.mi)")
-                            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                            .font(.dsCaption2.weight(.semibold).monospaced())
                             .foregroundStyle(.secondary)
                             .opacity(barsVisible ? 1 : 0)
                         RoundedRectangle(cornerRadius: 3)
@@ -1250,7 +1250,7 @@ private struct WeeklyMileageChart: View {
                             .frame(height: barsVisible ? max(6, CGFloat(bar.mi) / CGFloat(peakMiles) * 72) : 2)
                             .animation(AppAnimation.bouncy.delay(Double(index) * 0.04), value: barsVisible)
                         Text("W\(bar.n)")
-                            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                            .font(.dsCaption2.weight(.semibold).monospaced())
                             .foregroundStyle(Color.secondary.opacity(0.6))
                     }
                     .frame(maxWidth: .infinity)
@@ -1272,7 +1272,7 @@ private struct WeeklyMileageChart: View {
                             .fill(color)
                             .frame(width: 8, height: 8)
                         Text(name)
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.dsCaption2.weight(.semibold))
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -1324,7 +1324,7 @@ struct OBEquipmentCard: View {
                 Spacer()
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 16))
+                        .font(.dsCallout)
                         .foregroundStyle(Color.brand)
                 }
             }
@@ -1341,14 +1341,14 @@ struct OBEquipmentCard: View {
 
     private var iconView: some View {
         Image(systemName: equipment.systemImage)
-            .font(.system(size: 18, weight: .medium))
+            .font(.dsBody.weight(.medium))
             .frame(width: 28)
             .foregroundStyle(isSelected ? Color.brand : Color.secondary)
     }
 
     private var labelView: some View {
         Text(equipment.localizedName)
-            .font(.system(size: 14, weight: .semibold))
+            .font(.dsSubhead.weight(.semibold))
             .foregroundStyle(isSelected ? Color.primary : Color.secondary)
             .lineLimit(1)
             .minimumScaleFactor(0.8)
@@ -1371,7 +1371,7 @@ struct OBStrengthFocusPicker: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("TRAINING FOCUS")
-                .font(.system(size: 11, weight: .semibold))
+                .font(.dsCaption2.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 4)
 
@@ -1399,10 +1399,10 @@ private struct OBStrengthFocusRow: View {
                 OBRadio(isSelected: isSelected, color: .brand)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(option.localizedName)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.dsSubhead.weight(.semibold))
                         .foregroundStyle(Color.primary)
                     Text(option.subtitle)
-                        .font(.system(size: 12))
+                        .font(.dsCaption)
                         .foregroundStyle(Color.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }

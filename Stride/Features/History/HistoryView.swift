@@ -372,7 +372,7 @@ struct WorkoutRowView: View {
                         .foregroundStyle(.secondary)
                     if workout.scheduledWorkout != nil {
                         Image(systemName: "link")
-                            .font(.system(size: 9, weight: .semibold))
+                            .font(.dsCaption2.weight(.semibold))
                             .foregroundStyle(.brand)
                     }
                 }
@@ -382,12 +382,12 @@ struct WorkoutRowView: View {
 
             VStack(alignment: .trailing, spacing: 3) {
                 Text(workout.distanceMeters.distanceString(unit: appSettings.unitPreference))
-                    .font(.system(size: 15, weight: .semibold, design: .monospaced))
+                    .font(.dsSubhead.weight(.semibold).monospaced())
                 // `paceValueString` is the unit-less form of exactly this number. The row
                 // used to build it by string-stripping " min/km" off `paceString`, which
                 // silently stops matching the moment the app is localized (U8).
                 Text(workout.averagePaceSecondsPerKm.paceValueString(unit: appSettings.unitPreference))
-                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .font(.dsCaption.weight(.medium).monospaced())
                     .foregroundStyle(.secondary)
                 if let w = workout.weather {
                     HStack(spacing: 3) {
@@ -395,7 +395,7 @@ struct WorkoutRowView: View {
                             .symbolRenderingMode(.multicolor)
                         Text(w.temperatureString(unit: appSettings.unitPreference))
                     }
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.dsCaption2.weight(.medium))
                     .foregroundStyle(.secondary)
                 }
             }
@@ -454,12 +454,12 @@ struct StrengthWorkoutRowView: View {
                         .foregroundStyle(.secondary)
                     if workout.scheduledWorkout != nil {
                         Image(systemName: "link")
-                            .font(.system(size: 9, weight: .semibold))
+                            .font(.dsCaption2.weight(.semibold))
                             .foregroundStyle(.brand)
                     }
                     if workout.healthKitWorkoutID != nil {
                         Image(systemName: "heart.fill")
-                            .font(.system(size: 9))
+                            .font(.dsCaption2)
                             .foregroundStyle(.red)
                     }
                 }
@@ -469,11 +469,11 @@ struct StrengthWorkoutRowView: View {
 
             VStack(alignment: .trailing, spacing: 3) {
                 Text(durationLabel)
-                    .font(.system(size: 15, weight: .semibold, design: .monospaced))
+                    .font(.dsSubhead.weight(.semibold).monospaced())
                 let setCount = workout.completedSets.count
                 if setCount > 0 {
                     Text("\(setCount) sets")
-                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .font(.dsCaption.weight(.medium).monospaced())
                         .foregroundStyle(.secondary)
                 }
             }

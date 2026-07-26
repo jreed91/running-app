@@ -35,7 +35,7 @@ struct WorkoutCardView: View {
                             )
                         }
                     }
-                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .font(.dsFootnote.weight(.medium).monospaced())
                     .foregroundStyle(.secondary)
                 }
 

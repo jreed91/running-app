@@ -86,7 +86,7 @@ struct AICoachChatView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Image(systemName: "sparkles")
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.dsSubhead.weight(.bold))
                         .foregroundStyle(.brand)
                         .frame(width: 36, height: 36)
                         .background(.surfaceSecondary, in: Circle())
@@ -106,11 +106,11 @@ struct AICoachChatView: View {
                 coachAvatar(size: 42)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("AI COACH")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(.dsCaption2.weight(.bold))
                         .tracking(1.4)
                         .foregroundStyle(.brand)
                     Text(contextSubtitle)
-                        .font(.system(size: 13))
+                        .font(.dsFootnote)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -118,7 +118,7 @@ struct AICoachChatView: View {
             }
 
             Text("Ask follow-ups about your last run, training plan, recovery, or pacing. Stride keeps the answers grounded in your recent data.")
-                .font(.system(size: 15))
+                .font(.dsSubhead)
                 .foregroundStyle(.secondary)
                 .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
@@ -133,7 +133,7 @@ struct AICoachChatView: View {
                 .fill(appSettings.aiInsightsEnabled && hasAIKey ? Color.success : Color.warning)
                 .frame(width: 6, height: 6)
             Text(appSettings.aiInsightsEnabled && hasAIKey ? "READY" : "SETUP")
-                .font(.system(size: 10, weight: .bold))
+                .font(.dsCaption2.weight(.bold))
                 .tracking(0.7)
         }
         .foregroundStyle(appSettings.aiInsightsEnabled && hasAIKey ? Color.success : Color.warning)
@@ -153,7 +153,7 @@ struct AICoachChatView: View {
                         Task { await send(prompt) }
                     } label: {
                         Text(prompt)
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.dsFootnote.weight(.semibold))
                             .foregroundStyle(.brand)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 10)
@@ -172,11 +172,11 @@ struct AICoachChatView: View {
     private var composer: some View {
         HStack(spacing: 10) {
             Image(systemName: "sparkles")
-                .font(.system(size: 14, weight: .bold))
+                .font(.dsSubhead.weight(.bold))
                 .foregroundStyle(.brand)
 
             TextField("Ask your coach...", text: $draft, axis: .vertical)
-                .font(.system(size: 15))
+                .font(.dsSubhead)
                 .lineLimit(1...4)
                 .focused($isComposerFocused)
                 .submitLabel(.send)
@@ -188,7 +188,7 @@ struct AICoachChatView: View {
                 Task { await send(draft) }
             } label: {
                 Image(systemName: "arrow.up")
-                    .font(.system(size: 15, weight: .bold))
+                    .font(.dsSubhead.weight(.bold))
                     .foregroundStyle(.white)
                     .frame(width: 32, height: 32)
                     .background(canSendDraft ? Color.brand : Color.secondary.opacity(0.35), in: Circle())
@@ -220,7 +220,7 @@ struct AICoachChatView: View {
                 }
 
                 Text(markdownText(message.text))
-                    .font(.system(size: 15))
+                    .font(.dsSubhead)
                     .lineSpacing(3)
                     .foregroundStyle(message.sender == .coach ? Color.primary : Color.white)
                     .fixedSize(horizontal: false, vertical: true)
@@ -271,14 +271,14 @@ struct AICoachChatView: View {
     private func coachBubbleHeader(_ message: AICoachChatMessage) -> some View {
         HStack(spacing: 6) {
             Text("Coach")
-                .font(.system(size: 13, weight: .bold))
+                .font(.dsFootnote.weight(.bold))
             if let status = message.status {
                 HStack(spacing: 5) {
                     Circle()
                         .fill(status.color)
                         .frame(width: 5, height: 5)
                     Text(status.title)
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.dsCaption2.weight(.bold))
                         .tracking(0.4)
                 }
                 .foregroundStyle(status.color)
@@ -294,15 +294,15 @@ struct AICoachChatView: View {
             ForEach(metrics) { metric in
                 VStack(alignment: .leading, spacing: 2) {
                     Text(metric.label.uppercased())
-                        .font(.system(size: 9, weight: .bold))
+                        .font(.dsCaption2.weight(.bold))
                         .tracking(0.6)
                         .foregroundStyle(.secondary)
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
                         Text(metric.value)
-                            .font(.system(size: 14, weight: .bold, design: .monospaced))
+                            .font(.dsSubhead.weight(.bold).monospaced())
                         if let delta = metric.delta {
                             Text(delta)
-                                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                .font(.dsCaption2.weight(.bold).monospaced())
                                 .foregroundStyle(metric.tone)
                         }
                     }

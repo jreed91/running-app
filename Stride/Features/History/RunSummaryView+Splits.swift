@@ -36,7 +36,7 @@ extension RunSummaryView {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 10) {
                     Text(metric.heading(unit: appSettings.unitPreference))
-                        .font(.system(size: 13, weight: .bold))
+                        .font(.dsFootnote.weight(.bold))
                     Spacer()
                     if availableSplitMetrics.count > 1 {
                         ForEach(availableSplitMetrics, id: \.self) { option in

@@ -57,7 +57,7 @@ struct GuidedWorkoutBanner: View {
             Text("STEP \(guided.stepNumber) / \(guided.stepCount)")
                 .font(.system(size: 11, weight: .bold, design: .monospaced))
                 .kerning(1.2)
-                .foregroundStyle(.white.opacity(0.8))
+                .foregroundStyle(.white.opacity(0.92))
         }
     }
 
@@ -81,7 +81,7 @@ struct GuidedWorkoutBanner: View {
             if let pace = guided.currentStep.targetPaceSecondsPerKm, pace > 0 {
                 Text("@ \(pace.paceString(unit: unit))")
                     .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.75))
+                    .foregroundStyle(.white.opacity(0.92))
             }
         }
     }
@@ -122,19 +122,21 @@ struct GuidedWorkoutBanner: View {
             if let next = guided.nextStep {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("UP NEXT")
-                        .font(.system(size: 9, weight: .bold))
+                        // 9pt, under Apple's legibility floor, at 0.55 white over a
+                        // saturated zone gradient — 1.5:1 (U2/U3b).
+                        .font(.metricLabel)
                         .kerning(1.2)
-                        .foregroundStyle(.white.opacity(0.55))
+                        .foregroundStyle(.white.opacity(0.92))
                     Text(next.label)
                         .font(.system(size: 13, weight: .semibold))
                         .lineLimit(1)
-                        .foregroundStyle(.white.opacity(0.9))
+                        .foregroundStyle(.white.opacity(0.95))
                 }
             } else {
                 Text("FINAL STEP")
                     .font(.system(size: 11, weight: .bold))
                     .kerning(1.2)
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(.white.opacity(0.92))
             }
 
             Spacer()

@@ -368,15 +368,15 @@ struct OnboardingView: View {
                         .fill(Color.brand.opacity(0.2))
                         .frame(width: 44, height: 44)
                     Text(String(format: "%.0f", vdotValue))
-                        .font(.system(size: 14, weight: .bold, design: .monospaced))
+                        .font(.dsSubhead.weight(.bold).monospaced())
                         .foregroundStyle(.brand)
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text("VDOT \(String(format: "%.0f", vdotValue)) · \(vdotLabel)")
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.dsSubhead.weight(.bold))
                         .foregroundStyle(.primary)
                     Text("Easy \(shortPace(paces.easyRange.lowerBound)) · Tempo \(tempoLabel) · Interval \(intervalLabel)")
-                        .font(.system(size: 12))
+                        .font(.dsCaption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -400,23 +400,26 @@ struct OnboardingView: View {
         VStack(spacing: 12) {
             HStack {
                 Text("Age")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.dsSubhead.weight(.semibold))
                 Spacer()
-                Text("\(age)").font(.system(size: 14, weight: .bold)).monospacedDigit().foregroundStyle(.secondary)
+                Text("\(age)").font(.dsSubhead.weight(.bold)).monospacedDigit().foregroundStyle(.secondary)
                 Stepper("", value: Binding(get: { age }, set: { age = $0; didEnterHR = true }), in: 10...100)
                     .labelsHidden()
             }
             Divider()
             HStack {
                 Text("Max HR")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.dsSubhead.weight(.semibold))
                 Spacer()
-                Text("\(onboardingMaxHR) bpm").font(.system(size: 14, weight: .bold)).monospacedDigit().foregroundStyle(.secondary)
+                Text("\(onboardingMaxHR) bpm")
+                    .font(.dsSubhead.weight(.bold))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
                 Stepper("", value: Binding(get: { onboardingMaxHR }, set: { maxHROverride = $0; didEnterHR = true }), in: 120...220)
                     .labelsHidden()
             }
             Text("Sets your heart-rate zones. Estimated from age (208 − 0.7 × age) — adjust if you know your true max.")
-                .font(.system(size: 11))
+                .font(.dsCaption2)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -447,11 +450,11 @@ struct OnboardingView: View {
                         } label: {
                             VStack(spacing: 2) {
                                 Text(labels[i])
-                                    .font(.system(size: 11, weight: .bold))
+                                    .font(.dsCaption2.weight(.bold))
                                     .kerning(0.6)
                                     .opacity(isOn ? 0.85 : 0.6)
                                 Text("\(dayNumber)")
-                                    .font(.system(size: 15, weight: .bold, design: .monospaced))
+                                    .font(.dsSubhead.weight(.bold).monospaced())
                             }
                             .frame(maxWidth: .infinity)
                             .frame(height: 52)
@@ -469,13 +472,13 @@ struct OnboardingView: View {
 
             VStack(alignment: .leading, spacing: 10) {
                 Text("Long run day")
-                    .font(.system(size: 13))
+                    .font(.dsFootnote)
                     .foregroundStyle(.secondary)
                 HStack(spacing: 6) {
                     ForEach([("Sat", true), ("Sun", false), ("Flexible", false)], id: \.0) { name, isSat in
                         Button { longRunOnSaturday = isSat } label: {
                             Text(name)
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.dsFootnote.weight(.semibold))
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 8)
                                 .background(longRunOnSaturday == isSat && name != "Flexible" ? Color.surfaceSecondary : Color.clear, in: RoundedRectangle(cornerRadius: 8))
@@ -490,11 +493,11 @@ struct OnboardingView: View {
 
                 HStack {
                     Text("Runs per week")
-                        .font(.system(size: 13))
+                        .font(.dsFootnote)
                         .foregroundStyle(.secondary)
                     Spacer()
                     Text("\(selectedDays.count)")
-                        .font(.system(size: 20, weight: .bold, design: .monospaced))
+                        .font(.dsTitle3.weight(.bold).monospaced())
                         .foregroundStyle(.brand)
                 }
                 .padding(.top, 4)

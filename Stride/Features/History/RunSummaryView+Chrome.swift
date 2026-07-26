@@ -9,7 +9,7 @@ extension RunSummaryView {
     func sectionHeader(title: String) -> some View {
         HStack {
             Text(title.uppercased())
-                .font(.system(size: 11, weight: .bold))
+                .font(.dsCaption2.weight(.bold))
                 .kerning(1.4)
                 .foregroundStyle(.secondary)
             Spacer()
@@ -23,7 +23,7 @@ extension RunSummaryView {
             selectedSplitMetric = metric
         } label: {
             Text(metric.tabTitle)
-                .font(.system(size: 11, weight: .bold))
+                .font(.dsCaption2.weight(.bold))
                 .foregroundStyle(active ? Color.brand : Color.secondary)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
@@ -44,7 +44,7 @@ extension RunSummaryView {
                         .frame(width: 36 * CGFloat(value) / 100, height: 4)
                 }
             Text("\(value)%")
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .font(.dsCaption2.weight(.bold).monospaced())
                 .foregroundStyle(.secondary)
         }
     }
@@ -52,11 +52,11 @@ extension RunSummaryView {
     func evidenceChip(label: String, sub: String?, tone: Color) -> some View {
         HStack(spacing: 6) {
             Text(label)
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .font(.dsCaption.weight(.bold).monospaced())
                 .foregroundStyle(.primary)
             if let sub {
                 Text(sub)
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.dsCaption2.weight(.bold))
                     .foregroundStyle(tone)
             }
         }

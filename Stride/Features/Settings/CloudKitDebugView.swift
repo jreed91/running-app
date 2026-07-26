@@ -89,7 +89,7 @@ struct CloudKitDebugView: View {
                 ForEach(Array(records.enumerated()), id: \.offset) { index, record in
                     DisclosureGroup("Record \(index + 1)") {
                         Text(prettyPrinted(record) ?? "Unable to serialize record.")
-                            .font(.system(size: 11, design: .monospaced))
+                            .font(.dsCaption2.monospaced())
                             .textSelection(.enabled)
                     }
                 }

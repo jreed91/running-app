@@ -32,20 +32,20 @@ extension RunSummaryView {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 6) {
                         Text("AI COACH")
-                            .font(.system(size: 10.5, weight: .heavy))
+                            .font(.dsCaption2.weight(.heavy))
                             .kerning(1.4)
                             .foregroundStyle(.brand)
                         Circle()
                             .fill(Color.brand)
                             .frame(width: 5, height: 5)
                         Text(topCoachBadgeText)
-                            .font(.system(size: 10, weight: .bold))
+                            .font(.dsCaption2.weight(.bold))
                             .kerning(0.6)
                             .foregroundStyle(.brand)
                     }
 
                     Text(topCoachHeadline)
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.dsSubhead.weight(.bold))
                         .kerning(-0.2)
                         .foregroundStyle(.primary)
                         .lineLimit(2)
@@ -61,7 +61,7 @@ extension RunSummaryView {
                                         .frame(width: 50 * CGFloat(confidence) / 100, height: 3)
                                 }
                             Text("\(confidence)% conf.")
-                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .font(.dsCaption2.weight(.bold).monospaced())
                                 .foregroundStyle(.brand)
                         }
                     }

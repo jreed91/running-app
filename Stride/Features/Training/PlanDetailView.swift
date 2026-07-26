@@ -101,7 +101,7 @@ struct PlanSummaryCard: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .lastTextBaseline) {
                     Text("\(Int((summary.adherence * 100).rounded()))%")
-                        .font(.system(size: 28, weight: .bold, design: .monospaced))
+                        .font(.dsTitle1.monospaced())
                         .foregroundStyle(.brand)
                     Text("\(summary.completedCount) of \(summary.scheduledCount) workouts completed")
                         .font(.caption)
@@ -207,7 +207,7 @@ private struct TypeBreakdownRow: View {
             Spacer()
 
             Text("\(stat.completed)/\(stat.scheduled)")
-                .font(.system(size: 13, weight: .medium, design: .monospaced))
+                .font(.dsFootnote.weight(.medium).monospaced())
                 .foregroundStyle(.secondary)
 
             ProgressView(value: fraction)

@@ -383,7 +383,7 @@ struct RaceInsightsView: View {
                 .foregroundStyle(.primary)
             Spacer()
             Text(paceText)
-                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                .font(.dsFootnote.weight(.semibold).monospaced())
                 .foregroundStyle(color)
         }
         .padding(.vertical, 10)
@@ -434,7 +434,7 @@ struct RaceInsightsView: View {
     private func metricsCell(value: String, label: String, valueColor: Color = .primary) -> some View {
         VStack(spacing: 4) {
             Text(value)
-                .font(.system(size: 16, weight: .bold, design: .monospaced))
+                .font(.dsCallout.weight(.bold).monospaced())
                 .foregroundStyle(valueColor)
                 .minimumScaleFactor(0.7)
                 .lineLimit(1)

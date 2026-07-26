@@ -80,6 +80,9 @@ struct WeekCalendarView: View {
             }
         }
         .padding(.bottom, 8)
+        // Seven day columns plus two chevrons across the screen width — the other
+        // layout that can't reflow, so it scales up to accessibility1 and stops (U2).
+        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
     }
 
     private func navChevron(
@@ -143,7 +146,7 @@ private struct DayCell: View {
     var body: some View {
         VStack(spacing: 4) {
             Text(date.formatted(.dateTime.weekday(.narrow)))
-                .font(.system(size: 11, weight: .semibold))
+                .font(.dsCaption2.weight(.semibold))
                 .foregroundStyle(isToday ? .brand : .secondary)
 
             ZStack {
@@ -152,7 +155,7 @@ private struct DayCell: View {
                     .frame(width: 32, height: 32)
                     .adaptiveAnimation(AppAnimation.snappy, value: isSelected)
                 Text(date.formatted(.dateTime.day()))
-                    .font(.system(size: 15, weight: isToday || isSelected ? .bold : .regular))
+                    .font(.dsSubhead.weight(isToday || isSelected ? .bold : .regular))
                     .foregroundStyle(numberForeground)
                     .adaptiveAnimation(AppAnimation.snappy, value: isSelected)
             }
@@ -612,7 +615,7 @@ struct DashboardView: View {
             HStack(spacing: 10) {
                 StrideIcon(name: .play, size: 18, color: .onFill, strokeWeight: 2.2)
                 Text(startButtonTitle(for: workout))
-                    .font(.system(size: 17, weight: .bold))
+                    .font(.dsHeadline.weight(.bold))
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
@@ -721,7 +724,7 @@ struct DashboardView: View {
             HStack(spacing: 10) {
                 StrideIcon(name: .run, size: 20, color: .onFill, strokeWeight: 2.0)
                 Text("Start a Free Run")
-                    .font(.system(size: 17, weight: .bold))
+                    .font(.dsHeadline.weight(.bold))
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)

@@ -73,7 +73,7 @@ struct StrengthSummaryView: View {
     private func statCell(value: String, label: String) -> some View {
         VStack(spacing: 2) {
             Text(value)
-                .font(.system(size: 22, weight: .bold, design: .monospaced))
+                .font(.dsTitle2.monospaced())
             Text(label)
                 .font(.sectionHeader)
                 .foregroundStyle(.secondary)
@@ -106,21 +106,21 @@ struct StrengthSummaryView: View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text(exerciseName)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.dsSubhead.weight(.semibold))
 
                     ForEach(sets, id: \.setIndex) { set in
                         HStack {
                             Text("Set \(set.setIndex + 1)")
-                                .font(.system(size: 13, weight: .medium, design: .monospaced))
+                                .font(.dsFootnote.weight(.medium).monospaced())
                                 .foregroundStyle(.secondary)
                             Spacer()
                             if set.skipped {
                                 Text("Skipped")
-                                    .font(.system(size: 13))
+                                    .font(.dsFootnote)
                                     .foregroundStyle(.tertiary)
                             } else {
                                 Text("\(set.completedReps) reps\(set.actualWeight.map { " · \($0)" } ?? "")")
-                                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                                    .font(.dsFootnote.weight(.medium).monospaced())
                             }
                         }
                     }
@@ -142,9 +142,9 @@ struct StrengthSummaryView: View {
                 Spacer()
                 HStack(spacing: 4) {
                     Image(systemName: "clock")
-                        .font(.system(size: 11))
+                        .font(.dsCaption2)
                     Text("\(plan.estimatedDurationMinutes) min")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.dsCaption.weight(.semibold))
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)

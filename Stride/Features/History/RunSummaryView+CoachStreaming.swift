@@ -21,14 +21,14 @@ extension RunSummaryView {
                     .fill(Color.brand)
                     .frame(width: 14, height: 14)
                 Text("COACHING READ")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.dsCaption2.weight(.bold))
                     .kerning(1.4)
                     .foregroundStyle(.brand)
                 Spacer()
                 ProgressView().controlSize(.small)
             }
             Text(markdownText(aiStreamBuffer))
-                .font(.system(size: 14))
+                .font(.dsSubhead)
                 .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
         }

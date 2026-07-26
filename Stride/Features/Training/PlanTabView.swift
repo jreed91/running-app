@@ -304,14 +304,14 @@ private struct SmartAdaptPlanCard: View {
                                 .controlSize(.small)
                         } else {
                             Image(systemName: "sparkles")
-                                .font(.system(size: 20, weight: .semibold))
+                                .font(.dsTitle3)
                                 .foregroundStyle(.brand)
                         }
                     }
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text(isAdapting ? "Adapting Plan" : "Smart Adapt")
-                            .font(.system(size: 17, weight: .bold))
+                            .font(.dsHeadline.weight(.bold))
                             .foregroundStyle(.brand)
 
                         Text(subtitle)
@@ -436,7 +436,7 @@ private struct RouteGeniusCard: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Route Genius")
-                        .font(.system(size: 17, weight: .bold))
+                        .font(.dsHeadline.weight(.bold))
                         .foregroundStyle(.brand)
                     Text("AI-generated route matched to today's distance & elevation.")
                         .font(.caption)
@@ -511,14 +511,14 @@ private struct PlanOverviewCard: View {
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     Text(planTitle)
-                        .font(.system(size: 20, weight: .bold))
+                        .font(.dsTitle3.weight(.bold))
                     Text("Goal \(plan.goalTimeSeconds.durationString)  ·  \(plan.totalWeeks) weeks")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
                 Text("\(Int(plan.progress * 100))%")
-                    .font(.system(size: 22, weight: .bold, design: .monospaced))
+                    .font(.dsTitle2.monospaced())
                     .foregroundStyle(.brand)
             }
 
@@ -631,7 +631,7 @@ private struct PhaseProgressBar: View {
             HStack {
                 ForEach([TrainingPhase.base, .build, .peak, .taper], id: \.self) { phase in
                     Text(phase.localizedName.uppercased())
-                        .font(.system(size: 11, weight: phase == currentPhase ? .bold : .semibold))
+                        .font(.dsCaption2.weight(phase == currentPhase ? .bold : .semibold))
                         .kerning(0.8)
                         .foregroundStyle(phase == currentPhase ? Color.brand : Color.secondary.opacity(0.55))
                     if phase != .taper { Spacer() }
@@ -825,14 +825,14 @@ private struct PaceRow: View {
                 .frame(width: 3, height: 22)
 
             Text(label)
-                .font(.system(size: 15, weight: .medium))
+                .font(.dsSubhead.weight(.medium))
                 .foregroundStyle(.primary)
 
             Spacer()
 
             HStack(alignment: .lastTextBaseline, spacing: 4) {
                 Text(value)
-                    .font(.system(size: 15, weight: .semibold, design: .monospaced))
+                    .font(.dsSubhead.weight(.semibold).monospaced())
                 Text(appSettings.unitPreference.paceLabel)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -997,7 +997,7 @@ private struct PlanWorkoutSummaryRow: View {
 
             if let dist = workout.targetDistanceMeters {
                 Text(dist.distanceString(unit: appSettings.unitPreference))
-                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .font(.dsCaption.weight(.medium).monospaced())
                     .foregroundStyle(.secondary)
             }
 

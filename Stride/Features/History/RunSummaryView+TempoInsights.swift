@@ -31,7 +31,7 @@ extension RunSummaryView {
 
                 if insights.recentTempoCount == 0 {
                     Text("This is your first tempo run — keep it up to track pace trends.")
-                        .font(.system(size: 12))
+                        .font(.dsCaption)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 4)
                 }
@@ -43,11 +43,11 @@ extension RunSummaryView {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("TEMPO PACE")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.dsCaption2.weight(.bold))
                     .kerning(0.8)
                     .foregroundStyle(.secondary)
                 Text(insights.achievedPaceSecondsPerKm.paceString(unit: appSettings.unitPreference))
-                    .font(.system(size: 22, weight: .semibold, design: .monospaced))
+                    .font(.dsTitle2.weight(.semibold).monospaced())
                     .kerning(-0.5)
 
                 if let prev = insights.previousBestTempoSecondsPerKm {
@@ -55,13 +55,13 @@ extension RunSummaryView {
                     let isNew = delta > 1
                     HStack(spacing: 4) {
                         Image(systemName: isNew ? "arrow.up.circle.fill" : (delta < -1 ? "arrow.down.circle.fill" : "minus.circle.fill"))
-                            .font(.system(size: 10))
+                            .font(.dsCaption2)
                         Text(isNew
                              ? "New best"
                              : (delta < -1
                                 ? "\(Int(abs(delta)))s slower than best"
                                 : "Matches best"))
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.dsCaption.weight(.semibold))
                     }
                     .foregroundStyle(isNew ? Color.success : (delta < -1 ? Color.destructive : Color.secondary))
                 }
@@ -70,11 +70,11 @@ extension RunSummaryView {
             if let target = insights.targetThresholdSecondsPerKm {
                 VStack(alignment: .trailing, spacing: 4) {
                     Text("TARGET")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.dsCaption2.weight(.bold))
                         .kerning(0.8)
                         .foregroundStyle(.secondary)
                     Text(target.paceString(unit: appSettings.unitPreference))
-                        .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                        .font(.dsCallout.weight(.semibold).monospaced())
                         .foregroundStyle(.secondary)
                     tempoTargetStatusChip(actual: insights.achievedPaceSecondsPerKm, target: target)
                 }
@@ -96,8 +96,8 @@ extension RunSummaryView {
             }
         }()
         return HStack(spacing: 4) {
-            Image(systemName: icon).font(.system(size: 10, weight: .bold))
-            Text(label).font(.system(size: 11, weight: .bold))
+            Image(systemName: icon).font(.dsCaption2.weight(.bold))
+            Text(label).font(.dsCaption2.weight(.bold))
         }
         .foregroundStyle(color)
         .padding(.horizontal, 8)
@@ -110,18 +110,18 @@ extension RunSummaryView {
             if let vdot = insights.derivedVDOT {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("VDOT THIS RUN")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.dsCaption2.weight(.bold))
                         .kerning(0.8)
                         .foregroundStyle(.secondary)
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
                         Text(String(format: "%.1f", vdot))
-                            .font(.system(size: 20, weight: .semibold, design: .monospaced))
+                            .font(.dsTitle3.monospaced())
                         if let prev = insights.previousVDOT {
                             let delta = vdot - prev
                             Text(delta >= 0
                                  ? String(format: "+%.1f", delta)
                                  : String(format: "%.1f", delta))
-                                .font(.system(size: 12, weight: .bold))
+                                .font(.dsCaption.weight(.bold))
                                 .foregroundStyle(delta >= 0.3 ? Color.success : (delta <= -0.3 ? Color.destructive : Color.secondary))
                         }
                     }
@@ -131,11 +131,11 @@ extension RunSummaryView {
             if let prev = insights.previousVDOT {
                 VStack(alignment: .trailing, spacing: 4) {
                     Text("PREV VDOT")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.dsCaption2.weight(.bold))
                         .kerning(0.8)
                         .foregroundStyle(.secondary)
                     Text(String(format: "%.1f", prev))
-                        .font(.system(size: 20, weight: .semibold, design: .monospaced))
+                        .font(.dsTitle3.monospaced())
                         .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .trailing)
@@ -147,14 +147,14 @@ extension RunSummaryView {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
                 Text("SPLIT CONSISTENCY")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.dsCaption2.weight(.bold))
                     .kerning(0.8)
                     .foregroundStyle(.secondary)
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text(String(format: "±%.0fs/km", stdDevSeconds))
-                        .font(.system(size: 18, weight: .semibold, design: .monospaced))
+                        .font(.dsHeadline.monospaced())
                     Text("std dev")
-                        .font(.system(size: 11))
+                        .font(.dsCaption2)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -166,7 +166,7 @@ extension RunSummaryView {
                 return ("Uneven", .destructive)
             }()
             Text(label)
-                .font(.system(size: 12, weight: .bold))
+                .font(.dsCaption.weight(.bold))
                 .foregroundStyle(color)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)

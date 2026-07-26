@@ -98,13 +98,13 @@ private struct ScheduledWorkoutPickerRow: View {
             VStack(alignment: .trailing, spacing: 3) {
                 if let distance = scheduled.targetDistanceMeters {
                     Text(distance.distanceString(unit: appSettings.unitPreference))
-                        .font(.system(size: 15, weight: .semibold, design: .monospaced))
+                        .font(.dsSubhead.weight(.semibold).monospaced())
                 }
                 if let paceRange = scheduled.targetPaceRange {
                     Text(paceRange.lowerBound.paceString(unit: appSettings.unitPreference)
                         .replacingOccurrences(of: " min/km", with: "")
                         .replacingOccurrences(of: " min/mi", with: ""))
-                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .font(.dsCaption.weight(.medium).monospaced())
                         .foregroundStyle(.secondary)
                 }
             }

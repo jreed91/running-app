@@ -185,7 +185,7 @@ struct ProgressDashboardView: View {
     private func summaryStatCell(value: String, label: String) -> some View {
         VStack(spacing: 2) {
             Text(value)
-                .font(.system(size: 22, weight: .bold, design: .monospaced))
+                .font(.dsTitle2.monospaced())
                 .foregroundStyle(.primary)
                 .minimumScaleFactor(0.7)
                 .lineLimit(1)
@@ -208,7 +208,7 @@ struct ProgressDashboardView: View {
                     withAnimation(AppAnimation.bouncy) { selectedRange = range }
                 } label: {
                     Text(range.rawValue)
-                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                        .font(.dsSubhead.weight(.semibold).monospaced())
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 9)
                         .background {
@@ -237,7 +237,7 @@ struct ProgressDashboardView: View {
                     withAnimation(AppAnimation.bouncy) { selectedTab = tab }
                 } label: {
                     Text(tab.rawValue)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.dsSubhead.weight(.semibold))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 9)
                         .background {
@@ -720,7 +720,7 @@ struct ProgressDashboardView: View {
     private func summaryCell(value: String, label: String) -> some View {
         VStack(spacing: 4) {
             Text(value)
-                .font(.system(size: 16, weight: .bold, design: .monospaced))
+                .font(.dsCallout.weight(.bold).monospaced())
                 .minimumScaleFactor(0.7)
                 .lineLimit(1)
             Text(label)
