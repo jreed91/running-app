@@ -51,31 +51,34 @@ struct AICoachChatView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        VStack(spacing: 16) {
-                            contextHeader
-                            ForEach(messages) { message in
-                                messageRow(message)
-                                    .id(message.id)
-                            }
-                            if isWaitingForCoach {
-                                typingRow
-                                    .id("typing")
-                            }
+                ScrollView {
+                    VStack(spacing: 16) {
+                        contextHeader
+                        ForEach(messages) { message in
+                            messageRow(message)
                         }
-                        .padding(.horizontal, AppSpacing.lg)
-                        .padding(.top, 10)
-                        .padding(.bottom, 18)
+                        if isWaitingForCoach {
+                            typingRow
+                        }
                     }
-                    .scrollDismissesKeyboard(.interactively)
-                    .onChange(of: messages.count) { _, _ in
-                        scrollToLatest(proxy)
-                    }
-                    .onChange(of: isWaitingForCoach) { _, _ in
-                        scrollToLatest(proxy)
-                    }
+                    .padding(.horizontal, AppSpacing.lg)
+                    .padding(.top, 10)
+                    .padding(.bottom, 18)
                 }
+                .scrollDismissesKeyboard(.interactively)
+                // A transcript follows its newest line, and that is a property of the
+                // scroll view rather than an event to react to. This replaces a
+                // `ScrollViewReader` and two `onChange` handlers that chased it by hand
+                // (U7) — and chased it a step behind, because they fired on the *counts*
+                // changing, so a long reply that grew the last bubble after it was
+                // appended, or a keyboard that shrank the container, moved the bottom of
+                // the transcript out of view with nothing left to trigger a correction.
+                // The anchor covers all three, since each one is a size change.
+                //
+                // `initialOffset` is deliberately left alone: the top of the context
+                // header is still what opens, because on a fresh chat it is the only
+                // thing there is to read.
+                .defaultScrollAnchor(.bottom, for: .sizeChanges)
 
                 quickReplies
                 composer
@@ -428,19 +431,6 @@ struct AICoachChatView: View {
             return
         }
         await send(prompt)
-    }
-
-    private func scrollToLatest(_ proxy: ScrollViewProxy) {
-        if isWaitingForCoach {
-            withAnimation(AppAnimation.snappy) {
-                proxy.scrollTo("typing", anchor: .bottom)
-            }
-            return
-        }
-        guard let last = messages.last else { return }
-        withAnimation(AppAnimation.snappy) {
-            proxy.scrollTo(last.id, anchor: .bottom)
-        }
     }
 
     private var canSendDraft: Bool {

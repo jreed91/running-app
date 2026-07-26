@@ -851,10 +851,28 @@ private struct PlanWeekSummaryRow: View {
     let week: TrainingWeek
     let currentWeekID: UUID?
     @Environment(AppSettings.self) private var appSettings
+    @Environment(AppContainer.self) private var container
+    @Environment(\.modelContext) private var context
     @State private var isExpanded = false
 
     private var isCurrentWeek: Bool { week.id == currentWeekID }
     private var isFutureWeek: Bool { week.startDate > Date() && !week.isCompleted }
+
+    /// The week's sessions in the order the rows are drawn, which is also the order the
+    /// reorder container reports drop offsets against.
+    private var orderedWorkouts: [ScheduledWorkout] {
+        (week.workouts ?? []).sorted { lhs, rhs in
+            if lhs.scheduledDate != rhs.scheduledDate { return lhs.scheduledDate < rhs.scheduledDate }
+            return lhs.id.uuidString < rhs.id.uuidString
+        }
+    }
+
+    /// A race date the runner has committed to pins race day; an estimated one does not.
+    private var hasFixedRaceDate: Bool { week.plan?.raceDate != nil }
+
+    private var canReorder: Bool {
+        WorkoutReorderPlanner.isReorderable(orderedWorkouts, hasFixedRaceDate: hasFixedRaceDate)
+    }
 
     private var totalWorkouts: Int {
         (week.workouts ?? []).filter { $0.workoutType != .rest }.count
@@ -921,14 +939,83 @@ private struct PlanWeekSummaryRow: View {
 
             if isExpanded {
                 Divider()
-                ForEach((week.workouts ?? []).sorted { $0.scheduledDate < $1.scheduledDate }) { workout in
+                ForEach(orderedWorkouts) { workout in
                     PlanWorkoutSummaryRow(workout: workout)
-                    Divider().padding(.leading, 44)
+                        // The divider used to be this `ForEach`'s second child. Inside a
+                        // reorder container that makes it part of the item, so it would
+                        // lift with the row and leave a gap behind. As a bottom overlay it
+                        // draws in the same place and belongs to the row's frame.
+                        .overlay(alignment: .bottom) {
+                            Divider().padding(.leading, 44)
+                        }
                 }
+                .reorderable()
             }
+        }
+        // Drag a session onto another day (U7). This sits directly on the stack that holds
+        // the rows rather than after the chrome below it, because it is the modifier that
+        // marks a view as the reorderable container.
+        //
+        // A week whose sessions are all completed or all in the past has nothing to
+        // rearrange, and `isEnabled` is what keeps the lift gesture off those rows rather
+        // than a guard that fires after the drop.
+        .reorderContainer(for: ScheduledWorkout.self, itemID: \.id, isEnabled: canReorder) { difference in
+            reschedule(difference)
         }
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
         .opacity(isFutureWeek ? 0.65 : 1.0)
+    }
+
+    /// Applies a drop by rewriting `scheduledDate`s — see `WorkoutReorderPlanner` for why
+    /// that is the only thing a reorder can mean in a plan.
+    ///
+    /// `@MainActor` is explicit rather than inherited: this touches the model context and
+    /// hands a `TrainingPlan` to an async call, and a `ScheduledWorkout` is not `Sendable`,
+    /// so under `SWIFT_STRICT_CONCURRENCY: complete` a nonisolated method here would read
+    /// as sending model objects out of the main actor's region.
+    @MainActor
+    private func reschedule(
+        _ difference: ReorderDifference<UUID, ReorderableSingleCollectionIdentifier>
+    ) {
+        let workouts = orderedWorkouts
+        // `index(in:)` resolves the drop against the same array the rows were built from,
+        // and is `nil` when the container could not place it — an unplaced drop leaves the
+        // week alone rather than guessing at one end of it.
+        guard let offset = difference.destination.index(in: workouts) else { return }
+
+        let changes = WorkoutReorderPlanner.plan(
+            slots: WorkoutReorderPlanner.slots(for: workouts, hasFixedRaceDate: hasFixedRaceDate),
+            moving: Array(difference.sources),
+            toOffset: offset
+        )
+        guard !changes.isEmpty else { return }
+
+        withAnimation(AppAnimation.snappy) {
+            for workout in workouts {
+                if let newDate = changes[workout.id] {
+                    workout.scheduledDate = newDate
+                }
+            }
+        }
+
+        do {
+            try context.save()
+        } catch {
+            // Roll the dates back rather than leave the week showing an order the store
+            // rejected — the next fetch would undo it anyway, with no explanation.
+            context.rollback()
+            AppLogger.log("Reordered week failed to save: \(error)", label: "Plan", level: .error)
+            return
+        }
+
+        // The 8 AM reminders are addressed to dates, so two of them now point at the wrong
+        // sessions. `scheduleMorningReminders` cancels and rebuilds the whole set, so it is
+        // safe to call for a two-day swap.
+        if let plan = week.plan, plan.isActive {
+            Task { @MainActor in
+                await container.notificationService.scheduleMorningReminders(for: plan)
+            }
+        }
     }
 
     @ViewBuilder
