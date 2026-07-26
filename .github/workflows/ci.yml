@@ -324,6 +324,11 @@ jobs:
             deriveddata-archive-
 
       - name: Archive (no signing)
+        # No `SKIP_INSTALL=NO` here. A command-line build setting applies to every
+        # target in the scheme, so it also overrode `SKIP_INSTALL: YES` on
+        # StrideWidgets and dropped the extension at the archive's Products root
+        # alongside the app — an archive shape that export rejects. The app target
+        # already installs by default; the extension must not.
         run: |
           set -o pipefail
           xcodebuild archive \
@@ -332,7 +337,6 @@ jobs:
             -archivePath build/Stride.xcarchive \
             -derivedDataPath ~/Library/Developer/Xcode/DerivedData \
             CODE_SIGNING_ALLOWED=NO \
-            SKIP_INSTALL=NO \
             | xcbeautify --renderer github-actions
 
       - name: Generate TestFlight notes
