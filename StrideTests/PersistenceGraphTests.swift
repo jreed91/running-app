@@ -153,10 +153,10 @@ struct PersistenceGraphTests {
         )
         try container.routeRepository.save(route)
 
-        // Plans are deleted through the container, not the repository: teardown of the
-        // Watch entries and the plan's reminders belongs to the same step as the row
-        // (D3), and `PlanRepository` deliberately exposes no `delete` to bypass it.
-        await container.deletePlan(plan, context: context)
+        // Plans are deleted through `PlanLifecycleService`, not the repository: teardown
+        // of the Watch entries and the plan's reminders belongs to the same step as the
+        // row (D3), and `PlanRepository` deliberately exposes no `delete` to bypass it.
+        await container.planLifecycle.deletePlan(plan, context: context)
         try container.workoutRepository.delete(workout)
         try container.routeRepository.delete(route)
 

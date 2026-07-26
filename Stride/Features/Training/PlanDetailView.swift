@@ -56,7 +56,7 @@ struct PlanDetailView: View {
                 dismiss()
                 // `deletePlan` owns the order: the Watch entries and reminders are
                 // reachable only through the plan, so they go before the record does (D3).
-                Task { await container.deletePlan(plan, context: context) }
+                Task { await container.planLifecycle.deletePlan(plan, context: context) }
             }
             Button("Cancel", role: .cancel) {}
         } message: {

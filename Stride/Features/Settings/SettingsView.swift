@@ -722,7 +722,7 @@ struct SettingsView: View {
 
     private func resetAll() {
         // The whole routine — reminders, Watch entries, pending-review defaults, then
-        // the models — lives in `AppContainer.resetAllData` (N11). Clearing only the
+        // the models — lives in `PlanLifecycleService.resetAllData` (N11). Clearing only the
         // store left reminders firing and a deleted run able to resurrect itself.
         Task { await container.resetAllData(context: context) }
     }

@@ -68,7 +68,7 @@ struct TrainingPlanListView: View {
                 // `deletePlan` owns the order: the Watch entries and reminders are
                 // reachable only through the plan, so they go before the record does (D3).
                 for plan in toDelete {
-                    await container.deletePlan(plan, context: context)
+                    await container.planLifecycle.deletePlan(plan, context: context)
                 }
             }
         }

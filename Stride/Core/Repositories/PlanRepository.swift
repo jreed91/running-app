@@ -8,7 +8,7 @@ import SwiftData
 /// Deliberately **no `delete`**. A plan owns two things that live outside the store —
 /// its WorkoutKit entries on the Watch and up to 56 scheduled morning reminders — and a
 /// repository has no way to reach either, so a bare `context.delete(plan)` here left
-/// both behind. `AppContainer.deletePlan(_:context:)` is the one owner of plan teardown
+/// both behind. `PlanLifecycleService.deletePlan(_:context:)` is the one owner of plan teardown
 /// (D3); removing the method is what stops a future caller from routing around it.
 protocol PlanRepositoryProtocol {
     func save(_ plan: TrainingPlan) throws

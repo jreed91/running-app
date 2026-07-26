@@ -687,7 +687,7 @@ struct ActiveRunView: View {
         }
         if let profile = profiles.first, let plan = activePlans.first {
             let allHistory = (try? context.fetch(FetchDescriptor<RunWorkout>())) ?? []
-            container.refreshPlanAfterWorkout(
+            container.planLifecycle.refreshPlanAfterWorkout(
                 plan: plan,
                 history: allHistory,
                 profile: profile,
