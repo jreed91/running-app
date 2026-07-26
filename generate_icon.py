@@ -8,6 +8,23 @@ Design from Stride Design System (app-icon.jsx):
   Shine:      top-half white fade (α 0.32 → 0)
   Motif:      white filled shape on 180×180 viewport
               M36 148 Q66 44 122 28 L140 28 Q86 46 60 150 Z
+
+Emits three appearances at 1024×1024, which is the form the asset catalogue has
+wanted since Xcode 14 — one master image per appearance, with the sizes derived at
+build time, rather than the thirteen hand-listed slots this used to write:
+
+  light   the design above, unchanged
+  dark    the same motif on a darkened backdrop, for the dark home screen
+  tinted  greyscale; iOS maps luminance onto the user's chosen tint
+
+Without the last two, iOS 26 derives its dark and tinted icons from the light one,
+which is why the tinted variant used to come out as a muddy full-bleed square: the
+whole background is saturated orange, so there is nothing for the tint to modulate.
+
+NOTE: these are still flat images. A true Liquid Glass icon is authored as a layered
+`.icon` bundle in Icon Composer (a GUI tool that ships with Xcode) and cannot be
+generated from this script; that remains open. Appearance variants and layering are
+independent — this closes the first without pretending to close the second.
 """
 import struct, zlib, os, math
 
@@ -124,7 +141,38 @@ def _blend(base, over, a):
 
 # ── Full icon render ──────────────────────────────────────────────────────────
 
-def generate(size):
+def _darken(rgb, factor):
+    return (int(rgb[0] * factor), int(rgb[1] * factor), int(rgb[2] * factor))
+
+
+def _luminance(rgb):
+    """Rec. 709 luma. The tinted appearance is greyscale by contract: iOS reads the
+    luminance and substitutes the user's tint, so any colour left here is discarded."""
+    y = int(0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2])
+    return (y, y, y)
+
+
+def generate(size, appearance="light"):
+    """Render one 8-bit RGB icon.
+
+    `appearance` is "light", "dark", or "tinted". The geometry is identical across
+    all three — only the palette moves — so the mark stays recognisably the same
+    icon however the home screen is configured.
+    """
+    if appearance not in ("light", "dark", "tinted"):
+        raise ValueError(f"unknown appearance: {appearance}")
+
+    # The dark backdrop is the same hue ramp at roughly a third of its luminance:
+    # dark-mode icons keep their identity, they do not become a different colour.
+    # Glow and shine come down with it, since both exist to lift a bright surface
+    # and at full strength they simply grey the dark one out.
+    dark = appearance == "dark"
+    bg_factor = 0.20 if dark else 1.0
+    glow_scale = 0.30 if dark else 1.0
+    shine_scale = 0.20 if dark else 1.0
+    # Pure white on a dark backdrop glares at small sizes; back it off slightly.
+    motif_rgb = (236, 236, 236) if dark else (255, 255, 255)
+
     motif_mask = scanfill(build_motif(size), size, size)
 
     # Glow: radialGradient cx=0.25 cy=0.10 r=0.9, stops at 0 and 0.7
@@ -140,7 +188,7 @@ def generate(size):
         row = y * size * 3
 
         # Shine alpha: linear 0.32→0 over top half, 0 below
-        shine_a = max(0.0, (0.5 - y * inv) * 2.0) * 0.32
+        shine_a = max(0.0, (0.5 - y * inv) * 2.0) * 0.32 * shine_scale
 
         # Glow: only worth computing for rows within glow circle
         gd_y2 = (y - gy) ** 2
@@ -150,21 +198,28 @@ def generate(size):
             # 1. Diagonal gradient background
             t = (x + y) * inv * 0.5
             rgb = _grad_bg(t)
+            if bg_factor != 1.0:
+                rgb = _darken(rgb, bg_factor)
 
             # 2. Radial warm glow (top-left)
             if glow_row:
                 gd2 = (x - gx)**2 + gd_y2
                 if gd2 < g_stop * g_stop:
-                    ga = (1.0 - math.sqrt(gd2) / g_stop) * 0.5
+                    ga = (1.0 - math.sqrt(gd2) / g_stop) * 0.5 * glow_scale
                     rgb = _blend(rgb, _GLOW, ga)
 
             # 3. Top-half shine
             if shine_a > 0.0:
                 rgb = _blend(rgb, (255, 255, 255), shine_a)
 
-            # 4. White motif
+            # 4. Motif
             if motif_mask[y * size + x]:
-                rgb = (255, 255, 255)
+                rgb = motif_rgb
+
+            # 5. Flatten to luminance for the tinted appearance, last so the mark
+            #    keeps the contrast the colour composition gave it.
+            if appearance == "tinted":
+                rgb = _luminance(rgb)
 
             idx = row + x * 3
             pixels[idx]     = rgb[0]
@@ -176,27 +231,55 @@ def generate(size):
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
-SIZES = [
-    ("Icon-20x20.png",     20),
-    ("Icon-29x29.png",     29),
-    ("Icon-40x40.png",     40),
-    ("Icon-58x58.png",     58),
-    ("Icon-60x60.png",     60),
-    ("Icon-76x76.png",     76),
-    ("Icon-80x80.png",     80),
-    ("Icon-87x87.png",     87),
-    ("Icon-120x120.png",  120),
-    ("Icon-152x152.png",  152),
-    ("Icon-167x167.png",  167),
-    ("Icon-180x180.png",  180),
-    ("Icon-1024x1024.png",1024),
+MASTER_SIZE = 1024
+
+# (filename, appearance, Contents.json "appearances" entry)
+VARIANTS = [
+    ("Icon-1024x1024.png",        "light",  None),
+    ("Icon-Dark-1024x1024.png",   "dark",   {"appearance": "luminosity", "value": "dark"}),
+    ("Icon-Tinted-1024x1024.png", "tinted", {"appearance": "luminosity", "value": "tinted"}),
 ]
 
+# Written alongside the PNGs so the manifest can never drift from what was rendered.
+# Every entry is `universal` / `platform: ios` at 1024 — the single-size form. Xcode
+# derives the home-screen, Spotlight, Settings and notification sizes itself.
+def build_contents():
+    images = []
+    for fname, _, appearances in VARIANTS:
+        entry = {"filename": fname, "idiom": "universal", "platform": "ios", "size": "1024x1024"}
+        if appearances is not None:
+            entry["appearances"] = [appearances]
+        images.append(entry)
+    return {"images": images, "info": {"author": "xcode", "version": 1}}
+
+
+def prune_legacy_pngs():
+    """Remove the per-size PNGs the old thirteen-slot manifest referenced.
+
+    Left in place they are unreferenced files inside the .appiconset, which Xcode
+    reports as unassigned children on every build.
+    """
+    keep = {fname for fname, _, _ in VARIANTS} | {"Contents.json"}
+    for name in sorted(os.listdir(OUTDIR)):
+        if name not in keep and name.endswith(".png"):
+            os.remove(os.path.join(OUTDIR, name))
+            print(f"  removed stale {name}")
+
+
 if __name__ == "__main__":
+    import json
+
     os.makedirs(OUTDIR, exist_ok=True)
-    for fname, sz in SIZES:
+    for fname, appearance, _ in VARIANTS:
         path = os.path.join(OUTDIR, fname)
-        print(f"  {fname} ({sz}×{sz})…", end=" ", flush=True)
-        write_png(path, generate(sz), sz, sz)
-        print("done")
+        print(f"  {fname} ({appearance})…", end=" ", flush=True)
+        write_png(path, generate(MASTER_SIZE, appearance), MASTER_SIZE, MASTER_SIZE)
+        print("ok")
+
+    prune_legacy_pngs()
+
+    with open(os.path.join(OUTDIR, "Contents.json"), "w") as f:
+        json.dump(build_contents(), f, indent=2)
+        f.write("\n")
+    print("  Contents.json")
     print("All icons generated.")

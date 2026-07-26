@@ -30,6 +30,10 @@ struct ActiveRunView: View {
     @State private var metricsAppeared = false
     @State private var selectedLocation: WorkoutLocation = .outdoor
 
+    /// Ties the top bar's pills together so `GlassEffectContainer` can morph one into
+    /// the next as they appear and disappear, rather than cross-fading them.
+    @Namespace private var topBarGlass
+
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var tracker: WorkoutTrackerService { container.workoutTrackerService }
@@ -274,18 +278,39 @@ struct ActiveRunView: View {
 
     // MARK: - Top bar
 
+    /// The top bar's pills are the one place in the app where several glass surfaces sit
+    /// side by side, so it is the one place `GlassEffectContainer` earns its keep — the
+    /// earlier pass left it out for exactly that reason, when the bar held at most two.
+    ///
+    /// Three of the four come and go mid-run (minimize and REC on start, the GPS pill on
+    /// the first fix), and inside a container with `glassEffectID`s they melt in and out
+    /// of the neighbouring glass instead of popping. `spacing` matches the `HStack`'s,
+    /// which is what tells the container how close is close enough to blend.
     private var topBar: some View {
+        GlassEffectContainer(spacing: 8) {
+            topBarContent
+        }
+        .padding(.horizontal, 22)
+        .padding(.top, AppSpacing.md)
+        .foregroundStyle(.white)
+        .adaptiveAnimation(AppAnimation.gentle, value: tracker.trackingState)
+    }
+
+    private var topBarContent: some View {
         HStack(spacing: 8) {
             minimizeButton
+                .glassEffectID("minimize", in: topBarGlass)
 
             // Indoor / outdoor toggle — only interactive before the workout starts
             locationToggle
+                .glassEffectID("location", in: topBarGlass)
 
             Spacer(minLength: 8)
 
             // Reception. `nil` indoors and until the first fix arrives.
             if let signal = tracker.gpsSignal {
                 gpsSignalPill(signal)
+                    .glassEffectID("gps", in: topBarGlass)
             }
 
             // The idle state used to show a "Lock" pill here. It was decorative — it
@@ -309,11 +334,9 @@ struct ActiveRunView: View {
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(tracker.trackingState == .paused ? "Run paused" : "Recording run")
+                .glassEffectID("rec", in: topBarGlass)
             }
         }
-        .padding(.horizontal, 22)
-        .padding(.top, AppSpacing.md)
-        .foregroundStyle(.white)
     }
 
     /// The way off this screen that isn't ending the run (U7).

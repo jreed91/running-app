@@ -40,6 +40,22 @@ final class RunActivityController: RunActivityPresenting {
     private var lastPush: Date?
     private var lastPushedPauseState: Bool?
 
+    // NOTE ON THE `nonisolated(unsafe)` LOCALS BELOW.
+    //
+    // `Activity` is not `Sendable`, and `update`/`end` are `nonisolated async`. Awaiting
+    // one from this main-actor class therefore reads as sending a non-Sendable value out
+    // of the main actor's isolation region, and strict concurrency rejects it:
+    // "Sending 'activity' risks causing data races". `Activity` is an opaque handle to a
+    // system-owned activity rather than state this app mutates, so there is nothing here
+    // for two threads to race over — the `Sendable` annotation is missing from the SDK,
+    // not the thread safety.
+    //
+    // AGENTS.md restricts `nonisolated(unsafe)` to narrowly scoped static defaults, and
+    // these are the documented exception. What makes each one safe: the handle is only
+    // ever read or written on the main actor, the local is an immutable copy, and it is
+    // used for exactly one ActivityKit call and then dropped. Remove them if ActivityKit
+    // declares `Activity` as `Sendable`.
+
     // MARK: RunActivityPresenting
 
     func runDidStart(_ snapshot: RunActivitySnapshot) {
@@ -95,7 +111,8 @@ final class RunActivityController: RunActivityPresenting {
             state: RunActivityContent.state(from: snapshot, now: now),
             staleDate: RunActivityContent.staleDate(from: now)
         )
-        Task { await activity.update(content) }
+        nonisolated(unsafe) let pushing = activity
+        Task { await pushing.update(content) }
     }
 
     func runDidEnd(_ snapshot: RunActivitySnapshot) {
@@ -110,7 +127,8 @@ final class RunActivityController: RunActivityPresenting {
         // Dismissed immediately rather than left to linger: the run's summary is in the
         // app by now, and a Lock Screen card for a run that has stopped recording is a lie
         // about the state of the app.
-        Task { await activity.end(content, dismissalPolicy: .immediate) }
+        nonisolated(unsafe) let ending = activity
+        Task { await ending.end(content, dismissalPolicy: .immediate) }
     }
 
     // MARK: Recovery
@@ -128,7 +146,8 @@ final class RunActivityController: RunActivityPresenting {
                 "Ending a run Live Activity left over from a previous launch (\(orphan.id))",
                 label: "RunActivity"
             )
-            Task { await orphan.end(nil, dismissalPolicy: .immediate) }
+            nonisolated(unsafe) let ending = orphan
+            Task { await ending.end(nil, dismissalPolicy: .immediate) }
         }
     }
 }

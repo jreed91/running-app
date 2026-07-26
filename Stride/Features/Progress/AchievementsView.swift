@@ -339,6 +339,10 @@ private struct ProgressRing: View {
                 Image(systemName: "checkmark")
                     .font(.dsTitle3.weight(.bold))
                     .foregroundStyle(Color.success)
+                    // Draws itself in the first time the ring closes, rather than
+                    // appearing fully formed with no acknowledgement that anything
+                    // was earned.
+                    .transition(.symbolEffect(.drawOn))
             } else {
                 Text("\(Int(fraction * 100))%")
                     .font(.captionStrong)
@@ -346,6 +350,10 @@ private struct ProgressRing: View {
                     .foregroundStyle(.secondary)
             }
         }
+        // The transition above only runs if the insertion is animated, and the ring's
+        // completion is a data change rather than a user gesture. Routed through
+        // `adaptiveAnimation` so Reduce Motion still gets a plain cross-fade.
+        .adaptiveAnimation(AppAnimation.bouncy, value: isComplete)
     }
 }
 

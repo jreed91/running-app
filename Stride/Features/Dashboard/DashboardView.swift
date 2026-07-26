@@ -326,7 +326,8 @@ struct DashboardView: View {
     ///
     /// One piece of state and one `.alert`, because two `.alert` modifiers on the same
     /// view do not reliably both present.
-    private struct RecoveryAlert {
+    private struct RecoveryAlert: Identifiable {
+        let id = UUID()
         let title: String
         let message: String
     }
@@ -399,16 +400,16 @@ struct DashboardView: View {
             .fullScreenCover(item: $strengthWorkout) { workout in
                 StrengthActiveView(scheduledWorkout: workout)
             }
+            // `alert(_:item:)` (iOS 27): presentation follows the optional directly, so
+            // the bridging `Binding` is gone and the message reads the item it was
+            // given rather than re-reading the state behind a `?? ""`.
             .alert(
                 recoveryAlert?.title ?? "",
-                isPresented: Binding(
-                    get: { recoveryAlert != nil },
-                    set: { if !$0 { recoveryAlert = nil } }
-                )
-            ) {
-                Button("OK", role: .cancel) { recoveryAlert = nil }
-            } message: {
-                Text(recoveryAlert?.message ?? "")
+                item: $recoveryAlert
+            ) { _ in
+                Button("OK", role: .cancel) {}
+            } message: { alert in
+                Text(alert.message)
             }
         }
     }

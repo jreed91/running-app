@@ -8,7 +8,7 @@ import Foundation
 /// delivered: no check on `horizontalAccuracy` (negative means the reading is
 /// invalid), no staleness check on `timestamp` (the manager hands over a cached
 /// fix the moment updates start), and no sanity cap on the implied speed. Under
-/// trees, between buildings, or in the seconds after `startUpdatingLocation()`
+/// trees, between buildings, or in the seconds after location updates start
 /// while the fix converges, that jitter was recorded as real distance and drawn
 /// into the route. The auto-pause guard only suppressed *slow* movement, so a
 /// 40 m accuracy spike read as fast movement and was kept.
@@ -61,7 +61,7 @@ enum LocationQualityFilter {
 
     /// Fixes older than this are cached or badly delayed. Deliberately forgiving —
     /// a live fix that took a moment to reach the main actor must never be dropped,
-    /// while the cached fix Core Location replays on `startUpdatingLocation()` is
+    /// while the cached fix Core Location replays when updates start is
     /// typically minutes old.
     static let maximumFixAgeSeconds: TimeInterval = 15
 

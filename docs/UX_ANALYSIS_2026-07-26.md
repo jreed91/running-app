@@ -22,7 +22,7 @@ ratios are computed from `Stride/Resources/Assets.xcassets`, not eyeballed.
 | Dynamic Type | 🟢 Fixed | ✅ 262 sites on `ds*`, `@ScaledMetric` on badges, 2 grids clamped |
 | Colour contrast | 🟢 Fixed | ✅ CTAs, HUD, dark-mode zone collisions, high-contrast variants |
 | Haptics and audio | 🟢 Fixed | ✅ `sensoryFeedback` on run, guided steps, splits, strength sets; ✅ spoken splits |
-| iOS 26/27 API adoption | 🟢 Fixed | ✅ `Tab` builder, native `Color.mix`, real `glassEffect`, `tabViewBottomAccessory` + `tabBarMinimizeBehavior`, Live Activity / Dynamic Island |
+| iOS 26/27 API adoption | 🟢 Fixed | ✅ `Tab` builder, native `Color.mix`, real `glassEffect`, `tabViewBottomAccessory` + `tabBarMinimizeBehavior`, Live Activity / Dynamic Island, `GlassEffectContainer`, `symbolEffect`, `alert(_:item:)`, live-updates Core Location, icon appearances, Swift 6.2 |
 | Destructive-action safety | 🟢 Fixed | ✅ Both swipe paths confirm; delete failures surface |
 | History discoverability | 🟢 Fixed | ✅ Search, pull-to-refresh, first-sync loading state, date/distance filter |
 | Onboarding length | 🟢 Fixed | ✅ 8 steps, not 9 — units follow the locale and moved onto "About you" |
@@ -40,7 +40,11 @@ into `tabViewBottomAccessory`, so a run no longer has to be *ended* to leave its
 (§7, Tier 4 #12). **Pass 6** took the last three: the Live Activity (§5b, a new
 `StrideWidgets` extension target), the `GeometryReader` retirements (§7) and the spacing
 scale (§1) — the two of those the audit asked to be settled per site rather than swept,
-which is how they were settled.
+which is how they were settled. **Pass 7** was an iOS 26/27 API sweep on top of all of
+it: `GlassEffectContainer`, `symbolEffect`, iOS 27's `alert(_:item:)`, the Core Location
+live-updates migration, dark/tinted app-icon appearances, and Swift 6.2 build settings
+(§7). It also fixed the ActivityKit strict-concurrency break in
+`RunActivityController` that pass 6 shipped.
 
 **Nothing in this document is open.** Two items were closed by *decision* rather than by
 code, and both say so where they live: seven of the twelve `GeometryReader`s stay, because
@@ -527,17 +531,50 @@ those `try?`s are gone with the above; the pattern is otherwise untouched.
 | API | Uses | | API | Uses |
 | --- | --- | --- | --- | --- |
 | `glassEffect` | 0 → ✅ | | `tabViewBottomAccessory` | 0 → ✅ |
-| `GlassEffectContainer` | 0 | | `tabBarMinimizeBehavior` | 0 → ✅ |
+| `GlassEffectContainer` | 0 → ✅ | | `tabBarMinimizeBehavior` | 0 → ✅ |
 | `buttonStyle(.glass)` | 0 | | `scrollEdgeEffectStyle` | 0 |
 | `ToolbarSpacer` | 0 | | `backgroundExtensionEffect` | 0 |
-| `symbolEffect` | 0 | | `onGeometryChange` | 0 |
-| `scrollPosition` | 0 | | `containerRelativeFrame` | 0 |
-| `visualEffect` | 0 | | `presentationSizing` | 0 |
+| `symbolEffect` | 0 → ✅ | | `onGeometryChange` | 0 |
+| `scrollPosition` | 0 | | `containerRelativeFrame` | 0 → ✅ |
+| `visualEffect` | 0 → ✅ | | `presentationSizing` | 0 |
 
 🟠 **PARTIALLY FIXED** — `MainTabView.swift` now uses the `Tab` builder, the
 hand-rolled `Color.mix` is gone in favour of the native perceptual one, the simulated
 glass is now real (pass 3), and the active run minimises into `tabViewBottomAccessory`
-(pass 5). The Live Activity and the `GeometryReader` retirements are still open.
+(pass 5). Pass 6 took the Live Activity and the `GeometryReader` retirements.
+
+**Pass 7** swept the API this target pays for but had not taken up:
+
+| API | Where |
+| --- | --- |
+| `GlassEffectContainer` + `glassEffectID` | `ActiveRunView.swift` — the top bar's four pills, which now morph rather than pop. Pass 3 left this out for the right reason: the bar held two pills then. Pass 5's minimize control is what made it a cluster. |
+| `symbolEffect` | AI coach (`.variableColor` while generating), strength completion (`.bounce`), achievement ring (`.drawOn` transition), run accessory (`.pulse`) |
+| `alert(_:item:)` (iOS 27) | `StrideApp.swift`, `DashboardView.swift` — two hand-rolled `Binding(get:set:)` bridges deleted |
+| `CLLocationUpdate.liveUpdates(.fitness)` + `CLBackgroundActivitySession` | `WorkoutTrackerService.swift` — the `CLLocationManagerDelegate` conformance and the `NSObject` base are gone |
+| App-icon appearances | `AppIcon.appiconset` — dark and tinted variants, single-size 1024 manifest |
+| Swift 6.2 | `project.yml` — `SWIFT_VERSION: 6.2` + `SWIFT_APPROACHABLE_CONCURRENCY` |
+
+One thing to know about the Core Location move: the live-updates API has no
+`distanceFilter`, so the old 5 m floor is reimplemented as `minimumFixSeparationMeters`
+in `processLocation`. Without it a phone sitting still accrues distance out of GPS
+jitter, and `LocationQualityFilter` does not catch that — jitter is neither inaccurate,
+stale, nor impossibly far.
+
+Deliberately still open after pass 7:
+
+- **`reorderable()` / `reorderContainer(for:)` (iOS 27).** The best iOS 27 fit for this
+  app — dragging workouts around a training week — and not attempted. `ReorderDifference`'s
+  members were not verifiable from the documentation available, and workouts are anchored
+  to `scheduledDate` rather than to an array index, so "move item 3 above item 1" has to
+  become a date rewrite. Product decision plus an unconfirmed API.
+- **Toolbar `visibilityPriority` / `ToolbarOverflowMenu` (iOS 27).** No toolbar in the app
+  carries enough items to overflow.
+- **`SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor`.** The other half of the Swift 6.2 story.
+  It isolates every unannotated type to the main actor, including the 100-plus `Sendable`
+  value types in `Core/Models`, where that fights the conformance. A migration with a
+  compiler in the loop, not a build-setting flip.
+- **`AlarmKit`, `ControlWidget`, `buttonStyle(.glass)`, `ToolbarSpacer`.** New surfaces or
+  design-language changes rather than modernizations of what is there.
 
 On the accessory: this was filed as a Tier 4 *feature*, and turned out to also close a
 plain bug. The HUD was a `fullScreenCover` with **no close control at all** — Finish and
