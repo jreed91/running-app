@@ -33,7 +33,7 @@ extension RunSummaryView {
                     Text("This is your first tempo run — keep it up to track pace trends.")
                         .font(.dsCaption)
                         .foregroundStyle(.secondary)
-                        .padding(.horizontal, 4)
+                        .padding(.horizontal, AppSpacing.xs)
                 }
             }
         }
@@ -100,8 +100,8 @@ extension RunSummaryView {
             Text(label).font(.dsCaption2.weight(.bold))
         }
         .foregroundStyle(color)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
+        .padding(.horizontal, AppSpacing.sm)
+        .padding(.vertical, AppSpacing.xs)
         .background(color.opacity(0.1), in: Capsule())
     }
 

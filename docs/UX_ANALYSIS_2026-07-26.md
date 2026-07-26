@@ -18,11 +18,11 @@ ratios are computed from `Stride/Resources/Assets.xcassets`, not eyeballed.
 | VoiceOver labelling | 🟢 Strong | N18/D8 work paid off; charts, metric cells, day cells all speak well |
 | Error recovery in the run flow | 🟢 Strong | Save-retry, discard, race-clamp notices are genuinely well designed |
 | Information architecture | 🟢 Good | Tab split is sensible; empty states are specific, not generic |
-| Design-system adoption | 🟠 Partial | ✅ Type, radius and elevation/glow adopted and guarded; spacing still raw |
+| Design-system adoption | 🟢 Fixed | ✅ Type, radius and elevation/glow adopted and guarded; spacing adopted for exact matches |
 | Dynamic Type | 🟢 Fixed | ✅ 262 sites on `ds*`, `@ScaledMetric` on badges, 2 grids clamped |
 | Colour contrast | 🟢 Fixed | ✅ CTAs, HUD, dark-mode zone collisions, high-contrast variants |
 | Haptics and audio | 🟢 Fixed | ✅ `sensoryFeedback` on run, guided steps, splits, strength sets; ✅ spoken splits |
-| iOS 26/27 API adoption | 🟠 Partial | ✅ `Tab` builder, native `Color.mix`, real `glassEffect`, `tabViewBottomAccessory` + `tabBarMinimizeBehavior`; Live Activity still absent |
+| iOS 26/27 API adoption | 🟢 Fixed | ✅ `Tab` builder, native `Color.mix`, real `glassEffect`, `tabViewBottomAccessory` + `tabBarMinimizeBehavior`, Live Activity / Dynamic Island |
 | Destructive-action safety | 🟢 Fixed | ✅ Both swipe paths confirm; delete failures surface |
 | History discoverability | 🟢 Fixed | ✅ Search, pull-to-refresh, first-sync loading state, date/distance filter |
 | Onboarding length | 🟢 Fixed | ✅ 8 steps, not 9 — units follow the locale and moved onto "About you" |
@@ -37,10 +37,21 @@ date/distance filter (§8), and the whole of the §10 remainder — the onboardi
 merge, Audio Graph descriptors, and press feedback on the two primary CTAs. **Pass 5**
 took the tab-bar restructure: the run HUD is presented by `MainTabView` and minimises
 into `tabViewBottomAccessory`, so a run no longer has to be *ended* to leave its screen
-(§7, Tier 4 #12).
+(§7, Tier 4 #12). **Pass 6** took the last three: the Live Activity (§5b, a new
+`StrideWidgets` extension target), the `GeometryReader` retirements (§7) and the spacing
+scale (§1) — the two of those the audit asked to be settled per site rather than swept,
+which is how they were settled.
 
-Still open: the `GeometryReader` retirements in §7, the spacing scale in §1, and the
-Live Activity (§5b) — the one item here that needs a new widget extension target.
+**Nothing in this document is open.** Two items were closed by *decision* rather than by
+code, and both say so where they live: seven of the twelve `GeometryReader`s stay, because
+`visualEffect` and `onGeometryChange` can move a view and not size one; and the spacing
+scale is adopted only where a literal already equalled a token, because snapping the rest
+is a density redesign that needs a device. Anything future work should not assume is called
+out at the site rather than left implied.
+
+The blocked items in [`APP_ANALYSIS_2026-07-24.md`](APP_ANALYSIS_2026-07-24.md) are
+untouched and still blocked: the CI toolchain pins need a run that reaches the test job,
+and `.externalStorage` needs a migration exercised on hardware.
 
 ---
 
@@ -54,7 +65,7 @@ sites outside their own file**:
 | Type (`ds*`) | `AppFonts.swift:59-83` | **0** | 262 ✅ |
 | Elevation (`appShadow` / `AppElevation`) | `AppElevation.swift` | **0** | 5 + 19 on the new `AppGlow` ✅ |
 | Radius (`AppRadius`) | `AppRadius.swift` | 4 | 212 ✅ |
-| Spacing (`AppSpacing`) | `AppSpacing.swift` | 18 | 18 — still open |
+| Spacing (`AppSpacing`) | `AppSpacing.swift` | 18 | 228 ✅ (exact matches; see below) |
 | Animation (`AppAnimation`) | `AppAnimations.swift` | widely used ✅ | ✅ |
 
 What the app uses instead:
@@ -75,9 +86,26 @@ explaining why `ds`-prefixed tokens exist; the SwiftLint `custom_rules` entry
 call sites onto the new tokens.
 
 ✅ **FIXED** for the three dead scales — type, radius and elevation are all adopted
-and guarded. Spacing is the one left: `AppSpacing` still has 18 uses against 353
-numeric `.padding()` literals. It is deliberately last, because padding carries far
-more per-site intent than a corner radius does and a blanket snap would be a redesign.
+and guarded.
+
+**Spacing** ✅ **closed in pass 6, on different terms from the others.** The radius
+migration snapped all 208 literals to their nearest token; spacing is deliberately *not*
+migrated that way, because a corner radius moving 2pt is decorative while a padding moving
+2pt is a density change on every card in the app at once — and that judgement cannot be
+made without looking at the result.
+
+So the rule is **exact matches only**: every literal that already *was* a token value now
+names the token — 207 sites across 33 files, a provably zero-pixel change — and the 146
+that sit off the 4pt grid stay as literals. Two values account for 56 of those on their
+own (14 × 41, 18 × 15), and deciding whether each is a 12, a 16, or a deliberate one-off
+is a design pass with a device in hand.
+
+Two things follow, and both are written into `AppSpacing.swift` so the next reader does
+not have to rediscover them: re-pointing a token now moves the sites that name it and
+leaves the equal-valued literals behind, and there is **no SwiftLint rule** guarding this
+scale — unlike `no_fixed_font_size` and `no_raw_corner_radius` — because a raw padding is
+still a legitimate thing to write. That asymmetry is the honest state of the scale, not an
+oversight.
 
 **Radius.** The design call this was waiting on: *adopt the scale as it stands rather
 than redesign it around the literals.* Re-pointing the tokens at the two most common
@@ -379,11 +407,45 @@ occurrences**; `project.yml` declares no widget extension. On an iOS 27 target,
 a run in progress with no Lock Screen or Dynamic Island presence means checking
 pace requires a full unlock. This is the highest-value *feature* gap the review
 found, and the tracker already publishes everything the activity would need.
-**Still open**, and now the only item that needs a new build target. Pass 5 closed the
-in-app half of the same problem — a minimised run is visible and controllable from the
-tab-bar accessory on every screen (§7) — which leaves the Lock Screen, the Dynamic
-Island, and the two run signals that are still modifiers on the HUD rather than
-properties of the run: the per-split haptic and the spoken split announcement.
+
+✅ **FIXED in pass 6.** `StrideWidgets` is a new `app-extension` target in `project.yml`
+— an `ActivityConfiguration` can only be declared by an extension, which is why this was
+the one item here that needed a build target rather than a file. It shows the run on the
+Lock Screen and in the Dynamic Island (compact, expanded and minimal), and the design
+decisions worth knowing are these:
+
+- **The elapsed clock is not pushed.** Every presentation renders
+  `Text(timerInterval:pauseTime:countsDown:)`, so the *system* counts the seconds and the
+  app sends nothing for them. Pausing is one push that sets `pauseTime`, not a stream. The
+  interval is derived backwards from the tracker's elapsed time, which is what lets an
+  activity started or refreshed mid-run still show the right number
+  (`RunActivityContentTests`).
+- **Distance and pace are pushed as preformatted strings**, every 5 seconds, with pause and
+  resume jumping the queue. The app owns unit preference and every formatter in this repo,
+  so shipping "5.4 km" rather than `5400` keeps the widget from needing either — and keeps
+  the Lock Screen agreeing with the HUD by construction rather than by two implementations
+  rounding the same way.
+- **It is driven by the tracker, not by a view.** The case a Live Activity exists for is a
+  locked phone, and SwiftUI does not update a backgrounded view; `WorkoutTrackerService`'s
+  one-second timer is the only pulse in the app that keeps running there. The tracker's
+  dependency is on three verbs (`RunActivityPresenting`), not on ActivityKit.
+- **Tapping the card lands on the run**, via `stride://active-run` and the URL scheme this
+  added — which matters more since §7, because the run may be minimised behind any tab.
+- **An app killed mid-run** leaves a card with nothing behind it to update or end, so
+  `endActivitiesFromPreviousLaunches()` takes it down on the next launch rather than
+  letting it go stale on screen.
+
+The same pass closed what pass 5 left behind: the per-split haptic and the spoken
+announcement were modifiers on the HUD, so they stopped when a run was minimised. They are
+now one `RunSplitFeedback` modifier applied by both the HUD and `MainTabView` with
+`isActive` making the two mutually exclusive — so a split is felt and heard exactly once,
+whichever of the two is on screen. Deliberately *not* applied once high up: whether
+`sensoryFeedback` fires for a view underneath a `fullScreenCover` is undocumented, and
+finding out by losing the HUD's split haptic would be a regression in a shipped feature.
+
+**Not covered, and worth stating:** `.frequentUpdates`, push-token updates (this is a local
+activity only), and any interactive `Button`/`Toggle` in the card via App Intents. Pause and
+resume are still tap-through-to-the-app.
 
 **5c. GPS quality is computed and thrown away.** `LocationQualityFilter` grades
 every fix and `WorkoutTrackerService.swift:68` counts discards by reason — but
@@ -538,12 +600,28 @@ takes none of the benefit. Specifics worth acting on:
   API but a missing exit.
 - **12 `GeometryReader`s** remain where `onGeometryChange`, `visualEffect` or
   `containerRelativeFrame` now apply. `GeometryReader` forces greedy sizing and
-  is the usual cause of surprising layout in `ScrollView`s. Still open, and worth
-  doing per-site rather than in a sweep: nine of the twelve read a width to size a
-  progress bar, and the two obvious replacements each have a catch —
-  `containerRelativeFrame` measures the nearest scroll view or window rather than
-  the padded card the bar sits in, and `onGeometryChange` delivers the width *after*
-  layout, so a static bar would render at zero on its first frame.
+  is the usual cause of surprising layout in `ScrollView`s.
+
+  ✅ **Closed in pass 6, per site rather than in a sweep** — which is what this entry
+  asked for, and the answer turned out to be five retired and seven kept for reasons now
+  recorded at each call site:
+
+  | Site | Outcome |
+  | --- | --- |
+  | `OBWelcome` / `OBWelcomeBack` backgrounds | ✅ `EllipticalGradient` — its radii are fractions of the frame, so a glow sized `max(w, h) * 0.85` needs no measurement at all |
+  | Onboarding step-chrome bar, "ready" chrome bar | ✅ `ProgressView(value:total:)` — both were the platform's own 4pt determinate track drawn by hand; `.accessibilityHidden(true)` because the "3/8" counter beside them says it |
+  | `WeeklyLoadBar` (Dashboard) | ✅ full height, `scaleEffect(y:anchor: .bottom)`. The only casualty is a `micro` corner radius squashing with the bar — a fraction of a point |
+  | HR-zone stacked bar (`RunSummaryView`) | Kept — five segments each need a measured *width*, and none of the three replacements sets a frame |
+  | Run HUD zone gradient | Kept — `EllipticalGradient` would retire it, but it would move where the three stops land, and *that* is what the contrast audit measured (§3b). A re-tune, not a refactor |
+  | Pace meter (Run HUD) | Kept — the marker's offset could move to `visualEffect`; the target band needs a width, so converting half would split one piece of geometry across two idioms |
+  | Guided-workout progress bar | Kept — an 8pt capsule with a 6pt minimum fill on a zone gradient. `ProgressView` fits the onboarding bars because they already *were* a 4pt track; here it would redesign the run HUD |
+  | Plan phase-progress bar | Kept — same shape as the pace meter: tick offsets could move, the fill's width cannot |
+  | `ConfettiBurstView`, `StaticConfettiView` | Kept — each particle is positioned at a fraction of the *container*, and `visualEffect`'s proxy is the 5pt particle's own geometry |
+
+  The through-line: `visualEffect` and `onGeometryChange` can move a view, not size one, so
+  every bar that needs a measured width keeps its reader. All seven are wrapped in an
+  explicit `.frame(height:)`, which is what makes the greedy-sizing objection theoretical at
+  these particular sites — none of them is the layout bug this entry warns about.
 - **`Color.mix` is reimplemented.** `ActiveRunView.swift:712-728` hand-rolls
   colour mixing through `UIColor`, dropping alpha and blending naively in sRGB.
   `Color.mix(with:by:in:)` has been native since iOS 18 and blends correctly.
@@ -708,20 +786,22 @@ than fetching everything and filtering in `filteredWorkouts` (`:60`).
 9b. ✅ The radius and elevation scales adopted and guarded, `AppGlow` added (§1);
    GPS quality surfaced (§5c); Differentiate Without Color handled (§3d)
 
-**Tier 4 — features the platform now expects** — 🟠 two of three done
-10. Live Activity / Dynamic Island for an in-progress run (§5b) — still open, and the
-    last of the three: it needs a widget extension target in `project.yml`, which no
-    other item here has required. It also owns the remainder pass 5 left — the split
-    haptic and spoken split still live on the HUD, so they pause while a run is minimised
+**Tier 4 — features the platform now expects** — ✅ **DONE**
+10. ✅ Live Activity / Dynamic Island for an in-progress run (§5b) — `StrideWidgets`, a new
+    `app-extension` target; the elapsed clock is counted by the system rather than pushed,
+    and the tracker drives it because a locked phone is the case it exists for. It also
+    closed pass 5's remainder: the split haptic and spoken split are `RunSplitFeedback`
+    now, shared by the HUD and `MainTabView`, so they follow the run rather than the screen
 11. ✅ Spoken split announcements (§4) — `SplitAnnouncement` + `RunVoiceCoach`, opt-in
 12. ✅ `tabViewBottomAccessory` for the active run (§7) — the HUD is presented by
     `MainTabView` and minimises into the accessory, which also gave the screen the close
     control it never had. `ActiveRunPresentation` + `ActiveRunAccessory`,
     `MinimizedRunSummary`, `tabBarMinimizeBehavior(.onScrollDown)`
 
-**Left over, smaller than a tier** — ✅ **DONE** except §7/§1
-13. The `GeometryReader` retirements (§7) and the spacing scale (§1) — both still open,
-    and both deliberately per-site rather than a sweep (see the notes there)
+**Left over, smaller than a tier** — ✅ **DONE**
+13. ✅ The `GeometryReader` retirements (§7) — five retired, seven kept with the reason
+    recorded at each call site — and the spacing scale (§1), adopted for exact token
+    matches only. Both per-site rather than a sweep, which is what the entries asked for
 14. ✅ History's distance/date-range filter (§8)
 15. ✅ Merging onboarding steps 3 and 4, `.accessibilityChartDescriptor` for Audio
     Graphs, and press feedback on the two primary CTAs (§10)

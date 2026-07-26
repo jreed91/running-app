@@ -324,7 +324,7 @@ private struct SmartAdaptPlanCard: View {
 
                     StrideIcon(name: .chevronRight, size: 12, color: .brand, strokeWeight: 2.4)
                 }
-                .padding(16)
+                .padding(AppSpacing.lg)
                 .background(
                     RoundedRectangle(cornerRadius: AppRadius.lg)
                         .fill(Color.brand.opacity(0.08))
@@ -397,7 +397,7 @@ private struct SmartAdaptPlanCard: View {
                         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.sm))
                     }
                 }
-                .padding(.top, 4)
+                .padding(.top, AppSpacing.xs)
             }
         }
     }
@@ -448,7 +448,7 @@ private struct RouteGeniusCard: View {
 
                 StrideIcon(name: .chevronRight, size: 12, color: .brand, strokeWeight: 2.4)
             }
-            .padding(16)
+            .padding(AppSpacing.lg)
             .background(
                 RoundedRectangle(cornerRadius: AppRadius.lg)
                     .fill(
@@ -604,6 +604,10 @@ private struct PhaseProgressBar: View {
 
     var body: some View {
         VStack(spacing: 6) {
+            // `GeometryReader` stays here deliberately (U7). The phase ticks are offsets and
+            // could move to `visualEffect`, but the fill needs a measured width, so the reader
+            // would remain either way — and the ticks have to be positioned in the same
+            // coordinate space as the fill they mark.
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     Capsule()
@@ -881,14 +885,14 @@ private struct PlanWeekSummaryRow: View {
                                 Text("CURRENT")
                                     .font(.caption)
                                     .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
+                                    .padding(.vertical, AppSpacing.xxs)
                                     .background(.brand.opacity(0.15), in: Capsule())
                                     .foregroundStyle(.brand)
                             } else if week.isCompleted {
                                 Text("DONE")
                                     .font(.caption)
                                     .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
+                                    .padding(.vertical, AppSpacing.xxs)
                                     .background(.success.opacity(0.15), in: Capsule())
                                     .foregroundStyle(.success)
                             }
@@ -983,7 +987,7 @@ private struct PlanWorkoutSummaryRow: View {
                 StrideIcon(name: workout.workoutType.strideIcon, size: 15,
                            color: workout.workoutType.color, strokeWeight: 1.8)
             }
-            .padding(.leading, 4)
+            .padding(.leading, AppSpacing.xs)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(workout.workoutType.localizedName)
@@ -1010,7 +1014,7 @@ private struct PlanWorkoutSummaryRow: View {
                 }
             }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, AppSpacing.sm)
         .padding(.trailing)
     }
 

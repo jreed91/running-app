@@ -14,7 +14,7 @@ extension RunSummaryView {
                 .foregroundStyle(.secondary)
             Spacer()
         }
-        .padding(.horizontal, 4)
+        .padding(.horizontal, AppSpacing.xs)
         .padding(.top, 10)
     }
 
@@ -26,7 +26,7 @@ extension RunSummaryView {
                 .font(.dsCaption2.weight(.bold))
                 .foregroundStyle(active ? Color.brand : Color.secondary)
                 .padding(.horizontal, 10)
-                .padding(.vertical, 4)
+                .padding(.vertical, AppSpacing.xs)
                 .background(
                     active ? Color.brand.opacity(0.12) : Color.clear,
                     in: RoundedRectangle(cornerRadius: AppRadius.xs)

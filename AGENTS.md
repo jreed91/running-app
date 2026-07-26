@@ -39,6 +39,12 @@ GPS, HealthKit, WeatherKit, CloudKit, and background delivery behavior require d
 
 The Xcode project is generated from `project.yml` using XcodeGen. Edit `project.yml` to add targets, files, capabilities, packages, or build settings. Do not hand-edit the generated `.xcodeproj`.
 
+- Targets: `Stride` (app), `StrideWidgets` (widget extension — the run's Live Activity),
+  `StrideTests`, `StrideUITests`. The app embeds the extension via a target dependency.
+- `StrideWidgets` compiles `Stride/Core/Models/RunActivityAttributes.swift` and
+  `Stride/Resources/Assets.xcassets` from the app's tree: ActivityKit matches the two sides
+  on the attributes *type*, and a widget bundle cannot read the app's asset catalog. Keep
+  that file free of app-only dependencies or the extension stops building.
 - iOS deployment target: 27.0
 - Xcode version in config: 27.0
 - Swift: 6.0 with `SWIFT_STRICT_CONCURRENCY: complete`
@@ -81,6 +87,7 @@ Business logic belongs in services or repositories, not directly in SwiftUI view
 | `Stride/Core/Services/` | Plan generation, pace math, workout tracking/sync, notifications, analytics, routes, weather, AI coach, migration, logging |
 | `Stride/Features/` | SwiftUI feature modules: Dashboard, Training, ActiveRun, ActiveStrength, History, Progress, Settings, Onboarding, AppIntents |
 | `Stride/Shared/` | Reusable components, extensions, icons, theme primitives |
+| `StrideWidgets/` | Widget extension target — today just the run's Live Activity (Lock Screen + Dynamic Island) |
 | `StrideTests/` | Unit tests using Swift Testing (`@Test`, `#expect`) |
 | `StrideUITests/` | UI tests using XCTest and `XCUIApplication` |
 | `ci_scripts/` | Xcode Cloud helper scripts |
@@ -195,7 +202,7 @@ issue is usually already written up, with a recommended fix:
 
 | Doc | Covers |
 | --- | --- |
-| [`docs/UX_ANALYSIS_2026-07-26.md`](docs/UX_ANALYSIS_2026-07-26.md) | UX and SwiftUI platform conformance (third pass): design-token adoption, Dynamic Type, contrast, haptics, iOS 26+ API. Systemic gaps rather than per-screen bugs. |
+| [`docs/UX_ANALYSIS_2026-07-26.md`](docs/UX_ANALYSIS_2026-07-26.md) | UX and SwiftUI platform conformance (third pass): design-token adoption, Dynamic Type, contrast, haptics, iOS 26+ API. Systemic gaps rather than per-screen bugs. **All items closed** — two of them by a documented decision rather than by code, so read those before reopening them. |
 | [`docs/APP_ANALYSIS_2026-07-24.md`](docs/APP_ANALYSIS_2026-07-24.md) | Current open bugs, UX issues, and cleanup (second pass). Start here. |
 | [`docs/APP_ANALYSIS_2026-07.md`](docs/APP_ANALYSIS_2026-07.md) | First-pass audit; all numbered bugs fixed. Its design (§5) and coverage (§8) sections are still live. |
 | [`docs/FEATURE_IMPROVEMENTS_2026-07.md`](docs/FEATURE_IMPROVEMENTS_2026-07.md) | Product/feature roadmap with shipped-status tracking. |

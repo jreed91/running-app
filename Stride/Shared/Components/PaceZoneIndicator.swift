@@ -88,7 +88,7 @@ struct PaceZoneIndicator: View {
                 .font(.sectionHeader)
                 .foregroundStyle(zone.color)
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, AppSpacing.xl)
         .padding(.vertical, 10)
         .background(zone.color.opacity(0.15), in: Capsule())
         .animation(.easeInOut(duration: 0.3), value: zone.rawValue)

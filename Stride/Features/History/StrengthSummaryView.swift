@@ -25,7 +25,7 @@ struct StrengthSummaryView: View {
                 }
                 sourceRow
             }
-            .padding(16)
+            .padding(AppSpacing.lg)
         }
         .navigationTitle("Strength Workout")
         .navigationBarTitleDisplayMode(.inline)
@@ -66,7 +66,7 @@ struct StrengthSummaryView: View {
                 }
             }
         }
-        .padding(16)
+        .padding(AppSpacing.lg)
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
@@ -125,7 +125,7 @@ struct StrengthSummaryView: View {
                         }
                     }
                 }
-                .padding(12)
+                .padding(AppSpacing.md)
                 .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
             }
         }
@@ -174,7 +174,7 @@ struct StrengthSummaryView: View {
         }
         .font(.caption)
         .foregroundStyle(.secondary)
-        .padding(12)
+        .padding(AppSpacing.md)
         .frame(maxWidth: .infinity)
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }

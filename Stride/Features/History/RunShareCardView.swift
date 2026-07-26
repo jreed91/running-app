@@ -41,12 +41,12 @@ struct RunShareCardView: View {
                 .padding(.top, 10)
             if !model.splitBars.isEmpty {
                 splitsStrip
-                    .padding(.top, 16)
+                    .padding(.top, AppSpacing.lg)
             }
             Spacer(minLength: 0)
             footer
         }
-        .padding(20)
+        .padding(AppSpacing.xl)
         .frame(width: Self.size.width, height: Self.size.height)
         .background(
             LinearGradient(colors: [backgroundTop, backgroundBottom], startPoint: .top, endPoint: .bottom)
@@ -168,7 +168,7 @@ struct RunShareCardView: View {
             .font(.system(size: 10, weight: .bold))
             .tracking(2)
             .foregroundStyle(secondaryText)
-            .padding(.top, 12)
+            .padding(.top, AppSpacing.md)
     }
 
     // MARK: Building blocks

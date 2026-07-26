@@ -70,7 +70,7 @@ extension RunSummaryView {
                 Spacer(minLength: 8)
                 StrideIcon(name: .chevronRight, size: 14, color: .brand, strokeWeight: 2.4)
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, AppSpacing.lg)
             .padding(.vertical, 14)
             .background(
                 LinearGradient(

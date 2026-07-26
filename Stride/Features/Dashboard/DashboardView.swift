@@ -43,8 +43,8 @@ struct WeekCalendarView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 12)
+        .padding(.horizontal, AppSpacing.lg)
+        .padding(.top, AppSpacing.md)
         .padding(.bottom, 6)
     }
 
@@ -79,7 +79,7 @@ struct WeekCalendarView: View {
                 weekStart = weekStart.adding(weeks: 1)
             }
         }
-        .padding(.bottom, 8)
+        .padding(.bottom, AppSpacing.sm)
         // Seven day columns plus two chevrons across the screen width — the other
         // layout that can't reflow, so it scales up to accessibility1 and stops (U2).
         .dynamicTypeSize(...DynamicTypeSize.accessibility1)
@@ -169,7 +169,7 @@ private struct DayCell: View {
             indicatorArea
                 .frame(height: 10)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, AppSpacing.xs)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityDescription)
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
@@ -258,22 +258,25 @@ private struct WeeklyLoadBar: View {
     let isActive: Bool       // today (no bar yet)
 
     var body: some View {
-        GeometryReader { geo in
-            VStack(spacing: 0) {
-                Spacer()
-                if isActive {
-                    RoundedRectangle(cornerRadius: AppRadius.micro)
-                        .fill(Color.brand)
-                        .frame(height: 3)
-                } else if fraction > 0 {
-                    RoundedRectangle(cornerRadius: AppRadius.micro)
-                        .fill(color.opacity(0.9))
-                        .frame(height: geo.size.height * fraction)
-                } else {
-                    RoundedRectangle(cornerRadius: AppRadius.micro)
-                        .fill(Color.secondary.opacity(0.2))
-                        .frame(height: 3)
-                }
+        VStack(spacing: 0) {
+            Spacer(minLength: 0)
+            if isActive {
+                RoundedRectangle(cornerRadius: AppRadius.micro)
+                    .fill(Color.brand)
+                    .frame(height: 3)
+            } else if fraction > 0 {
+                // Full height, scaled from the bottom, rather than a measured height: it
+                // retires the `GeometryReader` this view existed inside (U7) and draws the
+                // same bar. The only casualty is the corner radius, which squashes with the
+                // bar — at `micro` on a chart bar that is a fraction of a point.
+                RoundedRectangle(cornerRadius: AppRadius.micro)
+                    .fill(color.opacity(0.9))
+                    .frame(maxHeight: .infinity)
+                    .scaleEffect(y: fraction, anchor: .bottom)
+            } else {
+                RoundedRectangle(cornerRadius: AppRadius.micro)
+                    .fill(Color.secondary.opacity(0.2))
+                    .frame(height: 3)
             }
         }
     }
@@ -381,8 +384,8 @@ struct DashboardView: View {
                             .offset(y: dashboardAppeared ? 0 : 16)
                             .adaptiveAnimation(AppAnimation.entrance.delay(0.18), value: dashboardAppeared)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 16)
+                    .padding(.horizontal, AppSpacing.lg)
+                    .padding(.vertical, AppSpacing.lg)
                 }
                 .task { dashboardAppeared = true }
             }
@@ -444,7 +447,7 @@ struct DashboardView: View {
             // Weekly load mini bar chart
             weeklyLoadChart
         }
-        .padding(16)
+        .padding(AppSpacing.lg)
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
         .appShadow(.e1)
     }
@@ -529,7 +532,7 @@ struct DashboardView: View {
             }
         }
         .frame(height: 28)
-        .padding(.top, 4)
+        .padding(.top, AppSpacing.xs)
         // Seven bars with no label at all. `chartAccessibility` was built for exactly
         // this and is on all six Progress-tab charts — this one was missed (U10).
         // Days still to come are left out rather than spoken as zero.
@@ -562,7 +565,7 @@ struct DashboardView: View {
             Text(selectedDayLabel)
                 .font(.sectionHeader)
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, 4)
+                .padding(.horizontal, AppSpacing.xs)
                 .adaptiveAnimation(AppAnimation.bouncy, value: selectedDate)
 
             Group {
@@ -629,7 +632,7 @@ struct DashboardView: View {
                     .font(.dsHeadline.weight(.bold))
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
+            .padding(.vertical, AppSpacing.lg)
             // White on `Color.brand` is 2.84:1 — below even the 3.0 large-text bar,
             // on the app's most-tapped control (U3a).
             .foregroundStyle(.onFill)
@@ -738,7 +741,7 @@ struct DashboardView: View {
                     .font(.dsHeadline.weight(.bold))
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
+            .padding(.vertical, AppSpacing.lg)
             .foregroundStyle(.onFill)
             // Inside the label, not on the `Button`: `BouncyButtonStyle` scales
             // `configuration.label`, so a background applied outside it would stay put

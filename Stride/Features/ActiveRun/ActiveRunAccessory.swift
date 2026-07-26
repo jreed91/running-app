@@ -36,7 +36,7 @@ struct ActiveRunAccessory: View {
             pauseResumeButton
         }
         .padding(.leading, 14)
-        .padding(.trailing, 4)
+        .padding(.trailing, AppSpacing.xs)
         // The HUD's own pause/resume haptic goes with the HUD, and a run is minimised
         // precisely when the phone is in a pocket — the state change has to be felt.
         .sensoryFeedback(.selection, trigger: tracker.trackingState)

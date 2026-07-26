@@ -51,6 +51,10 @@ struct MainTabView: View {
         .fullScreenCover(isPresented: isRunPresented) {
             ActiveRunView()
         }
+        // A closed split has to be felt and heard whether or not the HUD is on screen, and
+        // while the run is minimised this view is the only one left to say so (U4/U7). The
+        // HUD carries the same modifier with `isActive: true`, so the two never both fire.
+        .runSplitFeedback(isActive: isRunMinimized)
         // The store-recovery alert (C3) is presented by `ContentView`, not here: a
         // recreated store has no profile, so the app shows onboarding and this view
         // never appears on exactly the launch the notice describes (N5).

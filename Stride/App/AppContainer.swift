@@ -145,6 +145,11 @@ final class AppContainer {
     /// now outlives the screen that shows it, so nothing about it can live in the view.
     let activeRunPresentation: ActiveRunPresentation
 
+    /// The run's Lock Screen and Dynamic Island presence (U5b). Wired into
+    /// `workoutTrackerService` below, which is the only pulse in the app that keeps running
+    /// while the phone is locked — the situation the activity exists for.
+    let runActivityController: RunActivityController
+
     // MARK: Workout Review
 
     /// Listens to `NotificationService.syncedRunTaps` for this container's lifetime. Not
@@ -297,7 +302,14 @@ final class AppContainer {
 
         let planService = TrainingPlanService()
         self.trainingPlanService = planService
-        self.workoutTrackerService = WorkoutTrackerService()
+        let tracker = WorkoutTrackerService()
+        self.workoutTrackerService = tracker
+        let activityController = RunActivityController()
+        self.runActivityController = activityController
+        // The tracker drives the Live Activity, so it is handed the presenter rather than
+        // reaching for it: three verbs (started, updated, ended) instead of a dependency on
+        // ActivityKit inside the service that records the run (U5b).
+        tracker.activityPresenter = activityController
         let notifications = NotificationService.shared
         self.notificationService = notifications
         self.workoutAnalyticsService = WorkoutAnalyticsService()

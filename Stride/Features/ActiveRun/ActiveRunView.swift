@@ -104,10 +104,10 @@ struct ActiveRunView: View {
                 }
             }
             .sensoryFeedback(.error, trigger: saveErrorMessage != nil) { _, isShowing in isShowing }
-            // Each completed kilometre/mile, so pace checks don't need a glance.
-            .sensoryFeedback(.impact(weight: .light), trigger: tracker.splits.count) { old, new in
-                new > old
-            }
+            // Each closed kilometre/mile, felt and (opt-in) spoken. Shared with
+            // `MainTabView`, which owns the same feedback while the run is minimised and
+            // this screen is gone — see `RunSplitFeedback`.
+            .runSplitFeedback(isActive: true)
             // A guided interval changing step is otherwise invisible unless the runner
             // happens to be looking at the banner at that moment.
             .sensoryFeedback(trigger: presentation.guided?.stepNumber) { (oldStep: Int?, newStep: Int?) -> SensoryFeedback? in
@@ -156,12 +156,6 @@ struct ActiveRunView: View {
             .onChange(of: tracker.trackingState, initial: true) { _, state in
                 UIApplication.shared.isIdleTimerDisabled = (state == .active || state == .paused)
             }
-            // Each closed kilometre/mile, spoken (U4). The light haptic beside this says
-            // *that* a split closed; only speech can say what it was, which is the whole
-            // reason a runner would look at the phone mid-stride.
-            .onChange(of: tracker.splits.count) { (oldCount: Int, newCount: Int) in
-                announceSplit(previousCount: oldCount, count: newCount)
-            }
             .onDisappear {
                 UIApplication.shared.isIdleTimerDisabled = false
                 // Finishing or discarding mid-sentence must not leave the runner's music
@@ -177,34 +171,6 @@ struct ActiveRunView: View {
             }
     }
 
-    /// Speaks the split that just closed, when the runner has asked for it.
-    ///
-    /// Off by default (`AppSettings.spokenSplitsEnabled`) — this is the one feature that
-    /// talks over whatever else is playing.
-    private func announceSplit(previousCount: Int, count: Int) {
-        guard appSettings.spokenSplitsEnabled,
-              count > previousCount,
-              let split = tracker.splits.last else { return }
-        container.runVoiceCoach.speak(
-            SplitAnnouncement.phrase(
-                splitNumber: split.kilometer,
-                paceSecondsPerKm: split.paceSecondsPerKm,
-                unit: appSettings.unitPreference,
-                targetPaceSecondsPerKm: spokenSplitTargetBand
-            )
-        )
-    }
-
-    /// The pace band a split is judged against, narrowest first: the guided step the
-    /// runner is actually in, then the scheduled workout's own target. A free run has
-    /// neither, and its splits are announced without a verdict.
-    private var spokenSplitTargetBand: ClosedRange<Double>? {
-        if let stepPace = guided?.currentStep.targetPaceSecondsPerKm, stepPace > 0 {
-            return stepPace...stepPace
-        }
-        return scheduledWorkout?.targetPaceRange
-    }
-
     private var hudLayers: some View {
         ZStack {
             // Full-bleed zone-color radial gradient backdrop
@@ -216,6 +182,12 @@ struct ActiveRunView: View {
             // is darkened enough that white clears 4.5:1 on the lightest zone
             // (ZoneTempo/ZoneEasy) while the zone stays unmistakably itself.
             // Fractions are tuned for the perceptual blend `mix` uses by default.
+            //
+            // `GeometryReader` stays here deliberately (U7). `EllipticalGradient` would
+            // retire it — as it did on the onboarding glow — but its radii are fractions of
+            // both axes, so the three stops would land somewhere else, and *where* they land
+            // is what the contrast audit measured (U3b). A geometry-free version of this
+            // gradient is a re-tune, not a refactor.
             GeometryReader { geo in
                 RadialGradient(
                     stops: [
@@ -262,7 +234,7 @@ struct ActiveRunView: View {
                         guided: unwrappedGuided,
                         unit: appSettings.unitPreference
                     )
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, AppSpacing.lg)
                     .padding(.top, 18)
                 }
                 metricsGrid
@@ -340,7 +312,7 @@ struct ActiveRunView: View {
             }
         }
         .padding(.horizontal, 22)
-        .padding(.top, 12)
+        .padding(.top, AppSpacing.md)
         .foregroundStyle(.white)
     }
 
@@ -516,6 +488,10 @@ struct ActiveRunView: View {
             .kerning(1.2)
             .foregroundStyle(.white.opacity(0.92))
 
+            // `GeometryReader` stays here deliberately (U7). The marker's offset alone could
+            // move to `visualEffect`, but the target band needs a measured *width* as well,
+            // so converting half of it would leave the reader in place and split one piece of
+            // geometry across two idioms.
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     // Track
@@ -588,9 +564,9 @@ struct ActiveRunView: View {
                 )
             }
         }
-        .padding(20)
+        .padding(AppSpacing.xl)
         .glassEffect(.regular, in: .rect(cornerRadius: AppRadius.xl))
-        .padding(.horizontal, 16)
+        .padding(.horizontal, AppSpacing.lg)
         .padding(.top, 26)
         // Three fixed-width columns above a hero that already fills the screen: this
         // grid is one of the two places in the app that genuinely cannot reflow, so
@@ -738,8 +714,8 @@ struct ActiveRunView: View {
             .accessibilityHint("Choose to save or discard this run")
             .accessibilityIdentifier("activeRun.finish")
         }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 40)
+        .padding(.horizontal, AppSpacing.lg)
+        .padding(.bottom, AppSpacing.huge)
         .opacity(controlsAppeared ? 1 : 0)
         .offset(y: controlsAppeared ? 0 : 30)
         .adaptiveAnimation(AppAnimation.entrance.delay(0.2), value: controlsAppeared)
@@ -788,7 +764,7 @@ struct ActiveRunView: View {
         HStack(spacing: 6) { content() }
             .font(.system(size: 12, weight: .semibold))
             .padding(.horizontal, 14)
-            .padding(.vertical, 8)
+            .padding(.vertical, AppSpacing.sm)
             .glassEffect(.regular, in: .capsule)
     }
 

@@ -178,7 +178,7 @@ struct ProgressDashboardView: View {
                 label: "VDOT"
             )
         }
-        .padding(16)
+        .padding(AppSpacing.lg)
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
@@ -224,7 +224,7 @@ struct ProgressDashboardView: View {
                 .buttonStyle(BouncyButtonStyle())
             }
         }
-        .padding(4)
+        .padding(AppSpacing.xs)
         .background(Color.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
@@ -253,7 +253,7 @@ struct ProgressDashboardView: View {
                 .buttonStyle(BouncyButtonStyle())
             }
         }
-        .padding(4)
+        .padding(AppSpacing.xs)
         .background(Color.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
         .padding(.horizontal, AppSpacing.lg)
         .padding(.top, AppSpacing.sm)
@@ -269,7 +269,7 @@ struct ProgressDashboardView: View {
                 .foregroundStyle(.secondary)
             content()
         }
-        .padding(16)
+        .padding(AppSpacing.lg)
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
@@ -561,7 +561,7 @@ struct ProgressDashboardView: View {
                             .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 24)
+                    .padding(.vertical, AppSpacing.xxl)
                 } else {
                     emptyDataPlaceholder("No heart-rate zone data in this period")
                 }
@@ -738,7 +738,7 @@ struct ProgressDashboardView: View {
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
-        .padding(12)
+        .padding(AppSpacing.md)
         .background(Color.surfaceTertiary, in: RoundedRectangle(cornerRadius: AppRadius.sm))
         // One element per cell, and a "--" placeholder is spoken as such rather than as
         // a pair of dashes (N18).
@@ -793,7 +793,7 @@ struct ProgressDashboardView: View {
 
     private func tooltipContainer<C: View>(@ViewBuilder content: () -> C) -> some View {
         content()
-            .padding(.horizontal, 8).padding(.vertical, 5)
+            .padding(.horizontal, AppSpacing.sm).padding(.vertical, 5)
             .background(Color.surfacePrimary, in: RoundedRectangle(cornerRadius: AppRadius.xs))
             .appShadow(.e2)
     }

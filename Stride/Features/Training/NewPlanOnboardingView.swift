@@ -313,7 +313,7 @@ struct NewPlanOnboardingView: View {
                 .padding(.vertical, 7)
                 .background(Color.brand.opacity(0.1), in: Capsule())
             }
-            .padding(20)
+            .padding(AppSpacing.xl)
             .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
 
             VStack(alignment: .leading, spacing: 10) {
@@ -400,7 +400,7 @@ struct NewPlanOnboardingView: View {
                         .onChange(of: startDate) { _, _ in recalibrateDates() }
                 }
             }
-            .padding(16)
+            .padding(AppSpacing.lg)
             .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
 
             HStack(spacing: 10) {
@@ -462,10 +462,10 @@ struct NewPlanOnboardingView: View {
                     Spacer()
                 }
                 .padding(.horizontal, 14)
-                .padding(.vertical, 12)
+                .padding(.vertical, AppSpacing.md)
                 .background(Color.brand.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.md))
             }
-            .padding(16)
+            .padding(AppSpacing.lg)
             .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
 
             if selectedDays.isEmpty {
