@@ -8,7 +8,7 @@ import HealthKit
 struct StrideApp: App {
 
     @UIApplicationDelegateAdaptor(StrideAppDelegate.self) private var appDelegate
-    @StateObject private var container: AppContainer
+    @State private var container: AppContainer
     @State private var appSettings: AppSettings
     @State private var authService: AuthService
 
@@ -18,7 +18,7 @@ struct StrideApp: App {
         // UI-test state from a later hook would be too late to matter.
         UITestingSupport.prepareIfNeeded()
 
-        _container = StateObject(wrappedValue: AppContainer(inMemory: UITestingSupport.isEnabled))
+        _container = State(initialValue: AppContainer(inMemory: UITestingSupport.isEnabled))
         _appSettings = State(initialValue: AppSettings())
         _authService = State(initialValue: AuthService())
     }
@@ -26,7 +26,7 @@ struct StrideApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .environment(\.appContainer, container)
+                .environment(container)
                 .environment(appSettings)
                 .environment(authService)
                 .modelContainer(container.modelContainer)
@@ -60,7 +60,9 @@ struct StrideApp: App {
 }
 
 private struct PendingReviewSheet: ViewModifier {
-    @ObservedObject var container: AppContainer
+    // `AppContainer` is `@Observable`, so reading `pendingReviewWorkout` in `body`
+    // is what subscribes this modifier to it — no property wrapper needed (D4).
+    let container: AppContainer
     let appSettings: AppSettings
     let authService: AuthService
 
@@ -70,7 +72,7 @@ private struct PendingReviewSheet: ViewModifier {
                 NavigationStack {
                     RunSummaryView(workout: workout)
                 }
-                .environment(\.appContainer, container)
+                .environment(container)
                 .environment(appSettings)
                 .environment(authService)
                 .modelContainer(container.modelContainer)
@@ -111,7 +113,7 @@ final class StrideAppDelegate: NSObject, UIApplicationDelegate {
 /// "Welcome Back / Checking iCloud" screen and the standard new-user flow.
 struct ContentView: View {
     @Environment(\.modelContext) private var context
-    @Environment(\.appContainer) private var container
+    @Environment(AppContainer.self) private var container
     @Environment(AuthService.self) private var authService
     @Environment(AppSettings.self) private var appSettings
 

@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 
 struct ActiveRunView: View {
-    @Environment(\.appContainer) private var container
+    @Environment(AppContainer.self) private var container
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @Environment(AppSettings.self) private var appSettings

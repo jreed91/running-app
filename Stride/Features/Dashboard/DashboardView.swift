@@ -282,7 +282,7 @@ struct DashboardView: View {
 
     @Environment(AppSettings.self) private var appSettings
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.appContainer) private var container
+    @Environment(AppContainer.self) private var container
     @Environment(\.modelContext) private var context
     @Query private var profiles: [UserProfile]
     @State private var showActiveRun = false

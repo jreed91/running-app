@@ -1,5 +1,6 @@
 import Foundation
 import CloudKit
+import Observation
 import CoreData
 import SwiftData
 
@@ -7,10 +8,18 @@ import SwiftData
 
 /// Central dependency-injection container.
 ///
-/// Initialised once at app launch and injected via SwiftUI's `Environment`.
+/// Initialised once at app launch and injected into SwiftUI's environment by type —
+/// `.environment(container)` at the root, `@Environment(AppContainer.self)` in a view —
+/// the same shape `AppSettings` and `AuthService` already use. It was `ObservableObject`
+/// behind a hand-written `EnvironmentKey` whose default had to *invent* a container for
+/// a view nobody injected into, which is a wiring bug wearing a fallback (D4). There is
+/// no default to get wrong now, and observation is per-property rather than per-object,
+/// so a view that reads nothing off the container no longer redraws when one changes.
+///
 /// Services are singletons within the container lifetime.
+@Observable
 @MainActor
-final class AppContainer: ObservableObject {
+final class AppContainer {
 
     enum PersistenceMode: Equatable {
         case cloudKit
@@ -85,7 +94,7 @@ final class AppContainer: ObservableObject {
     /// Set when the persistent store could not be opened normally, so the UI can tell
     /// the user what happened instead of silently running on a different store (C3).
     /// Cleared once acknowledged.
-    @Published var storeRecoveryNotice: StoreRecoveryNotice?
+    var storeRecoveryNotice: StoreRecoveryNotice?
 
     /// The iCloud-sync preference the store was actually opened with. Settings
     /// compares the live preference against this to decide whether a restart is
@@ -117,10 +126,15 @@ final class AppContainer: ObservableObject {
 
     // MARK: Workout Review
 
+    /// Listens to `NotificationService.syncedRunTaps` for this container's lifetime. Not
+    /// cancelled in `deinit` — `deinit` is nonisolated and this is main-actor state — but
+    /// the loop holds the container weakly and returns on the first tap after it is gone.
+    @ObservationIgnored private var syncedRunTapTask: Task<Void, Never>?
+
     /// Set when a workout is synced from HealthKit (background or foreground) or when the user
     /// taps a "Run Synced" notification. Presenting a RunSummaryView sheet on this value lets
     /// the user review their workout and confirms the auto-link to today's planned workout.
-    @Published var pendingReviewWorkout: RunWorkout?
+    var pendingReviewWorkout: RunWorkout?
 
     // MARK: Init
 
@@ -295,13 +309,15 @@ final class AppContainer: ObservableObject {
             self.pendingReviewWorkout = first
         }
 
-        // Wire notification-tap callback only for the real app container. The EnvironmentKey
-        // default creates an in-memory fallback container, and letting that container own this
-        // singleton callback means notification taps update a hidden container instead of the
-        // SwiftUI root container.
-        if !inMemory {
-            notifications.onSyncedRunTapped = { [weak self] idString in
-                self?.surfacePendingReviewWorkout(idString: idString)
+        // Notification taps arrive as a stream rather than a stored callback on the
+        // notification singleton, which whichever container was built last used to own
+        // (D4). `self` is re-checked on every element — the shape
+        // `AppSettings.observeExternalChanges` uses — so this task keeps no strong
+        // reference to the container between taps and falls out once it is gone.
+        syncedRunTapTask = Task { @MainActor [weak self] in
+            for await idString in notifications.syncedRunTaps {
+                guard let self else { return }
+                self.surfacePendingReviewWorkout(idString: idString)
             }
         }
     }
@@ -630,36 +646,4 @@ final class AppContainer: ObservableObject {
         return lines
     }
 
-}
-
-// MARK: - EnvironmentKey
-
-import SwiftUI
-
-private struct AppContainerKey: EnvironmentKey {
-    // Reached only when a view reads `@Environment(\.appContainer)` without an
-    // ancestor injecting one — a wiring bug. Under the old default such a view
-    // silently bound to a throwaway in-memory container and lost every write with
-    // no error or log. Trap in debug so the missing injection surfaces at once; in
-    // release, `assertionFailure` is a no-op and we hand back a fresh in-memory
-    // container so a shipping build degrades instead of crashing. Computing this at
-    // the access site (a `var`, not a `let`) keeps `assumeIsolated` on the main
-    // actor where SwiftUI evaluates environment reads, rather than trapping on a
-    // stray off-main first touch of a lazily-initialised `static let`.
-    static var defaultValue: AppContainer {
-        MainActor.assumeIsolated {
-            assertionFailure(
-                "appContainer was read without injection — add "
-                + ".environment(\\.appContainer, container) above this view"
-            )
-            return AppContainer(inMemory: true)
-        }
-    }
-}
-
-extension EnvironmentValues {
-    var appContainer: AppContainer {
-        get { self[AppContainerKey.self] }
-        set { self[AppContainerKey.self] = newValue }
-    }
 }

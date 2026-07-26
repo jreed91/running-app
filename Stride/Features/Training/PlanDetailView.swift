@@ -5,7 +5,7 @@ struct PlanDetailView: View {
     let plan: TrainingPlan
 
     @Environment(\.modelContext) private var context
-    @Environment(\.appContainer) private var container
+    @Environment(AppContainer.self) private var container
     @Environment(\.dismiss) private var dismiss
 
     @State private var showDeleteConfirmation = false

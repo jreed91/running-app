@@ -4,7 +4,7 @@ import SwiftData
 struct WorkoutDetailView: View {
     let workout: ScheduledWorkout
 
-    @Environment(\.appContainer) private var container
+    @Environment(AppContainer.self) private var container
     @Environment(\.modelContext) private var context
     @Environment(AppSettings.self) private var appSettings
     @Environment(\.accessibilityReduceMotion) private var reduceMotion

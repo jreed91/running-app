@@ -5,7 +5,7 @@ import SwiftData
 /// that predate the app's automatic 60-day sync window.
 struct HealthKitImportView: View {
     @Environment(\.modelContext) private var context
-    @Environment(\.appContainer) private var container
+    @Environment(AppContainer.self) private var container
     @Query private var existingWorkouts: [RunWorkout]
 
     @State private var startDate: Date = Calendar.current.date(

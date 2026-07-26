@@ -5,7 +5,7 @@ import SwiftData
 /// completion stats. Pushed from the Plan tab's history toolbar button.
 struct TrainingPlanListView: View {
     @Environment(\.modelContext) private var context
-    @Environment(\.appContainer) private var container
+    @Environment(AppContainer.self) private var container
 
     @Query(sort: \TrainingPlan.createdAt, order: .reverse)
     private var plans: [TrainingPlan]

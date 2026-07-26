@@ -3,7 +3,7 @@ import SwiftData
 
 struct PlanSetupView: View {
     @Environment(\.modelContext) private var context
-    @Environment(\.appContainer) private var container
+    @Environment(AppContainer.self) private var container
     @Environment(\.dismiss) private var dismiss
     @Environment(AppSettings.self) private var appSettings
 

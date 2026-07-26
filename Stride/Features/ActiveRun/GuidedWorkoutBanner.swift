@@ -3,13 +3,12 @@ import SwiftUI
 /// In-run banner that guides a runner through a structured workout's steps
 /// (warm-up → reps → recovery → cool-down).
 ///
-/// It observes the ``WorkoutTrackerService`` directly so it refreshes on every
-/// live distance/time tick — the environment `AppContainer` does not propagate
-/// the tracker's `@Published` changes on its own. All stepping logic lives in
-/// the pure ``GuidedWorkoutState`` (passed as a binding); this view only renders
-/// it and forwards auto/manual advances.
+/// It reads the ``WorkoutTrackerService`` directly so it refreshes on every live
+/// distance/time tick; the tracker is `@Observable`, so reading it in `body` is the
+/// subscription. All stepping logic lives in the pure ``GuidedWorkoutState`` (passed as
+/// a binding); this view only renders it and forwards auto/manual advances.
 struct GuidedWorkoutBanner: View {
-    @ObservedObject var tracker: WorkoutTrackerService
+    let tracker: WorkoutTrackerService
     @Binding var guided: GuidedWorkoutState
     let unit: UnitPreference
 

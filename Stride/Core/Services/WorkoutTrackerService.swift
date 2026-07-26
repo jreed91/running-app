@@ -1,7 +1,7 @@
 import Foundation
 import CoreLocation
 import CoreMotion
-import Combine
+import Observation
 import HealthKit
 
 // MARK: - Tracking state
@@ -22,33 +22,40 @@ enum TrackingState: Equatable, Sendable {
 ///  2. `startWorkout(type:)`
 ///  3. `pauseWorkout()` / `resumeWorkout()` as needed
 ///  4. `finishWorkout()` → returns the completed `RunWorkout`
+/// Observation note: the live values below are read straight out of `ActiveRunView.body`,
+/// and `@Observable` is what makes that a subscription. Reached through the container as
+/// an `ObservableObject` they were not: `@Environment` does not subscribe to one, so
+/// nothing invalidated the run HUD when a tick moved the clock — `GuidedWorkoutBanner`
+/// took an `@ObservedObject` of its own and refreshed, and the distance, duration, pace,
+/// heart-rate, cadence, and elevation cells around it did not (D4).
+@Observable
 @MainActor
-final class WorkoutTrackerService: NSObject, ObservableObject {
+final class WorkoutTrackerService: NSObject {
 
-    // MARK: Published state
+    // MARK: Live state
 
-    @Published private(set) var trackingState: TrackingState = .idle
-    @Published private(set) var workoutLocation: WorkoutLocation = .outdoor
-    @Published private(set) var elapsedSeconds: Double = 0
-    @Published private(set) var distanceMeters: Double = 0
-    @Published private(set) var currentPaceSecondsPerKm: Double = 0
-    @Published private(set) var currentHeartRate: Double?
-    @Published private(set) var coordinates: [Coordinate] = []
-    @Published private(set) var splits: [Split] = []
+    private(set) var trackingState: TrackingState = .idle
+    private(set) var workoutLocation: WorkoutLocation = .outdoor
+    private(set) var elapsedSeconds: Double = 0
+    private(set) var distanceMeters: Double = 0
+    private(set) var currentPaceSecondsPerKm: Double = 0
+    private(set) var currentHeartRate: Double?
+    private(set) var coordinates: [Coordinate] = []
+    private(set) var splits: [Split] = []
 
     /// Elevation gain accumulated across the whole run, in metres.
     ///
     /// Published because the live HUD showed a hardcoded `--` for elevation while
     /// this number was already being accumulated (N20). Also the value stored on the
     /// finished `RunWorkout`.
-    @Published private(set) var elevationGainMeters: Double = 0
+    private(set) var elevationGainMeters: Double = 0
 
     /// Live cadence in steps per minute, or `nil` before the first pedometer sample.
     ///
     /// `CMPedometer` reports cadence in steps per *second* and needs no permission
     /// beyond the motion access the indoor path already requests, so the HUD's
     /// second hardcoded `--` can show a real number on outdoor runs too (N20).
-    @Published private(set) var currentCadenceStepsPerMinute: Double?
+    private(set) var currentCadenceStepsPerMinute: Double?
 
     // MARK: Private
 

@@ -10,7 +10,7 @@ struct ProgressDashboardView: View {
     private var profile: UserProfile? { profiles.first }
 
     @Environment(AppSettings.self) private var appSettings
-    @Environment(\.appContainer) private var container
+    @Environment(AppContainer.self) private var container
     @Environment(\.modelContext) private var context
     @State private var selectedRange: ChartRange = .threeMonths
 

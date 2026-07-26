@@ -7,7 +7,7 @@ import PulseUI
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var context
-    @Environment(\.appContainer) private var container
+    @Environment(AppContainer.self) private var container
     @Environment(AppSettings.self) private var appSettings
     @Environment(AuthService.self) private var authService
     @Query private var profiles: [UserProfile]

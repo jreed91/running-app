@@ -6,7 +6,7 @@ struct AICoachChatView: View {
     private let initialPrompt: String?
 
     @Environment(AppSettings.self) private var appSettings
-    @Environment(\.appContainer) private var container
+    @Environment(AppContainer.self) private var container
 
     /// How many recent runs the coach prompt summarises. Also the fetch limit below —
     /// the prompt is the only consumer of more than the newest run.

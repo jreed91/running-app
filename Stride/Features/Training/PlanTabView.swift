@@ -5,7 +5,7 @@ import SwiftData
 
 struct PlanTabView: View {
     @Environment(AppSettings.self) private var appSettings
-    @Environment(\.appContainer) private var container
+    @Environment(AppContainer.self) private var container
     @Environment(\.modelContext) private var context
 
     @Query(filter: #Predicate<TrainingPlan> { $0.isActive == true })

@@ -25,7 +25,7 @@ private enum HistoryEntry: Identifiable {
 // MARK: - HistoryView
 
 struct HistoryView: View {
-    @Environment(\.appContainer) private var container
+    @Environment(AppContainer.self) private var container
 
     @State private var isSyncing = false
     /// How many entries the list is currently showing. Held here, and passed *into* the
@@ -105,7 +105,7 @@ private struct HistoryEntryList: View {
     private let isSyncing: Bool
     private let loadMore: () -> Void
 
-    @Environment(\.appContainer) private var container
+    @Environment(AppContainer.self) private var container
 
     @Query private var runs: [RunWorkout]
     @Query private var strengthWorkouts: [StrengthWorkout]
