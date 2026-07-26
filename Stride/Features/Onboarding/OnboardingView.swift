@@ -61,7 +61,7 @@ struct OnboardingView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let locationManager = CLLocationManager()
-    private let totalSteps = 9
+    private let totalSteps = 8
 
     // MARK: - Computed
 
@@ -172,20 +172,18 @@ struct OnboardingView: View {
                     onCTA: advance) {
                 timingContent
             }
+        // Units used to be a step of its own, answering a question the device already
+        // knows (`UnitPreference.localeDefault`) — so nine steps stood between a new
+        // runner and a usable app, one of them a fork with a right answer (U10). It is a
+        // control on this step now, pre-set and there to be corrected rather than asked.
         case 3:
-            OBShell(stepIndex: 3, total: totalSteps, kicker: "Units",
-                    title: "Kilometres or miles?", subtitle: "Choose how distances and paces are shown throughout the app.",
-                    ctaLabel: "Continue", onBack: retreat, onCTA: advance) {
-                unitsContent
-            }
-        case 4:
-            OBShell(stepIndex: 4, total: totalSteps, kicker: "About you",
+            OBShell(stepIndex: 3, total: totalSteps, kicker: "About you",
                     title: "How would you describe your running?", subtitle: "We'll calibrate volume and pace from here.",
                     ctaLabel: "Continue", onBack: retreat, onCTA: advance) {
                 levelContent
             }
-        case 5:
-            OBShell(stepIndex: 5, total: totalSteps, kicker: "Calibrate",
+        case 4:
+            OBShell(stepIndex: 4, total: totalSteps, kicker: "Calibrate",
                     title: "Your recent 5K time?", subtitle: "Used to compute your VDOT and pace zones. You can skip or update this later.",
                     ctaLabel: "Continue",
                     secondaryLabel: "I don't know my 5K time",
@@ -194,14 +192,14 @@ struct OnboardingView: View {
                     onCTA: { didEnter5KTime = true; advance() }) {
                 timeContent
             }
-        case 6:
-            OBShell(stepIndex: 6, total: totalSteps, kicker: "Schedule",
+        case 5:
+            OBShell(stepIndex: 5, total: totalSteps, kicker: "Schedule",
                     title: "Which days can you run?", subtitle: "Pick your typical week. We'll place harder workouts on your energy days.",
                     ctaLabel: "Continue", onBack: retreat, onCTA: advance) {
                 scheduleContent
             }
-        case 7:
-            OBShell(stepIndex: 7, total: totalSteps, kicker: "Strength Training",
+        case 6:
+            OBShell(stepIndex: 6, total: totalSteps, kicker: "Strength Training",
                     title: "What equipment do you have?",
                     subtitle: "We'll add 1–2 strength sessions per week tailored to your gear.",
                     ctaLabel: "Continue",
@@ -211,8 +209,8 @@ struct OnboardingView: View {
                     onCTA: advance) {
                 strengthContent
             }
-        case 8:
-            OBShell(stepIndex: 8, total: totalSteps, kicker: "Permissions",
+        case 7:
+            OBShell(stepIndex: 7, total: totalSteps, kicker: "Permissions",
                     title: "A few things to set up.", subtitle: "Each is optional — you can always change these in Settings.",
                     ctaLabel: isRequestingPermissions ? "Requesting…" : "Build my plan",
                     secondaryLabel: "Skip — I'll do this later",
@@ -292,55 +290,43 @@ struct OnboardingView: View {
         }
     }
 
-    private func unitCard(_ unit: UnitPreference, isSelected: Bool) -> some View {
-        let iconColor: Color = isSelected ? .brand : .secondary
-        let circleFill = Color.brand.opacity(isSelected ? 0.15 : 0.06)
-        let bgColor: Color = isSelected ? Color.brand.opacity(0.06) : Color.surfaceSecondary
-        let borderColor: Color = isSelected ? Color.brand.opacity(0.4) : Color.clear
-        let subtitle = unit == .metric ? "Distances in km · Pace in min/km" : "Distances in miles · Pace in min/mi"
-
-        return Button { appSettings.unitPreference = unit } label: {
-            HStack(spacing: 16) {
-                ZStack {
-                    Circle().fill(circleFill).frame(width: 48, height: 48)
-                    StrideIcon(name: .ruler, size: 22, color: iconColor, strokeWeight: 2.0)
-                }
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(unit.localizedName).font(.bodyStrong).foregroundStyle(.primary)
-                    Text(subtitle).font(.caption).foregroundStyle(.secondary)
-                }
-                Spacer()
-                OBRadio(isSelected: isSelected, color: .brand)
-            }
-            .padding(16)
-            .background(bgColor, in: RoundedRectangle(cornerRadius: AppRadius.md))
-            .overlay(
-                RoundedRectangle(cornerRadius: AppRadius.md)
-                    .strokeBorder(borderColor, lineWidth: 1.5)
-            )
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var unitsContent: some View {
-        VStack(spacing: 10) {
-            ForEach(UnitPreference.allCases, id: \.self) { unit in
-                unitCard(unit, isSelected: appSettings.unitPreference == unit)
-            }
-        }
-    }
-
-    // MARK: - Level content
+    // MARK: - Level + units content
 
     private var levelContent: some View {
-        VStack(spacing: 10) {
-            ForEach(OBFitnessSelection.allCases, id: \.self) { selection in
-                OBFitnessRow(selection: selection, goalRace: goalRace, isSelected: fitnessSelection == selection) {
-                    fitnessSelection = selection
-                    fitnessLevel = selection.fitnessLevel
+        VStack(spacing: 16) {
+            VStack(spacing: 10) {
+                ForEach(OBFitnessSelection.allCases, id: \.self) { selection in
+                    OBFitnessRow(selection: selection, goalRace: goalRace, isSelected: fitnessSelection == selection) {
+                        fitnessSelection = selection
+                        fitnessLevel = selection.fitnessLevel
+                    }
                 }
             }
+            unitsRow
         }
+    }
+
+    /// Units, folded into the step above rather than asked as one of its own (U10).
+    ///
+    /// A segmented control rather than the pair of full-width cards this used to be: the
+    /// value arrives already correct for the device (`UnitPreference.localeDefault`), so
+    /// this is a correction, not a decision — and the options are two words each.
+    private var unitsRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Units")
+                .font(.dsFootnote)
+                .foregroundStyle(.secondary)
+            Picker("Units", selection: Bindable(appSettings).unitPreference) {
+                ForEach(UnitPreference.allCases, id: \.self) { unit in
+                    Text(unit == .metric ? "km · min/km" : "mi · min/mi").tag(unit)
+                }
+            }
+            .pickerStyle(.segmented)
+            .accessibilityLabel("Distance and pace units")
+            .accessibilityIdentifier("onboarding.units")
+        }
+        .padding(16)
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     // MARK: - Time content

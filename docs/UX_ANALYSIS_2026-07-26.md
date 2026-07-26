@@ -21,21 +21,24 @@ ratios are computed from `Stride/Resources/Assets.xcassets`, not eyeballed.
 | Design-system adoption | 🟠 Partial | ✅ Type, radius and elevation/glow adopted and guarded; spacing still raw |
 | Dynamic Type | 🟢 Fixed | ✅ 262 sites on `ds*`, `@ScaledMetric` on badges, 2 grids clamped |
 | Colour contrast | 🟢 Fixed | ✅ CTAs, HUD, dark-mode zone collisions, high-contrast variants |
-| Haptics | 🟢 Fixed | ✅ `sensoryFeedback` on run, guided steps, splits, strength sets |
+| Haptics and audio | 🟢 Fixed | ✅ `sensoryFeedback` on run, guided steps, splits, strength sets; ✅ spoken splits |
 | iOS 26/27 API adoption | 🟠 Partial | ✅ `Tab` builder, native `Color.mix`, real `glassEffect`; Live Activity still absent |
 | Destructive-action safety | 🟢 Fixed | ✅ Both swipe paths confirm; delete failures surface |
-| History discoverability | 🟢 Fixed | ✅ Search, pull-to-refresh, first-sync loading state |
+| History discoverability | 🟢 Fixed | ✅ Search, pull-to-refresh, first-sync loading state, date/distance filter |
+| Onboarding length | 🟢 Fixed | ✅ 8 steps, not 9 — units follow the locale and moved onto "About you" |
 
 **Pass 1 (2026-07-26) closed:** the whole of Tier 1, plus §5a, §5d, §8, §9 and most
 of §10. **Pass 2** closed Tier 2 — the type-scale migration and the SwiftLint rule
 that holds it. **Pass 3** closed the rest of Tier 3 and the §1 remainder: the radius
 and elevation scales are adopted and guarded, the hand-rolled glass is now
 `glassEffect`, GPS quality reaches the runner (§5c), and Differentiate Without Color
-is handled (§3d).
+is handled (§3d). **Pass 4** closed the audio channel (spoken splits, §4), History's
+date/distance filter (§8), and the whole of the §10 remainder — the onboarding step
+merge, Audio Graph descriptors, and press feedback on the two primary CTAs.
 
-Still open: the `GeometryReader` retirements in §7, History's distance/date filter
-(§8), the onboarding step merge and Audio Graph descriptors (§10), and all of Tier 4
-(Live Activity, spoken splits, `tabViewBottomAccessory`).
+Still open: the `GeometryReader` retirements in §7, the spacing scale in §1, and the
+two remaining Tier 4 features (Live Activity, `tabViewBottomAccessory`) — the two
+that need a new widget extension target and a tab-bar restructure respectively.
 
 ---
 
@@ -323,6 +326,37 @@ rest-timer expiry. No UIKit generators.
 the standard solution for the same heads-down problem and would reuse the
 existing `SpokenMetric` formatting.
 
+✅ **FIXED** — `SplitAnnouncement` builds the sentence out of `SpokenMetric`, so a
+spoken pace says "minutes per kilometre" rather than "slash km", and `RunVoiceCoach`
+speaks it. The pace verdict is the part worth knowing about: a split is judged against
+the guided step's target pace if the run is guided, else the scheduled workout's target
+range, and the delta is reported in *seconds per display unit* — an imperial runner
+hears the number they would get by differencing the paces they can see. The band is
+widened by 8 s/km, matching `WorkoutPaceAlert`'s tolerance so the phone and a scheduled
+Watch workout agree on what counts as on pace; inside a single kilometre GPS pace is not
+accurate to the second, and "2 seconds slow" would be correcting the noise. A free run
+has no target and hears the milestone and pace alone. Eleven tests in
+`SplitAnnouncementTests`.
+
+Four decisions worth recording:
+
+- **Off by default** (`AppSettings.spokenSplitsEnabled`, with a Settings row that says
+  what it will do). This is the only feature in the app that talks over whatever the
+  runner is already playing, and one that starts speaking unasked after an update is a
+  surprise rather than a coach.
+- **The session ducks rather than interrupts** — `.playback` / `.voicePrompt` with
+  `.duckOthers` and `.interruptSpokenAudioAndMixWithOthers`, activated per utterance and
+  released on `didFinish` with `.notifyOthersOnDeactivation`. Music dips; a podcast (which
+  cannot usefully be ducked — you would miss the words) pauses and resumes. A session left
+  active would hold the duck for the rest of the run, so `RunVoiceCoach` is owned by
+  `AppContainer` and stopped in the HUD's `onDisappear`.
+- **`audio` joins `UIBackgroundModes`** in `project.yml`. A runner locks the phone and
+  pockets it, so by the time a split closes the app is in the background — which is
+  exactly the case the announcement exists for, and where the session could not otherwise
+  be activated at all.
+- **Announcements are dropped, not queued,** while one is speaking: a backlog read out at
+  km 6 is worse than silence.
+
 ---
 
 ## 5. Active Run is missing the platform integrations the screen implies
@@ -499,8 +533,27 @@ find one:
 *localized* name, resolved to raw values before the fetch predicate, plus run notes
 and the strength focus), `.refreshable` on the canonical importer, a first-sync
 loading state and a no-results state in place of the blank list, and the pace column
-now calls `paceValueString(unit:)` directly. A dedicated distance/date-range filter
-is still open — search covers the type case.
+now calls `paceValueString(unit:)` directly.
+
+✅ **The filter is closed too** (pass 4) — `HistoryFilter` adds a date range (any / 30
+days / 3 months / year) and a distance floor, driven from a toolbar `Menu` and applied
+through the fetch descriptor the way `searchText` is, so a narrowed list is a narrower
+*fetch* rather than a filtered page. Two decisions:
+
+- **The distance thresholds are the four race distances the app already plans for** (5K,
+  10K, half, marathon), not round numbers in the runner's unit. "At least a 10K" is a fact
+  about the run rather than about how it is displayed, so nothing needs converting and an
+  imperial runner is not offered a 5-mile filter no plan in the app has a concept of. Each
+  sits ~2% below its nominal distance: a GPS trace of a 5K routinely measures 4.97 km, and
+  a filter that hides it is wrong about what the runner did.
+- **A distance floor excludes strength sessions outright** — they have no distance, so no
+  floor can be true of one. Spelled out as `HistoryFilter.includesStrengthWorkouts` rather
+  than left implicit at the merge. A date range keeps them; a session does have a date.
+
+An active filter that matches nothing gets its own `ContentUnavailableView` naming both
+axes and offering "Clear Filters" — otherwise it is indistinguishable from "no workouts
+yet", and the control that caused it is a glyph in the toolbar. Covered by
+`HistoryFilterTests`.
 
 ---
 
@@ -545,6 +598,13 @@ than fetching everything and filtering in `filteredWorkouts` (`:60`).
 - **Onboarding is 9 steps** (`OnboardingView.swift:148-221`: steps 0–8) before
   the app is usable. Steps 3 (Units) and 4 (About you) could merge, and Units has
   a sensible locale-derived default that needs no prompt.
+  ✅ **FIXED** — 8 steps. `UnitPreference.localeDefault` reads
+  `Locale.current.measurementSystem`, so a new install starts on the unit the device
+  already measures in (anything non-metric maps to miles: `.uk` measures road distance
+  in miles, which is the only measurement this app makes). That turned the units *step*
+  into a segmented control on "About you" — a correction rather than a question. The
+  old default was the deeper bug: skipping the step silently gave every runner in the
+  US kilometres.
 - **`ProgressRingView` has no accessibility label** ✅ **FIXED** —
   `.accessibilityHidden(true)`, since the adjacent `statItem` already speaks the
   number.
@@ -557,10 +617,25 @@ than fetching everything and filtering in `filteredWorkouts` (`:60`).
   choice, but `.accessibilityChartDescriptor(_:)` (`AXChartDescriptor`) would
   additionally enable **Audio Graphs**, letting a VoiceOver user play the series
   as sound and navigate point-by-point. Worth it for the Progress tab.
+  ✅ **FIXED** for all seven Progress-tab charts (the six on Stats plus the race-pace
+  prediction on Insights). The mechanism matters more than the modifier: call sites used
+  to hand `chartAccessibility` a finished summary *string*, which is why a descriptor
+  could not be added without duplicating each chart's data. They now pass a
+  `ChartAccessibility.Series` — the points, the value-axis name, and the formatter — and
+  the modifier derives both the spoken summary and the `AXChartDescriptor` from it, so the
+  two cannot describe different data. The x-axis is categorical, reusing the labels the
+  summary already renders (a date, a split number, a zone); the series is
+  `isContinuous: false` for the same reason. The `String` overload stays for the charts
+  outside this tab.
 - **Redundant computation.** ✅ **FIXED** — the ring takes `pct`; `pct2` is gone.
 - **`BouncyButtonStyle` is defined and used 7 times**, while most buttons use
   `.buttonStyle(.plain)` and get no press feedback at all — including both
   primary CTAs.
+  ✅ **FIXED** for the two CTAs ("Start a Free Run" and "Start This Workout"). Both
+  needed their `.background` moved *inside* the button's label: the style scales
+  `configuration.label`, so a background applied outside it would have held still while
+  the text shrank inside a stationary pill. The remaining `.plain` buttons are rows and
+  cards whose own selected/unselected state is the feedback.
 - ~~**Legacy state management.**~~ **Not a finding** — checked while doing the
   above: `AppContainer` (`AppContainer.swift:20`) and `WorkoutTrackerService`
   (`WorkoutTrackerService.swift:33`) are both already `@Observable`, and both carry
@@ -589,17 +664,18 @@ than fetching everything and filtering in `filteredWorkouts` (`:60`).
 9b. ✅ The radius and elevation scales adopted and guarded, `AppGlow` added (§1);
    GPS quality surfaced (§5c); Differentiate Without Color handled (§3d)
 
-**Tier 4 — features the platform now expects** — next up
-10. Live Activity / Dynamic Island for an in-progress run (§5b) — the largest of the
-    three: it needs a widget extension target in `project.yml`, which no other item
-    here has required
-11. Spoken split announcements (§4)
-12. `tabViewBottomAccessory` for the active run (§7)
+**Tier 4 — features the platform now expects** — 🟠 one of three done
+10. Live Activity / Dynamic Island for an in-progress run (§5b) — still open, and the
+    largest of the three: it needs a widget extension target in `project.yml`, which no
+    other item here has required
+11. ✅ Spoken split announcements (§4) — `SplitAnnouncement` + `RunVoiceCoach`, opt-in
+12. `tabViewBottomAccessory` for the active run (§7) — still open
 
-**Left over, smaller than a tier**
-13. The `GeometryReader` retirements (§7) and the spacing scale (§1)
-14. History's distance/date-range filter (§8)
-15. Merging onboarding steps 3 and 4, `.accessibilityChartDescriptor` for Audio
+**Left over, smaller than a tier** — ✅ **DONE** except §7/§1
+13. The `GeometryReader` retirements (§7) and the spacing scale (§1) — both still open,
+    and both deliberately per-site rather than a sweep (see the notes there)
+14. ✅ History's distance/date-range filter (§8)
+15. ✅ Merging onboarding steps 3 and 4, `.accessibilityChartDescriptor` for Audio
     Graphs, and press feedback on the two primary CTAs (§10)
 
 ---

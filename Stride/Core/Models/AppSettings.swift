@@ -81,6 +81,18 @@ final class AppSettings {
         }
     }
 
+    /// Whether each completed kilometre/mile is announced out loud during a run (U4).
+    ///
+    /// Opt-in, and deliberately so: this is the one setting in the app that makes the
+    /// phone talk over whatever the runner is already listening to, and a feature that
+    /// starts speaking unasked on the first run after an update is a surprise rather
+    /// than a coach.
+    var spokenSplitsEnabled: Bool {
+        didSet {
+            persist(spokenSplitsEnabled, forKey: Self.spokenSplitsKey)
+        }
+    }
+
     /// The user's weekly running-distance goal, in metres. Drives the weekly
     /// progress ring and consistency badges on the Progress → Achievements tab.
     var weeklyGoalMeters: Double {
@@ -101,6 +113,7 @@ final class AppSettings {
     // Internal so AppContainer can read the same key before AppSettings is created.
     static let iCloudSyncKey = "iCloudSyncEnabled"
     static let morningReminderKey = "morningReminderEnabled"
+    static let spokenSplitsKey = "spokenSplitsEnabled"
     static let weeklyGoalMetersKey = "weeklyGoalMeters"
 
     /// Default weekly goal (20 km) applied when the user has never set one.
@@ -124,10 +137,14 @@ final class AppSettings {
         let aiProviderStored = Self.hasStoredValue(forKey: Self.aiProviderKey, defaults: defaults, ubiquitous: ubiquitous)
         let syncStored = Self.hasStoredValue(forKey: Self.iCloudSyncKey, defaults: defaults, ubiquitous: ubiquitous)
         let reminderStored = Self.hasStoredValue(forKey: Self.morningReminderKey, defaults: defaults, ubiquitous: ubiquitous)
+        let spokenSplitsStored = Self.hasStoredValue(forKey: Self.spokenSplitsKey, defaults: defaults, ubiquitous: ubiquitous)
         let weeklyGoalStored = Self.hasStoredValue(forKey: Self.weeklyGoalMetersKey, defaults: defaults, ubiquitous: ubiquitous)
 
         let raw = Self.readString(forKey: Self.unitPreferenceKey, defaults: defaults, ubiquitous: ubiquitous) ?? ""
-        self.unitPreference = UnitPreference(rawValue: raw) ?? .metric
+        // No stored choice falls back to what the device already measures in, not to
+        // metric: the old default was wrong for every runner in the US who skipped the
+        // units step (U10). Still not seeded — an in-memory default only (M15).
+        self.unitPreference = UnitPreference(rawValue: raw) ?? .localeDefault
         self.orsAPIKey = Self.loadORSAPIKey(defaults: defaults, ubiquitous: ubiquitous)
 
         self.aiInsightsEnabled = aiInsightsStored
@@ -148,6 +165,11 @@ final class AppSettings {
             ? Self.readBool(forKey: Self.morningReminderKey, defaults: defaults, ubiquitous: ubiquitous)
             : true
 
+        // Default to false (silent) when the key has never been set — see the property.
+        self.spokenSplitsEnabled = spokenSplitsStored
+            ? Self.readBool(forKey: Self.spokenSplitsKey, defaults: defaults, ubiquitous: ubiquitous)
+            : false
+
         // Default to 20 km when the user has never set a weekly goal.
         self.weeklyGoalMeters = weeklyGoalStored
             ? (Self.readDouble(forKey: Self.weeklyGoalMetersKey, defaults: defaults, ubiquitous: ubiquitous) ?? Self.defaultWeeklyGoalMeters)
@@ -160,6 +182,7 @@ final class AppSettings {
         if aiProviderStored { persist(aiProvider.rawValue, forKey: Self.aiProviderKey) }
         if syncStored { persist(iCloudSyncEnabled, forKey: Self.iCloudSyncKey) }
         if reminderStored { persist(morningReminderEnabled, forKey: Self.morningReminderKey) }
+        if spokenSplitsStored { persist(spokenSplitsEnabled, forKey: Self.spokenSplitsKey) }
         if weeklyGoalStored { persist(weeklyGoalMeters, forKey: Self.weeklyGoalMetersKey) }
 
         observeExternalChanges()
@@ -214,6 +237,11 @@ final class AppSettings {
         if Self.hasStoredValue(forKey: Self.morningReminderKey, defaults: defaults, ubiquitous: ubiquitous) {
             let value = Self.readBool(forKey: Self.morningReminderKey, defaults: defaults, ubiquitous: ubiquitous)
             if value != morningReminderEnabled { morningReminderEnabled = value }
+        }
+
+        if Self.hasStoredValue(forKey: Self.spokenSplitsKey, defaults: defaults, ubiquitous: ubiquitous) {
+            let value = Self.readBool(forKey: Self.spokenSplitsKey, defaults: defaults, ubiquitous: ubiquitous)
+            if value != spokenSplitsEnabled { spokenSplitsEnabled = value }
         }
 
         if let value = Self.readDouble(forKey: Self.weeklyGoalMetersKey, defaults: defaults, ubiquitous: ubiquitous),

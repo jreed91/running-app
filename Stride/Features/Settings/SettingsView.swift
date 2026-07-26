@@ -320,6 +320,19 @@ struct SettingsView: View {
                         }
                     }
             }
+            rowDivider
+            // The one setting that makes the app talk over the runner's music, so it
+            // says what it will say and stays off until asked (U4).
+            settingsRow(icon: .ruler, iconColor: .zoneEasy, title: "Spoken Splits") {
+                Toggle("", isOn: Bindable(appSettings).spokenSplitsEnabled)
+                    .labelsHidden()
+                    .tint(.brand)
+            }
+            Text("Announces each \(appSettings.unitPreference.distanceLabel) and its pace out loud during a run. Music ducks for the announcement.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.leading, 62)
+                .padding(.bottom, 10)
         }
     }
 

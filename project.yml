@@ -121,6 +121,11 @@ targets:
         UIBackgroundModes:
           - location
           - remote-notification
+          # Spoken split announcements (U4). A runner locks the phone and puts it in a
+          # pocket, so by the time a split closes the app is in the background — without
+          # this the audio session cannot be activated there and the announcement is
+          # simply lost, which is exactly the case it exists for.
+          - audio
         NSLocationWhenInUseUsageDescription: "Stride uses your location to track your route during a run."
         NSLocationAlwaysAndWhenInUseUsageDescription: "Stride uses your location in the background to continue tracking your route."
         NSHealthShareUsageDescription: "Stride reads your workout and heart-rate history to show training insights."

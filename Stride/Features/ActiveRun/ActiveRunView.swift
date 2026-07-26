@@ -142,9 +142,46 @@ struct ActiveRunView: View {
             .onChange(of: tracker.trackingState, initial: true) { _, state in
                 UIApplication.shared.isIdleTimerDisabled = (state == .active || state == .paused)
             }
+            // Each closed kilometre/mile, spoken (U4). The light haptic beside this says
+            // *that* a split closed; only speech can say what it was, which is the whole
+            // reason a runner would look at the phone mid-stride.
+            .onChange(of: tracker.splits.count) { (oldCount: Int, newCount: Int) in
+                announceSplit(previousCount: oldCount, count: newCount)
+            }
             .onDisappear {
                 UIApplication.shared.isIdleTimerDisabled = false
+                // Finishing or discarding mid-sentence must not leave the runner's music
+                // ducked, so the session is released with the screen.
+                container.runVoiceCoach.stop()
             }
+    }
+
+    /// Speaks the split that just closed, when the runner has asked for it.
+    ///
+    /// Off by default (`AppSettings.spokenSplitsEnabled`) — this is the one feature that
+    /// talks over whatever else is playing.
+    private func announceSplit(previousCount: Int, count: Int) {
+        guard appSettings.spokenSplitsEnabled,
+              count > previousCount,
+              let split = tracker.splits.last else { return }
+        container.runVoiceCoach.speak(
+            SplitAnnouncement.phrase(
+                splitNumber: split.kilometer,
+                paceSecondsPerKm: split.paceSecondsPerKm,
+                unit: appSettings.unitPreference,
+                targetPaceSecondsPerKm: spokenSplitTargetBand
+            )
+        )
+    }
+
+    /// The pace band a split is judged against, narrowest first: the guided step the
+    /// runner is actually in, then the scheduled workout's own target. A free run has
+    /// neither, and its splits are announced without a verdict.
+    private var spokenSplitTargetBand: ClosedRange<Double>? {
+        if let stepPace = guided?.currentStep.targetPaceSecondsPerKm, stepPace > 0 {
+            return stepPace...stepPace
+        }
+        return scheduledWorkout?.targetPaceRange
     }
 
     private var hudLayers: some View {

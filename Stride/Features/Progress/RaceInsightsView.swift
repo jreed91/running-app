@@ -306,7 +306,7 @@ struct RaceInsightsView: View {
                     }
                 }
                 .chartXSelection(value: $selectedPredictionDate)
-                .chartAccessibility("Predicted race pace chart", predictedPaceSummary)
+                .chartAccessibility("Predicted race pace chart", predictedPaceSeries)
                 Text("Lower is faster")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -314,17 +314,20 @@ struct RaceInsightsView: View {
         }
     }
 
-    /// Spoken summary of the prediction series (N18); built here rather than inline so the
-    /// chart body stays one expression.
-    private var predictedPaceSummary: String {
-        ChartAccessibility.summary(
-            pacePredictionPoints.map {
+    /// The prediction series' accessible form (N18); built here rather than inline so the
+    /// chart body stays one expression. A `Series` rather than a finished summary string,
+    /// so the chart is playable as an Audio Graph too (U10).
+    private var predictedPaceSeries: ChartAccessibility.Series {
+        let unit = appSettings.unitPreference
+        return ChartAccessibility.Series(
+            points: pacePredictionPoints.map {
                 ChartAccessibility.Point(
                     label: $0.date.formatted(.dateTime.month(.abbreviated).day()),
                     value: $0.predictedPaceSecondsPerKm
                 )
-            }
-        ) { SpokenMetric.spoken(measurement: $0.paceString(unit: appSettings.unitPreference)) }
+            },
+            valueAxisLabel: String(localized: "Predicted pace", comment: "Chart value axis")
+        ) { SpokenMetric.spoken(measurement: $0.paceString(unit: unit)) }
     }
 
     // MARK: - Card 3: Training Zones

@@ -634,16 +634,17 @@ struct DashboardView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
+            // White on `Color.brand` is 2.84:1 — below even the 3.0 large-text bar,
+            // on the app's most-tapped control (U3a).
+            .foregroundStyle(.onFill)
+            // Inside the label so the press bounce scales the pill, not just its text.
+            .background(
+                RoundedRectangle(cornerRadius: AppRadius.lg)
+                    .fill(Color.brand)
+                    .appGlow(.strong, color: .brand)
+            )
         }
-        // White on `Color.brand` is 2.84:1 — below even the 3.0 large-text bar,
-        // on the app's most-tapped control (U3a).
-        .foregroundStyle(.onFill)
-        .background(
-            RoundedRectangle(cornerRadius: AppRadius.lg)
-                .fill(Color.brand)
-                .appGlow(.strong, color: .brand)
-        )
-        .buttonStyle(.plain)
+        .buttonStyle(BouncyButtonStyle())
         .accessibilityIdentifier("dashboard.startScheduledWorkout.\(workout.workoutType.sessionKind.rawValue)")
     }
 
@@ -743,15 +744,20 @@ struct DashboardView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
+            .foregroundStyle(.onFill)
+            // Inside the label, not on the `Button`: `BouncyButtonStyle` scales
+            // `configuration.label`, so a background applied outside it would stay put
+            // while the text shrank inside a stationary pill.
+            .background(
+                RoundedRectangle(cornerRadius: AppRadius.lg)
+                    .fill(Color.brand)
+                    .appGlow(.strong, color: .brand)
+            )
         }
-        .foregroundStyle(.onFill)
         .accessibilityIdentifier("dashboard.startFreeRun")
-        .background(
-            RoundedRectangle(cornerRadius: AppRadius.lg)
-                .fill(Color.brand)
-                .appGlow(.strong, color: .brand)
-        )
-        .buttonStyle(.plain)
+        // `.plain` gave the app's two most-tapped controls no press response at all,
+        // while `BouncyButtonStyle` sat on seven onboarding buttons (U10).
+        .buttonStyle(BouncyButtonStyle())
     }
 
     // MARK: - Helpers

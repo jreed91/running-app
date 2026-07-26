@@ -130,6 +130,12 @@ final class AppContainer {
     let weatherService: WeatherService
     let aiCoachService: AICoachService
 
+    /// Speaks split announcements during a run (U4). Owned here rather than by the run
+    /// screen because it holds the app's audio session: one instance means one place that
+    /// can leave the runner's music ducked, and it survives the HUD being dismissed
+    /// mid-sentence.
+    let runVoiceCoach: RunVoiceCoach
+
     /// Creating, shifting, rebuilding, and destroying training plans (D2). The container
     /// wires it and hands it out; it does not orchestrate it.
     let planLifecycle: PlanLifecycleService
@@ -296,6 +302,7 @@ final class AppContainer {
         let weather = WeatherService()
         self.weatherService = weather
         self.aiCoachService = AICoachService()
+        self.runVoiceCoach = RunVoiceCoach()
         self.workoutSyncService = WorkoutSyncService(
             healthKitRepository: hkRepository,
             notificationService: notifications,

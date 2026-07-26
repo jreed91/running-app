@@ -153,7 +153,7 @@ struct RunShareCardView: View {
             }
             HStack(alignment: .bottom, spacing: 3) {
                 ForEach(model.splitBars) { bar in
-                    RoundedRectangle(cornerRadius: AppRadius.micro.5, style: .continuous)
+                    RoundedRectangle(cornerRadius: AppRadius.micro, style: .continuous)
                         .fill(bar.isFastest ? accent : Color.white.opacity(0.28))
                         .frame(maxWidth: .infinity)
                         .frame(height: max(3, CGFloat(bar.height) * 44))
