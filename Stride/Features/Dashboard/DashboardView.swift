@@ -307,14 +307,10 @@ struct DashboardView: View {
     @Environment(AppContainer.self) private var container
     @Environment(\.modelContext) private var context
     @Query private var profiles: [UserProfile]
-    @State private var showActiveRun = false
     /// The strength workout to present. Captured at tap time and driven through
     /// `fullScreenCover(item:)` so the cover can never open onto an empty,
     /// undismissable screen when the selected day changes mid-presentation.
     @State private var strengthWorkout: ScheduledWorkout?
-    /// The scheduled workout to fulfill when the active-run sheet is a planned run
-    /// (set by "Start This Workout"); `nil` for a free run (H4).
-    @State private var activeRunScheduled: ScheduledWorkout?
     @State private var selectedDate = Date()
     /// Timestamp of the last time the rearrange-workouts prompt was flagged
     /// (dismissed or acted on). Used to limit the prompt to once per week.
@@ -393,9 +389,10 @@ struct DashboardView: View {
             .background(Color.surfacePrimary)
             .navigationTitle("Today")
             .navigationBarTitleDisplayMode(.inline)
-            .fullScreenCover(isPresented: $showActiveRun) {
-                ActiveRunView(scheduledWorkout: activeRunScheduled)
-            }
+            // The active-run HUD is presented by `MainTabView`, not here: a run started
+            // from this tab now outlives the screen that shows it, so it can be
+            // minimised into the tab-bar accessory instead of only finished (U7).
+            // Strength stays local — it has no minimised form.
             .fullScreenCover(item: $strengthWorkout) { workout in
                 StrengthActiveView(scheduledWorkout: workout)
             }
@@ -623,8 +620,7 @@ struct DashboardView: View {
             if workout.workoutType == .strength {
                 strengthWorkout = workout
             } else {
-                activeRunScheduled = workout
-                showActiveRun = true
+                startRun(fulfilling: workout)
             }
         } label: {
             HStack(spacing: 10) {
@@ -734,12 +730,11 @@ struct DashboardView: View {
 
     private var startRunButton: some View {
         Button {
-            activeRunScheduled = nil
-            showActiveRun = true
+            startRun(fulfilling: nil)
         } label: {
             HStack(spacing: 10) {
                 StrideIcon(name: .run, size: 20, color: .onFill, strokeWeight: 2.0)
-                Text("Start a Free Run")
+                Text(freeRunButtonTitle)
                     .font(.dsHeadline.weight(.bold))
             }
             .frame(maxWidth: .infinity)
@@ -758,6 +753,25 @@ struct DashboardView: View {
         // `.plain` gave the app's two most-tapped controls no press response at all,
         // while `BouncyButtonStyle` sat on seven onboarding buttons (U10).
         .buttonStyle(BouncyButtonStyle())
+    }
+
+    /// The app's most-tapped control has a second job since U7: a run can be minimised
+    /// into the tab-bar accessory, and this button stays on screen underneath it. Tapping
+    /// it then reopens the run rather than starting another, so it has to say so.
+    ///
+    /// Typed `LocalizedStringKey` explicitly — a ternary of two bare literals infers
+    /// `String`, which picks `Text`'s non-localizing overload and drops both strings out
+    /// of the catalog.
+    private var freeRunButtonTitle: LocalizedStringKey {
+        container.workoutTrackerService.isRecording ? "Back to Your Run" : "Start a Free Run"
+    }
+
+    /// Starts a run, or reopens the one already recording (U7).
+    private func startRun(fulfilling workout: ScheduledWorkout?) {
+        container.activeRunPresentation.startOrReopen(
+            scheduledWorkout: workout,
+            isRunInProgress: container.workoutTrackerService.isRecording
+        )
     }
 
     // MARK: - Helpers

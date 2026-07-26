@@ -140,6 +140,11 @@ final class AppContainer {
     /// wires it and hands it out; it does not orchestrate it.
     let planLifecycle: PlanLifecycleService
 
+    /// Whether the active-run HUD is on screen, and the session state that has to survive
+    /// it being closed (U7). Owned here for the same reason `runVoiceCoach` is: the run
+    /// now outlives the screen that shows it, so nothing about it can live in the view.
+    let activeRunPresentation: ActiveRunPresentation
+
     // MARK: Workout Review
 
     /// Listens to `NotificationService.syncedRunTaps` for this container's lifetime. Not
@@ -303,6 +308,7 @@ final class AppContainer {
         self.weatherService = weather
         self.aiCoachService = AICoachService()
         self.runVoiceCoach = RunVoiceCoach()
+        self.activeRunPresentation = ActiveRunPresentation()
         self.workoutSyncService = WorkoutSyncService(
             healthKitRepository: hkRepository,
             notificationService: notifications,

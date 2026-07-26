@@ -62,6 +62,29 @@ final class StrideUITests: XCTestCase {
         XCTAssertTrue(app.buttons["activeRun.finish"].waitForExistence(timeout: 5))
     }
 
+    /// The HUD used to have no way out but Finish or Discard, so opening it by mistake
+    /// meant saving or throwing away a run to get back (U7). Before a run starts there is
+    /// no session to minimise, so the control closes outright — that is the path here,
+    /// because starting one would need location permission and a GPS fix.
+    func testRunHUDClosesBeforeTheRunStarts() throws {
+        completeOnboarding()
+
+        let tabBar = app.tabBars["main.tabs"]
+        XCTAssertTrue(tabBar.waitForExistence(timeout: 8))
+        tabBar.buttons["Home"].tap()
+
+        let startFreeRun = app.buttons["dashboard.startFreeRun"]
+        XCTAssertTrue(startFreeRun.waitForExistence(timeout: 5))
+        startFreeRun.tap()
+
+        let close = app.buttons["activeRun.minimize"]
+        XCTAssertTrue(close.waitForExistence(timeout: 5))
+        close.tap()
+
+        XCTAssertTrue(startFreeRun.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Today"].waitForExistence(timeout: 5))
+    }
+
     private func completeOnboarding() {
         if app.tabBars["main.tabs"].waitForExistence(timeout: 1) {
             return

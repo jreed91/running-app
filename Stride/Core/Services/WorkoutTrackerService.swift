@@ -124,6 +124,16 @@ final class WorkoutTrackerService: NSObject {
 
     // MARK: Public API
 
+    /// Whether a run is underway — recording or holding — as opposed to not yet started
+    /// or already finished.
+    ///
+    /// The predicate the minimised-run accessory keys off (U7): a run that outlives the
+    /// screen showing it needs one shared answer to "is there a run right now", rather
+    /// than each caller spelling out the same two-case comparison.
+    var isRecording: Bool {
+        trackingState == .active || trackingState == .paused
+    }
+
     /// Set the workout location before calling `startWorkout`. No-op once a workout is active.
     func setLocation(_ location: WorkoutLocation) {
         guard trackingState == .idle else { return }

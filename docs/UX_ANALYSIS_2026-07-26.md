@@ -22,7 +22,7 @@ ratios are computed from `Stride/Resources/Assets.xcassets`, not eyeballed.
 | Dynamic Type | 🟢 Fixed | ✅ 262 sites on `ds*`, `@ScaledMetric` on badges, 2 grids clamped |
 | Colour contrast | 🟢 Fixed | ✅ CTAs, HUD, dark-mode zone collisions, high-contrast variants |
 | Haptics and audio | 🟢 Fixed | ✅ `sensoryFeedback` on run, guided steps, splits, strength sets; ✅ spoken splits |
-| iOS 26/27 API adoption | 🟠 Partial | ✅ `Tab` builder, native `Color.mix`, real `glassEffect`; Live Activity still absent |
+| iOS 26/27 API adoption | 🟠 Partial | ✅ `Tab` builder, native `Color.mix`, real `glassEffect`, `tabViewBottomAccessory` + `tabBarMinimizeBehavior`; Live Activity still absent |
 | Destructive-action safety | 🟢 Fixed | ✅ Both swipe paths confirm; delete failures surface |
 | History discoverability | 🟢 Fixed | ✅ Search, pull-to-refresh, first-sync loading state, date/distance filter |
 | Onboarding length | 🟢 Fixed | ✅ 8 steps, not 9 — units follow the locale and moved onto "About you" |
@@ -34,11 +34,13 @@ and elevation scales are adopted and guarded, the hand-rolled glass is now
 `glassEffect`, GPS quality reaches the runner (§5c), and Differentiate Without Color
 is handled (§3d). **Pass 4** closed the audio channel (spoken splits, §4), History's
 date/distance filter (§8), and the whole of the §10 remainder — the onboarding step
-merge, Audio Graph descriptors, and press feedback on the two primary CTAs.
+merge, Audio Graph descriptors, and press feedback on the two primary CTAs. **Pass 5**
+took the tab-bar restructure: the run HUD is presented by `MainTabView` and minimises
+into `tabViewBottomAccessory`, so a run no longer has to be *ended* to leave its screen
+(§7, Tier 4 #12).
 
 Still open: the `GeometryReader` retirements in §7, the spacing scale in §1, and the
-two remaining Tier 4 features (Live Activity, `tabViewBottomAccessory`) — the two
-that need a new widget extension target and a tab-bar restructure respectively.
+Live Activity (§5b) — the one item here that needs a new widget extension target.
 
 ---
 
@@ -377,6 +379,11 @@ occurrences**; `project.yml` declares no widget extension. On an iOS 27 target,
 a run in progress with no Lock Screen or Dynamic Island presence means checking
 pace requires a full unlock. This is the highest-value *feature* gap the review
 found, and the tracker already publishes everything the activity would need.
+**Still open**, and now the only item that needs a new build target. Pass 5 closed the
+in-app half of the same problem — a minimised run is visible and controllable from the
+tab-bar accessory on every screen (§7) — which leaves the Lock Screen, the Dynamic
+Island, and the two run signals that are still modifiers on the HUD rather than
+properties of the run: the per-split haptic and the spoken split announcement.
 
 **5c. GPS quality is computed and thrown away.** `LocationQualityFilter` grades
 every fix and `WorkoutTrackerService.swift:68` counts discards by reason — but
@@ -457,8 +464,8 @@ those `try?`s are gone with the above; the pattern is otherwise untouched.
 
 | API | Uses | | API | Uses |
 | --- | --- | --- | --- | --- |
-| `glassEffect` | 0 | | `tabViewBottomAccessory` | 0 |
-| `GlassEffectContainer` | 0 | | `tabBarMinimizeBehavior` | 0 |
+| `glassEffect` | 0 → ✅ | | `tabViewBottomAccessory` | 0 → ✅ |
+| `GlassEffectContainer` | 0 | | `tabBarMinimizeBehavior` | 0 → ✅ |
 | `buttonStyle(.glass)` | 0 | | `scrollEdgeEffectStyle` | 0 |
 | `ToolbarSpacer` | 0 | | `backgroundExtensionEffect` | 0 |
 | `symbolEffect` | 0 | | `onGeometryChange` | 0 |
@@ -466,9 +473,45 @@ those `try?`s are gone with the above; the pattern is otherwise untouched.
 | `visualEffect` | 0 | | `presentationSizing` | 0 |
 
 🟠 **PARTIALLY FIXED** — `MainTabView.swift` now uses the `Tab` builder, the
-hand-rolled `Color.mix` is gone in favour of the native perceptual one, and the
-simulated glass is now real (pass 3). `tabViewBottomAccessory`, the Live Activity and
-the `GeometryReader` retirements are still open.
+hand-rolled `Color.mix` is gone in favour of the native perceptual one, the simulated
+glass is now real (pass 3), and the active run minimises into `tabViewBottomAccessory`
+(pass 5). The Live Activity and the `GeometryReader` retirements are still open.
+
+On the accessory: this was filed as a Tier 4 *feature*, and turned out to also close a
+plain bug. The HUD was a `fullScreenCover` with **no close control at all** — Finish and
+Discard were the only ways off it — so a run opened by mistake had to be saved or thrown
+away, and a runner mid-tempo could not look at their plan without ending the session.
+The cover moved to `MainTabView`, which is what makes minimising possible at all: a
+cover owned by the Home tab covers the accessory that offers the way back.
+
+That move meant the run had to outlive the screen showing it, so the two things a run
+remembers that `WorkoutTrackerService` does not — the `ScheduledWorkout` it fulfils and
+the guided stepper's position — moved out of `@State` into `ActiveRunPresentation`
+(`ActiveRunPresentationTests`). Dismissing a cover destroys the view inside it, so the
+stepper in particular had to move or reopening a structured session would have put a
+runner three intervals in back on step 1; `prepareForAppearance` now has to be safe to
+repeat mid-run, which it is (`prepareForNewWorkout` only acts on a finished tracker,
+`setLocation` only on an idle one). Three smaller consequences of the run outliving its
+screen, each handled rather than left:
+
+- The dashboard's start buttons stay tappable underneath a minimised run, so
+  `startOrReopen` reopens the run instead of replacing the session, and the free-run
+  button says **"Back to Your Run"** while one is recording.
+- The session is torn down in `onDisappear` rather than in the finish/discard actions —
+  the HUD is still on screen while the cover slides away, and clearing it any earlier
+  pops the guided banner out from under it. `onDisappear` can tell minimising from
+  ending, because a minimised run is still recording.
+- The accessory carries pause/resume as well as the way back (the Now Playing shape),
+  spells "Paused" out in words rather than leaving it to the glyph (§3d), and speaks a
+  sentence to VoiceOver rather than "27:14 dot 5.4 k m" (`MinimizedRunSummaryTests`).
+
+*Known remainder:* the split haptic and the spoken split announcement are still
+modifiers on the HUD, so they pause while a run is minimised. Both belong with the Live
+Activity work below, which is the item that has to answer "what does this run do when
+its screen isn't there" in general.
+
+`tabBarMinimizeBehavior(.onScrollDown)` went on at the same time, since it is the
+behaviour the accessory is designed to sit alongside.
 
 On glass: all five hand-rolled surfaces in the run flow — the zone pill, the top-bar
 pills, the metric grid, the finish button and the guided-workout banner — dropped
@@ -489,9 +532,10 @@ takes none of the benefit. Specifics worth acting on:
 - ~~**Glass is hand-rolled.**~~ ✅ Fixed in pass 3 — `glassPill`,
   `glassControlButton`, the zone pill, the metric grid and `GuidedWorkoutBanner` all
   use `.glassEffect` now. See the note above.
-- **`tabViewBottomAccessory` is tailor-made for this app.** A run in progress
-  showing as a persistent accessory above the tab bar (the Now Playing pattern)
-  would solve "I navigated away from my run" far better than a `fullScreenCover`.
+- ~~**`tabViewBottomAccessory` is tailor-made for this app.**~~ ✅ Fixed in pass 5 —
+  a recording run shows as a persistent accessory above the tab bar (the Now Playing
+  pattern) whenever the HUD is closed. See the note above; it was not only a missing
+  API but a missing exit.
 - **12 `GeometryReader`s** remain where `onGeometryChange`, `visualEffect` or
   `containerRelativeFrame` now apply. `GeometryReader` forces greedy sizing and
   is the usual cause of surprising layout in `ScrollView`s. Still open, and worth
@@ -664,12 +708,16 @@ than fetching everything and filtering in `filteredWorkouts` (`:60`).
 9b. ✅ The radius and elevation scales adopted and guarded, `AppGlow` added (§1);
    GPS quality surfaced (§5c); Differentiate Without Color handled (§3d)
 
-**Tier 4 — features the platform now expects** — 🟠 one of three done
+**Tier 4 — features the platform now expects** — 🟠 two of three done
 10. Live Activity / Dynamic Island for an in-progress run (§5b) — still open, and the
-    largest of the three: it needs a widget extension target in `project.yml`, which no
-    other item here has required
+    last of the three: it needs a widget extension target in `project.yml`, which no
+    other item here has required. It also owns the remainder pass 5 left — the split
+    haptic and spoken split still live on the HUD, so they pause while a run is minimised
 11. ✅ Spoken split announcements (§4) — `SplitAnnouncement` + `RunVoiceCoach`, opt-in
-12. `tabViewBottomAccessory` for the active run (§7) — still open
+12. ✅ `tabViewBottomAccessory` for the active run (§7) — the HUD is presented by
+    `MainTabView` and minimises into the accessory, which also gave the screen the close
+    control it never had. `ActiveRunPresentation` + `ActiveRunAccessory`,
+    `MinimizedRunSummary`, `tabBarMinimizeBehavior(.onScrollDown)`
 
 **Left over, smaller than a tier** — ✅ **DONE** except §7/§1
 13. The `GeometryReader` retirements (§7) and the spacing scale (§1) — both still open,
