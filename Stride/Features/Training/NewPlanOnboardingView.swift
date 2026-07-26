@@ -3,7 +3,7 @@ import SwiftData
 
 struct NewPlanOnboardingView: View {
     @Environment(\.modelContext) private var context
-    @Environment(\.appContainer) private var container
+    @Environment(AppContainer.self) private var container
     @Environment(\.dismiss) private var dismiss
     @Environment(AppSettings.self) private var appSettings
 
@@ -407,7 +407,7 @@ struct NewPlanOnboardingView: View {
                 StrideIcon(name: .calendar, size: 16, color: .secondary)
                 Text(goalRace.isGoalRace
                      ? "Race plans can target any future date."
-                     : "\(goalRace.typicalWeeks.lowerBound)–\(goalRace.typicalWeeks.upperBound) weeks recommended for \(goalRace.displayName).")
+                     : "\(goalRace.typicalWeeks.lowerBound)–\(goalRace.typicalWeeks.upperBound) weeks recommended for \(goalRace.localizedName).")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

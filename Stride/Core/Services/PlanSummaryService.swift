@@ -11,11 +11,13 @@ enum PlanStatus: Sendable, Equatable {
     /// An inactive plan that was replaced or abandoned before its end date.
     case ended
 
+    /// Presentation only — nothing compares or persists this, so unlike the display
+    /// enums in `Enums.swift` it needs no canonical English twin (D8).
     var displayName: String {
         switch self {
-        case .active:   return "Active"
-        case .finished: return "Finished"
-        case .ended:    return "Ended"
+        case .active:   return String(localized: "Active", comment: "Training plan status")
+        case .finished: return String(localized: "Finished", comment: "Training plan status")
+        case .ended:    return String(localized: "Ended", comment: "Training plan status")
         }
     }
 }

@@ -1,5 +1,6 @@
 import Foundation
 import CloudKit
+import Observation
 import CoreData
 import SwiftData
 
@@ -7,10 +8,18 @@ import SwiftData
 
 /// Central dependency-injection container.
 ///
-/// Initialised once at app launch and injected via SwiftUI's `Environment`.
+/// Initialised once at app launch and injected into SwiftUI's environment by type —
+/// `.environment(container)` at the root, `@Environment(AppContainer.self)` in a view —
+/// the same shape `AppSettings` and `AuthService` already use. It was `ObservableObject`
+/// behind a hand-written `EnvironmentKey` whose default had to *invent* a container for
+/// a view nobody injected into, which is a wiring bug wearing a fallback (D4). There is
+/// no default to get wrong now, and observation is per-property rather than per-object,
+/// so a view that reads nothing off the container no longer redraws when one changes.
+///
 /// Services are singletons within the container lifetime.
+@Observable
 @MainActor
-final class AppContainer: ObservableObject {
+final class AppContainer {
 
     enum PersistenceMode: Equatable {
         case cloudKit
@@ -53,26 +62,36 @@ final class AppContainer: ObservableObject {
 
         var title: String {
             switch self {
-            case .storeMovedAside: "Your training data couldn't be opened"
-            case .runningInMemory: "Running without saved data"
+            case .storeMovedAside:
+                String(localized: "Your training data couldn't be opened", comment: "Store-recovery alert title")
+            case .runningInMemory:
+                String(localized: "Running without saved data", comment: "Store-recovery alert title")
             }
         }
 
         var message: String {
             switch self {
             case .storeMovedAside(let backupName):
-                let location = backupName.map { " It's kept on this device as \($0)." } ?? ""
-                return """
-                Stride started with a fresh, empty database because your existing one \
-                couldn't be read by this version.\(location) Nothing was deleted — if you \
-                had iCloud Sync on, your data will come back down from iCloud shortly.
-                """
+                let location = backupName.map {
+                    String(localized: " It's kept on this device as \($0).", comment: "Where the unreadable store was kept")
+                } ?? ""
+                return String(
+                    localized: """
+                    Stride started with a fresh, empty database because your existing one \
+                    couldn't be read by this version.\(location) Nothing was deleted — if you \
+                    had iCloud Sync on, your data will come back down from iCloud shortly.
+                    """,
+                    comment: "Store-recovery alert body: the old store was set aside"
+                )
             case .runningInMemory:
-                return """
-                Stride couldn't open its database this time, so anything you record now \
-                will not be saved. Your existing data has been left untouched. Please \
-                restart the app; if this keeps happening, restart your device.
-                """
+                return String(
+                    localized: """
+                    Stride couldn't open its database this time, so anything you record now \
+                    will not be saved. Your existing data has been left untouched. Please \
+                    restart the app; if this keeps happening, restart your device.
+                    """,
+                    comment: "Store-recovery alert body: running from memory"
+                )
             }
         }
     }
@@ -85,7 +104,7 @@ final class AppContainer: ObservableObject {
     /// Set when the persistent store could not be opened normally, so the UI can tell
     /// the user what happened instead of silently running on a different store (C3).
     /// Cleared once acknowledged.
-    @Published var storeRecoveryNotice: StoreRecoveryNotice?
+    var storeRecoveryNotice: StoreRecoveryNotice?
 
     /// The iCloud-sync preference the store was actually opened with. Settings
     /// compares the live preference against this to decide whether a restart is
@@ -111,12 +130,21 @@ final class AppContainer: ObservableObject {
     let weatherService: WeatherService
     let aiCoachService: AICoachService
 
+    /// Creating, shifting, rebuilding, and destroying training plans (D2). The container
+    /// wires it and hands it out; it does not orchestrate it.
+    let planLifecycle: PlanLifecycleService
+
     // MARK: Workout Review
+
+    /// Listens to `NotificationService.syncedRunTaps` for this container's lifetime. Not
+    /// cancelled in `deinit` — `deinit` is nonisolated and this is main-actor state — but
+    /// the loop holds the container weakly and returns on the first tap after it is gone.
+    @ObservationIgnored private var syncedRunTapTask: Task<Void, Never>?
 
     /// Set when a workout is synced from HealthKit (background or foreground) or when the user
     /// taps a "Run Synced" notification. Presenting a RunSummaryView sheet on this value lets
     /// the user review their workout and confirms the auto-link to today's planned workout.
-    @Published var pendingReviewWorkout: RunWorkout?
+    var pendingReviewWorkout: RunWorkout?
 
     // MARK: Init
 
@@ -250,12 +278,14 @@ final class AppContainer: ObservableObject {
 
         let context = container.mainContext
         self.workoutRepository = WorkoutRepository(context: context)
-        self.planRepository = PlanRepository(context: context)
+        let planRepo = PlanRepository(context: context)
+        self.planRepository = planRepo
         let hkRepository = HealthKitRepository()
         self.healthKitRepository = hkRepository
         self.routeRepository = RouteRepository(context: context)
 
-        self.trainingPlanService = TrainingPlanService()
+        let planService = TrainingPlanService()
+        self.trainingPlanService = planService
         self.workoutTrackerService = WorkoutTrackerService()
         let notifications = NotificationService.shared
         self.notificationService = notifications
@@ -272,6 +302,12 @@ final class AppContainer: ObservableObject {
             weatherService: weather,
             context: context
         )
+        self.planLifecycle = PlanLifecycleService(
+            trainingPlanService: planService,
+            planRepository: planRepo,
+            healthKitRepository: hkRepository,
+            notificationService: notifications
+        )
 
         self.configureCloudKitDiagnostics(cloudKitEnabled: cloudKitEnabled)
 
@@ -283,13 +319,15 @@ final class AppContainer: ObservableObject {
             self.pendingReviewWorkout = first
         }
 
-        // Wire notification-tap callback only for the real app container. The EnvironmentKey
-        // default creates an in-memory fallback container, and letting that container own this
-        // singleton callback means notification taps update a hidden container instead of the
-        // SwiftUI root container.
-        if !inMemory {
-            notifications.onSyncedRunTapped = { [weak self] idString in
-                self?.surfacePendingReviewWorkout(idString: idString)
+        // Notification taps arrive as a stream rather than a stored callback on the
+        // notification singleton, which whichever container was built last used to own
+        // (D4). `self` is re-checked on every element — the shape
+        // `AppSettings.observeExternalChanges` uses — so this task keeps no strong
+        // reference to the container between taps and falls out once it is gone.
+        syncedRunTapTask = Task { @MainActor [weak self] in
+            for await idString in notifications.syncedRunTaps {
+                guard let self else { return }
+                self.surfacePendingReviewWorkout(idString: idString)
             }
         }
     }
@@ -491,223 +529,14 @@ final class AppContainer: ObservableObject {
         )
     }
 
-    // MARK: - Continuous plan refresh
-
-    /// Re-derives training paces from recent history and updates all future uncompleted
-    /// workouts in the plan. Call this after the user completes any run so workout
-    /// targets stay aligned with their current VDOT for any number of weekly run days.
-    func refreshPlanAfterWorkout(
-        plan: TrainingPlan,
-        history: [RunWorkout],
-        profile: UserProfile,
-        unitPreference: UnitPreference = .metric
-    ) {
-        trainingPlanService.refreshPaces(
-            plan: plan,
-            history: history,
-            profile: profile,
-            unitPreference: unitPreference
-        )
-    }
-
-    // MARK: - Schedule management
-
-    /// Redistributes uncompleted future workouts to match the given run day indices.
-    /// Excess workouts that no longer fit the new schedule are deleted from the context.
-    func rescheduleWorkouts(
-        in plan: TrainingPlan,
-        newDayIndices: [Int],
-        profile: UserProfile?,
-        context: ModelContext
-    ) {
-        let toDelete = trainingPlanService.applyNewRunDays(to: plan, newDayIndices: newDayIndices, profile: profile)
-        for workout in toDelete {
-            context.delete(workout)
-        }
-    }
-
-    // MARK: - Missed workout recovery
-
-    /// Shifts all future uncompleted training workouts forward by `days` calendar days.
-    /// Extends `plan.endDate` if any shifted workout falls beyond it.
-    /// Race workouts are excluded when the plan has a fixed raceDate.
-    ///
-    /// Strength and cross-training move with the runs. Holding them still while the
-    /// runs slid past them dropped runs onto gym days, and the plan's same-day
-    /// duplicate pruning then deleted the strength session outright (N6). Shifting
-    /// the whole week by one delta preserves the spacing the plan was built with —
-    /// which is the point of "pick up where I left off". Rest days stay put: they
-    /// are gaps, not sessions, and nothing is lost by leaving them.
-    ///
-    /// Holding the race still was never enough on its own: the rest of the block slid
-    /// straight over it, so a runner four days behind could end up with a tempo session
-    /// on race morning. `MissedWorkoutShift` clamps the request to the room that exists
-    /// before race day, and the returned outcome tells the caller how much of the
-    /// request survived so the UI can say so.
-    ///
-    /// - Returns: What the shift resolved to. `Outcome.isNoOp` means nothing moved and
-    ///   nothing was saved.
-    @discardableResult
-    func shiftMissedWorkoutsForward(
-        plan: TrainingPlan,
-        by days: Int,
-        context: ModelContext
-    ) throws -> MissedWorkoutShift.Outcome {
-        let startOfToday = Calendar.current.startOfDay(for: Date())
-        let hasFixedRace = plan.raceDate != nil
-
-        let allWorkouts: [ScheduledWorkout] = (plan.weeks ?? []).flatMap { $0.workouts ?? [] }
-        let toShift: [ScheduledWorkout] = allWorkouts.filter { w in
-            guard !w.isCompleted else { return false }
-            guard w.scheduledDate >= startOfToday else { return false }
-            let type = w.workoutType
-            if type == .rest { return false }
-            if hasFixedRace && type == .race { return false }
-            return true
-        }
-
-        let outcome = MissedWorkoutShift.resolve(
-            requestedDays: days,
-            lastMovableDate: toShift.map(\.scheduledDate).max(),
-            raceDate: plan.raceDate
-        )
-        guard !outcome.isNoOp else { return outcome }
-
-        for workout in toShift {
-            workout.scheduledDate = Calendar.current.date(
-                byAdding: .day, value: outcome.appliedDays, to: workout.scheduledDate
-            ) ?? workout.scheduledDate
-        }
-
-        if let newLast = toShift.max(by: { $0.scheduledDate < $1.scheduledDate }),
-           newLast.scheduledDate > plan.endDate {
-            plan.endDate = newLast.scheduledDate
-        }
-
-        try context.save()
-        return outcome
-    }
-
-    /// Retires the active plan and generates a fresh one starting from today,
-    /// preserving the original race date, goal time, and race type.
-    ///
-    /// The plan being replaced is **deactivated, never deleted** (N1). Deleting it
-    /// cascaded through its weeks and every `ScheduledWorkout` in them, including
-    /// completed ones — erasing the block from Plan History and unlinking the runs
-    /// that fulfilled it. That is the same data loss H3 fixed for the plan-creation
-    /// flows, and it fired from a button the app offers a runner who has fallen
-    /// behind. Deleting a plan stays a deliberate action in the Plan History list.
-    func rebuildPlan(
-        replacing oldPlan: TrainingPlan,
-        profile: UserProfile,
-        context: ModelContext,
-        unitPreference: UnitPreference = .metric
-    ) throws {
-        let startDate = Date().startOfDay
-        let runDayIndices = profile.preferredRunDayIndices
-
-        let newPlan: TrainingPlan
-        if let raceDate = oldPlan.raceDate, let raceName = oldPlan.raceName {
-            newPlan = trainingPlanService.generateRacePlan(
-                profile: profile,
-                startDate: startDate,
-                raceDate: raceDate,
-                raceName: raceName,
-                runDayIndices: runDayIndices,
-                unitPreference: unitPreference
-            )
-        } else {
-            newPlan = trainingPlanService.generatePlan(
-                profile: profile,
-                startDate: startDate,
-                numberOfWeeks: PlanRebuildWindow.remainingWeeks(from: startDate, to: oldPlan.endDate),
-                runDayIndices: runDayIndices,
-                unitPreference: unitPreference
-            )
-        }
-
-        newPlan.goalTimeSeconds = oldPlan.goalTimeSeconds
-        newPlan.targetRace = oldPlan.targetRace
-
-        // `save` enforces the single-active invariant by deactivating every other
-        // plan, which retires `oldPlan` while keeping it (and its history) in the store.
-        try planRepository.save(newPlan)
-        try planRepository.setActive(newPlan)
-
-        // The scheduler only clears entries for the plan it is syncing, so the retired
-        // plan's workouts would otherwise stay on the Watch alongside the new block's.
-        // Fire-and-forget: a failure here must not fail the rebuild the user asked for.
-        Task { @MainActor [healthKitRepository] in
-            try? await healthKitRepository.removeWorkoutPlans(for: oldPlan)
-        }
-    }
-
-    // MARK: - Plan deletion
-
-    /// Everything deliberately deleting one plan has to tear down, in one place (D3).
-    ///
-    /// A plan owns state outside its own row: WorkoutKit entries on the Watch and in
-    /// Fitness, and up to 56 scheduled morning reminders. Both are reachable only
-    /// *through* the plan, so deleting the record first strands them — still scheduled,
-    /// with nothing left to find them from. That is the same orphaning N1 fixed for the
-    /// rebuild path and N11 for the full reset; this is the third and last place a plan
-    /// is deliberately destroyed.
-    ///
-    /// It had two copies, in the Plan History swipe and the plan detail dialog, each
-    /// correct and each independently maintained. `resetAllData` is a fourth statement of
-    /// the same order of operations, over every plan at once.
-    ///
-    /// Best-effort on the teardown steps: an unauthorized or unsupported scheduler must
-    /// not block the deletion the user explicitly confirmed.
-    func deletePlan(_ plan: TrainingPlan, context: ModelContext) async {
-        try? await healthKitRepository.removeWorkoutPlans(for: plan)
-        notificationService.cancelReminders(for: plan)
-        context.delete(plan)
-        context.saveOrLog("a deleted plan")
-    }
-
     // MARK: - Reset
 
-    /// Everything **Settings → Reset All Data** has to tear down, in one place (N11).
-    ///
-    /// Deleting the SwiftData rows was only the visible half of a reset. Left behind,
-    /// each of these outlives the data it describes:
-    ///
-    /// - up to 56 pending morning reminders keep firing for a plan that no longer exists;
-    /// - the plan's WorkoutKit entries stay on the Watch and in Fitness, so the app
-    ///   drops to onboarding while the Watch still offers last week's workouts;
-    /// - the pending-review pointer and its snapshot can re-insert a deleted run on
-    ///   the next launch, which is a reset that undoes itself.
-    ///
-    /// Order matters: the Watch entries are found through the plans that own them, so
-    /// they have to be removed *before* the models are deleted.
+    /// Clears the in-memory pointer at the review sheet, then hands the teardown to
+    /// `PlanLifecycleService`. The pointer is the container's own state — a strong
+    /// reference to a `RunWorkout` that is about to be deleted — so it goes first.
     func resetAllData(context: ModelContext) async {
-        await notificationService.cancelAllMorningReminders()
-
-        let plans = (try? context.fetch(FetchDescriptor<TrainingPlan>())) ?? []
-        for plan in plans {
-            // Best-effort per plan: an unauthorized or unsupported scheduler must not
-            // stop the reset the user explicitly confirmed.
-            try? await healthKitRepository.removeWorkoutPlans(for: plan)
-        }
-
-        NotificationService.clearAllReviewState()
         pendingReviewWorkout = nil
-
-        do {
-            try context.delete(model: RunWorkout.self)
-            try context.delete(model: StrengthWorkout.self)
-            try context.delete(model: ScheduledWorkout.self)
-            try context.delete(model: TrainingWeek.self)
-            try context.delete(model: TrainingPlan.self)
-            try context.delete(model: UserProfile.self)
-            try context.delete(model: SavedRoute.self)
-            try context.delete(model: DeletedWorkout.self)
-            try context.save()
-            AppLogger.log("Reset All Data completed for \(plans.count) plan(s).", label: "Data", level: .notice)
-        } catch {
-            AppLogger.log("Reset All Data failed: \(error)", label: "Data", level: .error)
-        }
+        await planLifecycle.resetAllData(context: context)
     }
 
     // MARK: Preview support
@@ -827,36 +656,4 @@ final class AppContainer: ObservableObject {
         return lines
     }
 
-}
-
-// MARK: - EnvironmentKey
-
-import SwiftUI
-
-private struct AppContainerKey: EnvironmentKey {
-    // Reached only when a view reads `@Environment(\.appContainer)` without an
-    // ancestor injecting one — a wiring bug. Under the old default such a view
-    // silently bound to a throwaway in-memory container and lost every write with
-    // no error or log. Trap in debug so the missing injection surfaces at once; in
-    // release, `assertionFailure` is a no-op and we hand back a fresh in-memory
-    // container so a shipping build degrades instead of crashing. Computing this at
-    // the access site (a `var`, not a `let`) keeps `assumeIsolated` on the main
-    // actor where SwiftUI evaluates environment reads, rather than trapping on a
-    // stray off-main first touch of a lazily-initialised `static let`.
-    static var defaultValue: AppContainer {
-        MainActor.assumeIsolated {
-            assertionFailure(
-                "appContainer was read without injection — add "
-                + ".environment(\\.appContainer, container) above this view"
-            )
-            return AppContainer(inMemory: true)
-        }
-    }
-}
-
-extension EnvironmentValues {
-    var appContainer: AppContainer {
-        get { self[AppContainerKey.self] }
-        set { self[AppContainerKey.self] = newValue }
-    }
 }

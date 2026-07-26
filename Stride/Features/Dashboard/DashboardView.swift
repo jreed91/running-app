@@ -200,7 +200,7 @@ private struct DayCell: View {
             return "\(day), \(isRestDay ? "rest day" : "nothing scheduled")"
         }
         let list = sessions
-            .map { "\($0.workoutType.displayName)\($0.isCompleted ? ", completed" : "")" }
+            .map { "\($0.workoutType.localizedName)\($0.isCompleted ? ", completed" : "")" }
             .joined(separator: ", ")
         return "\(day), \(list)"
     }
@@ -282,7 +282,7 @@ struct DashboardView: View {
 
     @Environment(AppSettings.self) private var appSettings
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.appContainer) private var container
+    @Environment(AppContainer.self) private var container
     @Environment(\.modelContext) private var context
     @Query private var profiles: [UserProfile]
     @State private var showActiveRun = false
@@ -750,7 +750,7 @@ struct DashboardView: View {
     private func handlePickUp(info: MissedWorkoutInfo) {
         guard let plan = activePlan, !isHandlingRecovery else { return }
         runRecovery(failureMessage: "We couldn't move your missed workouts forward.") {
-            let outcome = try container.shiftMissedWorkoutsForward(
+            let outcome = try container.planLifecycle.shiftMissedWorkoutsForward(
                 plan: plan,
                 by: info.daysToShift,
                 context: context
@@ -782,7 +782,7 @@ struct DashboardView: View {
     private func handleRebuild() {
         guard let plan = activePlan, let profile = profiles.first, !isHandlingRecovery else { return }
         runRecovery(failureMessage: "We couldn't rebuild your plan.") {
-            try container.rebuildPlan(
+            try container.planLifecycle.rebuildPlan(
                 replacing: plan,
                 profile: profile,
                 context: context,

@@ -87,7 +87,7 @@ private struct SavedRouteRow: View {
                     Text("·")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
-                    Text(route.routeType.displayName)
+                    Text(route.routeType.localizedName)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Text("·")
@@ -124,7 +124,7 @@ struct SavedRouteDetailView: View {
                         value: viewModel.formattedDuration(route.estimatedDurationSeconds)
                     )
                     Divider().frame(height: 40)
-                    DetailStat(label: "Type", value: route.routeType.displayName)
+                    DetailStat(label: "Type", value: route.routeType.localizedName)
                 }
                 .padding()
                 .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))

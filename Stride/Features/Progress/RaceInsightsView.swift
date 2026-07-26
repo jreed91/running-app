@@ -170,7 +170,7 @@ struct RaceInsightsView: View {
 
     private var raceFitnessHeroCard: some View {
         let trend = paceTrend
-        let raceName = profile?.goalRace.displayName ?? "Race"
+        let raceName = profile?.goalRace.localizedName ?? "Race"
         let hasGoal = (profile?.goalFinishTime ?? 0) > 0
         let gap = goalGapSeconds
 

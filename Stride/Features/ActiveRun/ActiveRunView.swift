@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 
 struct ActiveRunView: View {
-    @Environment(\.appContainer) private var container
+    @Environment(AppContainer.self) private var container
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @Environment(AppSettings.self) private var appSettings
@@ -219,7 +219,7 @@ struct ActiveRunView: View {
             glassPill {
                 Image(systemName: selectedLocation.systemImage)
                     .font(.system(size: 13, weight: .semibold))
-                Text(selectedLocation.displayName)
+                Text(selectedLocation.localizedName)
                     .font(.system(size: 12, weight: .bold))
                     .kerning(0.5)
             }
@@ -228,7 +228,7 @@ struct ActiveRunView: View {
         .buttonStyle(.plain)
         .disabled(!isIdle)
         .accessibilityLabel("Workout location")
-        .accessibilityValue(selectedLocation.displayName)
+        .accessibilityValue(selectedLocation.localizedName)
         .accessibilityHint("Switches between outdoor GPS and indoor tracking. Only before the run starts.")
         .adaptiveAnimation(AppAnimation.gentle, value: selectedLocation.rawValue)
     }
@@ -687,7 +687,7 @@ struct ActiveRunView: View {
         }
         if let profile = profiles.first, let plan = activePlans.first {
             let allHistory = (try? context.fetch(FetchDescriptor<RunWorkout>())) ?? []
-            container.refreshPlanAfterWorkout(
+            container.planLifecycle.refreshPlanAfterWorkout(
                 plan: plan,
                 history: allHistory,
                 profile: profile,

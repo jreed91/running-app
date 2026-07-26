@@ -72,7 +72,7 @@ struct MissedWorkoutsRecoveryTests {
         let originalDates = before.map { $0.scheduledDate }
         guard !before.isEmpty else { return }
 
-        try container.shiftMissedWorkoutsForward(plan: plan, by: 5, context: context)
+        try container.planLifecycle.shiftMissedWorkoutsForward(plan: plan, by: 5, context: context)
 
         for (index, workout) in before.enumerated() {
             let expected = Calendar.current.date(byAdding: .day, value: 5, to: originalDates[index])!
@@ -98,7 +98,7 @@ struct MissedWorkoutsRecoveryTests {
         firstFuture.isCompleted = true
         let completedDate = firstFuture.scheduledDate
 
-        try container.shiftMissedWorkoutsForward(plan: plan, by: 3, context: context)
+        try container.planLifecycle.shiftMissedWorkoutsForward(plan: plan, by: 3, context: context)
 
         // The completed workout should not have moved
         #expect(Calendar.current.isDate(firstFuture.scheduledDate, inSameDayAs: completedDate))
@@ -118,7 +118,7 @@ struct MissedWorkoutsRecoveryTests {
         let restDates = restWorkouts.map { $0.scheduledDate }
         guard !restDates.isEmpty else { return }
 
-        try container.shiftMissedWorkoutsForward(plan: plan, by: 3, context: context)
+        try container.planLifecycle.shiftMissedWorkoutsForward(plan: plan, by: 3, context: context)
 
         for (index, workout) in restWorkouts.enumerated() {
             #expect(
@@ -139,7 +139,7 @@ struct MissedWorkoutsRecoveryTests {
         let before = futureNonRestWorkouts(in: plan, from: today)
         let originalDates = before.map { $0.scheduledDate }
 
-        try container.shiftMissedWorkoutsForward(plan: plan, by: 0, context: context)
+        try container.planLifecycle.shiftMissedWorkoutsForward(plan: plan, by: 0, context: context)
 
         for (index, workout) in before.enumerated() {
             #expect(
@@ -160,7 +160,7 @@ struct MissedWorkoutsRecoveryTests {
         let originalEndDate = plan.endDate
 
         // Shift by a large number to guarantee the last workout goes past endDate
-        try container.shiftMissedWorkoutsForward(plan: plan, by: 30, context: context)
+        try container.planLifecycle.shiftMissedWorkoutsForward(plan: plan, by: 30, context: context)
 
         let allFuture = futureNonRestWorkouts(in: plan, from: today)
         if let lastWorkout = allFuture.last {
@@ -181,7 +181,7 @@ struct MissedWorkoutsRecoveryTests {
         let oldPlan = try makePlan(container: container, profile: profile, startDate: today.adding(weeks: -2))
         let oldPlanID = oldPlan.id
 
-        try container.rebuildPlan(replacing: oldPlan, profile: profile, context: context)
+        try container.planLifecycle.rebuildPlan(replacing: oldPlan, profile: profile, context: context)
 
         let allPlans = try container.planRepository.fetchAll()
         // N1: the replaced plan is kept as history, not deleted.
@@ -221,7 +221,7 @@ struct MissedWorkoutsRecoveryTests {
         completed.isCompleted = true
         try context.save()
 
-        try container.rebuildPlan(replacing: oldPlan, profile: profile, context: context)
+        try container.planLifecycle.rebuildPlan(replacing: oldPlan, profile: profile, context: context)
 
         // The old block, its weeks, its completed day, and the run's link all survive.
         #expect(oldPlan.hasLoggedProgress == true)
@@ -247,7 +247,7 @@ struct MissedWorkoutsRecoveryTests {
         guard !strength.isEmpty else { return }
         let originalDates = strength.map(\.scheduledDate)
 
-        try container.shiftMissedWorkoutsForward(plan: plan, by: 4, context: context)
+        try container.planLifecycle.shiftMissedWorkoutsForward(plan: plan, by: 4, context: context)
 
         // N6: holding strength still while runs slid past it dropped runs onto gym
         // days, and the plan's duplicate pruning then deleted the gym session.
@@ -284,7 +284,7 @@ struct MissedWorkoutsRecoveryTests {
 
         // Far more than the block has room for: unclamped this pushed the whole
         // remaining plan over race day (N6).
-        let outcome = try container.shiftMissedWorkoutsForward(plan: plan, by: 60, context: context)
+        let outcome = try container.planLifecycle.shiftMissedWorkoutsForward(plan: plan, by: 60, context: context)
 
         #expect(outcome.requestedDays == 60)
         #expect(outcome.wasClampedByRace)
@@ -324,7 +324,7 @@ struct MissedWorkoutsRecoveryTests {
         )
         try container.planRepository.save(plan)
 
-        try container.rebuildPlan(replacing: plan, profile: profile, context: context)
+        try container.planLifecycle.rebuildPlan(replacing: plan, profile: profile, context: context)
 
         let newPlan = try container.planRepository.fetchActivePlan()
         #expect(newPlan != nil)
@@ -346,7 +346,7 @@ struct MissedWorkoutsRecoveryTests {
         oldPlan.goalTimeSeconds = 5_400  // 90 min
         oldPlan.targetRace = .halfMarathon
 
-        try container.rebuildPlan(replacing: oldPlan, profile: profile, context: context)
+        try container.planLifecycle.rebuildPlan(replacing: oldPlan, profile: profile, context: context)
 
         let newPlan = try container.planRepository.fetchActivePlan()
         #expect(newPlan?.goalTimeSeconds == 5_400)
@@ -362,7 +362,7 @@ struct MissedWorkoutsRecoveryTests {
 
         let oldPlan = try makePlan(container: container, profile: profile, startDate: today.adding(weeks: -4))
 
-        try container.rebuildPlan(replacing: oldPlan, profile: profile, context: context)
+        try container.planLifecycle.rebuildPlan(replacing: oldPlan, profile: profile, context: context)
 
         let newPlan = try container.planRepository.fetchActivePlan()
         #expect(newPlan != nil)

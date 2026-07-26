@@ -5,7 +5,7 @@ import SwiftData
 /// completion stats. Pushed from the Plan tab's history toolbar button.
 struct TrainingPlanListView: View {
     @Environment(\.modelContext) private var context
-    @Environment(\.appContainer) private var container
+    @Environment(AppContainer.self) private var container
 
     @Query(sort: \TrainingPlan.createdAt, order: .reverse)
     private var plans: [TrainingPlan]
@@ -68,7 +68,7 @@ struct TrainingPlanListView: View {
                 // `deletePlan` owns the order: the Watch entries and reminders are
                 // reachable only through the plan, so they go before the record does (D3).
                 for plan in toDelete {
-                    await container.deletePlan(plan, context: context)
+                    await container.planLifecycle.deletePlan(plan, context: context)
                 }
             }
         }
@@ -88,7 +88,7 @@ struct PlanRowView: View {
         if let name = plan.raceName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
             return name
         }
-        return plan.targetRace.displayName
+        return plan.targetRace.localizedName
     }
 
     private var dateRange: String {

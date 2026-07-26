@@ -44,7 +44,7 @@ struct StrengthSummaryView: View {
                                color: WorkoutType.strength.color, strokeWeight: 2.0)
                 }
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(workout.scheduledWorkout?.strengthPlan?.focus.displayName ?? "Strength Workout")
+                    Text(workout.scheduledWorkout?.strengthPlan?.focus.localizedName ?? "Strength Workout")
                         .font(.title3.bold())
                     Text(workout.date.formatted(.dateTime.weekday(.wide).month(.wide).day().year()))
                         .font(.subheadline)

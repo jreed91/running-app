@@ -18,7 +18,7 @@ enum SpokenMetric {
     /// ("minutes", "sets") needs no translation, and a new abbreviation reads no worse
     /// than it looks.
     static func spoken(value: String, unit: String? = nil) -> String {
-        guard !isPlaceholder(value) else { return "No data yet" }
+        guard !isPlaceholder(value) else { return String(localized: "No data yet", comment: "Spoken value of a metric cell with nothing in it") }
         guard let unit, !unit.isEmpty else { return value }
         return "\(value) \(spokenUnit(unit))"
     }
@@ -30,7 +30,7 @@ enum SpokenMetric {
     /// Only a recognised trailing unit is translated; anything else is spoken as written,
     /// so a value that is already a sentence is left alone.
     static func spoken(measurement: String) -> String {
-        guard !isPlaceholder(measurement) else { return "No data yet" }
+        guard !isPlaceholder(measurement) else { return String(localized: "No data yet", comment: "Spoken value of a metric cell with nothing in it") }
         let parts = measurement.split(separator: " ")
         guard parts.count >= 2, let unit = parts.last else { return measurement }
         let translated = spokenUnit(String(unit))
@@ -46,18 +46,18 @@ enum SpokenMetric {
 
     private static func spokenUnit(_ unit: String) -> String {
         switch unit {
-        case "spm":            return "steps per minute"
-        case "bpm":            return "beats per minute"
-        case "m":              return "metres"
-        case "ft":             return "feet"
-        case "km":             return "kilometres"
-        case "mi":             return "miles"
-        case "/km":            return "per kilometre"
-        case "/mi":            return "per mile"
-        case "min/km":         return "minutes per kilometre"
-        case "min/mi":         return "minutes per mile"
-        case "min":            return "minutes"
-        case "%":              return "percent"
+        case "spm":            return String(localized: "steps per minute", comment: "Spoken form of the unit spm")
+        case "bpm":            return String(localized: "beats per minute", comment: "Spoken form of the unit bpm")
+        case "m":              return String(localized: "metres", comment: "Spoken form of the unit m")
+        case "ft":             return String(localized: "feet", comment: "Spoken form of the unit ft")
+        case "km":             return String(localized: "kilometres", comment: "Spoken form of the unit km")
+        case "mi":             return String(localized: "miles", comment: "Spoken form of the unit mi")
+        case "/km":            return String(localized: "per kilometre", comment: "Spoken form of the unit /km")
+        case "/mi":            return String(localized: "per mile", comment: "Spoken form of the unit /mi")
+        case "min/km":         return String(localized: "minutes per kilometre", comment: "Spoken form of the unit min/km")
+        case "min/mi":         return String(localized: "minutes per mile", comment: "Spoken form of the unit min/mi")
+        case "min":            return String(localized: "minutes", comment: "Spoken form of the unit min")
+        case "%":              return String(localized: "percent", comment: "Spoken form of the unit %")
         default:               return unit
         }
     }

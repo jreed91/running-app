@@ -38,14 +38,16 @@ enum ChartAccessibility {
     ///   - points: the plotted values, in the order the chart draws them.
     ///   - format: renders one value the way the chart's axis does, units included.
     static func summary(_ points: [Point], format: (Double) -> String) -> String {
-        guard let first = points.first, let last = points.last else { return "No data" }
+        guard let first = points.first, let last = points.last else {
+            return String(localized: "No data", comment: "Spoken summary of an empty chart")
+        }
         guard points.count > 1 else {
-            return "1 value: \(first.label), \(format(first.value))."
+            return String(localized: "1 value: \(first.label), \(format(first.value)).", comment: "Spoken summary of a chart with one point")
         }
 
         var sentences = [
-            "\(points.count) values.",
-            "From \(first.label), \(format(first.value)) to \(last.label), \(format(last.value))."
+            String(localized: "\(points.count) values.", comment: "How many points a chart has"),
+            String(localized: "From \(first.label), \(format(first.value)) to \(last.label), \(format(last.value)).", comment: "Where a charted series starts and ends")
         ]
         // Endpoints are often the extremes too; naming them again is a little redundant
         // but keeps every chart's summary the same shape, which matters more when it is
@@ -53,8 +55,8 @@ enum ChartAccessibility {
         if let lowest = points.min(by: { $0.value < $1.value }),
            let highest = points.max(by: { $0.value < $1.value }),
            lowest.value < highest.value {
-            sentences.append("Lowest \(lowest.label), \(format(lowest.value)).")
-            sentences.append("Highest \(highest.label), \(format(highest.value)).")
+            sentences.append(String(localized: "Lowest \(lowest.label), \(format(lowest.value)).", comment: "A charted series' minimum"))
+            sentences.append(String(localized: "Highest \(highest.label), \(format(highest.value)).", comment: "A charted series' maximum"))
         }
         return sentences.joined(separator: " ")
     }

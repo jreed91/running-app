@@ -250,7 +250,7 @@ final class RouteGeniusViewModel {
         } else {
             distLabel = "Route"
         }
-        return "\(routeType.displayName) · \(distLabel)"
+        return "\(routeType.localizedName) · \(distLabel)"
     }
 
     func formattedDistance(_ meters: Double) -> String {

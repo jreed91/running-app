@@ -445,7 +445,7 @@ private struct RouteTypeButton: View {
             VStack(spacing: 6) {
                 StrideIcon(name: type.strideIcon, size: 22,
                            color: isSelected ? .white : .primary, strokeWeight: 2.0)
-                Text(type.displayName).font(.caption)
+                Text(type.localizedName).font(.caption)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)

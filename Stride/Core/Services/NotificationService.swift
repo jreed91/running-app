@@ -25,14 +25,34 @@ final class NotificationService: NSObject {
     // instead of being silently dropped, which left stale reminders (M3).
     private var pendingBulkPlan: TrainingPlan?
 
-    /// Called on MainActor when the user taps a SYNCED_RUN notification.
-    /// The argument is the `RunWorkout.id.uuidString` embedded in the notification payload.
-    var onSyncedRunTapped: ((String) -> Void)? {
-        didSet {
-            replayBufferedSyncedRunTapIfNeeded()
+    /// Taps on a SYNCED_RUN notification, as a stream of the `RunWorkout.id.uuidString`
+    /// carried in the payload.
+    ///
+    /// This was a stored `onSyncedRunTapped` closure, and this service is a process-wide
+    /// singleton — it is the `UNUserNotificationCenter` delegate — so that closure belonged
+    /// to whichever `AppContainer` was built last, which in a test run or a preview is not
+    /// the one on screen. The container worked around it by refusing to register when it
+    /// was in-memory; the shape was the problem (D4). A stream has no single slot to
+    /// clobber: every listener gets every tap, a tap that lands before anyone is listening
+    /// is held and replayed to the next one (the cold-launch case), and a listener's
+    /// registration ends with its task rather than being overwritten by the next container.
+    var syncedRunTaps: AsyncStream<String> {
+        AsyncStream(bufferingPolicy: .unbounded) { continuation in
+            let id = UUID()
+            syncedRunTapListeners[id] = continuation
+            if let buffered = bufferedSyncedRunTapID {
+                bufferedSyncedRunTapID = nil
+                continuation.yield(buffered)
+            }
+            continuation.onTermination = { [weak self] _ in
+                Task { @MainActor in self?.syncedRunTapListeners[id] = nil }
+            }
         }
     }
 
+    private var syncedRunTapListeners: [UUID: AsyncStream<String>.Continuation] = [:]
+
+    /// A tap that arrived with nothing listening yet, replayed to the first listener.
     private var bufferedSyncedRunTapID: String?
 
     func installAsDelegate() {
@@ -77,8 +97,11 @@ final class NotificationService: NSObject {
         guard workout.workoutType != .rest else { return }
 
         let content = UNMutableNotificationContent()
-        content.title = "Workout today"
-        content.body = "You have a \(workout.workoutType.displayName) workout scheduled today. Lace up!"
+        content.title = String(localized: "Workout today", comment: "Morning reminder notification title")
+        content.body = String(
+            localized: "You have a \(workout.workoutType.localizedName) workout scheduled today. Lace up!",
+            comment: "Morning reminder notification body"
+        )
         content.sound = .default
         content.categoryIdentifier = Category.workoutReminder
 
@@ -189,7 +212,7 @@ final class NotificationService: NSObject {
     ) async throws {
         guard await isAuthorized else { return }
         let content = UNMutableNotificationContent()
-        content.title = "Run Synced"
+        content.title = String(localized: "Run Synced", comment: "Notification title when one run is imported from Apple Health")
         content.body  = syncedRunBody(for: workout, unit: unit)
         content.sound = .default
         content.categoryIdentifier = Category.syncedRun
@@ -216,8 +239,11 @@ final class NotificationService: NSObject {
     func notifyRunBatchSynced(count: Int) async throws {
         guard count > 0, await isAuthorized else { return }
         let content = UNMutableNotificationContent()
-        content.title = "Runs Synced"
-        content.body = "\(count) runs were imported from Apple Health."
+        content.title = String(localized: "Runs Synced", comment: "Notification title when several runs are imported from Apple Health")
+        content.body = String(
+            localized: "\(count) runs were imported from Apple Health.",
+            comment: "Notification body when several runs are imported"
+        )
         content.sound = .default
         content.categoryIdentifier = Category.syncedRun
         content.userInfo = ["opensReviewOnTap": false]
@@ -259,7 +285,7 @@ final class NotificationService: NSObject {
             workoutType: .tempo
         )
         let content = UNMutableNotificationContent()
-        content.title = "Time to run!"
+        content.title = String(localized: "Time to run!", comment: "Notification title at the scheduled workout time")
         content.body = reminderBody(for: workout, minutesBefore: 0)
         content.sound = .default
         content.categoryIdentifier = Category.workoutReminder
@@ -278,8 +304,11 @@ final class NotificationService: NSObject {
             workoutType: .easy
         )
         let content = UNMutableNotificationContent()
-        content.title = "Workout today"
-        content.body = "You have a \(workout.workoutType.displayName) workout scheduled today. Lace up!"
+        content.title = String(localized: "Workout today", comment: "Morning reminder notification title")
+        content.body = String(
+            localized: "You have a \(workout.workoutType.localizedName) workout scheduled today. Lace up!",
+            comment: "Morning reminder notification body"
+        )
         content.sound = .default
         content.categoryIdentifier = Category.workoutReminder
         let request = UNNotificationRequest(
@@ -357,7 +386,7 @@ final class NotificationService: NSObject {
     private func syncedRunBody(for workout: RunWorkout, unit: UnitPreference) -> String {
         let distance = workout.distanceMeters.distanceString(unit: unit)
         let pace = workout.averagePaceSecondsPerKm.paceString(unit: unit)
-        return "\(workout.workoutType.displayName) · \(distance) · \(pace)"
+        return "\(workout.workoutType.localizedName) · \(distance) · \(pace)"
     }
 
     private func storeReviewSnapshot(for workout: RunWorkout) {
@@ -379,26 +408,26 @@ final class NotificationService: NSObject {
     }
 
     private func reminderBody(for workout: ScheduledWorkout, minutesBefore: Int) -> String {
-        let type = workout.workoutType.displayName
+        let type = workout.workoutType.localizedName
         if minutesBefore == 0 {
-            return "Your \(type) workout starts now. Lace up!"
+            return String(localized: "Your \(type) workout starts now. Lace up!", comment: "Reminder body, workout starting now")
         }
-        return "Your \(type) workout is in \(minutesBefore) min. Get ready!"
-    }
-
-    private func replayBufferedSyncedRunTapIfNeeded() {
-        guard let workoutID = bufferedSyncedRunTapID, let onSyncedRunTapped else { return }
-        bufferedSyncedRunTapID = nil
-        onSyncedRunTapped(workoutID)
+        return String(
+            localized: "Your \(type) workout is in \(minutesBefore) min. Get ready!",
+            comment: "Reminder body, workout starting soon"
+        )
     }
 
     private func handleSyncedRunTap(workoutID: String) {
         UserDefaults.standard.set(workoutID, forKey: Self.pendingReviewWorkoutIDKey)
-        guard let onSyncedRunTapped else {
+        guard !syncedRunTapListeners.isEmpty else {
+            // Cold launch: the tap woke the app and no container is listening yet.
             bufferedSyncedRunTapID = workoutID
             return
         }
-        onSyncedRunTapped(workoutID)
+        for listener in syncedRunTapListeners.values {
+            listener.yield(workoutID)
+        }
     }
 
     private struct SyncedRunReviewSnapshot: Codable {

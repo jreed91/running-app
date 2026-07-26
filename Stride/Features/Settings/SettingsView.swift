@@ -7,7 +7,7 @@ import PulseUI
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var context
-    @Environment(\.appContainer) private var container
+    @Environment(AppContainer.self) private var container
     @Environment(AppSettings.self) private var appSettings
     @Environment(AuthService.self) private var authService
     @Query private var profiles: [UserProfile]
@@ -112,9 +112,9 @@ struct SettingsView: View {
                 Text(profile.name.isEmpty ? "Runner" : profile.name)
                     .font(.system(size: 20, weight: .bold))
                 HStack(spacing: 4) {
-                    Text(profile.goalRace.displayName)
+                    Text(profile.goalRace.localizedName)
                     Text("·")
-                    Text(profile.fitnessLevel.displayName)
+                    Text(profile.fitnessLevel.localizedName)
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -179,7 +179,7 @@ struct SettingsView: View {
                 ForEach(UnitPreference.allCases, id: \.self) { unit in
                     Button { appSettings.unitPreference = unit } label: {
                         VStack(spacing: 3) {
-                            Text(unit.displayName)
+                            Text(unit.localizedName)
                                 .font(.system(size: 14, weight: .semibold))
                             Text(unit == .metric ? "km · min/km" : "mi · min/mi")
                                 .font(.system(size: 11))
@@ -215,7 +215,7 @@ struct SettingsView: View {
             rowDivider
             settingsRow(icon: .heart, iconColor: .destructive, title: "Gender") {
                 Picker("", selection: profileGenderBinding(for: profile)) {
-                    ForEach(Gender.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                    ForEach(Gender.allCases, id: \.self) { Text($0.localizedName).tag($0) }
                 }
                 .labelsHidden()
             }
@@ -386,7 +386,7 @@ struct SettingsView: View {
             settingsRow(icon: .gear, iconColor: .brand, title: "Model") {
                 Picker("", selection: Bindable(appSettings).aiProvider) {
                     ForEach(AIProvider.allCases, id: \.self) { provider in
-                        Text(provider.displayName).tag(provider)
+                        Text(provider.localizedName).tag(provider)
                     }
                 }
                 .labelsHidden()
@@ -722,7 +722,7 @@ struct SettingsView: View {
 
     private func resetAll() {
         // The whole routine — reminders, Watch entries, pending-review defaults, then
-        // the models — lives in `AppContainer.resetAllData` (N11). Clearing only the
+        // the models — lives in `PlanLifecycleService.resetAllData` (N11). Clearing only the
         // store left reminders firing and a deleted run able to resurrect itself.
         Task { await container.resetAllData(context: context) }
     }

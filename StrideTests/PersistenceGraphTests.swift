@@ -116,8 +116,8 @@ struct PersistenceGraphTests {
         #expect(fetchedProfile.preferredRunDayIndices == [0, 2, 5])
     }
 
-    @Test("Repository delete APIs remove saved plans, workouts, and routes")
-    func repositoriesDeleteModels() throws {
+    @Test("Delete APIs remove saved plans, workouts, and routes")
+    func repositoriesDeleteModels() async throws {
         let container = AppContainer.preview()
         let context = container.modelContainer.mainContext
 
@@ -153,7 +153,10 @@ struct PersistenceGraphTests {
         )
         try container.routeRepository.save(route)
 
-        try container.planRepository.delete(plan)
+        // Plans are deleted through `PlanLifecycleService`, not the repository: teardown
+        // of the Watch entries and the plan's reminders belongs to the same step as the
+        // row (D3), and `PlanRepository` deliberately exposes no `delete` to bypass it.
+        await container.planLifecycle.deletePlan(plan, context: context)
         try container.workoutRepository.delete(workout)
         try container.routeRepository.delete(route)
 

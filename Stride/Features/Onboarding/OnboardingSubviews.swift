@@ -531,7 +531,7 @@ struct OBRaceCard: View {
                 }
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(race.displayName).font(.bodyStrong)
+                        Text(race.localizedName).font(.bodyStrong)
                         Text(distanceLabel)
                             .font(.system(size: 12, weight: .semibold, design: .monospaced))
                             .foregroundStyle(.secondary)
@@ -839,7 +839,7 @@ struct OBLevelRow: View {
         Button(action: onSelect) {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(level.displayName).font(.bodyStrong)
+                    Text(level.localizedName).font(.bodyStrong)
                     Text(desc)
                         .font(.caption).foregroundStyle(.secondary)
                     Text({
@@ -1091,7 +1091,7 @@ struct OBReady: View {
                                 .font(.system(size: 11, weight: .bold))
                                 .kerning(1.6)
                                 .foregroundStyle(.brand)
-                            Text("\(planWeeks)-week \(goalRace.displayName) plan\nbuilt for you.")
+                            Text("\(planWeeks)-week \(goalRace.localizedName) plan\nbuilt for you.")
                                 .font(.system(size: 28, weight: .heavy))
                                 .kerning(-0.7)
                                 .foregroundStyle(.primary)
@@ -1347,7 +1347,7 @@ struct OBEquipmentCard: View {
     }
 
     private var labelView: some View {
-        Text(equipment.displayName)
+        Text(equipment.localizedName)
             .font(.system(size: 14, weight: .semibold))
             .foregroundStyle(isSelected ? Color.primary : Color.secondary)
             .lineLimit(1)
@@ -1398,7 +1398,7 @@ private struct OBStrengthFocusRow: View {
             HStack(spacing: 12) {
                 OBRadio(isSelected: isSelected, color: .brand)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(option.displayName)
+                    Text(option.localizedName)
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Color.primary)
                     Text(option.subtitle)

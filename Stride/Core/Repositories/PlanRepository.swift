@@ -3,12 +3,18 @@ import SwiftData
 
 // MARK: - Protocol
 
+/// Reads, writes, and activation for training plans.
+///
+/// Deliberately **no `delete`**. A plan owns two things that live outside the store —
+/// its WorkoutKit entries on the Watch and up to 56 scheduled morning reminders — and a
+/// repository has no way to reach either, so a bare `context.delete(plan)` here left
+/// both behind. `PlanLifecycleService.deletePlan(_:context:)` is the one owner of plan teardown
+/// (D3); removing the method is what stops a future caller from routing around it.
 protocol PlanRepositoryProtocol {
     func save(_ plan: TrainingPlan) throws
     func fetchAll() throws -> [TrainingPlan]
     func fetchActivePlan() throws -> TrainingPlan?
     func setActive(_ plan: TrainingPlan) throws
-    func delete(_ plan: TrainingPlan) throws
 }
 
 // MARK: - SwiftData implementation
@@ -55,11 +61,6 @@ final class PlanRepository: PlanRepositoryProtocol {
         let all = try fetchAll()
         all.forEach { $0.isActive = false }
         plan.isActive = true
-        try context.save()
-    }
-
-    func delete(_ plan: TrainingPlan) throws {
-        context.delete(plan)
         try context.save()
     }
 }
