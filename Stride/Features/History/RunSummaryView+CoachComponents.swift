@@ -35,7 +35,7 @@ extension RunSummaryView {
 
         var bodyView: some View {
             HStack(spacing: 12) {
-                RoundedRectangle(cornerRadius: 2)
+                RoundedRectangle(cornerRadius: AppRadius.micro)
                     .fill(tone)
                     .frame(width: 4)
 
@@ -66,11 +66,11 @@ extension RunSummaryView {
                         .minimumScaleFactor(0.75)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
-                        .background(tone.opacity(0.14), in: RoundedRectangle(cornerRadius: 8))
+                        .background(tone.opacity(0.14), in: RoundedRectangle(cornerRadius: AppRadius.xs))
                 }
             }
             .padding(14)
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
+            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
 
         var body: some View {

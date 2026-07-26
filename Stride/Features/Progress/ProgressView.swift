@@ -179,7 +179,7 @@ struct ProgressDashboardView: View {
             )
         }
         .padding(16)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     private func summaryStatCell(value: String, label: String) -> some View {
@@ -213,7 +213,7 @@ struct ProgressDashboardView: View {
                         .padding(.vertical, 9)
                         .background {
                             if selectedRange == range {
-                                RoundedRectangle(cornerRadius: 10)
+                                RoundedRectangle(cornerRadius: AppRadius.sm)
                                     .fill(Color.brand)
                                     .matchedGeometryEffect(id: "rangePill", in: rangeNamespace)
                             }
@@ -225,7 +225,7 @@ struct ProgressDashboardView: View {
             }
         }
         .padding(4)
-        .background(Color.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
+        .background(Color.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     // MARK: - Tab picker
@@ -242,7 +242,7 @@ struct ProgressDashboardView: View {
                         .padding(.vertical, 9)
                         .background {
                             if selectedTab == tab {
-                                RoundedRectangle(cornerRadius: 10)
+                                RoundedRectangle(cornerRadius: AppRadius.sm)
                                     .fill(Color.brand)
                                     .matchedGeometryEffect(id: "tabPill", in: tabNamespace)
                             }
@@ -254,7 +254,7 @@ struct ProgressDashboardView: View {
             }
         }
         .padding(4)
-        .background(Color.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
+        .background(Color.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
         .padding(.horizontal, AppSpacing.lg)
         .padding(.top, AppSpacing.sm)
         .padding(.bottom, AppSpacing.xs)
@@ -270,7 +270,7 @@ struct ProgressDashboardView: View {
             content()
         }
         .padding(16)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     // MARK: - Weekly volume chart
@@ -284,7 +284,7 @@ struct ProgressDashboardView: View {
                         y: .value(appSettings.unitPreference.distanceLabel, distanceValue(bucket.meters))
                     )
                     .foregroundStyle(Color.brand.gradient)
-                    .cornerRadius(4)
+                    .cornerRadius(AppRadius.micro)
                 }
                 if let selected = selectedVolumeDate, let bucket = closestWeekBucket(to: selected) {
                     selectionRule(x: .value("Week", bucket.weekStart)) {
@@ -563,7 +563,7 @@ struct ProgressDashboardView: View {
                             y: .value("Zone", slice.zone.shortName)
                         )
                         .foregroundStyle(slice.zone.color)
-                        .cornerRadius(4)
+                        .cornerRadius(AppRadius.micro)
                     }
                     .chartYScale(domain: HRZone.allCases.reversed().map(\.shortName))
                     .chartXAxisLabel("minutes")
@@ -602,7 +602,7 @@ struct ProgressDashboardView: View {
                                       (workout.elevationGainMeters ?? 0).elevationValue(unit: appSettings.unitPreference))
                         )
                         .foregroundStyle(Color.success.gradient)
-                        .cornerRadius(3)
+                        .cornerRadius(AppRadius.micro)
                     }
                     if let selected = selectedElevationDate,
                        let workout = closestWorkout(to: selected, in: withElev),
@@ -729,7 +729,7 @@ struct ProgressDashboardView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(12)
-        .background(Color.surfaceTertiary, in: RoundedRectangle(cornerRadius: 10))
+        .background(Color.surfaceTertiary, in: RoundedRectangle(cornerRadius: AppRadius.sm))
         // One element per cell, and a "--" placeholder is spoken as such rather than as
         // a pair of dashes (N18).
         .accessibilityElement(children: .ignore)
@@ -784,8 +784,8 @@ struct ProgressDashboardView: View {
     private func tooltipContainer<C: View>(@ViewBuilder content: () -> C) -> some View {
         content()
             .padding(.horizontal, 8).padding(.vertical, 5)
-            .background(Color.surfacePrimary, in: RoundedRectangle(cornerRadius: 8))
-            .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+            .background(Color.surfacePrimary, in: RoundedRectangle(cornerRadius: AppRadius.xs))
+            .appShadow(.e2)
     }
 
     // MARK: - Weekly buckets

@@ -50,6 +50,15 @@ final class WorkoutTrackerService: NSObject {
     /// finished `RunWorkout`.
     private(set) var elevationGainMeters: Double = 0
 
+    /// Reception quality on the outdoor path, or `nil` indoors and before the first
+    /// fix of a run.
+    ///
+    /// `LocationQualityFilter` graded every fix and the verdict never left the
+    /// service, so a runner under tree cover saw a plausible pace with no sign that
+    /// the fixes behind it were being discarded (U5c). Graded on every delivered
+    /// fix — including rejected ones, which are exactly the ones worth knowing about.
+    private(set) var gpsSignal: LocationQualityFilter.SignalQuality?
+
     /// Live cadence in steps per minute, or `nil` before the first pedometer sample.
     ///
     /// `CMPedometer` reports cadence in steps per *second* and needs no permission
@@ -243,6 +252,7 @@ final class WorkoutTrackerService: NSObject {
         indoorDistanceBaselineMeters = 0
         pedometerActive = false
         rejectedFixCounts = [:]
+        gpsSignal = nil
     }
 
     /// Opens a new split bucket at the current elapsed time and distance.
@@ -417,6 +427,11 @@ final class WorkoutTrackerService: NSObject {
             distanceFromPreviousMeters: previous.map { location.distance(from: $0) },
             secondsSincePreviousFix: previous.map { location.timestamp.timeIntervalSince($0.timestamp) }
         )
+        // Graded before the accept/reject decision, so the runner is told reception is
+        // poor by the very fixes that are being thrown away rather than by their
+        // absence (U5c).
+        gpsSignal = LocationQualityFilter.signalQuality(forHorizontalAccuracy: location.horizontalAccuracy)
+
         if let rejection = LocationQualityFilter.rejection(for: fix) {
             rejectedFixCounts[rejection, default: 0] += 1
             return

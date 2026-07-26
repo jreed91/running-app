@@ -162,7 +162,7 @@ struct WorkoutDetailView: View {
             // Zone-color hero band
             HStack(alignment: .center, spacing: 14) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: AppRadius.md)
                         .fill(workout.workoutType.color.opacity(0.22))
                         .frame(width: 52, height: 52)
                     StrideIcon(name: workout.workoutType.strideIcon, size: 28,
@@ -208,10 +208,10 @@ struct WorkoutDetailView: View {
                 colors: [workout.workoutType.color.opacity(0.12), workout.workoutType.color.opacity(0.03)],
                 startPoint: .topLeading, endPoint: .bottomTrailing
             ),
-            in: RoundedRectangle(cornerRadius: 18)
+            in: RoundedRectangle(cornerRadius: AppRadius.lg)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 18)
+            RoundedRectangle(cornerRadius: AppRadius.lg)
                 .strokeBorder(workout.workoutType.color.opacity(0.18), lineWidth: 0.5)
         )
     }
@@ -255,9 +255,9 @@ struct WorkoutDetailView: View {
                 }
             }
         }
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 10))
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.sm))
         .overlay(
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: AppRadius.sm)
                 .strokeBorder(workout.workoutType.color.opacity(0.15), lineWidth: 0.5)
         )
     }
@@ -291,7 +291,7 @@ struct WorkoutDetailView: View {
                     }
                 }
                 .padding()
-                .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 10))
+                .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.sm))
             }
         }
     }
@@ -309,7 +309,7 @@ struct WorkoutDetailView: View {
             Text(notes)
                 .font(.bodyRegular)
                 .padding()
-                .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
+                .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
     }
 
@@ -378,7 +378,7 @@ struct ExerciseRow: View {
             }
         }
         .padding(12)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     private var repsLabel: String {
@@ -431,10 +431,10 @@ private struct GoalRaceCelebrationCard: View {
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             ),
-            in: RoundedRectangle(cornerRadius: 18)
+            in: RoundedRectangle(cornerRadius: AppRadius.lg)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 18)
+            RoundedRectangle(cornerRadius: AppRadius.lg)
                 .strokeBorder(Color.brand.opacity(0.22), lineWidth: 0.75)
         )
         .clipped()
@@ -453,7 +453,7 @@ private struct ConfettiBurstView: View {
     var body: some View {
         GeometryReader { geo in
             ForEach(ConfettiParticle.samples) { particle in
-                RoundedRectangle(cornerRadius: 2)
+                RoundedRectangle(cornerRadius: AppRadius.micro)
                     .fill(particle.color)
                     .frame(width: particle.width, height: particle.height)
                     .rotationEffect(.degrees(isExpanded ? particle.rotation : 0))
@@ -585,7 +585,7 @@ private struct WorkoutSetRow: View {
     var body: some View {
         HStack(spacing: 12) {
             ZStack {
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: AppRadius.xs)
                     .fill(color.opacity(0.12))
                     .frame(width: 34, height: 34)
                 Text("\(workoutSet.repetitions)×")
@@ -600,7 +600,7 @@ private struct WorkoutSetRow: View {
             Spacer()
         }
         .padding()
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     @ViewBuilder

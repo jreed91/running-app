@@ -45,7 +45,7 @@ extension RunSummaryView {
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                         .background(Color.brand, in: Capsule())
-                        .shadow(color: Color.brand.opacity(0.35), radius: 10, y: 4)
+                        .appGlow(.standard, color: .brand)
                     }
                     .buttonStyle(.plain)
                     .disabled(isLoadingAIInsight || !hasAIKey)
@@ -116,9 +116,9 @@ extension RunSummaryView {
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             ),
-            in: RoundedRectangle(cornerRadius: 20)
+            in: RoundedRectangle(cornerRadius: AppRadius.lg)
         )
-        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(Color.warning.opacity(0.28), lineWidth: 0.5))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).strokeBorder(Color.warning.opacity(0.28), lineWidth: 0.5))
     }
 
     private var aiAskCoachCard: some View {
@@ -205,7 +205,7 @@ extension RunSummaryView {
             } label: {
                 HStack(spacing: 12) {
                     ZStack {
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: AppRadius.md)
                             .fill(Color.success.opacity(0.14))
                             .frame(width: 40, height: 40)
                         if isApplyingNextSessionFeedback {
@@ -247,7 +247,7 @@ extension RunSummaryView {
             }
         }
         .padding(14)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     private func aiReactionRow(_ insight: AICoachInsight) -> some View {
@@ -263,7 +263,7 @@ extension RunSummaryView {
                         .foregroundStyle(.brand)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
-                        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
+                        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
                 }
                 .buttonStyle(.plain)
 
@@ -293,7 +293,7 @@ extension RunSummaryView {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
 
@@ -314,7 +314,7 @@ extension RunSummaryView {
                 .font(.dsHeadline)
                 .foregroundStyle(isActive ? Color.brand : Color.secondary)
                 .frame(width: 48, height: 48)
-                .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
+                .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(reaction == .up ? "Helpful" : "Not helpful")
@@ -346,7 +346,7 @@ extension RunSummaryView {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     private func aiUnavailableCard(_ insight: AICoachInsight) -> some View {
@@ -360,6 +360,6 @@ extension RunSummaryView {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 }

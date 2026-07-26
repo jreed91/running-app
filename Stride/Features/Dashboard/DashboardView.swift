@@ -135,6 +135,12 @@ private struct DayCell: View {
     let workouts: [ScheduledWorkout]
     let isSelected: Bool
 
+    /// The week strip encodes workout type as colour and nothing else, so with
+    /// Differentiate Without Color switched on a tempo day and an interval day were
+    /// the same 6×6 dot (U3d). The glyph below is the fallback; the colour stays,
+    /// because the setting means "don't rely on colour alone", not "remove colour".
+    @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
+
     private let cal = Calendar.current
     private var isToday: Bool { cal.isDateInToday(date) }
 
@@ -188,11 +194,20 @@ private struct DayCell: View {
     private func indicator(for workout: ScheduledWorkout) -> some View {
         if workout.isCompleted {
             StrideIcon(name: .check, size: 8, color: dotColor(for: workout.workoutType), strokeWeight: 2.5)
+        } else if differentiateWithoutColor {
+            // Each type's own glyph, so the day is identifiable without reading the
+            // colour. Sized to the strip's 10pt indicator row.
+            StrideIcon(
+                name: workout.workoutType.strideIcon,
+                size: 9,
+                color: dotColor(for: workout.workoutType),
+                strokeWeight: 2.2
+            )
         } else {
             // Long run gets a wider pill indicator — unless the day is shared, where
             // two full-width pills wouldn't fit under a 32pt date circle.
             let isLong = workout.workoutType == .longRun && sessions.count == 1
-            RoundedRectangle(cornerRadius: 3)
+            RoundedRectangle(cornerRadius: AppRadius.micro)
                 .fill(dotColor(for: workout.workoutType))
                 .frame(width: isLong ? 12 : 6, height: 6)
         }
@@ -247,15 +262,15 @@ private struct WeeklyLoadBar: View {
             VStack(spacing: 0) {
                 Spacer()
                 if isActive {
-                    RoundedRectangle(cornerRadius: 2)
+                    RoundedRectangle(cornerRadius: AppRadius.micro)
                         .fill(Color.brand)
                         .frame(height: 3)
                 } else if fraction > 0 {
-                    RoundedRectangle(cornerRadius: 3)
+                    RoundedRectangle(cornerRadius: AppRadius.micro)
                         .fill(color.opacity(0.9))
                         .frame(height: geo.size.height * fraction)
                 } else {
-                    RoundedRectangle(cornerRadius: 2)
+                    RoundedRectangle(cornerRadius: AppRadius.micro)
                         .fill(Color.secondary.opacity(0.2))
                         .frame(height: 3)
                 }
@@ -433,8 +448,8 @@ struct DashboardView: View {
             weeklyLoadChart
         }
         .padding(16)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 20))
-        .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .appShadow(.e1)
     }
 
     /// Distance in meters that fills a weekly-load bar to the top.
@@ -624,9 +639,9 @@ struct DashboardView: View {
         // on the app's most-tapped control (U3a).
         .foregroundStyle(.onFill)
         .background(
-            RoundedRectangle(cornerRadius: 18)
+            RoundedRectangle(cornerRadius: AppRadius.lg)
                 .fill(Color.brand)
-                .shadow(color: Color.brand.opacity(0.4), radius: 14, y: 6)
+                .appGlow(.strong, color: .brand)
         )
         .buttonStyle(.plain)
         .accessibilityIdentifier("dashboard.startScheduledWorkout.\(workout.workoutType.sessionKind.rawValue)")
@@ -697,7 +712,7 @@ struct DashboardView: View {
         }
         .padding(18)
         .background(
-            RoundedRectangle(cornerRadius: 18)
+            RoundedRectangle(cornerRadius: AppRadius.lg)
                 .fill(
                     LinearGradient(
                         colors: [tint.opacity(0.12), tint.opacity(0.04)],
@@ -706,7 +721,7 @@ struct DashboardView: View {
                     )
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 18)
+                    RoundedRectangle(cornerRadius: AppRadius.lg)
                         .strokeBorder(tint.opacity(0.2), lineWidth: 0.5)
                 )
         )
@@ -732,9 +747,9 @@ struct DashboardView: View {
         .foregroundStyle(.onFill)
         .accessibilityIdentifier("dashboard.startFreeRun")
         .background(
-            RoundedRectangle(cornerRadius: 18)
+            RoundedRectangle(cornerRadius: AppRadius.lg)
                 .fill(Color.brand)
-                .shadow(color: Color.brand.opacity(0.4), radius: 14, y: 6)
+                .appGlow(.strong, color: .brand)
         )
         .buttonStyle(.plain)
     }

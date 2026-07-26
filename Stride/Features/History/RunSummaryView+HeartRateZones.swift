@@ -35,7 +35,7 @@ extension RunSummaryView {
             }
         }
         .padding(16)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     private func zoneRow(_ slice: HRZoneSlice, total: Double) -> some View {

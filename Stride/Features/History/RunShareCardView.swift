@@ -70,7 +70,7 @@ struct RunShareCardView: View {
 
     private var routePanel: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: AppRadius.md, style: .continuous)
                 .fill(Color.white.opacity(0.05))
             if let routeMapImage {
                 // Map tiles + route already baked into the snapshot; just present it.
@@ -97,7 +97,7 @@ struct RunShareCardView: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: AppRadius.md, style: .continuous))
     }
 
     private var distanceHeadline: some View {
@@ -153,7 +153,7 @@ struct RunShareCardView: View {
             }
             HStack(alignment: .bottom, spacing: 3) {
                 ForEach(model.splitBars) { bar in
-                    RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                    RoundedRectangle(cornerRadius: AppRadius.micro.5, style: .continuous)
                         .fill(bar.isFastest ? accent : Color.white.opacity(0.28))
                         .frame(maxWidth: .infinity)
                         .frame(height: max(3, CGFloat(bar.height) * 44))

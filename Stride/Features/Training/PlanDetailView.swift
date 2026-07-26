@@ -158,7 +158,7 @@ struct PlanSummaryCard: View {
             }
         }
         .padding()
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 }
 
@@ -267,7 +267,7 @@ struct WeekCardView: View {
                 }
             }
         }
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 }
 

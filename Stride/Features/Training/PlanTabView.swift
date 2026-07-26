@@ -296,7 +296,7 @@ private struct SmartAdaptPlanCard: View {
             Button(action: action) {
                 HStack(spacing: 14) {
                     ZStack {
-                        RoundedRectangle(cornerRadius: 14)
+                        RoundedRectangle(cornerRadius: AppRadius.md)
                             .fill(Color.brand.opacity(0.12))
                             .frame(width: 48, height: 48)
                         if isAdapting {
@@ -326,10 +326,10 @@ private struct SmartAdaptPlanCard: View {
                 }
                 .padding(16)
                 .background(
-                    RoundedRectangle(cornerRadius: 18)
+                    RoundedRectangle(cornerRadius: AppRadius.lg)
                         .fill(Color.brand.opacity(0.08))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 18)
+                            RoundedRectangle(cornerRadius: AppRadius.lg)
                                 .strokeBorder(Color.brand.opacity(0.2), lineWidth: 0.5)
                         )
                 )
@@ -379,7 +379,7 @@ private struct SmartAdaptPlanCard: View {
                         }
                         .padding(10)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 10))
+                        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.sm))
                     }
 
                     ForEach(progress.updates) { update in
@@ -394,7 +394,7 @@ private struct SmartAdaptPlanCard: View {
                         }
                         .padding(10)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 10))
+                        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.sm))
                     }
                 }
                 .padding(.top, 4)
@@ -421,7 +421,7 @@ private struct RouteGeniusCard: View {
         Button(action: action) {
             HStack(spacing: 14) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: AppRadius.md)
                         .fill(
                             LinearGradient(
                                 colors: [.brand, .destructive],
@@ -430,7 +430,7 @@ private struct RouteGeniusCard: View {
                             )
                         )
                         .frame(width: 48, height: 48)
-                        .shadow(color: Color.brand.opacity(0.35), radius: 10, y: 3)
+                        .appGlow(.standard, color: .brand)
                     StrideIcon(name: .bolt, size: 22, color: .white, strokeWeight: 2.2)
                 }
 
@@ -450,7 +450,7 @@ private struct RouteGeniusCard: View {
             }
             .padding(16)
             .background(
-                RoundedRectangle(cornerRadius: 18)
+                RoundedRectangle(cornerRadius: AppRadius.lg)
                     .fill(
                         LinearGradient(
                             colors: [Color.brand.opacity(0.10), Color.destructive.opacity(0.04)],
@@ -459,7 +459,7 @@ private struct RouteGeniusCard: View {
                         )
                     )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 18)
+                        RoundedRectangle(cornerRadius: AppRadius.lg)
                             .strokeBorder(Color.brand.opacity(0.2), lineWidth: 0.5)
                     )
             )
@@ -504,7 +504,7 @@ private struct PlanOverviewCard: View {
             // Header row: race icon + title + goal
             HStack(alignment: .top, spacing: 14) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: AppRadius.md)
                         .fill(Color.brand.opacity(0.12))
                         .frame(width: 52, height: 52)
                     StrideIcon(name: raceStrideIcon, size: 26, color: .brand, strokeWeight: 2.0)
@@ -545,7 +545,7 @@ private struct PlanOverviewCard: View {
             }
         }
         .padding()
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 }
 
@@ -616,7 +616,7 @@ private struct PhaseProgressBar: View {
                             width: max(geo.size.width * CGFloat(plan.progress), plan.progress > 0 ? 6 : 0),
                             height: 10
                         )
-                        .shadow(color: Color.brand.opacity(0.55), radius: 6)
+                        .appGlow(.halo, color: .brand)
 
                     ForEach(phaseTransitions, id: \.self) { p in
                         Rectangle()
@@ -806,7 +806,7 @@ private struct PaceInsightsCard: View {
             }
         }
         .padding()
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 }
 
@@ -820,7 +820,7 @@ private struct PaceRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            RoundedRectangle(cornerRadius: 2)
+            RoundedRectangle(cornerRadius: AppRadius.micro)
                 .fill(zone.color)
                 .frame(width: 3, height: 22)
 
@@ -923,7 +923,7 @@ private struct PlanWeekSummaryRow: View {
                 }
             }
         }
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
         .opacity(isFutureWeek ? 0.65 : 1.0)
     }
 

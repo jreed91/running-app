@@ -313,9 +313,9 @@ struct OnboardingView: View {
                 OBRadio(isSelected: isSelected, color: .brand)
             }
             .padding(16)
-            .background(bgColor, in: RoundedRectangle(cornerRadius: 16))
+            .background(bgColor, in: RoundedRectangle(cornerRadius: AppRadius.md))
             .overlay(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: AppRadius.md)
                     .strokeBorder(borderColor, lineWidth: 1.5)
             )
         }
@@ -360,11 +360,11 @@ struct OnboardingView: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 18)
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 20))
+            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
 
             HStack(spacing: 14) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: AppRadius.md)
                         .fill(Color.brand.opacity(0.2))
                         .frame(width: 44, height: 44)
                     Text(String(format: "%.0f", vdotValue))
@@ -385,9 +385,12 @@ struct OnboardingView: View {
             .padding(.vertical, 14)
             .background(
                 LinearGradient(colors: [Color.brand.opacity(0.14), Color.brand.opacity(0.04)], startPoint: .topLeading, endPoint: .bottomTrailing),
-                in: RoundedRectangle(cornerRadius: 16)
+                in: RoundedRectangle(cornerRadius: AppRadius.md)
             )
-            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color.brand.opacity(0.28), lineWidth: 0.5))
+            .overlay(
+                RoundedRectangle(cornerRadius: AppRadius.md)
+                    .strokeBorder(Color.brand.opacity(0.28), lineWidth: 0.5)
+            )
 
             hrCalibrationCard
         }
@@ -425,7 +428,7 @@ struct OnboardingView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     // MARK: - Schedule content
@@ -459,16 +462,16 @@ struct OnboardingView: View {
                             .frame(maxWidth: .infinity)
                             .frame(height: 52)
                             .background(isOn ? Color.brand : Color.surfaceTertiary,
-                                        in: RoundedRectangle(cornerRadius: 14))
+                                        in: RoundedRectangle(cornerRadius: AppRadius.md))
                             .foregroundStyle(isOn ? Color.white : Color.primary)
-                            .shadow(color: isOn ? Color.brand.opacity(0.35) : .clear, radius: 10, y: 4)
+                            .appGlow(.standard, color: .brand, isActive: isOn)
                         }
                         .buttonStyle(BouncyButtonStyle())
                     }
                 }
             }
             .padding(14)
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 18))
+            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
 
             VStack(alignment: .leading, spacing: 10) {
                 Text("Long run day")
@@ -476,20 +479,26 @@ struct OnboardingView: View {
                     .foregroundStyle(.secondary)
                 HStack(spacing: 6) {
                     ForEach([("Sat", true), ("Sun", false), ("Flexible", false)], id: \.0) { name, isSat in
+                        // "Sun" and "Flexible" both carry `isSat == false`, so only the
+                        // named day can read as chosen — "Flexible" is the unselected rest.
+                        let isChosen = longRunOnSaturday == isSat && name != "Flexible"
                         Button { longRunOnSaturday = isSat } label: {
                             Text(name)
                                 .font(.dsFootnote.weight(.semibold))
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 8)
-                                .background(longRunOnSaturday == isSat && name != "Flexible" ? Color.surfaceSecondary : Color.clear, in: RoundedRectangle(cornerRadius: 8))
-                                .shadow(color: longRunOnSaturday == isSat && name != "Flexible" ? Color.black.opacity(0.1) : .clear, radius: 6, y: 2)
+                                .background(
+                                    isChosen ? Color.surfaceSecondary : Color.clear,
+                                    in: RoundedRectangle(cornerRadius: AppRadius.xs)
+                                )
+                                .appShadow(isChosen ? .e2 : .e0)
                         }
                         .buttonStyle(.plain)
                         .foregroundStyle(.primary)
                     }
                 }
                 .padding(2)
-                .background(Color.secondary.opacity(0.14), in: RoundedRectangle(cornerRadius: 10))
+                .background(Color.secondary.opacity(0.14), in: RoundedRectangle(cornerRadius: AppRadius.sm))
 
                 HStack {
                     Text("Runs per week")
@@ -503,7 +512,7 @@ struct OnboardingView: View {
                 .padding(.top, 4)
             }
             .padding(16)
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
+            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
     }
 

@@ -124,7 +124,7 @@ struct AICoachChatView: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(16)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 20))
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
     private var readinessBadge: some View {
@@ -263,7 +263,15 @@ struct AICoachChatView: View {
                 }
             }
             .padding(14)
-            .background(.surfaceSecondary, in: UnevenRoundedRectangle(topLeadingRadius: 4, bottomLeadingRadius: 18, bottomTrailingRadius: 18, topTrailingRadius: 18))
+            .background(
+                .surfaceSecondary,
+                in: UnevenRoundedRectangle(
+                    topLeadingRadius: AppRadius.micro,
+                    bottomLeadingRadius: AppRadius.lg,
+                    bottomTrailingRadius: AppRadius.lg,
+                    topTrailingRadius: AppRadius.lg
+                )
+            )
             Spacer(minLength: 20)
         }
     }
@@ -309,7 +317,7 @@ struct AICoachChatView: View {
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 7)
-                .background(.surfaceTertiary, in: RoundedRectangle(cornerRadius: 10))
+                .background(.surfaceTertiary, in: RoundedRectangle(cornerRadius: AppRadius.sm))
             }
         }
     }
@@ -327,15 +335,15 @@ struct AICoachChatView: View {
         }
         .frame(width: size, height: size)
         .clipShape(Circle())
-        .shadow(color: Color.brand.opacity(0.35), radius: 10, y: 5)
+        .appGlow(.standard, color: .brand)
     }
 
     private func bubbleShape(for message: AICoachChatMessage) -> some InsettableShape {
         UnevenRoundedRectangle(
             topLeadingRadius: message.sender == .coach ? 4 : 18,
-            bottomLeadingRadius: 18,
+            bottomLeadingRadius: AppRadius.lg,
             bottomTrailingRadius: message.sender == .coach ? 18 : 4,
-            topTrailingRadius: 18
+            topTrailingRadius: AppRadius.lg
         )
     }
 

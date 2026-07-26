@@ -41,9 +41,9 @@ struct DayToggleButton: View {
                 .foregroundStyle(isOn ? .white : .primary)
                 .background(
                     isOn ? Color.brand : Color(.systemFill),
-                    in: RoundedRectangle(cornerRadius: 14)
+                    in: RoundedRectangle(cornerRadius: AppRadius.md)
                 )
-                .shadow(color: isOn ? Color.brand.opacity(0.35) : .clear, radius: 8, y: 3)
+                .appGlow(.subtle, color: .brand, isActive: isOn)
         }
         .buttonStyle(.plain)
     }

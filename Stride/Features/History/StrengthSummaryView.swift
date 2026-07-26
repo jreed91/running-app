@@ -67,7 +67,7 @@ struct StrengthSummaryView: View {
             }
         }
         .padding(16)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 18))
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
     private func statCell(value: String, label: String) -> some View {
@@ -126,7 +126,7 @@ struct StrengthSummaryView: View {
                     }
                 }
                 .padding(12)
-                .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
+                .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
             }
         }
     }
@@ -176,6 +176,6 @@ struct StrengthSummaryView: View {
         .foregroundStyle(.secondary)
         .padding(12)
         .frame(maxWidth: .infinity)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 }

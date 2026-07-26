@@ -238,11 +238,16 @@ struct ActiveRunView: View {
     // MARK: - Top bar
 
     private var topBar: some View {
-        HStack {
+        HStack(spacing: 8) {
             // Indoor / outdoor toggle — only interactive before the workout starts
             locationToggle
 
-            Spacer()
+            Spacer(minLength: 8)
+
+            // Reception. `nil` indoors and until the first fix arrives.
+            if let signal = tracker.gpsSignal {
+                gpsSignalPill(signal)
+            }
 
             // The idle state used to show a "Lock" pill here. It was decorative — it
             // read as a control to assistive tech and to anyone who tapped it, and
@@ -270,6 +275,39 @@ struct ActiveRunView: View {
         .padding(.horizontal, 22)
         .padding(.top, 12)
         .foregroundStyle(.white)
+    }
+
+    /// GPS reception, surfaced on the screen the runner is actually looking at (U5c).
+    ///
+    /// `LocationQualityFilter` has always graded every fix and `WorkoutTrackerService`
+    /// has always counted the discards, but both stayed in the log: under tree cover
+    /// the HUD showed a confident pace derived from fixes that were being thrown away.
+    ///
+    /// Quality is carried by the number of filled bars, not by colour alone, so it
+    /// survives Differentiate Without Color and a monochrome glance mid-stride. The
+    /// weak state adds a word, because that is the one a runner should act on.
+    private func gpsSignalPill(_ signal: LocationQualityFilter.SignalQuality) -> some View {
+        glassPill {
+            HStack(alignment: .bottom, spacing: 2) {
+                ForEach(1...3, id: \.self) { bar in
+                    Capsule()
+                        .fill(.white.opacity(bar <= signal.bars ? 1 : 0.3))
+                        .frame(width: 3, height: 4 + CGFloat(bar) * 3)
+                }
+            }
+            .frame(height: 13, alignment: .bottom)
+
+            if signal == .weak {
+                Text("Weak GPS")
+                    .font(.system(size: 12, weight: .bold))
+                    .kerning(0.5)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("GPS signal")
+        .accessibilityValue(signal.localizedName)
+        .accessibilityIdentifier("activeRun.gpsSignal")
+        .adaptiveAnimation(AppAnimation.gentle, value: signal.rawValue)
     }
 
     private var locationToggle: some View {
@@ -308,8 +346,7 @@ struct ActiveRunView: View {
         .foregroundStyle(.white)
         .padding(.horizontal, 14)
         .padding(.vertical, 7)
-        .background(.ultraThinMaterial, in: Capsule())
-        .overlay(Capsule().strokeBorder(.white.opacity(0.3), lineWidth: 0.5))
+        .glassEffect(.regular, in: .capsule)
         .padding(.top, 28)
         .adaptiveAnimation(AppAnimation.bouncy, value: currentZone.rawValue)
     }
@@ -325,6 +362,13 @@ struct ActiveRunView: View {
                 .minimumScaleFactor(0.6)
                 .lineLimit(1)
                 .foregroundStyle(.white)
+                // This screen keeps its inline shadows, and is excluded from
+                // `no_inline_shadow` for it (U1). Everywhere else a shadow means
+                // height and belongs to `AppElevation`; here the four shadows are
+                // legibility aids tuned against a saturated full-bleed gradient —
+                // separating white type and white controls from a background that
+                // changes colour with the pace zone. A neutral page-elevation token
+                // would be both too weak and the wrong intent.
                 .shadow(color: .black.opacity(0.15), radius: 15, y: 4)
                 .contentTransition(.numericText())
                 .animation(.linear(duration: 0.2), value: tracker.currentPaceSecondsPerKm)
@@ -443,14 +487,7 @@ struct ActiveRunView: View {
             }
         }
         .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 22)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 22)
-                        .strokeBorder(.white.opacity(0.12), lineWidth: 0.5)
-                )
-        )
+        .glassEffect(.regular, in: .rect(cornerRadius: AppRadius.xl))
         .padding(.horizontal, 16)
         .padding(.top, 26)
         // Three fixed-width columns above a hero that already fills the screen: this
@@ -608,15 +645,18 @@ struct ActiveRunView: View {
 
     // MARK: - Control button helpers
 
+    /// Liquid Glass, not a simulation of it.
+    ///
+    /// This used to be `.ultraThinMaterial` under a hand-drawn `strokeBorder`, which
+    /// looks close but is inert: it does not respond to Reduce Transparency or to
+    /// Increase Contrast, and it does not pick up the specular edge that makes the
+    /// real material read as a control. `.glassEffect` handles all three, and
+    /// `.interactive()` adds the press reaction the hand-rolled version never had (U7).
     @ViewBuilder
     private func glassControlButton<Label: View>(size: CGFloat, @ViewBuilder label: () -> Label) -> some View {
-        ZStack {
-            Circle()
-                .fill(.ultraThinMaterial)
-                .overlay(Circle().strokeBorder(.white.opacity(0.28), lineWidth: 0.5))
-                .frame(width: size, height: size)
-            label()
-        }
+        ZStack { label() }
+            .frame(width: size, height: size)
+            .glassEffect(.regular.interactive(), in: .circle)
     }
 
     @ViewBuilder
@@ -647,8 +687,7 @@ struct ActiveRunView: View {
             .font(.system(size: 12, weight: .semibold))
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
-            .background(.ultraThinMaterial, in: Capsule())
-            .overlay(Capsule().strokeBorder(.white.opacity(0.28), lineWidth: 0.5))
+            .glassEffect(.regular, in: .capsule)
     }
 
     // MARK: - Actions

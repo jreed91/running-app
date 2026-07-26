@@ -27,14 +27,7 @@ struct GuidedWorkoutBanner: View {
             footer
         }
         .padding(18)
-        .background(
-            RoundedRectangle(cornerRadius: 22)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 22)
-                        .strokeBorder(.white.opacity(0.14), lineWidth: 0.5)
-                )
-        )
+        .glassEffect(.regular, in: .rect(cornerRadius: AppRadius.xl))
         .foregroundStyle(.white)
         // Auto-advance when the current step's distance/time target is met.
         // Distance-based steps settle on GPS/pedometer updates, time-based on the

@@ -99,10 +99,10 @@ struct OBWelcome: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
-                    .background(Color.brand, in: RoundedRectangle(cornerRadius: 18))
-                    .shadow(color: Color.brand.opacity(0.5), radius: 14, y: 8)
+                    .background(Color.brand, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                    .appGlow(.strong, color: .brand)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 18)
+                        RoundedRectangle(cornerRadius: AppRadius.lg)
                             .strokeBorder(.white.opacity(0.2), lineWidth: 0.5)
                     )
                 }
@@ -123,7 +123,7 @@ struct OBWelcome: View {
                 }
                 .signInWithAppleButtonStyle(.black)
                 .frame(height: 50)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
                 .padding(.top, 12)
                 .opacity(appeared ? 1 : 0)
                 .adaptiveAnimation(AppAnimation.entrance.delay(0.34), value: appeared)
@@ -227,9 +227,12 @@ struct OBWelcomeBack: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(Color.brand, in: RoundedRectangle(cornerRadius: 18))
-                        .shadow(color: Color.brand.opacity(0.5), radius: 14, y: 8)
-                        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(.white.opacity(0.2), lineWidth: 0.5))
+                        .background(Color.brand, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                        .appGlow(.strong, color: .brand)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: AppRadius.lg)
+                                .strokeBorder(.white.opacity(0.2), lineWidth: 0.5)
+                        )
                     }
                     .foregroundStyle(.onFill)
                     .buttonStyle(.plain)
@@ -446,10 +449,10 @@ struct OBShell<Content: View>: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
                     .background(Color.brand.opacity(ctaEnabled ? 1 : 0.5),
-                                in: RoundedRectangle(cornerRadius: 16))
-                    .shadow(color: Color.brand.opacity(ctaEnabled ? 0.4 : 0), radius: 12, y: 6)
+                                in: RoundedRectangle(cornerRadius: AppRadius.md))
+                    .appGlow(.strong, color: .brand, isActive: ctaEnabled)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 16)
+                        RoundedRectangle(cornerRadius: AppRadius.md)
                             .strokeBorder(.white.opacity(0.2), lineWidth: 0.5)
                     )
                 }
@@ -543,8 +546,8 @@ struct OBRaceCard: View {
                 OBRadio(isSelected: isSelected, color: color)
             }
             .padding(16)
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 18))
-            .overlay(RoundedRectangle(cornerRadius: 18)
+            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.lg)
                 .strokeBorder(isSelected ? color : Color.clear, lineWidth: 2))
         }
         .buttonStyle(BouncyButtonStyle()).foregroundStyle(.primary)
@@ -600,7 +603,7 @@ struct OBCustomDistanceCard: View {
                             .padding(.vertical, 8)
                             .background(
                                 isOn ? Color.brand : Color.surfaceTertiary,
-                                in: RoundedRectangle(cornerRadius: 10)
+                                in: RoundedRectangle(cornerRadius: AppRadius.sm)
                             )
                             .foregroundStyle(isOn ? Color.white : Color.primary)
                     }
@@ -609,7 +612,7 @@ struct OBCustomDistanceCard: View {
             }
         }
         .padding(16)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 18))
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 }
 
@@ -645,9 +648,9 @@ struct OBRaceDetailsCard: View {
                     .font(.bodyRegular)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
-                    .background(.surfaceTertiary, in: RoundedRectangle(cornerRadius: 12))
+                    .background(.surfaceTertiary, in: RoundedRectangle(cornerRadius: AppRadius.md))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: AppRadius.md)
                             .strokeBorder(trimmedRaceName.isEmpty ? Color.destructive.opacity(0.35) : Color.clear)
                     )
             }
@@ -661,7 +664,7 @@ struct OBRaceDetailsCard: View {
             .font(.bodyStrong)
         }
         .padding(16)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 18))
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 }
 
@@ -707,7 +710,7 @@ struct OBStartDateCard: View {
                 .foregroundStyle(.secondary)
         }
         .padding(16)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 18))
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 }
 
@@ -781,7 +784,7 @@ struct OBFitnessRow: View {
                 HStack(spacing: 10) {
                     HStack(alignment: .bottom, spacing: 3) {
                         ForEach(0..<4, id: \.self) { index in
-                            RoundedRectangle(cornerRadius: 1)
+                            RoundedRectangle(cornerRadius: AppRadius.micro)
                                 .fill(index < selection.barCount ? Color.brand : Color.secondary.opacity(0.12))
                                 .frame(width: 5, height: barHeights[index])
                         }
@@ -809,9 +812,9 @@ struct OBFitnessRow: View {
                     .padding(.leading, 38)
             }
             .padding(14)
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
+            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
             .overlay(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: AppRadius.md)
                     .strokeBorder(isSelected ? Color.brand : Color.clear, lineWidth: 2)
             )
         }
@@ -856,8 +859,8 @@ struct OBLevelRow: View {
                 OBRadio(isSelected: isSelected, color: .brand)
             }
             .padding(.horizontal, 18).padding(.vertical, 16)
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16)
+            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
                 .strokeBorder(isSelected ? Color.brand : Color.clear, lineWidth: 2))
         }
         .buttonStyle(BouncyButtonStyle()).foregroundStyle(.primary)
@@ -891,9 +894,9 @@ struct OBTimeWheelColumn: View {
             .frame(maxWidth: .infinity)
             .frame(height: 116)
             .clipped()
-            .background(Color.secondary.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
+            .background(Color.secondary.opacity(0.05), in: RoundedRectangle(cornerRadius: AppRadius.md))
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: AppRadius.xs)
                     .strokeBorder(Color.brand.opacity(0.32), lineWidth: 1.5)
                     .padding(.horizontal, 8)
                     .frame(height: 42),
@@ -919,9 +922,9 @@ struct OBWheelColumnStyle: ViewModifier {
                 .frame(maxWidth: .infinity)
                 .frame(height: 116)
                 .clipped()
-                .background(Color.secondary.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
+                .background(Color.secondary.opacity(0.05), in: RoundedRectangle(cornerRadius: AppRadius.md))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 8)
+                    RoundedRectangle(cornerRadius: AppRadius.xs)
                         .strokeBorder(Color.brand.opacity(0.32), lineWidth: 1.5)
                         .padding(.horizontal, 8)
                         .frame(height: 42),
@@ -953,7 +956,7 @@ struct OBPaceCell: View {
             Spacer()
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 }
 
@@ -970,7 +973,7 @@ struct OBPermissionRow: View {
     var body: some View {
         HStack(spacing: 14) {
             ZStack {
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: AppRadius.md)
                     .fill(tint.opacity(isActive ? 0.25 : 0.15))
                     .frame(width: 40, height: 40)
                 StrideIcon(name: icon, size: 20, color: tint, strokeWeight: 2.2)
@@ -1111,7 +1114,7 @@ struct OBReady: View {
                             )
                         }
                         .padding(16)
-                        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 18))
+                        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
                         .padding(.horizontal, 16)
 
                         // Weekly mileage chart
@@ -1138,10 +1141,10 @@ struct OBReady: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
-                .background(Color.brand, in: RoundedRectangle(cornerRadius: 18))
-                .shadow(color: Color.brand.opacity(0.5), radius: 14, y: 8)
+                .background(Color.brand, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                .appGlow(.strong, color: .brand)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 18)
+                    RoundedRectangle(cornerRadius: AppRadius.lg)
                         .strokeBorder(.white.opacity(0.2), lineWidth: 0.5)
                 )
             }
@@ -1245,7 +1248,7 @@ private struct WeeklyMileageChart: View {
                             .font(.dsCaption2.weight(.semibold).monospaced())
                             .foregroundStyle(.secondary)
                             .opacity(barsVisible ? 1 : 0)
-                        RoundedRectangle(cornerRadius: 3)
+                        RoundedRectangle(cornerRadius: AppRadius.micro)
                             .fill(phaseColor(bar.phase))
                             .frame(height: barsVisible ? max(6, CGFloat(bar.mi) / CGFloat(peakMiles) * 72) : 2)
                             .animation(AppAnimation.bouncy.delay(Double(index) * 0.04), value: barsVisible)
@@ -1268,7 +1271,7 @@ private struct WeeklyMileageChart: View {
                     ("Taper", Color.zoneMarathon),
                 ], id: \.0) { name, color in
                     HStack(spacing: 5) {
-                        RoundedRectangle(cornerRadius: 2)
+                        RoundedRectangle(cornerRadius: AppRadius.micro)
                             .fill(color)
                             .frame(width: 8, height: 8)
                         Text(name)
@@ -1280,7 +1283,7 @@ private struct WeeklyMileageChart: View {
             .padding(.top, 4)
         }
         .padding(16)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 18))
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 }
 
@@ -1330,9 +1333,9 @@ struct OBEquipmentCard: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
-            .background(cardBackground, in: RoundedRectangle(cornerRadius: 14))
+            .background(cardBackground, in: RoundedRectangle(cornerRadius: AppRadius.md))
             .overlay(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: AppRadius.md)
                     .stroke(borderColor, lineWidth: 1.5)
             )
         }
@@ -1410,9 +1413,9 @@ private struct OBStrengthFocusRow: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
-            .background(rowBackground, in: RoundedRectangle(cornerRadius: 14))
+            .background(rowBackground, in: RoundedRectangle(cornerRadius: AppRadius.md))
             .overlay(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: AppRadius.md)
                     .stroke(borderColor, lineWidth: 1.5)
             )
         }

@@ -247,7 +247,7 @@ struct RaceInsightsView: View {
             }
         }
         .padding(16)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     // MARK: - Card 2: Predicted Race Pace Chart
@@ -445,7 +445,7 @@ struct RaceInsightsView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(12)
-        .background(Color.surfaceTertiary, in: RoundedRectangle(cornerRadius: 10))
+        .background(Color.surfaceTertiary, in: RoundedRectangle(cornerRadius: AppRadius.sm))
     }
 
     // MARK: - Card 5: Improvement Tips
@@ -478,7 +478,7 @@ struct RaceInsightsView: View {
             }
         }
         .padding(16)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     // MARK: - Shared helpers (mirrors ProgressDashboardView pattern)
@@ -491,7 +491,7 @@ struct RaceInsightsView: View {
             content()
         }
         .padding(16)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     private func emptyDataPlaceholder(_ message: String) -> some View {
@@ -529,7 +529,7 @@ struct RaceInsightsView: View {
     private func tooltipContainer<C: View>(@ViewBuilder content: () -> C) -> some View {
         content()
             .padding(.horizontal, 8).padding(.vertical, 5)
-            .background(Color.surfacePrimary, in: RoundedRectangle(cornerRadius: 8))
-            .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+            .background(Color.surfacePrimary, in: RoundedRectangle(cornerRadius: AppRadius.xs))
+            .appShadow(.e2)
     }
 }
