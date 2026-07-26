@@ -244,6 +244,22 @@ targets:
 
     settings:
       base:
+        # REQUIRES its own App ID registered at
+        # https://developer.apple.com/account/resources/identifiers — an app extension
+        # is a separate signed bundle and cannot ride on the app's `com.running.stride`
+        # App ID. Xcode Cloud's signing proxy is read-only (every request it forwards
+        # carries `X-HTTP-Method-Override: GET`), so automatic signing there can look an
+        # App ID up but never create one. Adding this target without registering the
+        # identifier first archives fine and then fails every "Exporting for …
+        # Distribution" step with:
+        #
+        #   error: exportArchive Automatic signing cannot register bundle identifier
+        #   "com.running.stride.StrideWidgets".
+        #   error: exportArchive No profiles for 'com.running.stride.StrideWidgets' were found
+        #
+        # The extension declares no entitlements, so the App ID needs no capabilities
+        # enabled — it only has to exist. Renaming it here means registering the new
+        # name before the next archive.
         PRODUCT_BUNDLE_IDENTIFIER: com.running.stride.StrideWidgets
         PRODUCT_NAME: StrideWidgets
         # Set explicitly for the same reason the app target sets it: XcodeGen infers it from
