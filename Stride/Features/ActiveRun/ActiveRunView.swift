@@ -66,7 +66,88 @@ struct ActiveRunView: View {
 
     private var zoneColor: Color { currentZone.color }
 
+    // `body` used to hold the HUD stack and every lifecycle, alert and haptic
+    // modifier in one expression, which the type checker could no longer solve in
+    // reasonable time. It is split across three properties so each one is a small
+    // inference problem: the layered HUD, the lifecycle/alert modifiers, and the
+    // haptics. Keep new modifiers in the group they belong to rather than growing
+    // one chain back to where it was.
     var body: some View {
+        runScreen
+            // Haptics: this is a heads-down screen, so state changes have to be felt
+            // rather than seen (U4). Declarative `sensoryFeedback` respects the system
+            // haptics setting; no UIKit generators.
+            //
+            // The closure signatures are spelled out: an inferred multi-statement
+            // closure returning an implicitly-wrapped `SensoryFeedback?` is what
+            // pushed this expression over the type checker's budget.
+            .sensoryFeedback(trigger: tracker.trackingState) { (oldState: TrackingState, newState: TrackingState) -> SensoryFeedback? in
+                switch newState {
+                case .active:   return oldState == .paused ? .selection : .impact(weight: .heavy)
+                case .paused:   return .selection
+                case .finished: return .success
+                case .idle:     return nil
+                }
+            }
+            .sensoryFeedback(.error, trigger: saveErrorMessage != nil) { _, isShowing in isShowing }
+            // Each completed kilometre/mile, so pace checks don't need a glance.
+            .sensoryFeedback(.impact(weight: .light), trigger: tracker.splits.count) { old, new in
+                new > old
+            }
+            // A guided interval changing step is otherwise invisible unless the runner
+            // happens to be looking at the banner at that moment.
+            .sensoryFeedback(trigger: guided?.stepNumber) { (oldStep: Int?, newStep: Int?) -> SensoryFeedback? in
+                guard let oldStep, let newStep, newStep != oldStep else { return nil }
+                return .impact(weight: .heavy)
+            }
+    }
+
+    /// The HUD with everything that runs its lifecycle: appearance setup, the two
+    /// outcome dialogs, and the idle-timer hold.
+    private var runScreen: some View {
+        hudLayers
+            .onAppear { prepareForAppearance() }
+            // "Finish" used to be the only outcome, so a mis-tapped start that ran for
+            // twelve seconds was saved, exported to HealthKit, and marked its scheduled
+            // day complete. Strength sessions have had a discard option since H5; runs
+            // get one here (N17).
+            .confirmationDialog("Finish workout?", isPresented: $showFinishConfirmation, titleVisibility: .visible) {
+                Button("Finish & Save") { finishAndSave() }
+                Button("Discard Run", role: .destructive) { discardRunWithoutSaving() }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Discarding throws this run away — it won't be saved to Stride or Health.")
+            }
+            // A failed save used to lose the run silently: the tracker has already moved
+            // to `.finished` by this point, so there is nothing left to recover from (N15).
+            // Stay on the screen so "Try Again" can re-attempt the save with the workout
+            // still in hand.
+            .alert(
+                "Couldn't save your run",
+                isPresented: Binding(
+                    get: { saveErrorMessage != nil },
+                    set: { if !$0 { saveErrorMessage = nil } }
+                )
+            ) {
+                Button("Try Again") { retrySave() }
+                Button("Discard", role: .destructive) { discardUnsavedRun() }
+            } message: {
+                Text(saveErrorMessage ?? "")
+            }
+            // The display sleeps after 30 seconds on default settings, so the hero pace,
+            // zone colour, pace meter and guided-workout banner all went black while the
+            // runner was still running — everything this screen exists for stopped
+            // working almost immediately (U5a). Held only while tracking, and released
+            // on finish/discard so a forgotten flag can't drain the battery afterwards.
+            .onChange(of: tracker.trackingState, initial: true) { _, state in
+                UIApplication.shared.isIdleTimerDisabled = (state == .active || state == .paused)
+            }
+            .onDisappear {
+                UIApplication.shared.isIdleTimerDisabled = false
+            }
+    }
+
+    private var hudLayers: some View {
         ZStack {
             // Full-bleed zone-color radial gradient backdrop
             // (emanates from the top — matches design spec 130% × 70% at 50% 0%)
@@ -131,85 +212,26 @@ struct ActiveRunView: View {
                 controls
             }
         }
-        .onAppear {
-            // Recover from a previous run's terminal state so the start button works.
-            tracker.prepareForNewWorkout()
-            // Build the guided-workout stepper when this run fulfils a structured
-            // scheduled workout (A4); a nil/flat structure leaves guided mode off.
-            if let structure = scheduledWorkout?.workoutStructure, !structure.mainSets.isEmpty {
-                guided = GuidedWorkoutState(structure: structure)
-            }
-            // Default the indoor/outdoor toggle to the scheduled workout's location.
-            if let scheduledLocation = scheduledWorkout?.workoutLocation {
-                selectedLocation = scheduledLocation
-                tracker.setLocation(scheduledLocation)
-            }
-            metricsAppeared = true
-            controlsAppeared = true
-            if !reduceMotion {
-                recPulse = true
-                heartPulse = true
-            }
+    }
+
+    private func prepareForAppearance() {
+        // Recover from a previous run's terminal state so the start button works.
+        tracker.prepareForNewWorkout()
+        // Build the guided-workout stepper when this run fulfils a structured
+        // scheduled workout (A4); a nil/flat structure leaves guided mode off.
+        if let structure = scheduledWorkout?.workoutStructure, !structure.mainSets.isEmpty {
+            guided = GuidedWorkoutState(structure: structure)
         }
-        // "Finish" used to be the only outcome, so a mis-tapped start that ran for
-        // twelve seconds was saved, exported to HealthKit, and marked its scheduled
-        // day complete. Strength sessions have had a discard option since H5; runs
-        // get one here (N17).
-        .confirmationDialog("Finish workout?", isPresented: $showFinishConfirmation, titleVisibility: .visible) {
-            Button("Finish & Save") { finishAndSave() }
-            Button("Discard Run", role: .destructive) { discardRunWithoutSaving() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Discarding throws this run away — it won't be saved to Stride or Health.")
+        // Default the indoor/outdoor toggle to the scheduled workout's location.
+        if let scheduledLocation = scheduledWorkout?.workoutLocation {
+            selectedLocation = scheduledLocation
+            tracker.setLocation(scheduledLocation)
         }
-        // A failed save used to lose the run silently: the tracker has already moved
-        // to `.finished` by this point, so there is nothing left to recover from (N15).
-        // Stay on the screen so "Try Again" can re-attempt the save with the workout
-        // still in hand.
-        .alert(
-            "Couldn't save your run",
-            isPresented: Binding(
-                get: { saveErrorMessage != nil },
-                set: { if !$0 { saveErrorMessage = nil } }
-            )
-        ) {
-            Button("Try Again") { retrySave() }
-            Button("Discard", role: .destructive) { discardUnsavedRun() }
-        } message: {
-            Text(saveErrorMessage ?? "")
-        }
-        // The display sleeps after 30 seconds on default settings, so the hero pace,
-        // zone colour, pace meter and guided-workout banner all went black while the
-        // runner was still running — everything this screen exists for stopped
-        // working almost immediately (U5a). Held only while tracking, and released
-        // on finish/discard so a forgotten flag can't drain the battery afterwards.
-        .onChange(of: tracker.trackingState, initial: true) { _, state in
-            UIApplication.shared.isIdleTimerDisabled = (state == .active || state == .paused)
-        }
-        .onDisappear {
-            UIApplication.shared.isIdleTimerDisabled = false
-        }
-        // Haptics: this is a heads-down screen, so state changes have to be felt
-        // rather than seen (U4). Declarative `sensoryFeedback` respects the system
-        // haptics setting; no UIKit generators.
-        .sensoryFeedback(trigger: tracker.trackingState) { oldState, newState in
-            switch newState {
-            case .active:   return oldState == .paused ? .selection : .impact(weight: .heavy)
-            case .paused:   return .selection
-            case .finished: return .success
-            case .idle:     return nil
-            }
-        }
-        .sensoryFeedback(.error, trigger: saveErrorMessage != nil) { _, isShowing in isShowing }
-        // Each completed kilometre/mile, so pace checks don't need a glance.
-        .sensoryFeedback(.impact(weight: .light), trigger: tracker.splits.count) { old, new in
-            new > old
-        }
-        // A guided interval changing step is otherwise invisible unless the runner
-        // happens to be looking at the banner at that moment.
-        .sensoryFeedback(trigger: guided?.stepNumber) { oldStep, newStep in
-            guard let oldStep, let newStep, newStep != oldStep else { return nil }
-            return .impact(weight: .heavy)
+        metricsAppeared = true
+        controlsAppeared = true
+        if !reduceMotion {
+            recPulse = true
+            heartPulse = true
         }
     }
 
