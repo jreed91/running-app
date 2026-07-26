@@ -161,15 +161,15 @@ struct ContentView: View {
             container.storeRecoveryNotice = nil
             recoveryNotice = notice
         }
+        // `alert(_:item:)` (iOS 27) drives presentation straight off the optional, so
+        // the hand-rolled `Binding(get:set:)` bridge and the separate `presenting:`
+        // argument both go away — and the action no longer has to nil the state by
+        // hand, since dismissing is what clears the binding.
         .alert(
             recoveryNotice?.title ?? "",
-            isPresented: Binding(
-                get: { recoveryNotice != nil },
-                set: { if !$0 { recoveryNotice = nil } }
-            ),
-            presenting: recoveryNotice
+            item: $recoveryNotice
         ) { _ in
-            Button("OK", role: .cancel) { recoveryNotice = nil }
+            Button("OK", role: .cancel) {}
         } message: { notice in
             Text(notice.message)
         }

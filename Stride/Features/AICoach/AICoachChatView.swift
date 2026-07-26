@@ -88,6 +88,10 @@ struct AICoachChatView: View {
                     Image(systemName: "sparkles")
                         .font(.dsSubhead.weight(.bold))
                         .foregroundStyle(.brand)
+                        // On-device generation can take a few seconds with no other sign
+                        // that anything is happening; the glyph that represents the coach
+                        // is the natural place to say "thinking".
+                        .symbolEffect(.variableColor.iterative, isActive: isWaitingForCoach)
                         .frame(width: 36, height: 36)
                         .background(.surfaceSecondary, in: Circle())
                         // Decoration, not a control — it reads as "sparkles" otherwise.

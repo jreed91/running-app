@@ -36,6 +36,10 @@ struct ActiveRunView: View {
     @State private var metricsAppeared = false
     @State private var selectedLocation: WorkoutLocation = .outdoor
 
+    /// Ties the top bar's pills together so `GlassEffectContainer` can morph one into
+    /// the next as they appear and disappear, rather than cross-fading them.
+    @Namespace private var topBarGlass
+
     /// Guided structured-workout state, present only when this run fulfils a
     /// scheduled workout that carries a multi-segment `WorkoutStructure` (A4).
     /// Flat easy runs and free runs leave this `nil` and are unchanged.
@@ -142,36 +146,22 @@ struct ActiveRunView: View {
             .onChange(of: tracker.trackingState, initial: true) { _, state in
                 UIApplication.shared.isIdleTimerDisabled = (state == .active || state == .paused)
             }
-            // Each closed kilometre/mile, spoken (U4). The light haptic beside this says
-            // *that* a split closed; only speech can say what it was, which is the whole
-            // reason a runner would look at the phone mid-stride.
-            .onChange(of: tracker.splits.count) { (oldCount: Int, newCount: Int) in
-                announceSplit(previousCount: oldCount, count: newCount)
+            // Split announcements themselves are made by `MainTabView` (U4/U7) so they
+            // survive this screen being minimized. What the HUD owns is the *band* they
+            // are judged against, which is derived from guided state that lives here.
+            .onChange(of: spokenSplitTargetBand, initial: true) { _, band in
+                container.activeRunTargetPaceBand = band
             }
             .onDisappear {
                 UIApplication.shared.isIdleTimerDisabled = false
-                // Finishing or discarding mid-sentence must not leave the runner's music
-                // ducked, so the session is released with the screen.
-                container.runVoiceCoach.stop()
+                // Minimizing keeps the run — and its announcements — alive, so the audio
+                // session is only released when the run itself is over. Otherwise this
+                // would duck the runner's music for the rest of the session.
+                if tracker.trackingState != .active && tracker.trackingState != .paused {
+                    container.runVoiceCoach.stop()
+                    container.activeRunTargetPaceBand = nil
+                }
             }
-    }
-
-    /// Speaks the split that just closed, when the runner has asked for it.
-    ///
-    /// Off by default (`AppSettings.spokenSplitsEnabled`) — this is the one feature that
-    /// talks over whatever else is playing.
-    private func announceSplit(previousCount: Int, count: Int) {
-        guard appSettings.spokenSplitsEnabled,
-              count > previousCount,
-              let split = tracker.splits.last else { return }
-        container.runVoiceCoach.speak(
-            SplitAnnouncement.phrase(
-                splitNumber: split.kilometer,
-                paceSecondsPerKm: split.paceSecondsPerKm,
-                unit: appSettings.unitPreference,
-                targetPaceSecondsPerKm: spokenSplitTargetBand
-            )
-        )
     }
 
     /// The pace band a split is judged against, narrowest first: the guided step the
@@ -274,16 +264,44 @@ struct ActiveRunView: View {
 
     // MARK: - Top bar
 
+    /// The top bar's pills are the one place in the app where several glass surfaces sit
+    /// side by side, so it is the one place `GlassEffectContainer` earns its keep — the
+    /// earlier pass left it out for exactly that reason, when the bar held at most two.
+    ///
+    /// Three of the four come and go mid-run (minimize and REC on start, the GPS pill on
+    /// the first fix), and inside a container with `glassEffectID`s they melt in and out
+    /// of the neighbouring glass instead of popping. `spacing` matches the `HStack`'s,
+    /// which is what tells the container how close is close enough to blend.
     private var topBar: some View {
+        GlassEffectContainer(spacing: 8) {
+            topBarContent
+        }
+        .padding(.horizontal, 22)
+        .padding(.top, 12)
+        .foregroundStyle(.white)
+        .adaptiveAnimation(AppAnimation.gentle, value: tracker.trackingState)
+    }
+
+    private var topBarContent: some View {
         HStack(spacing: 8) {
+            // Minimizing is only meaningful once there is a run to come back to: with
+            // the tracker idle this button would dismiss the screen with nothing left
+            // behind, which the Start button's absence already covers.
+            if tracker.trackingState == .active || tracker.trackingState == .paused {
+                minimizeButton
+                    .glassEffectID("minimize", in: topBarGlass)
+            }
+
             // Indoor / outdoor toggle — only interactive before the workout starts
             locationToggle
+                .glassEffectID("location", in: topBarGlass)
 
             Spacer(minLength: 8)
 
             // Reception. `nil` indoors and until the first fix arrives.
             if let signal = tracker.gpsSignal {
                 gpsSignalPill(signal)
+                    .glassEffectID("gps", in: topBarGlass)
             }
 
             // The idle state used to show a "Lock" pill here. It was decorative — it
@@ -307,11 +325,31 @@ struct ActiveRunView: View {
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(tracker.trackingState == .paused ? "Run paused" : "Recording run")
+                .glassEffectID("rec", in: topBarGlass)
             }
         }
-        .padding(.horizontal, 22)
-        .padding(.top, 12)
-        .foregroundStyle(.white)
+    }
+
+    /// Sends the HUD away without touching the run.
+    ///
+    /// The counterpart to `MainTabView`'s bottom accessory (U7): the run keeps
+    /// recording, the accessory above the tab bar takes over as its representation,
+    /// and tapping that brings this screen back. Before this the cover had no exit
+    /// that wasn't "finish" or "discard", so checking tomorrow's workout mid-run meant
+    /// ending the run.
+    private var minimizeButton: some View {
+        Button {
+            dismiss()
+        } label: {
+            glassPill {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 13, weight: .bold))
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Minimize run")
+        .accessibilityHint("Keeps recording and returns to the app. The run stays available above the tab bar.")
+        .accessibilityIdentifier("activeRun.minimize")
     }
 
     /// GPS reception, surfaced on the screen the runner is actually looking at (U5c).

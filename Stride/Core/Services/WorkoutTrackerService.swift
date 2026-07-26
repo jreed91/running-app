@@ -30,7 +30,10 @@ enum TrackingState: Equatable, Sendable {
 /// heart-rate, cadence, and elevation cells around it did not (D4).
 @Observable
 @MainActor
-final class WorkoutTrackerService: NSObject {
+// No longer an `NSObject`: the only reason it ever was is that
+// `CLLocationManagerDelegate` requires one, and fixes now arrive over an
+// `AsyncSequence` instead.
+final class WorkoutTrackerService {
 
     // MARK: Live state
 
@@ -107,8 +110,27 @@ final class WorkoutTrackerService: NSObject {
     /// date, so each active segment is measured independently and summed here.
     private var indoorDistanceBaselineMeters: Double = 0
 
+    /// Kept only to ask for authorization. Fixes themselves arrive through
+    /// `CLLocationUpdate.liveUpdates(.fitness)` — see `startLocationUpdates()`.
     private let locationManager = CLLocationManager()
+
+    /// The `for await` loop consuming `CLLocationUpdate.liveUpdates`, and the session
+    /// that entitles it to keep running with the app in the background.
+    private var locationTask: Task<Void, Never>?
+    private var backgroundActivitySession: CLBackgroundActivitySession?
+
     private let autoPauseThresholdMetersPerSecond: Double = 0.5  // below this ≈ standing still
+
+    /// Minimum movement between two *accepted* fixes, in metres.
+    ///
+    /// This used to be `CLLocationManager.distanceFilter`, which the live-updates API
+    /// does not expose — `.fitness` picks the accuracy but delivers every fix it gets.
+    /// Without a replacement, a phone sitting still on a start line accumulates real
+    /// distance out of GPS jitter, a metre or two at a time, which is precisely the
+    /// number this whole service exists to get right. `LocationQualityFilter` does not
+    /// cover it: it rejects fixes that are inaccurate, stale, or impossibly far, and
+    /// jitter is none of those.
+    private let minimumFixSeparationMeters: Double = 5
 
     /// Weight given to the newest fix in the live pace HUD. A raw `1_000 / speed`
     /// reading swings hard fix-to-fix; splits no longer depend on this value (N7),
@@ -143,8 +165,7 @@ final class WorkoutTrackerService: NSObject {
         startHeartRateQuery(from: startDate)
 
         if workoutLocation == .outdoor {
-            configureLocationManager()
-            locationManager.startUpdatingLocation()
+            startLocationUpdates()
         }
         // The pedometer runs on both paths: indoors it is the distance source,
         // outdoors it is read for cadence only (N20).
@@ -158,7 +179,7 @@ final class WorkoutTrackerService: NSObject {
         elapsedSeconds = stopwatch.accumulated
         timer?.invalidate()
         if workoutLocation == .outdoor {
-            locationManager.stopUpdatingLocation()
+            stopLocationUpdates()
             // Forget the last fix so the first one after resuming opens a fresh
             // segment: otherwise the distance walked while paused is measured
             // against the pre-pause location and added to the run — the outdoor
@@ -180,7 +201,7 @@ final class WorkoutTrackerService: NSObject {
         startTimer()
         startHeartRateQuery(from: Date())
         if workoutLocation == .outdoor {
-            locationManager.startUpdatingLocation()
+            startLocationUpdates()
         }
         startPedometerUpdates(from: Date())
     }
@@ -199,7 +220,7 @@ final class WorkoutTrackerService: NSObject {
         guard trackingState == .active || trackingState == .paused else { return nil }
         timer?.invalidate()
         if workoutLocation == .outdoor {
-            locationManager.stopUpdatingLocation()
+            stopLocationUpdates()
         }
         stopPedometerUpdates()
         if let q = hrQuery { hkStore.stop(q); hrQuery = nil }
@@ -404,14 +425,51 @@ final class WorkoutTrackerService: NSObject {
 
     // MARK: - GPS (outdoor)
 
-    private func configureLocationManager() {
-        locationManager.delegate = self
-        locationManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
-        locationManager.distanceFilter = 5   // metres
-        locationManager.activityType = .fitness
-        locationManager.pausesLocationUpdatesAutomatically = false
-        locationManager.allowsBackgroundLocationUpdates = true
+    /// Starts (or restarts) the flow of GPS fixes for the outdoor path.
+    ///
+    /// Replaces the `CLLocationManagerDelegate` pairing this service used to carry.
+    /// `CLLocationUpdate.liveUpdates(.fitness)` is the modern form: `.fitness` selects
+    /// the accuracy and activity type that `desiredAccuracy` /`activityType` used to be
+    /// set by hand, and delivery is an `AsyncSequence`, so the fix-handling code reads
+    /// top-to-bottom on the main actor instead of hopping there from a nonisolated
+    /// callback.
+    ///
+    /// `CLBackgroundActivitySession` replaces `allowsBackgroundLocationUpdates = true`.
+    /// It is the difference between a flag that silently entitles the app to track
+    /// forever and a session with a lifetime: it shows the runner the system's
+    /// background-location indicator while it is alive, and `stopLocationUpdates()`
+    /// ends it on pause, finish, and discard alike.
+    private func startLocationUpdates() {
+        guard locationTask == nil else { return }
+
         locationManager.requestWhenInUseAuthorization()
+        backgroundActivitySession = CLBackgroundActivitySession()
+
+        locationTask = Task { [weak self] in
+            do {
+                for try await update in CLLocationUpdate.liveUpdates(.fitness) {
+                    guard let self, !Task.isCancelled else { return }
+                    // An update can carry no fix — Core Location signals state changes
+                    // (it has decided the device has settled, authorization moved)
+                    // through the same stream. Nothing to process on those.
+                    guard let location = update.location else { continue }
+                    self.processLocation(location)
+                }
+            } catch {
+                AppLogger.log(
+                    "Location updates ended: \(error.localizedDescription)",
+                    label: "WorkoutTrackerService",
+                    level: .error
+                )
+            }
+        }
+    }
+
+    private func stopLocationUpdates() {
+        locationTask?.cancel()
+        locationTask = nil
+        backgroundActivitySession?.invalidate()
+        backgroundActivitySession = nil
     }
 
     private func processLocation(_ location: CLLocation) {
@@ -434,6 +492,15 @@ final class WorkoutTrackerService: NSObject {
 
         if let rejection = LocationQualityFilter.rejection(for: fix) {
             rejectedFixCounts[rejection, default: 0] += 1
+            return
+        }
+
+        // The software replacement for `distanceFilter` (see
+        // `minimumFixSeparationMeters`). Deliberately *after* the quality grading above,
+        // so a runner standing still under bad reception still sees their signal
+        // strength update, and *before* anything that accumulates: a fix this close to
+        // the last one contributes nothing but noise to distance, elevation and pace.
+        if let last = previous, location.distance(from: last) < minimumFixSeparationMeters {
             return
         }
 
@@ -493,22 +560,7 @@ final class WorkoutTrackerService: NSObject {
     }
 }
 
-// MARK: - CLLocationManagerDelegate
-
-extension WorkoutTrackerService: CLLocationManagerDelegate {
-    nonisolated func locationManager(
-        _ manager: CLLocationManager,
-        didUpdateLocations locations: [CLLocation]
-    ) {
-        guard let location = locations.last else { return }
-        Task { @MainActor in processLocation(location) }
-    }
-
-    nonisolated func locationManager(
-        _ manager: CLLocationManager,
-        didFailWithError error: Error
-    ) {
-        // Non-fatal – location updates will resume on next fix
-        AppLogger.log("Location error: \(error.localizedDescription)", label: "WorkoutTrackerService", level: .error)
-    }
-}
+// The `CLLocationManagerDelegate` conformance that used to live here is gone: fixes
+// arrive through `CLLocationUpdate.liveUpdates` in `startLocationUpdates()`, and the
+// error path is the `catch` on that loop. `locationManager` survives only to ask for
+// authorization.

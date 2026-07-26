@@ -307,14 +307,10 @@ struct DashboardView: View {
     @Environment(AppContainer.self) private var container
     @Environment(\.modelContext) private var context
     @Query private var profiles: [UserProfile]
-    @State private var showActiveRun = false
     /// The strength workout to present. Captured at tap time and driven through
     /// `fullScreenCover(item:)` so the cover can never open onto an empty,
     /// undismissable screen when the selected day changes mid-presentation.
     @State private var strengthWorkout: ScheduledWorkout?
-    /// The scheduled workout to fulfill when the active-run sheet is a planned run
-    /// (set by "Start This Workout"); `nil` for a free run (H4).
-    @State private var activeRunScheduled: ScheduledWorkout?
     @State private var selectedDate = Date()
     /// Timestamp of the last time the rearrange-workouts prompt was flagged
     /// (dismissed or acted on). Used to limit the prompt to once per week.
@@ -327,7 +323,8 @@ struct DashboardView: View {
     ///
     /// One piece of state and one `.alert`, because two `.alert` modifiers on the same
     /// view do not reliably both present.
-    private struct RecoveryAlert {
+    private struct RecoveryAlert: Identifiable {
+        let id = UUID()
         let title: String
         let message: String
     }
@@ -348,6 +345,16 @@ struct DashboardView: View {
             return nil
         }
         return info
+    }
+
+    /// Bridges the container's active-run flag into the `isPresented:` shape the cover
+    /// needs. The flag lives on the container so `MainTabView`'s bottom accessory can
+    /// raise it from outside this view's tree (U7).
+    private var activeRunPresented: Binding<Bool> {
+        Binding(
+            get: { container.isShowingActiveRun },
+            set: { container.isShowingActiveRun = $0 }
+        )
     }
 
     var body: some View {
@@ -393,22 +400,22 @@ struct DashboardView: View {
             .background(Color.surfacePrimary)
             .navigationTitle("Today")
             .navigationBarTitleDisplayMode(.inline)
-            .fullScreenCover(isPresented: $showActiveRun) {
-                ActiveRunView(scheduledWorkout: activeRunScheduled)
+            .fullScreenCover(isPresented: activeRunPresented) {
+                ActiveRunView(scheduledWorkout: container.activeRunScheduledWorkout)
             }
             .fullScreenCover(item: $strengthWorkout) { workout in
                 StrengthActiveView(scheduledWorkout: workout)
             }
+            // `alert(_:item:)` (iOS 27): presentation follows the optional directly, so
+            // the bridging `Binding` is gone and the message reads the item it was
+            // given rather than re-reading the state behind a `?? ""`.
             .alert(
                 recoveryAlert?.title ?? "",
-                isPresented: Binding(
-                    get: { recoveryAlert != nil },
-                    set: { if !$0 { recoveryAlert = nil } }
-                )
-            ) {
-                Button("OK", role: .cancel) { recoveryAlert = nil }
-            } message: {
-                Text(recoveryAlert?.message ?? "")
+                item: $recoveryAlert
+            ) { _ in
+                Button("OK", role: .cancel) {}
+            } message: { alert in
+                Text(alert.message)
             }
         }
     }
@@ -623,8 +630,8 @@ struct DashboardView: View {
             if workout.workoutType == .strength {
                 strengthWorkout = workout
             } else {
-                activeRunScheduled = workout
-                showActiveRun = true
+                container.activeRunScheduledWorkout = workout
+                container.isShowingActiveRun = true
             }
         } label: {
             HStack(spacing: 10) {
@@ -734,8 +741,8 @@ struct DashboardView: View {
 
     private var startRunButton: some View {
         Button {
-            activeRunScheduled = nil
-            showActiveRun = true
+            container.activeRunScheduledWorkout = nil
+            container.isShowingActiveRun = true
         } label: {
             HStack(spacing: 10) {
                 StrideIcon(name: .run, size: 20, color: .onFill, strokeWeight: 2.0)

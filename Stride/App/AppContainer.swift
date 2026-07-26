@@ -152,6 +152,33 @@ final class AppContainer {
     /// the user review their workout and confirms the auto-link to today's planned workout.
     var pendingReviewWorkout: RunWorkout?
 
+    // MARK: Active run presentation
+
+    /// Whether the full-screen run HUD is on screen.
+    ///
+    /// This lives on the container rather than in `DashboardView` because two views now
+    /// drive it: the dashboard's "Start Run" button, and `MainTabView`'s bottom accessory,
+    /// which sits *outside* the dashboard's view tree and has to be able to bring a
+    /// still-running workout back after the runner dismisses the HUD (U7). Dismissing the
+    /// cover no longer ends the run, so something above the tab bar has to own the way back.
+    var isShowingActiveRun = false
+
+    /// The planned workout the active run is fulfilling, or `nil` for a free run.
+    /// Paired with `isShowingActiveRun` so re-presenting from the accessory restores the
+    /// same run rather than reopening it as an unplanned one (H4).
+    var activeRunScheduledWorkout: ScheduledWorkout?
+
+    /// The pace band the current guided step — or the scheduled workout behind it —
+    /// is asking for, or `nil` on a free run.
+    ///
+    /// Published here by `ActiveRunView` because the *announcer* now lives in
+    /// `MainTabView` rather than in the HUD. Spoken splits (U4) were driven by an
+    /// `onChange` inside the run screen, which stopped the moment the runner minimized
+    /// it — and a runner with the phone in a pocket is exactly who spoken splits are
+    /// for. The band is HUD-derived state, so the HUD hands it over rather than the
+    /// announcer reaching back into guided-workout internals.
+    var activeRunTargetPaceBand: ClosedRange<Double>?
+
     // MARK: Init
 
     init(

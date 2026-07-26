@@ -386,6 +386,10 @@ struct StrengthActiveView: View {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: completionGlyphSize))
                 .foregroundStyle(Color.brand)
+                // The one moment in the strength flow worth celebrating. Non-repeating:
+                // this screen can sit on-screen while the runner catches their breath,
+                // and a looping bounce would be the only thing moving on it.
+                .symbolEffect(.bounce, options: .nonRepeating)
             Text("All exercises done!")
                 .font(.dsTitle2)
             Text("Tap Finish to save your workout.")

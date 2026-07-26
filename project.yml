@@ -19,8 +19,27 @@ configFiles:
 
 settings:
   base:
-    SWIFT_VERSION: 6.0
+    SWIFT_VERSION: 6.2
     SWIFT_STRICT_CONCURRENCY: complete
+    # Swift 6.2's "approachable concurrency" bundle. Turns on
+    # NonisolatedNonsendingByDefault (a `nonisolated` async function runs on its
+    # caller's actor instead of hopping to the global executor),
+    # InferSendableFromCaptures, GlobalActorIsolatedTypesUsability, and
+    # DisableOutwardActorInference.
+    #
+    # The behavioural one is the first. It is safe here because this project's
+    # `nonisolated` members are delegate callbacks and static pure helpers — the only
+    # `nonisolated` *async* work goes through `IntentModelActor`, which carries its own
+    # isolation. Anything added later that must not run on the caller's actor should say
+    # `@concurrent` explicitly rather than rely on the old implicit hop.
+    SWIFT_APPROACHABLE_CONCURRENCY: YES
+    # NOTE: SWIFT_DEFAULT_ACTOR_ISOLATION is deliberately left at `nonisolated` rather
+    # than set to `MainActor`. It is the other half of the Swift 6.2 story and it would
+    # delete a good deal of the `@MainActor` bookkeeping in `Core/Services`, but it
+    # isolates *every* unannotated type to the main actor — including the 100-plus
+    # `Sendable` value types in `Core/Models`, where main-actor isolation and a
+    # `Sendable` conformance fight each other. That is a migration with a compiler in
+    # the loop, not a build-setting flip.
     DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
     SUPPORTED_PLATFORMS: "iphoneos iphonesimulator"
   configs:
