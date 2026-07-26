@@ -981,7 +981,7 @@ private struct PlanWeekSummaryRow: View {
         // Resolved against the same array the rows were built from. `nil` means the
         // container named a row this week does not hold, and an unplaceable drop leaves
         // the week alone rather than guessing at one end of it.
-        guard let offset = dropOffset(difference.destination, in: workouts) else { return }
+        guard let offset = dropOffset(difference.destination.position, in: workouts) else { return }
 
         let changes = WorkoutReorderPlanner.plan(
             slots: WorkoutReorderPlanner.slots(for: workouts, hasFixedRaceDate: hasFixedRaceDate),
@@ -1018,29 +1018,31 @@ private struct PlanWeekSummaryRow: View {
         }
     }
 
-    /// Turns a `ReorderDifference.Destination` into the insertion offset
+    /// Turns a `ReorderDifference.Destination.Position` into the insertion offset
     /// `WorkoutReorderPlanner.plan(slots:moving:toOffset:)` wants.
     ///
-    /// The destination is a *position relative to a row*, not a number: `.before(id)`
+    /// A destination is a *position relative to a row*, not a number: `.before(id)`
     /// names the row the lifted sessions were dropped above, and `.end` means past the
     /// last one. The planner counts rendered rows in date order, so `.before` resolves to
     /// that row's own index — an insertion offset into the pre-move array, which is the
     /// same convention the classic `onMove(perform:)` destination used, and what
     /// `plan`'s `ordered.prefix(offset)` is written against.
+    ///
+    /// The destination's `collectionID` is ignored on purpose: this container is registered
+    /// with `reorderContainer(for:itemID:isEnabled:move:)`, whose single collection makes
+    /// `ReorderableSingleCollectionIdentifier` the only value it can carry.
     private func dropOffset(
-        _ destination: ReorderDifference<UUID, ReorderableSingleCollectionIdentifier>.Destination,
+        _ position: ReorderDifference<UUID, ReorderableSingleCollectionIdentifier>.Destination.Position,
         in workouts: [ScheduledWorkout]
     ) -> Int? {
-        switch destination {
+        // `Position` is `@frozen`, so these two cases are the whole enum and there is no
+        // `@unknown default` to write. `firstIndex` returning `nil` is still reachable —
+        // a row this week does not hold stays a no-op rather than a guess at one end of it.
+        switch position {
         case .before(let id):
             return workouts.firstIndex { $0.id == id }
         case .end:
             return workouts.count
-        @unknown default:
-            // A position this build does not know how to place is a no-op rather than a
-            // guess: dropping a session onto an unrecognised target must not silently
-            // rewrite a day.
-            return nil
         }
     }
 
