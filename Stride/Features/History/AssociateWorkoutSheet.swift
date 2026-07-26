@@ -75,7 +75,7 @@ private struct ScheduledWorkoutPickerRow: View {
             }
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(scheduled.workoutType.displayName)
+                Text(scheduled.workoutType.localizedName)
                     .font(.bodyStrong)
                 Text(scheduled.scheduledDate.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
                     .font(.caption)
@@ -85,7 +85,7 @@ private struct ScheduledWorkoutPickerRow: View {
                         if let name = plan.raceName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
                             return name
                         }
-                        return plan.targetRace.displayName
+                        return plan.targetRace.localizedName
                     }()
                     Text(planTitle)
                         .font(.caption2)

@@ -357,7 +357,7 @@ struct AICoachChatView: View {
         draft = ""
 
         guard appSettings.aiInsightsEnabled, hasAIKey else {
-            let setupText = "Turn on AI Coach in Settings to chat with \(appSettings.aiProvider.displayName)."
+            let setupText = "Turn on AI Coach in Settings to chat with \(appSettings.aiProvider.localizedName)."
             messages.append(
                 AICoachChatMessage(
                     sender: .coach,
@@ -398,7 +398,7 @@ struct AICoachChatView: View {
                 messages.append(
                     AICoachChatMessage(
                         sender: .coach,
-                        text: "I could not reach \(appSettings.aiProvider.displayName). Make sure Apple Intelligence is enabled on this device, then try again.",
+                        text: "I could not reach \(appSettings.aiProvider.localizedName). Make sure Apple Intelligence is enabled on this device, then try again.",
                         metrics: [],
                         status: .setupNeeded
                     )
@@ -457,9 +457,9 @@ struct AICoachChatView: View {
 
     private var contextSubtitle: String {
         if let latestRun {
-            "After \(latestRun.workoutType.displayName.lowercased()) run"
+            "After \(latestRun.workoutType.localizedName.lowercased()) run"
         } else if let activePlan {
-            "\(activePlan.targetRace.displayName) plan context"
+            "\(activePlan.targetRace.localizedName) plan context"
         } else {
             "Plan and workout context"
         }
@@ -532,7 +532,7 @@ struct AICoachChatView: View {
     private var openingMetrics: [AICoachMiniMetric] {
         guard let latestRun else {
             return [
-                AICoachMiniMetric(label: "Plan", value: activePlan?.targetRace.displayName ?? "None", delta: nil, tone: .brand),
+                AICoachMiniMetric(label: "Plan", value: activePlan?.targetRace.localizedName ?? "None", delta: nil, tone: .brand),
                 AICoachMiniMetric(label: "Runs", value: "\(recentRuns.count)", delta: nil, tone: .secondary)
             ]
         }

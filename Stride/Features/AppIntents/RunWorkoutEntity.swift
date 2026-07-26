@@ -84,11 +84,11 @@ extension RunWorkout {
         return RunWorkoutEntity(
             id: id,
             date: date,
-            workoutTypeName: workoutType.displayName,
+            workoutTypeName: workoutType.localizedName,
             distanceMeters: distanceMeters,
             durationSeconds: durationSeconds,
             averagePaceSecondsPerKm: averagePaceSecondsPerKm,
-            title: "\(workoutType.displayName) · \(distanceText)",
+            title: "\(workoutType.localizedName) · \(distanceText)",
             subtitle: "\(dateText) · \(paceText)"
         )
     }

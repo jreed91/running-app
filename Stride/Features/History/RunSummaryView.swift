@@ -262,7 +262,7 @@ struct RunSummaryView: View {
            !name.isEmpty {
             return name
         }
-        return workout.scheduledWorkout?.workoutType.displayName ?? "\(workout.workoutLocation.displayName) Run"
+        return workout.scheduledWorkout?.workoutType.localizedName ?? "\(workout.workoutLocation.localizedName) Run"
     }
 
 
@@ -302,7 +302,7 @@ struct RunSummaryView: View {
             await backfillSplits()
         }
         .background(Color.surfacePrimary.ignoresSafeArea())
-        .navigationTitle(displayType.displayName)
+        .navigationTitle(displayType.localizedName)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {

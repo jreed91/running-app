@@ -97,8 +97,11 @@ final class NotificationService: NSObject {
         guard workout.workoutType != .rest else { return }
 
         let content = UNMutableNotificationContent()
-        content.title = "Workout today"
-        content.body = "You have a \(workout.workoutType.displayName) workout scheduled today. Lace up!"
+        content.title = String(localized: "Workout today", comment: "Morning reminder notification title")
+        content.body = String(
+            localized: "You have a \(workout.workoutType.localizedName) workout scheduled today. Lace up!",
+            comment: "Morning reminder notification body"
+        )
         content.sound = .default
         content.categoryIdentifier = Category.workoutReminder
 
@@ -209,7 +212,7 @@ final class NotificationService: NSObject {
     ) async throws {
         guard await isAuthorized else { return }
         let content = UNMutableNotificationContent()
-        content.title = "Run Synced"
+        content.title = String(localized: "Run Synced", comment: "Notification title when one run is imported from Apple Health")
         content.body  = syncedRunBody(for: workout, unit: unit)
         content.sound = .default
         content.categoryIdentifier = Category.syncedRun
@@ -236,8 +239,11 @@ final class NotificationService: NSObject {
     func notifyRunBatchSynced(count: Int) async throws {
         guard count > 0, await isAuthorized else { return }
         let content = UNMutableNotificationContent()
-        content.title = "Runs Synced"
-        content.body = "\(count) runs were imported from Apple Health."
+        content.title = String(localized: "Runs Synced", comment: "Notification title when several runs are imported from Apple Health")
+        content.body = String(
+            localized: "\(count) runs were imported from Apple Health.",
+            comment: "Notification body when several runs are imported"
+        )
         content.sound = .default
         content.categoryIdentifier = Category.syncedRun
         content.userInfo = ["opensReviewOnTap": false]
@@ -279,7 +285,7 @@ final class NotificationService: NSObject {
             workoutType: .tempo
         )
         let content = UNMutableNotificationContent()
-        content.title = "Time to run!"
+        content.title = String(localized: "Time to run!", comment: "Notification title at the scheduled workout time")
         content.body = reminderBody(for: workout, minutesBefore: 0)
         content.sound = .default
         content.categoryIdentifier = Category.workoutReminder
@@ -298,8 +304,11 @@ final class NotificationService: NSObject {
             workoutType: .easy
         )
         let content = UNMutableNotificationContent()
-        content.title = "Workout today"
-        content.body = "You have a \(workout.workoutType.displayName) workout scheduled today. Lace up!"
+        content.title = String(localized: "Workout today", comment: "Morning reminder notification title")
+        content.body = String(
+            localized: "You have a \(workout.workoutType.localizedName) workout scheduled today. Lace up!",
+            comment: "Morning reminder notification body"
+        )
         content.sound = .default
         content.categoryIdentifier = Category.workoutReminder
         let request = UNNotificationRequest(
@@ -377,7 +386,7 @@ final class NotificationService: NSObject {
     private func syncedRunBody(for workout: RunWorkout, unit: UnitPreference) -> String {
         let distance = workout.distanceMeters.distanceString(unit: unit)
         let pace = workout.averagePaceSecondsPerKm.paceString(unit: unit)
-        return "\(workout.workoutType.displayName) · \(distance) · \(pace)"
+        return "\(workout.workoutType.localizedName) · \(distance) · \(pace)"
     }
 
     private func storeReviewSnapshot(for workout: RunWorkout) {
@@ -399,11 +408,14 @@ final class NotificationService: NSObject {
     }
 
     private func reminderBody(for workout: ScheduledWorkout, minutesBefore: Int) -> String {
-        let type = workout.workoutType.displayName
+        let type = workout.workoutType.localizedName
         if minutesBefore == 0 {
-            return "Your \(type) workout starts now. Lace up!"
+            return String(localized: "Your \(type) workout starts now. Lace up!", comment: "Reminder body, workout starting now")
         }
-        return "Your \(type) workout is in \(minutesBefore) min. Get ready!"
+        return String(
+            localized: "Your \(type) workout is in \(minutesBefore) min. Get ready!",
+            comment: "Reminder body, workout starting soon"
+        )
     }
 
     private func handleSyncedRunTap(workoutID: String) {

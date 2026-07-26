@@ -306,7 +306,7 @@ struct OnboardingView: View {
                     StrideIcon(name: .ruler, size: 22, color: iconColor, strokeWeight: 2.0)
                 }
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(unit.displayName).font(.bodyStrong).foregroundStyle(.primary)
+                    Text(unit.localizedName).font(.bodyStrong).foregroundStyle(.primary)
                     Text(subtitle).font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()

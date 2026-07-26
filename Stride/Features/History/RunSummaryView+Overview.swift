@@ -43,7 +43,7 @@ extension RunSummaryView {
                     .frame(width: 8, height: 8)
                     .shadow(color: workoutTone.opacity(0.35), radius: 0, x: 0, y: 0)
                     .overlay(Circle().stroke(workoutTone.opacity(0.25), lineWidth: 6))
-                Text("\(displayType.displayName) run")
+                Text("\(displayType.localizedName) run")
                     .font(.system(size: 11, weight: .bold))
                     .kerning(1.4)
                     .textCase(.uppercase)

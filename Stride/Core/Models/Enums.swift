@@ -16,6 +16,19 @@ enum RaceType: String, Codable, CaseIterable, Sendable {
         self == .custom ? "Custom Distance" : rawValue
     }
 
+    /// The name a runner reads. `displayName` is the canonical English form — it is what
+    /// the AI prompts, the logs, and the seeded race names use, and several of those are
+    /// compared or persisted, so it must not move with the device language (D8).
+    var localizedName: String {
+        switch self {
+        case .maintainFitness: return String(localized: "Maintain Fitness", comment: "Goal race type")
+        case .fiveK:           return String(localized: "5K", comment: "Goal race type")
+        case .halfMarathon:    return String(localized: "Half Marathon", comment: "Goal race type")
+        case .marathon:        return String(localized: "Marathon", comment: "Goal race type")
+        case .custom:          return String(localized: "Custom Distance", comment: "Goal race type")
+        }
+    }
+
     var isGoalRace: Bool {
         self != .maintainFitness
     }
@@ -66,6 +79,17 @@ enum FitnessLevel: String, Codable, CaseIterable, Sendable {
     case advanced
 
     var displayName: String { rawValue.capitalized }
+
+    /// The name a runner reads. `displayName` is the canonical English form — it is what
+    /// the AI prompts, the logs, and the seeded race names use, and several of those are
+    /// compared or persisted, so it must not move with the device language (D8).
+    var localizedName: String {
+        switch self {
+        case .beginner:     return String(localized: "Beginner", comment: "Fitness level")
+        case .intermediate: return String(localized: "Intermediate", comment: "Fitness level")
+        case .advanced:     return String(localized: "Advanced", comment: "Fitness level")
+        }
+    }
 
     /// Starting weekly volume in km, scaled to the target race distance.
     ///
@@ -123,6 +147,17 @@ enum Gender: String, Codable, CaseIterable, Sendable {
         case .preferNotToShare: return "Prefer not to share"
         }
     }
+
+    /// The name a runner reads. `displayName` is the canonical English form — it is what
+    /// the AI prompts, the logs, and the seeded race names use, and several of those are
+    /// compared or persisted, so it must not move with the device language (D8).
+    var localizedName: String {
+        switch self {
+        case .male:             return String(localized: "Male", comment: "Gender")
+        case .female:           return String(localized: "Female", comment: "Gender")
+        case .preferNotToShare: return String(localized: "Prefer not to share", comment: "Gender")
+        }
+    }
 }
 
 // MARK: - WorkoutType
@@ -138,6 +173,22 @@ enum WorkoutType: String, Codable, CaseIterable, Sendable {
     case strength = "Strength"
 
     var displayName: String { rawValue }
+
+    /// The name a runner reads. `displayName` is the canonical English form — it is what
+    /// the AI prompts, the logs, and the seeded race names use, and several of those are
+    /// compared or persisted, so it must not move with the device language (D8).
+    var localizedName: String {
+        switch self {
+        case .easy:          return String(localized: "Easy", comment: "Workout type")
+        case .tempo:         return String(localized: "Tempo", comment: "Workout type")
+        case .interval:      return String(localized: "Interval", comment: "Workout type")
+        case .longRun:       return String(localized: "Long Run", comment: "Workout type")
+        case .race:          return String(localized: "Race", comment: "Workout type")
+        case .rest:          return String(localized: "Rest", comment: "Workout type")
+        case .crossTraining: return String(localized: "Cross Training", comment: "Workout type")
+        case .strength:      return String(localized: "Strength", comment: "Workout type")
+        }
+    }
 
     var isQualitySession: Bool {
         switch self {
@@ -187,6 +238,18 @@ enum TrainingPhase: String, Codable, Sendable {
     case taper = "Taper"
 
     var displayName: String { rawValue }
+
+    /// The name a runner reads. `displayName` is the canonical English form — it is what
+    /// the AI prompts, the logs, and the seeded race names use, and several of those are
+    /// compared or persisted, so it must not move with the device language (D8).
+    var localizedName: String {
+        switch self {
+        case .base:  return String(localized: "Base", comment: "Training phase")
+        case .build: return String(localized: "Build", comment: "Training phase")
+        case .peak:  return String(localized: "Peak", comment: "Training phase")
+        case .taper: return String(localized: "Taper", comment: "Training phase")
+        }
+    }
 }
 
 // MARK: - RecoveryType
@@ -204,6 +267,16 @@ enum RouteType: String, Codable, CaseIterable, Sendable {
     case outAndBack = "Out & Back"
 
     var displayName: String { rawValue }
+
+    /// The name a runner reads. `displayName` is the canonical English form — it is what
+    /// the AI prompts, the logs, and the seeded race names use, and several of those are
+    /// compared or persisted, so it must not move with the device language (D8).
+    var localizedName: String {
+        switch self {
+        case .loop:       return String(localized: "Loop", comment: "Route shape")
+        case .outAndBack: return String(localized: "Out & Back", comment: "Route shape")
+        }
+    }
 
     var systemImage: String {
         switch self {
@@ -228,6 +301,16 @@ enum WorkoutLocation: String, Codable, CaseIterable, Sendable {
 
     var displayName: String { rawValue }
 
+    /// The name a runner reads. `displayName` is the canonical English form — it is what
+    /// the AI prompts, the logs, and the seeded race names use, and several of those are
+    /// compared or persisted, so it must not move with the device language (D8).
+    var localizedName: String {
+        switch self {
+        case .outdoor: return String(localized: "Outdoor", comment: "Where a run happens")
+        case .indoor:  return String(localized: "Indoor", comment: "Where a run happens")
+        }
+    }
+
     var systemImage: String {
         switch self {
         case .outdoor: return "figure.run"
@@ -246,6 +329,16 @@ enum UnitPreference: String, CaseIterable, Sendable {
         switch self {
         case .metric: return "Kilometers"
         case .imperial: return "Miles"
+        }
+    }
+
+    /// The name a runner reads. `displayName` is the canonical English form — it is what
+    /// the AI prompts, the logs, and the seeded race names use, and several of those are
+    /// compared or persisted, so it must not move with the device language (D8).
+    var localizedName: String {
+        switch self {
+        case .metric:   return String(localized: "Kilometers", comment: "Unit preference")
+        case .imperial: return String(localized: "Miles", comment: "Unit preference")
         }
     }
 
@@ -300,6 +393,18 @@ enum AIProvider: String, CaseIterable, Sendable {
         }
     }
 
+    /// The name a runner reads. `displayName` is the canonical English form — it is what
+    /// the AI prompts, the logs, and the seeded race names use, and several of those are
+    /// compared or persisted, so it must not move with the device language (D8).
+    var localizedName: String {
+        switch self {
+        case .appleOnDevice:
+            return String(localized: "On-device (Apple Intelligence)", comment: "Where AI coaching runs")
+        case .applePrivateCloud:
+            return String(localized: "Apple Private Cloud Compute", comment: "Where AI coaching runs")
+        }
+    }
+
     /// Apple's server-backed model (Private Cloud Compute); only meaningful on iOS 27+.
     var usesPrivateCloudCompute: Bool { self == .applePrivateCloud }
 }
@@ -315,6 +420,20 @@ enum StrengthEquipment: String, Codable, CaseIterable, Sendable {
     case barbell         = "Barbell"
 
     var displayName: String { rawValue }
+
+    /// The name a runner reads. `displayName` is the canonical English form — it is what
+    /// the AI prompts, the logs, and the seeded race names use, and several of those are
+    /// compared or persisted, so it must not move with the device language (D8).
+    var localizedName: String {
+        switch self {
+        case .bodyweight:      return String(localized: "Bodyweight", comment: "Strength equipment")
+        case .dumbbells:       return String(localized: "Dumbbells", comment: "Strength equipment")
+        case .resistanceBands: return String(localized: "Resistance Bands", comment: "Strength equipment")
+        case .pullUpBar:       return String(localized: "Pull-Up Bar", comment: "Strength equipment")
+        case .kettlebell:      return String(localized: "Kettlebell", comment: "Strength equipment")
+        case .barbell:         return String(localized: "Barbell", comment: "Strength equipment")
+        }
+    }
 
     var systemImage: String {
         switch self {
@@ -336,10 +455,22 @@ enum StrengthFocus: String, Codable, CaseIterable, Sendable {
 
     var displayName: String { rawValue }
 
+    /// The name a runner reads. `displayName` is the canonical English form — it is what
+    /// the AI prompts, the logs, and the seeded race names use, and several of those are
+    /// compared or persisted, so it must not move with the device language (D8).
+    var localizedName: String {
+        switch self {
+        case .runningSpecific: return String(localized: "Running-Specific", comment: "Strength focus")
+        case .generalStrength: return String(localized: "General Strength", comment: "Strength focus")
+        }
+    }
+
     var subtitle: String {
         switch self {
-        case .runningSpecific: return "Glutes, hips, core, and single-leg stability"
-        case .generalStrength: return "Full-body strength with push, pull, and hinge patterns"
+        case .runningSpecific:
+            return String(localized: "Glutes, hips, core, and single-leg stability", comment: "Strength focus subtitle")
+        case .generalStrength:
+            return String(localized: "Full-body strength with push, pull, and hinge patterns", comment: "Strength focus subtitle")
         }
     }
 }

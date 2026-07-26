@@ -23,22 +23,26 @@ struct TodaysRunIntent: AppIntent {
     /// a gym session as "You have a Strength run today". Non-run days get their own
     /// phrasing; only run types are called runs.
     static func dialogText(for data: TodaysRunData?) -> String {
-        guard let data else { return "No run scheduled for today." }
-        let name = data.workoutType.displayName
+        guard let data else {
+            return String(localized: "No run scheduled for today.", comment: "Siri answer with nothing planned")
+        }
+        let name = data.workoutType.localizedName
         switch data.workoutType.sessionKind {
         case .run:
             // "Long Run" and "Race" already name the session; appending "run" to them
             // produces the kind of sentence only a template writes.
             switch data.workoutType {
-            case .longRun, .race: return "You have a \(name) today."
-            default:              return "You have a \(name) run today."
+            case .longRun, .race:
+                return String(localized: "You have a \(name) today.", comment: "Siri answer for a long run or race")
+            default:
+                return String(localized: "You have a \(name) run today.", comment: "Siri answer for a run")
             }
         case .strength:
-            return "You have a \(name) session today."
+            return String(localized: "You have a \(name) session today.", comment: "Siri answer for a strength session")
         case .crossTraining:
-            return "You have \(name.lowercased()) today."
+            return String(localized: "You have \(name.lowercased()) today.", comment: "Siri answer for a cross-training day")
         case .rest:
-            return "Today is a rest day."
+            return String(localized: "Today is a rest day.", comment: "Siri answer for a rest day")
         }
     }
 }

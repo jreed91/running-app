@@ -30,7 +30,7 @@ struct WorkoutDetailView: View {
         if let name = goalRacePlan?.raceName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
             return name
         }
-        return workout.week?.plan?.targetRace.displayName ?? "Goal Race"
+        return workout.week?.plan?.targetRace.localizedName ?? "Goal Race"
     }
 
     var body: some View {
@@ -69,7 +69,7 @@ struct WorkoutDetailView: View {
                     .padding(.vertical, 16)
                     .frame(maxWidth: .infinity)
                 }
-                .navigationTitle(workout.workoutType.displayName)
+                .navigationTitle(workout.workoutType.localizedName)
                 .navigationBarTitleDisplayMode(.inline)
             }
         }
@@ -172,7 +172,7 @@ struct WorkoutDetailView: View {
 
                 VStack(alignment: .leading, spacing: 5) {
                     HStack(spacing: 8) {
-                        Text(workout.workoutType.displayName)
+                        Text(workout.workoutType.localizedName)
                             .font(.system(size: 22, weight: .bold))
                             .lineLimit(1)
                             .minimumScaleFactor(0.82)
@@ -230,7 +230,7 @@ struct WorkoutDetailView: View {
                             Image(systemName: location.systemImage)
                                 .font(.system(size: 12, weight: .semibold))
                         }
-                        Text(location.displayName)
+                        Text(location.localizedName)
                             .font(.system(size: 13, weight: .semibold))
                     }
                     .padding(.horizontal, 14)

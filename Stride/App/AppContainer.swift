@@ -62,26 +62,36 @@ final class AppContainer {
 
         var title: String {
             switch self {
-            case .storeMovedAside: "Your training data couldn't be opened"
-            case .runningInMemory: "Running without saved data"
+            case .storeMovedAside:
+                String(localized: "Your training data couldn't be opened", comment: "Store-recovery alert title")
+            case .runningInMemory:
+                String(localized: "Running without saved data", comment: "Store-recovery alert title")
             }
         }
 
         var message: String {
             switch self {
             case .storeMovedAside(let backupName):
-                let location = backupName.map { " It's kept on this device as \($0)." } ?? ""
-                return """
-                Stride started with a fresh, empty database because your existing one \
-                couldn't be read by this version.\(location) Nothing was deleted — if you \
-                had iCloud Sync on, your data will come back down from iCloud shortly.
-                """
+                let location = backupName.map {
+                    String(localized: " It's kept on this device as \($0).", comment: "Where the unreadable store was kept")
+                } ?? ""
+                return String(
+                    localized: """
+                    Stride started with a fresh, empty database because your existing one \
+                    couldn't be read by this version.\(location) Nothing was deleted — if you \
+                    had iCloud Sync on, your data will come back down from iCloud shortly.
+                    """,
+                    comment: "Store-recovery alert body: the old store was set aside"
+                )
             case .runningInMemory:
-                return """
-                Stride couldn't open its database this time, so anything you record now \
-                will not be saved. Your existing data has been left untouched. Please \
-                restart the app; if this keeps happening, restart your device.
-                """
+                return String(
+                    localized: """
+                    Stride couldn't open its database this time, so anything you record now \
+                    will not be saved. Your existing data has been left untouched. Please \
+                    restart the app; if this keeps happening, restart your device.
+                    """,
+                    comment: "Store-recovery alert body: running from memory"
+                )
             }
         }
     }

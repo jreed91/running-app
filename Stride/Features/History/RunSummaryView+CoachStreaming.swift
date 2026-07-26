@@ -222,7 +222,7 @@ extension RunSummaryView {
 
     private func workoutLabel(_ workout: ScheduledWorkout) -> String {
         let date = workout.scheduledDate.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
-        return "\(date) \(workout.workoutType.displayName)"
+        return "\(date) \(workout.workoutType.localizedName)"
     }
 
     @MainActor

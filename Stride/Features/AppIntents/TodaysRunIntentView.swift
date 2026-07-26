@@ -15,7 +15,7 @@ struct TodaysRunIntentView: View {
                         .foregroundStyle(data.workoutType.color)
                 }
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(data.workoutType.displayName)
+                    Text(data.workoutType.localizedName)
                         .font(.headline)
                     if let meters = data.distanceMeters {
                         Text(meters.distanceString(unit: AppSettings.syncedUnitPreference()))

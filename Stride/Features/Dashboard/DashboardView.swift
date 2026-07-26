@@ -200,7 +200,7 @@ private struct DayCell: View {
             return "\(day), \(isRestDay ? "rest day" : "nothing scheduled")"
         }
         let list = sessions
-            .map { "\($0.workoutType.displayName)\($0.isCompleted ? ", completed" : "")" }
+            .map { "\($0.workoutType.localizedName)\($0.isCompleted ? ", completed" : "")" }
             .joined(separator: ", ")
         return "\(day), \(list)"
     }

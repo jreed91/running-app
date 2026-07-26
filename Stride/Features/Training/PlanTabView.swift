@@ -242,7 +242,7 @@ struct PlanTabView: View {
     }
 
     private func workoutLabel(_ workout: ScheduledWorkout) -> String {
-        "\(workout.workoutType.displayName) on \(workout.scheduledDate.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))"
+        "\(workout.workoutType.localizedName) on \(workout.scheduledDate.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))"
     }
 }
 
@@ -496,7 +496,7 @@ private struct PlanOverviewCard: View {
         if let name = plan.raceName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
             return name
         }
-        return plan.targetRace.displayName
+        return plan.targetRace.localizedName
     }
 
     var body: some View {
@@ -630,7 +630,7 @@ private struct PhaseProgressBar: View {
 
             HStack {
                 ForEach([TrainingPhase.base, .build, .peak, .taper], id: \.self) { phase in
-                    Text(phase.displayName.uppercased())
+                    Text(phase.localizedName.uppercased())
                         .font(.system(size: 11, weight: phase == currentPhase ? .bold : .semibold))
                         .kerning(0.8)
                         .foregroundStyle(phase == currentPhase ? Color.brand : Color.secondary.opacity(0.55))
@@ -874,7 +874,7 @@ private struct PlanWeekSummaryRow: View {
                                 .font(isCurrentWeek ? .bodyStrong : .bodyRegular)
                             Text("·")
                                 .foregroundStyle(.tertiary)
-                            Text(week.phase.displayName)
+                            Text(week.phase.localizedName)
                                 .font(.bodyRegular)
                                 .foregroundStyle(.secondary)
                             if isCurrentWeek {
@@ -986,7 +986,7 @@ private struct PlanWorkoutSummaryRow: View {
             .padding(.leading, 4)
 
             VStack(alignment: .leading, spacing: 1) {
-                Text(workout.workoutType.displayName)
+                Text(workout.workoutType.localizedName)
                     .font(.bodyRegular)
                 Text(workout.scheduledDate.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
                     .font(.caption)

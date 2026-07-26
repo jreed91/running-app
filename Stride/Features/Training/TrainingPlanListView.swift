@@ -88,7 +88,7 @@ struct PlanRowView: View {
         if let name = plan.raceName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
             return name
         }
-        return plan.targetRace.displayName
+        return plan.targetRace.localizedName
     }
 
     private var dateRange: String {

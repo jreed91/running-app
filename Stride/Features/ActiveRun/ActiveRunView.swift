@@ -219,7 +219,7 @@ struct ActiveRunView: View {
             glassPill {
                 Image(systemName: selectedLocation.systemImage)
                     .font(.system(size: 13, weight: .semibold))
-                Text(selectedLocation.displayName)
+                Text(selectedLocation.localizedName)
                     .font(.system(size: 12, weight: .bold))
                     .kerning(0.5)
             }
@@ -228,7 +228,7 @@ struct ActiveRunView: View {
         .buttonStyle(.plain)
         .disabled(!isIdle)
         .accessibilityLabel("Workout location")
-        .accessibilityValue(selectedLocation.displayName)
+        .accessibilityValue(selectedLocation.localizedName)
         .accessibilityHint("Switches between outdoor GPS and indoor tracking. Only before the run starts.")
         .adaptiveAnimation(AppAnimation.gentle, value: selectedLocation.rawValue)
     }

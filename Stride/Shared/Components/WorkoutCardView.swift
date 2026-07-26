@@ -11,7 +11,7 @@ struct WorkoutCardView: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .center, spacing: 8) {
-                    Text(workout.workoutType.displayName)
+                    Text(workout.workoutType.localizedName)
                         .font(.bodyStrong)
                     if workout.isCompleted {
                         ZStack {

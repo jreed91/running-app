@@ -14,7 +14,7 @@ struct PlanDetailView: View {
         if let name = plan.raceName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
             return name
         }
-        return plan.targetRace.displayName
+        return plan.targetRace.localizedName
     }
 
     // MARK: - Body
@@ -201,7 +201,7 @@ private struct TypeBreakdownRow: View {
                            color: stat.type.color, strokeWeight: 1.8)
             }
 
-            Text(stat.type.displayName)
+            Text(stat.type.localizedName)
                 .font(.bodyRegular)
 
             Spacer()
@@ -233,7 +233,7 @@ struct WeekCardView: View {
             } label: {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Week \(week.weekNumber) · \(week.phase.displayName)")
+                        Text("Week \(week.weekNumber) · \(week.phase.localizedName)")
                             .font(.bodyStrong)
                         Text(week.targetDistanceKm.distanceStringFromKm(unit: appSettings.unitPreference) + " target")
                             .font(.caption)
@@ -285,7 +285,7 @@ struct ScheduledWorkoutRow: View {
                 .padding(.leading)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(workout.workoutType.displayName).font(.bodyRegular)
+                Text(workout.workoutType.localizedName).font(.bodyRegular)
                 Text(workout.scheduledDate, style: .date)
                     .font(.caption)
                     .foregroundStyle(.secondary)

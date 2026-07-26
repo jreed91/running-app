@@ -227,7 +227,7 @@ struct WorkoutRowView: View {
     /// strips for space, and the icons are said in words.
     private var rowDescription: String {
         var parts = [
-            displayType.displayName,
+            displayType.localizedName,
             workout.date.formatted(.dateTime.weekday(.wide).month(.wide).day()),
             workout.distanceMeters.distanceString(unit: appSettings.unitPreference),
             workout.averagePaceSecondsPerKm.paceString(unit: appSettings.unitPreference)
@@ -250,7 +250,7 @@ struct WorkoutRowView: View {
             }
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(displayType.displayName)
+                Text(displayType.localizedName)
                     .font(.bodyStrong)
                 HStack(spacing: 4) {
                     Text(workout.date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
@@ -297,7 +297,7 @@ struct StrengthWorkoutRowView: View {
     let workout: StrengthWorkout
 
     private var title: String {
-        workout.scheduledWorkout?.strengthPlan?.focus.displayName ?? "Strength Workout"
+        workout.scheduledWorkout?.strengthPlan?.focus.localizedName ?? "Strength Workout"
     }
 
     private var durationLabel: String {

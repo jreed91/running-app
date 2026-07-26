@@ -95,7 +95,7 @@ struct PlanSetupView: View {
         Section("Goal") {
             Picker("Goal", selection: $goalRace) {
                 ForEach(RaceType.allCases, id: \.self) { race in
-                    Text(race.displayName).tag(race)
+                    Text(race.localizedName).tag(race)
                 }
             }
             .onChange(of: goalRace) { _, _ in clampWeeks() }
@@ -122,7 +122,7 @@ struct PlanSetupView: View {
 
             Picker("Fitness level", selection: $fitnessLevel) {
                 ForEach(FitnessLevel.allCases, id: \.self) { level in
-                    Text(level.displayName).tag(level)
+                    Text(level.localizedName).tag(level)
                 }
             }
         }
