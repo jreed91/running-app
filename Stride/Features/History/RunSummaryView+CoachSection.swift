@@ -36,12 +36,12 @@ extension RunSummaryView {
                     } label: {
                         HStack(spacing: 5) {
                             SparkleShape()
-                                .fill(.white)
+                                .fill(.onFill)
                                 .frame(width: 11, height: 11)
                             Text(aiInsight == nil ? "Load" : "Refresh")
                                 .font(.system(size: 12, weight: .bold))
                         }
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.onFill)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                         .background(Color.brand, in: Capsule())
@@ -162,7 +162,7 @@ extension RunSummaryView {
                     Spacer()
                     Image(systemName: "arrow.up")
                         .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.onFill)
                         .frame(width: 30, height: 30)
                         .background(Color.brand, in: Circle())
                 }

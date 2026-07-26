@@ -19,12 +19,16 @@ ratios are computed from `Stride/Resources/Assets.xcassets`, not eyeballed.
 | Error recovery in the run flow | 🟢 Strong | Save-retry, discard, race-clamp notices are genuinely well designed |
 | Information architecture | 🟢 Good | Tab split is sensible; empty states are specific, not generic |
 | Design-system adoption | 🔴 Failing | Tokens exist and are ~unused; 3 of 5 scales are dead code |
-| Dynamic Type | 🔴 Failing | 296 fixed font sizes; text does not scale app-wide |
-| Colour contrast | 🔴 Failing | Primary CTA and the entire run HUD fail WCAG AA |
-| Haptics | 🔴 Absent | Zero feedback in a heads-down, in-motion app |
-| iOS 26/27 API adoption | 🔴 Absent | Targets iOS 27, uses no API newer than iOS 17 |
-| Destructive-action safety | 🟠 Inconsistent | Same operation confirms in one place, not another |
-| History discoverability | 🟠 Thin | No search, no filter, no manual refresh |
+| Dynamic Type | 🔴 Failing | 296 fixed font sizes; text does not scale app-wide (9pt floor fixed) |
+| Colour contrast | 🟢 Fixed | ✅ CTAs, HUD, dark-mode zone collisions, high-contrast variants |
+| Haptics | 🟢 Fixed | ✅ `sensoryFeedback` on run, guided steps, splits, strength sets |
+| iOS 26/27 API adoption | 🟠 Started | ✅ `Tab` builder, native `Color.mix`; glass and Live Activity still absent |
+| Destructive-action safety | 🟢 Fixed | ✅ Both swipe paths confirm; delete failures surface |
+| History discoverability | 🟢 Fixed | ✅ Search, pull-to-refresh, first-sync loading state |
+
+**Pass 1 (2026-07-26) closed:** the whole of Tier 1, plus §5a, §5d, §8, §9 and most
+of §10. Still open: the §1/§2 typography migration (Tier 2) and the Tier 4 feature
+work (Live Activity, spoken splits, `tabViewBottomAccessory`).
 
 ---
 
@@ -108,6 +112,11 @@ don't."* That rule is right. The code does not implement it — the `metric*`
 tokens (correctly fixed) are used 12 times, while UI copy that should scale uses
 raw fixed sizes 296 times.
 
+🟠 **PARTIALLY FIXED** — the sub-floor sizes are gone: the run HUD's 9pt metric
+captions now use a new fixed `Font.metricLabel` (11pt, Apple's floor) and the pace
+meter's 10pt scale labels moved to 11pt (`AppFonts.swift`, `ActiveRunView.swift`).
+The 296-site migration onto `ds*` is still open and is the Tier 2 work.
+
 **Fix.** Migrate per §1. Keep `metricHero`/`metricXL` fixed and add
 `.dynamicTypeSize(...(.accessibility1))` clamps on the two fixed-height grids
 that genuinely cannot reflow (the run HUD metric grid, the week calendar strip),
@@ -139,6 +148,12 @@ palette is a light/vivid palette being used as if it were dark.
 `DashboardView.swift:577` and `:684` put white 17pt-bold on `Color.brand` — the
 two most-tapped buttons in the app, at 2.84:1.
 
+✅ **FIXED** — a new `Color.onFill` token (`OnFill.colorset`, near-black; pure black
+under Increase Contrast) is now the foreground on every solid `brand`/`success`
+fill: both Dashboard CTAs, the four onboarding CTAs, the coach Load/Refresh and
+ask-bar buttons, Route Genius' two save buttons, both strength buttons, the missed-
+workout button, the race-tips numerals, and the plan week markers. 6.5–9:1.
+
 ### 3b. The Active Run HUD is the worst offender
 
 The HUD dims white to 55–85% over a saturated zone-coloured gradient
@@ -157,6 +172,10 @@ Nothing on that screen except the hero pace clears 4.5:1, and the metric labels
 sit at 1.47–2.26:1. In direct sunlight — the actual usage condition — these are
 unreadable. This is the single highest-impact accessibility fix in the app.
 
+✅ **FIXED** — `ActiveRunView.swift`: the gradient's three stops are now mixed with
+black by 0.40/0.56/0.72 (the top stop was the raw zone colour), and every dimmed
+label went to 0.92–0.95 white. White clears 4.5:1 even on the lightest zone.
+
 ### 3c. Two pace zones collapse in dark mode 🔴
 
 Duplicate hex values in the catalog:
@@ -174,12 +193,23 @@ from a marathon-pace segment, or an interval from a max effort.
 (`Destructive`/`ZoneInterval` and `Warning`/`ZoneTempo` also share values, but
 those are semantic aliases that never co-occur, so they're harmless.)
 
+✅ **FIXED** — `ZoneEasy` dark is now Apple's system-cyan dark (`#64D2FF`) and
+`ZoneMarathon` moved to a green-side teal in both modes (`#12A594`/`#34D6C8`), so
+the two never converge. `ZoneMax` dark is a deep crimson (`#C70A1E`), keeping the
+same deeper-than-interval relationship it already had in light mode.
+
 ### 3d. No high-contrast variants
 
 No colorset defines a `contrast: high` appearance, and
 `\.colorSchemeContrast` / `\.accessibilityDifferentiateWithoutColor` appear
 **0 times** in the codebase. The system Increase Contrast setting therefore does
 nothing in Stride.
+
+🟠 **PARTIALLY FIXED** — every brand, zone and semantic colorset now carries
+`contrast: high` variants for both appearances. The light-mode high-contrast values
+for the fills that carry `onFill` text are solved to clear 4.5:1 *both* as tinted
+text on a white surface and as a fill behind black text. `accessibilityDifferentiate\
+WithoutColor` is still unhandled — the zone system remains colour-only.
 
 **Fix.**
 1. Give `ZoneMarathon` and `ZoneMax` genuinely distinct dark variants.
@@ -217,6 +247,12 @@ The guided-workout case is the most serious: `GuidedWorkoutEngine` steps a runne
 through structured intervals, and the only signal that a segment changed is a
 banner they'd have to be watching to see.
 
+✅ **FIXED** — `ActiveRunView.swift` carries four `sensoryFeedback` modifiers: run
+state (heavy impact on start, selection on pause/resume, success on finish), error
+on a failed save, light impact per split, and heavy impact on a guided-workout step
+change. `StrengthActiveView.swift` adds selection on a logged set and success on
+rest-timer expiry. No UIKit generators.
+
 **Fix.** Use the modern declarative API, per current guidance:
 `.sensoryFeedback(.impact, trigger: tracker.trackingState)`. No UIKit generators.
 
@@ -237,6 +273,8 @@ zone colour, pace meter, guided-workout banner — goes black while the runner i
 running. Everything the screen is for stops working almost immediately.
 *Fix:* set `UIApplication.shared.isIdleTimerDisabled = true` while
 `trackingState` is `.active`/`.paused`, and clear it on finish/discard.
+✅ **FIXED** — `ActiveRunView.swift`, via `onChange(of: tracker.trackingState)`
+plus an `onDisappear` release.
 
 **5b. No Live Activity.** `ActivityKit`, `WidgetKit`, `DynamicIsland` — **0
 occurrences**; `project.yml` declares no widget extension. On an iOS 27 target,
@@ -255,6 +293,7 @@ decorative "Lock" pill was removed there under N18.)
 `.padding(.top, 56)` on a `VStack` that already respects the safe area, so the
 top bar sits ~56pt below the inset on every device regardless of hardware. Use
 the safe area or `safeAreaPadding`.
+✅ **FIXED** — reduced to a 12pt gap inside the safe area (`ActiveRunView.swift`).
 
 ---
 
@@ -286,9 +325,16 @@ on screen with no explanation.
 keep the swipe immediate and add undo, which is the platform-idiomatic answer to
 "destructive but frequent". At minimum, stop discarding the error.
 
+✅ **FIXED** — both swipe paths now confirm before deleting. `HistoryView.swift`
+holds the swiped offsets in `pendingDeletion` and asks first, and its delete is a
+real `do/catch` that logs and raises an alert instead of a `try?` that dropped the
+error. `TrainingPlanListView.swift` does the same, with a message naming what the
+cascade takes (and what it keeps).
+
 **Wider pattern:** `Stride/Features/` contains **38** `try?` expressions and only
 **3** `.alert(` presentations (`ActiveRunView`, `DashboardView`,
-`NewPlanOnboardingView`). Most failure paths in the UI layer are silent.
+`NewPlanOnboardingView`). Most failure paths in the UI layer are silent. Two of
+those `try?`s are gone with the above; the pattern is otherwise untouched.
 
 ---
 
@@ -305,6 +351,10 @@ keep the swipe immediate and add undo, which is the platform-idiomatic answer to
 | `symbolEffect` | 0 | | `onGeometryChange` | 0 |
 | `scrollPosition` | 0 | | `containerRelativeFrame` | 0 |
 | `visualEffect` | 0 | | `presentationSizing` | 0 |
+
+🟠 **PARTIALLY FIXED** — `MainTabView.swift` now uses the `Tab` builder, and the
+hand-rolled `Color.mix` is gone in favour of the native perceptual one. Glass,
+`tabViewBottomAccessory` and the `GeometryReader` retirements are still open.
 
 The app pays the full cost of a 27.0 floor (excluding every device below it) and
 takes none of the benefit. Specifics worth acting on:
@@ -352,6 +402,13 @@ find one:
   returns exactly this and is used in `ActiveRunView.swift:376`. The string
   surgery breaks the moment the app is localized.
 
+✅ **FIXED** — `HistoryView.swift` gains `.searchable` (matching workout type by its
+*localized* name, resolved to raw values before the fetch predicate, plus run notes
+and the strength focus), `.refreshable` on the canonical importer, a first-sync
+loading state and a no-results state in place of the blank list, and the pace column
+now calls `paceValueString(unit:)` directly. A dedicated distance/date-range filter
+is still open — search covers the type case.
+
 ---
 
 ## 9. Performance: the D6 query fix stopped short
@@ -369,61 +426,73 @@ full set on each pass. `ProgressView` already has a `selectedRange` picker
 (`.threeMonths` default) — the fetch should honour it via a date predicate rather
 than fetching everything and filtering in `filteredWorkouts` (`:60`).
 
+✅ **FIXED**, two by bounding and one by a different route:
+
+- `ProgressView` fetches a date-predicated window of the widest range its picker can
+  ask for (1Y) plus a week of slack, built in a new `init()` since a `@Query`'s
+  descriptor is fixed at view-initialisation.
+- `RaceInsightsView` is bounded to a year — far more than its widest read, which is
+  `WorkoutAnalyticsService`'s eight-week trend lookback.
+- `AchievementsView` is *deliberately* left unbounded and documented as such: its
+  medals are all-time PRs and its badges count lifetime distance and the longest
+  streak ever, so a window would silently redefine them. Its real cost was that
+  `badgeSection` is called once per category and each call recomputed the full
+  achievement set (which itself recomputes the streak) — the derivations are now
+  computed once in `body` and passed down.
+
 ---
 
 ## 10. Smaller findings
 
-- **Touch targets below 44pt.** The week-calendar chevrons are
-  `.frame(width: 28, height: 44)` (`DashboardView.swift:94`) — 28pt wide. Several
-  onboarding controls sit at 22–32pt square
-  (`OnboardingSubviews.swift:789, 1018, 1020`).
+- **Touch targets below 44pt.** ✅ **FIXED** — the week-calendar chevrons are
+  44×44 with an explicit `contentShape` (the glyph is unchanged). The onboarding
+  controls named here turned out *not* to be targets: the 22–32pt bar glyph and
+  `OBRadio` are decorative parts inside full-width row `Button`s, so the tappable
+  area was always well over 44pt. `OBRadio`'s white check moved to `onFill`.
 - **Onboarding is 9 steps** (`OnboardingView.swift:148-221`: steps 0–8) before
   the app is usable. Steps 3 (Units) and 4 (About you) could merge, and Units has
   a sensible locale-derived default that needs no prompt.
-- **`ProgressRingView` has no accessibility label** (`DashboardView.swift:833`) —
-  it renders plan-completion percentage purely visually. The adjacent `statItem`
-  speaks the number, so the ring is redundant rather than lost, but it should be
-  `.accessibilityHidden(true)` to say so explicitly.
-- **The weekly load chart is invisible to VoiceOver.**
-  `DashboardView.swift:460-498` builds seven bars with no label. The app has a
-  `chartAccessibility(_:_:)` helper built for exactly this
-  (`View+ChartAccessibility.swift`) and used correctly on all six Progress-tab
-  charts — this one was missed.
+- **`ProgressRingView` has no accessibility label** ✅ **FIXED** —
+  `.accessibilityHidden(true)`, since the adjacent `statItem` already speaks the
+  number.
+- **The weekly load chart is invisible to VoiceOver.** ✅ **FIXED** — the bar
+  tuples became a named `WeeklyLoadDay` carrying each day's label and distance, and
+  the strip now speaks through `chartAccessibility` like every other chart. Days
+  still to come are omitted rather than spoken as zero.
 - **Charts collapse rather than describe.** `chartAccessibility` merges each
   chart into one element with a summary sentence. That's a solid pragmatic
   choice, but `.accessibilityChartDescriptor(_:)` (`AXChartDescriptor`) would
   additionally enable **Audio Graphs**, letting a VoiceOver user play the series
   as sound and navigate point-by-point. Worth it for the Progress tab.
-- **Redundant computation.** `DashboardView.swift:409` computes `pct`, then
-  `:417` recomputes the identical value as `pct2` for the ring.
+- **Redundant computation.** ✅ **FIXED** — the ring takes `pct`; `pct2` is gone.
 - **`BouncyButtonStyle` is defined and used 7 times**, while most buttons use
   `.buttonStyle(.plain)` and get no press feedback at all — including both
   primary CTAs.
-- **Legacy state management.** `AppContainer` is `ObservableObject` with
-  `@StateObject`/`@ObservedObject` (`StrideApp.swift:11, 63`), as is
-  `WorkoutTrackerService` (`:26`). `@Observable` is used correctly elsewhere
-  (`AppSettings`, `AuthService`, `RouteGeniusViewModel`). Migrating the two
-  holdouts would narrow invalidation — relevant because `WorkoutTrackerService`
-  publishes at GPS frequency into the HUD.
+- ~~**Legacy state management.**~~ **Not a finding** — checked while doing the
+  above: `AppContainer` (`AppContainer.swift:20`) and `WorkoutTrackerService`
+  (`WorkoutTrackerService.swift:33`) are both already `@Observable`, and both carry
+  comments explaining the migration off `ObservableObject` (D4). There is no
+  holdout left to migrate.
 
 ---
 
 ## Recommended order of work
 
-**Tier 1 — accessibility and the run experience (ship first)**
-1. Contrast: dark-mode zone collisions, white-on-brand CTAs, HUD label opacity (§3)
-2. `isIdleTimerDisabled` during an active run (§5a) — one line, restores the whole screen
-3. `.sensoryFeedback` on run/pause/finish/segment/set (§4)
-4. Confirmation or undo on the two unguarded swipe-deletes (§6)
+**Tier 1 — accessibility and the run experience (ship first)** — ✅ **DONE**
+1. ✅ Contrast: dark-mode zone collisions, white-on-brand CTAs, HUD label opacity (§3)
+2. ✅ `isIdleTimerDisabled` during an active run (§5a) — one line, restores the whole screen
+3. ✅ `.sensoryFeedback` on run/pause/finish/segment/set (§4)
+4. ✅ Confirmation or undo on the two unguarded swipe-deletes (§6)
 
-**Tier 2 — the systemic typography fix**
+**Tier 2 — the systemic typography fix** — the next pass
 5. Migrate 296 fixed sizes onto `ds*`, add `@ScaledMetric`, clamp the two fixed grids (§1, §2)
 6. Add SwiftLint rules so it holds
 
 **Tier 3 — platform conformance**
-7. `Tab` API, `glassEffect`, native `Color.mix`, retire `GeometryReader`s (§7)
-8. `.searchable` + `.refreshable` on History (§8)
-9. Bound the three remaining unbounded queries (§9)
+7. 🟠 `Tab` API ✅, native `Color.mix` ✅; `glassEffect` and the `GeometryReader`
+   retirements still open (§7)
+8. ✅ `.searchable` + `.refreshable` on History (§8)
+9. ✅ Bound the three remaining unbounded queries (§9)
 
 **Tier 4 — features the platform now expects**
 10. Live Activity / Dynamic Island for an in-progress run (§5b)

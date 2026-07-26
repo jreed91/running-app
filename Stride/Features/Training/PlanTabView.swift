@@ -932,12 +932,12 @@ private struct PlanWeekSummaryRow: View {
         if week.isCompleted {
             ZStack {
                 Circle().fill(Color.success).frame(width: 24, height: 24)
-                StrideIcon(name: .check, size: 12, color: .white, strokeWeight: 3)
+                StrideIcon(name: .check, size: 12, color: .onFill, strokeWeight: 3)
             }
         } else if isCurrentWeek {
             ZStack {
                 Circle().fill(Color.brand).frame(width: 24, height: 24)
-                Circle().fill(Color.white).frame(width: 8, height: 8)
+                Circle().fill(Color.onFill).frame(width: 8, height: 8)
             }
         } else {
             Circle()

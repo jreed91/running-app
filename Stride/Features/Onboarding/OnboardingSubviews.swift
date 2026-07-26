@@ -95,7 +95,7 @@ struct OBWelcome: View {
                 Button(action: onStart) {
                     HStack(spacing: 10) {
                         Text("Get started").font(.system(size: 17, weight: .bold))
-                        StrideIcon(name: .chevronRight, size: 15, color: .white, strokeWeight: 2.6)
+                        StrideIcon(name: .chevronRight, size: 15, color: .onFill, strokeWeight: 2.6)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
@@ -106,7 +106,7 @@ struct OBWelcome: View {
                             .strokeBorder(.white.opacity(0.2), lineWidth: 0.5)
                     )
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(.onFill)
                 .buttonStyle(BouncyButtonStyle())
                 .accessibilityIdentifier("onboarding.getStarted")
                 .opacity(appeared ? 1 : 0)
@@ -223,7 +223,7 @@ struct OBWelcomeBack: View {
                     } label: {
                         HStack(spacing: 10) {
                             Text("Continue to Dashboard").font(.system(size: 17, weight: .bold))
-                            StrideIcon(name: .chevronRight, size: 15, color: .white, strokeWeight: 2.6)
+                            StrideIcon(name: .chevronRight, size: 15, color: .onFill, strokeWeight: 2.6)
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
@@ -231,7 +231,7 @@ struct OBWelcomeBack: View {
                         .shadow(color: Color.brand.opacity(0.5), radius: 14, y: 8)
                         .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(.white.opacity(0.2), lineWidth: 0.5))
                     }
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.onFill)
                     .buttonStyle(.plain)
                 }
 
@@ -441,7 +441,7 @@ struct OBShell<Content: View>: View {
                 Button(action: onCTA) {
                     HStack(spacing: 10) {
                         Text(ctaLabel).font(.system(size: 17, weight: .bold))
-                        StrideIcon(name: .chevronRight, size: 14, color: .white, strokeWeight: 2.6)
+                        StrideIcon(name: .chevronRight, size: 14, color: .onFill, strokeWeight: 2.6)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
@@ -453,7 +453,7 @@ struct OBShell<Content: View>: View {
                             .strokeBorder(.white.opacity(0.2), lineWidth: 0.5)
                     )
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(.onFill)
                 .buttonStyle(.plain)
                 .disabled(!ctaEnabled)
                 .accessibilityIdentifier("onboarding.primaryCTA.\(stepIndex)")
@@ -1019,7 +1019,7 @@ struct OBRadio: View {
             if isSelected {
                 Circle().fill(color).frame(width: 22, height: 22)
                     .transition(.scale(scale: 0.4).combined(with: .opacity))
-                StrideIcon(name: .check, size: 12, color: .white, strokeWeight: 3)
+                StrideIcon(name: .check, size: 12, color: .onFill, strokeWeight: 3)
                     .transition(.scale(scale: 0.4).combined(with: .opacity))
             }
         }
@@ -1128,11 +1128,11 @@ struct OBReady: View {
             Button(action: onViewPlan) {
                 Group {
                     if isCreatingPlan {
-                        ProgressView().tint(.white)
+                        ProgressView().tint(.onFill)
                     } else {
                         HStack(spacing: 10) {
                             Text("Start training").font(.system(size: 17, weight: .bold))
-                            StrideIcon(name: .chevronRight, size: 15, color: .white, strokeWeight: 2.6)
+                            StrideIcon(name: .chevronRight, size: 15, color: .onFill, strokeWeight: 2.6)
                         }
                     }
                 }
@@ -1145,7 +1145,7 @@ struct OBReady: View {
                         .strokeBorder(.white.opacity(0.2), lineWidth: 0.5)
                 )
             }
-            .foregroundStyle(.white)
+            .foregroundStyle(.onFill)
             .buttonStyle(.plain)
             .disabled(isCreatingPlan)
             .accessibilityIdentifier("onboarding.startTraining")

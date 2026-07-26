@@ -17,6 +17,11 @@ private struct MedalBucket: Identifiable {
 
 @MainActor
 struct AchievementsView: View {
+    /// Deliberately *not* date-bounded, unlike the other two Progress screens (U9):
+    /// the medals are all-time personal records, and the badges count lifetime
+    /// distance and the longest streak ever recorded — a window would quietly
+    /// redefine all three. What made this screen expensive was recomputing those
+    /// derivations several times per render, and that is fixed in `body`.
     @Query(sort: [SortDescriptor(\RunWorkout.date)])
     private var workouts: [RunWorkout]
 
@@ -29,29 +34,32 @@ struct AchievementsView: View {
 
     // MARK: Derived stats
 
-    private var streak: StreakGoalService.StreakSummary {
-        StreakGoalService.streak(for: workouts)
-    }
-
-    private var weekly: StreakGoalService.WeeklyGoalProgress {
-        StreakGoalService.weeklyProgress(for: workouts, goalMeters: appSettings.weeklyGoalMeters)
-    }
-
-    private var achievements: [StreakGoalService.Achievement] {
-        StreakGoalService.achievements(for: workouts, unit: appSettings.unitPreference)
-    }
-
     var body: some View {
+        // Each of these walks the whole run history, and `achievements` walks it
+        // several times over. They used to be computed properties read from inside
+        // the section builders — and `badgeSection` is called once per category, so
+        // the full set was recomputed four times on every render pass (U9). Derived
+        // once here and handed down instead.
+        let streak = StreakGoalService.streak(for: workouts)
+        let weekly = StreakGoalService.weeklyProgress(
+            for: workouts,
+            goalMeters: appSettings.weeklyGoalMeters
+        )
+        let achievements = StreakGoalService.achievements(
+            for: workouts,
+            unit: appSettings.unitPreference
+        )
+
         ScrollView {
             VStack(alignment: .leading, spacing: AppSpacing.lg) {
-                streakCard
+                streakCard(streak)
                     .fadeSlide(appeared, delay: 0.05)
 
-                weeklyGoalCard
+                weeklyGoalCard(weekly)
                     .fadeSlide(appeared, delay: 0.10)
 
                 ForEach(Array(StreakGoalService.AchievementCategory.allCases.enumerated()), id: \.element) { index, category in
-                    badgeSection(for: category)
+                    badgeSection(for: category, achievements: achievements)
                         .fadeSlide(appeared, delay: 0.15 + Double(index) * 0.05)
                 }
 
@@ -80,7 +88,7 @@ struct AchievementsView: View {
 
     // MARK: Streak
 
-    private var streakCard: some View {
+    private func streakCard(_ streak: StreakGoalService.StreakSummary) -> some View {
         HStack(spacing: AppSpacing.lg) {
             ZStack {
                 Circle()
@@ -100,7 +108,7 @@ struct AchievementsView: View {
                         .font(.bodyStrong)
                         .foregroundStyle(.secondary)
                 }
-                Text(streakSubtitle)
+                Text(streakSubtitle(streak))
                     .font(.caption)
                     .foregroundStyle(.tertiary)
             }
@@ -111,7 +119,7 @@ struct AchievementsView: View {
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
-    private var streakSubtitle: String {
+    private func streakSubtitle(_ streak: StreakGoalService.StreakSummary) -> String {
         if streak.current == 0 {
             return streak.longest > 0 ? "Longest: \(streak.longest) days • run today to start again" : "Run today to start a streak"
         }
@@ -123,7 +131,7 @@ struct AchievementsView: View {
 
     // MARK: Weekly goal
 
-    private var weeklyGoalCard: some View {
+    private func weeklyGoalCard(_ weekly: StreakGoalService.WeeklyGoalProgress) -> some View {
         HStack(spacing: AppSpacing.lg) {
             ProgressRing(fraction: weekly.fraction, isComplete: weekly.isMet)
                 .frame(width: 72, height: 72)
@@ -135,7 +143,7 @@ struct AchievementsView: View {
                 Text(weekly.completedMeters.distanceString(unit: appSettings.unitPreference))
                     .font(.metricS)
                     .monospacedDigit()
-                Text(weeklyGoalSubtitle)
+                Text(weeklyGoalSubtitle(weekly))
                     .font(.caption)
                     .foregroundStyle(.tertiary)
             }
@@ -157,7 +165,7 @@ struct AchievementsView: View {
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
-    private var weeklyGoalSubtitle: String {
+    private func weeklyGoalSubtitle(_ weekly: StreakGoalService.WeeklyGoalProgress) -> String {
         let goal = appSettings.weeklyGoalMeters.distanceString(unit: appSettings.unitPreference)
         if weekly.isMet {
             return "Goal reached — \(goal) 🎉"
@@ -167,7 +175,10 @@ struct AchievementsView: View {
 
     // MARK: Badges
 
-    private func badgeSection(for category: StreakGoalService.AchievementCategory) -> some View {
+    private func badgeSection(
+        for category: StreakGoalService.AchievementCategory,
+        achievements: [StreakGoalService.Achievement]
+    ) -> some View {
         let items = achievements.filter { $0.category == category }
         return VStack(alignment: .leading, spacing: AppSpacing.sm) {
             Text(category.sectionTitle)

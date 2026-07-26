@@ -93,6 +93,10 @@ struct StrengthActiveView: View {
                  : "No sets were logged — this workout won't be saved and the day stays open.")
         }
         .onDisappear { endRestTimer() }
+        // Haptics (U4). Logging a set and the rest timer expiring are both moments
+        // the lifter is mid-movement and not looking at the phone.
+        .sensoryFeedback(.selection, trigger: completedSets.count) { old, new in new > old }
+        .sensoryFeedback(.success, trigger: restTimeRemaining) { old, new in old == 1 && new == 0 }
     }
 
     // MARK: - Header
@@ -268,7 +272,7 @@ struct StrengthActiveView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
             }
-            .foregroundStyle(.white)
+            .foregroundStyle(.onFill)
             .background(Color.brand, in: RoundedRectangle(cornerRadius: 14))
 
             Button {
@@ -413,7 +417,7 @@ struct StrengthActiveView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(.onFill)
         .background(Color.brand, in: RoundedRectangle(cornerRadius: 18))
         .padding(.horizontal, 16)
         .padding(.bottom, 20)

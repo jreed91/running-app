@@ -33,13 +33,27 @@ struct HistoryView: View {
     /// paging means re-initialising a child view with a bigger limit (D6). The list itself
     /// used to fetch both whole tables to show twenty rows.
     @State private var displayLimit = HistoryEntryList.pageSize
+    /// Search term. Like `displayLimit`, it is applied by re-initialising the list, since
+    /// the run-side filter is a fetch predicate rather than an in-memory pass (U8).
+    @State private var searchText = ""
 
     var body: some View {
         NavigationStack {
-            HistoryEntryList(limit: displayLimit, isSyncing: isSyncing) {
+            HistoryEntryList(limit: displayLimit, searchText: searchText, isSyncing: isSyncing) {
                 displayLimit += HistoryEntryList.pageSize
             }
             .navigationTitle("History")
+            .searchable(text: $searchText, prompt: "Search workouts")
+            // `.task` fires once for the view's lifetime, and a `TabView` keeps its
+            // children alive — so a runner who opened History, recorded a Watch run,
+            // and came back had no way to make the new run appear (U8). Pull-to-refresh
+            // is the expected gesture and runs the same canonical importer.
+            .refreshable {
+                await syncRecentHealthKitWorkouts()
+            }
+            .onChange(of: searchText) { _, _ in
+                displayLimit = HistoryEntryList.pageSize
+            }
             .toolbar {
                 if isSyncing {
                     ToolbarItem(placement: .navigationBarTrailing) {
@@ -102,6 +116,7 @@ private struct HistoryEntryList: View {
     static let pageSize = 20
 
     private let limit: Int
+    private let searchTerm: String
     private let isSyncing: Bool
     private let loadMore: () -> Void
 
@@ -110,17 +125,40 @@ private struct HistoryEntryList: View {
     @Query private var runs: [RunWorkout]
     @Query private var strengthWorkouts: [StrengthWorkout]
 
-    init(limit: Int, isSyncing: Bool, loadMore: @escaping () -> Void) {
+    /// Rows the runner has asked to delete, held until the confirmation is answered.
+    @State private var pendingDeletion: IndexSet? = nil
+    @State private var deleteErrorMessage: String? = nil
+
+    init(limit: Int, searchText: String, isSyncing: Bool, loadMore: @escaping () -> Void) {
         self.limit = limit
         self.isSyncing = isSyncing
         self.loadMore = loadMore
 
+        let term = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.searchTerm = term
+
+        // Types are resolved from their *localized* names here, in Swift, and the
+        // predicate compares raw values — so search matches what the runner actually
+        // reads on the row without the stored enum ever moving with the device language.
+        let matchingTypeRaws = term.isEmpty ? [] : WorkoutType.allCases
+            .filter { $0.localizedName.localizedStandardContains(term) }
+            .map(\.rawValue)
+
         var runDescriptor = FetchDescriptor<RunWorkout>(
             sortBy: [SortDescriptor(\.date, order: .reverse)]
         )
+        if !term.isEmpty {
+            runDescriptor.predicate = #Predicate<RunWorkout> { run in
+                matchingTypeRaws.contains(run.workoutTypeRaw)
+                    || (run.notes?.localizedStandardContains(term) ?? false)
+            }
+        }
         runDescriptor.fetchLimit = limit + 1
         _runs = Query(runDescriptor)
 
+        // The strength side is filtered in memory rather than by predicate: its title
+        // comes from the plan's focus across two relationships, which a fetch predicate
+        // can't reach. The fetch stays bounded either way.
         var strengthDescriptor = FetchDescriptor<StrengthWorkout>(
             sortBy: [SortDescriptor(\.date, order: .reverse)]
         )
@@ -131,8 +169,19 @@ private struct HistoryEntryList: View {
     /// Newest-first merge of both fetches. Either type can supply the whole page, which is
     /// why each is fetched to the full limit rather than to some share of it.
     private var entries: [HistoryEntry] {
-        let merged = runs.map { HistoryEntry.run($0) } + strengthWorkouts.map { HistoryEntry.strength($0) }
+        let matchingStrength = strengthWorkouts.filter(matchesSearch)
+        let merged = runs.map { HistoryEntry.run($0) } + matchingStrength.map { HistoryEntry.strength($0) }
         return merged.sorted { $0.date > $1.date }
+    }
+
+    private func matchesSearch(_ workout: StrengthWorkout) -> Bool {
+        guard !searchTerm.isEmpty else { return true }
+        if WorkoutType.strength.localizedName.localizedStandardContains(searchTerm) { return true }
+        if let focus = workout.scheduledWorkout?.strengthPlan?.focus,
+           focus.localizedName.localizedStandardContains(searchTerm) {
+            return true
+        }
+        return false
     }
 
     private var displayedEntries: [HistoryEntry] {
@@ -150,7 +199,11 @@ private struct HistoryEntryList: View {
             ForEach(Array(displayedEntries.enumerated()), id: \.element.id) { index, entry in
                 entryRow(for: entry, index: index)
             }
-            .onDelete(perform: deleteEntries)
+            // Swiping used to delete immediately while the same delete from a run's
+            // summary asked first — and the swipe is the *less* recoverable path, since
+            // it also writes a tombstone that keeps the run from returning on the next
+            // Health sync (U6).
+            .onDelete { offsets in pendingDeletion = offsets }
 
             if hasMore {
                 HStack {
@@ -161,14 +214,62 @@ private struct HistoryEntryList: View {
                 .listRowSeparator(.hidden)
             }
         }
-        .overlay {
-            if entries.isEmpty && !isSyncing {
-                ContentUnavailableView(
-                    "No workouts yet",
-                    systemImage: "figure.run.circle",
-                    description: Text("Start a workout or sync from Apple Health.")
-                )
+        .overlay { emptyStateOverlay }
+        .confirmationDialog(
+            "Delete this workout?",
+            isPresented: Binding(
+                get: { pendingDeletion != nil },
+                set: { if !$0 { pendingDeletion = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                if let offsets = pendingDeletion { deleteEntries(at: offsets) }
+                pendingDeletion = nil
             }
+            Button("Cancel", role: .cancel) { pendingDeletion = nil }
+        } message: {
+            Text("This can't be undone, and the workout won't come back on the next Apple Health sync.")
+        }
+        // The delete used to be a `try?`, so a failure left the row on screen with no
+        // explanation of why it hadn't gone (U6).
+        .alert(
+            "Couldn't delete that workout",
+            isPresented: Binding(
+                get: { deleteErrorMessage != nil },
+                set: { if !$0 { deleteErrorMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { deleteErrorMessage = nil }
+        } message: {
+            Text(deleteErrorMessage ?? "")
+        }
+    }
+
+    /// Empty, searching, and first-sync states. The list used to render a blank screen
+    /// during the initial Health import, with only a 0.8×-scaled toolbar spinner to say
+    /// anything was happening (U8).
+    @ViewBuilder
+    private var emptyStateOverlay: some View {
+        if !entries.isEmpty {
+            EmptyView()
+        } else if isSyncing {
+            VStack(spacing: 12) {
+                ProgressView()
+                Text("Checking Apple Health for recent workouts…")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.horizontal, 40)
+        } else if !searchTerm.isEmpty {
+            ContentUnavailableView.search(text: searchTerm)
+        } else {
+            ContentUnavailableView(
+                "No workouts yet",
+                systemImage: "figure.run.circle",
+                description: Text("Start a workout or sync from Apple Health.")
+            )
         }
     }
 
@@ -200,13 +301,26 @@ private struct HistoryEntryList: View {
         // access, so mutating the store mid-loop would shift the offsets we're iterating.
         // All invariant repair (tombstones, scheduled-day reset) lives in the repository.
         let entries = displayedEntries
+        var failure: Error?
         for index in offsets where entries.indices.contains(index) {
-            switch entries[index] {
-            case .run(let workout):
-                try? container.workoutRepository.delete(workout)
-            case .strength(let workout):
-                try? container.workoutRepository.delete(workout)
+            do {
+                switch entries[index] {
+                case .run(let workout):
+                    try container.workoutRepository.delete(workout)
+                case .strength(let workout):
+                    try container.workoutRepository.delete(workout)
+                }
+            } catch {
+                failure = error
+                AppLogger.log(
+                    "Failed to delete a history entry: \(error.localizedDescription)",
+                    label: "History",
+                    level: .error
+                )
             }
+        }
+        if let failure {
+            deleteErrorMessage = failure.localizedDescription
         }
     }
 }
@@ -269,9 +383,10 @@ struct WorkoutRowView: View {
             VStack(alignment: .trailing, spacing: 3) {
                 Text(workout.distanceMeters.distanceString(unit: appSettings.unitPreference))
                     .font(.system(size: 15, weight: .semibold, design: .monospaced))
-                Text(workout.averagePaceSecondsPerKm.paceString(unit: appSettings.unitPreference)
-                    .replacingOccurrences(of: " min/km", with: "")
-                    .replacingOccurrences(of: " min/mi", with: ""))
+                // `paceValueString` is the unit-less form of exactly this number. The row
+                // used to build it by string-stripping " min/km" off `paceString`, which
+                // silently stops matching the moment the app is localized (U8).
+                Text(workout.averagePaceSecondsPerKm.paceValueString(unit: appSettings.unitPreference))
                     .font(.system(size: 12, weight: .medium, design: .monospaced))
                     .foregroundStyle(.secondary)
                 if let w = workout.weather {

@@ -79,7 +79,7 @@ struct MissedWorkoutsRecoveryCard: View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(.onFill)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
                 .background(
