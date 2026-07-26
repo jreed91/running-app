@@ -79,3 +79,24 @@ custom_rules:
     regex: 'static\s+(?:let|var)\s+(largeTitle|title|title2|title3|headline|subheadline|body|callout|footnote|caption|caption2)\s*(?::\s*Font\s*)?=\s*Font'
     message: "Don't re-declare one of SwiftUI's Font statics — it shadows the dynamic-type token app-wide. Use a `ds`-prefixed name (see Stride/Shared/Theme/AppFonts.swift)."
     severity: error
+
+  # The `ds*` scale was added to fix Dynamic Type (N19) and then never wired up:
+  # 296 call sites kept rendering a fixed point size, so text did not scale
+  # anywhere in the app (U2). The migration is done; this keeps it done.
+  #
+  # A *literal* size is what's banned. `.font(.system(size: badgeSize))` — a size
+  # derived from a `@ScaledMetric` or from a caller's parameter — still scales and
+  # still passes. The exclusions are the places where a fixed size is the point:
+  # the scale's own definitions, the Active Run HUD (AppFonts rule 2), and the
+  # share card, which renders a fixed-size PNG.
+  no_fixed_font_size:
+    name: "Fixed font size"
+    regex: '\.font\(\s*\.system\(size:\s*[0-9]'
+    excluded:
+      - ".*/AppFonts\\.swift"
+      - ".*/ActiveRunView\\.swift"
+      - ".*/GuidedWorkoutBanner\\.swift"
+      - ".*/RunShareCardView\\.swift"
+      - ".*/StrideIcon\\.swift"
+    message: "Use a design-system font token (`.dsBody`, `.dsCaption2`, …) or a `@ScaledMetric` size. A literal point size ignores the user's preferred content size. See Stride/Shared/Theme/AppFonts.swift."
+    severity: error

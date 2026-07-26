@@ -20,10 +20,10 @@ extension RunSummaryView {
                             .fill(scheduled.workoutType.color)
                             .frame(width: 8, height: 8)
                         Text(scheduled.workoutType.localizedName)
-                            .font(.system(size: 15, weight: .bold))
+                            .font(.dsSubhead.weight(.bold))
                         Spacer()
                         Text(scheduled.scheduledDate.formatted(.dateTime.month(.abbreviated).day()))
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.dsCaption.weight(.medium))
                             .foregroundStyle(.secondary)
                     }
 
@@ -44,7 +44,7 @@ extension RunSummaryView {
 
                     if let notes = scheduled.notes, !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         Text(notes)
-                            .font(.system(size: 12))
+                            .font(.dsCaption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -87,15 +87,15 @@ extension RunSummaryView {
                         .fill(Color.warning)
                         .frame(width: 24, height: 24)
                     Image(systemName: "exclamationmark")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.dsCaption.weight(.bold))
                         .foregroundStyle(.white)
                 }
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Effort higher than expected")
-                        .font(.system(size: 13, weight: .bold))
+                        .font(.dsFootnote.weight(.bold))
                         .foregroundStyle(.warning)
                     Text("HR averaged \(Int(avg)) bpm for this \(workout.workoutType.losplayName.lowercased()) effort.")
-                        .font(.system(size: 12))
+                        .font(.dsCaption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -111,9 +111,9 @@ extension RunSummaryView {
     private func plannedChip(icon: String, text: String) -> some View {
         HStack(spacing: 5) {
             Image(systemName: icon)
-                .font(.system(size: 10, weight: .semibold))
+                .font(.dsCaption2.weight(.semibold))
             Text(text)
-                .font(.system(size: 12, weight: .semibold))
+                .font(.dsCaption.weight(.semibold))
         }
         .foregroundStyle(.secondary)
         .padding(.horizontal, 10)
@@ -124,26 +124,26 @@ extension RunSummaryView {
     private func planComparisonRow(label: String, planned: String, actual: String, status: PaceStatus) -> some View {
         HStack(spacing: 6) {
             Text(label)
-                .font(.system(size: 12, weight: .medium))
+                .font(.dsCaption.weight(.medium))
                 .foregroundStyle(.secondary)
                 .frame(minWidth: 64, alignment: .leading)
             Text(planned)
-                .font(.system(size: 12, design: .monospaced))
+                .font(.dsCaption.monospaced())
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             Image(systemName: "arrow.right")
-                .font(.system(size: 9, weight: .semibold))
+                .font(.dsCaption2.weight(.semibold))
                 .foregroundStyle(.tertiary)
             Text(actual)
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .font(.dsCaption.weight(.bold).monospaced())
                 .foregroundStyle(.primary)
                 .lineLimit(1)
             Spacer(minLength: 4)
             HStack(spacing: 4) {
                 Image(systemName: status.icon)
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.dsCaption2.weight(.bold))
                 Text(status.label)
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.dsCaption2.weight(.bold))
             }
             .foregroundStyle(status.color)
             .padding(.horizontal, 8)

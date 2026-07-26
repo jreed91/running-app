@@ -31,6 +31,12 @@ extension Font {
     static let metricM      = Font.system(size: 40, weight: .semibold, design: .monospaced)
     /// 24pt — inline metric row (HR, cadence).
     static let metricS      = Font.system(size: 24, weight: .semibold, design: .monospaced)
+    /// 11pt bold — the caption under a HUD metric.
+    ///
+    /// Fixed like the rest of the `metric` scale (rule 2), but pinned to Apple's
+    /// 11pt legibility floor. The run HUD labelled every cell at 9pt — under the
+    /// floor, on the one screen read at arm's length, outdoors, in motion (U2).
+    static let metricLabel  = Font.system(size: 11, weight: .bold)
 
     // MARK: Legacy metric aliases (kept for existing call sites)
 
@@ -67,6 +73,12 @@ extension Font {
     static let dsFootnote   = Font.system(.footnote)
     /// 12pt regular at default size.
     static let dsCaption    = Font.system(.caption)
+    /// 11pt regular at default size — and the floor of the scale.
+    ///
+    /// The app had 90 call sites at 9–11pt before the migration. They all land here:
+    /// `caption2` is the smallest text style Apple ships, 11pt is its legibility
+    /// floor, and it scales from there (U2).
+    static let dsCaption2   = Font.system(.caption2)
 
     // MARK: Section header
 

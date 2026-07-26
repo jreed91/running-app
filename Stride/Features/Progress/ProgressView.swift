@@ -3,8 +3,11 @@ import Charts
 import SwiftData
 
 struct ProgressDashboardView: View {
-    @Query(sort: [SortDescriptor(\RunWorkout.date)])
-    private var workouts: [RunWorkout]
+    /// Bounded to the widest range the picker offers, plus a week of slack for the
+    /// edge bucket. This screen used to fetch every run ever logged and then filter
+    /// in `filteredWorkouts` — on a screen that can never display more than a year,
+    /// and that recomputes derived series over whatever it fetched (U9).
+    @Query private var workouts: [RunWorkout]
 
     @Query private var profiles: [UserProfile]
     private var profile: UserProfile? { profiles.first }
@@ -50,6 +53,19 @@ struct ProgressDashboardView: View {
             case .year: return 365
             }
         }
+    }
+
+    init() {
+        // A `@Query`'s descriptor is fixed at view-initialisation, so this is where the
+        // window has to be set. It is the widest range the picker can ask for plus a
+        // week, which keeps the outermost weekly bucket whole.
+        let windowDays = ChartRange.year.days + 7
+        let cutoff = Calendar.current.date(byAdding: .day, value: -windowDays, to: Date())
+            ?? Date.distantPast
+        _workouts = Query(
+            filter: #Predicate<RunWorkout> { $0.date >= cutoff },
+            sort: [SortDescriptor(\RunWorkout.date)]
+        )
     }
 
     // The period arithmetic — which runs are in range, what they total, how they bucket
@@ -169,7 +185,7 @@ struct ProgressDashboardView: View {
     private func summaryStatCell(value: String, label: String) -> some View {
         VStack(spacing: 2) {
             Text(value)
-                .font(.system(size: 22, weight: .bold, design: .monospaced))
+                .font(.dsTitle2.monospaced())
                 .foregroundStyle(.primary)
                 .minimumScaleFactor(0.7)
                 .lineLimit(1)
@@ -192,7 +208,7 @@ struct ProgressDashboardView: View {
                     withAnimation(AppAnimation.bouncy) { selectedRange = range }
                 } label: {
                     Text(range.rawValue)
-                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                        .font(.dsSubhead.weight(.semibold).monospaced())
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 9)
                         .background {
@@ -221,7 +237,7 @@ struct ProgressDashboardView: View {
                     withAnimation(AppAnimation.bouncy) { selectedTab = tab }
                 } label: {
                     Text(tab.rawValue)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.dsSubhead.weight(.semibold))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 9)
                         .background {
@@ -704,7 +720,7 @@ struct ProgressDashboardView: View {
     private func summaryCell(value: String, label: String) -> some View {
         VStack(spacing: 4) {
             Text(value)
-                .font(.system(size: 16, weight: .bold, design: .monospaced))
+                .font(.dsCallout.weight(.bold).monospaced())
                 .minimumScaleFactor(0.7)
                 .lineLimit(1)
             Text(label)

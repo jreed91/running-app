@@ -35,7 +35,7 @@ struct DayToggleButton: View {
     var body: some View {
         Button(action: action) {
             Text(label)
-                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .font(.system(.caption, design: .rounded, weight: .bold))
                 .frame(maxWidth: .infinity)
                 .frame(height: 52)
                 .foregroundStyle(isOn ? .white : .primary)

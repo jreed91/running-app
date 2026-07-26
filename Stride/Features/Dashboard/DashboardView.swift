@@ -80,6 +80,9 @@ struct WeekCalendarView: View {
             }
         }
         .padding(.bottom, 8)
+        // Seven day columns plus two chevrons across the screen width — the other
+        // layout that can't reflow, so it scales up to accessibility1 and stops (U2).
+        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
     }
 
     private func navChevron(
@@ -91,7 +94,11 @@ struct WeekCalendarView: View {
             withAnimation(AppAnimation.bouncy) { action() }
         } label: {
             StrideIcon(name: icon, size: 13, color: .secondary, strokeWeight: 2)
-                .frame(width: 28, height: 44)
+                // 28pt wide was under the 44pt minimum target — and this is the
+                // control that moves the calendar a week at a time (U10). The glyph
+                // is unchanged; only the tappable area grew.
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
         .accessibilityLabel(label)
     }
@@ -139,7 +146,7 @@ private struct DayCell: View {
     var body: some View {
         VStack(spacing: 4) {
             Text(date.formatted(.dateTime.weekday(.narrow)))
-                .font(.system(size: 11, weight: .semibold))
+                .font(.dsCaption2.weight(.semibold))
                 .foregroundStyle(isToday ? .brand : .secondary)
 
             ZStack {
@@ -148,7 +155,7 @@ private struct DayCell: View {
                     .frame(width: 32, height: 32)
                     .adaptiveAnimation(AppAnimation.snappy, value: isSelected)
                 Text(date.formatted(.dateTime.day()))
-                    .font(.system(size: 15, weight: isToday || isSelected ? .bold : .regular))
+                    .font(.dsSubhead.weight(isToday || isSelected ? .bold : .regular))
                     .foregroundStyle(numberForeground)
                     .adaptiveAnimation(AppAnimation.snappy, value: isSelected)
             }
@@ -413,12 +420,12 @@ struct DashboardView: View {
                         color: .brand
                     )
                     Spacer()
-                    // Progress ring
-                    let pct2 = min(
-                        (activePlan?.currentWeek?.completedDistanceKm ?? 0) /
-                        max(activePlan?.currentWeek?.targetDistanceKm ?? 1, 1), 1.0
-                    )
-                    ProgressRingView(progress: pct2, size: 44, lineWidth: 5, color: .brand)
+                    // The ring draws the number the `statItem` beside it just spoke, so
+                    // it is redundant to VoiceOver rather than missing from it — say so
+                    // explicitly instead of leaving an unlabelled element (U10). It also
+                    // used to recompute `pct` under a second name.
+                    ProgressRingView(progress: pct, size: 44, lineWidth: 5, color: .brand)
+                        .accessibilityHidden(true)
                 }
             }
 
@@ -464,12 +471,22 @@ struct DashboardView: View {
         let scale = weeklyLoadScaleMeters
 
         // Build 7-day bars based on actual run data this week
-        let bars: [(fraction: CGFloat, color: Color, isActive: Bool)] = (0..<7).map { offset in
+        let bars: [WeeklyLoadDay] = (0..<7).map { offset in
             let day = monday.adding(days: offset)
             let isToday = cal.isDateInToday(day)
             let isFuture = day > today && !isToday
+            let label = day.formatted(.dateTime.weekday(.wide))
 
-            if isFuture { return (0, .clear, false) }
+            if isFuture {
+                return WeeklyLoadDay(
+                    label: label,
+                    distanceMeters: 0,
+                    fraction: 0,
+                    color: .clear,
+                    isActive: false,
+                    isFuture: true
+                )
+            }
 
             let dist = recentWorkouts
                 .filter { cal.isDate($0.date, inSameDayAs: day) }
@@ -484,17 +501,46 @@ struct DashboardView: View {
             default:                    color = .zoneEasy
             }
 
-            let fraction = CGFloat(min(dist / scale, 1.0))
-            return (fraction, color, isToday && dist == 0)
+            return WeeklyLoadDay(
+                label: label,
+                distanceMeters: dist,
+                fraction: CGFloat(min(dist / scale, 1.0)),
+                color: color,
+                isActive: isToday && dist == 0,
+                isFuture: false
+            )
         }
 
         return HStack(alignment: .bottom, spacing: 6) {
-            ForEach(0..<bars.count, id: \.self) { i in
-                WeeklyLoadBar(fraction: bars[i].fraction, color: bars[i].color, isActive: bars[i].isActive)
+            ForEach(Array(bars.enumerated()), id: \.offset) { _, bar in
+                WeeklyLoadBar(fraction: bar.fraction, color: bar.color, isActive: bar.isActive)
             }
         }
         .frame(height: 28)
         .padding(.top, 4)
+        // Seven bars with no label at all. `chartAccessibility` was built for exactly
+        // this and is on all six Progress-tab charts — this one was missed (U10).
+        // Days still to come are left out rather than spoken as zero.
+        .chartAccessibility("Weekly load chart", weeklyLoadSummary(bars))
+    }
+
+    private func weeklyLoadSummary(_ bars: [WeeklyLoadDay]) -> String {
+        let points = bars
+            .filter { !$0.isFuture }
+            .map { ChartAccessibility.Point(label: $0.label, value: $0.distanceMeters) }
+        return ChartAccessibility.summary(points) { meters in
+            meters.distanceString(unit: appSettings.unitPreference)
+        }
+    }
+
+    /// One day of the weekly-load strip: what it draws, and what it says.
+    private struct WeeklyLoadDay {
+        let label: String
+        let distanceMeters: Double
+        let fraction: CGFloat
+        let color: Color
+        let isActive: Bool
+        let isFuture: Bool
     }
 
     // MARK: - Selected Day Section
@@ -567,14 +613,16 @@ struct DashboardView: View {
             }
         } label: {
             HStack(spacing: 10) {
-                StrideIcon(name: .play, size: 18, color: .white, strokeWeight: 2.2)
+                StrideIcon(name: .play, size: 18, color: .onFill, strokeWeight: 2.2)
                 Text(startButtonTitle(for: workout))
-                    .font(.system(size: 17, weight: .bold))
+                    .font(.dsHeadline.weight(.bold))
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
         }
-        .foregroundStyle(.white)
+        // White on `Color.brand` is 2.84:1 — below even the 3.0 large-text bar,
+        // on the app's most-tapped control (U3a).
+        .foregroundStyle(.onFill)
         .background(
             RoundedRectangle(cornerRadius: 18)
                 .fill(Color.brand)
@@ -674,14 +722,14 @@ struct DashboardView: View {
             showActiveRun = true
         } label: {
             HStack(spacing: 10) {
-                StrideIcon(name: .run, size: 20, color: .white, strokeWeight: 2.0)
+                StrideIcon(name: .run, size: 20, color: .onFill, strokeWeight: 2.0)
                 Text("Start a Free Run")
-                    .font(.system(size: 17, weight: .bold))
+                    .font(.dsHeadline.weight(.bold))
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(.onFill)
         .accessibilityIdentifier("dashboard.startFreeRun")
         .background(
             RoundedRectangle(cornerRadius: 18)

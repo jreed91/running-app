@@ -78,8 +78,8 @@ struct MissedWorkoutsRecoveryCard: View {
     private func primaryButton(title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.white)
+                .font(.dsSubhead.weight(.semibold))
+                .foregroundStyle(.onFill)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
                 .background(
@@ -93,7 +93,7 @@ struct MissedWorkoutsRecoveryCard: View {
     private func secondaryButton(title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 15, weight: .medium))
+                .font(.dsSubhead.weight(.medium))
                 .foregroundStyle(.primary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)

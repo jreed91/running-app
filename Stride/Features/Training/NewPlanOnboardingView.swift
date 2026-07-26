@@ -288,7 +288,7 @@ struct NewPlanOnboardingView: View {
                     .frame(width: 80)
 
                     Text(":")
-                        .font(.system(size: 48, weight: .bold, design: .monospaced))
+                        .font(.dsLargeTitle.monospaced())
                         .foregroundStyle(.brand)
 
                     Picker("Seconds", selection: $fiveKSeconds) {
@@ -302,7 +302,7 @@ struct NewPlanOnboardingView: View {
 
                 HStack(spacing: 6) {
                     Text(String(format: "VDOT %.0f", vdotValue))
-                        .font(.system(size: 13, weight: .bold, design: .monospaced))
+                        .font(.dsFootnote.weight(.bold).monospaced())
                         .foregroundStyle(.brand)
                     Text("·").foregroundStyle(.secondary)
                     Text(vdotLabel)
@@ -432,11 +432,11 @@ struct NewPlanOnboardingView: View {
                         } label: {
                             VStack(spacing: 2) {
                                 Text(dayLabels[i])
-                                    .font(.system(size: 11, weight: .bold))
+                                    .font(.dsCaption2.weight(.bold))
                                     .kerning(0.6)
                                     .opacity(isOn ? 0.85 : 0.6)
                                 Text("\(dayNumber)")
-                                    .font(.system(size: 15, weight: .bold, design: .monospaced))
+                                    .font(.dsSubhead.weight(.bold).monospaced())
                             }
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 52)
@@ -453,7 +453,7 @@ struct NewPlanOnboardingView: View {
 
                 HStack(spacing: 10) {
                     Text("\(selectedDays.count)")
-                        .font(.system(size: 22, weight: .bold, design: .monospaced))
+                        .font(.dsTitle2.monospaced())
                         .foregroundStyle(.brand)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Days per week").font(.captionStrong)

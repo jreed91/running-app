@@ -20,12 +20,12 @@ extension RunSummaryView {
                                 .fill(Color.brand)
                                 .frame(width: 11, height: 11)
                             Text("AI COACH")
-                                .font(.system(size: 11, weight: .bold))
+                                .font(.dsCaption2.weight(.bold))
                                 .kerning(1.4)
                                 .foregroundStyle(.brand)
                         }
                         Text("Today's analysis")
-                            .font(.system(size: 18, weight: .bold))
+                            .font(.dsHeadline.weight(.bold))
                             .kerning(-0.3)
                     }
                     Spacer()
@@ -36,12 +36,12 @@ extension RunSummaryView {
                     } label: {
                         HStack(spacing: 5) {
                             SparkleShape()
-                                .fill(.white)
+                                .fill(.onFill)
                                 .frame(width: 11, height: 11)
                             Text(aiInsight == nil ? "Load" : "Refresh")
-                                .font(.system(size: 12, weight: .bold))
+                                .font(.dsCaption.weight(.bold))
                         }
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.onFill)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                         .background(Color.brand, in: Capsule())
@@ -86,7 +86,7 @@ extension RunSummaryView {
                     .fill(Color.brand)
                     .frame(width: 14, height: 14)
                 Text("COACHING READ")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.dsCaption2.weight(.bold))
                     .kerning(1.4)
                     .foregroundStyle(.brand)
                 Spacer()
@@ -94,7 +94,7 @@ extension RunSummaryView {
             }
 
             Text(markdownText(insight.headline))
-                .font(.system(size: 22, weight: .heavy))
+                .font(.dsTitle2.weight(.heavy))
                 .kerning(-0.55)
                 .lineSpacing(1)
                 .fixedSize(horizontal: false, vertical: true)
@@ -124,7 +124,7 @@ extension RunSummaryView {
     private var aiAskCoachCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("ASK COACH")
-                .font(.system(size: 11, weight: .bold))
+                .font(.dsCaption2.weight(.bold))
                 .kerning(1.4)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 4)
@@ -136,7 +136,7 @@ extension RunSummaryView {
                             coachChatRequest = AICoachChatRequest(prompt: prompt)
                         } label: {
                             Text(prompt)
-                                .font(.system(size: 12.5, weight: .semibold))
+                                .font(.dsCaption.weight(.semibold))
                                 .foregroundStyle(.brand)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 8)
@@ -157,12 +157,12 @@ extension RunSummaryView {
                         .fill(Color.brand)
                         .frame(width: 13, height: 13)
                     Text("Ask your coach...")
-                        .font(.system(size: 13.5))
+                        .font(.dsFootnote)
                         .foregroundStyle(.tertiary)
                     Spacer()
                     Image(systemName: "arrow.up")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(.white)
+                        .font(.dsCaption.weight(.bold))
+                        .foregroundStyle(.onFill)
                         .frame(width: 30, height: 30)
                         .background(Color.brand, in: Circle())
                 }
@@ -179,7 +179,7 @@ extension RunSummaryView {
     private func aiActionPlan(_ insight: AICoachInsight) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("DO THIS NEXT")
-                .font(.system(size: 11, weight: .bold))
+                .font(.dsCaption2.weight(.bold))
                 .kerning(1.4)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 4)
@@ -218,16 +218,16 @@ extension RunSummaryView {
                     }
                     VStack(alignment: .leading, spacing: 2) {
                         Text("NEXT SESSION")
-                            .font(.system(size: 10, weight: .bold))
+                            .font(.dsCaption2.weight(.bold))
                             .kerning(0.8)
                             .foregroundStyle(.secondary)
                         Text(markdownText(insight.nextWorkoutSuggestion))
-                            .font(.system(size: 14, weight: .bold))
+                            .font(.dsSubhead.weight(.bold))
                             .foregroundStyle(.primary)
                             .lineLimit(2)
                         if let rationale = insight.nextWorkoutRationale?.trimmingCharacters(in: .whitespacesAndNewlines), !rationale.isEmpty {
                             Text(markdownText(rationale))
-                                .font(.system(size: 12))
+                                .font(.dsCaption)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(2)
                         }
@@ -241,7 +241,7 @@ extension RunSummaryView {
 
             if let nextSessionUpdateMessage {
                 Text(nextSessionUpdateMessage)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.dsCaption.weight(.medium))
                     .foregroundStyle(nextSessionUpdateMessage.hasPrefix("Updated") ? Color.success : Color.secondary)
                     .padding(.horizontal, 2)
             }
@@ -259,7 +259,7 @@ extension RunSummaryView {
                     }
                 } label: {
                     Text(showFullAIAnalysis ? "Hide full analysis" : "Read full analysis")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.dsSubhead.weight(.semibold))
                         .foregroundStyle(.brand)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
@@ -281,12 +281,12 @@ extension RunSummaryView {
     private func fullAnalysisCard(_ insight: AICoachInsight) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("FULL ANALYSIS")
-                .font(.system(size: 10, weight: .bold))
+                .font(.dsCaption2.weight(.bold))
                 .kerning(1.1)
                 .foregroundStyle(.secondary)
 
             Text(markdownText(CoachInsightText.fullAnalysis(for: insight)))
-                .font(.system(size: 13))
+                .font(.dsFootnote)
                 .foregroundStyle(.secondary)
                 .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
@@ -311,7 +311,7 @@ extension RunSummaryView {
             context.saveOrLog("the coach-insight reaction")
         } label: {
             Image(systemName: reaction == .up ? "hand.thumbsup" : "hand.thumbsdown")
-                .font(.system(size: 18, weight: .semibold))
+                .font(.dsHeadline)
                 .foregroundStyle(isActive ? Color.brand : Color.secondary)
                 .frame(width: 48, height: 48)
                 .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
@@ -327,7 +327,7 @@ extension RunSummaryView {
                 .fill(Color.success)
                 .frame(width: 11, height: 11)
             Text("Generated by \(appSettings.aiProvider.localizedName) · \(workout.date.formatted(.dateTime.month(.abbreviated).day().hour().minute()))")
-                .font(.system(size: 11))
+                .font(.dsCaption2)
                 .foregroundStyle(.tertiary)
         }
         .frame(maxWidth: .infinity)
@@ -337,11 +337,11 @@ extension RunSummaryView {
     private var aiEmptyState: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(hasAIKey ? "Ready for analysis" : "AI Coach is off")
-                .font(.system(size: 15, weight: .bold))
+                .font(.dsSubhead.weight(.bold))
             Text(hasAIKey
                  ? "Tap Load to fetch on-device AI coaching feedback for this workout."
                  : "Turn on AI Coach in Settings to load on-device workout analysis.")
-                .font(.system(size: 13))
+                .font(.dsFootnote)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -352,9 +352,9 @@ extension RunSummaryView {
     private func aiUnavailableCard(_ insight: AICoachInsight) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(markdownText(insight.headline))
-                .font(.system(size: 15, weight: .bold))
+                .font(.dsSubhead.weight(.bold))
             Text(markdownText(insight.summary))
-                .font(.system(size: 13))
+                .font(.dsFootnote)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }

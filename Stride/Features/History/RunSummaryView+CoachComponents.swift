@@ -42,15 +42,15 @@ extension RunSummaryView {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(number)
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .font(.dsCaption2.weight(.bold).monospaced())
                             .kerning(0.6)
                             .foregroundStyle(tone)
                         Text(Self.markdownText(title))
-                            .font(.system(size: 15, weight: .bold))
+                            .font(.dsSubhead.weight(.bold))
                             .kerning(-0.2)
                     }
                     Text(Self.markdownText(detail))
-                        .font(.system(size: 13))
+                        .font(.dsFootnote)
                         .lineSpacing(1)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -60,7 +60,7 @@ extension RunSummaryView {
 
                 if let metric {
                     Text(metric)
-                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .font(.dsCaption.weight(.bold).monospaced())
                         .foregroundStyle(tone)
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)

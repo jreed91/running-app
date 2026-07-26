@@ -13,6 +13,8 @@ struct TrainingPlanListView: View {
     @Query private var profiles: [UserProfile]
 
     @State private var showNewPlanSheet = false
+    /// Plans the runner has swiped away, held until the confirmation is answered (U6).
+    @State private var pendingDeletion: [TrainingPlan] = []
 
     private var currentPlans: [TrainingPlan] { plans.filter(\.isActive) }
     private var pastPlans: [TrainingPlan] { plans.filter { !$0.isActive } }
@@ -43,6 +45,32 @@ struct TrainingPlanListView: View {
         .sheet(isPresented: $showNewPlanSheet) {
             PlanSetupView()
         }
+        // Deleting a plan from its detail screen asks first; deleting the same plan by
+        // swiping here did not, even though the swipe cascades to every scheduled
+        // workout, Watch entry and reminder the plan owns (U6).
+        .confirmationDialog(
+            "Delete this plan?",
+            isPresented: Binding(
+                get: { !pendingDeletion.isEmpty },
+                set: { if !$0 { pendingDeletion = [] } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                let plans = pendingDeletion
+                pendingDeletion = []
+                Task {
+                    // `deletePlan` owns the order: the Watch entries and reminders are
+                    // reachable only through the plan, so they go before the record does (D3).
+                    for plan in plans {
+                        await container.planLifecycle.deletePlan(plan, context: context)
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) { pendingDeletion = [] }
+        } message: {
+            Text("Its scheduled workouts, reminders and Watch entries go with it. Completed runs are kept.")
+        }
         .overlay {
             if plans.isEmpty {
                 ContentUnavailableView(
@@ -63,14 +91,7 @@ struct TrainingPlanListView: View {
             }
         }
         .onDelete { offsets in
-            let toDelete = offsets.map { sectionPlans[$0] }
-            Task {
-                // `deletePlan` owns the order: the Watch entries and reminders are
-                // reachable only through the plan, so they go before the record does (D3).
-                for plan in toDelete {
-                    await container.planLifecycle.deletePlan(plan, context: context)
-                }
-            }
+            pendingDeletion = offsets.map { sectionPlans[$0] }
         }
     }
 }

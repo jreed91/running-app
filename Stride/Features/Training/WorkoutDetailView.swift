@@ -137,7 +137,7 @@ struct WorkoutDetailView: View {
 
     private func summaryChip(label: String, systemImage: String) -> some View {
         Text(label)
-            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+            .font(.dsCaption.weight(.semibold).monospaced())
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
             .background(.surfaceTertiary, in: Capsule())
@@ -173,7 +173,7 @@ struct WorkoutDetailView: View {
                 VStack(alignment: .leading, spacing: 5) {
                     HStack(spacing: 8) {
                         Text(workout.workoutType.localizedName)
-                            .font(.system(size: 22, weight: .bold))
+                            .font(.dsTitle2)
                             .lineLimit(1)
                             .minimumScaleFactor(0.82)
                         if workout.isCompleted {
@@ -228,10 +228,10 @@ struct WorkoutDetailView: View {
                             ProgressView().controlSize(.mini)
                         } else {
                             Image(systemName: location.systemImage)
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.dsCaption.weight(.semibold))
                         }
                         Text(location.localizedName)
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.dsFootnote.weight(.semibold))
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
@@ -321,9 +321,9 @@ struct WorkoutDetailView: View {
             // Summary chip
             HStack(spacing: 6) {
                 Image(systemName: "clock")
-                    .font(.system(size: 11))
+                    .font(.dsCaption2)
                 Text("\(plan.estimatedDurationMinutes) min")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.dsCaption.weight(.semibold))
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
@@ -346,16 +346,16 @@ struct ExerciseRow: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(exercise.name)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.dsSubhead.weight(.semibold))
                 Spacer()
                 Text(repsLabel)
-                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .font(.dsFootnote.weight(.medium).monospaced())
                     .foregroundStyle(.secondary)
             }
             HStack(spacing: 6) {
                 ForEach(exercise.muscleGroups.prefix(3), id: \.self) { group in
                     Text(group)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.dsCaption2.weight(.medium))
                         .padding(.horizontal, 7)
                         .padding(.vertical, 3)
                         .background(Color.brand.opacity(0.12), in: Capsule())
@@ -363,7 +363,7 @@ struct ExerciseRow: View {
                 }
                 if let weight = exercise.targetWeight {
                     Text(weight)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.dsCaption2.weight(.medium))
                         .padding(.horizontal, 7)
                         .padding(.vertical, 3)
                         .background(.surfaceSecondary, in: Capsule())
@@ -372,7 +372,7 @@ struct ExerciseRow: View {
             }
             if let notes = exercise.notes {
                 Text(notes)
-                    .font(.system(size: 12))
+                    .font(.dsCaption)
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -412,7 +412,7 @@ private struct GoalRaceCelebrationCard: View {
             VStack(spacing: 8) {
                 StrideIcon(name: .trophy, size: 34, color: .brand, strokeWeight: 2.2)
                 Text(raceName)
-                    .font(.system(size: 26, weight: .heavy))
+                    .font(.dsTitle1.weight(.heavy))
                     .multilineTextAlignment(.center)
                 Text("Goal race completed")
                     .font(.bodyStrong)
@@ -589,7 +589,7 @@ private struct WorkoutSetRow: View {
                     .fill(color.opacity(0.12))
                     .frame(width: 34, height: 34)
                 Text("\(workoutSet.repetitions)×")
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .font(.system(.caption, design: .rounded, weight: .bold))
                     .foregroundStyle(color)
             }
 

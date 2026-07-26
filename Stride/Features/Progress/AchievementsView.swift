@@ -17,6 +17,11 @@ private struct MedalBucket: Identifiable {
 
 @MainActor
 struct AchievementsView: View {
+    /// Deliberately *not* date-bounded, unlike the other two Progress screens (U9):
+    /// the medals are all-time personal records, and the badges count lifetime
+    /// distance and the longest streak ever recorded — a window would quietly
+    /// redefine all three. What made this screen expensive was recomputing those
+    /// derivations several times per render, and that is fixed in `body`.
     @Query(sort: [SortDescriptor(\RunWorkout.date)])
     private var workouts: [RunWorkout]
 
@@ -25,33 +30,43 @@ struct AchievementsView: View {
     @State private var appeared = false
     @State private var editingGoal = false
 
+    // Symbols sized by `.font` and the circles behind them have to scale *together*,
+    // or the glyph outgrows its badge at large content sizes (U2). `@ScaledMetric`
+    // was unused anywhere in the app before this.
+    @ScaledMetric(relativeTo: .largeTitle) private var streakBadgeSize: CGFloat = 64
+    @ScaledMetric(relativeTo: .title2) private var badgeCircleSize: CGFloat = 52
+    @ScaledMetric(relativeTo: .largeTitle) private var medalGlyphSize: CGFloat = 34
+
     private let eligibleTypes: Set<WorkoutType> = [.easy, .tempo, .interval, .longRun, .race]
 
     // MARK: Derived stats
 
-    private var streak: StreakGoalService.StreakSummary {
-        StreakGoalService.streak(for: workouts)
-    }
-
-    private var weekly: StreakGoalService.WeeklyGoalProgress {
-        StreakGoalService.weeklyProgress(for: workouts, goalMeters: appSettings.weeklyGoalMeters)
-    }
-
-    private var achievements: [StreakGoalService.Achievement] {
-        StreakGoalService.achievements(for: workouts, unit: appSettings.unitPreference)
-    }
-
     var body: some View {
+        // Each of these walks the whole run history, and `achievements` walks it
+        // several times over. They used to be computed properties read from inside
+        // the section builders — and `badgeSection` is called once per category, so
+        // the full set was recomputed four times on every render pass (U9). Derived
+        // once here and handed down instead.
+        let streak = StreakGoalService.streak(for: workouts)
+        let weekly = StreakGoalService.weeklyProgress(
+            for: workouts,
+            goalMeters: appSettings.weeklyGoalMeters
+        )
+        let achievements = StreakGoalService.achievements(
+            for: workouts,
+            unit: appSettings.unitPreference
+        )
+
         ScrollView {
             VStack(alignment: .leading, spacing: AppSpacing.lg) {
-                streakCard
+                streakCard(streak)
                     .fadeSlide(appeared, delay: 0.05)
 
-                weeklyGoalCard
+                weeklyGoalCard(weekly)
                     .fadeSlide(appeared, delay: 0.10)
 
                 ForEach(Array(StreakGoalService.AchievementCategory.allCases.enumerated()), id: \.element) { index, category in
-                    badgeSection(for: category)
+                    badgeSection(for: category, achievements: achievements)
                         .fadeSlide(appeared, delay: 0.15 + Double(index) * 0.05)
                 }
 
@@ -80,14 +95,14 @@ struct AchievementsView: View {
 
     // MARK: Streak
 
-    private var streakCard: some View {
+    private func streakCard(_ streak: StreakGoalService.StreakSummary) -> some View {
         HStack(spacing: AppSpacing.lg) {
             ZStack {
                 Circle()
                     .fill(streak.current > 0 ? Color.warning.opacity(0.15) : Color.secondary.opacity(0.12))
-                    .frame(width: 64, height: 64)
+                    .frame(width: streakBadgeSize, height: streakBadgeSize)
                 Image(systemName: "flame.fill")
-                    .font(.system(size: 30))
+                    .font(.system(size: streakBadgeSize * 0.47))
                     .foregroundStyle(streak.current > 0 ? Color.warning : Color.secondary.opacity(0.35))
             }
 
@@ -100,7 +115,7 @@ struct AchievementsView: View {
                         .font(.bodyStrong)
                         .foregroundStyle(.secondary)
                 }
-                Text(streakSubtitle)
+                Text(streakSubtitle(streak))
                     .font(.caption)
                     .foregroundStyle(.tertiary)
             }
@@ -111,7 +126,7 @@ struct AchievementsView: View {
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
-    private var streakSubtitle: String {
+    private func streakSubtitle(_ streak: StreakGoalService.StreakSummary) -> String {
         if streak.current == 0 {
             return streak.longest > 0 ? "Longest: \(streak.longest) days • run today to start again" : "Run today to start a streak"
         }
@@ -123,7 +138,7 @@ struct AchievementsView: View {
 
     // MARK: Weekly goal
 
-    private var weeklyGoalCard: some View {
+    private func weeklyGoalCard(_ weekly: StreakGoalService.WeeklyGoalProgress) -> some View {
         HStack(spacing: AppSpacing.lg) {
             ProgressRing(fraction: weekly.fraction, isComplete: weekly.isMet)
                 .frame(width: 72, height: 72)
@@ -135,7 +150,7 @@ struct AchievementsView: View {
                 Text(weekly.completedMeters.distanceString(unit: appSettings.unitPreference))
                     .font(.metricS)
                     .monospacedDigit()
-                Text(weeklyGoalSubtitle)
+                Text(weeklyGoalSubtitle(weekly))
                     .font(.caption)
                     .foregroundStyle(.tertiary)
             }
@@ -146,7 +161,7 @@ struct AchievementsView: View {
                 editingGoal = true
             } label: {
                 Image(systemName: "slider.horizontal.3")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.dsCallout.weight(.semibold))
                     .foregroundStyle(.brand)
                     .padding(AppSpacing.sm)
                     .background(Color.brand.opacity(0.12), in: Circle())
@@ -157,7 +172,7 @@ struct AchievementsView: View {
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
-    private var weeklyGoalSubtitle: String {
+    private func weeklyGoalSubtitle(_ weekly: StreakGoalService.WeeklyGoalProgress) -> String {
         let goal = appSettings.weeklyGoalMeters.distanceString(unit: appSettings.unitPreference)
         if weekly.isMet {
             return "Goal reached — \(goal) 🎉"
@@ -167,7 +182,10 @@ struct AchievementsView: View {
 
     // MARK: Badges
 
-    private func badgeSection(for category: StreakGoalService.AchievementCategory) -> some View {
+    private func badgeSection(
+        for category: StreakGoalService.AchievementCategory,
+        achievements: [StreakGoalService.Achievement]
+    ) -> some View {
         let items = achievements.filter { $0.category == category }
         return VStack(alignment: .leading, spacing: AppSpacing.sm) {
             Text(category.sectionTitle)
@@ -187,9 +205,9 @@ struct AchievementsView: View {
             ZStack {
                 Circle()
                     .fill(badge.isEarned ? Color.brand.opacity(0.16) : Color.secondary.opacity(0.10))
-                    .frame(width: 52, height: 52)
+                    .frame(width: badgeCircleSize, height: badgeCircleSize)
                 Image(systemName: badge.isEarned ? systemImage : "lock.fill")
-                    .font(.system(size: 22))
+                    .font(.system(size: badgeCircleSize * 0.42))
                     .foregroundStyle(badge.isEarned ? Color.brand : Color.secondary.opacity(0.4))
             }
 
@@ -262,9 +280,9 @@ struct AchievementsView: View {
     private func medalCard(_ bucket: MedalBucket) -> some View {
         HStack(spacing: AppSpacing.lg) {
             Image(systemName: "medal.fill")
-                .font(.system(size: 34))
+                .font(.system(size: medalGlyphSize))
                 .foregroundStyle(bucket.bestRun != nil ? Color.warning : Color.secondary.opacity(0.25))
-                .frame(width: 44)
+                .frame(width: medalGlyphSize * 1.3)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(bucket.name)
@@ -319,7 +337,7 @@ private struct ProgressRing: View {
                 .rotationEffect(.degrees(-90))
             if isComplete {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.dsTitle3.weight(.bold))
                     .foregroundStyle(Color.success)
             } else {
                 Text("\(Int(fraction * 100))%")

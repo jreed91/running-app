@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 struct ActiveRunView: View {
     @Environment(AppContainer.self) private var container
@@ -69,12 +70,19 @@ struct ActiveRunView: View {
         ZStack {
             // Full-bleed zone-color radial gradient backdrop
             // (emanates from the top — matches design spec 130% × 70% at 50% 0%)
+            //
+            // The top stop used to be the raw zone colour at full luminance, which
+            // put every label on this screen between 1.5:1 and 2.3:1 — unreadable
+            // outdoors, which is the only place this screen is used (U3b). Each stop
+            // is darkened enough that white clears 4.5:1 on the lightest zone
+            // (ZoneTempo/ZoneEasy) while the zone stays unmistakably itself.
+            // Fractions are tuned for the perceptual blend `mix` uses by default.
             GeometryReader { geo in
                 RadialGradient(
                     stops: [
-                        .init(color: zoneColor, location: 0),
-                        .init(color: zoneColor.mix(with: .black, by: 0.25), location: 0.55),
-                        .init(color: zoneColor.mix(with: .black, by: 0.55), location: 1.0),
+                        .init(color: zoneColor.mix(with: .black, by: 0.40), location: 0),
+                        .init(color: zoneColor.mix(with: .black, by: 0.56), location: 0.55),
+                        .init(color: zoneColor.mix(with: .black, by: 0.72), location: 1.0),
                     ],
                     center: .init(x: 0.5, y: 0),
                     startRadius: 0,
@@ -170,6 +178,39 @@ struct ActiveRunView: View {
         } message: {
             Text(saveErrorMessage ?? "")
         }
+        // The display sleeps after 30 seconds on default settings, so the hero pace,
+        // zone colour, pace meter and guided-workout banner all went black while the
+        // runner was still running — everything this screen exists for stopped
+        // working almost immediately (U5a). Held only while tracking, and released
+        // on finish/discard so a forgotten flag can't drain the battery afterwards.
+        .onChange(of: tracker.trackingState, initial: true) { _, state in
+            UIApplication.shared.isIdleTimerDisabled = (state == .active || state == .paused)
+        }
+        .onDisappear {
+            UIApplication.shared.isIdleTimerDisabled = false
+        }
+        // Haptics: this is a heads-down screen, so state changes have to be felt
+        // rather than seen (U4). Declarative `sensoryFeedback` respects the system
+        // haptics setting; no UIKit generators.
+        .sensoryFeedback(trigger: tracker.trackingState) { oldState, newState in
+            switch newState {
+            case .active:   return oldState == .paused ? .selection : .impact(weight: .heavy)
+            case .paused:   return .selection
+            case .finished: return .success
+            case .idle:     return nil
+            }
+        }
+        .sensoryFeedback(.error, trigger: saveErrorMessage != nil) { _, isShowing in isShowing }
+        // Each completed kilometre/mile, so pace checks don't need a glance.
+        .sensoryFeedback(.impact(weight: .light), trigger: tracker.splits.count) { old, new in
+            new > old
+        }
+        // A guided interval changing step is otherwise invisible unless the runner
+        // happens to be looking at the banner at that moment.
+        .sensoryFeedback(trigger: guided?.stepNumber) { oldStep, newStep in
+            guard let oldStep, let newStep, newStep != oldStep else { return nil }
+            return .impact(weight: .heavy)
+        }
     }
 
     // MARK: - Top bar
@@ -205,7 +246,7 @@ struct ActiveRunView: View {
             }
         }
         .padding(.horizontal, 22)
-        .padding(.top, 56)
+        .padding(.top, 12)
         .foregroundStyle(.white)
     }
 
@@ -269,7 +310,7 @@ struct ActiveRunView: View {
             Text("CURRENT PACE · \(paceUnitLabel.uppercased())")
                 .font(.system(size: 12, weight: .bold))
                 .kerning(2.2)
-                .foregroundStyle(.white.opacity(0.85))
+                .foregroundStyle(.white.opacity(0.95))
         }
         .padding(.top, 18)
         .accessibilityElement(children: .ignore)
@@ -303,9 +344,9 @@ struct ActiveRunView: View {
                 Spacer()
                 Text("faster")
             }
-            .font(.system(size: 10, weight: .bold))
+            .font(.system(size: 11, weight: .bold))
             .kerning(1.2)
-            .foregroundStyle(.white.opacity(0.65))
+            .foregroundStyle(.white.opacity(0.92))
 
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
@@ -390,6 +431,11 @@ struct ActiveRunView: View {
         )
         .padding(.horizontal, 16)
         .padding(.top, 26)
+        // Three fixed-width columns above a hero that already fills the screen: this
+        // grid is one of the two places in the app that genuinely cannot reflow, so
+        // it is clamped rather than left to overflow (U2). Its fonts are the fixed
+        // `metric*` tokens; the clamp covers anything nested that isn't.
+        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
         .opacity(metricsAppeared ? 1 : 0)
         .scaleEffect(metricsAppeared ? 1 : 0.92)
         .adaptiveAnimation(AppAnimation.entrance.delay(0.1), value: metricsAppeared)
@@ -432,12 +478,12 @@ struct ActiveRunView: View {
                     )
                 Text("bpm")
                     .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.65))
+                    .foregroundStyle(.white.opacity(0.92))
             }
             Text("HEART RATE")
-                .font(.system(size: 9, weight: .bold))
+                .font(.metricLabel)
                 .kerning(1.2)
-                .foregroundStyle(.white.opacity(0.55))
+                .foregroundStyle(.white.opacity(0.92))
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Heart rate")
@@ -455,13 +501,13 @@ struct ActiveRunView: View {
                 if let unit {
                     Text(unit)
                         .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.65))
+                        .foregroundStyle(.white.opacity(0.92))
                 }
             }
             Text(label.uppercased())
-                .font(.system(size: 9, weight: .bold))
+                .font(.metricLabel)
                 .kerning(1.2)
-                .foregroundStyle(.white.opacity(0.55))
+                .foregroundStyle(.white.opacity(0.92))
         }
         // Without this a six-cell grid reads to VoiceOver as twelve loose fragments
         // ("5.2", "DISTANCE", "27:14", "TIME", …) with no pairing (N18).
@@ -707,22 +753,6 @@ private extension Comparable {
     }
 }
 
-// MARK: - Color+mix
-
-private extension Color {
-    func mix(with other: Color, by amount: Double) -> Color {
-        let a = amount.clamped(to: 0...1)
-        // Blend via UIColor for correctness
-        let ui1 = UIColor(self)
-        let ui2 = UIColor(other)
-        var r1: CGFloat = 0, g1: CGFloat = 0, b1: CGFloat = 0, a1: CGFloat = 0
-        var r2: CGFloat = 0, g2: CGFloat = 0, b2: CGFloat = 0, a2: CGFloat = 0
-        ui1.getRed(&r1, green: &g1, blue: &b1, alpha: &a1)
-        ui2.getRed(&r2, green: &g2, blue: &b2, alpha: &a2)
-        return Color(
-            red: r1 + (r2 - r1) * a,
-            green: g1 + (g2 - g1) * a,
-            blue: b1 + (b2 - b1) * a
-        )
-    }
-}
+// The hand-rolled `Color.mix(with:by:)` that used to live here blended through
+// `UIColor` in sRGB and dropped alpha. `Color.mix(with:by:in:)` has been native
+// since iOS 18 — well below this app's 27.0 floor — and blends perceptually (U7).

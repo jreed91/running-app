@@ -316,7 +316,7 @@ struct RouteGeniusView: View {
                     .frame(maxWidth: .infinity)
                     .padding()
                     .background(.brand, in: RoundedRectangle(cornerRadius: 14))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.onFill)
             }
 
             if !route.steps.isEmpty {
@@ -354,7 +354,7 @@ struct RouteGeniusView: View {
                         .frame(maxWidth: .infinity)
                         .padding()
                         .background(.brand, in: RoundedRectangle(cornerRadius: 14))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.onFill)
                         .padding(.horizontal)
                 }
             }

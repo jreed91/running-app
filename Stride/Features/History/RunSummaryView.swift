@@ -47,6 +47,12 @@ struct RunSummaryView: View {
     /// Which split chart the tab row is showing (N22).
     @State var selectedSplitMetric: SplitChartMetric = .pace
     @State private var showDeleteConfirmation = false
+
+    // Sizes that have to track the text beside them rather than staying pinned (U2).
+    // Declared here rather than in `RunSummaryView+Overview` because a Swift
+    // extension can't carry stored properties.
+    @ScaledMetric(relativeTo: .largeTitle) var heroMetricSize: CGFloat = 56
+    @ScaledMetric(relativeTo: .title) var weatherGlyphSize: CGFloat = 32
     @State var showAssociateSheet = false
     @State var aiInsight: AICoachInsight?
     @State var isLoadingAIInsight = false

@@ -17,6 +17,10 @@ struct SettingsView: View {
     )
     private var activePlans: [TrainingPlan]
 
+    /// The profile avatar and the initial inside it scale together, so the letter
+    /// can't outgrow its circle at large content sizes (U2).
+    @ScaledMetric(relativeTo: .title) private var avatarSize: CGFloat = 60
+
     @State private var showResetConfirmation = false
     @State private var showPulseConsole = false
     @State private var notificationTestStatus: String?
@@ -99,18 +103,18 @@ struct SettingsView: View {
                         colors: [Color.brand, Color(red: 0.878, green: 0.263, blue: 0.102)],
                         startPoint: .topLeading, endPoint: .bottomTrailing
                     ))
-                    .frame(width: 60, height: 60)
+                    .frame(width: avatarSize, height: avatarSize)
                 if profile.name.isEmpty {
-                    StrideIcon(name: .run, size: 28, color: .white, strokeWeight: 2.2)
+                    StrideIcon(name: .run, size: avatarSize * 0.47, color: .onFill, strokeWeight: 2.2)
                 } else {
                     Text(String(profile.name.prefix(1)).uppercased())
-                        .font(.system(size: 26, weight: .bold))
-                        .foregroundStyle(.white)
+                        .font(.system(size: avatarSize * 0.47, weight: .bold))
+                        .foregroundStyle(.onFill)
                 }
             }
             VStack(alignment: .leading, spacing: 4) {
                 Text(profile.name.isEmpty ? "Runner" : profile.name)
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.dsTitle3.weight(.bold))
                 HStack(spacing: 4) {
                     Text(profile.goalRace.localizedName)
                     Text("·")
@@ -142,7 +146,7 @@ struct SettingsView: View {
             if authService.isSignedIn {
                 settingsRow(icon: .check, iconColor: .success, title: "Signed in with Apple") {
                     Button("Sign out") { authService.signOut() }
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.dsFootnote.weight(.medium))
                         .foregroundStyle(.secondary)
                         .buttonStyle(.plain)
                 }
@@ -180,9 +184,9 @@ struct SettingsView: View {
                     Button { appSettings.unitPreference = unit } label: {
                         VStack(spacing: 3) {
                             Text(unit.localizedName)
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(.dsSubhead.weight(.semibold))
                             Text(unit == .metric ? "km · min/km" : "mi · min/mi")
-                                .font(.system(size: 11))
+                                .font(.dsCaption2)
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
@@ -360,7 +364,7 @@ struct SettingsView: View {
             SecureField("Paste your token here", text: Bindable(appSettings).orsAPIKey)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
-                .font(.system(size: 13, design: .monospaced))
+                .font(.dsFootnote.monospaced())
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 16)
                 .padding(.bottom, 6)
@@ -484,7 +488,7 @@ struct SettingsView: View {
         return settingsSection("About") {
             settingsRow(icon: .gear, iconColor: Color.secondary, title: "Version") {
                 Text(version)
-                    .font(.system(size: 14, weight: .medium, design: .monospaced))
+                    .font(.dsSubhead.weight(.medium).monospaced())
                     .foregroundStyle(.secondary)
             }
             #if canImport(PulseUI)

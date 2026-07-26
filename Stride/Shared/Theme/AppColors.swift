@@ -26,6 +26,20 @@ extension Color {
     static let success = Color("Success")
     static let warning = Color("Warning")
     static let destructive = Color("Destructive")
+
+    // MARK: On-fill foreground
+
+    /// Foreground for text and glyphs that sit **on** one of the saturated light
+    /// fills — `brand`, `success`, `warning`, `zoneTempo`, `zoneEasy`.
+    ///
+    /// Those fills are vivid rather than dark, so white on them lands at 2.0–2.8:1
+    /// and fails WCAG AA even at the 3.0 large-text bar: the two primary CTAs sat
+    /// at 2.84:1 (U3a). This near-black reads at 6.5–9:1 on the same fills, and
+    /// goes to pure black under Increase Contrast.
+    ///
+    /// Not for `zoneMax`, `zoneInterval` or `zoneRecovery` — those are dark enough
+    /// that white is the higher-contrast choice on them.
+    static let onFill = Color("OnFill")
 }
 
 // Allows shorthand dot syntax when the expected type is `some ShapeStyle`,
@@ -45,4 +59,5 @@ extension ShapeStyle where Self == Color {
     static var success: Color { Color("Success") }
     static var warning: Color { Color("Warning") }
     static var destructive: Color { Color("Destructive") }
+    static var onFill: Color { Color("OnFill") }
 }

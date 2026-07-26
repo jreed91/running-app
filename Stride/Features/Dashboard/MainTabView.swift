@@ -2,27 +2,25 @@ import SwiftUI
 
 struct MainTabView: View {
     var body: some View {
+        // `Tab` rather than `.tabItem` — the builder form has been the correct one
+        // since iOS 18, well below this app's 27.0 floor, and it is what the newer
+        // tab-bar behaviours (minimize, bottom accessory) attach to (U7).
         TabView {
-            DashboardView()
-                .tabItem {
-                    Label("Home", systemImage: "house.fill")
-                }
-            PlanTabView()
-                .tabItem {
-                    Label("Plan", systemImage: "calendar")
-                }
-            HistoryView()
-                .tabItem {
-                    Label("History", systemImage: "clock.arrow.circlepath")
-                }
-            ProgressDashboardView()
-                .tabItem {
-                    Label("Progress", systemImage: "chart.line.uptrend.xyaxis")
-                }
-            SettingsView()
-                .tabItem {
-                    Label("Settings", systemImage: "gear")
-                }
+            Tab("Home", systemImage: "house.fill") {
+                DashboardView()
+            }
+            Tab("Plan", systemImage: "calendar") {
+                PlanTabView()
+            }
+            Tab("History", systemImage: "clock.arrow.circlepath") {
+                HistoryView()
+            }
+            Tab("Progress", systemImage: "chart.line.uptrend.xyaxis") {
+                ProgressDashboardView()
+            }
+            Tab("Settings", systemImage: "gear") {
+                SettingsView()
+            }
         }
         .tint(.brand)
         .accessibilityIdentifier("main.tabs")

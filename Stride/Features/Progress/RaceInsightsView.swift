@@ -4,8 +4,11 @@ import SwiftData
 
 struct RaceInsightsView: View {
 
-    @Query(sort: [SortDescriptor(\RunWorkout.date)])
-    private var workouts: [RunWorkout]
+    /// Bounded to a year (U9). Every figure on this screen comes from
+    /// `WorkoutAnalyticsService.snapshot`, whose widest lookback is eight weeks, or
+    /// from the most recent qualifying run — so a year is already far more history
+    /// than anything here reads.
+    @Query private var workouts: [RunWorkout]
 
     @Query private var profiles: [UserProfile]
     private var profile: UserProfile? { profiles.first }
@@ -14,6 +17,17 @@ struct RaceInsightsView: View {
 
     @State private var selectedPredictionDate: Date? = nil
     @State private var appeared = false
+
+    init() {
+        // A `@Query`'s descriptor is fixed at view-initialisation, so the window is
+        // set here rather than in a computed property.
+        let cutoff = Calendar.current.date(byAdding: .day, value: -365, to: Date())
+            ?? Date.distantPast
+        _workouts = Query(
+            filter: #Predicate<RunWorkout> { $0.date >= cutoff },
+            sort: [SortDescriptor(\RunWorkout.date)]
+        )
+    }
 
     // MARK: - Snapshot
 
@@ -369,7 +383,7 @@ struct RaceInsightsView: View {
                 .foregroundStyle(.primary)
             Spacer()
             Text(paceText)
-                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                .font(.dsFootnote.weight(.semibold).monospaced())
                 .foregroundStyle(color)
         }
         .padding(.vertical, 10)
@@ -420,7 +434,7 @@ struct RaceInsightsView: View {
     private func metricsCell(value: String, label: String, valueColor: Color = .primary) -> some View {
         VStack(spacing: 4) {
             Text(value)
-                .font(.system(size: 16, weight: .bold, design: .monospaced))
+                .font(.dsCallout.weight(.bold).monospaced())
                 .foregroundStyle(valueColor)
                 .minimumScaleFactor(0.7)
                 .lineLimit(1)
@@ -451,7 +465,7 @@ struct RaceInsightsView: View {
                         HStack(alignment: .top, spacing: 10) {
                             Text("\(index + 1)")
                                 .font(.captionStrong)
-                                .foregroundStyle(.white)
+                                .foregroundStyle(.onFill)
                                 .frame(width: 20, height: 20)
                                 .background(Color.brand, in: Circle())
                             Text(tip)
