@@ -100,3 +100,36 @@ custom_rules:
       - ".*/StrideIcon\\.swift"
     message: "Use a design-system font token (`.dsBody`, `.dsCaption2`, …) or a `@ScaledMetric` size. A literal point size ignores the user's preferred content size. See Stride/Shared/Theme/AppFonts.swift."
     severity: error
+
+  # `AppRadius` defined six values and the app drew 208 `cornerRadius:` literals
+  # across 13 of them, so the same card came out at 16, 18 or 20 depending on who
+  # wrote it (U1). The migration is done; this keeps it done.
+  #
+  # A *literal* is what's banned — `cornerRadius: AppRadius.md`, or a radius
+  # derived from a parameter, still passes. `StrideIcon` is excluded because its
+  # radii are path-drawing coordinates on a 24pt grid, not UI chrome.
+  no_raw_corner_radius:
+    name: "Raw corner radius"
+    regex: '(cornerRadius|topLeadingRadius|bottomLeadingRadius|bottomTrailingRadius|topTrailingRadius):\s*[0-9]'
+    excluded:
+      - ".*/AppRadius\\.swift"
+      - ".*/StrideIcon\\.swift"
+    message: "Use a design-system radius token (`AppRadius.md`, `AppRadius.lg`, …). Raw literals are why the same card shipped at three different radii. See Stride/Shared/Theme/AppRadius.swift."
+    severity: error
+
+  # The elevation scale had zero call sites against 26 inline `.shadow(...)` calls,
+  # each with its own bespoke colour/radius/offset (U1). Nineteen of those were
+  # brand-coloured *glows*, which a neutral scale can't express — hence `AppGlow`
+  # alongside `AppElevation`.
+  #
+  # `ActiveRunView` is excluded: its four shadows separate white type and white
+  # controls from a saturated full-bleed gradient, which is legibility rather than
+  # height, and is documented at the call site.
+  no_inline_shadow:
+    name: "Inline shadow"
+    regex: '\.shadow\(\s*color:'
+    excluded:
+      - ".*/AppElevation\\.swift"
+      - ".*/ActiveRunView\\.swift"
+    message: "Use `.appShadow(.e1/.e2/.e3)` for height or `.appGlow(.subtle/.standard/.strong, color:)` for emphasis. See Stride/Shared/Theme/AppElevation.swift."
+    severity: error

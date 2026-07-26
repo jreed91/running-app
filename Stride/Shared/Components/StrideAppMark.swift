@@ -54,7 +54,7 @@ struct StrideAppMark: View {
                 .frame(width: size, height: size)
         }
         .frame(width: size, height: size)
-        .shadow(color: .black.opacity(0.20), radius: 20, y: 12)
+        .appShadow(.e3)
     }
 }
 

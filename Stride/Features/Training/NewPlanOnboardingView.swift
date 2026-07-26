@@ -314,7 +314,7 @@ struct NewPlanOnboardingView: View {
                 .background(Color.brand.opacity(0.1), in: Capsule())
             }
             .padding(20)
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 20))
+            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
 
             VStack(alignment: .leading, spacing: 10) {
                 Text("YOUR TRAINING PACES (\(appSettings.unitPreference.paceLabel.uppercased()))")
@@ -335,7 +335,7 @@ struct NewPlanOnboardingView: View {
                     .foregroundStyle(.secondary)
             }
             .padding(14)
-            .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))
+            .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
     }
 
@@ -401,7 +401,7 @@ struct NewPlanOnboardingView: View {
                 }
             }
             .padding(16)
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 20))
+            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
 
             HStack(spacing: 10) {
                 StrideIcon(name: .calendar, size: 16, color: .secondary)
@@ -412,7 +412,7 @@ struct NewPlanOnboardingView: View {
                     .foregroundStyle(.secondary)
             }
             .padding(14)
-            .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))
+            .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
     }
 
@@ -442,10 +442,10 @@ struct NewPlanOnboardingView: View {
                                 .frame(height: 52)
                                 .background(
                                     isOn ? Color.brand : Color.surfaceTertiary,
-                                    in: RoundedRectangle(cornerRadius: 14)
+                                    in: RoundedRectangle(cornerRadius: AppRadius.md)
                                 )
                                 .foregroundStyle(isOn ? Color.white : Color.secondary)
-                                .shadow(color: isOn ? Color.brand.opacity(0.4) : .clear, radius: 8, y: 3)
+                                .appGlow(.subtle, color: .brand, isActive: isOn)
                         }
                         .buttonStyle(.plain)
                     }
@@ -463,10 +463,10 @@ struct NewPlanOnboardingView: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
-                .background(Color.brand.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+                .background(Color.brand.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.md))
             }
             .padding(16)
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 20))
+            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
 
             if selectedDays.isEmpty {
                 HStack(spacing: 10) {
@@ -476,7 +476,7 @@ struct NewPlanOnboardingView: View {
                         .foregroundStyle(.destructive)
                 }
                 .padding(14)
-                .background(Color.destructive.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))
+                .background(Color.destructive.opacity(0.06), in: RoundedRectangle(cornerRadius: AppRadius.md))
             }
         }
     }

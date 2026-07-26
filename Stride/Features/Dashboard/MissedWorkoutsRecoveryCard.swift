@@ -17,7 +17,7 @@ struct MissedWorkoutsRecoveryCard: View {
         .background(cardBackground)
         .overlay {
             if isLoading {
-                RoundedRectangle(cornerRadius: 18)
+                RoundedRectangle(cornerRadius: AppRadius.lg)
                     .fill(.regularMaterial)
                     .overlay { ProgressView() }
             }
@@ -83,7 +83,7 @@ struct MissedWorkoutsRecoveryCard: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: AppRadius.md)
                         .fill(Color.brand)
                 )
         }
@@ -98,7 +98,7 @@ struct MissedWorkoutsRecoveryCard: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: AppRadius.md)
                         .fill(Color.surfaceSecondary)
                 )
         }
@@ -108,7 +108,7 @@ struct MissedWorkoutsRecoveryCard: View {
     // MARK: - Background
 
     private var cardBackground: some View {
-        RoundedRectangle(cornerRadius: 18)
+        RoundedRectangle(cornerRadius: AppRadius.lg)
             .fill(
                 LinearGradient(
                     colors: [Color.warning.opacity(0.10), Color.warning.opacity(0.04)],
@@ -117,7 +117,7 @@ struct MissedWorkoutsRecoveryCard: View {
                 )
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 18)
+                RoundedRectangle(cornerRadius: AppRadius.lg)
                     .strokeBorder(Color.warning.opacity(0.2), lineWidth: 0.5)
             )
     }

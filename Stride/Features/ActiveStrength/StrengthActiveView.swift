@@ -219,7 +219,7 @@ struct StrengthActiveView: View {
             }
         }
         .padding(16)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 18))
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
     // MARK: - Log Set Card
@@ -278,7 +278,7 @@ struct StrengthActiveView: View {
                     .padding(.vertical, 14)
             }
             .foregroundStyle(.onFill)
-            .background(Color.brand, in: RoundedRectangle(cornerRadius: 14))
+            .background(Color.brand, in: RoundedRectangle(cornerRadius: AppRadius.md))
 
             Button {
                 skipSet()
@@ -289,7 +289,7 @@ struct StrengthActiveView: View {
             }
         }
         .padding(16)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 18))
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
     // MARK: - Rest Timer Card
@@ -328,11 +328,11 @@ struct StrengthActiveView: View {
                     .foregroundStyle(Color.brand)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
-                    .background(Color.brand.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+                    .background(Color.brand.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.md))
             }
         }
         .padding(16)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 18))
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
     private var restProgress: Double {
@@ -372,7 +372,7 @@ struct StrengthActiveView: View {
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
-                    .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 10))
+                    .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.sm))
                 }
             }
         }
@@ -423,7 +423,7 @@ struct StrengthActiveView: View {
                 .padding(.vertical, 16)
         }
         .foregroundStyle(.onFill)
-        .background(Color.brand, in: RoundedRectangle(cornerRadius: 18))
+        .background(Color.brand, in: RoundedRectangle(cornerRadius: AppRadius.lg))
         .padding(.horizontal, 16)
         .padding(.bottom, 20)
         .padding(.top, 8)

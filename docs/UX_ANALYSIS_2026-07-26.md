@@ -18,19 +18,24 @@ ratios are computed from `Stride/Resources/Assets.xcassets`, not eyeballed.
 | VoiceOver labelling | 🟢 Strong | N18/D8 work paid off; charts, metric cells, day cells all speak well |
 | Error recovery in the run flow | 🟢 Strong | Save-retry, discard, race-clamp notices are genuinely well designed |
 | Information architecture | 🟢 Good | Tab split is sensible; empty states are specific, not generic |
-| Design-system adoption | 🟠 Partial | ✅ Type scale adopted app-wide; radius and elevation scales still dead |
+| Design-system adoption | 🟠 Partial | ✅ Type, radius and elevation/glow adopted and guarded; spacing still raw |
 | Dynamic Type | 🟢 Fixed | ✅ 262 sites on `ds*`, `@ScaledMetric` on badges, 2 grids clamped |
 | Colour contrast | 🟢 Fixed | ✅ CTAs, HUD, dark-mode zone collisions, high-contrast variants |
 | Haptics | 🟢 Fixed | ✅ `sensoryFeedback` on run, guided steps, splits, strength sets |
-| iOS 26/27 API adoption | 🟠 Started | ✅ `Tab` builder, native `Color.mix`; glass and Live Activity still absent |
+| iOS 26/27 API adoption | 🟠 Partial | ✅ `Tab` builder, native `Color.mix`, real `glassEffect`; Live Activity still absent |
 | Destructive-action safety | 🟢 Fixed | ✅ Both swipe paths confirm; delete failures surface |
 | History discoverability | 🟢 Fixed | ✅ Search, pull-to-refresh, first-sync loading state |
 
 **Pass 1 (2026-07-26) closed:** the whole of Tier 1, plus §5a, §5d, §8, §9 and most
 of §10. **Pass 2** closed Tier 2 — the type-scale migration and the SwiftLint rule
-that holds it. Still open: the radius and elevation halves of §1, the rest of §7
-(glass, `GeometryReader`s), and all of Tier 4 (Live Activity, spoken splits,
-`tabViewBottomAccessory`).
+that holds it. **Pass 3** closed the rest of Tier 3 and the §1 remainder: the radius
+and elevation scales are adopted and guarded, the hand-rolled glass is now
+`glassEffect`, GPS quality reaches the runner (§5c), and Differentiate Without Color
+is handled (§3d).
+
+Still open: the `GeometryReader` retirements in §7, History's distance/date filter
+(§8), the onboarding step merge and Audio Graph descriptors (§10), and all of Tier 4
+(Live Activity, spoken splits, `tabViewBottomAccessory`).
 
 ---
 
@@ -39,13 +44,13 @@ that holds it. Still open: the radius and elevation halves of §1, the rest of �
 `Stride/Shared/Theme/` defines five token scales. Three of them have **zero call
 sites outside their own file**:
 
-| Scale | Defined in | Uses outside `Shared/Theme/` |
-| --- | --- | --- |
-| Type (`ds*`) | `AppFonts.swift:59-83` | **0** |
-| Elevation (`appShadow` / `AppElevation`) | `AppElevation.swift` | **0** |
-| Radius (`AppRadius`) | `AppRadius.swift` | 4 |
-| Spacing (`AppSpacing`) | `AppSpacing.swift` | 18 |
-| Animation (`AppAnimation`) | `AppAnimations.swift` | widely used ✅ |
+| Scale | Defined in | Uses outside `Shared/Theme/` | After passes 2–3 |
+| --- | --- | --- | --- |
+| Type (`ds*`) | `AppFonts.swift:59-83` | **0** | 262 ✅ |
+| Elevation (`appShadow` / `AppElevation`) | `AppElevation.swift` | **0** | 5 + 19 on the new `AppGlow` ✅ |
+| Radius (`AppRadius`) | `AppRadius.swift` | 4 | 212 ✅ |
+| Spacing (`AppSpacing`) | `AppSpacing.swift` | 18 | 18 — still open |
+| Animation (`AppAnimation`) | `AppAnimations.swift` | widely used ✅ | ✅ |
 
 What the app uses instead:
 
@@ -64,19 +69,37 @@ explaining why `ds`-prefixed tokens exist; the SwiftLint `custom_rules` entry
 (`.swiftlint.yml:72`) guards against the *old* bug returning, but nothing pushes
 call sites onto the new tokens.
 
-🟠 **PARTIALLY FIXED** — the type scale is done and guarded (see §2); the radius and
-elevation scales are not. Those two are a *design* call rather than a mechanical
-one: 212 `cornerRadius:` literals span 13 values and the two most common card radii
-(18 and 22) exist nowhere in `AppRadius`'s six, so snapping them changes how the app
-looks. That needs a decision on the scale itself, not a script.
+✅ **FIXED** for the three dead scales — type, radius and elevation are all adopted
+and guarded. Spacing is the one left: `AppSpacing` still has 18 uses against 353
+numeric `.padding()` literals. It is deliberately last, because padding carries far
+more per-site intent than a corner radius does and a blanket snap would be a redesign.
 
-**Fix.** Treat this as a mechanical migration, not a redesign. Map
-`.font(.system(size: 17, weight: .bold))` → `.dsHeadline.weight(.bold)`,
-`size: 15` → `.dsSubhead`, `size: 13` → `.dsFootnote`, `size: 11/12` →
-`.dsCaption`, and so on; snap the 13 radius literals onto the 6-value scale;
-replace inline shadows with `.appShadow(.e1/.e2)`. Then add SwiftLint custom
-rules banning raw `.font(.system(size:`, raw `cornerRadius:` literals, and inline
-`.shadow(` in `Stride/Features/`, so the scales cannot rot again.
+**Radius.** The design call this was waiting on: *adopt the scale as it stands rather
+than redesign it around the literals.* Re-pointing the tokens at the two most common
+literals (18 and 22) would have silently changed the four existing `AppRadius` call
+sites and discarded the values the design system shipped, so all 208 literals snapped
+to their nearest token instead — `1–4 → micro` (a new token for chart-bar caps, where
+6 would round the element away), `8 → xs`, `10 → sm`, `12/14/16 → md`, `18/20 → lg`,
+`22 → xl`. Nothing moves more than 2pt except the four 22pt floating surfaces. The two
+dominant card radii land exactly where `AchievementsView` had already used the tokens
+by hand, so the app's rhythm is preserved. The mapping table lives in `AppRadius.swift`.
+
+**Elevation.** The reason this scale had no call sites turned out to be a real gap,
+not neglect: **19 of the 26 inline shadows were brand-coloured glows, not elevation.**
+A glow says "tap this"; elevation says "this is above the page", and a neutral scale
+cannot express the first — so every CTA hand-rolled its own. `AppGlow`
+(`.halo/.subtle/.standard/.strong`, applied as `.appGlow(_:color:isActive:)`) closes
+that gap and takes all 19. Of the remaining seven, five were genuine elevation and
+moved to `.appShadow(.e1/.e2/.e3)`; `e1` and `e2` were retuned to the shadows those
+sites actually needed, which cost nothing because both levels had zero call sites. One
+was a no-op (`radius: 0` at zero offset, drawing the shape behind itself) and is gone.
+
+Four stay inline, in `ActiveRunView`: they separate white type and white controls from
+a saturated full-bleed gradient, which is legibility rather than height. Documented at
+the call site and excluded from the rule.
+
+**Guards.** `.swiftlint.yml` gains `no_raw_corner_radius` and `no_inline_shadow`
+alongside `no_fixed_font_size`, each with the narrow exclusions above.
 
 ---
 
@@ -234,20 +257,30 @@ No colorset defines a `contrast: high` appearance, and
 **0 times** in the codebase. The system Increase Contrast setting therefore does
 nothing in Stride.
 
-🟠 **PARTIALLY FIXED** — every brand, zone and semantic colorset now carries
-`contrast: high` variants for both appearances. The light-mode high-contrast values
-for the fills that carry `onFill` text are solved to clear 4.5:1 *both* as tinted
-text on a white surface and as a fill behind black text. `accessibilityDifferentiate\
-WithoutColor` is still unhandled — the zone system remains colour-only.
+✅ **FIXED.** Every brand, zone and semantic colorset now carries `contrast: high`
+variants for both appearances. The light-mode high-contrast values for the fills that
+carry `onFill` text are solved to clear 4.5:1 *both* as tinted text on a white surface
+and as a fill behind black text.
 
-**Fix.**
-1. Give `ZoneMarathon` and `ZoneMax` genuinely distinct dark variants.
-2. Switch white-on-fill to black-on-fill for `Brand`, `ZoneTempo`, `ZoneEasy`,
+`accessibilityDifferentiateWithoutColor` is now handled too (pass 3). Auditing the
+zone system for colour-*only* encoding found one site rather than the four this
+section assumed: `PaceZoneIndicator` already pairs the colour with the zone's glyph
+and its name, the HUD background sits under a zone label carrying both, the split
+chart encodes faster/slower as bars rising above or hanging below the average rule
+(and names the delta in its tooltip), and `PaceRow` labels every zone in text. The
+exception was the dashboard week strip, where workout type was a 6×6 coloured dot and
+nothing else — a tempo day and an interval day were the same shape. `DayCell` now
+reads the environment value and swaps the dot for the type's own glyph, keeping the
+colour, since the setting means "don't rely on colour alone", not "remove colour".
+
+**Fix.** All five are now done — 1–4 in pass 1, 5 in pass 3.
+1. ✅ Give `ZoneMarathon` and `ZoneMax` genuinely distinct dark variants.
+2. ✅ Switch white-on-fill to black-on-fill for `Brand`, `ZoneTempo`, `ZoneEasy`,
    `Success`, `Warning` — or darken those fills for text-bearing surfaces.
-3. On the HUD, raise dimmed labels to ≥0.85 white and darken the gradient's upper
+3. ✅ On the HUD, raise dimmed labels to ≥0.85 white and darken the gradient's upper
    stop; the current top stop is the raw zone colour at full luminance.
-4. Add `contrast: high` variants for the brand and zone sets.
-5. Add `@Environment(\.accessibilityDifferentiateWithoutColor)` handling so the
+4. ✅ Add `contrast: high` variants for the brand and zone sets.
+5. ✅ Add `@Environment(\.accessibilityDifferentiateWithoutColor)` handling so the
    zone system carries a shape/label fallback, not colour alone.
 
 ---
@@ -317,6 +350,23 @@ nothing surfaces it. A runner under tree cover or between buildings sees a
 plausible-looking pace with no indication the signal is poor. A small
 accuracy indicator in the top bar would close it. (The top bar has room: the
 decorative "Lock" pill was removed there under N18.)
+✅ **FIXED** — `LocationQualityFilter.signalQuality(forHorizontalAccuracy:)` grades
+the same reading the accept/reject decision already uses into strong/fair/weak, the
+tracker publishes it as `gpsSignal` on *every* delivered fix (including the rejected
+ones — those are the ones worth knowing about), and `ActiveRunView` draws it as a
+three-bar glass pill in the space the Lock pill vacated. The fair/weak boundary is the
+filter's own accuracy ceiling, so "weak" means "fixes are being discarded and distance
+is being under-counted", not merely "imprecise" — and the weak state adds the words
+"Weak GPS", because it is the one state a runner can act on. Quality is carried by
+filled bar *count*, so it survives Differentiate Without Color (§3d) and a monochrome
+glance. Graded by accuracy alone, deliberately: staleness and out-of-order fixes
+describe the delivery path, not reception, and a runner cannot act on either. Covered
+by four tests in `LocationQualityFilterTests`.
+
+Still absent before the run starts: location updates only begin at `startWorkout`, so
+there is no "acquiring signal" state on the idle screen. Fixing that means starting
+the location manager earlier, which is a battery and permissions decision rather than
+a UI one.
 
 **5d. Hardcoded safe-area padding.** `ActiveRunView.swift:208` uses
 `.padding(.top, 56)` on a `VStack` that already respects the safe area, so the
@@ -381,9 +431,20 @@ those `try?`s are gone with the above; the pattern is otherwise untouched.
 | `scrollPosition` | 0 | | `containerRelativeFrame` | 0 |
 | `visualEffect` | 0 | | `presentationSizing` | 0 |
 
-🟠 **PARTIALLY FIXED** — `MainTabView.swift` now uses the `Tab` builder, and the
-hand-rolled `Color.mix` is gone in favour of the native perceptual one. Glass,
-`tabViewBottomAccessory` and the `GeometryReader` retirements are still open.
+🟠 **PARTIALLY FIXED** — `MainTabView.swift` now uses the `Tab` builder, the
+hand-rolled `Color.mix` is gone in favour of the native perceptual one, and the
+simulated glass is now real (pass 3). `tabViewBottomAccessory`, the Live Activity and
+the `GeometryReader` retirements are still open.
+
+On glass: all five hand-rolled surfaces in the run flow — the zone pill, the top-bar
+pills, the metric grid, the finish button and the guided-workout banner — dropped
+`.ultraThinMaterial` plus a hand-drawn `strokeBorder` for `.glassEffect(.regular, in:)`.
+That is the point of the change rather than a like-for-like swap: the material
+imitation is inert, ignoring Reduce Transparency and Increase Contrast, which matters
+most on exactly this screen (§3b). The finish button additionally takes
+`.regular.interactive()`, giving it the press response the simulation never had.
+`GlassEffectContainer` is deliberately not adopted yet — it earns its keep when glass
+elements sit close enough to blend and morph, and these are spread across the screen.
 
 The app pays the full cost of a 27.0 floor (excluding every device below it) and
 takes none of the benefit. Specifics worth acting on:
@@ -391,17 +452,20 @@ takes none of the benefit. Specifics worth acting on:
 - **`MainTabView.swift:6-27` uses the legacy `.tabItem` API.** The `Tab` builder
   has been the correct form since iOS 18. Current guidance is explicit that
   mixing or retaining `.tabItem` on modern targets is wrong.
-- **Glass is hand-rolled.** `ActiveRunView.swift:544-584` defines `glassPill` and
-  `glassControlButton` that simulate glass with `.ultraThinMaterial` plus a
-  manual `strokeBorder`. `.glassEffect(.regular, in: .capsule)` is the real
-  thing, and — relevant to §3 — it handles Reduce Transparency and contrast
-  adaptation automatically, which the hand-rolled version does not.
+- ~~**Glass is hand-rolled.**~~ ✅ Fixed in pass 3 — `glassPill`,
+  `glassControlButton`, the zone pill, the metric grid and `GuidedWorkoutBanner` all
+  use `.glassEffect` now. See the note above.
 - **`tabViewBottomAccessory` is tailor-made for this app.** A run in progress
   showing as a persistent accessory above the tab bar (the Now Playing pattern)
   would solve "I navigated away from my run" far better than a `fullScreenCover`.
 - **12 `GeometryReader`s** remain where `onGeometryChange`, `visualEffect` or
   `containerRelativeFrame` now apply. `GeometryReader` forces greedy sizing and
-  is the usual cause of surprising layout in `ScrollView`s.
+  is the usual cause of surprising layout in `ScrollView`s. Still open, and worth
+  doing per-site rather than in a sweep: nine of the twelve read a width to size a
+  progress bar, and the two obvious replacements each have a catch —
+  `containerRelativeFrame` measures the nearest scroll view or window rather than
+  the padded card the bar sits in, and `onGeometryChange` delivers the width *after*
+  layout, so a static bar would render at zero on its first frame.
 - **`Color.mix` is reimplemented.** `ActiveRunView.swift:712-728` hand-rolls
   colour mixing through `UIColor`, dropping alpha and blending naively in sRGB.
   `Color.mix(with:by:in:)` has been native since iOS 18 and blends correctly.
@@ -515,19 +579,28 @@ than fetching everything and filtering in `filteredWorkouts` (`:60`).
 
 **Tier 2 — the systemic typography fix** — ✅ **DONE**
 5. ✅ Migrate 296 fixed sizes onto `ds*`, add `@ScaledMetric`, clamp the two fixed grids (§2)
-6. ✅ Add a SwiftLint rule so it holds (`no_fixed_font_size`). The radius and
-   elevation scales (§1) are still unadopted and still unguarded.
+6. ✅ Add a SwiftLint rule so it holds (`no_fixed_font_size`).
 
-**Tier 3 — platform conformance**
-7. 🟠 `Tab` API ✅, native `Color.mix` ✅; `glassEffect` and the `GeometryReader`
+**Tier 3 — platform conformance** — ✅ **DONE** except the `GeometryReader`s
+7. 🟠 `Tab` API ✅, native `Color.mix` ✅, `glassEffect` ✅; the `GeometryReader`
    retirements still open (§7)
 8. ✅ `.searchable` + `.refreshable` on History (§8)
 9. ✅ Bound the three remaining unbounded queries (§9)
+9b. ✅ The radius and elevation scales adopted and guarded, `AppGlow` added (§1);
+   GPS quality surfaced (§5c); Differentiate Without Color handled (§3d)
 
-**Tier 4 — features the platform now expects**
-10. Live Activity / Dynamic Island for an in-progress run (§5b)
+**Tier 4 — features the platform now expects** — next up
+10. Live Activity / Dynamic Island for an in-progress run (§5b) — the largest of the
+    three: it needs a widget extension target in `project.yml`, which no other item
+    here has required
 11. Spoken split announcements (§4)
 12. `tabViewBottomAccessory` for the active run (§7)
+
+**Left over, smaller than a tier**
+13. The `GeometryReader` retirements (§7) and the spacing scale (§1)
+14. History's distance/date-range filter (§8)
+15. Merging onboarding steps 3 and 4, `.accessibilityChartDescriptor` for Audio
+    Graphs, and press feedback on the two primary CTAs (§10)
 
 ---
 

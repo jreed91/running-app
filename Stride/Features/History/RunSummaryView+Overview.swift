@@ -28,7 +28,7 @@ extension RunSummaryView {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
+            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
         .buttonStyle(.plain)
     }
@@ -41,7 +41,9 @@ extension RunSummaryView {
                 Circle()
                     .fill(workoutTone)
                     .frame(width: 8, height: 8)
-                    .shadow(color: workoutTone.opacity(0.35), radius: 0, x: 0, y: 0)
+                    // The tinted glow that used to sit here had `radius: 0` at zero
+                    // offset, so it drew the shape exactly behind itself and rendered
+                    // nothing. The stroke below is what actually halos the dot (U1).
                     .overlay(Circle().stroke(workoutTone.opacity(0.25), lineWidth: 6))
                 Text("\(displayType.localizedName) run")
                     .font(.dsCaption2.weight(.bold))
@@ -100,7 +102,7 @@ extension RunSummaryView {
     var routeMap: some View {
         Group {
             if workout.routeCoordinates.isEmpty {
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: AppRadius.md)
                     .fill(.surfaceSecondary)
                     .frame(height: 180)
                     .overlay {
@@ -118,11 +120,11 @@ extension RunSummaryView {
                         .font(.dsCaption2.weight(.semibold))
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: AppRadius.xs))
                         .padding(10)
                 }
                 .frame(height: 180)
-                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
             }
         }
     }
@@ -179,7 +181,7 @@ extension RunSummaryView {
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
         .gridCellColumns(colSpan ? 2 : 1)
         // One element per cell, or the grid reads as loose fragments with no pairing
         // between a number and the metric it belongs to (N18).
@@ -237,7 +239,7 @@ extension RunSummaryView {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
-                .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
+                .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
             }
         }
     }

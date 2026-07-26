@@ -27,7 +27,10 @@ extension RunSummaryView {
                 .foregroundStyle(active ? Color.brand : Color.secondary)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
-                .background(active ? Color.brand.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+                .background(
+                    active ? Color.brand.opacity(0.12) : Color.clear,
+                    in: RoundedRectangle(cornerRadius: AppRadius.xs)
+                )
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(active ? [.isButton, .isSelected] : .isButton)
@@ -62,7 +65,7 @@ extension RunSummaryView {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.xs))
     }
 
     func aiTone(_ raw: String) -> Color {

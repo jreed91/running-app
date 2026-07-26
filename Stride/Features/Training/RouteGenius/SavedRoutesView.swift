@@ -69,7 +69,7 @@ private struct SavedRouteRow: View {
         HStack(spacing: 14) {
             // Icon
             ZStack {
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: AppRadius.sm)
                     .fill(Color.brand.opacity(0.12))
                     .frame(width: 44, height: 44)
                 StrideIcon(name: route.routeType.strideIcon, size: 22, color: .brand, strokeWeight: 2.0)
@@ -127,12 +127,12 @@ struct SavedRouteDetailView: View {
                     DetailStat(label: "Type", value: route.routeType.localizedName)
                 }
                 .padding()
-                .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
+                .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
 
                 // Map
                 SavedRouteMapView(route: route)
                     .frame(height: 300)
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
 
                 // Turn-by-turn
                 if !route.steps.isEmpty {
@@ -160,7 +160,7 @@ struct SavedRouteDetailView: View {
                     }
                 }
             }
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
+            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
     }
 }

@@ -90,4 +90,60 @@ enum LocationQualityFilter {
 
     /// Whether the fix is good enough to append to the route and accumulate distance from.
     static func accepts(_ fix: Fix) -> Bool { rejection(for: fix) == nil }
+
+    // MARK: - Signal quality (U5c)
+
+    /// How good reception is right now, for the runner rather than for the log.
+    ///
+    /// The filter above already grades every fix and discards the bad ones, but that
+    /// verdict never left this file: under tree cover or between buildings the HUD
+    /// showed a plausible pace with no hint that the fixes behind it were being
+    /// thrown away. This is the same accuracy reading, expressed as something a
+    /// screen can display.
+    enum SignalQuality: String, Sendable, CaseIterable {
+        /// Fixes are precise enough to trust the pace between them.
+        case strong
+        /// Usable, but the live pace will wander.
+        case fair
+        /// At or past the accuracy ceiling — fixes are being discarded and distance
+        /// is being under-counted.
+        case weak
+
+        /// Filled bars out of three, so the indicator reads without colour (U3d).
+        var bars: Int {
+            switch self {
+            case .strong: return 3
+            case .fair:   return 2
+            case .weak:   return 1
+            }
+        }
+
+        /// Spoken by VoiceOver, so it is localized (unlike `rawValue`, which is
+        /// compared and logged).
+        var localizedName: String {
+            switch self {
+            case .strong:
+                return String(localized: "Strong", comment: "GPS signal quality")
+            case .fair:
+                return String(localized: "Fair", comment: "GPS signal quality")
+            case .weak:
+                return String(localized: "Weak", comment: "GPS signal quality")
+            }
+        }
+    }
+
+    /// Precise enough that the pace between two fixes is worth believing.
+    static let strongHorizontalAccuracyMeters: Double = 8
+
+    /// Grades reception from one fix's `horizontalAccuracy`, in metres.
+    ///
+    /// Deliberately graded from accuracy alone rather than from the rejection
+    /// reasons: staleness and out-of-order fixes say something about the delivery
+    /// path, not about reception, and a runner cannot act on either.
+    static func signalQuality(forHorizontalAccuracy accuracy: Double) -> SignalQuality {
+        guard accuracy >= 0, accuracy.isFinite else { return .weak }
+        if accuracy <= strongHorizontalAccuracyMeters { return .strong }
+        if accuracy <= maximumHorizontalAccuracyMeters { return .fair }
+        return .weak
+    }
 }

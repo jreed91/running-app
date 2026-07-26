@@ -14,10 +14,10 @@ extension RunSummaryView {
         } label: {
             HStack(spacing: 12) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: AppRadius.md)
                         .fill(.white)
                         .frame(width: 42, height: 42)
-                        .shadow(color: Color.brand.opacity(0.20), radius: 10, y: 4)
+                        .appGlow(.subtle, color: .brand)
                     if isLoadingAIInsight {
                         ProgressView()
                             .controlSize(.small)
@@ -78,9 +78,12 @@ extension RunSummaryView {
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 ),
-                in: RoundedRectangle(cornerRadius: 18)
+                in: RoundedRectangle(cornerRadius: AppRadius.lg)
             )
-            .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Color.brand.opacity(0.12), lineWidth: 0.5))
+            .overlay(
+                RoundedRectangle(cornerRadius: AppRadius.lg)
+                    .strokeBorder(Color.brand.opacity(0.12), lineWidth: 0.5)
+            )
         }
         .buttonStyle(.plain)
         .accessibilityLabel("AI Coach")

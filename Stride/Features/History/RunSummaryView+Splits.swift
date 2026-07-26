@@ -52,7 +52,7 @@ extension RunSummaryView {
                 Text(splitFootnote(metric)).font(.caption).foregroundStyle(.secondary)
             }
             .padding(16)
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
+            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
     }
 
@@ -97,7 +97,7 @@ extension RunSummaryView {
                         width: .ratio(0.62)
                     )
                     .foregroundStyle(tone)
-                    .cornerRadius(3)
+                    .cornerRadius(AppRadius.micro)
                 } else {
                     BarMark(
                         x: .value(splitLabelUpper, split.kilometer),
@@ -105,7 +105,7 @@ extension RunSummaryView {
                         width: .ratio(0.62)
                     )
                     .foregroundStyle(tone)
-                    .cornerRadius(3)
+                    .cornerRadius(AppRadius.micro)
                 }
             }
 
@@ -168,7 +168,7 @@ extension RunSummaryView {
             }
         }
         .padding(.horizontal, 8).padding(.vertical, 5)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: AppRadius.xs))
     }
 
     /// Faster than this run's average reads as a gain, slower as a caution, and anything
@@ -254,7 +254,7 @@ extension RunSummaryView {
                                 .font(.caption).bold()
                         }
                         .padding(.horizontal, 8).padding(.vertical, 5)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: AppRadius.xs))
                     }
             }
         }
@@ -295,7 +295,7 @@ extension RunSummaryView {
                                 .font(.caption).bold()
                         }
                         .padding(.horizontal, 8).padding(.vertical, 5)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: AppRadius.xs))
                     }
             }
         }
@@ -328,7 +328,7 @@ extension RunSummaryView {
             }
         }
         .padding(16)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     @ViewBuilder

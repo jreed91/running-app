@@ -78,7 +78,7 @@ extension RunSummaryView {
                     }
                 }
                 .padding(14)
-                .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
+                .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
             }
         } else if let avg = workout.averageHeartRate, avg >= 155 {
             HStack(spacing: 10) {
@@ -103,8 +103,11 @@ extension RunSummaryView {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
-            .background(Color.warning.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
-            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.warning.opacity(0.22), lineWidth: 0.5))
+            .background(Color.warning.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .overlay(
+                RoundedRectangle(cornerRadius: AppRadius.md)
+                    .strokeBorder(Color.warning.opacity(0.22), lineWidth: 0.5)
+            )
         }
     }
 

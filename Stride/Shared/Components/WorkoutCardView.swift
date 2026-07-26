@@ -51,7 +51,7 @@ struct WorkoutCardView: View {
             StrideIcon(name: .chevronRight, size: 12, color: Color.secondary.opacity(0.5), strokeWeight: 2)
         }
         .padding(16)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     private var typeIcon: some View {

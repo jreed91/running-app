@@ -69,7 +69,7 @@ struct RouteGeniusView: View {
             startPointPicker
         }
         .padding()
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     private var distanceField: some View {
@@ -90,7 +90,7 @@ struct RouteGeniusView: View {
                     .foregroundStyle(.secondary)
             }
             .padding()
-            .background(.background, in: RoundedRectangle(cornerRadius: 12))
+            .background(.background, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
     }
 
@@ -158,7 +158,7 @@ struct RouteGeniusView: View {
                 }
             }
             .padding(10)
-            .background(.background, in: RoundedRectangle(cornerRadius: 10))
+            .background(.background, in: RoundedRectangle(cornerRadius: AppRadius.sm))
 
             if !viewModel.addressResults.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
@@ -183,8 +183,8 @@ struct RouteGeniusView: View {
                         }
                     }
                 }
-                .background(.background, in: RoundedRectangle(cornerRadius: 10))
-                .overlay(RoundedRectangle(cornerRadius: 10).stroke(.separator, lineWidth: 0.5))
+                .background(.background, in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).stroke(.separator, lineWidth: 0.5))
             }
 
             if let selected = viewModel.selectedMapItem {
@@ -233,7 +233,7 @@ struct RouteGeniusView: View {
             .padding()
             .background(
                 viewModel.canGenerate ? Color.brand : Color.secondary.opacity(0.3),
-                in: RoundedRectangle(cornerRadius: 14)
+                in: RoundedRectangle(cornerRadius: AppRadius.md)
             )
             .foregroundStyle(viewModel.canGenerate ? .white : .secondary)
         }
@@ -250,7 +250,7 @@ struct RouteGeniusView: View {
         }
         .frame(maxWidth: .infinity)
         .padding()
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     // MARK: Error card
@@ -262,7 +262,7 @@ struct RouteGeniusView: View {
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.warning.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+        .background(.warning.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
     // MARK: Route options
@@ -304,7 +304,7 @@ struct RouteGeniusView: View {
                 startCoordinate: startCoord
             )
             .frame(height: 280)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
             .transition(.opacity.combined(with: .scale(scale: 0.97)))
 
             Button {
@@ -315,7 +315,7 @@ struct RouteGeniusView: View {
                     .font(.bodyStrong)
                     .frame(maxWidth: .infinity)
                     .padding()
-                    .background(.brand, in: RoundedRectangle(cornerRadius: 14))
+                    .background(.brand, in: RoundedRectangle(cornerRadius: AppRadius.md))
                     .foregroundStyle(.onFill)
             }
 
@@ -332,7 +332,7 @@ struct RouteGeniusView: View {
         NavigationStack {
             VStack(spacing: 20) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: AppRadius.md)
                         .fill(Color.brand.opacity(0.12))
                         .frame(width: 64, height: 64)
                     StrideIcon(name: .flag, size: 28, color: .brand, strokeWeight: 2.0)
@@ -353,7 +353,7 @@ struct RouteGeniusView: View {
                         .font(.bodyStrong)
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(.brand, in: RoundedRectangle(cornerRadius: 14))
+                        .background(.brand, in: RoundedRectangle(cornerRadius: AppRadius.md))
                         .foregroundStyle(.onFill)
                         .padding(.horizontal)
                 }
@@ -405,7 +405,7 @@ private struct RouteOptionCard: View {
                     startCoordinate: startCoord
                 )
                 .frame(height: 120)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.sm))
                 .allowsHitTesting(false)
 
                 // Stats
@@ -421,10 +421,10 @@ private struct RouteOptionCard: View {
                 isSelected
                     ? Color.brand.opacity(0.08)
                     : Color.surfaceSecondary,
-                in: RoundedRectangle(cornerRadius: 14)
+                in: RoundedRectangle(cornerRadius: AppRadius.md)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: AppRadius.md)
                     .stroke(isSelected ? Color.brand : Color.clear, lineWidth: 2)
             )
             .animation(.easeInOut(duration: 0.2), value: isSelected)
@@ -451,7 +451,7 @@ private struct RouteTypeButton: View {
             .padding(.vertical, 12)
             .background(
                 isSelected ? Color.brand : Color.surfaceSecondary,
-                in: RoundedRectangle(cornerRadius: 12)
+                in: RoundedRectangle(cornerRadius: AppRadius.md)
             )
             .foregroundStyle(isSelected ? .white : .primary)
             .animation(.easeInOut(duration: 0.15), value: isSelected)
@@ -497,7 +497,7 @@ private struct TurnByTurnList: View {
                     }
                 }
             }
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
+            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
     }
 }

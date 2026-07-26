@@ -34,7 +34,7 @@ extension RunSummaryView {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Coach analysis, still writing")
     }
@@ -53,7 +53,7 @@ extension RunSummaryView {
                 AIInsightSkeletonShape().frame(maxWidth: 260, minHeight: 14, maxHeight: 14)
             }
             .padding()
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
+            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
 
             // Action Plan skeleton
             VStack(alignment: .leading, spacing: 8) {
@@ -67,7 +67,7 @@ extension RunSummaryView {
                         }
                     }
                     .padding(10)
-                    .background(.surfaceTertiary, in: RoundedRectangle(cornerRadius: 10))
+                    .background(.surfaceTertiary, in: RoundedRectangle(cornerRadius: AppRadius.sm))
                 }
             }
 
@@ -78,7 +78,7 @@ extension RunSummaryView {
                 AIInsightSkeletonShape().frame(maxWidth: 200, minHeight: 11, maxHeight: 11)
             }
             .padding()
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
+            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
     }
 
@@ -86,7 +86,7 @@ extension RunSummaryView {
         @State private var opacity: Double = 0.12
 
         var body: some View {
-            RoundedRectangle(cornerRadius: 4)
+            RoundedRectangle(cornerRadius: AppRadius.micro)
                 .fill(Color.secondary.opacity(opacity))
                 .onAppear {
                     withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {

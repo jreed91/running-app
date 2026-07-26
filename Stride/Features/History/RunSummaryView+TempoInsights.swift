@@ -27,7 +27,7 @@ extension RunSummaryView {
                     }
                 }
                 .padding(14)
-                .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14))
+                .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
 
                 if insights.recentTempoCount == 0 {
                     Text("This is your first tempo run — keep it up to track pace trends.")

@@ -131,10 +131,10 @@ struct SettingsView: View {
                 colors: [Color.brand.opacity(0.1), Color.brand.opacity(0.03)],
                 startPoint: .topLeading, endPoint: .bottomTrailing
             ),
-            in: RoundedRectangle(cornerRadius: 20)
+            in: RoundedRectangle(cornerRadius: AppRadius.lg)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 20)
+            RoundedRectangle(cornerRadius: AppRadius.lg)
                 .strokeBorder(Color.brand.opacity(0.15), lineWidth: 0.5)
         )
     }
@@ -167,7 +167,7 @@ struct SettingsView: View {
                     }
                     .signInWithAppleButtonStyle(.black)
                     .frame(height: 44)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
                     .padding(.horizontal, 16)
                     .padding(.bottom, 12)
                 }
@@ -192,7 +192,7 @@ struct SettingsView: View {
                         .padding(.vertical, 12)
                         .background(
                             appSettings.unitPreference == unit ? Color.brand : Color.clear,
-                            in: RoundedRectangle(cornerRadius: 10)
+                            in: RoundedRectangle(cornerRadius: AppRadius.sm)
                         )
                         .foregroundStyle(appSettings.unitPreference == unit ? .white : .secondary)
                         .animation(.easeInOut(duration: 0.15), value: appSettings.unitPreference)
@@ -201,7 +201,7 @@ struct SettingsView: View {
                 }
             }
             .padding(4)
-            .background(Color.surfaceTertiary, in: RoundedRectangle(cornerRadius: 14))
+            .background(Color.surfaceTertiary, in: RoundedRectangle(cornerRadius: AppRadius.md))
             .padding(16)
         }
     }
@@ -526,9 +526,9 @@ struct SettingsView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .background(Color.destructive.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
+            .background(Color.destructive.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
             .overlay(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: AppRadius.md)
                     .strokeBorder(Color.destructive.opacity(0.2), lineWidth: 0.5)
             )
         }
@@ -640,7 +640,7 @@ struct SettingsView: View {
             VStack(spacing: 0) {
                 content()
             }
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
+            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
     }
 
@@ -652,7 +652,7 @@ struct SettingsView: View {
     ) -> some View {
         HStack(spacing: 14) {
             ZStack {
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: AppRadius.xs)
                     .fill(iconColor.opacity(0.12))
                     .frame(width: 32, height: 32)
                 StrideIcon(name: icon, size: 16, color: iconColor, strokeWeight: 2.0)

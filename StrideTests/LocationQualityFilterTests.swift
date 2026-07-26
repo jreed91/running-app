@@ -101,4 +101,45 @@ struct LocationQualityFilterTests {
                 == .invalidAccuracy
         )
     }
+
+    // MARK: - Signal quality (U5c)
+
+    @Test("Signal quality grades from the horizontal accuracy reading")
+    func signalQualityGrades() {
+        #expect(LocationQualityFilter.signalQuality(forHorizontalAccuracy: 0) == .strong)
+        #expect(LocationQualityFilter.signalQuality(forHorizontalAccuracy: 5) == .strong)
+        #expect(LocationQualityFilter.signalQuality(forHorizontalAccuracy: 9) == .fair)
+        #expect(LocationQualityFilter.signalQuality(forHorizontalAccuracy: 40) == .weak)
+    }
+
+    @Test("The grade boundaries are inclusive, and meet the filter's own ceiling")
+    func signalQualityBoundaries() {
+        let strongCeiling = LocationQualityFilter.strongHorizontalAccuracyMeters
+        let acceptCeiling = LocationQualityFilter.maximumHorizontalAccuracyMeters
+        #expect(LocationQualityFilter.signalQuality(forHorizontalAccuracy: strongCeiling) == .strong)
+        #expect(LocationQualityFilter.signalQuality(forHorizontalAccuracy: strongCeiling.nextUp) == .fair)
+        // The fair/weak boundary is the same reading that starts rejecting fixes, so
+        // "weak" means "distance is being under-counted", not merely "imprecise".
+        #expect(LocationQualityFilter.signalQuality(forHorizontalAccuracy: acceptCeiling) == .fair)
+        #expect(LocationQualityFilter.accepts(fix(accuracy: acceptCeiling)))
+        #expect(LocationQualityFilter.signalQuality(forHorizontalAccuracy: acceptCeiling.nextUp) == .weak)
+        #expect(!LocationQualityFilter.accepts(fix(accuracy: acceptCeiling.nextUp)))
+    }
+
+    @Test("An unusable reading is weak, not strong")
+    func invalidAccuracyIsWeak() {
+        // `horizontalAccuracy` is negative when Core Location cannot fix the position
+        // at all. Grading that as 0 metres would have shown three bars for no signal.
+        #expect(LocationQualityFilter.signalQuality(forHorizontalAccuracy: -1) == .weak)
+        #expect(LocationQualityFilter.signalQuality(forHorizontalAccuracy: .nan) == .weak)
+        #expect(LocationQualityFilter.signalQuality(forHorizontalAccuracy: .infinity) == .weak)
+    }
+
+    @Test("Each grade fills a distinct number of bars, so the indicator reads without colour")
+    func signalQualityBarsAreDistinct() {
+        let bars = LocationQualityFilter.SignalQuality.allCases.map(\.bars)
+        #expect(Set(bars).count == LocationQualityFilter.SignalQuality.allCases.count)
+        #expect(bars.allSatisfy { (1...3).contains($0) })
+        #expect(LocationQualityFilter.SignalQuality.strong.bars > LocationQualityFilter.SignalQuality.weak.bars)
+    }
 }
