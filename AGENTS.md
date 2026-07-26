@@ -187,6 +187,12 @@ Strict concurrency is enabled. Key patterns:
   must not move with the device language.
 - Do not introduce new third-party packages without an explicit reason and a `project.yml` update.
 - For frontend/UI work, match the existing theme primitives in `Stride/Shared/Theme/` and reusable components in `Stride/Shared/Components/`.
+- **Text on a solid `Color.brand` fill uses `Color.onBrand`, never `.white`** — white
+  on that fill measures 2.84:1, below even WCAG's large-text bar. Decorative brand
+  fills that carry no text are unaffected. Likewise, each of the six pace-zone
+  colorsets needs its own *light and dark* value: dark mode once rendered the six as
+  four. `StrideTests/PaletteContrastTests.swift` enforces both and will fail the build
+  if a colorset edit reintroduces either.
 
 ## Analysis Docs
 
@@ -195,7 +201,7 @@ issue is usually already written up, with a recommended fix:
 
 | Doc | Covers |
 | --- | --- |
-| [`docs/UX_ANALYSIS_2026-07-26.md`](docs/UX_ANALYSIS_2026-07-26.md) | UX and SwiftUI platform conformance (third pass): design-token adoption, Dynamic Type, contrast, haptics, iOS 26+ API. Systemic gaps rather than per-screen bugs. |
+| [`docs/UX_ANALYSIS_2026-07-26.md`](docs/UX_ANALYSIS_2026-07-26.md) | UX and SwiftUI platform conformance (third pass): design-token adoption, Dynamic Type, contrast, haptics, iOS 26+ API. Systemic gaps rather than per-screen bugs. **Tier 1 is done**; Tiers 2–4 (the `ds*` type migration, iOS 26+ API, History search/refresh, Live Activity) are the open work. |
 | [`docs/APP_ANALYSIS_2026-07-24.md`](docs/APP_ANALYSIS_2026-07-24.md) | Current open bugs, UX issues, and cleanup (second pass). Start here. |
 | [`docs/APP_ANALYSIS_2026-07.md`](docs/APP_ANALYSIS_2026-07.md) | First-pass audit; all numbered bugs fixed. Its design (§5) and coverage (§8) sections are still live. |
 | [`docs/FEATURE_IMPROVEMENTS_2026-07.md`](docs/FEATURE_IMPROVEMENTS_2026-07.md) | Product/feature roadmap with shipped-status tracking. |

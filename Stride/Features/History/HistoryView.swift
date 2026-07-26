@@ -110,6 +110,17 @@ private struct HistoryEntryList: View {
     @Query private var runs: [RunWorkout]
     @Query private var strengthWorkouts: [StrengthWorkout]
 
+    /// Rows a swipe has asked to delete, held until the runner confirms.
+    ///
+    /// Swiping used to delete immediately while the *same* delete reached from a run's
+    /// summary asked first — and the swipe is the less recoverable of the two, because
+    /// deleting a run also writes a `DeletedWorkout` tombstone so the next HealthKit
+    /// sync will not bring it back (§6).
+    @State private var pendingDeletion: [HistoryEntry]?
+    /// Set when a delete fails. The repository call was `try?`, so a failure left the
+    /// row on screen with nothing said about why.
+    @State private var deleteErrorMessage: String?
+
     init(limit: Int, isSyncing: Bool, loadMore: @escaping () -> Void) {
         self.limit = limit
         self.isSyncing = isSyncing
@@ -170,6 +181,40 @@ private struct HistoryEntryList: View {
                 )
             }
         }
+        .confirmationDialog(
+            deletionTitle,
+            isPresented: Binding(
+                get: { pendingDeletion != nil },
+                set: { if !$0 { pendingDeletion = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                if let entries = pendingDeletion { performDeletion(entries) }
+                pendingDeletion = nil
+            }
+            Button("Cancel", role: .cancel) { pendingDeletion = nil }
+        } message: {
+            Text("This can't be undone. Deleted runs won't come back on the next Apple Health sync.")
+        }
+        .alert(
+            "Couldn't delete",
+            isPresented: Binding(
+                get: { deleteErrorMessage != nil },
+                set: { if !$0 { deleteErrorMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { deleteErrorMessage = nil }
+        } message: {
+            Text(deleteErrorMessage ?? "")
+        }
+    }
+
+    private var deletionTitle: String {
+        let count = pendingDeletion?.count ?? 0
+        return count > 1
+            ? String(localized: "Delete \(count) workouts?", comment: "Swipe-delete confirmation, multiple rows")
+            : String(localized: "Delete this workout?", comment: "Swipe-delete confirmation, one row")
     }
 
     @ViewBuilder
@@ -195,19 +240,54 @@ private struct HistoryEntryList: View {
 
     // MARK: Delete
 
+    /// Resolves the swiped offsets to entries and asks before touching the store.
+    ///
+    /// Snapshotting here matters twice over: `displayedEntries` is recomputed on every
+    /// access, so offsets held across the confirmation dialog would drift if the list
+    /// changed underneath it (a HealthKit sync landing mid-swipe would be enough).
     private func deleteEntries(at offsets: IndexSet) {
-        // Snapshot the entries before deleting: `displayedEntries` is recomputed on every
-        // access, so mutating the store mid-loop would shift the offsets we're iterating.
-        // All invariant repair (tombstones, scheduled-day reset) lives in the repository.
         let entries = displayedEntries
-        for index in offsets where entries.indices.contains(index) {
-            switch entries[index] {
-            case .run(let workout):
-                try? container.workoutRepository.delete(workout)
-            case .strength(let workout):
-                try? container.workoutRepository.delete(workout)
+        let selected: [HistoryEntry] = offsets.compactMap {
+            entries.indices.contains($0) ? entries[$0] : nil
+        }
+        guard !selected.isEmpty else { return }
+        pendingDeletion = selected
+    }
+
+    /// Performs a confirmed delete. All invariant repair (tombstones, scheduled-day
+    /// reset) lives in the repository; this only reports what it couldn't do.
+    private func performDeletion(_ entries: [HistoryEntry]) {
+        var failures = 0
+        var lastError: Error?
+        for entry in entries {
+            do {
+                switch entry {
+                case .run(let workout):
+                    try container.workoutRepository.delete(workout)
+                case .strength(let workout):
+                    try container.workoutRepository.delete(workout)
+                }
+            } catch {
+                failures += 1
+                lastError = error
+                AppLogger.log(
+                    "Failed to delete history entry \(entry.id): \(error.localizedDescription)",
+                    label: "History",
+                    level: .error
+                )
             }
         }
+        guard failures > 0 else { return }
+        let reason = lastError?.localizedDescription ?? ""
+        deleteErrorMessage = failures == 1
+            ? String(
+                localized: "That workout is still on your device. \(reason)",
+                comment: "Delete failure, one row"
+            )
+            : String(
+                localized: "\(failures) workouts are still on your device. \(reason)",
+                comment: "Delete failure, multiple rows"
+            )
     }
 }
 

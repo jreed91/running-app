@@ -25,6 +25,9 @@ struct StrengthActiveView: View {
     @State private var restTimeRemaining: Int = 0
     @State private var restDeadline: Date?
     @State private var restTimerTask: Task<Void, Never>?
+    /// Bumped once per rest countdown that reaches zero on its own, so the expiry
+    /// haptic fires for that and not for "Skip Rest" (§4).
+    @State private var restExpiryCount = 0
     private let defaultRestSeconds = 60
 
     // Session timing
@@ -93,6 +96,16 @@ struct StrengthActiveView: View {
                  : "No sets were logged — this workout won't be saved and the day stays open.")
         }
         .onDisappear { endRestTimer() }
+        // A logged set is a hands-busy confirmation — the runner is mid-rack, often
+        // not looking at the phone (§4). Guarded on an increase so the reset that
+        // follows a discard stays silent.
+        .sensoryFeedback(trigger: completedSets.count) { old, new in
+            guard new > old else { return nil }
+            return SensoryFeedback.selection
+        }
+        // Rest expiry is the one event here that arrives on its own schedule, so it
+        // is the one that most needs a signal that isn't on screen.
+        .sensoryFeedback(.success, trigger: restExpiryCount)
     }
 
     // MARK: - Header
@@ -518,7 +531,13 @@ struct StrengthActiveView: View {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
                 guard !Task.isCancelled else { return }
             }
-            if restTimerActive { endRestTimer() }
+            if restTimerActive {
+                // Only a countdown that ran out earns the "rest is over" haptic —
+                // `endRestTimer()` is also how "Skip Rest" and leaving the screen
+                // stop the clock, and neither is a milestone.
+                restExpiryCount += 1
+                endRestTimer()
+            }
         }
     }
 

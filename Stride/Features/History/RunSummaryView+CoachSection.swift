@@ -36,12 +36,14 @@ extension RunSummaryView {
                     } label: {
                         HStack(spacing: 5) {
                             SparkleShape()
-                                .fill(.white)
+                                .fill(.onBrand)
                                 .frame(width: 11, height: 11)
                             Text(aiInsight == nil ? "Load" : "Refresh")
                                 .font(.system(size: 12, weight: .bold))
                         }
-                        .foregroundStyle(.white)
+                        // 12pt bold is body-weight text for contrast purposes, so this
+                        // needed 4.5:1 and white on `Brand` gave 2.84:1 (§3a).
+                        .foregroundStyle(.onBrand)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                         .background(Color.brand, in: Capsule())
@@ -162,7 +164,7 @@ extension RunSummaryView {
                     Spacer()
                     Image(systemName: "arrow.up")
                         .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.onBrand)
                         .frame(width: 30, height: 30)
                         .background(Color.brand, in: Circle())
                 }

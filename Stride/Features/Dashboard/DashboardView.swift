@@ -567,14 +567,16 @@ struct DashboardView: View {
             }
         } label: {
             HStack(spacing: 10) {
-                StrideIcon(name: .play, size: 18, color: .white, strokeWeight: 2.2)
+                StrideIcon(name: .play, size: 18, color: .onBrand, strokeWeight: 2.2)
                 Text(startButtonTitle(for: workout))
                     .font(.system(size: 17, weight: .bold))
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
         }
-        .foregroundStyle(.white)
+        // White on `Brand` is 2.84:1 — below WCAG's large-text floor on the app's
+        // most-tapped button. Near-black on the same fill is 7.4:1.
+        .foregroundStyle(.onBrand)
         .background(
             RoundedRectangle(cornerRadius: 18)
                 .fill(Color.brand)
@@ -674,14 +676,14 @@ struct DashboardView: View {
             showActiveRun = true
         } label: {
             HStack(spacing: 10) {
-                StrideIcon(name: .run, size: 20, color: .white, strokeWeight: 2.0)
+                StrideIcon(name: .run, size: 20, color: .onBrand, strokeWeight: 2.0)
                 Text("Start a Free Run")
                     .font(.system(size: 17, weight: .bold))
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(.onBrand)
         .accessibilityIdentifier("dashboard.startFreeRun")
         .background(
             RoundedRectangle(cornerRadius: 18)

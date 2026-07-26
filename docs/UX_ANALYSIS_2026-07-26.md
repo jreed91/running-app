@@ -20,11 +20,13 @@ ratios are computed from `Stride/Resources/Assets.xcassets`, not eyeballed.
 | Information architecture | 🟢 Good | Tab split is sensible; empty states are specific, not generic |
 | Design-system adoption | 🔴 Failing | Tokens exist and are ~unused; 3 of 5 scales are dead code |
 | Dynamic Type | 🔴 Failing | 296 fixed font sizes; text does not scale app-wide |
-| Colour contrast | 🔴 Failing | Primary CTA and the entire run HUD fail WCAG AA |
-| Haptics | 🔴 Absent | Zero feedback in a heads-down, in-motion app |
+| Colour contrast | 🟠 Partly fixed | Zone collisions, CTAs and the HUD are fixed; no high-contrast variants yet (§3d) |
+| Haptics | 🟢 Fixed | `.sensoryFeedback` on run, guided-segment and strength events (§4) |
 | iOS 26/27 API adoption | 🔴 Absent | Targets iOS 27, uses no API newer than iOS 17 |
-| Destructive-action safety | 🟠 Inconsistent | Same operation confirms in one place, not another |
+| Destructive-action safety | 🟢 Fixed | Both swipe paths confirm, and neither swallows its error (§6) |
 | History discoverability | 🟠 Thin | No search, no filter, no manual refresh |
+
+**Tier 1 of the work order below is complete.** Fixed items are marked in place.
 
 ---
 
@@ -93,9 +95,10 @@ Concrete consequences:
   are `.font(.system(size: 17, weight: .bold))`
   (`DashboardView.swift:572, 679`). A user at AX5 gets the same 17pt label as a
   user at the default size.
-- **9pt labels exist.** `ActiveRunView.swift:438, 462` label every metric cell in
-  the run HUD at 9pt. Apple's guidance floor is 11pt, and this is the screen read
-  at arm's length, in motion, outdoors.
+- **9pt labels exist.** ✅ Fixed in the run HUD and `GuidedWorkoutBanner` as part
+  of §3b — every metric-cell label is 11pt, Apple's floor. They are still *fixed*
+  11pt rather than a `ds*` token, so this is a legibility fix, not a Dynamic Type
+  one; the migration below still owns them.
 - **`dynamicTypeSize` is never used** — 0 occurrences. So there is not even a
   deliberate clamp; scaling is simply absent.
 - **`@ScaledMetric` is never used** — 0 occurrences. Icon sizes, circle diameters
@@ -121,7 +124,7 @@ sizes that sit beside scaling text.
 Computed from the asset catalog. WCAG AA needs **4.5:1** for body text, **3.0:1**
 for large text (≥18pt, or ≥14pt bold).
 
-### 3a. White-on-brand — the app's primary CTA
+### 3a. White-on-brand — the app's primary CTA ✅ FIXED
 
 | Fill | Mode | White text | Verdict |
 | --- | --- | --- | --- |
@@ -139,7 +142,16 @@ palette is a light/vivid palette being used as if it were dark.
 `DashboardView.swift:577` and `:684` put white 17pt-bold on `Color.brand` — the
 two most-tapped buttons in the app, at 2.84:1.
 
-### 3b. The Active Run HUD is the worst offender
+**✅ FIXED.** `Color.onBrand` (`AppColors.swift`, backed by a new `OnBrand`
+colorset) is the near-black foreground for anything sitting on a solid `brand`
+fill — 7.4:1 where white was 2.84:1. Applied to both Dashboard CTAs, the four
+onboarding primary CTAs (`OnboardingSubviews.swift`), and the coach section's
+Load/Refresh chip and ask-arrow (`RunSummaryView+CoachSection.swift`). Decorative
+brand fills that carry no text (progress bars, dots, rings) are unchanged.
+`PaletteContrastTests` asserts the ratio in both appearances, and asserts that
+white still fails — so the token can't quietly become redundant.
+
+### 3b. The Active Run HUD is the worst offender ✅ FIXED
 
 The HUD dims white to 55–85% over a saturated zone-coloured gradient
 (`ActiveRunView.swift:435, 440, 464, 308, 272`):
@@ -157,7 +169,27 @@ Nothing on that screen except the hero pace clears 4.5:1, and the metric labels
 sit at 1.47–2.26:1. In direct sunlight — the actual usage condition — these are
 unreadable. This is the single highest-impact accessibility fix in the app.
 
-### 3c. Two pace zones collapse in dark mode 🔴
+**✅ FIXED** in `ActiveRunView.swift`, from both directions at once — neither
+alone was enough:
+
+- Every radial stop is pulled toward black (0.28 / 0.50 / 0.72, was 0 / 0.25 /
+  0.55). The top stop was the raw zone colour at full luminance. 0.28 is a floor
+  rather than a taste call: it is where the brightest zone (`ZoneTempo`) clears
+  4.5:1 for both the full-white and the 92%-white text on the screen.
+- A flat `black.opacity(0.18)` scrim sits under all content, because the radial
+  stops can't hold a ratio near the centre — where the hero pace and zone pill are.
+- The dimmed labels are undimmed: metric labels 55% → 100%, units and the pace-meter
+  scale 65% → 92%, the pace caption 85% → 95%. `GuidedWorkoutBanner` got the same
+  treatment (55–90% → 85–95%).
+- The 9pt metric labels are 11pt, Apple's floor, with `minimumScaleFactor(0.8)` so
+  "HEART RATE" still fits the three-column grid.
+
+Measured over the darkened backdrop, the metric labels go from 1.47–2.26:1 to
+5.37–11.01:1, and the 92%-white units and scale labels land at 4.82–9.40:1. Every
+element on the screen now clears AA on every zone, worst case included. The zone
+hue is still unmistakable at 72% luminance.
+
+### 3c. Two pace zones collapse in dark mode ✅ FIXED
 
 Duplicate hex values in the catalog:
 
@@ -174,7 +206,24 @@ from a marathon-pace segment, or an interval from a max effort.
 (`Destructive`/`ZoneInterval` and `Warning`/`ZoneTempo` also share values, but
 those are semantic aliases that never co-occur, so they're harmless.)
 
-### 3d. No high-contrast variants
+**✅ FIXED** in the asset catalog:
+
+| Colorset | Was (dark) | Now (dark) |
+| --- | --- | --- |
+| `ZoneEasy` | #40C8E0 | #64D2FF — sky blue, matching its own light hue |
+| `ZoneMarathon` | #40C8E0 | #3ADBC8 — teal, leaning green away from easy |
+| `ZoneMax` | #FF453A | #E01030 — deep red, distinct from interval's orange-red |
+
+`ZoneMarathon`'s *light* value moved too (#30B0C7 → #17BFB0): at 0.12 apart in
+sRGB it was the next collision waiting to happen, close enough to `ZoneEasy` that
+fixing only the dark pair would have left the same complaint in the other mode.
+
+`PaletteContrastTests.zonesAreDistinctInBothAppearances` now checks all fifteen
+pairs in both appearances against a 0.20 separation floor, resolved through
+`UITraitCollection` rather than read from the JSON. The closest surviving pair is
+`ZoneInterval`/`ZoneMax` in dark at ≈0.24.
+
+### 3d. No high-contrast variants 🔴 still open
 
 No colorset defines a `contrast: high` appearance, and
 `\.colorSchemeContrast` / `\.accessibilityDifferentiateWithoutColor` appear
@@ -182,18 +231,18 @@ No colorset defines a `contrast: high` appearance, and
 nothing in Stride.
 
 **Fix.**
-1. Give `ZoneMarathon` and `ZoneMax` genuinely distinct dark variants.
-2. Switch white-on-fill to black-on-fill for `Brand`, `ZoneTempo`, `ZoneEasy`,
-   `Success`, `Warning` — or darken those fills for text-bearing surfaces.
-3. On the HUD, raise dimmed labels to ≥0.85 white and darken the gradient's upper
-   stop; the current top stop is the raw zone colour at full luminance.
-4. Add `contrast: high` variants for the brand and zone sets.
-5. Add `@Environment(\.accessibilityDifferentiateWithoutColor)` handling so the
-   zone system carries a shape/label fallback, not colour alone.
+1. ✅ Give `ZoneMarathon` and `ZoneMax` genuinely distinct dark variants.
+2. ✅ Switch white-on-fill to black-on-fill for `Brand` — via `Color.onBrand`.
+   `ZoneTempo`/`ZoneEasy`/`Success`/`Warning` are **still open**: they carry white
+   text on the zone chips and status pills, and want the same token treatment.
+3. ✅ On the HUD, raise dimmed labels and darken the gradient's upper stop.
+4. **Still open.** Add `contrast: high` variants for the brand and zone sets.
+5. **Still open.** Add `@Environment(\.accessibilityDifferentiateWithoutColor)`
+   handling so the zone system carries a shape/label fallback, not colour alone.
 
 ---
 
-## 4. Zero haptics in a heads-down app 🔴
+## 4. Zero haptics in a heads-down app ✅ FIXED
 
 `sensoryFeedback`, `UIImpactFeedbackGenerator`, `UINotificationFeedbackGenerator`,
 `CoreHaptics` — **0 occurrences, all of them.**
@@ -217,8 +266,25 @@ The guided-workout case is the most serious: `GuidedWorkoutEngine` steps a runne
 through structured intervals, and the only signal that a segment changed is a
 banner they'd have to be watching to see.
 
-**Fix.** Use the modern declarative API, per current guidance:
-`.sensoryFeedback(.impact, trigger: tracker.trackingState)`. No UIKit generators.
+**✅ FIXED** with the declarative API throughout — no UIKit generators:
+
+| Event | Where | Feedback |
+| --- | --- | --- |
+| Run start | `ActiveRunView` | `.impact(weight: .heavy)` |
+| Pause / resume | `ActiveRunView` | `.selection` |
+| Run saved | `ActiveRunView` | `.success` |
+| Save failed | `ActiveRunView` | `.error` |
+| Split / km milestone | `ActiveRunView` | `.impact(weight: .light)` |
+| Guided segment change | `GuidedWorkoutBanner` | `.impact` |
+| Set logged | `StrengthActiveView` | `.selection` |
+| Rest countdown expiry | `StrengthActiveView` | `.success` |
+
+Three of these needed a trigger that isn't the obvious one, because the obvious
+one fires on the wrong events too: the tracker reaches `.finished` on a *discard*
+as well as a save (so a saved run bumps its own `saveSuccessCount`), splits reset
+to zero when a new run is prepared (so the trigger fires only on an increase), and
+`endRestTimer()` is how "Skip Rest" stops the clock as well as expiry (so expiry
+bumps `restExpiryCount`).
 
 **Related:** there is also no **audio** channel — no `AVSpeechSynthesizer`, no
 `AVAudioSession`. Spoken split announcements ("kilometre 5, 4:32, on pace") are
@@ -231,12 +297,13 @@ existing `SpokenMetric` formatting.
 
 Beyond haptics, three absences stand out:
 
-**5a. The screen sleeps mid-run.** `isIdleTimerDisabled` appears **0 times**. On
-default settings the display sleeps after 30 seconds, so the HUD — hero pace,
-zone colour, pace meter, guided-workout banner — goes black while the runner is
-running. Everything the screen is for stops working almost immediately.
-*Fix:* set `UIApplication.shared.isIdleTimerDisabled = true` while
-`trackingState` is `.active`/`.paused`, and clear it on finish/discard.
+**5a. The screen sleeps mid-run.** ✅ **FIXED.** `isIdleTimerDisabled` appeared
+**0 times**. On default settings the display sleeps after 30 seconds, so the HUD —
+hero pace, zone colour, pace meter, guided-workout banner — went black while the
+runner was running. Everything the screen is for stopped working almost
+immediately. `ActiveRunView` now holds the timer while `trackingState` is
+`.active`/`.paused` and releases it in `onDisappear`, so leaving by any route
+(finish, discard, swipe) hands it back.
 
 **5b. No Live Activity.** `ActivityKit`, `WidgetKit`, `DynamicIsland` — **0
 occurrences**; `project.yml` declares no widget extension. On an iOS 27 target,
@@ -251,23 +318,24 @@ plausible-looking pace with no indication the signal is poor. A small
 accuracy indicator in the top bar would close it. (The top bar has room: the
 decorative "Lock" pill was removed there under N18.)
 
-**5d. Hardcoded safe-area padding.** `ActiveRunView.swift:208` uses
-`.padding(.top, 56)` on a `VStack` that already respects the safe area, so the
-top bar sits ~56pt below the inset on every device regardless of hardware. Use
-the safe area or `safeAreaPadding`.
+**5d. Hardcoded safe-area padding.** ✅ **FIXED.** `ActiveRunView`'s top bar used
+`.padding(.top, 56)` on a `VStack` that already respects the safe area — only the
+gradient layers behind it opt out — so the bar sat ~56pt below the inset on every
+device regardless of hardware. Now `.padding(.top, 8)`, ordinary spacing under the
+inset.
 
 ---
 
-## 6. Destructive actions are inconsistently guarded 🟠
+## 6. Destructive actions are inconsistently guarded ✅ FIXED
 
 The same operation asks for confirmation in one place and not in another:
 
 | Action | Confirmed? | Site |
 | --- | --- | --- |
 | Delete a run, from its summary | ✅ dialog | `RunSummaryView.swift:344` |
-| Delete a run, by swipe in History | ❌ **none** | `HistoryView.swift:153` |
+| Delete a run, by swipe in History | ✅ dialog | `HistoryView.swift` — was none |
 | Delete a plan, from its detail | ✅ dialog | `PlanDetailView.swift:50` |
-| Delete a plan, by swipe in the list | ❌ **none** | `TrainingPlanListView.swift:65` |
+| Delete a plan, by swipe in the list | ✅ dialog | `TrainingPlanListView.swift` — was none |
 | Delete a saved route | ✅ dialog | `SavedRoutesView.swift:44` |
 | Discard an active run | ✅ dialog | `ActiveRunView.swift:150` |
 | Reset all data | ✅ dialog | `SettingsView.swift:79` |
@@ -282,13 +350,22 @@ Both deletes also swallow failures: `HistoryView.swift:206, 208` use
 `try? container.workoutRepository.delete(...)`, so a failed delete leaves the row
 on screen with no explanation.
 
-**Fix.** Either add confirmation to the two swipe paths, or — better for a list —
-keep the swipe immediate and add undo, which is the platform-idiomatic answer to
-"destructive but frequent". At minimum, stop discarding the error.
+**✅ FIXED** by confirming both swipe paths rather than by adding undo. Undo is the
+nicer answer for a frequent action, but neither of these is frequent, and both
+cascade further than the row implies — a run writes a tombstone, a plan takes its
+scheduled workouts, Watch entries and reminders with it — so both dialogs say what
+else goes. Each resolves its offsets to model objects *before* presenting, since a
+HealthKit sync landing mid-confirmation would otherwise shift what the indices
+point at.
 
-**Wider pattern:** `Stride/Features/` contains **38** `try?` expressions and only
-**3** `.alert(` presentations (`ActiveRunView`, `DashboardView`,
-`NewPlanOnboardingView`). Most failure paths in the UI layer are silent.
+`HistoryView.performDeletion` also stopped swallowing failures: the two `try?`
+calls are a `do`/`catch` that logs, counts, and raises a "Couldn't delete" alert
+naming how many rows survived and why.
+
+**Wider pattern (still open):** `Stride/Features/` contains **38** `try?`
+expressions and only **3** `.alert(` presentations (`ActiveRunView`,
+`DashboardView`, `NewPlanOnboardingView`). Most failure paths in the UI layer are
+still silent — the History delete path is one of them fixed, not the pattern.
 
 ---
 
@@ -410,11 +487,14 @@ than fetching everything and filtering in `filteredWorkouts` (`:60`).
 
 ## Recommended order of work
 
-**Tier 1 — accessibility and the run experience (ship first)**
-1. Contrast: dark-mode zone collisions, white-on-brand CTAs, HUD label opacity (§3)
-2. `isIdleTimerDisabled` during an active run (§5a) — one line, restores the whole screen
-3. `.sensoryFeedback` on run/pause/finish/segment/set (§4)
-4. Confirmation or undo on the two unguarded swipe-deletes (§6)
+**Tier 1 — accessibility and the run experience (ship first) — ✅ COMPLETE**
+1. ✅ Contrast: dark-mode zone collisions, white-on-brand CTAs, HUD label opacity (§3)
+2. ✅ `isIdleTimerDisabled` during an active run (§5a) — restores the whole screen
+3. ✅ `.sensoryFeedback` on run/pause/finish/segment/set (§4)
+4. ✅ Confirmation on the two unguarded swipe-deletes, and their swallowed errors (§6)
+
+Picked up alongside them: §5d's hardcoded safe-area padding, which sits in the same
+few lines as the HUD contrast work.
 
 **Tier 2 — the systemic typography fix**
 5. Migrate 296 fixed sizes onto `ds*`, add `@ScaledMetric`, clamp the two fixed grids (§1, §2)

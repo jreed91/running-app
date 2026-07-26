@@ -14,6 +14,13 @@ struct TrainingPlanListView: View {
 
     @State private var showNewPlanSheet = false
 
+    /// Plans a swipe has asked to delete, held until the runner confirms.
+    ///
+    /// Deleting a plan from its detail screen has always asked; the swipe here did not,
+    /// even though it cascades to every scheduled workout, Watch entry and reminder the
+    /// plan owns (§6).
+    @State private var pendingDeletion: [TrainingPlan]?
+
     private var currentPlans: [TrainingPlan] { plans.filter(\.isActive) }
     private var pastPlans: [TrainingPlan] { plans.filter { !$0.isActive } }
 
@@ -43,6 +50,22 @@ struct TrainingPlanListView: View {
         .sheet(isPresented: $showNewPlanSheet) {
             PlanSetupView()
         }
+        .confirmationDialog(
+            deletionTitle,
+            isPresented: Binding(
+                get: { pendingDeletion != nil },
+                set: { if !$0 { pendingDeletion = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                if let plans = pendingDeletion { performDeletion(plans) }
+                pendingDeletion = nil
+            }
+            Button("Cancel", role: .cancel) { pendingDeletion = nil }
+        } message: {
+            Text("This also removes the plan's scheduled workouts, Watch entries and reminders. It can't be undone.")
+        }
         .overlay {
             if plans.isEmpty {
                 ContentUnavailableView(
@@ -63,13 +86,27 @@ struct TrainingPlanListView: View {
             }
         }
         .onDelete { offsets in
-            let toDelete = offsets.map { sectionPlans[$0] }
-            Task {
-                // `deletePlan` owns the order: the Watch entries and reminders are
-                // reachable only through the plan, so they go before the record does (D3).
-                for plan in toDelete {
-                    await container.planLifecycle.deletePlan(plan, context: context)
-                }
+            let selected: [TrainingPlan] = offsets.compactMap {
+                sectionPlans.indices.contains($0) ? sectionPlans[$0] : nil
+            }
+            guard !selected.isEmpty else { return }
+            pendingDeletion = selected
+        }
+    }
+
+    private var deletionTitle: String {
+        let count = pendingDeletion?.count ?? 0
+        return count > 1
+            ? String(localized: "Delete \(count) plans?", comment: "Swipe-delete confirmation, multiple plans")
+            : String(localized: "Delete this plan?", comment: "Swipe-delete confirmation, one plan")
+    }
+
+    private func performDeletion(_ toDelete: [TrainingPlan]) {
+        Task {
+            // `deletePlan` owns the order: the Watch entries and reminders are
+            // reachable only through the plan, so they go before the record does (D3).
+            for plan in toDelete {
+                await container.planLifecycle.deletePlan(plan, context: context)
             }
         }
     }

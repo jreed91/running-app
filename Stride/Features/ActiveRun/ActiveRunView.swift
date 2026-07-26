@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 struct ActiveRunView: View {
     @Environment(AppContainer.self) private var container
@@ -40,6 +41,11 @@ struct ActiveRunView: View {
     /// Flat easy runs and free runs leave this `nil` and are unchanged.
     @State private var guided: GuidedWorkoutState?
 
+    /// Bumped once each time a finished run is successfully written to the store, so
+    /// the save can play a success haptic without the tracker's state machine — which
+    /// reaches `.finished` on a discard too — standing in for "saved".
+    @State private var saveSuccessCount = 0
+
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var tracker: WorkoutTrackerService { container.workoutTrackerService }
@@ -69,12 +75,22 @@ struct ActiveRunView: View {
         ZStack {
             // Full-bleed zone-color radial gradient backdrop
             // (emanates from the top — matches design spec 130% × 70% at 50% 0%)
+            //
+            // Every stop is pulled toward black. The top stop used to be the raw zone
+            // colour at full luminance, which is what made this screen the app's worst
+            // contrast offender: white dimmed to 55% over `ZoneTempo` measured 1.47:1,
+            // on the one screen that is read at arm's length, in motion, in sunlight.
+            // Darkening the backdrop and undimming the labels (below) is what buys the
+            // ratio back. 0.28 at the top is the point where the *brightest* zone
+            // (`ZoneTempo`) clears 4.5:1 for both full-white and 92%-white text — with
+            // the flat scrim below it — so it is a floor, not a taste call. The zone
+            // hue is still unmistakable at 72% luminance.
             GeometryReader { geo in
                 RadialGradient(
                     stops: [
-                        .init(color: zoneColor, location: 0),
-                        .init(color: zoneColor.mix(with: .black, by: 0.25), location: 0.55),
-                        .init(color: zoneColor.mix(with: .black, by: 0.55), location: 1.0),
+                        .init(color: zoneColor.mix(with: .black, by: 0.28), location: 0),
+                        .init(color: zoneColor.mix(with: .black, by: 0.50), location: 0.55),
+                        .init(color: zoneColor.mix(with: .black, by: 0.72), location: 1.0),
                     ],
                     center: .init(x: 0.5, y: 0),
                     startRadius: 0,
@@ -99,6 +115,12 @@ struct ActiveRunView: View {
                 endRadius: 320
             )
             .ignoresSafeArea()
+
+            // Flat scrim under all content. The radial stops alone cannot hold a ratio
+            // near the centre, where the gradient is brightest and the hero pace and
+            // zone pill sit; this puts a uniform floor under every label on the screen.
+            Color.black.opacity(0.18)
+                .ignoresSafeArea()
 
             VStack(spacing: 0) {
                 topBar
@@ -170,6 +192,42 @@ struct ActiveRunView: View {
         } message: {
             Text(saveErrorMessage ?? "")
         }
+        // The display sleeps after 30 s on default settings, so the HUD — hero pace,
+        // zone colour, pace meter, guided-workout banner — went black while the runner
+        // was still running, which is the entire time this screen matters (§5a). Held
+        // for `.paused` too: a runner stopped at a crossing still glances at it.
+        .onChange(of: tracker.trackingState, initial: true) { _, state in
+            UIApplication.shared.isIdleTimerDisabled = (state == .active || state == .paused)
+        }
+        // Belt and braces: leaving the screen by any route (finish, discard, swipe)
+        // must hand the timer back, or the phone never sleeps again this launch.
+        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
+        // Haptics. This is a heads-down app — the point of the run screen is that the
+        // runner isn't looking at it — and it had no feedback channel at all (§4).
+        .sensoryFeedback(trigger: tracker.trackingState) { old, new in
+            switch new {
+            case .active:
+                return old == .idle ? SensoryFeedback.impact(weight: .heavy) : SensoryFeedback.selection
+            case .paused:
+                return SensoryFeedback.selection
+            // `.finished` is reached by discarding as well as saving, so the
+            // confirmation for a *saved* run rides on `saveSuccessCount` instead.
+            case .finished, .idle:
+                return nil
+            }
+        }
+        .sensoryFeedback(.success, trigger: saveSuccessCount)
+        .sensoryFeedback(trigger: saveErrorMessage) { _, new in
+            guard new != nil else { return nil }
+            return SensoryFeedback.error
+        }
+        // A split is the one milestone that happens without the runner acting, and the
+        // only thing that currently marks it is a number the runner would have to look
+        // at. Guard on an increase so resetting the tracker for a new run stays silent.
+        .sensoryFeedback(trigger: tracker.splits.count) { old, new in
+            guard new > old else { return nil }
+            return SensoryFeedback.impact(weight: .light)
+        }
     }
 
     // MARK: - Top bar
@@ -205,7 +263,11 @@ struct ActiveRunView: View {
             }
         }
         .padding(.horizontal, 22)
-        .padding(.top, 56)
+        // The enclosing `VStack` already sits inside the safe area — only the gradient
+        // layers below it opt out — so the old `.padding(.top, 56)` was stacked on top
+        // of the inset and pushed the top bar ~56pt down the screen on every device,
+        // regardless of hardware (§5d). This is now ordinary spacing under the inset.
+        .padding(.top, 8)
         .foregroundStyle(.white)
     }
 
@@ -269,7 +331,7 @@ struct ActiveRunView: View {
             Text("CURRENT PACE · \(paceUnitLabel.uppercased())")
                 .font(.system(size: 12, weight: .bold))
                 .kerning(2.2)
-                .foregroundStyle(.white.opacity(0.85))
+                .foregroundStyle(.white.opacity(0.95))
         }
         .padding(.top, 18)
         .accessibilityElement(children: .ignore)
@@ -303,9 +365,9 @@ struct ActiveRunView: View {
                 Spacer()
                 Text("faster")
             }
-            .font(.system(size: 10, weight: .bold))
+            .font(.system(size: 11, weight: .bold))
             .kerning(1.2)
-            .foregroundStyle(.white.opacity(0.65))
+            .foregroundStyle(.white.opacity(0.92))
 
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
@@ -432,12 +494,14 @@ struct ActiveRunView: View {
                     )
                 Text("bpm")
                     .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.65))
+                    .foregroundStyle(.white.opacity(0.92))
             }
             Text("HEART RATE")
-                .font(.system(size: 9, weight: .bold))
-                .kerning(1.2)
-                .foregroundStyle(.white.opacity(0.55))
+                .font(.system(size: 11, weight: .bold))
+                .kerning(1.0)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .foregroundStyle(.white)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Heart rate")
@@ -455,13 +519,19 @@ struct ActiveRunView: View {
                 if let unit {
                     Text(unit)
                         .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.65))
+                        .foregroundStyle(.white.opacity(0.92))
                 }
             }
+            // Was 9pt at 55% white — 1.47:1 over `ZoneTempo`, and below Apple's 11pt
+            // floor besides. Full white at 11pt, with the darkened backdrop above,
+            // clears 4.5:1 on the worst zone. `minimumScaleFactor` keeps the longest
+            // label ("HEART RATE") on one line in the three-column grid.
             Text(label.uppercased())
-                .font(.system(size: 9, weight: .bold))
-                .kerning(1.2)
-                .foregroundStyle(.white.opacity(0.55))
+                .font(.system(size: 11, weight: .bold))
+                .kerning(1.0)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .foregroundStyle(.white)
         }
         // Without this a six-cell grid reads to VoiceOver as twelve loose fragments
         // ("5.2", "DISTANCE", "27:14", "TIME", …) with no pairing (N18).
@@ -673,6 +743,7 @@ struct ActiveRunView: View {
             return
         }
         pendingSave = nil
+        saveSuccessCount += 1
 
         Task { @MainActor in
             if let hkID = try? await container.healthKitRepository.save(workout) {

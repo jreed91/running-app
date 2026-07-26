@@ -95,7 +95,7 @@ struct OBWelcome: View {
                 Button(action: onStart) {
                     HStack(spacing: 10) {
                         Text("Get started").font(.system(size: 17, weight: .bold))
-                        StrideIcon(name: .chevronRight, size: 15, color: .white, strokeWeight: 2.6)
+                        StrideIcon(name: .chevronRight, size: 15, color: .onBrand, strokeWeight: 2.6)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
@@ -106,7 +106,8 @@ struct OBWelcome: View {
                             .strokeBorder(.white.opacity(0.2), lineWidth: 0.5)
                     )
                 }
-                .foregroundStyle(.white)
+                // Near-black rather than white: white on `Brand` is 2.84:1 (§3a).
+                .foregroundStyle(.onBrand)
                 .buttonStyle(BouncyButtonStyle())
                 .accessibilityIdentifier("onboarding.getStarted")
                 .opacity(appeared ? 1 : 0)
@@ -223,7 +224,7 @@ struct OBWelcomeBack: View {
                     } label: {
                         HStack(spacing: 10) {
                             Text("Continue to Dashboard").font(.system(size: 17, weight: .bold))
-                            StrideIcon(name: .chevronRight, size: 15, color: .white, strokeWeight: 2.6)
+                            StrideIcon(name: .chevronRight, size: 15, color: .onBrand, strokeWeight: 2.6)
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
@@ -231,7 +232,7 @@ struct OBWelcomeBack: View {
                         .shadow(color: Color.brand.opacity(0.5), radius: 14, y: 8)
                         .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(.white.opacity(0.2), lineWidth: 0.5))
                     }
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.onBrand)
                     .buttonStyle(.plain)
                 }
 
@@ -441,7 +442,7 @@ struct OBShell<Content: View>: View {
                 Button(action: onCTA) {
                     HStack(spacing: 10) {
                         Text(ctaLabel).font(.system(size: 17, weight: .bold))
-                        StrideIcon(name: .chevronRight, size: 14, color: .white, strokeWeight: 2.6)
+                        StrideIcon(name: .chevronRight, size: 14, color: .onBrand, strokeWeight: 2.6)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
@@ -453,7 +454,7 @@ struct OBShell<Content: View>: View {
                             .strokeBorder(.white.opacity(0.2), lineWidth: 0.5)
                     )
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(.onBrand)
                 .buttonStyle(.plain)
                 .disabled(!ctaEnabled)
                 .accessibilityIdentifier("onboarding.primaryCTA.\(stepIndex)")
@@ -1128,11 +1129,11 @@ struct OBReady: View {
             Button(action: onViewPlan) {
                 Group {
                     if isCreatingPlan {
-                        ProgressView().tint(.white)
+                        ProgressView().tint(.onBrand)
                     } else {
                         HStack(spacing: 10) {
                             Text("Start training").font(.system(size: 17, weight: .bold))
-                            StrideIcon(name: .chevronRight, size: 15, color: .white, strokeWeight: 2.6)
+                            StrideIcon(name: .chevronRight, size: 15, color: .onBrand, strokeWeight: 2.6)
                         }
                     }
                 }
@@ -1145,7 +1146,7 @@ struct OBReady: View {
                         .strokeBorder(.white.opacity(0.2), lineWidth: 0.5)
                 )
             }
-            .foregroundStyle(.white)
+            .foregroundStyle(.onBrand)
             .buttonStyle(.plain)
             .disabled(isCreatingPlan)
             .accessibilityIdentifier("onboarding.startTraining")
