@@ -952,14 +952,18 @@ private struct PlanWeekSummaryRow: View {
                 .reorderable()
             }
         }
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
-        .opacity(isFutureWeek ? 0.65 : 1.0)
-        // Drag a session onto another day (U7). A week whose sessions are all in the past
-        // or all completed has nothing to rearrange, and `isEnabled` is what keeps the
-        // lift gesture off those rows rather than a guard that fires after the drop.
+        // Drag a session onto another day (U7). This sits directly on the stack that holds
+        // the rows rather than after the chrome below it, because it is the modifier that
+        // marks a view as the reorderable container.
+        //
+        // A week whose sessions are all completed or all in the past has nothing to
+        // rearrange, and `isEnabled` is what keeps the lift gesture off those rows rather
+        // than a guard that fires after the drop.
         .reorderContainer(for: ScheduledWorkout.self, itemID: \.id, isEnabled: canReorder) { difference in
             reschedule(difference)
         }
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .opacity(isFutureWeek ? 0.65 : 1.0)
     }
 
     /// Applies a drop by rewriting `scheduledDate`s — see `WorkoutReorderPlanner` for why

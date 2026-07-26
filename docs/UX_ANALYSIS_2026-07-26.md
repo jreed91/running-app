@@ -593,6 +593,13 @@ rest day and a run, so pinning rest would make most real reorders inexpressible.
 also rebuilds the plan's morning reminders, which are addressed to dates and would
 otherwise point at the wrong sessions.
 
+The planner's arithmetic was additionally checked outside Swift — the algorithm was ported
+and run against every named test expectation plus a brute-force sweep of weeks of two to
+seven sessions, every combination of pinned positions, every drag source and out-of-range
+drop offsets, asserting that the set of days is preserved and that a pinned row never moves
+or gives up its day. So the risk in this change sits in the SwiftUI glue
+(`PlanTabView.reschedule`), not in the date rewrite.
+
 *Known remainder on reordering:* a pinned row can still be lifted, because `.reorderable()`
 applies to a `ForEach`'s content rather than per row, and the week's pinned sessions are not
 a contiguous block that could be split into a second `ForEach` — a session can be completed
