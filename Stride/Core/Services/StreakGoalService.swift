@@ -255,7 +255,13 @@ struct StreakGoalService: Sendable {
 
     /// Monday-anchored start of the week containing `date`, computed with the
     /// injected calendar so tests stay deterministic. Mirrors `Date.startOfWeek`.
-    private static func startOfWeek(for date: Date, calendar: Calendar) -> Date {
+    ///
+    /// Not private: `WidgetSnapshotBuilder` counts the same week's runs for the weekly
+    /// widget, and a second copy of this — the third, counting `Date.startOfWeek` — is
+    /// how the widget and the Achievements screen end up disagreeing by one run every
+    /// Sunday. `Date.startOfWeek` remains the form to use where a calendar need not be
+    /// injected.
+    static func startOfWeek(for date: Date, calendar: Calendar) -> Date {
         var cal = calendar
         cal.firstWeekday = 2 // Monday
         let components = cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: date)

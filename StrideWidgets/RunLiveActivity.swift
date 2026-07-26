@@ -161,12 +161,6 @@ struct RunActivityGlyph: View {
     }
 }
 
-// MARK: - Colour
-
-private extension ShapeStyle where Self == Color {
-    /// Stride's brand colour, resolved from this extension's own copy of the app's asset
-    /// catalog — a widget bundle cannot read the app's. `project.yml` lists
-    /// `Assets.xcassets` in both targets' sources for exactly this, so the Lock Screen and
-    /// the app cannot drift to two different oranges.
-    static var strideBrand: Color { Color("Brand") }
-}
+// `strideBrand` and the rest of the palette now live in `WidgetTheme.swift`, shared with
+// the Home Screen widgets (B1) — the private copy that used to sit here would have been a
+// second definition of the same asset lookup in the same module.

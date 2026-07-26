@@ -919,6 +919,11 @@ struct ActiveRunView: View {
             )
             context.saveOrLog("training paces refreshed after the run")
         }
+        // Finishing a run is the moment every widget's content changes at once — the
+        // week's total, the streak, and the plan's next session all move — and it is the
+        // one moment the runner is most likely to go straight to the Home Screen to look
+        // at (B1). The scene-phase refresh would catch it eventually; this catches it now.
+        WidgetRefreshService.refresh(context: context, appSettings: appSettings)
         endRun()
     }
 }

@@ -978,10 +978,10 @@ private struct PlanWeekSummaryRow: View {
         _ difference: ReorderDifference<UUID, ReorderableSingleCollectionIdentifier>
     ) {
         let workouts = orderedWorkouts
-        // `index(in:)` resolves the drop against the same array the rows were built from,
-        // and is `nil` when the container could not place it — an unplaced drop leaves the
-        // week alone rather than guessing at one end of it.
-        guard let offset = difference.destination.index(in: workouts) else { return }
+        // Resolved against the same array the rows were built from. `nil` means the
+        // container named a row this week does not hold, and an unplaceable drop leaves
+        // the week alone rather than guessing at one end of it.
+        guard let offset = dropOffset(difference.destination, in: workouts) else { return }
 
         let changes = WorkoutReorderPlanner.plan(
             slots: WorkoutReorderPlanner.slots(for: workouts, hasFixedRaceDate: hasFixedRaceDate),
@@ -1015,6 +1015,32 @@ private struct PlanWeekSummaryRow: View {
             Task { @MainActor in
                 await container.notificationService.scheduleMorningReminders(for: plan)
             }
+        }
+    }
+
+    /// Turns a `ReorderDifference.Destination` into the insertion offset
+    /// `WorkoutReorderPlanner.plan(slots:moving:toOffset:)` wants.
+    ///
+    /// The destination is a *position relative to a row*, not a number: `.before(id)`
+    /// names the row the lifted sessions were dropped above, and `.end` means past the
+    /// last one. The planner counts rendered rows in date order, so `.before` resolves to
+    /// that row's own index — an insertion offset into the pre-move array, which is the
+    /// same convention the classic `onMove(perform:)` destination used, and what
+    /// `plan`'s `ordered.prefix(offset)` is written against.
+    private func dropOffset(
+        _ destination: ReorderDifference<UUID, ReorderableSingleCollectionIdentifier>.Destination,
+        in workouts: [ScheduledWorkout]
+    ) -> Int? {
+        switch destination {
+        case .before(let id):
+            return workouts.firstIndex { $0.id == id }
+        case .end:
+            return workouts.count
+        @unknown default:
+            // A position this build does not know how to place is a no-op rather than a
+            // guess: dropping a session onto an unrecognised target must not silently
+            // rewrite a day.
+            return nil
         }
     }
 

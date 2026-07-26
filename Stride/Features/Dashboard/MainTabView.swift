@@ -16,20 +16,24 @@ struct MainTabView: View {
         // `Tab` rather than `.tabItem` — the builder form has been the correct one
         // since iOS 18, well below this app's 27.0 floor, and it is what the newer
         // tab-bar behaviours (minimize, bottom accessory) attach to (U7).
-        TabView {
-            Tab("Home", systemImage: "house.fill") {
+        //
+        // The selection is bound rather than left to `TabView`'s own state because a
+        // widget tapped on the Home Screen has to be able to land on the right tab, and
+        // that decision is made at the scene root (B1).
+        TabView(selection: selectedTab) {
+            Tab("Home", systemImage: "house.fill", value: StrideTab.home) {
                 DashboardView()
             }
-            Tab("Plan", systemImage: "calendar") {
+            Tab("Plan", systemImage: "calendar", value: StrideTab.plan) {
                 PlanTabView()
             }
-            Tab("History", systemImage: "clock.arrow.circlepath") {
+            Tab("History", systemImage: "clock.arrow.circlepath", value: StrideTab.history) {
                 HistoryView()
             }
-            Tab("Progress", systemImage: "chart.line.uptrend.xyaxis") {
+            Tab("Progress", systemImage: "chart.line.uptrend.xyaxis", value: StrideTab.progress) {
                 ProgressDashboardView()
             }
-            Tab("Settings", systemImage: "gear") {
+            Tab("Settings", systemImage: "gear", value: StrideTab.settings) {
                 SettingsView()
             }
         }
@@ -58,6 +62,16 @@ struct MainTabView: View {
         // The store-recovery alert (C3) is presented by `ContentView`, not here: a
         // recreated store has no profile, so the app shows onboarding and this view
         // never appears on exactly the launch the notice describes (N5).
+    }
+
+    /// Read and written straight through to `AppNavigation` for the same reason
+    /// `isRunPresented` is: one owner, so a deep link and the tab bar cannot end up
+    /// disagreeing about which tab is showing.
+    private var selectedTab: Binding<StrideTab> {
+        Binding(
+            get: { container.appNavigation.selectedTab },
+            set: { container.appNavigation.selectedTab = $0 }
+        )
     }
 
     /// `ActiveRunPresentation` is `@Observable`, so this reads and writes it directly

@@ -65,17 +65,29 @@ struct StrideApp: App {
         }
     }
 
-    /// Handles `stride://` links. Today there is exactly one: the run's Live Activity,
-    /// which should land on the run rather than merely foregrounding the app (U5b/U7).
-    ///
-    /// Guarded on a run actually recording, because a Live Activity can be tapped in the
-    /// moment between the run finishing and the card being dismissed — and reopening the HUD
-    /// onto a finished tracker would show a run that has already been saved.
+    /// Handles `stride://` links: the run's Live Activity (U5b/U7) and the Home Screen /
+    /// Lock Screen widgets (B1), each of which should land on the surface it was showing
+    /// rather than merely foregrounding the app onto whatever was open last.
     private func handleDeepLink(_ url: URL) {
-        guard url.scheme == RunActivityDeepLink.scheme,
-              url.host == RunActivityDeepLink.activeRunHost else { return }
-        guard container.workoutTrackerService.isRecording else { return }
-        container.activeRunPresentation.reopen()
+        guard url.scheme == RunActivityDeepLink.scheme, let host = url.host else { return }
+
+        switch host {
+        case RunActivityDeepLink.activeRunHost:
+            // Guarded on a run actually recording, because a Live Activity can be tapped
+            // in the moment between the run finishing and the card being dismissed — and
+            // reopening the HUD onto a finished tracker would show a run that has already
+            // been saved.
+            guard container.workoutTrackerService.isRecording else { return }
+            container.activeRunPresentation.reopen()
+        case StrideWidgetDeepLink.planHost:
+            container.appNavigation.select(.plan)
+        case StrideWidgetDeepLink.progressHost:
+            container.appNavigation.select(.progress)
+        case StrideWidgetDeepLink.homeHost:
+            container.appNavigation.select(.home)
+        default:
+            break
+        }
     }
 }
 
@@ -196,6 +208,10 @@ struct ContentView: View {
         .task(id: activePlans.first?.id) {
             deduplicate()
             await reconcileActivePlanIntegrations()
+            // A new plan replaces every widget's "next workout" and its race countdown
+            // at once, so it is worth a refresh of its own rather than waiting for the
+            // app to be backgrounded (B1).
+            WidgetRefreshService.refresh(context: context, appSettings: appSettings)
         }
         .onChange(of: profiles.count) { _, _ in deduplicate() }
         .onChange(of: activePlans.count) { oldCount, newCount in
@@ -246,6 +262,15 @@ struct ContentView: View {
             Task {
                 await container.notificationService.scheduleMorningReminders(for: plan)
             }
+        }
+        // The widgets' catch-all (B1). `.background` is the one that matters — it is the
+        // last chance to publish whatever the runner just did before they go and look at
+        // the Home Screen — and `.active` covers a snapshot that went stale while the app
+        // was away, most often because the date rolled over. Neither costs a WidgetKit
+        // reload unless the snapshot actually moved; see `WidgetRefreshService`.
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active || phase == .background else { return }
+            WidgetRefreshService.refresh(context: context, appSettings: appSettings)
         }
     }
 

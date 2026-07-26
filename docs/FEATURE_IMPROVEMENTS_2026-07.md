@@ -164,7 +164,29 @@ goal splits, weather, A/B/C goal times) that closes the plan's narrative arc.
 Net-new capabilities, ordered by product leverage. Each is currently absent from
 the codebase (verified by search), not merely thin.
 
-### B1. Home-screen Widgets *(high impact, medium effort)*
+### ✅ B1. Home-screen Widgets *(high impact, medium effort)*
+
+**SHIPPED.** Four `StaticConfiguration` widgets in `StrideWidgets`, all fed by one
+snapshot the app publishes into the App Group `group.com.running.stride`:
+
+| Widget | Families | Shows |
+| --- | --- | --- |
+| Next Workout | small, medium, `.accessoryRectangular` | the next (or overdue) session, its distance and target pace, the plan's note |
+| Weekly Goal | small, `.accessoryCircular`, `.accessoryRectangular` | this week's distance against the goal, as a ring |
+| Race Countdown | small, `.accessoryRectangular`, `.accessoryInline` | days to race day, the race name, the plan's phase and week |
+| Run Streak | small, `.accessoryCircular`, `.accessoryInline` | consecutive run days, and whether today's is in |
+
+The extension cannot open the SwiftData store, so `IntentDataProvider` turned out not to
+be reusable after all — it opens the store in-process, which a widget has no entitlement
+to do. `WidgetSnapshotBuilder` (pure, unit-tested) plays the same role instead, and
+`WidgetRefreshService` publishes its output on launch, on plan change, on scene-phase
+change, and immediately after a run is saved. Tapping a widget deep-links to the matching
+tab via `stride://plan` / `stride://progress`, which is what gave `MainTabView` a bound
+selection. See "Widget Data Flow" in `AGENTS.md`.
+
+*Deferred:* a Control Center `ControlWidget` for starting a run, and an
+`AppIntentConfiguration` letting the user choose which metric a widget shows.
+
 No WidgetKit target exists. A running app without a "next workout" / "weekly
 progress" / "days to race" widget leaves the most valuable glanceable surface on
 iOS empty. The data (`IntentDataProvider` already assembles Today's Run and
@@ -244,7 +266,7 @@ Sequenced for user-visible impact per unit of effort, reusing existing models.
 3. **✅ A1** real mile splits *(shipped)* **+ A2** working laps (unblocks interval feedback).
 
 **P1 — glanceable + platform surfaces (high impact, reuse existing data):**
-4. **B1** Widgets (reuse `IntentDataProvider`).
+4. **✅ B1** Widgets *(shipped)*.
 5. **B2** Live Activity / Dynamic Island (reuse `WorkoutTrackerService`).
 6. **✅ B4** streaks & goals *(shipped)*.
 

@@ -150,6 +150,10 @@ final class AppContainer {
     /// while the phone is locked — the situation the activity exists for.
     let runActivityController: RunActivityController
 
+    /// Which tab is on screen. Owned here so a widget's deep link, handled at the scene
+    /// root, can drive a `TabView` several levels below it (B1).
+    let appNavigation = AppNavigation()
+
     // MARK: Workout Review
 
     /// Listens to `NotificationService.syncedRunTaps` for this container's lifetime. Not
@@ -562,6 +566,10 @@ final class AppContainer {
     func resetAllData(context: ModelContext) async {
         pendingReviewWorkout = nil
         await planLifecycle.resetAllData(context: context)
+        // The App Group container is outside the store `PlanLifecycleService` just tore
+        // down, so without this the Home Screen would be the one place the deleted plan
+        // survived (B1).
+        WidgetRefreshService.clear()
     }
 
     // MARK: Preview support
