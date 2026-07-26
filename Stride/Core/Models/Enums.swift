@@ -325,6 +325,19 @@ enum UnitPreference: String, CaseIterable, Sendable {
     case metric = "metric"
     case imperial = "imperial"
 
+    /// What this device already measures in, used when the runner has never chosen.
+    ///
+    /// Onboarding used to spend a whole step of nine asking this (U10), with `.metric`
+    /// as the answer it assumed if you skipped — wrong for every runner in the US.
+    /// The system already knows, so the step became a control on the "About you" step
+    /// instead of a question of its own.
+    ///
+    /// Anything that is not the metric system maps to miles: `.uk` measures road
+    /// distance in miles, which is the only measurement this app makes.
+    static var localeDefault: UnitPreference {
+        Locale.current.measurementSystem == .metric ? .metric : .imperial
+    }
+
     var displayName: String {
         switch self {
         case .metric: return "Kilometers"

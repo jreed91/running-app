@@ -36,10 +36,18 @@ struct HistoryView: View {
     /// Search term. Like `displayLimit`, it is applied by re-initialising the list, since
     /// the run-side filter is a fetch predicate rather than an in-memory pass (U8).
     @State private var searchText = ""
+    /// Date range and minimum distance, applied the same way and for the same reason.
+    @State private var filter = HistoryFilter()
 
     var body: some View {
         NavigationStack {
-            HistoryEntryList(limit: displayLimit, searchText: searchText, isSyncing: isSyncing) {
+            HistoryEntryList(
+                limit: displayLimit,
+                searchText: searchText,
+                filter: filter,
+                isSyncing: isSyncing,
+                clearFilter: { filter = HistoryFilter() }
+            ) {
                 displayLimit += HistoryEntryList.pageSize
             }
             .navigationTitle("History")
@@ -51,10 +59,19 @@ struct HistoryView: View {
             .refreshable {
                 await syncRecentHealthKitWorkouts()
             }
+            // Both narrow the list, so both send paging back to the first page —
+            // otherwise a filter applied at page five keeps fetching five pages of a
+            // much smaller result set.
             .onChange(of: searchText) { _, _ in
                 displayLimit = HistoryEntryList.pageSize
             }
+            .onChange(of: filter) { _, _ in
+                displayLimit = HistoryEntryList.pageSize
+            }
             .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    HistoryFilterMenu(filter: $filter)
+                }
                 if isSyncing {
                     ToolbarItem(placement: .navigationBarTrailing) {
                         ProgressView()
@@ -117,7 +134,9 @@ private struct HistoryEntryList: View {
 
     private let limit: Int
     private let searchTerm: String
+    private let filter: HistoryFilter
     private let isSyncing: Bool
+    private let clearFilter: () -> Void
     private let loadMore: () -> Void
 
     @Environment(AppContainer.self) private var container
@@ -129,9 +148,18 @@ private struct HistoryEntryList: View {
     @State private var pendingDeletion: IndexSet? = nil
     @State private var deleteErrorMessage: String? = nil
 
-    init(limit: Int, searchText: String, isSyncing: Bool, loadMore: @escaping () -> Void) {
+    init(
+        limit: Int,
+        searchText: String,
+        filter: HistoryFilter,
+        isSyncing: Bool,
+        clearFilter: @escaping () -> Void,
+        loadMore: @escaping () -> Void
+    ) {
         self.limit = limit
+        self.filter = filter
         self.isSyncing = isSyncing
+        self.clearFilter = clearFilter
         self.loadMore = loadMore
 
         let term = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -144,24 +172,41 @@ private struct HistoryEntryList: View {
             .filter { $0.localizedName.localizedStandardContains(term) }
             .map(\.rawValue)
 
+        // The filter's two axes go into the predicate as neutral values — `distantPast`
+        // and `0` are true of every row — so an inactive filter needs no separate
+        // predicate. Search still does: with no term, `matchingTypeRaws` is empty and the
+        // search clause would be false for every run rather than absent.
+        let earliestDate = filter.dateRange.earliestDate() ?? .distantPast
+        let minimumMeters = filter.minimumDistance.meters ?? 0
+
         var runDescriptor = FetchDescriptor<RunWorkout>(
             sortBy: [SortDescriptor(\.date, order: .reverse)]
         )
-        if !term.isEmpty {
+        if term.isEmpty {
             runDescriptor.predicate = #Predicate<RunWorkout> { run in
-                matchingTypeRaws.contains(run.workoutTypeRaw)
-                    || (run.notes?.localizedStandardContains(term) ?? false)
+                run.date >= earliestDate && run.distanceMeters >= minimumMeters
+            }
+        } else {
+            runDescriptor.predicate = #Predicate<RunWorkout> { run in
+                (matchingTypeRaws.contains(run.workoutTypeRaw)
+                    || (run.notes?.localizedStandardContains(term) ?? false))
+                    && run.date >= earliestDate
+                    && run.distanceMeters >= minimumMeters
             }
         }
         runDescriptor.fetchLimit = limit + 1
         _runs = Query(runDescriptor)
 
-        // The strength side is filtered in memory rather than by predicate: its title
-        // comes from the plan's focus across two relationships, which a fetch predicate
-        // can't reach. The fetch stays bounded either way.
+        // The strength side takes the date bound in its predicate and everything else in
+        // memory: its title comes from the plan's focus across two relationships, which a
+        // fetch predicate can't reach, and a distance floor excludes it outright
+        // (`HistoryFilter.includesStrengthWorkouts`). The fetch stays bounded either way.
         var strengthDescriptor = FetchDescriptor<StrengthWorkout>(
             sortBy: [SortDescriptor(\.date, order: .reverse)]
         )
+        strengthDescriptor.predicate = #Predicate<StrengthWorkout> { workout in
+            workout.date >= earliestDate
+        }
         strengthDescriptor.fetchLimit = limit + 1
         _strengthWorkouts = Query(strengthDescriptor)
     }
@@ -169,7 +214,9 @@ private struct HistoryEntryList: View {
     /// Newest-first merge of both fetches. Either type can supply the whole page, which is
     /// why each is fetched to the full limit rather than to some share of it.
     private var entries: [HistoryEntry] {
-        let matchingStrength = strengthWorkouts.filter(matchesSearch)
+        let matchingStrength = filter.includesStrengthWorkouts
+            ? strengthWorkouts.filter(matchesSearch)
+            : []
         let merged = runs.map { HistoryEntry.run($0) } + matchingStrength.map { HistoryEntry.strength($0) }
         return merged.sorted { $0.date > $1.date }
     }
@@ -264,6 +311,18 @@ private struct HistoryEntryList: View {
             .padding(.horizontal, 40)
         } else if !searchTerm.isEmpty {
             ContentUnavailableView.search(text: searchTerm)
+        } else if filter.isActive {
+            // A filter that hides everything has to say so *and* offer the way out —
+            // otherwise the screen is indistinguishable from "no workouts yet", and the
+            // control that caused it is a glyph in the toolbar.
+            ContentUnavailableView {
+                Label("No matching workouts", systemImage: "line.3.horizontal.decrease.circle")
+            } description: {
+                Text("\(filter.dateRange.localizedName) · \(filter.minimumDistance.localizedName)")
+            } actions: {
+                Button("Clear Filters") { clearFilter() }
+                    .buttonStyle(.borderedProminent)
+            }
         } else {
             ContentUnavailableView(
                 "No workouts yet",

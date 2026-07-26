@@ -28,6 +28,35 @@ enum ChartAccessibility {
         }
     }
 
+    /// A chart's whole accessible payload: the points, how a value is spoken, and what the
+    /// value axis is called.
+    ///
+    /// The summary alone was enough while a chart was one collapsed element. An **Audio
+    /// Graph** needs more — the series itself, so VoiceOver can play it as sound and step
+    /// through it point by point — and it needs exactly the same numbers and the same
+    /// formatter the summary uses, or the two would disagree about the chart in front of
+    /// them (U10). Passing this instead of a pre-built `String` is what keeps them one
+    /// thing.
+    struct Series {
+        var points: [Point]
+        /// Name of the value axis, e.g. "Pace" or "Distance". Spoken when a VoiceOver user
+        /// asks what the graph's axes are.
+        var valueAxisLabel: String
+        /// Renders one value the way the chart's axis does, units included.
+        var format: (Double) -> String
+
+        init(points: [Point], valueAxisLabel: String, format: @escaping (Double) -> String) {
+            self.points = points
+            self.valueAxisLabel = valueAxisLabel
+            self.format = format
+        }
+
+        /// The sentence VoiceOver speaks as the chart's value.
+        var summary: String {
+            ChartAccessibility.summary(points, format: format)
+        }
+    }
+
     /// What a chart's data sounds like: count, endpoints, and extremes.
     ///
     /// Points are read in the order given — chronological for a trend chart, ascending

@@ -61,4 +61,29 @@ struct ChartAccessibilityTests {
         #expect(bpm.contains("150 beats per minute"))
         #expect(bpm.contains("162 beats per minute"))
     }
+
+    // MARK: - Series (U10)
+    //
+    // A chart's spoken summary and its Audio Graph are built from one `Series` precisely so
+    // they cannot describe different data. This is that guarantee.
+
+    @Test("A series speaks exactly the summary its own points would")
+    func seriesSummaryMatchesTheFreeFunction() {
+        let points = [point("Mar 2", 150), point("Mar 9", 162), point("Mar 16", 148)]
+        let format: (Double) -> String = { "\(Int($0)) beats per minute" }
+
+        let series = ChartAccessibility.Series(
+            points: points,
+            valueAxisLabel: "Heart rate",
+            format: format
+        )
+
+        #expect(series.summary == ChartAccessibility.summary(points, format: format))
+    }
+
+    @Test("An empty series still has something to say")
+    func emptySeriesSummarises() {
+        let series = ChartAccessibility.Series(points: [], valueAxisLabel: "Distance") { "\($0)" }
+        #expect(series.summary == "No data")
+    }
 }

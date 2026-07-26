@@ -71,13 +71,17 @@ final class StrideUITests: XCTestCase {
         XCTAssertTrue(getStarted.waitForExistence(timeout: 8))
         getStarted.tap()
 
+        // Eight steps, not nine: units moved onto "About you" as a pre-set control, since
+        // the device already knows the answer (U10). The default goal is a 5K, so the
+        // timing step asks about race day rather than a start date.
         tapPrimaryCTA(step: 1, expectedTitle: "What are you training for?")
-        tapPrimaryCTA(step: 2, expectedTitle: "Kilometres or miles?")
+        tapPrimaryCTA(step: 2, expectedTitle: "When's the big day?")
         tapPrimaryCTA(step: 3, expectedTitle: "How would you describe your running?")
         tapPrimaryCTA(step: 4, expectedTitle: "Your recent 5K time?")
         tapPrimaryCTA(step: 5, expectedTitle: "Which days can you run?")
+        tapPrimaryCTA(step: 6, expectedTitle: "What equipment do you have?")
 
-        let skipPermissions = app.buttons["onboarding.secondaryCTA.6"]
+        let skipPermissions = app.buttons["onboarding.secondaryCTA.7"]
         XCTAssertTrue(skipPermissions.waitForExistence(timeout: 5))
         skipPermissions.tap()
 

@@ -35,8 +35,9 @@ struct AppSettingsTests {
 
         let settings = AppSettings(defaults: defaults, ubiquitous: ubiquitous)
 
-        // In-memory defaults still resolve as expected...
-        #expect(settings.unitPreference == .metric)
+        // In-memory defaults still resolve as expected. Units follow the device rather
+        // than a hardcoded metric assumption (U10), so the expectation does too.
+        #expect(settings.unitPreference == UnitPreference.localeDefault)
         #expect(settings.iCloudSyncEnabled == true)
         #expect(settings.morningReminderEnabled == true)
 
@@ -139,6 +140,44 @@ struct AppSettingsTests {
         #expect(settings.weeklyGoalMeters == 35_000)
     }
 
+    // MARK: - Spoken splits (U4)
+
+    @Test("Spoken splits are off on a fresh install, and nothing is seeded")
+    func spokenSplitsDefaultOff() {
+        let defaults = InMemoryStore()
+        let ubiquitous = InMemoryStore()
+
+        let settings = AppSettings(defaults: defaults, ubiquitous: ubiquitous)
+
+        // Off by default: this is the setting that talks over the runner's music.
+        #expect(settings.spokenSplitsEnabled == false)
+        #expect(ubiquitous.has(AppSettings.spokenSplitsKey) == false)
+        #expect(defaults.has(AppSettings.spokenSplitsKey) == false)
+    }
+
+    @Test("Turning spoken splits on round-trips through both stores")
+    func spokenSplitsChangeSyncs() {
+        let defaults = InMemoryStore()
+        let ubiquitous = InMemoryStore()
+        let settings = AppSettings(defaults: defaults, ubiquitous: ubiquitous)
+
+        settings.spokenSplitsEnabled = true
+
+        #expect(defaults.bool(forKey: AppSettings.spokenSplitsKey) == true)
+        #expect(ubiquitous.bool(forKey: AppSettings.spokenSplitsKey) == true)
+    }
+
+    @Test("A stored spoken-splits preference is read back on launch")
+    func spokenSplitsReadOnLaunch() {
+        let defaults = InMemoryStore()
+        let ubiquitous = InMemoryStore()
+        ubiquitous.set(true, forKey: AppSettings.spokenSplitsKey)
+
+        let settings = AppSettings(defaults: defaults, ubiquitous: ubiquitous)
+
+        #expect(settings.spokenSplitsEnabled == true)
+    }
+
     // MARK: - M15: mid-session changes arriving from another device
 
     @Test("A value that lands in iCloud while running is adopted")
@@ -146,15 +185,18 @@ struct AppSettingsTests {
         let defaults = InMemoryStore()
         let ubiquitous = InMemoryStore()
         let settings = AppSettings(defaults: defaults, ubiquitous: ubiquitous)
-        #expect(settings.unitPreference == .metric)
+        #expect(settings.unitPreference == UnitPreference.localeDefault)
 
-        // Another device switches to miles; iCloud KVS delivers it mid-session.
-        ubiquitous.set(UnitPreference.imperial.rawValue, forKey: AppSettings.unitPreferenceKey)
+        // Another device switches units; iCloud KVS delivers it mid-session. The incoming
+        // value is whichever one this device is *not* already on, so the test proves
+        // adoption on any locale (U10).
+        let incomingUnit: UnitPreference = UnitPreference.localeDefault == .metric ? .imperial : .metric
+        ubiquitous.set(incomingUnit.rawValue, forKey: AppSettings.unitPreferenceKey)
         ubiquitous.set(50_000.0, forKey: AppSettings.weeklyGoalMetersKey)
         ubiquitous.set(false, forKey: AppSettings.morningReminderKey)
         settings.applyExternalValues()
 
-        #expect(settings.unitPreference == .imperial)
+        #expect(settings.unitPreference == incomingUnit)
         #expect(settings.weeklyGoalMeters == 50_000)
         #expect(settings.morningReminderEnabled == false)
     }
@@ -169,7 +211,7 @@ struct AppSettingsTests {
         settings.applyExternalValues()
 
         #expect(settings.weeklyGoalMeters == 30_000)
-        #expect(settings.unitPreference == .metric)
+        #expect(settings.unitPreference == UnitPreference.localeDefault)
     }
 
     @Test("The device-local sync toggle is never changed by a remote value (M16)")
