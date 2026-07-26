@@ -246,7 +246,7 @@ struct RaceInsightsView: View {
                 }
             }
         }
-        .padding(16)
+        .padding(AppSpacing.lg)
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
@@ -342,28 +342,28 @@ struct RaceInsightsView: View {
                         color: .zoneEasy,
                         icon: .walk
                     )
-                    Divider().padding(.leading, 40)
+                    Divider().padding(.leading, AppSpacing.huge)
                     zoneRow(
                         label: "Marathon",
                         paceText: paces.marathon.paceString(unit: appSettings.unitPreference),
                         color: .zoneMarathon,
                         icon: .run
                     )
-                    Divider().padding(.leading, 40)
+                    Divider().padding(.leading, AppSpacing.huge)
                     zoneRow(
                         label: "Tempo",
                         paceText: paces.threshold.paceString(unit: appSettings.unitPreference),
                         color: .zoneTempo,
                         icon: .tempo
                     )
-                    Divider().padding(.leading, 40)
+                    Divider().padding(.leading, AppSpacing.huge)
                     zoneRow(
                         label: "Interval",
                         paceText: paces.interval.paceString(unit: appSettings.unitPreference),
                         color: .zoneInterval,
                         icon: .bolt
                     )
-                    Divider().padding(.leading, 40)
+                    Divider().padding(.leading, AppSpacing.huge)
                     zoneRow(
                         label: "Repetition",
                         paceText: paces.repetition.paceString(unit: appSettings.unitPreference),
@@ -447,7 +447,7 @@ struct RaceInsightsView: View {
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
-        .padding(12)
+        .padding(AppSpacing.md)
         .background(Color.surfaceTertiary, in: RoundedRectangle(cornerRadius: AppRadius.sm))
     }
 
@@ -480,7 +480,7 @@ struct RaceInsightsView: View {
                 }
             }
         }
-        .padding(16)
+        .padding(AppSpacing.lg)
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
@@ -493,7 +493,7 @@ struct RaceInsightsView: View {
                 .foregroundStyle(.secondary)
             content()
         }
-        .padding(16)
+        .padding(AppSpacing.lg)
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
@@ -531,7 +531,7 @@ struct RaceInsightsView: View {
 
     private func tooltipContainer<C: View>(@ViewBuilder content: () -> C) -> some View {
         content()
-            .padding(.horizontal, 8).padding(.vertical, 5)
+            .padding(.horizontal, AppSpacing.sm).padding(.vertical, 5)
             .background(Color.surfacePrimary, in: RoundedRectangle(cornerRadius: AppRadius.xs))
             .appShadow(.e2)
     }

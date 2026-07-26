@@ -51,7 +51,7 @@ extension RunSummaryView {
 
                     let hasComparison = scheduled.targetDistanceMeters != nil || scheduled.targetPaceRange != nil
                     if hasComparison {
-                        Divider().padding(.vertical, 2)
+                        Divider().padding(.vertical, AppSpacing.xxs)
 
                         if let targetDist = scheduled.targetDistanceMeters {
                             let converted = appSettings.unitPreference == .imperial ? targetDist / 1_609.344 : targetDist / 1_000
@@ -102,7 +102,7 @@ extension RunSummaryView {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 14)
-            .padding(.vertical, 12)
+            .padding(.vertical, AppSpacing.md)
             .background(Color.warning.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
             .overlay(
                 RoundedRectangle(cornerRadius: AppRadius.md)
@@ -149,8 +149,8 @@ extension RunSummaryView {
                     .font(.dsCaption2.weight(.bold))
             }
             .foregroundStyle(status.color)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .padding(.horizontal, AppSpacing.sm)
+            .padding(.vertical, AppSpacing.xs)
             .background(status.color.opacity(0.1), in: Capsule())
         }
     }

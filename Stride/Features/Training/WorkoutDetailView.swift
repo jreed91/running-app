@@ -65,8 +65,8 @@ struct WorkoutDetailView: View {
                             notesSection(notes: notes)
                         }
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 16)
+                    .padding(.horizontal, AppSpacing.lg)
+                    .padding(.vertical, AppSpacing.lg)
                     .frame(maxWidth: .infinity)
                 }
                 .navigationTitle(workout.workoutType.localizedName)
@@ -138,7 +138,7 @@ struct WorkoutDetailView: View {
     private func summaryChip(label: String, systemImage: String) -> some View {
         Text(label)
             .font(.dsCaption.weight(.semibold).monospaced())
-            .padding(.horizontal, 12)
+            .padding(.horizontal, AppSpacing.md)
             .padding(.vertical, 6)
             .background(.surfaceTertiary, in: Capsule())
             .foregroundStyle(.secondary)
@@ -192,15 +192,15 @@ struct WorkoutDetailView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 16)
-            .padding(.bottom, 12)
+            .padding(.horizontal, AppSpacing.lg)
+            .padding(.top, AppSpacing.lg)
+            .padding(.bottom, AppSpacing.md)
 
             // Indoor / outdoor toggle
             if !workout.isCompleted && workout.workoutType != .strength {
                 locationPicker
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 16)
+                    .padding(.horizontal, AppSpacing.lg)
+                    .padding(.bottom, AppSpacing.lg)
             }
         }
         .background(
@@ -234,7 +234,7 @@ struct WorkoutDetailView: View {
                             .font(.dsFootnote.weight(.semibold))
                     }
                     .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
+                    .padding(.vertical, AppSpacing.sm)
                     .frame(maxWidth: .infinity)
                     .background(
                         workout.workoutLocation == location
@@ -377,7 +377,7 @@ struct ExerciseRow: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(12)
+        .padding(AppSpacing.md)
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
@@ -451,6 +451,10 @@ private struct ConfettiBurstView: View {
     let isExpanded: Bool
 
     var body: some View {
+        // `GeometryReader` stays here and in `StaticConfettiView` deliberately (U7). Each
+        // particle is `.position`ed at a fraction of the *container*, and `visualEffect`'s
+        // proxy is the modified view's own geometry — a 5pt square — so it cannot express
+        // "38% across the card I am sitting in".
         GeometryReader { geo in
             ForEach(ConfettiParticle.samples) { particle in
                 RoundedRectangle(cornerRadius: AppRadius.micro)

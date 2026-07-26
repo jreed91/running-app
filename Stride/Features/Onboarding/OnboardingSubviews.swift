@@ -35,16 +35,19 @@ struct OBWelcome: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            GeometryReader { geo in
-                ZStack {
-                    Color.surfacePrimary
-                    RadialGradient(
-                        colors: [Color.brand.opacity(0.22), .clear],
-                        center: .top,
-                        startRadius: 0,
-                        endRadius: max(geo.size.width, geo.size.height) * 0.85
-                    )
-                }
+            // `EllipticalGradient`'s radii are fractions of the frame, so the welcome glow
+            // needs no `GeometryReader` to size itself and adapts to any screen (U7). The
+            // circle it replaces was `max(width, height) * 0.85`, which on a phone meant
+            // 0.85 of the *height* in both directions; the ellipse keeps that vertically
+            // and narrows horizontally, which is the falloff this was reaching for anyway.
+            ZStack {
+                Color.surfacePrimary
+                EllipticalGradient(
+                    colors: [Color.brand.opacity(0.22), .clear],
+                    center: .top,
+                    startRadiusFraction: 0,
+                    endRadiusFraction: 0.85
+                )
             }
             .ignoresSafeArea()
 
@@ -84,7 +87,7 @@ struct OBWelcome: View {
                     .font(.bodyRegular)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 12)
+                    .padding(.horizontal, AppSpacing.md)
                     .lineSpacing(2)
                     .opacity(appeared ? 1 : 0)
                     .offset(y: appeared ? 0 : 14)
@@ -98,7 +101,7 @@ struct OBWelcome: View {
                         StrideIcon(name: .chevronRight, size: 15, color: .onFill, strokeWeight: 2.6)
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
+                    .padding(.vertical, AppSpacing.lg)
                     .background(Color.brand, in: RoundedRectangle(cornerRadius: AppRadius.lg))
                     .appGlow(.strong, color: .brand)
                     .overlay(
@@ -124,13 +127,13 @@ struct OBWelcome: View {
                 .signInWithAppleButtonStyle(.black)
                 .frame(height: 50)
                 .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
-                .padding(.top, 12)
+                .padding(.top, AppSpacing.md)
                 .opacity(appeared ? 1 : 0)
                 .adaptiveAnimation(AppAnimation.entrance.delay(0.34), value: appeared)
 
                 Spacer().frame(height: 34)
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, AppSpacing.xxl)
         }
         .onAppear { appeared = true }
     }
@@ -163,16 +166,15 @@ struct OBWelcomeBack: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            GeometryReader { geo in
-                ZStack {
-                    Color.surfacePrimary
-                    RadialGradient(
-                        colors: [Color.brand.opacity(0.22), .clear],
-                        center: .top,
-                        startRadius: 0,
-                        endRadius: max(geo.size.width, geo.size.height) * 0.85
-                    )
-                }
+            // The same geometry-free glow as `OBWelcome` — see the note there.
+            ZStack {
+                Color.surfacePrimary
+                EllipticalGradient(
+                    colors: [Color.brand.opacity(0.22), .clear],
+                    center: .top,
+                    startRadiusFraction: 0,
+                    endRadiusFraction: 0.85
+                )
             }
             .ignoresSafeArea()
 
@@ -198,7 +200,7 @@ struct OBWelcomeBack: View {
                         .font(.bodyRegular)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
-                        .padding(.horizontal, 12)
+                        .padding(.horizontal, AppSpacing.md)
                         .lineSpacing(2)
                     if let iCloudIssue {
                         Spacer().frame(height: 12)
@@ -206,7 +208,7 @@ struct OBWelcomeBack: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
-                            .padding(.horizontal, 12)
+                            .padding(.horizontal, AppSpacing.md)
                     }
                     Spacer().frame(height: 28)
                     ProgressView().tint(.brand).scaleEffect(1.2)
@@ -214,7 +216,7 @@ struct OBWelcomeBack: View {
 
                 Spacer(minLength: 30)
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, AppSpacing.xxl)
 
             VStack(spacing: 14) {
                 if hasData {
@@ -226,7 +228,7 @@ struct OBWelcomeBack: View {
                             StrideIcon(name: .chevronRight, size: 15, color: .onFill, strokeWeight: 2.6)
                         }
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
+                        .padding(.vertical, AppSpacing.lg)
                         .background(Color.brand, in: RoundedRectangle(cornerRadius: AppRadius.lg))
                         .appGlow(.strong, color: .brand)
                         .overlay(
@@ -245,7 +247,7 @@ struct OBWelcomeBack: View {
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, AppSpacing.xl)
             .padding(.bottom, 44)
         }
         .task { await checkICloudStatus() }
@@ -390,16 +392,16 @@ struct OBShell<Content: View>: View {
                         .accessibilityLabel("Back")
                         .accessibilityIdentifier("onboarding.back.\(stepIndex)")
 
-                        GeometryReader { geo in
-                            ZStack(alignment: .leading) {
-                                Capsule().fill(Color.secondary.opacity(0.12)).frame(height: 4)
-                                Capsule().fill(Color.brand)
-                                    .frame(width: geo.size.width * CGFloat(stepIndex) / CGFloat(total),
-                                           height: 4)
-                                    .adaptiveAnimation(AppAnimation.bouncy, value: stepIndex)
-                            }
-                        }
-                        .frame(height: 4)
+                        // The platform's own determinate bar, which is what this was drawing
+                        // by hand: a 4pt track filled to a fraction. It needs no
+                        // `GeometryReader` to measure itself (U7), and it is hidden from
+                        // VoiceOver because the "3/8" counter beside it already says this —
+                        // the same call `ProgressRingView` makes next to its stat (U10).
+                        ProgressView(value: Double(stepIndex), total: Double(total))
+                            .progressViewStyle(.linear)
+                            .tint(.brand)
+                            .adaptiveAnimation(AppAnimation.bouncy, value: stepIndex)
+                            .accessibilityHidden(true)
 
                         // Steps count 1…total (the welcome screen is step 0, uncounted;
                         // the final "ready" screen is the last step) — so show
@@ -409,8 +411,8 @@ struct OBShell<Content: View>: View {
                             .font(.dsCaption2.weight(.bold).monospaced())
                             .foregroundStyle(.secondary)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 8)
+                    .padding(.horizontal, AppSpacing.xl)
+                    .padding(.top, AppSpacing.sm)
                     .padding(.bottom, 18)
                 }
 
@@ -434,7 +436,7 @@ struct OBShell<Content: View>: View {
 
                         content()
                     }
-                    .padding(.horizontal, 24)
+                    .padding(.horizontal, AppSpacing.xxl)
                     .padding(.bottom, 120)
                 }
             }
@@ -447,7 +449,7 @@ struct OBShell<Content: View>: View {
                         StrideIcon(name: .chevronRight, size: 14, color: .onFill, strokeWeight: 2.6)
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
+                    .padding(.vertical, AppSpacing.lg)
                     .background(Color.brand.opacity(ctaEnabled ? 1 : 0.5),
                                 in: RoundedRectangle(cornerRadius: AppRadius.md))
                     .appGlow(.strong, color: .brand, isActive: ctaEnabled)
@@ -472,7 +474,7 @@ struct OBShell<Content: View>: View {
                     .accessibilityIdentifier("onboarding.secondaryCTA.\(stepIndex)")
                 }
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, AppSpacing.xl)
             .padding(.bottom, 44)
         }
     }
@@ -545,7 +547,7 @@ struct OBRaceCard: View {
                 Spacer()
                 OBRadio(isSelected: isSelected, color: color)
             }
-            .padding(16)
+            .padding(AppSpacing.lg)
             .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
             .overlay(RoundedRectangle(cornerRadius: AppRadius.lg)
                 .strokeBorder(isSelected ? color : Color.clear, lineWidth: 2))
@@ -600,7 +602,7 @@ struct OBCustomDistanceCard: View {
                         Text(pick.label)
                             .font(.dsFootnote.weight(.semibold))
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 8)
+                            .padding(.vertical, AppSpacing.sm)
                             .background(
                                 isOn ? Color.brand : Color.surfaceTertiary,
                                 in: RoundedRectangle(cornerRadius: AppRadius.sm)
@@ -611,7 +613,7 @@ struct OBCustomDistanceCard: View {
                 }
             }
         }
-        .padding(16)
+        .padding(AppSpacing.lg)
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 }
@@ -647,7 +649,7 @@ struct OBRaceDetailsCard: View {
                     .submitLabel(.done)
                     .font(.bodyRegular)
                     .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
+                    .padding(.vertical, AppSpacing.md)
                     .background(.surfaceTertiary, in: RoundedRectangle(cornerRadius: AppRadius.md))
                     .overlay(
                         RoundedRectangle(cornerRadius: AppRadius.md)
@@ -663,7 +665,7 @@ struct OBRaceDetailsCard: View {
             )
             .font(.bodyStrong)
         }
-        .padding(16)
+        .padding(AppSpacing.lg)
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 }
@@ -709,7 +711,7 @@ struct OBStartDateCard: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
-        .padding(16)
+        .padding(AppSpacing.lg)
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 }
@@ -858,7 +860,7 @@ struct OBLevelRow: View {
                 Spacer()
                 OBRadio(isSelected: isSelected, color: .brand)
             }
-            .padding(.horizontal, 18).padding(.vertical, 16)
+            .padding(.horizontal, 18).padding(.vertical, AppSpacing.lg)
             .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
             .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
                 .strokeBorder(isSelected ? Color.brand : Color.clear, lineWidth: 2))
@@ -898,7 +900,7 @@ struct OBTimeWheelColumn: View {
             .overlay(
                 RoundedRectangle(cornerRadius: AppRadius.xs)
                     .strokeBorder(Color.brand.opacity(0.32), lineWidth: 1.5)
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, AppSpacing.sm)
                     .frame(height: 42),
                 alignment: .center
             )
@@ -926,7 +928,7 @@ struct OBWheelColumnStyle: ViewModifier {
                 .overlay(
                     RoundedRectangle(cornerRadius: AppRadius.xs)
                         .strokeBorder(Color.brand.opacity(0.32), lineWidth: 1.5)
-                        .padding(.horizontal, 8)
+                        .padding(.horizontal, AppSpacing.sm)
                         .frame(height: 42),
                     alignment: .center
                 )
@@ -955,7 +957,7 @@ struct OBPaceCell: View {
             }
             Spacer()
         }
-        .padding(.horizontal, 12).padding(.vertical, 10)
+        .padding(.horizontal, AppSpacing.md).padding(.vertical, 10)
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 }
@@ -1004,7 +1006,7 @@ struct OBPermissionRow: View {
             .animation(.easeInOut(duration: 0.2), value: isActive)
             .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isOn)
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, AppSpacing.md)
     }
 }
 
@@ -1070,20 +1072,18 @@ struct OBReady: View {
                 // Chrome: progress bar at 100% with 7/7 counter
                 Spacer().frame(height: 54)
                 HStack(spacing: 14) {
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            Capsule().fill(Color.secondary.opacity(0.18)).frame(height: 4)
-                            Capsule().fill(Color.brand).frame(height: 4)
-                                .frame(width: geo.size.width)
-                        }
-                    }
-                    .frame(height: 4)
+                    // The same bar as the step chrome, full (U7). The `GeometryReader` this
+                    // replaces was measuring a width only to fill all of it.
+                    ProgressView(value: 1)
+                        .progressViewStyle(.linear)
+                        .tint(.brand)
+                        .accessibilityHidden(true)
                     Text("\(progressTotal)/\(progressTotal)")
                         .font(.dsCaption2.weight(.bold).monospaced())
                         .foregroundStyle(.secondary)
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
+                .padding(.horizontal, AppSpacing.xl)
+                .padding(.top, AppSpacing.sm)
                 .padding(.bottom, 22)
 
                 ScrollView(showsIndicators: false) {
@@ -1100,7 +1100,7 @@ struct OBReady: View {
                                 .foregroundStyle(.primary)
                                 .lineSpacing(-2)
                         }
-                        .padding(.horizontal, 20)
+                        .padding(.horizontal, AppSpacing.xl)
 
                         // Summary card
                         HStack(spacing: 0) {
@@ -1113,17 +1113,17 @@ struct OBReady: View {
                                 value: "\(peakMiles)"
                             )
                         }
-                        .padding(16)
+                        .padding(AppSpacing.lg)
                         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, AppSpacing.lg)
 
                         // Weekly mileage chart
                         WeeklyMileageChart(planWeeks: planWeeks, goalRace: goalRace, peakMiles: peakMiles, unit: appSettings.unitPreference)
-                            .padding(.horizontal, 16)
+                            .padding(.horizontal, AppSpacing.lg)
 
                         Spacer().frame(height: 120)
                     }
-                    .padding(.top, 8)
+                    .padding(.top, AppSpacing.sm)
                 }
             }
 
@@ -1140,7 +1140,7 @@ struct OBReady: View {
                     }
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
+                .padding(.vertical, AppSpacing.lg)
                 .background(Color.brand, in: RoundedRectangle(cornerRadius: AppRadius.lg))
                 .appGlow(.strong, color: .brand)
                 .overlay(
@@ -1152,7 +1152,7 @@ struct OBReady: View {
             .buttonStyle(.plain)
             .disabled(isCreatingPlan)
             .accessibilityIdentifier("onboarding.startTraining")
-            .padding(.horizontal, 20)
+            .padding(.horizontal, AppSpacing.xl)
             .padding(.bottom, 44)
         }
     }
@@ -1280,9 +1280,9 @@ private struct WeeklyMileageChart: View {
                     }
                 }
             }
-            .padding(.top, 4)
+            .padding(.top, AppSpacing.xs)
         }
-        .padding(16)
+        .padding(AppSpacing.lg)
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 }
@@ -1332,7 +1332,7 @@ struct OBEquipmentCard: View {
                 }
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 12)
+            .padding(.vertical, AppSpacing.md)
             .background(cardBackground, in: RoundedRectangle(cornerRadius: AppRadius.md))
             .overlay(
                 RoundedRectangle(cornerRadius: AppRadius.md)
@@ -1376,7 +1376,7 @@ struct OBStrengthFocusPicker: View {
             Text("TRAINING FOCUS")
                 .font(.dsCaption2.weight(.semibold))
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, 4)
+                .padding(.horizontal, AppSpacing.xs)
 
             VStack(spacing: 8) {
                 ForEach(StrengthFocus.allCases, id: \.self) { option in
@@ -1412,7 +1412,7 @@ private struct OBStrengthFocusRow: View {
                 Spacer()
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 12)
+            .padding(.vertical, AppSpacing.md)
             .background(rowBackground, in: RoundedRectangle(cornerRadius: AppRadius.md))
             .overlay(
                 RoundedRectangle(cornerRadius: AppRadius.md)

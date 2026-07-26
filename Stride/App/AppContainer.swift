@@ -140,6 +140,16 @@ final class AppContainer {
     /// wires it and hands it out; it does not orchestrate it.
     let planLifecycle: PlanLifecycleService
 
+    /// Whether the active-run HUD is on screen, and the session state that has to survive
+    /// it being closed (U7). Owned here for the same reason `runVoiceCoach` is: the run
+    /// now outlives the screen that shows it, so nothing about it can live in the view.
+    let activeRunPresentation: ActiveRunPresentation
+
+    /// The run's Lock Screen and Dynamic Island presence (U5b). Wired into
+    /// `workoutTrackerService` below, which is the only pulse in the app that keeps running
+    /// while the phone is locked — the situation the activity exists for.
+    let runActivityController: RunActivityController
+
     // MARK: Workout Review
 
     /// Listens to `NotificationService.syncedRunTaps` for this container's lifetime. Not
@@ -151,33 +161,6 @@ final class AppContainer {
     /// taps a "Run Synced" notification. Presenting a RunSummaryView sheet on this value lets
     /// the user review their workout and confirms the auto-link to today's planned workout.
     var pendingReviewWorkout: RunWorkout?
-
-    // MARK: Active run presentation
-
-    /// Whether the full-screen run HUD is on screen.
-    ///
-    /// This lives on the container rather than in `DashboardView` because two views now
-    /// drive it: the dashboard's "Start Run" button, and `MainTabView`'s bottom accessory,
-    /// which sits *outside* the dashboard's view tree and has to be able to bring a
-    /// still-running workout back after the runner dismisses the HUD (U7). Dismissing the
-    /// cover no longer ends the run, so something above the tab bar has to own the way back.
-    var isShowingActiveRun = false
-
-    /// The planned workout the active run is fulfilling, or `nil` for a free run.
-    /// Paired with `isShowingActiveRun` so re-presenting from the accessory restores the
-    /// same run rather than reopening it as an unplanned one (H4).
-    var activeRunScheduledWorkout: ScheduledWorkout?
-
-    /// The pace band the current guided step — or the scheduled workout behind it —
-    /// is asking for, or `nil` on a free run.
-    ///
-    /// Published here by `ActiveRunView` because the *announcer* now lives in
-    /// `MainTabView` rather than in the HUD. Spoken splits (U4) were driven by an
-    /// `onChange` inside the run screen, which stopped the moment the runner minimized
-    /// it — and a runner with the phone in a pocket is exactly who spoken splits are
-    /// for. The band is HUD-derived state, so the HUD hands it over rather than the
-    /// announcer reaching back into guided-workout internals.
-    var activeRunTargetPaceBand: ClosedRange<Double>?
 
     // MARK: Init
 
@@ -319,7 +302,14 @@ final class AppContainer {
 
         let planService = TrainingPlanService()
         self.trainingPlanService = planService
-        self.workoutTrackerService = WorkoutTrackerService()
+        let tracker = WorkoutTrackerService()
+        self.workoutTrackerService = tracker
+        let activityController = RunActivityController()
+        self.runActivityController = activityController
+        // The tracker drives the Live Activity, so it is handed the presenter rather than
+        // reaching for it: three verbs (started, updated, ended) instead of a dependency on
+        // ActivityKit inside the service that records the run (U5b).
+        tracker.activityPresenter = activityController
         let notifications = NotificationService.shared
         self.notificationService = notifications
         self.workoutAnalyticsService = WorkoutAnalyticsService()
@@ -330,6 +320,7 @@ final class AppContainer {
         self.weatherService = weather
         self.aiCoachService = AICoachService()
         self.runVoiceCoach = RunVoiceCoach()
+        self.activeRunPresentation = ActiveRunPresentation()
         self.workoutSyncService = WorkoutSyncService(
             healthKitRepository: hkRepository,
             notificationService: notifications,

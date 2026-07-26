@@ -43,8 +43,8 @@ struct WeekCalendarView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 12)
+        .padding(.horizontal, AppSpacing.lg)
+        .padding(.top, AppSpacing.md)
         .padding(.bottom, 6)
     }
 
@@ -79,7 +79,7 @@ struct WeekCalendarView: View {
                 weekStart = weekStart.adding(weeks: 1)
             }
         }
-        .padding(.bottom, 8)
+        .padding(.bottom, AppSpacing.sm)
         // Seven day columns plus two chevrons across the screen width — the other
         // layout that can't reflow, so it scales up to accessibility1 and stops (U2).
         .dynamicTypeSize(...DynamicTypeSize.accessibility1)
@@ -169,7 +169,7 @@ private struct DayCell: View {
             indicatorArea
                 .frame(height: 10)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, AppSpacing.xs)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityDescription)
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
@@ -258,22 +258,25 @@ private struct WeeklyLoadBar: View {
     let isActive: Bool       // today (no bar yet)
 
     var body: some View {
-        GeometryReader { geo in
-            VStack(spacing: 0) {
-                Spacer()
-                if isActive {
-                    RoundedRectangle(cornerRadius: AppRadius.micro)
-                        .fill(Color.brand)
-                        .frame(height: 3)
-                } else if fraction > 0 {
-                    RoundedRectangle(cornerRadius: AppRadius.micro)
-                        .fill(color.opacity(0.9))
-                        .frame(height: geo.size.height * fraction)
-                } else {
-                    RoundedRectangle(cornerRadius: AppRadius.micro)
-                        .fill(Color.secondary.opacity(0.2))
-                        .frame(height: 3)
-                }
+        VStack(spacing: 0) {
+            Spacer(minLength: 0)
+            if isActive {
+                RoundedRectangle(cornerRadius: AppRadius.micro)
+                    .fill(Color.brand)
+                    .frame(height: 3)
+            } else if fraction > 0 {
+                // Full height, scaled from the bottom, rather than a measured height: it
+                // retires the `GeometryReader` this view existed inside (U7) and draws the
+                // same bar. The only casualty is the corner radius, which squashes with the
+                // bar — at `micro` on a chart bar that is a fraction of a point.
+                RoundedRectangle(cornerRadius: AppRadius.micro)
+                    .fill(color.opacity(0.9))
+                    .frame(maxHeight: .infinity)
+                    .scaleEffect(y: fraction, anchor: .bottom)
+            } else {
+                RoundedRectangle(cornerRadius: AppRadius.micro)
+                    .fill(Color.secondary.opacity(0.2))
+                    .frame(height: 3)
             }
         }
     }
@@ -347,16 +350,6 @@ struct DashboardView: View {
         return info
     }
 
-    /// Bridges the container's active-run flag into the `isPresented:` shape the cover
-    /// needs. The flag lives on the container so `MainTabView`'s bottom accessory can
-    /// raise it from outside this view's tree (U7).
-    private var activeRunPresented: Binding<Bool> {
-        Binding(
-            get: { container.isShowingActiveRun },
-            set: { container.isShowingActiveRun = $0 }
-        )
-    }
-
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -392,17 +385,18 @@ struct DashboardView: View {
                             .offset(y: dashboardAppeared ? 0 : 16)
                             .adaptiveAnimation(AppAnimation.entrance.delay(0.18), value: dashboardAppeared)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 16)
+                    .padding(.horizontal, AppSpacing.lg)
+                    .padding(.vertical, AppSpacing.lg)
                 }
                 .task { dashboardAppeared = true }
             }
             .background(Color.surfacePrimary)
             .navigationTitle("Today")
             .navigationBarTitleDisplayMode(.inline)
-            .fullScreenCover(isPresented: activeRunPresented) {
-                ActiveRunView(scheduledWorkout: container.activeRunScheduledWorkout)
-            }
+            // The active-run HUD is presented by `MainTabView`, not here: a run started
+            // from this tab now outlives the screen that shows it, so it can be
+            // minimised into the tab-bar accessory instead of only finished (U7).
+            // Strength stays local — it has no minimised form.
             .fullScreenCover(item: $strengthWorkout) { workout in
                 StrengthActiveView(scheduledWorkout: workout)
             }
@@ -454,7 +448,7 @@ struct DashboardView: View {
             // Weekly load mini bar chart
             weeklyLoadChart
         }
-        .padding(16)
+        .padding(AppSpacing.lg)
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
         .appShadow(.e1)
     }
@@ -539,7 +533,7 @@ struct DashboardView: View {
             }
         }
         .frame(height: 28)
-        .padding(.top, 4)
+        .padding(.top, AppSpacing.xs)
         // Seven bars with no label at all. `chartAccessibility` was built for exactly
         // this and is on all six Progress-tab charts — this one was missed (U10).
         // Days still to come are left out rather than spoken as zero.
@@ -572,7 +566,7 @@ struct DashboardView: View {
             Text(selectedDayLabel)
                 .font(.sectionHeader)
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, 4)
+                .padding(.horizontal, AppSpacing.xs)
                 .adaptiveAnimation(AppAnimation.bouncy, value: selectedDate)
 
             Group {
@@ -630,8 +624,7 @@ struct DashboardView: View {
             if workout.workoutType == .strength {
                 strengthWorkout = workout
             } else {
-                container.activeRunScheduledWorkout = workout
-                container.isShowingActiveRun = true
+                startRun(fulfilling: workout)
             }
         } label: {
             HStack(spacing: 10) {
@@ -640,7 +633,7 @@ struct DashboardView: View {
                     .font(.dsHeadline.weight(.bold))
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
+            .padding(.vertical, AppSpacing.lg)
             // White on `Color.brand` is 2.84:1 — below even the 3.0 large-text bar,
             // on the app's most-tapped control (U3a).
             .foregroundStyle(.onFill)
@@ -741,16 +734,15 @@ struct DashboardView: View {
 
     private var startRunButton: some View {
         Button {
-            container.activeRunScheduledWorkout = nil
-            container.isShowingActiveRun = true
+            startRun(fulfilling: nil)
         } label: {
             HStack(spacing: 10) {
                 StrideIcon(name: .run, size: 20, color: .onFill, strokeWeight: 2.0)
-                Text("Start a Free Run")
+                Text(freeRunButtonTitle)
                     .font(.dsHeadline.weight(.bold))
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
+            .padding(.vertical, AppSpacing.lg)
             .foregroundStyle(.onFill)
             // Inside the label, not on the `Button`: `BouncyButtonStyle` scales
             // `configuration.label`, so a background applied outside it would stay put
@@ -765,6 +757,25 @@ struct DashboardView: View {
         // `.plain` gave the app's two most-tapped controls no press response at all,
         // while `BouncyButtonStyle` sat on seven onboarding buttons (U10).
         .buttonStyle(BouncyButtonStyle())
+    }
+
+    /// The app's most-tapped control has a second job since U7: a run can be minimised
+    /// into the tab-bar accessory, and this button stays on screen underneath it. Tapping
+    /// it then reopens the run rather than starting another, so it has to say so.
+    ///
+    /// Typed `LocalizedStringKey` explicitly — a ternary of two bare literals infers
+    /// `String`, which picks `Text`'s non-localizing overload and drops both strings out
+    /// of the catalog.
+    private var freeRunButtonTitle: LocalizedStringKey {
+        container.workoutTrackerService.isRecording ? "Back to Your Run" : "Start a Free Run"
+    }
+
+    /// Starts a run, or reopens the one already recording (U7).
+    private func startRun(fulfilling workout: ScheduledWorkout?) {
+        container.activeRunPresentation.startOrReopen(
+            scheduledWorkout: workout,
+            isRunInProgress: container.workoutTrackerService.isRecording
+        )
     }
 
     // MARK: - Helpers

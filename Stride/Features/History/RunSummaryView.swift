@@ -296,8 +296,8 @@ struct RunSummaryView: View {
                 }
                 aiCoachSection
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 32)
+            .padding(.horizontal, AppSpacing.lg)
+            .padding(.bottom, AppSpacing.xxxl)
             .frame(maxWidth: .infinity)
         }
         .task(id: workout.id) {

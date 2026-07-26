@@ -131,7 +131,7 @@ struct PlanSetupView: View {
     private var runDaysSection: some View {
         Section {
             DayOfWeekPicker(selectedDays: $selectedDays)
-                .padding(.vertical, 4)
+                .padding(.vertical, AppSpacing.xs)
         } header: {
             HStack {
                 Text("Run Days")

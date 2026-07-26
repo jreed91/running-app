@@ -93,6 +93,11 @@ struct GuidedWorkoutBanner: View {
     // MARK: - Progress bar
 
     private var progressBar: some View {
+        // `GeometryReader` stays here deliberately (U7). `ProgressView(value:)` retired the
+        // two onboarding chrome bars, which were already the platform's 4pt track drawn by
+        // hand — this one is an 8pt capsule with a 6pt minimum fill on a saturated zone
+        // gradient, so swapping it would be a redesign of the run HUD rather than adopting a
+        // component that matches.
         GeometryReader { geo in
             ZStack(alignment: .leading) {
                 Capsule()
@@ -142,7 +147,7 @@ struct GuidedWorkoutBanner: View {
                         Image(systemName: "forward.fill")
                             .font(.system(size: 12, weight: .bold))
                     }
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, AppSpacing.lg)
                     .padding(.vertical, 9)
                     .background(.white.opacity(0.18), in: Capsule())
                     .overlay(Capsule().strokeBorder(.white.opacity(0.3), lineWidth: 0.5))

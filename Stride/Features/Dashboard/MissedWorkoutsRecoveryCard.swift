@@ -81,7 +81,7 @@ struct MissedWorkoutsRecoveryCard: View {
                 .font(.dsSubhead.weight(.semibold))
                 .foregroundStyle(.onFill)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
+                .padding(.vertical, AppSpacing.md)
                 .background(
                     RoundedRectangle(cornerRadius: AppRadius.md)
                         .fill(Color.brand)
@@ -96,7 +96,7 @@ struct MissedWorkoutsRecoveryCard: View {
                 .font(.dsSubhead.weight(.medium))
                 .foregroundStyle(.primary)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
+                .padding(.vertical, AppSpacing.md)
                 .background(
                     RoundedRectangle(cornerRadius: AppRadius.md)
                         .fill(Color.surfaceSecondary)

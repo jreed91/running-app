@@ -27,7 +27,7 @@ extension RunSummaryView {
                     .foregroundStyle(.secondary)
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 12)
+            .padding(.vertical, AppSpacing.md)
             .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
         .buttonStyle(.plain)
@@ -82,7 +82,7 @@ extension RunSummaryView {
             }
         }
         .padding(.top, 18)
-        .padding(.horizontal, 4)
+        .padding(.horizontal, AppSpacing.xs)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -179,7 +179,7 @@ extension RunSummaryView {
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, 16)
+        .padding(.horizontal, AppSpacing.lg)
         .padding(.vertical, 14)
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
         .gridCellColumns(colSpan ? 2 : 1)
@@ -237,7 +237,7 @@ extension RunSummaryView {
                     .font(.caption)
                     .frame(maxWidth: .infinity)
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, AppSpacing.lg)
                 .padding(.vertical, 14)
                 .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
             }
