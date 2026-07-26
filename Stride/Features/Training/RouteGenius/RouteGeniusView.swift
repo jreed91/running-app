@@ -175,11 +175,11 @@ struct RouteGeniusView: View {
                                 }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 12)
+                            .padding(.horizontal, AppSpacing.md)
                             .padding(.vertical, 10)
                         }
                         if item != viewModel.addressResults.last {
-                            Divider().padding(.leading, 12)
+                            Divider().padding(.leading, AppSpacing.md)
                         }
                     }
                 }
@@ -358,7 +358,7 @@ struct RouteGeniusView: View {
                         .padding(.horizontal)
                 }
             }
-            .padding(.top, 40)
+            .padding(.top, AppSpacing.huge)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -416,7 +416,7 @@ private struct RouteOptionCard: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             }
-            .padding(12)
+            .padding(AppSpacing.md)
             .background(
                 isSelected
                     ? Color.brand.opacity(0.08)
@@ -448,7 +448,7 @@ private struct RouteTypeButton: View {
                 Text(type.localizedName).font(.caption)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
+            .padding(.vertical, AppSpacing.md)
             .background(
                 isSelected ? Color.brand : Color.surfaceSecondary,
                 in: RoundedRectangle(cornerRadius: AppRadius.md)
@@ -532,6 +532,6 @@ struct TurnByTurnRow: View {
                 .foregroundStyle(.tertiary)
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 12)
+        .padding(.vertical, AppSpacing.md)
     }
 }

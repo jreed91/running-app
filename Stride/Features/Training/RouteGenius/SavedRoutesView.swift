@@ -99,7 +99,7 @@ private struct SavedRouteRow: View {
                 }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, AppSpacing.xs)
     }
 }
 

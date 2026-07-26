@@ -4,14 +4,8 @@ import UIKit
 
 struct ActiveRunView: View {
     @Environment(AppContainer.self) private var container
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @Environment(AppSettings.self) private var appSettings
-
-    /// The scheduled workout this run fulfills, when launched from "Start This
-    /// Workout". `nil` for a free run. Drives the start type and links the saved
-    /// run back to the plan so the day is marked complete (H4).
-    var scheduledWorkout: ScheduledWorkout? = nil
 
     // Both queries are filtered and sorted to match every other reader in the app.
     // Unfiltered, `activePlans.first` was whatever SwiftData returned — and since
@@ -36,14 +30,34 @@ struct ActiveRunView: View {
     @State private var metricsAppeared = false
     @State private var selectedLocation: WorkoutLocation = .outdoor
 
-    /// Guided structured-workout state, present only when this run fulfils a
-    /// scheduled workout that carries a multi-segment `WorkoutStructure` (A4).
-    /// Flat easy runs and free runs leave this `nil` and are unchanged.
-    @State private var guided: GuidedWorkoutState?
-
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var tracker: WorkoutTrackerService { container.workoutTrackerService }
+
+    /// The run session, which outlives this screen so it can be minimised into the
+    /// tab-bar accessory (U7). Both of the things a run remembers that the tracker does
+    /// not — the scheduled workout it fulfils and the guided stepper's position — live
+    /// there rather than in `@State`, because dismissing the cover destroys this view.
+    private var presentation: ActiveRunPresentation { container.activeRunPresentation }
+
+    /// The scheduled workout this run fulfills, when launched from "Start This
+    /// Workout". `nil` for a free run. Drives the start type and links the saved
+    /// run back to the plan so the day is marked complete (H4).
+    private var scheduledWorkout: ScheduledWorkout? { presentation.scheduledWorkout }
+
+    /// Guided structured-workout state, present only when this run fulfils a
+    /// scheduled workout that carries a multi-segment `WorkoutStructure` (A4).
+    /// Flat easy runs and free runs leave this `nil` and are unchanged.
+    private var guided: GuidedWorkoutState? { presentation.guided }
+
+    /// The stepper as a binding, for `GuidedWorkoutBanner` to advance. Built here
+    /// because `presentation` is a computed property, so `@Bindable` does not apply.
+    private var guidedBinding: Binding<GuidedWorkoutState?> {
+        Binding(
+            get: { presentation.guided },
+            set: { presentation.guided = $0 }
+        )
+    }
 
     /// Start type for the run: the scheduled workout's type when it's a run
     /// (easy/tempo/interval/long/race), otherwise a free easy run (H4).
@@ -90,13 +104,13 @@ struct ActiveRunView: View {
                 }
             }
             .sensoryFeedback(.error, trigger: saveErrorMessage != nil) { _, isShowing in isShowing }
-            // Each completed kilometre/mile, so pace checks don't need a glance.
-            .sensoryFeedback(.impact(weight: .light), trigger: tracker.splits.count) { old, new in
-                new > old
-            }
+            // Each closed kilometre/mile, felt and (opt-in) spoken. Shared with
+            // `MainTabView`, which owns the same feedback while the run is minimised and
+            // this screen is gone — see `RunSplitFeedback`.
+            .runSplitFeedback(isActive: true)
             // A guided interval changing step is otherwise invisible unless the runner
             // happens to be looking at the banner at that moment.
-            .sensoryFeedback(trigger: guided?.stepNumber) { (oldStep: Int?, newStep: Int?) -> SensoryFeedback? in
+            .sensoryFeedback(trigger: presentation.guided?.stepNumber) { (oldStep: Int?, newStep: Int?) -> SensoryFeedback? in
                 guard let oldStep, let newStep, newStep != oldStep else { return nil }
                 return .impact(weight: .heavy)
             }
@@ -142,46 +156,19 @@ struct ActiveRunView: View {
             .onChange(of: tracker.trackingState, initial: true) { _, state in
                 UIApplication.shared.isIdleTimerDisabled = (state == .active || state == .paused)
             }
-            // Each closed kilometre/mile, spoken (U4). The light haptic beside this says
-            // *that* a split closed; only speech can say what it was, which is the whole
-            // reason a runner would look at the phone mid-stride.
-            .onChange(of: tracker.splits.count) { (oldCount: Int, newCount: Int) in
-                announceSplit(previousCount: oldCount, count: newCount)
-            }
             .onDisappear {
                 UIApplication.shared.isIdleTimerDisabled = false
                 // Finishing or discarding mid-sentence must not leave the runner's music
-                // ducked, so the session is released with the screen.
+                // ducked, so the audio session is released with the screen.
                 container.runVoiceCoach.stop()
+                // Minimising and ending both take this screen away; only one of them keeps
+                // the run (U7). A tracker that is no longer recording means the run is
+                // over, so the session behind it — the scheduled workout it fulfilled and
+                // the guided stepper — goes now that the cover has actually gone.
+                if !presentation.isPresented, !tracker.isRecording {
+                    presentation.end()
+                }
             }
-    }
-
-    /// Speaks the split that just closed, when the runner has asked for it.
-    ///
-    /// Off by default (`AppSettings.spokenSplitsEnabled`) — this is the one feature that
-    /// talks over whatever else is playing.
-    private func announceSplit(previousCount: Int, count: Int) {
-        guard appSettings.spokenSplitsEnabled,
-              count > previousCount,
-              let split = tracker.splits.last else { return }
-        container.runVoiceCoach.speak(
-            SplitAnnouncement.phrase(
-                splitNumber: split.kilometer,
-                paceSecondsPerKm: split.paceSecondsPerKm,
-                unit: appSettings.unitPreference,
-                targetPaceSecondsPerKm: spokenSplitTargetBand
-            )
-        )
-    }
-
-    /// The pace band a split is judged against, narrowest first: the guided step the
-    /// runner is actually in, then the scheduled workout's own target. A free run has
-    /// neither, and its splits are announced without a verdict.
-    private var spokenSplitTargetBand: ClosedRange<Double>? {
-        if let stepPace = guided?.currentStep.targetPaceSecondsPerKm, stepPace > 0 {
-            return stepPace...stepPace
-        }
-        return scheduledWorkout?.targetPaceRange
     }
 
     private var hudLayers: some View {
@@ -195,6 +182,12 @@ struct ActiveRunView: View {
             // is darkened enough that white clears 4.5:1 on the lightest zone
             // (ZoneTempo/ZoneEasy) while the zone stays unmistakably itself.
             // Fractions are tuned for the perceptual blend `mix` uses by default.
+            //
+            // `GeometryReader` stays here deliberately (U7). `EllipticalGradient` would
+            // retire it — as it did on the onboarding glow — but its radii are fractions of
+            // both axes, so the three stops would land somewhere else, and *where* they land
+            // is what the contrast audit measured (U3b). A geometry-free version of this
+            // gradient is a re-tune, not a refactor.
             GeometryReader { geo in
                 RadialGradient(
                     stops: [
@@ -235,13 +228,13 @@ struct ActiveRunView: View {
                         .padding(.horizontal, 22)
                         .padding(.top, 22)
                 }
-                if let guidedBinding = Binding($guided) {
+                if let unwrappedGuided = Binding(guidedBinding) {
                     GuidedWorkoutBanner(
                         tracker: tracker,
-                        guided: guidedBinding,
+                        guided: unwrappedGuided,
                         unit: appSettings.unitPreference
                     )
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, AppSpacing.lg)
                     .padding(.top, 18)
                 }
                 metricsGrid
@@ -251,18 +244,25 @@ struct ActiveRunView: View {
         }
     }
 
+    /// Runs on every appearance, which since U7 includes *reopening* a minimised run —
+    /// so everything here has to be safe to repeat mid-run. It is: `prepareForNewWorkout`
+    /// only acts on a finished tracker, `setLocation` only on an idle one, and the
+    /// guided stepper is built once by `ActiveRunPresentation.start` rather than here,
+    /// which used to be the only place it was built and would have put a runner three
+    /// intervals in back on step 1.
     private func prepareForAppearance() {
         // Recover from a previous run's terminal state so the start button works.
         tracker.prepareForNewWorkout()
-        // Build the guided-workout stepper when this run fulfils a structured
-        // scheduled workout (A4); a nil/flat structure leaves guided mode off.
-        if let structure = scheduledWorkout?.workoutStructure, !structure.mainSets.isEmpty {
-            guided = GuidedWorkoutState(structure: structure)
-        }
-        // Default the indoor/outdoor toggle to the scheduled workout's location.
-        if let scheduledLocation = scheduledWorkout?.workoutLocation {
-            selectedLocation = scheduledLocation
-            tracker.setLocation(scheduledLocation)
+        if tracker.trackingState == .idle {
+            // Default the indoor/outdoor toggle to the scheduled workout's location.
+            if let scheduledLocation = scheduledWorkout?.workoutLocation {
+                selectedLocation = scheduledLocation
+                tracker.setLocation(scheduledLocation)
+            }
+        } else {
+            // Reopened mid-run: the toggle is read-only from here on, and it has to show
+            // what the run is actually recording rather than this view's fresh default.
+            selectedLocation = tracker.workoutLocation
         }
         metricsAppeared = true
         controlsAppeared = true
@@ -276,6 +276,8 @@ struct ActiveRunView: View {
 
     private var topBar: some View {
         HStack(spacing: 8) {
+            minimizeButton
+
             // Indoor / outdoor toggle — only interactive before the workout starts
             locationToggle
 
@@ -310,8 +312,43 @@ struct ActiveRunView: View {
             }
         }
         .padding(.horizontal, 22)
-        .padding(.top, 12)
+        .padding(.top, AppSpacing.md)
         .foregroundStyle(.white)
+    }
+
+    /// The way off this screen that isn't ending the run (U7).
+    ///
+    /// Before this there was none: the HUD was a `fullScreenCover` with no close control,
+    /// so a runner who wanted to look at next week's plan, or who opened the screen by
+    /// mistake and hadn't started yet, had to Finish or Discard to get out. Mid-run it
+    /// minimises into the tab-bar accessory, which keeps recording and offers the way
+    /// back; before the run starts there is no session to minimise, so it closes.
+    private var minimizeButton: some View {
+        let isIdle = tracker.trackingState == .idle
+        return Button {
+            if isIdle {
+                endRun()
+            } else {
+                presentation.minimize()
+            }
+        } label: {
+            glassControlButton(size: 44) {
+                StrideIcon(
+                    name: isIdle ? .close : .chevronDown,
+                    size: 16,
+                    color: .white,
+                    strokeWeight: 2.4
+                )
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(isIdle ? "Close" : "Minimize run")
+        .accessibilityHint(
+            isIdle
+                ? "Leaves without starting a run"
+                : "Keeps recording and shows the run above the tab bar"
+        )
+        .accessibilityIdentifier("activeRun.minimize")
     }
 
     /// GPS reception, surfaced on the screen the runner is actually looking at (U5c).
@@ -451,6 +488,10 @@ struct ActiveRunView: View {
             .kerning(1.2)
             .foregroundStyle(.white.opacity(0.92))
 
+            // `GeometryReader` stays here deliberately (U7). The marker's offset alone could
+            // move to `visualEffect`, but the target band needs a measured *width* as well,
+            // so converting half of it would leave the reader in place and split one piece of
+            // geometry across two idioms.
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     // Track
@@ -523,9 +564,9 @@ struct ActiveRunView: View {
                 )
             }
         }
-        .padding(20)
+        .padding(AppSpacing.xl)
         .glassEffect(.regular, in: .rect(cornerRadius: AppRadius.xl))
-        .padding(.horizontal, 16)
+        .padding(.horizontal, AppSpacing.lg)
         .padding(.top, 26)
         // Three fixed-width columns above a hero that already fills the screen: this
         // grid is one of the two places in the app that genuinely cannot reflow, so
@@ -673,8 +714,8 @@ struct ActiveRunView: View {
             .accessibilityHint("Choose to save or discard this run")
             .accessibilityIdentifier("activeRun.finish")
         }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 40)
+        .padding(.horizontal, AppSpacing.lg)
+        .padding(.bottom, AppSpacing.huge)
         .opacity(controlsAppeared ? 1 : 0)
         .offset(y: controlsAppeared ? 0 : 30)
         .adaptiveAnimation(AppAnimation.entrance.delay(0.2), value: controlsAppeared)
@@ -723,17 +764,33 @@ struct ActiveRunView: View {
         HStack(spacing: 6) { content() }
             .font(.system(size: 12, weight: .semibold))
             .padding(.horizontal, 14)
-            .padding(.vertical, 8)
+            .padding(.vertical, AppSpacing.sm)
             .glassEffect(.regular, in: .capsule)
     }
 
     // MARK: - Actions
 
+    /// Takes the HUD off screen at the end of a run — saved, discarded, or closed before
+    /// it ever started.
+    ///
+    /// This is the counterpart to `presentation.minimize()`, and the distinction is the
+    /// whole point of U7: minimising leaves the session standing so the accessory can show
+    /// it, while every path through here is finished with the run. The session itself is
+    /// torn down by `onDisappear` rather than here, once the cover has actually gone;
+    /// `onDisappear` can tell the two exits apart, because a minimised run is still
+    /// recording and an ended one is not.
+    ///
+    /// Dismissing through the presentation rather than `@Environment(\.dismiss)` is what
+    /// keeps the accessory and the HUD from disagreeing about where the run is.
+    private func endRun() {
+        presentation.isPresented = false
+    }
+
     private func finishAndSave() {
         // `finishWorkout()` is one-shot — it transitions the tracker to `.finished`
         // and a second call returns nil — so the run is held in `pendingSave` and a
         // failed save is retried from there rather than re-finishing the tracker.
-        guard let workout = pendingSave ?? tracker.finishWorkout() else { dismiss(); return }
+        guard let workout = pendingSave ?? tracker.finishWorkout() else { endRun(); return }
         pendingSave = workout
         persistFinishedRun(workout)
     }
@@ -747,12 +804,12 @@ struct ActiveRunView: View {
         _ = tracker.finishWorkout()
         pendingSave = nil
         AppLogger.log("Run discarded from the finish dialog; nothing saved", label: "ActiveRun")
-        dismiss()
+        endRun()
     }
 
     private func retrySave() {
         saveErrorMessage = nil
-        guard let workout = pendingSave else { dismiss(); return }
+        guard let workout = pendingSave else { endRun(); return }
         persistFinishedRun(workout)
     }
 
@@ -770,7 +827,7 @@ struct ActiveRunView: View {
             pendingSave = nil
         }
         context.saveOrLog("the discard of an unsaved run")
-        dismiss()
+        endRun()
     }
 
     private func persistFinishedRun(_ workout: RunWorkout) {
@@ -839,7 +896,7 @@ struct ActiveRunView: View {
             )
             context.saveOrLog("training paces refreshed after the run")
         }
-        dismiss()
+        endRun()
     }
 }
 

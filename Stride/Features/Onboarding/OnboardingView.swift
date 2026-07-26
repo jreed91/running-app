@@ -325,7 +325,7 @@ struct OnboardingView: View {
             .accessibilityLabel("Distance and pace units")
             .accessibilityIdentifier("onboarding.units")
         }
-        .padding(16)
+        .padding(AppSpacing.lg)
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
@@ -367,7 +367,7 @@ struct OnboardingView: View {
                 }
                 Spacer()
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, AppSpacing.lg)
             .padding(.vertical, 14)
             .background(
                 LinearGradient(colors: [Color.brand.opacity(0.14), Color.brand.opacity(0.04)], startPoint: .topLeading, endPoint: .bottomTrailing),
@@ -412,7 +412,7 @@ struct OnboardingView: View {
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, AppSpacing.lg)
         .padding(.vertical, 14)
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
@@ -472,7 +472,7 @@ struct OnboardingView: View {
                             Text(name)
                                 .font(.dsFootnote.weight(.semibold))
                                 .frame(maxWidth: .infinity)
-                                .padding(.vertical, 8)
+                                .padding(.vertical, AppSpacing.sm)
                                 .background(
                                     isChosen ? Color.surfaceSecondary : Color.clear,
                                     in: RoundedRectangle(cornerRadius: AppRadius.xs)
@@ -483,7 +483,7 @@ struct OnboardingView: View {
                         .foregroundStyle(.primary)
                     }
                 }
-                .padding(2)
+                .padding(AppSpacing.xxs)
                 .background(Color.secondary.opacity(0.14), in: RoundedRectangle(cornerRadius: AppRadius.sm))
 
                 HStack {
@@ -495,9 +495,9 @@ struct OnboardingView: View {
                         .font(.dsTitle3.weight(.bold).monospaced())
                         .foregroundStyle(.brand)
                 }
-                .padding(.top, 4)
+                .padding(.top, AppSpacing.xs)
             }
-            .padding(16)
+            .padding(AppSpacing.lg)
             .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
     }

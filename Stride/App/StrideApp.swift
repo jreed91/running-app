@@ -33,6 +33,10 @@ struct StrideApp: App {
                 .task {
                     PulseIntegrationService.activateIfNeeded()
                     guard !UITestingSupport.isEnabled else { return }
+                    // An app killed mid-run leaves its Live Activity on the Lock Screen
+                    // with nothing behind it to update or end (U5b). The run went with the
+                    // process, so the card comes down here rather than going stale.
+                    container.runActivityController.endActivitiesFromPreviousLaunches()
                     await container.workoutSyncService.startObserving()
                     await authService.checkCredentialState()
                     container.checkForPendingReviewWorkout()
@@ -55,7 +59,23 @@ struct StrideApp: App {
                         )
                     }
                 }
+                .onOpenURL { url in
+                    handleDeepLink(url)
+                }
         }
+    }
+
+    /// Handles `stride://` links. Today there is exactly one: the run's Live Activity,
+    /// which should land on the run rather than merely foregrounding the app (U5b/U7).
+    ///
+    /// Guarded on a run actually recording, because a Live Activity can be tapped in the
+    /// moment between the run finishing and the card being dismissed — and reopening the HUD
+    /// onto a finished tracker would show a run that has already been saved.
+    private func handleDeepLink(_ url: URL) {
+        guard url.scheme == RunActivityDeepLink.scheme,
+              url.host == RunActivityDeepLink.activeRunHost else { return }
+        guard container.workoutTrackerService.isRecording else { return }
+        container.activeRunPresentation.reopen()
     }
 }
 

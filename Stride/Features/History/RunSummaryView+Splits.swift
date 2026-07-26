@@ -51,7 +51,7 @@ extension RunSummaryView {
                 }
                 Text(splitFootnote(metric)).font(.caption).foregroundStyle(.secondary)
             }
-            .padding(16)
+            .padding(AppSpacing.lg)
             .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
     }
@@ -167,7 +167,7 @@ extension RunSummaryView {
                 .foregroundStyle(splitPaceTone(split.paceSecondsPerKm, average: average))
             }
         }
-        .padding(.horizontal, 8).padding(.vertical, 5)
+        .padding(.horizontal, AppSpacing.sm).padding(.vertical, 5)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: AppRadius.xs))
     }
 
@@ -253,7 +253,7 @@ extension RunSummaryView {
                             Text("\(Int(hr)) bpm")
                                 .font(.caption).bold()
                         }
-                        .padding(.horizontal, 8).padding(.vertical, 5)
+                        .padding(.horizontal, AppSpacing.sm).padding(.vertical, 5)
                         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: AppRadius.xs))
                     }
             }
@@ -294,7 +294,7 @@ extension RunSummaryView {
                             Text("\(gain >= 0 ? "+" : "")\(Int(gain)) \(appSettings.unitPreference.elevationLabel)")
                                 .font(.caption).bold()
                         }
-                        .padding(.horizontal, 8).padding(.vertical, 5)
+                        .padding(.horizontal, AppSpacing.sm).padding(.vertical, 5)
                         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: AppRadius.xs))
                     }
             }
@@ -327,7 +327,7 @@ extension RunSummaryView {
                 Divider()
             }
         }
-        .padding(16)
+        .padding(AppSpacing.lg)
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 

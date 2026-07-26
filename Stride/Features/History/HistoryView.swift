@@ -308,7 +308,7 @@ private struct HistoryEntryList: View {
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
-            .padding(.horizontal, 40)
+            .padding(.horizontal, AppSpacing.huge)
         } else if !searchTerm.isEmpty {
             ContentUnavailableView.search(text: searchTerm)
         } else if filter.isActive {

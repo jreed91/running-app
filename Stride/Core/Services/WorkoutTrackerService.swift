@@ -122,7 +122,39 @@ final class WorkoutTrackerService: NSObject {
     private let pedometer = CMPedometer()
     private var pedometerActive = false
 
+    /// The run's Live Activity (U5b), if one is wired up.
+    ///
+    /// Held weakly because `AppContainer` owns it, and driven from here rather than from a
+    /// view because the case a Live Activity exists for is a locked phone: SwiftUI does not
+    /// update a backgrounded view, while this service's one-second timer keeps running
+    /// there. Optional so tests and previews construct a tracker without one.
+    @ObservationIgnored weak var activityPresenter: RunActivityPresenting?
+
+    /// This run as the Live Activity needs it. Assembled here because the tracker is the
+    /// only holder of all of it, and handed over as a value so ActivityKit stays out of
+    /// this file.
+    private var activitySnapshot: RunActivitySnapshot {
+        RunActivitySnapshot(
+            elapsedSeconds: elapsedSeconds,
+            distanceMeters: distanceMeters,
+            paceSecondsPerKm: currentPaceSecondsPerKm,
+            isPaused: trackingState == .paused,
+            unit: splitUnit,
+            workoutType: workoutType
+        )
+    }
+
     // MARK: Public API
+
+    /// Whether a run is underway — recording or holding — as opposed to not yet started
+    /// or already finished.
+    ///
+    /// The predicate the minimised-run accessory keys off (U7): a run that outlives the
+    /// screen showing it needs one shared answer to "is there a run right now", rather
+    /// than each caller spelling out the same two-case comparison.
+    var isRecording: Bool {
+        trackingState == .active || trackingState == .paused
+    }
 
     /// Set the workout location before calling `startWorkout`. No-op once a workout is active.
     func setLocation(_ location: WorkoutLocation) {
@@ -149,6 +181,7 @@ final class WorkoutTrackerService: NSObject {
         // The pedometer runs on both paths: indoors it is the distance source,
         // outdoors it is read for cadence only (N20).
         startPedometerUpdates(from: startDate)
+        activityPresenter?.runDidStart(activitySnapshot)
     }
 
     func pauseWorkout() {
@@ -171,6 +204,9 @@ final class WorkoutTrackerService: NSObject {
         }
         stopPedometerUpdates()
         if let q = hrQuery { hkStore.stop(q) }
+        // Pushed straight through rather than waiting for the refresh cadence: a hold is
+        // one of the two things a runner checks the Lock Screen to confirm.
+        activityPresenter?.runDidUpdate(activitySnapshot)
     }
 
     func resumeWorkout() {
@@ -183,6 +219,7 @@ final class WorkoutTrackerService: NSObject {
             locationManager.startUpdatingLocation()
         }
         startPedometerUpdates(from: Date())
+        activityPresenter?.runDidUpdate(activitySnapshot)
     }
 
     /// Returns the tracker to `.idle` after a finished workout so a new one can start.
@@ -207,6 +244,9 @@ final class WorkoutTrackerService: NSObject {
         elapsedSeconds = stopwatch.accumulated
         trackingState = .finished
         logRejectedFixSummary()
+        // Before the `RunWorkout` is built, so the card comes down as the run stops rather
+        // than after the save round-trip — which can fail and stay on screen (N15).
+        activityPresenter?.runDidEnd(activitySnapshot)
 
         let workout = RunWorkout(
             date: startDate,
@@ -398,6 +438,10 @@ final class WorkoutTrackerService: NSObject {
                 // Derive from wall clock rather than counting ticks so a suspended
                 // process or stalled run loop can't undercount the run (M23).
                 self.elapsedSeconds = self.stopwatch.elapsed(at: Date())
+                // The Live Activity's pulse. It throttles internally — this fires every
+                // second, the Lock Screen refreshes every five, and the elapsed clock is
+                // counted by the widget rather than pushed at all (U5b).
+                self.activityPresenter?.runDidUpdate(self.activitySnapshot)
             }
         }
     }

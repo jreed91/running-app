@@ -68,8 +68,8 @@ struct StrengthActiveView: View {
                             }
                             completedSetsHistory
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 20)
+                        .padding(.horizontal, AppSpacing.lg)
+                        .padding(.vertical, AppSpacing.xl)
                     }
                 } else {
                     workoutCompleteView
@@ -137,9 +137,9 @@ struct StrengthActiveView: View {
             // Placeholder to balance the X button
             Color.clear.frame(width: 36, height: 36)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
-        .padding(.bottom, 12)
+        .padding(.horizontal, AppSpacing.lg)
+        .padding(.top, AppSpacing.sm)
+        .padding(.bottom, AppSpacing.md)
         .overlay(Divider(), alignment: .bottom)
     }
 
@@ -218,7 +218,7 @@ struct StrengthActiveView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(16)
+        .padding(AppSpacing.lg)
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
@@ -288,7 +288,7 @@ struct StrengthActiveView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(16)
+        .padding(AppSpacing.lg)
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
@@ -327,11 +327,11 @@ struct StrengthActiveView: View {
                     .font(.dsSubhead.weight(.semibold))
                     .foregroundStyle(Color.brand)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
+                    .padding(.vertical, AppSpacing.md)
                     .background(Color.brand.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.md))
             }
         }
-        .padding(16)
+        .padding(AppSpacing.lg)
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
@@ -370,8 +370,8 @@ struct StrengthActiveView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, AppSpacing.md)
+                    .padding(.vertical, AppSpacing.sm)
                     .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.sm))
                 }
             }
@@ -420,13 +420,13 @@ struct StrengthActiveView: View {
             Text("Finish Workout")
                 .font(.dsHeadline.weight(.bold))
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
+                .padding(.vertical, AppSpacing.lg)
         }
         .foregroundStyle(.onFill)
         .background(Color.brand, in: RoundedRectangle(cornerRadius: AppRadius.lg))
-        .padding(.horizontal, 16)
-        .padding(.bottom, 20)
-        .padding(.top, 8)
+        .padding(.horizontal, AppSpacing.lg)
+        .padding(.bottom, AppSpacing.xl)
+        .padding(.top, AppSpacing.sm)
     }
 
     // MARK: - Helpers

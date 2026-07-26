@@ -7,6 +7,7 @@
 # overwritten on the next `xcodegen generate`. Edit project.yml instead.
 Stride/Resources/Info.plist
 Stride/Resources/Stride.entitlements
+StrideWidgets/Info.plist
 
 # Xcode build artefacts
 build/

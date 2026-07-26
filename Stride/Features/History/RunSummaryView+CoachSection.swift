@@ -42,15 +42,15 @@ extension RunSummaryView {
                                 .font(.dsCaption.weight(.bold))
                         }
                         .foregroundStyle(.onFill)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
+                        .padding(.horizontal, AppSpacing.md)
+                        .padding(.vertical, AppSpacing.sm)
                         .background(Color.brand, in: Capsule())
                         .appGlow(.standard, color: .brand)
                     }
                     .buttonStyle(.plain)
                     .disabled(isLoadingAIInsight || !hasAIKey)
                 }
-                .padding(.horizontal, 4)
+                .padding(.horizontal, AppSpacing.xs)
 
                 if isLoadingAIInsight {
                     // Show the coach's text the moment it arrives instead of a skeleton
@@ -75,7 +75,7 @@ extension RunSummaryView {
                     aiEmptyState
                 }
             }
-            .padding(.top, 8)
+            .padding(.top, AppSpacing.sm)
         }
     }
 
@@ -127,7 +127,7 @@ extension RunSummaryView {
                 .font(.dsCaption2.weight(.bold))
                 .kerning(1.4)
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, 4)
+                .padding(.horizontal, AppSpacing.xs)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
@@ -138,8 +138,8 @@ extension RunSummaryView {
                             Text(prompt)
                                 .font(.dsCaption.weight(.semibold))
                                 .foregroundStyle(.brand)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
+                                .padding(.horizontal, AppSpacing.md)
+                                .padding(.vertical, AppSpacing.sm)
                                 .background(.surfaceSecondary, in: Capsule())
                                 .overlay(Capsule().strokeBorder(Color.brand.opacity(0.22), lineWidth: 0.5))
                         }
@@ -167,13 +167,13 @@ extension RunSummaryView {
                         .background(Color.brand, in: Circle())
                 }
                 .padding(.leading, 14)
-                .padding(.trailing, 8)
-                .padding(.vertical, 8)
+                .padding(.trailing, AppSpacing.sm)
+                .padding(.vertical, AppSpacing.sm)
                 .background(.surfaceSecondary, in: Capsule())
             }
             .buttonStyle(.plain)
         }
-        .padding(.top, 2)
+        .padding(.top, AppSpacing.xxs)
     }
 
     private func aiActionPlan(_ insight: AICoachInsight) -> some View {
@@ -182,7 +182,7 @@ extension RunSummaryView {
                 .font(.dsCaption2.weight(.bold))
                 .kerning(1.4)
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, 4)
+                .padding(.horizontal, AppSpacing.xs)
 
             let actions = Array(insight.actionItems.prefix(3))
             ForEach(Array(actions.enumerated()), id: \.offset) { index, action in
@@ -243,7 +243,7 @@ extension RunSummaryView {
                 Text(nextSessionUpdateMessage)
                     .font(.dsCaption.weight(.medium))
                     .foregroundStyle(nextSessionUpdateMessage.hasPrefix("Updated") ? Color.success : Color.secondary)
-                    .padding(.horizontal, 2)
+                    .padding(.horizontal, AppSpacing.xxs)
             }
         }
         .padding(14)
@@ -331,7 +331,7 @@ extension RunSummaryView {
                 .foregroundStyle(.tertiary)
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, 2)
+        .padding(.top, AppSpacing.xxs)
     }
 
     private var aiEmptyState: some View {
@@ -345,7 +345,7 @@ extension RunSummaryView {
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
+        .padding(AppSpacing.lg)
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 
@@ -359,7 +359,7 @@ extension RunSummaryView {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
+        .padding(AppSpacing.lg)
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
     }
 }

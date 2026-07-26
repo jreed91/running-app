@@ -168,8 +168,8 @@ struct SettingsView: View {
                     .signInWithAppleButtonStyle(.black)
                     .frame(height: 44)
                     .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 12)
+                    .padding(.horizontal, AppSpacing.lg)
+                    .padding(.bottom, AppSpacing.md)
                 }
             }
         }
@@ -189,7 +189,7 @@ struct SettingsView: View {
                                 .font(.dsCaption2)
                         }
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
+                        .padding(.vertical, AppSpacing.md)
                         .background(
                             appSettings.unitPreference == unit ? Color.brand : Color.clear,
                             in: RoundedRectangle(cornerRadius: AppRadius.sm)
@@ -200,9 +200,9 @@ struct SettingsView: View {
                     .buttonStyle(.plain)
                 }
             }
-            .padding(4)
+            .padding(AppSpacing.xs)
             .background(Color.surfaceTertiary, in: RoundedRectangle(cornerRadius: AppRadius.md))
-            .padding(16)
+            .padding(AppSpacing.lg)
         }
     }
 
@@ -260,7 +260,7 @@ struct SettingsView: View {
                             .font(.caption).foregroundStyle(.brand)
                         Spacer()
                     }
-                    .padding(.horizontal, 16).padding(.vertical, 12)
+                    .padding(.horizontal, AppSpacing.lg).padding(.vertical, AppSpacing.md)
                 }
             }
         }
@@ -379,12 +379,12 @@ struct SettingsView: View {
                 .textInputAutocapitalization(.never)
                 .font(.dsFootnote.monospaced())
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, 16)
+                .padding(.horizontal, AppSpacing.lg)
                 .padding(.bottom, 6)
             Text("Free key at openrouteservice.org · 2,000 routes/day · stored on-device only.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, 16)
+                .padding(.horizontal, AppSpacing.lg)
                 .padding(.bottom, 14)
         }
     }
@@ -411,7 +411,7 @@ struct SettingsView: View {
             Text(aiProviderFootnote)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, 16)
+                .padding(.horizontal, AppSpacing.lg)
                 .padding(.bottom, 14)
         }
     }
@@ -483,14 +483,14 @@ struct SettingsView: View {
                 Text(notificationTestStatus)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, AppSpacing.lg)
                     .padding(.bottom, 14)
             } else {
                 rowDivider
                 Text("Sends each local notification type immediately so QA can verify copy, sounds, and tap behavior.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, AppSpacing.lg)
                     .padding(.bottom, 14)
             }
         }
@@ -538,7 +538,7 @@ struct SettingsView: View {
                     .foregroundStyle(.destructive)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
+            .padding(.vertical, AppSpacing.lg)
             .background(Color.destructive.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
             .overlay(
                 RoundedRectangle(cornerRadius: AppRadius.md)
@@ -585,16 +585,16 @@ struct SettingsView: View {
                 settingsSection("Developer · Plan Progress") {
                     HStack {
                         StrideIcon(name: .calendar, size: 16, color: .brand, strokeWeight: 2)
-                            .padding(.leading, 16)
+                            .padding(.leading, AppSpacing.lg)
                         DatePicker(
                             "Complete through",
                             selection: $completionCutoff,
                             in: plan.startDate...plan.endDate,
                             displayedComponents: .date
                         )
-                        .padding(.trailing, 16)
+                        .padding(.trailing, AppSpacing.lg)
                     }
-                    .padding(.vertical, 12)
+                    .padding(.vertical, AppSpacing.md)
                     rowDivider
                     Button {
                         DebugRunGenerator.completePlan(upTo: completionCutoff, plan: plan, context: context)
@@ -633,8 +633,8 @@ struct SettingsView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .padding(.leading, 62)
-                            .padding(.trailing, 16)
-                            .padding(.bottom, 12)
+                            .padding(.trailing, AppSpacing.lg)
+                            .padding(.bottom, AppSpacing.md)
                     }
                 }
             }
@@ -649,7 +649,7 @@ struct SettingsView: View {
             Text(title.uppercased())
                 .font(.sectionHeader)
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, 4)
+                .padding(.horizontal, AppSpacing.xs)
             VStack(spacing: 0) {
                 content()
             }
@@ -674,8 +674,8 @@ struct SettingsView: View {
             Spacer()
             trailing()
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, AppSpacing.lg)
+        .padding(.vertical, AppSpacing.md)
     }
 
     private var rowDivider: some View {

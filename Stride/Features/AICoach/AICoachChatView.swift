@@ -64,7 +64,7 @@ struct AICoachChatView: View {
                                     .id("typing")
                             }
                         }
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, AppSpacing.lg)
                         .padding(.top, 10)
                         .padding(.bottom, 18)
                     }
@@ -123,7 +123,7 @@ struct AICoachChatView: View {
                 .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(16)
+        .padding(AppSpacing.lg)
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 
@@ -163,8 +163,8 @@ struct AICoachChatView: View {
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            .padding(.horizontal, AppSpacing.lg)
+            .padding(.vertical, AppSpacing.sm)
         }
         .background(Color.surfacePrimary)
     }
@@ -197,12 +197,12 @@ struct AICoachChatView: View {
             .disabled(!canSendDraft || isWaitingForCoach)
             .accessibilityLabel("Send message")
         }
-        .padding(.leading, 16)
+        .padding(.leading, AppSpacing.lg)
         .padding(.trailing, 10)
         .padding(.vertical, 10)
         .background(.surfaceSecondary, in: Capsule())
-        .padding(.horizontal, 16)
-        .padding(.bottom, 12)
+        .padding(.horizontal, AppSpacing.lg)
+        .padding(.bottom, AppSpacing.md)
         .background(Color.surfacePrimary)
     }
 
@@ -290,7 +290,7 @@ struct AICoachChatView: View {
                         .tracking(0.4)
                 }
                 .foregroundStyle(status.color)
-                .padding(.horizontal, 8)
+                .padding(.horizontal, AppSpacing.sm)
                 .padding(.vertical, 3)
                 .background(status.color.opacity(0.14), in: Capsule())
             }

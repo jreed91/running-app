@@ -141,7 +141,7 @@ struct PlanRowView: View {
             ProgressView(value: summary.adherence)
                 .tint(summary.status == .active ? .brand : .success)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, AppSpacing.xs)
     }
 }
 
@@ -162,7 +162,7 @@ struct PlanStatusBadge: View {
         Text(status.displayName.uppercased())
             .font(.caption)
             .padding(.horizontal, 6)
-            .padding(.vertical, 2)
+            .padding(.vertical, AppSpacing.xxs)
             .background(color.opacity(0.15), in: Capsule())
             .foregroundStyle(color)
     }
