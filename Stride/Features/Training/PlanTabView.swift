@@ -948,6 +948,14 @@ private struct PlanWeekSummaryRow: View {
                         .overlay(alignment: .bottom) {
                             Divider().padding(.leading, 44)
                         }
+                        // The lift gesture hit-tests the row's *drawn* content, and a row
+                        // is an icon, two labels and a `Spacer`. Without a shape the
+                        // transparent middle — most of its width — is not part of the row
+                        // for touch purposes, so a drag started there reached the
+                        // `ScrollView` and scrolled the plan instead of picking the
+                        // session up. A `List` gives its rows this for free; a stack does
+                        // not.
+                        .contentShape(Rectangle())
                 }
                 .reorderable()
             }
