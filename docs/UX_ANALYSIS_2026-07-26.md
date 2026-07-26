@@ -22,7 +22,7 @@ ratios are computed from `Stride/Resources/Assets.xcassets`, not eyeballed.
 | Dynamic Type | 🟢 Fixed | ✅ 262 sites on `ds*`, `@ScaledMetric` on badges, 2 grids clamped |
 | Colour contrast | 🟢 Fixed | ✅ CTAs, HUD, dark-mode zone collisions, high-contrast variants |
 | Haptics and audio | 🟢 Fixed | ✅ `sensoryFeedback` on run, guided steps, splits, strength sets; ✅ spoken splits |
-| iOS 26/27 API adoption | 🟢 Fixed | ✅ `Tab` builder, native `Color.mix`, real `glassEffect`, `tabViewBottomAccessory` + `tabBarMinimizeBehavior`, Live Activity / Dynamic Island, `GlassEffectContainer`, `symbolEffect`, `alert(_:item:)`, live-updates Core Location, icon appearances, Swift 6.2 |
+| iOS 26/27 API adoption | 🟢 Fixed | ✅ `Tab` builder, native `Color.mix`, real `glassEffect`, `tabViewBottomAccessory` + `tabBarMinimizeBehavior`, Live Activity / Dynamic Island, `GlassEffectContainer`, `symbolEffect`, `alert(_:item:)`, live-updates Core Location, icon appearances, Swift 6.2, `reorderable()`, `defaultScrollAnchor` |
 | Destructive-action safety | 🟢 Fixed | ✅ Both swipe paths confirm; delete failures surface |
 | History discoverability | 🟢 Fixed | ✅ Search, pull-to-refresh, first-sync loading state, date/distance filter |
 | Onboarding length | 🟢 Fixed | ✅ 8 steps, not 9 — units follow the locale and moved onto "About you" |
@@ -44,14 +44,20 @@ which is how they were settled. **Pass 7** was an iOS 26/27 API sweep on top of 
 it: `GlassEffectContainer`, `symbolEffect`, iOS 27's `alert(_:item:)`, the Core Location
 live-updates migration, dark/tinted app-icon appearances, and Swift 6.2 build settings
 (§7). It also fixed the ActivityKit strict-concurrency break in
-`RunActivityController` that pass 6 shipped.
+`RunActivityController` that pass 6 shipped. **Pass 8** closed the two §7 items that were
+left with reasons rather than with nothing: `reorderable()` — drag a session onto another
+day, with the date rewrite it implies in `WorkoutReorderPlanner` — and the coach chat's
+hand-driven scroll, now a `defaultScrollAnchor` role. The rest of §7's zero-use list is
+settled by decision in that section; read it before reopening any of it.
 
-**Nothing in this document is open.** Two items were closed by *decision* rather than by
-code, and both say so where they live: seven of the twelve `GeometryReader`s stay, because
-`visualEffect` and `onGeometryChange` can move a view and not size one; and the spacing
-scale is adopted only where a literal already equalled a token, because snapping the rest
-is a density redesign that needs a device. Anything future work should not assume is called
-out at the site rather than left implied.
+**Nothing in this document is open.** Several items were closed by *decision* rather than
+by code, and each says so where it lives: seven of the twelve `GeometryReader`s stay,
+because `visualEffect` and `onGeometryChange` can move a view and not size one; the
+spacing scale is adopted only where a literal already equalled a token, because snapping
+the rest is a density redesign that needs a device; and §7's remaining unadopted API is
+either not applicable to this app or a visual judgement that needs a device rather than a
+missing modernization. Anything future work should not assume is called out at the site
+rather than left implied.
 
 The blocked items in [`APP_ANALYSIS_2026-07-24.md`](APP_ANALYSIS_2026-07-24.md) are
 untouched and still blocked: the CI toolchain pins need a run that reaches the test job,
@@ -524,7 +530,7 @@ those `try?`s are gone with the above; the pattern is otherwise untouched.
 
 ---
 
-## 7. Zero adoption of iOS 26+ API on an iOS 27 target 🔴
+## 7. Zero adoption of iOS 26+ API on an iOS 27 target 🟢
 
 `project.yml:6` sets `deploymentTarget: iOS "27.0"`. Adoption of post-iOS-17 API:
 
@@ -532,13 +538,15 @@ those `try?`s are gone with the above; the pattern is otherwise untouched.
 | --- | --- | --- | --- | --- |
 | `glassEffect` | 0 → ✅ | | `tabViewBottomAccessory` | 0 → ✅ |
 | `GlassEffectContainer` | 0 → ✅ | | `tabBarMinimizeBehavior` | 0 → ✅ |
-| `buttonStyle(.glass)` | 0 | | `scrollEdgeEffectStyle` | 0 |
-| `ToolbarSpacer` | 0 | | `backgroundExtensionEffect` | 0 |
+| `buttonStyle(.glass)` | 0 — declined, see below | | `scrollEdgeEffectStyle` | 0 — N/A, see below |
+| `ToolbarSpacer` | 0 — N/A, see below | | `backgroundExtensionEffect` | 0 |
 | `symbolEffect` | 0 → ✅ | | `onGeometryChange` | 0 |
-| `scrollPosition` | 0 | | `containerRelativeFrame` | 0 → ✅ |
-| `visualEffect` | 0 → ✅ | | `presentationSizing` | 0 |
+| `reorderable` | 0 → ✅ | | `containerRelativeFrame` | 0 → ✅ |
+| `defaultScrollAnchor` | 0 → ✅ | | `presentationSizing` | 0 |
+| `visualEffect` | 0 → ✅ | | | |
 
-🟠 **PARTIALLY FIXED** — `MainTabView.swift` now uses the `Tab` builder, the
+🟢 **SETTLED (pass 8)** — every row above is either adopted or carries a reason under
+"Deliberately still open" below. `MainTabView.swift` now uses the `Tab` builder, the
 hand-rolled `Color.mix` is gone in favour of the native perceptual one, the simulated
 glass is now real (pass 3), and the active run minimises into `tabViewBottomAccessory`
 (pass 5). Pass 6 took the Live Activity and the `GeometryReader` retirements.
@@ -560,21 +568,76 @@ in `processLocation`. Without it a phone sitting still accrues distance out of G
 jitter, and `LocationQualityFilter` does not catch that — jitter is neither inaccurate,
 stale, nor impossibly far.
 
-Deliberately still open after pass 7:
+**Pass 8** took the item pass 7 named as the best fit and left, and the one scroll view
+that was still driving itself:
 
-- **`reorderable()` / `reorderContainer(for:)` (iOS 27).** The best iOS 27 fit for this
-  app — dragging workouts around a training week — and not attempted. `ReorderDifference`'s
-  members were not verifiable from the documentation available, and workouts are anchored
-  to `scheduledDate` rather than to an array index, so "move item 3 above item 1" has to
-  become a date rewrite. Product decision plus an unconfirmed API.
-- **Toolbar `visibilityPriority` / `ToolbarOverflowMenu` (iOS 27).** No toolbar in the app
-  carries enough items to overflow.
+| API | Where |
+| --- | --- |
+| `reorderable()` + `reorderContainer(for:itemID:isEnabled:move:)` (iOS 27) | `PlanTabView.swift` — drag a session onto another day inside a training week. The index-move-to-date-rewrite lives in `WorkoutReorderPlanner` (`WorkoutReorderPlannerTests`) |
+| `defaultScrollAnchor(_:for:)` | `AICoachChatView.swift` — a `ScrollViewReader` and two `onChange` handlers deleted |
+
+On reordering: pass 7 deferred this on two counts and both are now answered. The API
+shape was the smaller one — `ReorderDifference` exposes `sources` and a `destination`
+whose `index(in:)` resolves against the array the rows were built from. The real one was
+that a plan has no notion of "the third workout": `ScheduledWorkout` is anchored to a
+`scheduledDate`, so a drag cannot be an array move. It is a permutation of *which*
+session holds *which* day, and the week's set of days has to survive it untouched — a
+week that gains or loses a date is a week whose volume moved without the runner asking.
+That is why the translation is a service with tests rather than four lines in a `move`
+closure, and it is where three plan rules live that the gesture knows nothing about:
+a completed or past session is pinned and its day is not in the pool, race day is pinned
+when the plan carries a committed race date (the same session
+`PlanLifecycleService.shiftMissedWorkoutsForward` holds still, for the same reason), and
+rest days move like anything else — "I'll rest Tuesday and run Thursday" *is* a swap of a
+rest day and a run, so pinning rest would make most real reorders inexpressible. The drop
+also rebuilds the plan's morning reminders, which are addressed to dates and would
+otherwise point at the wrong sessions.
+
+*Known remainder on reordering:* a pinned row can still be lifted, because `.reorderable()`
+applies to a `ForEach`'s content rather than per row, and the week's pinned sessions are not
+a contiguous block that could be split into a second `ForEach` — a session can be completed
+early, and race day is pinned at the end. The drop is a no-op (`WorkoutReorderPlanner`
+discards IDs the plan pins), so it snaps back rather than doing anything wrong, but the lift
+should not be offered at all. Settling that wants a device and a look at whether
+`reorderable` takes a per-item enablement.
+
+On the chat scroll: the two `onChange` handlers fired on `messages.count` and
+`isWaitingForCoach`, so they were a step behind the thing they were following. A reply
+that grows its own bubble after being appended, and a keyboard that shrinks the
+container, both move the bottom of the transcript out of view with no count change left
+to trigger a correction. All three are size changes, which is what the anchor role
+describes.
+
+Deliberately still open after pass 8:
+
+- **Toolbar `visibilityPriority` / `ToolbarOverflowMenu` (iOS 27), `ToolbarSpacer`
+  (iOS 26).** Not applicable rather than not done. `ToolbarSpacer` groups adjacent items
+  into separate glass clusters; of the ten toolbars in the app, nine carry one item per
+  placement and the tenth (`HistoryView`) pairs its filter menu with a transient
+  `ProgressView`, which is a status indicator and not a control to group with. Nothing
+  overflows either.
+- **`scrollEdgeEffectStyle`.** This modifier exists to *override* an effect the system
+  already applies automatically, and Apple's guidance is to reach for it only when the
+  automatic style is unsuitable. Judging that is a look-at-it-on-a-device call, so
+  adopting it here would be moving a counter off zero rather than fixing anything. Same
+  for `backgroundExtensionEffect`, which wants a wide layout this iPhone-only app does
+  not have.
+- **`buttonStyle(.glass)` / `.glassProminent`.** Declined on purpose. The two controls
+  this would touch — the run HUD's minimize and finish buttons — already use the real
+  `glassEffect(.regular.interactive())` rather than a material imitation, so the change
+  buys the system's shape and sizing at the price of handing it two circles hand-tuned to
+  44 pt and 64 pt against a full-bleed gradient, with the contrast work in §3b sitting on
+  top of them. That is a visual regression risk with no correctness gain, and it needs a
+  device to settle. `filledControlButton`'s white-on-zone-colour play button is a
+  deliberate design choice, not an unadopted `glassProminent`.
 - **`SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor`.** The other half of the Swift 6.2 story.
   It isolates every unannotated type to the main actor, including the 100-plus `Sendable`
   value types in `Core/Models`, where that fights the conformance. A migration with a
   compiler in the loop, not a build-setting flip.
-- **`AlarmKit`, `ControlWidget`, `buttonStyle(.glass)`, `ToolbarSpacer`.** New surfaces or
-  design-language changes rather than modernizations of what is there.
+- **`AlarmKit`, `ControlWidget`, home-screen `WidgetKit` widgets.** New surfaces rather
+  than modernizations of what is there. The widget ones additionally need an App Group
+  before an extension can read the app's SwiftData store, plus a registered App ID per
+  bundle — see AGENTS.md.
 
 On the accessory: this was filed as a Tier 4 *feature*, and turned out to also close a
 plain bug. The HUD was a `fullScreenCover` with **no close control at all** — Finish and
