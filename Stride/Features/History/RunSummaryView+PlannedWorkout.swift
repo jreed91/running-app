@@ -94,7 +94,7 @@ extension RunSummaryView {
                     Text("Effort higher than expected")
                         .font(.dsFootnote.weight(.bold))
                         .foregroundStyle(.warning)
-                    Text("HR averaged \(Int(avg)) bpm for this \(workout.workoutType.losplayName.lowercased()) effort.")
+                    Text("HR averaged \(Int(avg)) bpm for this \(workout.workoutType.localizedName.lowercased()) effort.")
                         .font(.dsCaption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
