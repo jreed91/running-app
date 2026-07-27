@@ -10,9 +10,7 @@ struct MissedWorkoutsRecoveryTests {
         Calendar.current.date(from: DateComponents(year: year, month: month, day: day)) ?? .now
     }
 
-    private func makeContainer() -> AppContainer {
-        AppContainer.preview()
-    }
+    private func makeContainer() -> AppContainer { TestStore.makeContainer() }
 
     private func makeProfile(in context: ModelContext) -> UserProfile {
         let profile = UserProfile(

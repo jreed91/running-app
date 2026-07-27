@@ -71,7 +71,7 @@ struct ProfileRestoreDeduplicatorTests {
 
     @Test("Dedup removes stale restored profiles and keeps the latest values")
     func deduplicateLeavesExactlyOneProfile() throws {
-        let container = AppContainer.preview()
+        let container = TestStore.makeContainer()
         let context = container.modelContainer.mainContext
 
         let stale = makeProfile(
@@ -105,7 +105,7 @@ struct ProfileRestoreDeduplicatorTests {
 
     @Test("Dedup merges CloudKit profile identity fields into newer local placeholder profile")
     func deduplicateMergesIdentityFieldsFromRestoredProfile() throws {
-        let container = AppContainer.preview()
+        let container = TestStore.makeContainer()
         let context = container.modelContainer.mainContext
 
         let restored = makeProfile(

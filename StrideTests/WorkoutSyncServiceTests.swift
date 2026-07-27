@@ -133,7 +133,7 @@ final class MockHealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sen
 struct WorkoutSyncServiceTests {
 
     private func makeService(mock: MockHealthKitRepository) -> (WorkoutSyncService, ModelContext) {
-        let container = AppContainer.preview()
+        let container = TestStore.makeContainer()
         let context = container.modelContainer.mainContext
         let service = WorkoutSyncService(
             healthKitRepository: mock,

@@ -49,7 +49,7 @@ struct PlanHistoryTests {
 
     @Test("hasLoggedProgress is true only once a non-rest workout is completed")
     func hasLoggedProgressReflectsCompletion() throws {
-        let context = AppContainer.preview().modelContainer.mainContext
+        let context = TestStore.makeContext()
 
         let untouched = try makePlan(in: context, completeFirstWorkout: false)
         #expect(untouched.hasLoggedProgress == false)
@@ -60,7 +60,7 @@ struct PlanHistoryTests {
 
     @Test("A completed rest day does not count as logged progress")
     func restCompletionIsNotProgress() throws {
-        let context = AppContainer.preview().modelContainer.mainContext
+        let context = TestStore.makeContext()
         let plan = try makePlan(in: context, completeFirstWorkout: false)
 
         // Mark only the rest day complete.
@@ -73,7 +73,7 @@ struct PlanHistoryTests {
 
     @Test("Saving an active plan deactivates every other plan")
     func saveEnforcesSingleActivePlan() throws {
-        let container = AppContainer.preview()
+        let container = TestStore.makeContainer()
         let context = container.modelContainer.mainContext
 
         let old = try makePlan(in: context, completeFirstWorkout: true, isActive: true)
@@ -99,7 +99,7 @@ struct PlanHistoryTests {
 
     @Test("fetchActivePlan returns the most recently created active plan")
     func fetchActivePlanIsDeterministic() throws {
-        let container = AppContainer.preview()
+        let container = TestStore.makeContainer()
         let context = container.modelContainer.mainContext
 
         // Force a violated invariant: two actives with different creation dates.
@@ -117,7 +117,7 @@ struct PlanHistoryTests {
 
     @Test("Duplicate active plans are deactivated, never deleted")
     func duplicateActivePlansAreRetiredNotDeleted() throws {
-        let container = AppContainer.preview()
+        let container = TestStore.makeContainer()
         let context = container.modelContainer.mainContext
 
         // The CloudKit multi-device shape: two active plans, both carrying real work.
@@ -146,7 +146,7 @@ struct PlanHistoryTests {
 
     @Test("A single active plan is left alone")
     func singleActivePlanIsUntouched() throws {
-        let context = AppContainer.preview().modelContainer.mainContext
+        let context = TestStore.makeContext()
 
         let only = try makePlan(in: context, completeFirstWorkout: false, isActive: true)
 
@@ -160,7 +160,7 @@ struct PlanHistoryTests {
 
     @Test("Imported workouts never link to a retired plan's days")
     func retiredPlanDaysAreNotLinkTargets() throws {
-        let context = AppContainer.preview().modelContainer.mainContext
+        let context = TestStore.makeContext()
 
         let active = try makePlan(in: context, completeFirstWorkout: false, isActive: true)
         let retired = try makePlan(in: context, completeFirstWorkout: false, isActive: false)

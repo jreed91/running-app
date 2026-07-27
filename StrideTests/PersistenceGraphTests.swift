@@ -9,7 +9,7 @@ struct PersistenceGraphTests {
 
     @Test("Repositories save and fetch persisted models from an in-memory SwiftData graph")
     func repositoriesPersistModels() throws {
-        let container = AppContainer.preview()
+        let container = TestStore.makeContainer()
         let context = container.modelContainer.mainContext
 
         let profile = UserProfile(
@@ -118,7 +118,7 @@ struct PersistenceGraphTests {
 
     @Test("Delete APIs remove saved plans, workouts, and routes")
     func repositoriesDeleteModels() async throws {
-        let container = AppContainer.preview()
+        let container = TestStore.makeContainer()
         let context = container.modelContainer.mainContext
 
         let profile = UserProfile(
@@ -167,7 +167,7 @@ struct PersistenceGraphTests {
 
     @Test("Manual scheduled-run links persist both relationship directions")
     func manualScheduledRunLinkPersistsBidirectionally() throws {
-        let container = AppContainer.preview()
+        let container = TestStore.makeContainer()
         let context = container.modelContainer.mainContext
 
         let scheduled = ScheduledWorkout(
