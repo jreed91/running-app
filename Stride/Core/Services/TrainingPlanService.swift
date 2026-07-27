@@ -413,6 +413,9 @@ struct TrainingPlanService {
         case .advanced:
             blendWeight = 0.50
             maxDelta = 9.0
+        case .competitive:
+            blendWeight = 0.60
+            maxDelta = 11.0
         }
         let blended = baseline * (1.0 - blendWeight) + goalVDOT * blendWeight
         return min(max(blended, baseline - maxDelta), baseline + maxDelta)
@@ -427,12 +430,14 @@ struct TrainingPlanService {
             case .beginner:     fallback5KSeconds = 40 * 60   // 40:00
             case .intermediate: fallback5KSeconds = 31 * 60   // 31:00
             case .advanced:     fallback5KSeconds = 24 * 60   // 24:00
+            case .competitive:  fallback5KSeconds = 21 * 60   // 21:00
             }
         case .male, .preferNotToShare:
             switch profile.fitnessLevel {
             case .beginner:     fallback5KSeconds = 35 * 60   // 35:00
             case .intermediate: fallback5KSeconds = 27 * 60   // 27:00
             case .advanced:     fallback5KSeconds = 21 * 60   // 21:00
+            case .competitive:  fallback5KSeconds = 18 * 60   // 18:00
             }
         }
         return PaceCalculatorService.vdot(distanceMeters: 5_000, timeSeconds: fallback5KSeconds)

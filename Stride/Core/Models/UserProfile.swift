@@ -93,6 +93,13 @@ extension UserProfile {
         set { genderRaw = newValue.rawValue }
     }
 
+    /// The age assumed for HR estimates before the runner tells us theirs.
+    ///
+    /// Onboarding and Settings both display an age-derived max HR before `age` is set, and
+    /// they have to assume the same number or they show the runner two different values for
+    /// the same field (S7).
+    static let assumedAge = 30
+
     /// Tanaka (2001) age-predicted maximum heart rate: 208 − 0.7·age.
     static func estimatedMaxHeartRate(forAge age: Int) -> Int {
         Int((208.0 - 0.7 * Double(age)).rounded())
@@ -104,6 +111,17 @@ extension UserProfile {
         if let maxHeartRateBPM, maxHeartRateBPM > 0 { return maxHeartRateBPM }
         if let age, age > 0 { return Self.estimatedMaxHeartRate(forAge: age) }
         return nil
+    }
+
+    /// VDOT implied by the runner's own 5K estimate, before any run has been logged.
+    ///
+    /// Onboarding computes and *shows* this number ("VDOT 36 · base fitness") and builds the
+    /// plan's pace zones from it, so a screen that reports `--` until the first logged run
+    /// reads as data loss rather than as "not measured yet" (S8).
+    var baselineVDOT: Double? {
+        guard let time = currentEstimated5KTimeSeconds, time > 0 else { return nil }
+        let value = PaceCalculatorService.vdot(distanceMeters: 5_000, timeSeconds: time)
+        return value.isFinite && value > 20 ? value : nil
     }
 
     /// The goal race distance in meters, honoring a user-defined custom distance.

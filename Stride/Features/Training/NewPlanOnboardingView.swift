@@ -221,6 +221,7 @@ struct NewPlanOnboardingView: View {
                 estimatedWorkouts: estimatedWorkouts,
                 peakKm: peakKm,
                 isCreatingPlan: isCreatingPlan,
+                onBack: retreat,
                 onViewPlan: {
                     guard !isCreatingPlan else { return }
                     isCreatingPlan = true

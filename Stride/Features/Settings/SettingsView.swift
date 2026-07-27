@@ -179,30 +179,8 @@ struct SettingsView: View {
 
     private var unitsCard: some View {
         settingsSection("Units") {
-            HStack(spacing: 4) {
-                ForEach(UnitPreference.allCases, id: \.self) { unit in
-                    Button { appSettings.unitPreference = unit } label: {
-                        VStack(spacing: 3) {
-                            Text(unit.localizedName)
-                                .font(.dsSubhead.weight(.semibold))
-                            Text(unit == .metric ? "km · min/km" : "mi · min/mi")
-                                .font(.dsCaption2)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, AppSpacing.md)
-                        .background(
-                            appSettings.unitPreference == unit ? Color.brand : Color.clear,
-                            in: RoundedRectangle(cornerRadius: AppRadius.sm)
-                        )
-                        .foregroundStyle(appSettings.unitPreference == unit ? .white : .secondary)
-                        .animation(.easeInOut(duration: 0.15), value: appSettings.unitPreference)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(AppSpacing.xs)
-            .background(Color.surfaceTertiary, in: RoundedRectangle(cornerRadius: AppRadius.md))
-            .padding(AppSpacing.lg)
+            UnitPreferencePicker(selection: Bindable(appSettings).unitPreference)
+                .padding(AppSpacing.lg)
         }
     }
 
@@ -230,24 +208,24 @@ struct SettingsView: View {
 
     private func heartRateCard(_ profile: UserProfile) -> some View {
         settingsSection("Heart Rate Zones") {
+            // Typable as well as steppable, and the same control onboarding uses (S25).
             settingsRow(icon: .heart, iconColor: .zoneTempo, title: "Age") {
-                HStack(spacing: 10) {
-                    Text("\(ageBinding(for: profile).wrappedValue)")
-                        .font(.bodyRegular).foregroundStyle(.secondary)
-                        .monospacedDigit()
-                    Stepper("", value: ageBinding(for: profile), in: 10...100)
-                        .labelsHidden()
-                }
+                NumericStepperField(
+                    title: "Age",
+                    value: ageBinding(for: profile),
+                    range: 10...100,
+                    showsLabel: false
+                )
             }
             rowDivider
             settingsRow(icon: .bolt, iconColor: .zoneInterval, title: "Max HR") {
-                HStack(spacing: 10) {
-                    Text("\(maxHRBinding(for: profile).wrappedValue) bpm")
-                        .font(.bodyRegular).foregroundStyle(.secondary)
-                        .monospacedDigit()
-                    Stepper("", value: maxHRBinding(for: profile), in: 120...220)
-                        .labelsHidden()
-                }
+                NumericStepperField(
+                    title: "Max HR",
+                    value: maxHRBinding(for: profile),
+                    range: 120...220,
+                    suffix: "bpm",
+                    showsLabel: false
+                )
             }
             if profile.maxHeartRateBPM != nil {
                 rowDivider
@@ -256,7 +234,7 @@ struct SettingsView: View {
                     persistProfileEdit(profile)
                 } label: {
                     HStack {
-                        Text("Reset to age estimate (\(UserProfile.estimatedMaxHeartRate(forAge: profile.age ?? 30)) bpm)")
+                        Text("Reset to age estimate (\(UserProfile.estimatedMaxHeartRate(forAge: profile.age ?? UserProfile.assumedAge)) bpm)")
                             .font(.caption).foregroundStyle(.brand)
                         Spacer()
                     }
@@ -714,11 +692,12 @@ struct SettingsView: View {
         )
     }
 
-    /// Age drives the Tanaka max-HR estimate. Defaults to 30 until the user sets it; once the
-    /// user has an explicit Max HR, changing age no longer moves it (the estimate is decoupled).
+    /// Age drives the Tanaka max-HR estimate. Defaults to `UserProfile.assumedAge` until the
+    /// user sets it; once the user has an explicit Max HR, changing age no longer moves it
+    /// (the estimate is decoupled).
     private func ageBinding(for profile: UserProfile) -> Binding<Int> {
         Binding(
-            get: { profile.age ?? 30 },
+            get: { profile.age ?? UserProfile.assumedAge },
             set: { newValue in
                 guard profile.age != newValue else { return }
                 profile.age = newValue
@@ -727,11 +706,19 @@ struct SettingsView: View {
         )
     }
 
-    /// Max HR shows the effective value (explicit → age estimate → 190 default). Editing it
-    /// stores an explicit `maxHeartRateBPM`, overriding the age estimate.
+    /// Max HR shows the effective value (explicit → age estimate → estimate for the assumed
+    /// age). Editing it stores an explicit `maxHeartRateBPM`, overriding the age estimate.
+    ///
+    /// The last fallback used to be a flat `190`, which is `220 − 30` — a different formula
+    /// from the Tanaka estimate the Age row above it implies and onboarding shows. A runner
+    /// who left both defaults alone saw "187 bpm" during setup and then "Age 30 / Max HR 190"
+    /// here, with the two rows contradicting each other on screen (S7).
     private func maxHRBinding(for profile: UserProfile) -> Binding<Int> {
         Binding(
-            get: { profile.effectiveMaxHeartRate ?? 190 },
+            get: {
+                profile.effectiveMaxHeartRate
+                    ?? UserProfile.estimatedMaxHeartRate(forAge: profile.age ?? UserProfile.assumedAge)
+            },
             set: { newValue in
                 guard profile.maxHeartRateBPM != newValue else { return }
                 profile.maxHeartRateBPM = newValue

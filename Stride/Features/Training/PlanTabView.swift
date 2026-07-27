@@ -488,6 +488,10 @@ private struct PlanOverviewCard: View {
         (plan.weeks ?? []).reduce(0) { $0 + $1.completedDistanceKm }
     }
 
+    private var hasStarted: Bool {
+        Calendar.current.startOfDay(for: plan.startDate) <= Calendar.current.startOfDay(for: Date())
+    }
+
     private var raceStrideIcon: StrideIconName {
         switch plan.targetRace {
         case .maintainFitness: return .heart
@@ -544,9 +548,12 @@ private struct PlanOverviewCard: View {
                     label: "Completed"
                 )
                 Divider().frame(height: 36)
+                // "Started" was hardcoded, so a plan created today with next Monday's start
+                // — the default onboarding hands out — rendered "Aug 3 / Started" on the
+                // 27th of July, reporting a future date in the past tense (S20).
                 OverviewStat(
                     value: plan.startDate.formatted(.dateTime.month(.abbreviated).day()),
-                    label: "Started"
+                    label: hasStarted ? "Started" : "Starts"
                 )
             }
         }
@@ -715,7 +722,12 @@ private struct PaceInsightsCard: View {
         return timeDiff > 0 ? .warning : .success
     }
 
+    /// Before any run is logged, `currentVDOT` is derived from the plan's own goal time, so
+    /// the estimate and the goal are the same number by construction. Claiming "On track for
+    /// goal" off that is a tautology dressed as a verdict (S12) — say where the number comes
+    /// from instead, and only compare once there is something to compare against.
     private var statusText: String {
+        if completedRuns.isEmpty { return "Starting projection" }
         if abs(timeDiff) < 30 { return "On track for goal" }
         let formatted = abs(timeDiff).durationString
         return timeDiff > 0 ? "\(formatted) behind goal" : "\(formatted) ahead of goal"
@@ -781,7 +793,7 @@ private struct PaceInsightsCard: View {
                         .font(.caption)
                         .foregroundStyle(statusColor)
                     if completedRuns.isEmpty {
-                        Text("· Based on goal time")
+                        Text("· Log a run to track against it")
                             .font(.caption)
                             .foregroundStyle(Color.secondary.opacity(0.6))
                     }
@@ -888,6 +900,19 @@ private struct PlanWeekSummaryRow: View {
         (week.workouts ?? []).filter { $0.workoutType != .rest && $0.isCompleted }.count
     }
 
+    /// "Aug 3 – 9", or "Aug 31 – Sep 6" when the week straddles a month.
+    private var weekDateRange: String {
+        let calendar = Calendar.current
+        let start = week.startDate
+        let end = week.endDate
+        let startText = start.formatted(.dateTime.month(.abbreviated).day())
+        let sameMonth = calendar.isDate(start, equalTo: end, toGranularity: .month)
+        let endText = sameMonth
+            ? end.formatted(.dateTime.day())
+            : end.formatted(.dateTime.month(.abbreviated).day())
+        return "\(startText) – \(endText)"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button {
@@ -923,6 +948,17 @@ private struct PlanWeekSummaryRow: View {
                         }
 
                         HStack(spacing: 4) {
+                            // The week's dates. Without them the list was eight rows reading
+                            // "Week N · Base — 0/4 workouts · 12.4 mi target", with no way to
+                            // tell when any of them happen or which one is next — and on a
+                            // plan that has not started, no "CURRENT" badge to anchor to
+                            // either (S21).
+                            Text(weekDateRange)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text("·")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
                             Text("\(completedWorkouts)/\(totalWorkouts) workouts")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
@@ -931,6 +967,8 @@ private struct PlanWeekSummaryRow: View {
                                 .foregroundStyle(.tertiary)
                             distanceLabel
                         }
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                     }
 
                     Spacer()

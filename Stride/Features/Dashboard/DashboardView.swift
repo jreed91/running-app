@@ -256,8 +256,26 @@ private struct WeeklyLoadBar: View {
     let fraction: CGFloat    // 0–1
     let color: Color
     let isActive: Bool       // today (no bar yet)
+    /// One-letter weekday initial drawn under the bar.
+    ///
+    /// Seven bars with nothing under them were unreadable on a fresh install: the only
+    /// filled one is today's `isActive` marker, in the brand colour, sitting directly below
+    /// "0.0 mi / 0 Runs" — which makes it look like a progress meter reading 1/7 rather than
+    /// a day marker. The chart already had a full `chartAccessibility` summary, so VoiceOver
+    /// users could read this strip and sighted ones could not (S22).
+    let dayLetter: String
 
     var body: some View {
+        VStack(spacing: 4) {
+            bar
+            Text(dayLetter)
+                .font(.dsCaption2)
+                .foregroundStyle(isActive ? Color.brand : .secondary)
+                .fontWeight(isActive ? .bold : .regular)
+        }
+    }
+
+    private var bar: some View {
         VStack(spacing: 0) {
             Spacer(minLength: 0)
             if isActive {
@@ -492,10 +510,14 @@ struct DashboardView: View {
             let isToday = cal.isDateInToday(day)
             let isFuture = day > today && !isToday
             let label = day.formatted(.dateTime.weekday(.wide))
+            // `.narrow` is the calendar's own one-letter initial, so it localises with the
+            // device rather than being sliced off the English name.
+            let letter = day.formatted(.dateTime.weekday(.narrow))
 
             if isFuture {
                 return WeeklyLoadDay(
                     label: label,
+                    letter: letter,
                     distanceMeters: 0,
                     fraction: 0,
                     color: .clear,
@@ -524,6 +546,7 @@ struct DashboardView: View {
 
             return WeeklyLoadDay(
                 label: label,
+                letter: letter,
                 distanceMeters: dist,
                 fraction: CGFloat(min(dist / scale, 1.0)),
                 color: color,
@@ -534,10 +557,15 @@ struct DashboardView: View {
 
         return HStack(alignment: .bottom, spacing: 6) {
             ForEach(Array(bars.enumerated()), id: \.offset) { _, bar in
-                WeeklyLoadBar(fraction: bar.fraction, color: bar.color, isActive: bar.isActive)
+                WeeklyLoadBar(
+                    fraction: bar.fraction,
+                    color: bar.color,
+                    isActive: bar.isActive,
+                    dayLetter: bar.letter
+                )
             }
         }
-        .frame(height: 28)
+        .frame(height: 42)
         .padding(.top, AppSpacing.xs)
         // Seven bars with no label at all. `chartAccessibility` was built for exactly
         // this and is on all six Progress-tab charts — this one was missed (U10).
@@ -557,6 +585,9 @@ struct DashboardView: View {
     /// One day of the weekly-load strip: what it draws, and what it says.
     private struct WeeklyLoadDay {
         let label: String
+        /// One-letter weekday initial, drawn under the bar (S22). `label` stays the full
+        /// name because it is what the accessibility summary speaks.
+        let letter: String
         let distanceMeters: Double
         let fraction: CGFloat
         let color: Color
@@ -584,8 +615,18 @@ struct DashboardView: View {
                 // rest day claimed a plan said something it never said (N23).
                 switch selectedDayState {
                 case .rest, .scheduled: restDayCard
+                case .beforePlanStart(let daysUntilStart):
+                    planStartsSoonCard(daysUntilStart: daysUntilStart)
                 case .outsidePlan:      outsidePlanCard
                 case .noPlan:           noPlanCard
+                }
+
+                // A day with nothing on it is exactly the day the runner most wants to know
+                // what *is* coming, and it is also the day this screen is mostly blank
+                // below the fold (S23). Not shown for `.noPlan` — there is nothing to look
+                // ahead to — or once the plan is behind them.
+                if let next = nextScheduledSession, selectedDayState != .noPlan {
+                    upNextCard(next)
                 }
             } else {
                 ForEach(sessionsForSelectedDate) { workout in
@@ -670,44 +711,97 @@ struct DashboardView: View {
         )
     }
 
-    /// Shown for a date the active plan doesn't cover — scrolling to next month is not
-    /// the plan prescribing rest (N23).
+    /// Shown for a date before the plan begins — which, because the default start is the
+    /// next Monday, is the *first* thing most runners see after finishing onboarding.
     ///
-    /// A date *before* the plan begins gets its own wording. Onboarding hands back a plan
-    /// that starts on the coming week boundary, so the runner's very first Home screen was
-    /// the grey "Outside your plan" card — the same dead end shown for scrolling into
-    /// December, on the one day they most need to be told things are working.
-    private var outsidePlanCard: some View {
-        let upcoming = activePlan.flatMap { plan -> TrainingPlan? in
-            Calendar.current.startOfDay(for: selectedDate)
-                < Calendar.current.startOfDay(for: plan.startDate) ? plan : nil
-        }
+    /// `outsidePlanCard` used to cover this, and it is the wrong voice for it: grey, past
+    /// tense, and framed as an absence. A plan that hasn't started yet is good news with a
+    /// date attached, so this one is branded, counts down, and names what to do meanwhile —
+    /// the free-run button is directly beneath it (S4).
+    private func planStartsSoonCard(daysUntilStart: Int) -> some View {
+        let when: String = {
+            switch daysUntilStart {
+            case 0:
+                return String(localized: "today", comment: "When a training plan's first day falls")
+            case 1:
+                return String(localized: "tomorrow", comment: "When a training plan's first day falls")
+            default:
+                return String(
+                    localized: "in \(daysUntilStart) days",
+                    comment: "When a training plan's first day falls"
+                )
+            }
+        }()
 
         return emptyDayCard(
             icon: .calendar,
-            tint: upcoming == nil ? .secondary : .brand,
-            title: upcoming == nil ? "Outside your plan" : "Your plan starts soon",
-            subtitle: upcoming.map { plan in
-                let days = Calendar.current.dateComponents(
-                    [.day],
-                    from: Calendar.current.startOfDay(for: selectedDate),
-                    to: Calendar.current.startOfDay(for: plan.startDate)
-                ).day ?? 0
-                let when = days == 1
-                    ? String(localized: "tomorrow", comment: "When a training plan's first day falls")
-                    : String(
-                        localized: "in \(days) days",
-                        comment: "When a training plan's first day falls"
-                    )
-                return String(
-                    localized: "Week 1 begins \(when). Start a free run any time before then.",
-                    comment: "Subtitle for the day card shown before a plan's first day"
-                )
-            } ?? activePlan.map { plan in
-                "Your plan runs \(plan.startDate.formatted(.dateTime.month().day())) – "
+            tint: .brand,
+            title: String(
+                localized: "Your plan starts soon",
+                comment: "Title for the day card shown before a plan's first day"
+            ),
+            subtitle: String(
+                localized: "Week 1 begins \(when). Start a free run any time before then.",
+                comment: "Subtitle for the day card shown before a plan's first day"
+            )
+        )
+    }
+
+    /// Shown for a date past the end of the active plan — scrolling to next month is not
+    /// the plan prescribing rest (N23).
+    ///
+    /// Dates *before* the plan begins never reach here: `ScheduledDayResolver` classifies
+    /// those as `.beforePlanStart`, which `planStartsSoonCard` answers. That split matters
+    /// because onboarding hands back a plan starting on the coming week boundary, so the
+    /// runner's very first Home screen used to be this grey card — the same dead end shown
+    /// for scrolling into December, on the one day they most need to be told things work.
+    private var outsidePlanCard: some View {
+        emptyDayCard(
+            icon: .calendar,
+            tint: .secondary,
+            title: "Outside your plan",
+            subtitle: activePlan.map { plan in
+                "Your plan ran \(plan.startDate.formatted(.dateTime.month().day())) – "
                     + "\(plan.endDate.formatted(.dateTime.month().day()))."
             } ?? "This day isn't part of your training plan."
         )
+    }
+
+    /// What the plan asks for next, on a day it asks for nothing.
+    ///
+    /// Tapping it opens the session's detail rather than starting it: `canStart` deliberately
+    /// refuses future days so the plan is not run out of order, and a card that looks like a
+    /// start button but is not one would be worse than no card.
+    private func upNextCard(_ workout: ScheduledWorkout) -> some View {
+        NavigationLink {
+            WorkoutDetailView(workout: workout)
+        } label: {
+            HStack(spacing: 14) {
+                ZStack {
+                    Circle()
+                        .fill(Color.brand.opacity(0.15))
+                        .frame(width: 44, height: 44)
+                    StrideIcon(name: .calendar, size: 20, color: .brand, strokeWeight: 2.2)
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("UP NEXT")
+                        .font(.dsCaption2.weight(.bold))
+                        .kerning(1.2)
+                        .foregroundStyle(.secondary)
+                    Text(workout.workoutType.localizedName)
+                        .font(.bodyStrong)
+                    Text(workout.scheduledDate.formatted(.dateTime.weekday(.wide).month().day()))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                StrideIcon(name: .chevronRight, size: 14, color: .secondary, strokeWeight: 2)
+            }
+            .padding(18)
+            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Opens the workout's details")
     }
 
     /// Shown when there is no active plan at all — a CTA, not a rest day (N23).
@@ -837,6 +931,11 @@ struct DashboardView: View {
     /// outside the plan, or no plan at all (N23).
     private var selectedDayState: ScheduledDayResolver.DayState {
         ScheduledDayResolver.dayState(on: selectedDate, in: activePlan)
+    }
+
+    /// The plan's next uncompleted session after the selected day, for the "Up next" card.
+    private var nextScheduledSession: ScheduledWorkout? {
+        ScheduledDayResolver.nextSession(after: selectedDate, in: activePlan)
     }
 
     /// Whether the selected day's sessions can still be started (today, or one day

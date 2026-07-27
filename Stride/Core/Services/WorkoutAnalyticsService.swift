@@ -294,9 +294,7 @@ struct WorkoutAnalyticsService: Sendable {
 
     /// Derives VDOT from UserProfile's estimated 5K time.
     private func profileVDOT(from profile: UserProfile) -> Double? {
-        guard let time = profile.currentEstimated5KTimeSeconds, time > 0 else { return nil }
-        let v = PaceCalculatorService.vdot(distanceMeters: 5_000, timeSeconds: time)
-        return v.isFinite && v > 20 ? v : nil
+        profile.baselineVDOT
     }
 
     /// Classifies the overall trend from available signals.

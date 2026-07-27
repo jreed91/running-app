@@ -77,17 +77,28 @@ enum FitnessLevel: String, Codable, CaseIterable, Sendable {
     case beginner
     case intermediate
     case advanced
+    /// Added so onboarding's four-way choice has four outcomes. It used to fold into
+    /// `.advanced`, which the screen itself gave away: "Experienced" and "Competitive" both
+    /// read "Plan starts ~25 mi/week" (S10). Decoding an unknown raw value falls back to
+    /// `.beginner` at every call site, so an older client reading a synced profile degrades
+    /// rather than fails.
+    case competitive
 
     var displayName: String { rawValue.capitalized }
 
     /// The name a runner reads. `displayName` is the canonical English form — it is what
     /// the AI prompts, the logs, and the seeded race names use, and several of those are
     /// compared or persisted, so it must not move with the device language (D8).
+    ///
+    /// These are the words onboarding asks the question in. They used to be a second
+    /// vocabulary — pick "Recreational" in onboarding and Settings reported "Intermediate",
+    /// a word the runner was never shown (S9).
     var localizedName: String {
         switch self {
-        case .beginner:     return String(localized: "Beginner", comment: "Fitness level")
-        case .intermediate: return String(localized: "Intermediate", comment: "Fitness level")
-        case .advanced:     return String(localized: "Advanced", comment: "Fitness level")
+        case .beginner:     return String(localized: "New to running", comment: "Fitness level")
+        case .intermediate: return String(localized: "Recreational", comment: "Fitness level")
+        case .advanced:     return String(localized: "Experienced", comment: "Fitness level")
+        case .competitive:  return String(localized: "Competitive", comment: "Fitness level")
         }
     }
 
@@ -102,24 +113,28 @@ enum FitnessLevel: String, Codable, CaseIterable, Sendable {
             case .beginner:     return 12
             case .intermediate: return 20
             case .advanced:     return 30
+            case .competitive:  return 38
             }
         case .fiveK:
             switch self {
             case .beginner:     return 15   // ~9 mi/wk start, ~14 mi/wk peak
             case .intermediate: return 20   // ~12 mi/wk start, ~19 mi/wk peak
             case .advanced:     return 40   // ~25 mi/wk start, ~37 mi/wk peak
+            case .competitive:  return 52   // ~32 mi/wk start, ~48 mi/wk peak
             }
         case .halfMarathon:
             switch self {
             case .beginner:     return 25   // ~15 mi/wk
             case .intermediate: return 40   // ~25 mi/wk
             case .advanced:     return 60   // ~37 mi/wk
+            case .competitive:  return 75   // ~47 mi/wk
             }
         case .marathon:
             switch self {
             case .beginner:     return 40   // ~25 mi/wk
             case .intermediate: return 55   // ~34 mi/wk
             case .advanced:     return 80   // ~50 mi/wk
+            case .competitive:  return 100  // ~62 mi/wk
             }
         case .custom:
             // Custom distances route through `trainingStyle(forDistanceMeters:)`
@@ -128,6 +143,7 @@ enum FitnessLevel: String, Codable, CaseIterable, Sendable {
             case .beginner:     return 25
             case .intermediate: return 40
             case .advanced:     return 60
+            case .competitive:  return 75
             }
         }
     }

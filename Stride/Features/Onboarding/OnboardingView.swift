@@ -38,7 +38,7 @@ struct OnboardingView: View {
     // HR-zone calibration (shown on the Calibrate step). Age drives the Tanaka max-HR
     // estimate; an explicit override decouples it. Both are optional — untouched values
     // are not forced onto the profile.
-    @State private var age = 30
+    @State private var age = UserProfile.assumedAge
     @State private var maxHROverride: Int? = nil
     @State private var didEnterHR = false
 
@@ -229,7 +229,8 @@ struct OnboardingView: View {
                     progressTotal: totalSteps,
                     goalTimeSeconds: goalFinishTimeSeconds,
                     estimatedWorkouts: estimatedWorkouts, peakKm: peakKm,
-                    isCreatingPlan: isCreatingPlan, onViewPlan: { isCreatingPlan = true; createProfileAndPlan() })
+                    isCreatingPlan: isCreatingPlan, onBack: retreat,
+                    onViewPlan: { isCreatingPlan = true; createProfileAndPlan() })
         }
     }
 
@@ -308,22 +309,20 @@ struct OnboardingView: View {
 
     /// Units, folded into the step above rather than asked as one of its own (U10).
     ///
-    /// A segmented control rather than the pair of full-width cards this used to be: the
+    /// A compact control rather than the pair of full-width cards this used to be: the
     /// value arrives already correct for the device (`UnitPreference.localeDefault`), so
     /// this is a correction, not a decision — and the options are two words each.
+    ///
+    /// It shares `UnitPreferencePicker` with Settings. This used to be a stock
+    /// `.pickerStyle(.segmented)` while Settings drew a custom brand-filled pill, so the
+    /// same setting had two visual languages depending on where you met it (S24).
     private var unitsRow: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Units")
                 .font(.dsFootnote)
                 .foregroundStyle(.secondary)
-            Picker("Units", selection: Bindable(appSettings).unitPreference) {
-                ForEach(UnitPreference.allCases, id: \.self) { unit in
-                    Text(unit == .metric ? "km · min/km" : "mi · min/mi").tag(unit)
-                }
-            }
-            .pickerStyle(.segmented)
-            .accessibilityLabel("Distance and pace units")
-            .accessibilityIdentifier("onboarding.units")
+            UnitPreferencePicker(selection: Bindable(appSettings).unitPreference)
+                .accessibilityIdentifier("onboarding.units")
         }
         .padding(AppSpacing.lg)
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
@@ -387,26 +386,22 @@ struct OnboardingView: View {
 
     private var hrCalibrationCard: some View {
         VStack(spacing: 12) {
-            HStack {
-                Text("Age")
-                    .font(.dsSubhead.weight(.semibold))
-                Spacer()
-                Text("\(age)").font(.dsSubhead.weight(.bold)).monospacedDigit().foregroundStyle(.secondary)
-                Stepper("", value: Binding(get: { age }, set: { age = $0; didEnterHR = true }), in: 10...100)
-                    .labelsHidden()
-            }
+            // Typable as well as steppable: going from the assumed 30 to 45 used to be
+            // fifteen taps with no way to just say "45" (S25).
+            NumericStepperField(
+                title: "Age",
+                value: Binding(get: { age }, set: { age = $0 }),
+                range: 10...100,
+                onEdit: { didEnterHR = true }
+            )
             Divider()
-            HStack {
-                Text("Max HR")
-                    .font(.dsSubhead.weight(.semibold))
-                Spacer()
-                Text("\(onboardingMaxHR) bpm")
-                    .font(.dsSubhead.weight(.bold))
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-                Stepper("", value: Binding(get: { onboardingMaxHR }, set: { maxHROverride = $0; didEnterHR = true }), in: 120...220)
-                    .labelsHidden()
-            }
+            NumericStepperField(
+                title: "Max HR",
+                value: Binding(get: { onboardingMaxHR }, set: { maxHROverride = $0 }),
+                range: 120...220,
+                suffix: "bpm",
+                onEdit: { didEnterHR = true }
+            )
             Text("Sets your heart-rate zones. Estimated from age (208 − 0.7 × age) — adjust if you know your true max.")
                 .font(.dsCaption2)
                 .foregroundStyle(.secondary)
@@ -505,11 +500,27 @@ struct OnboardingView: View {
     // MARK: - Strength content
 
     private var strengthContent: some View {
-        VStack(spacing: 20) {
+        VStack(alignment: .leading, spacing: 20) {
             OBEquipmentGrid(selectedEquipment: $selectedEquipment)
-            OBStrengthFocusPicker(focus: $strengthFocus)
-                .opacity(selectedEquipment.isEmpty ? 0.4 : 1)
-                .disabled(selectedEquipment.isEmpty)
+
+            VStack(alignment: .leading, spacing: 8) {
+                OBStrengthFocusPicker(focus: $strengthFocus)
+                    .opacity(selectedEquipment.isEmpty ? 0.4 : 1)
+                    .disabled(selectedEquipment.isEmpty)
+
+                // A dimmed section with a pre-checked radio and nothing saying why is the
+                // state this step opens in, since nothing is selected on arrival (S13). The
+                // Plan tab's disabled Smart Adapt card gets this right — it carries its
+                // unlock condition directly beneath it. So does this now.
+                if selectedEquipment.isEmpty {
+                    Text("Pick your equipment above to choose a focus.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, AppSpacing.xs)
+                        .transition(.opacity)
+                }
+            }
+            .adaptiveAnimation(AppAnimation.bouncy, value: selectedEquipment.isEmpty)
         }
     }
 
@@ -539,12 +550,12 @@ struct OnboardingView: View {
                     .opacity(permRowsVisible[2] ? 1 : 0)
                     .offset(y: permRowsVisible[2] ? 0 : 14)
 
-                OBPermissionRow(icon: .timer, label: "Apple Watch",
-                                desc: "Launch Stride on your wrist.",
-                                tint: .secondary, isOn: false,
-                                isActive: false)
-                    .opacity(permRowsVisible[2] ? 1 : 0)
-                    .offset(y: permRowsVisible[2] ? 0 : 14)
+                // The Apple Watch row is gone (S15). It was not a permission — nothing in
+                // `requestPermissionsSequentially` touched it and both its flags were
+                // hardcoded `false` — so it sat permanently unchecked among three rows that
+                // do change state, in a list whose whole job is to report what was granted.
+                // It also borrowed the notifications row's `permRowsVisible[2]`, in an array
+                // sized for three.
             }
             .adaptiveAnimation(AppAnimation.bouncy, value: permRowsVisible[0])
             .adaptiveAnimation(AppAnimation.bouncy, value: permRowsVisible[1])
