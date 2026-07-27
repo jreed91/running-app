@@ -46,4 +46,7 @@ xcodebuild test \
 - Xcode Cloud scripts in `ci_scripts/` handle archive/TestFlight builds.
 - The app version and build number live in `ci_scripts/Version.xcconfig`.
 - Project files are generated from `project.yml` (do not hand-edit generated `.xcodeproj`).
-- TestFlight release notes are assembled from commit history by CI.
+- TestFlight release notes are assembled from commit history by CI: `ci_scripts/ci_post_xcodebuild.sh`
+  writes a bulleted changelog of the commits in each archive to `TestFlight/WhatToTest.en-US.txt`.
+  Preview what a build would send with
+  `CI_XCODEBUILD_ACTION=archive sh ci_scripts/ci_post_xcodebuild.sh`.
