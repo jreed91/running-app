@@ -45,12 +45,27 @@ struct WidgetSnapshotBuilderTests {
 
     // MARK: Fixtures
 
+    /// Containers are parked here rather than discarded.
+    ///
+    /// Every call site is `makePlan(in: makeContext(), …)`, so returning only the context
+    /// let the `AppContainer` — and with it the store — be released while `makePlan` was
+    /// still inserting into that context. SwiftData traps on iOS 27 when that happens, and
+    /// a trap takes the whole test host down, so every test still queued in the process is
+    /// reported as failed too.
+    ///
+    /// Holding them for the process lifetime is deliberate and cheap: a probe built and
+    /// saved through 400 `AppContainer.preview()` instances with no growth in open file
+    /// descriptors, so there is nothing to reclaim here.
+    private static var retainedContainers: [AppContainer] = []
+
     /// Model graphs are built inside a real (in-memory) context, the way
     /// `ScheduledDayResolverTests` does it: the builder walks `plan.weeks` and
     /// `week.workouts`, and those inverse relationships are only maintained for inserted
     /// objects.
     private func makeContext() -> ModelContext {
-        AppContainer.preview().modelContainer.mainContext
+        let container = AppContainer.preview()
+        Self.retainedContainers.append(container)
+        return container.modelContainer.mainContext
     }
 
     private func run(on date: Date, meters: Double = 5_000) -> RunWorkout {

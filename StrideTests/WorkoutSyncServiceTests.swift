@@ -129,6 +129,19 @@ final class MockHealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sen
 
 // MARK: - Tests
 
+// Quarantined on iOS 27: something at suite scope here traps before any test body runs.
+// `syncResolvesRunnerPaces()` crashes in isolation and is reported as "Test crashed with
+// signal trap" at 0.000 seconds, yet a probe replicating its body exactly — same mock,
+// container, profile insert, save, syncNow — passes in 0.103s with the right value.
+// `batchThreshold()`, a pure function in this same file, also passes alone. A trap takes
+// the whole test host down with it, so while this suite is live every test still queued
+// in the process is reported as failed too, which buries every real failure in the run.
+//
+// Disabled rather than deleted: the coverage is wanted back. See PR #280 for the
+// hypotheses already ruled out (container exhaustion, context/container lifetime,
+// in-memory vs file store, the insert-then-assign-inverse graph pattern) and for the
+// `-only-testing` form that actually isolates a Swift Testing test.
+@Suite(.disabled("Traps at suite scope on iOS 27 and aborts the test host — see PR #280"))
 @MainActor
 struct WorkoutSyncServiceTests {
 
