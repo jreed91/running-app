@@ -93,6 +93,32 @@ enum ScheduledDayResolver {
         return .beforePlanStart(daysUntilStart: max(0, daysUntilStart))
     }
 
+    /// The next uncompleted, non-rest session the plan schedules strictly after `date`.
+    ///
+    /// Exists so a day with nothing on it can still answer "what next". The dashboard's
+    /// lower half is empty on exactly those days — a rest day, or any day before the plan
+    /// begins — and an empty screen is the worst moment to make a runner go and look
+    /// somewhere else for the one fact they want (S23).
+    static func nextSession(
+        after date: Date,
+        in plan: TrainingPlan?,
+        calendar: Calendar = .current
+    ) -> ScheduledWorkout? {
+        guard let plan else { return nil }
+        let day = calendar.startOfDay(for: date)
+        return (plan.weeks ?? [])
+            .flatMap { $0.workouts ?? [] }
+            .filter { $0.workoutType != .rest && !$0.isCompleted }
+            .filter { calendar.startOfDay(for: $0.scheduledDate) > day }
+            // Date first, then the display order — *not* `isOrderedBefore` alone, which
+            // ranks by session kind before date and would answer with next week's run over
+            // tomorrow's gym session.
+            .min { lhs, rhs in
+                if lhs.scheduledDate != rhs.scheduledDate { return lhs.scheduledDate < rhs.scheduledDate }
+                return isOrderedBefore(lhs, rhs)
+            }
+    }
+
     /// Whether an uncompleted session scheduled on `date` can be started now.
     ///
     /// Today, plus one day late — the same tolerance `WorkoutSyncService` applies when

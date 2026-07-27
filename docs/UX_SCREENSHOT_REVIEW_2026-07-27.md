@@ -55,7 +55,9 @@ Second state is after this pass.
 | Cross-screen consistency | 🔴 Broken | 🟢 Fixed | Max HR, VDOT, fitness level and goal time now agree |
 | Disabled-state affordance | 🟡 Mixed | 🟢 Fixed | Training Focus says what unlocks it |
 | Selection colour semantics | 🟡 Mixed | 🟢 Fixed | Selection is `Color.brand` everywhere; race tint stays on the icon |
-| Screen density | 🟡 Mixed | 🟡 Mixed | Deferred — §7 |
+| Phase colour | 🔴 Broken | 🟢 Fixed | Peak is no longer red; one `TrainingPhase.tint` ramp drives bars, legend and phase bar |
+| Control consistency | 🟡 Mixed | 🟢 Fixed | One `UnitPreferencePicker`, one `NumericStepperField`, shared by onboarding and Settings |
+| Screen density | 🟡 Mixed | 🟡 Mostly | Home answers "what next"; onboarding steps 2/5/7 still open — §7 |
 | Overlap / occlusion | 🟡 Mixed | ⬜ n/a | S19 was a misread: that control is the system's minimized tab bar |
 
 ---
@@ -297,14 +299,21 @@ Reusing it as decoration on a goal picker is what puts red on a selection.
 **Fixed:** draw selection in the brand colour, and keep the per-race tint for the
 icon only.
 
-### S18 — Peak weeks are red on the plan chart 🟡
+### S18 — Peak weeks are red on the plan chart ✅ FIXED
 
 The `WeeklyMileageChart` legend is Base / Build / Peak / Taper in blue / orange /
 red / green. Red for "your hardest training block" reads as a warning on the screen
 that is meant to make the plan look achievable. Same root cause as S17: a zone
 scale used as a category scale.
 
-**Fixed:** deferred — see §7.
+**Fixed:** `TrainingPhase.tint`
+([`TrainingPhase+UI.swift`](../Stride/Shared/Extensions/TrainingPhase+UI.swift)) —
+a single-hue ramp on `brand` that rises Base → Build → Peak, so the colour carries
+the ordering the four unrelated hues never did, with Taper on `success` because it
+is the one phase that means *ease off* rather than another step up. Defined once,
+so the chart's bars, its legend and the Plan tab's phase names can no longer
+disagree; the legend now reads its swatches from the same property as the bars
+instead of a second hand-maintained list.
 
 ---
 
@@ -351,45 +360,63 @@ users get more information here than sighted ones.
 
 **Fixed:** label the days.
 
-### S23 — Home is more than half empty and does not scroll 🟡
+### S23 — Home is more than half empty and does not scroll ✅ FIXED
 
 Below "Start a Free Run" the Today screen is blank to the tab bar; three onboarding
 steps (2, 5, 7) have the same void above their pinned CTA. Not a defect on its own,
 but it is the reason S4 lands as hard as it does — there is nothing else on the
 screen to look at.
 
-**Fixed:** deferred — see §7.
+**Fixed:** with content, not with spacing. A day holding no session now carries an
+**Up next** card naming the plan's next uncompleted session and its date, backed by
+`ScheduledDayResolver.nextSession(after:in:)`. The blank half of the screen was
+worst on exactly the days the runner most wants to know what is coming — a rest
+day, or any day before the plan starts — so the answer goes there. It opens the
+workout's detail rather than starting it: `canStart` deliberately refuses future
+days so the plan is not run out of order, and a card that looked like a start
+button but was not one would be worse than no card.
 
-### S24 — The units control has two different designs 🟡
+Density on the onboarding steps is untouched and stays open — see §7.
+
+### S24 — The units control has two different designs ✅ FIXED
 
 Onboarding step 3 draws it as an iOS segmented control (white selection on a grey
 track); Settings draws it as a solid orange pill. Same setting, two visual
-languages.
+languages, and the stock segmented control is the only one of its kind in either
+flow.
 
-**Fixed:** deferred — see §7.
+**Fixed:** one
+[`UnitPreferencePicker`](../Stride/Shared/Components/UnitPreferencePicker.swift),
+used by both. It is the Settings treatment, which shows the unit's name *and* its
+format rather than the format alone. Extracting it also caught a contrast bug the
+copy had carried: the selected segment drew `.white` on `Color.brand`, which is
+2.84:1 — the exact failure `Color.onFill` was introduced for (U3a).
 
-### S25 — Age and Max HR are stepper-only 🟡
+### S25 — Age and Max HR are stepper-only ✅ FIXED
 
 [`OnboardingSubviews.swift:899`](../Stride/Features/Onboarding/OnboardingSubviews.swift#L899)
 
 Moving age from the default 30 to 45 is fifteen taps, with no keyboard entry.
 
-**Fixed:** deferred — see §7.
+**Fixed:**
+[`NumericStepperField`](../Stride/Shared/Components/NumericStepperField.swift) — the
+stepper stays, since it is the right control for a nudge, and the value beside it
+is a number-pad field. Both onboarding and Settings use it, so the two screens now
+also agree on how this row behaves.
+
+Committing is on focus loss rather than per keystroke, deliberately: clamping live
+would fight the typist, because the first digit of "45" is "4", which is under the
+age floor and would be rewritten to 10 before the second digit landed.
 
 ---
 
 ## 7. Deferred, with reasons
 
-These are real, and they are not being fixed in this pass:
-
-- **S18 (Peak = red), S24 (two units controls)** — both are palette/design-system
-  decisions that want a device and a designer, not a diff. Changing the phase
-  colours in isolation would leave the chart's legend out of step with the phase
-  bar on the Plan tab, which uses the same four names.
-- **S23 (empty screens)** — density is a redesign, not a patch. The earlier UX
-  audit deferred the spacing scale for the same reason and said so.
-- **S25 (stepper-only numerics)** — a keyboard-entry affordance is worth having but
-  needs a decimal pad, a validation story and a focus model; it is its own change.
+- **Onboarding step density (part of S23)** — steps 2, 5 and 7 still have a large
+  void above their pinned CTA. Unlike Home, there is no missing answer to put
+  there; these steps genuinely ask for one short thing. Closing the gap is a
+  layout redesign, and the earlier UX audit deferred the spacing scale for the same
+  reason and said so.
 
 ## 8. Not UX — found while running the tests
 

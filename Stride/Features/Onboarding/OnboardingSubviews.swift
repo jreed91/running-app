@@ -1282,14 +1282,6 @@ private struct WeeklyMileageChart: View {
         }
     }
 
-    private func phaseColor(_ phase: TrainingPhase) -> Color {
-        switch phase {
-        case .base:  return .zoneEasy
-        case .build: return .zoneTempo
-        case .peak:  return .zoneInterval
-        case .taper: return .zoneMarathon
-        }
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -1306,7 +1298,7 @@ private struct WeeklyMileageChart: View {
                             .foregroundStyle(.secondary)
                             .opacity(barsVisible ? 1 : 0)
                         RoundedRectangle(cornerRadius: AppRadius.micro)
-                            .fill(phaseColor(bar.phase))
+                            .fill(bar.phase.tint)
                             .frame(height: barsVisible ? max(6, CGFloat(bar.mi) / CGFloat(peakMiles) * 72) : 2)
                             .animation(AppAnimation.bouncy.delay(Double(index) * 0.04), value: barsVisible)
                         Text("W\(bar.n)")
@@ -1319,17 +1311,14 @@ private struct WeeklyMileageChart: View {
             .frame(height: 104)
             .task { barsVisible = true }
 
-            // Legend
+            // Legend. Driven off the same `tint` the bars use, rather than a second list of
+            // colours that has to be kept in step with the first by hand.
             HStack(spacing: 12) {
-                ForEach([
-                    ("Base",  Color.zoneEasy),
-                    ("Build", Color.zoneTempo),
-                    ("Peak",  Color.zoneInterval),
-                    ("Taper", Color.zoneMarathon),
-                ], id: \.0) { name, color in
+                ForEach([TrainingPhase.base, .build, .peak, .taper], id: \.self) { phase in
+                    let name = phase.localizedName
                     HStack(spacing: 5) {
                         RoundedRectangle(cornerRadius: AppRadius.micro)
-                            .fill(color)
+                            .fill(phase.tint)
                             .frame(width: 8, height: 8)
                         Text(name)
                             .font(.dsCaption2.weight(.semibold))

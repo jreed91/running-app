@@ -309,22 +309,20 @@ struct OnboardingView: View {
 
     /// Units, folded into the step above rather than asked as one of its own (U10).
     ///
-    /// A segmented control rather than the pair of full-width cards this used to be: the
+    /// A compact control rather than the pair of full-width cards this used to be: the
     /// value arrives already correct for the device (`UnitPreference.localeDefault`), so
     /// this is a correction, not a decision — and the options are two words each.
+    ///
+    /// It shares `UnitPreferencePicker` with Settings. This used to be a stock
+    /// `.pickerStyle(.segmented)` while Settings drew a custom brand-filled pill, so the
+    /// same setting had two visual languages depending on where you met it (S24).
     private var unitsRow: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Units")
                 .font(.dsFootnote)
                 .foregroundStyle(.secondary)
-            Picker("Units", selection: Bindable(appSettings).unitPreference) {
-                ForEach(UnitPreference.allCases, id: \.self) { unit in
-                    Text(unit == .metric ? "km · min/km" : "mi · min/mi").tag(unit)
-                }
-            }
-            .pickerStyle(.segmented)
-            .accessibilityLabel("Distance and pace units")
-            .accessibilityIdentifier("onboarding.units")
+            UnitPreferencePicker(selection: Bindable(appSettings).unitPreference)
+                .accessibilityIdentifier("onboarding.units")
         }
         .padding(AppSpacing.lg)
         .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
@@ -388,26 +386,22 @@ struct OnboardingView: View {
 
     private var hrCalibrationCard: some View {
         VStack(spacing: 12) {
-            HStack {
-                Text("Age")
-                    .font(.dsSubhead.weight(.semibold))
-                Spacer()
-                Text("\(age)").font(.dsSubhead.weight(.bold)).monospacedDigit().foregroundStyle(.secondary)
-                Stepper("", value: Binding(get: { age }, set: { age = $0; didEnterHR = true }), in: 10...100)
-                    .labelsHidden()
-            }
+            // Typable as well as steppable: going from the assumed 30 to 45 used to be
+            // fifteen taps with no way to just say "45" (S25).
+            NumericStepperField(
+                title: "Age",
+                value: Binding(get: { age }, set: { age = $0 }),
+                range: 10...100,
+                onEdit: { didEnterHR = true }
+            )
             Divider()
-            HStack {
-                Text("Max HR")
-                    .font(.dsSubhead.weight(.semibold))
-                Spacer()
-                Text("\(onboardingMaxHR) bpm")
-                    .font(.dsSubhead.weight(.bold))
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-                Stepper("", value: Binding(get: { onboardingMaxHR }, set: { maxHROverride = $0; didEnterHR = true }), in: 120...220)
-                    .labelsHidden()
-            }
+            NumericStepperField(
+                title: "Max HR",
+                value: Binding(get: { onboardingMaxHR }, set: { maxHROverride = $0 }),
+                range: 120...220,
+                suffix: "bpm",
+                onEdit: { didEnterHR = true }
+            )
             Text("Sets your heart-rate zones. Estimated from age (208 − 0.7 × age) — adjust if you know your true max.")
                 .font(.dsCaption2)
                 .foregroundStyle(.secondary)

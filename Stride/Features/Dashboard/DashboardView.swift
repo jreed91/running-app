@@ -620,6 +620,14 @@ struct DashboardView: View {
                 case .outsidePlan:      outsidePlanCard
                 case .noPlan:           noPlanCard
                 }
+
+                // A day with nothing on it is exactly the day the runner most wants to know
+                // what *is* coming, and it is also the day this screen is mostly blank
+                // below the fold (S23). Not shown for `.noPlan` — there is nothing to look
+                // ahead to — or once the plan is behind them.
+                if let next = nextScheduledSession, selectedDayState != .noPlan {
+                    upNextCard(next)
+                }
             } else {
                 ForEach(sessionsForSelectedDate) { workout in
                     VStack(alignment: .leading, spacing: 10) {
@@ -759,6 +767,43 @@ struct DashboardView: View {
         )
     }
 
+    /// What the plan asks for next, on a day it asks for nothing.
+    ///
+    /// Tapping it opens the session's detail rather than starting it: `canStart` deliberately
+    /// refuses future days so the plan is not run out of order, and a card that looks like a
+    /// start button but is not one would be worse than no card.
+    private func upNextCard(_ workout: ScheduledWorkout) -> some View {
+        NavigationLink {
+            WorkoutDetailView(workout: workout)
+        } label: {
+            HStack(spacing: 14) {
+                ZStack {
+                    Circle()
+                        .fill(Color.brand.opacity(0.15))
+                        .frame(width: 44, height: 44)
+                    StrideIcon(name: .calendar, size: 20, color: .brand, strokeWeight: 2.2)
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("UP NEXT")
+                        .font(.dsCaption2.weight(.bold))
+                        .kerning(1.2)
+                        .foregroundStyle(.secondary)
+                    Text(workout.workoutType.localizedName)
+                        .font(.bodyStrong)
+                    Text(workout.scheduledDate.formatted(.dateTime.weekday(.wide).month().day()))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                StrideIcon(name: .chevronRight, size: 14, color: .secondary, strokeWeight: 2)
+            }
+            .padding(18)
+            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Opens the workout's details")
+    }
+
     /// Shown when there is no active plan at all — a CTA, not a rest day (N23).
     private var noPlanCard: some View {
         emptyDayCard(
@@ -886,6 +931,11 @@ struct DashboardView: View {
     /// outside the plan, or no plan at all (N23).
     private var selectedDayState: ScheduledDayResolver.DayState {
         ScheduledDayResolver.dayState(on: selectedDate, in: activePlan)
+    }
+
+    /// The plan's next uncompleted session after the selected day, for the "Up next" card.
+    private var nextScheduledSession: ScheduledWorkout? {
+        ScheduledDayResolver.nextSession(after: selectedDate, in: activePlan)
     }
 
     /// Whether the selected day's sessions can still be started (today, or one day
