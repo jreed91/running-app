@@ -57,7 +57,15 @@ enum ScheduledDayResolver {
         case scheduled
         /// The plan covers this day and asks for nothing — a genuine rest day.
         case rest
-        /// There is an active plan, but this date falls outside its range.
+        /// The plan exists but has not begun: this date precedes its start.
+        ///
+        /// Split out of `outsidePlan` because it is the state a runner lands in the moment
+        /// onboarding finishes. The default start is the next Monday, so finishing setup on
+        /// any other day dropped them straight onto "Outside your plan — Your plan runs
+        /// Aug 3 – Sep 21", which reads as *you have nothing to do* rather than *your plan
+        /// starts soon* (S4).
+        case beforePlanStart(daysUntilStart: Int)
+        /// There is an active plan, but this date falls after its range.
         case outsidePlan
         /// No active plan at all.
         case noPlan
@@ -79,7 +87,10 @@ enum ScheduledDayResolver {
         // A plan whose end precedes its start is malformed rather than empty; it covers
         // no days, so every date is outside it.
         guard start <= end else { return .outsidePlan }
-        return (start...end).contains(day) ? .rest : .outsidePlan
+        if (start...end).contains(day) { return .rest }
+        guard day < start else { return .outsidePlan }
+        let daysUntilStart = calendar.dateComponents([.day], from: day, to: start).day ?? 0
+        return .beforePlanStart(daysUntilStart: max(0, daysUntilStart))
     }
 
     /// Whether an uncompleted session scheduled on `date` can be started now.

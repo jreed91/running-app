@@ -173,9 +173,15 @@ struct ProgressDashboardView: View {
                 label: "Distance"
             )
             Divider().frame(height: 40)
+            // Measured VDOT first; the profile's own baseline behind it, labelled as an
+            // estimate so the two are never confused. Falling straight through to "--" hid a
+            // number the app had already computed and shown during onboarding (S8).
             summaryStatCell(
-                value: summary.latestVDOT.map { String(format: "%.0f", $0) } ?? "--",
-                label: "VDOT"
+                value: (summary.latestVDOT ?? profile?.baselineVDOT)
+                    .map { String(format: "%.0f", $0) } ?? "--",
+                label: summary.latestVDOT == nil && profile?.baselineVDOT != nil
+                    ? "VDOT · est."
+                    : "VDOT"
             )
         }
         .padding(AppSpacing.lg)
@@ -277,6 +283,12 @@ struct ProgressDashboardView: View {
 
     private var weeklyVolumeChart: some View {
         chartCard("WEEKLY VOLUME") {
+            // Every other chart card on this screen guards on an empty series; this one was
+            // missed, so with no runs Swift Charts drew a ~160pt card with no bars, no axes
+            // and no message — which reads as a rendering failure, not an empty state (S5).
+            if weeklyBuckets.isEmpty {
+                emptyDataPlaceholder("No distance logged in this period")
+            } else {
             Chart {
                 ForEach(weeklyBuckets, id: \.weekStart) { bucket in
                     BarMark(
@@ -307,6 +319,7 @@ struct ProgressDashboardView: View {
             }
             .chartXSelection(value: $selectedVolumeDate)
             .chartAccessibility("Weekly volume chart", weeklyVolumeSeries)
+            }
         }
     }
 

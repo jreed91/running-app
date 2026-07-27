@@ -57,6 +57,13 @@ final class MockHealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sen
     private var _enableCalls = 0
     var enableCalls: Int { lock.withLock { _enableCalls } }
 
+    /// Declared explicitly, and on the main actor, because the implicit one cannot exist:
+    /// the `@MainActor` stored properties above have to have their defaults evaluated on the
+    /// main actor, while the `nonisolated` ones do not, so Swift 6.2 rejects the synthesized
+    /// initializer as "both nonisolated and main actor-isolated". Every construction site is
+    /// inside the `@MainActor` suite below, so this costs the tests nothing.
+    @MainActor init() {}
+
     func requestAuthorization() async throws {}
 
     @MainActor func save(_ workout: RunWorkout) async throws -> String { UUID().uuidString }

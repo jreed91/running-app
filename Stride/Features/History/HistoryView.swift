@@ -46,7 +46,8 @@ struct HistoryView: View {
                 searchText: searchText,
                 filter: filter,
                 isSyncing: isSyncing,
-                clearFilter: { filter = HistoryFilter() }
+                clearFilter: { filter = HistoryFilter() },
+                syncNow: { await syncRecentHealthKitWorkouts() }
             ) {
                 displayLimit += HistoryEntryList.pageSize
             }
@@ -137,6 +138,9 @@ private struct HistoryEntryList: View {
     private let filter: HistoryFilter
     private let isSyncing: Bool
     private let clearFilter: () -> Void
+    /// Runs the same importer as pull-to-refresh, so the empty state can offer the action it
+    /// names instead of only describing it (S6).
+    private let syncNow: () async -> Void
     private let loadMore: () -> Void
 
     @Environment(AppContainer.self) private var container
@@ -154,12 +158,14 @@ private struct HistoryEntryList: View {
         filter: HistoryFilter,
         isSyncing: Bool,
         clearFilter: @escaping () -> Void,
+        syncNow: @escaping () async -> Void,
         loadMore: @escaping () -> Void
     ) {
         self.limit = limit
         self.filter = filter
         self.isSyncing = isSyncing
         self.clearFilter = clearFilter
+        self.syncNow = syncNow
         self.loadMore = loadMore
 
         let term = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -324,11 +330,29 @@ private struct HistoryEntryList: View {
                     .buttonStyle(.borderedProminent)
             }
         } else {
-            ContentUnavailableView(
-                "No workouts yet",
-                systemImage: "figure.run.circle",
-                description: Text("Start a workout or sync from Apple Health.")
-            )
+            // The description named two actions and offered neither, leaving the only route
+            // to either one an unlabelled toolbar glyph or a gesture on an empty list (S6).
+            // The filter variant above already uses the `actions:` slot; so does this.
+            ContentUnavailableView {
+                Label("No workouts yet", systemImage: "figure.run.circle")
+            } description: {
+                Text("Start a run, or bring in what you've already recorded.")
+            } actions: {
+                Button("Start a Run") {
+                    container.appNavigation.select(.home)
+                    container.activeRunPresentation.startOrReopen(
+                        scheduledWorkout: nil,
+                        isRunInProgress: container.workoutTrackerService.isRecording
+                    )
+                }
+                .buttonStyle(.borderedProminent)
+
+                if container.healthKitRepository.isAvailable {
+                    Button("Sync Apple Health") {
+                        Task { await syncNow() }
+                    }
+                }
+            }
         }
     }
 

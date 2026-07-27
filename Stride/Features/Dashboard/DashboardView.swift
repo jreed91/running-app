@@ -256,8 +256,26 @@ private struct WeeklyLoadBar: View {
     let fraction: CGFloat    // 0–1
     let color: Color
     let isActive: Bool       // today (no bar yet)
+    /// One-letter weekday initial drawn under the bar.
+    ///
+    /// Seven bars with nothing under them were unreadable on a fresh install: the only
+    /// filled one is today's `isActive` marker, in the brand colour, sitting directly below
+    /// "0.0 mi / 0 Runs" — which makes it look like a progress meter reading 1/7 rather than
+    /// a day marker. The chart already had a full `chartAccessibility` summary, so VoiceOver
+    /// users could read this strip and sighted ones could not (S22).
+    let dayLetter: String
 
     var body: some View {
+        VStack(spacing: 4) {
+            bar
+            Text(dayLetter)
+                .font(.dsCaption2)
+                .foregroundStyle(isActive ? Color.brand : .secondary)
+                .fontWeight(isActive ? .bold : .regular)
+        }
+    }
+
+    private var bar: some View {
         VStack(spacing: 0) {
             Spacer(minLength: 0)
             if isActive {
@@ -492,10 +510,14 @@ struct DashboardView: View {
             let isToday = cal.isDateInToday(day)
             let isFuture = day > today && !isToday
             let label = day.formatted(.dateTime.weekday(.wide))
+            // `.narrow` is the calendar's own one-letter initial, so it localises with the
+            // device rather than being sliced off the English name.
+            let letter = day.formatted(.dateTime.weekday(.narrow))
 
             if isFuture {
                 return WeeklyLoadDay(
                     label: label,
+                    letter: letter,
                     distanceMeters: 0,
                     fraction: 0,
                     color: .clear,
@@ -519,6 +541,7 @@ struct DashboardView: View {
 
             return WeeklyLoadDay(
                 label: label,
+                letter: letter,
                 distanceMeters: dist,
                 fraction: CGFloat(min(dist / scale, 1.0)),
                 color: color,
@@ -529,10 +552,15 @@ struct DashboardView: View {
 
         return HStack(alignment: .bottom, spacing: 6) {
             ForEach(Array(bars.enumerated()), id: \.offset) { _, bar in
-                WeeklyLoadBar(fraction: bar.fraction, color: bar.color, isActive: bar.isActive)
+                WeeklyLoadBar(
+                    fraction: bar.fraction,
+                    color: bar.color,
+                    isActive: bar.isActive,
+                    dayLetter: bar.letter
+                )
             }
         }
-        .frame(height: 28)
+        .frame(height: 42)
         .padding(.top, AppSpacing.xs)
         // Seven bars with no label at all. `chartAccessibility` was built for exactly
         // this and is on all six Progress-tab charts — this one was missed (U10).
@@ -552,6 +580,9 @@ struct DashboardView: View {
     /// One day of the weekly-load strip: what it draws, and what it says.
     private struct WeeklyLoadDay {
         let label: String
+        /// One-letter weekday initial, drawn under the bar (S22). `label` stays the full
+        /// name because it is what the accessibility summary speaks.
+        let letter: String
         let distanceMeters: Double
         let fraction: CGFloat
         let color: Color
@@ -579,6 +610,8 @@ struct DashboardView: View {
                 // rest day claimed a plan said something it never said (N23).
                 switch selectedDayState {
                 case .rest, .scheduled: restDayCard
+                case .beforePlanStart(let daysUntilStart):
+                    planStartsSoonCard(daysUntilStart: daysUntilStart)
                 case .outsidePlan:      outsidePlanCard
                 case .noPlan:           noPlanCard
                 }
@@ -665,7 +698,30 @@ struct DashboardView: View {
         )
     }
 
-    /// Shown for a date the active plan doesn't cover — scrolling to next month is not
+    /// Shown for a date before the plan begins — which, because the default start is the
+    /// next Monday, is the *first* thing most runners see after finishing onboarding.
+    ///
+    /// `outsidePlanCard` used to cover this, and it is the wrong voice for it: grey, past
+    /// tense, and framed as an absence. A plan that hasn't started yet is good news with a
+    /// date attached, so this one is branded, counts down, and names what to do meanwhile —
+    /// the free-run button is directly beneath it (S4).
+    private func planStartsSoonCard(daysUntilStart: Int) -> some View {
+        emptyDayCard(
+            icon: .calendar,
+            tint: .brand,
+            title: daysUntilStart == 0
+                ? "Your plan starts today"
+                : daysUntilStart == 1
+                    ? "Your plan starts tomorrow"
+                    : "Your plan starts in \(daysUntilStart) days",
+            subtitle: activePlan.map { plan in
+                "Week 1 begins \(plan.startDate.formatted(.dateTime.weekday(.wide).month().day()))."
+                    + " Free runs before then still count."
+            } ?? "Free runs before then still count."
+        )
+    }
+
+    /// Shown for a date past the end of the active plan — scrolling to next month is not
     /// the plan prescribing rest (N23).
     private var outsidePlanCard: some View {
         emptyDayCard(
@@ -673,7 +729,7 @@ struct DashboardView: View {
             tint: .secondary,
             title: "Outside your plan",
             subtitle: activePlan.map { plan in
-                "Your plan runs \(plan.startDate.formatted(.dateTime.month().day())) – "
+                "Your plan ran \(plan.startDate.formatted(.dateTime.month().day())) – "
                     + "\(plan.endDate.formatted(.dateTime.month().day()))."
             } ?? "This day isn't part of your training plan."
         )

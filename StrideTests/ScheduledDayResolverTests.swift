@@ -179,8 +179,22 @@ struct ScheduledDayResolverTests {
 
         let nextMonth = monday.addingTimeInterval(40 * 86_400)
         #expect(ScheduledDayResolver.dayState(on: nextMonth, in: plan) == .outsidePlan)
-        let beforeStart = monday.addingTimeInterval(-86_400)
-        #expect(ScheduledDayResolver.dayState(on: beforeStart, in: plan) == .outsidePlan)
+    }
+
+    /// A plan that has not begun is not the same absence as one that has ended: the default
+    /// start is the next Monday, so this is the state onboarding hands the runner (S4).
+    @Test("A date before the plan's start counts down to it")
+    func dateBeforePlanStartCountsDown() throws {
+        let context = AppContainer.preview().modelContainer.mainContext
+        let plan = try makePlan(in: context, sessions: [(0, .tempo, false)])
+
+        let dayBefore = monday.addingTimeInterval(-86_400)
+        #expect(ScheduledDayResolver.dayState(on: dayBefore, in: plan)
+                == .beforePlanStart(daysUntilStart: 1))
+
+        let weekBefore = monday.addingTimeInterval(-7 * 86_400)
+        #expect(ScheduledDayResolver.dayState(on: weekBefore, in: plan)
+                == .beforePlanStart(daysUntilStart: 7))
     }
 
     @Test("With no plan, no day is a rest day")

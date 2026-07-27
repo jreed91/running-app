@@ -38,7 +38,7 @@ struct OnboardingView: View {
     // HR-zone calibration (shown on the Calibrate step). Age drives the Tanaka max-HR
     // estimate; an explicit override decouples it. Both are optional — untouched values
     // are not forced onto the profile.
-    @State private var age = 30
+    @State private var age = UserProfile.assumedAge
     @State private var maxHROverride: Int? = nil
     @State private var didEnterHR = false
 
@@ -229,7 +229,8 @@ struct OnboardingView: View {
                     progressTotal: totalSteps,
                     goalTimeSeconds: goalFinishTimeSeconds,
                     estimatedWorkouts: estimatedWorkouts, peakKm: peakKm,
-                    isCreatingPlan: isCreatingPlan, onViewPlan: { isCreatingPlan = true; createProfileAndPlan() })
+                    isCreatingPlan: isCreatingPlan, onBack: retreat,
+                    onViewPlan: { isCreatingPlan = true; createProfileAndPlan() })
         }
     }
 
@@ -505,11 +506,27 @@ struct OnboardingView: View {
     // MARK: - Strength content
 
     private var strengthContent: some View {
-        VStack(spacing: 20) {
+        VStack(alignment: .leading, spacing: 20) {
             OBEquipmentGrid(selectedEquipment: $selectedEquipment)
-            OBStrengthFocusPicker(focus: $strengthFocus)
-                .opacity(selectedEquipment.isEmpty ? 0.4 : 1)
-                .disabled(selectedEquipment.isEmpty)
+
+            VStack(alignment: .leading, spacing: 8) {
+                OBStrengthFocusPicker(focus: $strengthFocus)
+                    .opacity(selectedEquipment.isEmpty ? 0.4 : 1)
+                    .disabled(selectedEquipment.isEmpty)
+
+                // A dimmed section with a pre-checked radio and nothing saying why is the
+                // state this step opens in, since nothing is selected on arrival (S13). The
+                // Plan tab's disabled Smart Adapt card gets this right — it carries its
+                // unlock condition directly beneath it. So does this now.
+                if selectedEquipment.isEmpty {
+                    Text("Pick your equipment above to choose a focus.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, AppSpacing.xs)
+                        .transition(.opacity)
+                }
+            }
+            .adaptiveAnimation(AppAnimation.bouncy, value: selectedEquipment.isEmpty)
         }
     }
 
@@ -539,12 +556,12 @@ struct OnboardingView: View {
                     .opacity(permRowsVisible[2] ? 1 : 0)
                     .offset(y: permRowsVisible[2] ? 0 : 14)
 
-                OBPermissionRow(icon: .timer, label: "Apple Watch",
-                                desc: "Launch Stride on your wrist.",
-                                tint: .secondary, isOn: false,
-                                isActive: false)
-                    .opacity(permRowsVisible[2] ? 1 : 0)
-                    .offset(y: permRowsVisible[2] ? 0 : 14)
+                // The Apple Watch row is gone (S15). It was not a permission — nothing in
+                // `requestPermissionsSequentially` touched it and both its flags were
+                // hardcoded `false` — so it sat permanently unchecked among three rows that
+                // do change state, in a list whose whole job is to report what was granted.
+                // It also borrowed the notifications row's `permRowsVisible[2]`, in an array
+                // sized for three.
             }
             .adaptiveAnimation(AppAnimation.bouncy, value: permRowsVisible[0])
             .adaptiveAnimation(AppAnimation.bouncy, value: permRowsVisible[1])

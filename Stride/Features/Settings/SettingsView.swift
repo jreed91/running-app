@@ -706,11 +706,12 @@ struct SettingsView: View {
         )
     }
 
-    /// Age drives the Tanaka max-HR estimate. Defaults to 30 until the user sets it; once the
-    /// user has an explicit Max HR, changing age no longer moves it (the estimate is decoupled).
+    /// Age drives the Tanaka max-HR estimate. Defaults to `UserProfile.assumedAge` until the
+    /// user sets it; once the user has an explicit Max HR, changing age no longer moves it
+    /// (the estimate is decoupled).
     private func ageBinding(for profile: UserProfile) -> Binding<Int> {
         Binding(
-            get: { profile.age ?? 30 },
+            get: { profile.age ?? UserProfile.assumedAge },
             set: { newValue in
                 guard profile.age != newValue else { return }
                 profile.age = newValue
@@ -719,11 +720,19 @@ struct SettingsView: View {
         )
     }
 
-    /// Max HR shows the effective value (explicit → age estimate → 190 default). Editing it
-    /// stores an explicit `maxHeartRateBPM`, overriding the age estimate.
+    /// Max HR shows the effective value (explicit → age estimate → estimate for the assumed
+    /// age). Editing it stores an explicit `maxHeartRateBPM`, overriding the age estimate.
+    ///
+    /// The last fallback used to be a flat `190`, which is `220 − 30` — a different formula
+    /// from the Tanaka estimate the Age row above it implies and onboarding shows. A runner
+    /// who left both defaults alone saw "187 bpm" during setup and then "Age 30 / Max HR 190"
+    /// here, with the two rows contradicting each other on screen (S7).
     private func maxHRBinding(for profile: UserProfile) -> Binding<Int> {
         Binding(
-            get: { profile.effectiveMaxHeartRate ?? 190 },
+            get: {
+                profile.effectiveMaxHeartRate
+                    ?? UserProfile.estimatedMaxHeartRate(forAge: profile.age ?? UserProfile.assumedAge)
+            },
             set: { newValue in
                 guard profile.maxHeartRateBPM != newValue else { return }
                 profile.maxHeartRateBPM = newValue

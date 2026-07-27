@@ -452,7 +452,11 @@ struct ActiveRunView: View {
 
     private var heroPace: some View {
         VStack(spacing: 6) {
-            Text(tracker.currentPaceSecondsPerKm.paceString(unit: appSettings.unitPreference))
+            // `paceValueString`, not `paceString`: the latter carries "min/mi" inside the
+            // string, which the caption below already says. At 120pt that duplicate unit
+            // cannot fit, so `lineLimit(1)` truncated the hero to "--:-- min…" and ran it
+            // off the right edge of the screen (S1).
+            Text(tracker.currentPaceSecondsPerKm.paceValueString(unit: appSettings.unitPreference))
                 .font(.metricHero)
                 .kerning(-4.8)                       // -0.04em at 120pt
                 .lineSpacing(-12)

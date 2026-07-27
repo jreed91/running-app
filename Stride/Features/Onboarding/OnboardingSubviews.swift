@@ -510,11 +510,24 @@ struct OBRaceCard: View {
     private var distanceLabel: String {
         let isImperial = appSettings.unitPreference == .imperial
         switch race {
-        case .maintainFitness: return isImperial ? "No race target" : "No race target"
+        case .maintainFitness: return "No race target"
         case .fiveK:         return isImperial ? "3.1 mi"  : "5.0 km"
         case .halfMarathon:  return isImperial ? "13.1 mi" : "21.1 km"
         case .marathon:      return isImperial ? "26.2 mi" : "42.2 km"
         case .custom:        return "Set your own"
+        }
+    }
+
+    /// Whether `distanceLabel` is a measurement or a phrase.
+    ///
+    /// The monospaced face is the app's *data* face — it exists so digits line up. Two of
+    /// the five badges are prose ("No race target", "Set your own"), and monospacing those
+    /// made them wide enough to wrap inside the baseline-aligned `HStack`, which then broke
+    /// "Custom Distance" onto a second line as well (S3).
+    private var distanceLabelIsMeasurement: Bool {
+        switch race {
+        case .maintainFitness, .custom: return false
+        case .fiveK, .halfMarathon, .marathon: return true
         }
     }
     private var desc: String {
@@ -538,19 +551,31 @@ struct OBRaceCard: View {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(race.localizedName).font(.bodyStrong)
                         Text(distanceLabel)
-                            .font(.dsCaption.weight(.semibold).monospaced())
+                            .font(distanceLabelIsMeasurement
+                                  ? .dsCaption.weight(.semibold).monospaced()
+                                  : .dsCaption.weight(.semibold))
                             .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
                     }
                     Text("\(desc) · \(race.typicalWeeks.lowerBound)–\(race.typicalWeeks.upperBound) wks")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                OBRadio(isSelected: isSelected, color: color)
+                // Selection is `Color.brand`, and the per-race tint stays on the icon.
+                //
+                // `color` comes from the pace-zone palette, which is a *data* scale — it
+                // encodes effort on charts and in the run HUD. Used as decoration here it put
+                // `zoneInterval`, i.e. red, on the default-selected 5K card, so the app's
+                // first interactive screen presented its pre-selected answer in the same
+                // colour it uses for errors — and step 3's selection is orange, so selection
+                // colour was not even internally consistent (S17).
+                OBRadio(isSelected: isSelected, color: .brand)
             }
             .padding(AppSpacing.lg)
             .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
             .overlay(RoundedRectangle(cornerRadius: AppRadius.lg)
-                .strokeBorder(isSelected ? color : Color.clear, lineWidth: 2))
+                .strokeBorder(isSelected ? Color.brand : Color.clear, lineWidth: 2))
         }
         .buttonStyle(BouncyButtonStyle()).foregroundStyle(.primary)
     }
@@ -724,14 +749,9 @@ enum OBFitnessSelection: CaseIterable, Sendable {
     case experienced
     case competitive
 
-    var title: String {
-        switch self {
-        case .newToRunning: return "New to running"
-        case .recreational: return "Recreational"
-        case .experienced: return "Experienced"
-        case .competitive: return "Competitive"
-        }
-    }
+    /// Read from `FitnessLevel` rather than restated here, so the word on this card and the
+    /// word Settings shows for the same answer cannot drift apart again (S9).
+    var title: String { fitnessLevel.localizedName }
 
     var subtitle: String {
         switch self {
@@ -742,11 +762,15 @@ enum OBFitnessSelection: CaseIterable, Sendable {
         }
     }
 
+    /// One level per option. `.experienced` and `.competitive` both mapped to `.advanced`
+    /// until `FitnessLevel.competitive` existed, which made two of the four cards produce an
+    /// identical plan — and say so, both reading "Plan starts ~25 mi/week" (S10).
     var fitnessLevel: FitnessLevel {
         switch self {
         case .newToRunning: return .beginner
         case .recreational: return .intermediate
-        case .experienced, .competitive: return .advanced
+        case .experienced:  return .advanced
+        case .competitive:  return .competitive
         }
     }
 
@@ -837,6 +861,7 @@ struct OBLevelRow: View {
         case .beginner: return "New to running or returning"
         case .intermediate: return "Comfortable running 3× per week"
         case .advanced: return "Consistent weekly mileage"
+        case .competitive: return "Racing regularly with structured training"
         }
     }
 
@@ -987,26 +1012,40 @@ struct OBPermissionRow: View {
                     .animation(.easeInOut(duration: 0.2), value: isActive)
             }
             Spacer()
+            // Status, not a control. This row has no tap target — the CTA at the bottom
+            // requests all three in sequence — but an empty stroked circle is the standard
+            // unchecked-checkbox shape, so on a row with an icon, a title and a subtitle it
+            // read as "tap me to grant this" (S14). "Not yet" says the same thing without
+            // promising an interaction that isn't there.
             Group {
                 if isActive {
                     ProgressView().tint(tint)
-                        .frame(width: 28, height: 28)
+                        .frame(height: 28)
                 } else if isOn {
-                    ZStack {
-                        Circle().fill(Color.success)
-                            .frame(width: 28, height: 28)
-                        StrideIcon(name: .check, size: 13, color: .white, strokeWeight: 3)
+                    HStack(spacing: 6) {
+                        ZStack {
+                            Circle().fill(Color.success)
+                                .frame(width: 22, height: 22)
+                            StrideIcon(name: .check, size: 11, color: .white, strokeWeight: 3)
+                        }
+                        Text("Allowed")
+                            .font(.dsCaption.weight(.semibold))
+                            .foregroundStyle(Color.success)
                     }
+                    .frame(height: 28)
                 } else {
-                    Circle()
-                        .strokeBorder(Color.secondary.opacity(0.3), lineWidth: 1.5)
-                        .frame(width: 28, height: 28)
+                    Text("Not yet")
+                        .font(.dsCaption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(height: 28)
                 }
             }
             .animation(.easeInOut(duration: 0.2), value: isActive)
             .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isOn)
         }
         .padding(.vertical, AppSpacing.md)
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(isActive ? "Requesting" : isOn ? "Allowed" : "Not yet granted")
     }
 }
 
@@ -1042,6 +1081,11 @@ struct OBReady: View {
     let estimatedWorkouts: Int
     let peakKm: Double
     let isCreatingPlan: Bool
+    /// This screen used to draw the progress bar without the chevron every other step has,
+    /// which made the one screen most likely to prompt a change of mind — the first sight of
+    /// peak mileage, week count and the phase breakdown — the only one you could not go back
+    /// from (S16).
+    let onBack: () -> Void
     let onViewPlan: () -> Void
 
     @Environment(AppSettings.self) private var appSettings
@@ -1053,16 +1097,11 @@ struct OBReady: View {
             : max(1, Int(peakKm.rounded()))
     }
 
-    private var goalTimeLabel: String {
-        let total = max(0, Int(goalTimeSeconds.rounded()))
-        let hours = total / 3600
-        let minutes = (total % 3600) / 60
-        let seconds = total % 60
-        if hours > 0 {
-            return String(format: "%d:%02d:%02d", hours, minutes, seconds)
-        }
-        return String(format: "%d:%02d", minutes, seconds)
-    }
+    /// Shares `durationString` with the Plan tab rather than reimplementing it.
+    ///
+    /// This used to round where `durationString` truncates, so the same plan's finish time
+    /// read 26:24 here and 26:23 one screen later (S11).
+    private var goalTimeLabel: String { goalTimeSeconds.durationString }
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -1072,6 +1111,20 @@ struct OBReady: View {
                 // Chrome: progress bar at 100% with 7/7 counter
                 Spacer().frame(height: 54)
                 HStack(spacing: 14) {
+                    Button(action: onBack) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.secondary.opacity(0.1))
+                                .frame(width: 32, height: 32)
+                            StrideIcon(name: .chevronLeft, size: 14, color: .primary, strokeWeight: 2.4)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isCreatingPlan)
+                    .opacity(isCreatingPlan ? 0.4 : 1)
+                    .accessibilityLabel("Back")
+                    .accessibilityIdentifier("onboarding.back.\(progressTotal)")
+
                     // The same bar as the step chrome, full (U7). The `GeometryReader` this
                     // replaces was measuring a width only to fill all of it.
                     ProgressView(value: 1)
@@ -1104,7 +1157,11 @@ struct OBReady: View {
 
                         // Summary card
                         HStack(spacing: 0) {
-                            OBSummaryStat(label: "GOAL", value: goalTimeLabel)
+                            // "PROJECTED", not "GOAL": `goalTimeSeconds` is
+                            // `predictedTime(vdot:)` for the runner's *current* VDOT, so
+                            // labelling it a goal told them their goal was to run exactly as
+                            // fast as they already do (S12).
+                            OBSummaryStat(label: "PROJECTED", value: goalTimeLabel)
                             Rectangle().fill(Color.secondary.opacity(0.2)).frame(width: 1, height: 36)
                             OBSummaryStat(label: "WEEKS", value: "\(planWeeks)")
                             Rectangle().fill(Color.secondary.opacity(0.2)).frame(width: 1, height: 36)
@@ -1349,12 +1406,17 @@ struct OBEquipmentCard: View {
             .foregroundStyle(isSelected ? Color.brand : Color.secondary)
     }
 
+    /// Two lines, not one: "Resistance Bands" is the longest of the six names and does not
+    /// fit a half-width grid cell at default Dynamic Type even at the 0.8 scale floor, so a
+    /// single line truncated it to "Resistance…" while its grid neighbour fit (S2).
     private var labelView: some View {
         Text(equipment.localizedName)
             .font(.dsSubhead.weight(.semibold))
             .foregroundStyle(isSelected ? Color.primary : Color.secondary)
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
+            .multilineTextAlignment(.leading)
+            .lineLimit(2)
+            .minimumScaleFactor(0.7)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     private var cardBackground: Color {
