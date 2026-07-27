@@ -12,8 +12,7 @@ struct ModelContextSaveTests {
 
     @Test("saveOrLog persists pending changes")
     func saveOrLogWritesChanges() throws {
-        let container = TestStore.makeContainer()
-        let context = container.modelContainer.mainContext
+        let context = TestStore.makeContext()
 
         let run = RunWorkout(
             date: Date(timeIntervalSince1970: 1_785_024_000),
@@ -31,8 +30,7 @@ struct ModelContextSaveTests {
 
     @Test("saveOrLog on a clean context succeeds without writing")
     func saveOrLogOnCleanContextSucceeds() {
-        let container = TestStore.makeContainer()
-        let context = container.modelContainer.mainContext
+        let context = TestStore.makeContext()
 
         // The `hasChanges` short-circuit must report success, not failure: callers
         // treat `false` as "the store is not consistent with memory".
@@ -42,8 +40,7 @@ struct ModelContextSaveTests {
 
     @Test("saveOrLog persists an edit to an already-stored model")
     func saveOrLogWritesEdits() throws {
-        let container = TestStore.makeContainer()
-        let context = container.modelContainer.mainContext
+        let context = TestStore.makeContext()
 
         let run = RunWorkout(
             date: Date(timeIntervalSince1970: 1_785_024_000),

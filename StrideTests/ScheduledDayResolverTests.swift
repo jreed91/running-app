@@ -185,7 +185,7 @@ struct ScheduledDayResolverTests {
     /// start is the next Monday, so this is the state onboarding hands the runner (S4).
     @Test("A date before the plan's start counts down to it")
     func dateBeforePlanStartCountsDown() throws {
-        let context = AppContainer.preview().modelContainer.mainContext
+        let context = TestStore.makeContext()
         let plan = try makePlan(in: context, sessions: [(0, .tempo, false)])
 
         let dayBefore = monday.addingTimeInterval(-86_400)

@@ -133,8 +133,10 @@ final class MockHealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sen
 struct WorkoutSyncServiceTests {
 
     private func makeService(mock: MockHealthKitRepository) -> (WorkoutSyncService, ModelContext) {
-        let container = TestStore.makeContainer()
-        let context = container.modelContainer.mainContext
+        // A bare context, not `TestStore.makeContainer()`: the service under test is
+        // constructed here against mocks, so the app container's own copy of it — and the
+        // thirteen other services beside it — were built and thrown away on every call.
+        let context = TestStore.makeContext()
         let service = WorkoutSyncService(
             healthKitRepository: mock,
             notificationService: NotificationService.shared,

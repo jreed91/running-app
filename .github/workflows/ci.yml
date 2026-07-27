@@ -132,7 +132,13 @@ jobs:
     name: Test — iOS
     runs-on: xcode-27      # see the runner-label note in `env` above
     timeout-minutes: 60
-    needs: [changes, lint]
+    # Deliberately NOT `needs: lint`. Lint gating tests bought nothing — a lint
+    # failure and a test failure are independent facts about the same commit, and
+    # both are wanted on the first run rather than one after the other — while
+    # costing every push the lint job's Homebrew install plus a whole-repository
+    # SwiftLint pass before the test job was even scheduled. They now run in
+    # parallel; `archive` still requires both, so nothing unlinted can ship.
+    needs: [changes]
     if: needs.changes.outputs.ios == 'true'
 
     steps:
@@ -180,7 +186,14 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/Library/Developer/Xcode/DerivedData
-          key: deriveddata-ios-${{ hashFiles('project.yml') }}
+          # Keyed on the commit, not on `project.yml`. A key that only moves when
+          # `project.yml` does is an *exact* hit on nearly every run, and an exact hit
+          # is precisely when actions/cache skips writing the cache back — so the entry
+          # froze at whatever the tree looked like the first time that key was minted
+          # while the sources kept moving away from it, and the "incremental" build
+          # rebuilt more each week. A per-commit key never hits exactly, so every run
+          # restores the newest prefix match and saves a fresh entry on top of it.
+          key: deriveddata-ios-${{ github.sha }}
           restore-keys: |
             deriveddata-ios-
 
@@ -210,12 +223,25 @@ jobs:
           xcrun simctl boot "$UDID" || true
 
       - name: Build for testing
+        # `-skipMacroValidation` / `-skipPackagePluginValidation`: both are interactive
+        #   trust prompts for package plugins, which on a non-interactive runner are
+        #   answered by a default rather than by anyone.
+        # `COMPILER_INDEX_STORE_ENABLE=NO`: index-while-building exists to feed Xcode's
+        #   editor. Nothing on a runner opens the index.
+        #
+        # `-disableAutomaticPackageResolution` is deliberately NOT here despite the pins
+        # being copied in above: on a cold DerivedData the Pulse checkout does not exist
+        # yet, and the flag has been observed to turn that first fetch into a "missing
+        # package product" failure. The pins already constrain the versions.
         run: |
           set -o pipefail
           xcodebuild build-for-testing \
             -scheme "$SCHEME" \
             -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
             -derivedDataPath ~/Library/Developer/Xcode/DerivedData \
+            -skipMacroValidation \
+            -skipPackagePluginValidation \
+            COMPILER_INDEX_STORE_ENABLE=NO \
             CODE_SIGNING_ALLOWED=NO \
             | xcbeautify --renderer github-actions
 
@@ -279,7 +305,7 @@ jobs:
     name: Archive
     runs-on: xcode-27      # see the runner-label note in `env` above
     timeout-minutes: 60
-    needs: [changes, test-ios]
+    needs: [changes, lint, test-ios]
     # Only archive on pushes to main (not PRs)
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
@@ -325,7 +351,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/Library/Developer/Xcode/DerivedData
-          key: deriveddata-archive-${{ hashFiles('project.yml') }}
+          # Per-commit for the same reason as the test job's cache above.
+          key: deriveddata-archive-${{ github.sha }}
           restore-keys: |
             deriveddata-archive-
 
@@ -342,6 +369,9 @@ jobs:
             -destination "generic/platform=iOS" \
             -archivePath build/Stride.xcarchive \
             -derivedDataPath ~/Library/Developer/Xcode/DerivedData \
+            -skipMacroValidation \
+            -skipPackagePluginValidation \
+            COMPILER_INDEX_STORE_ENABLE=NO \
             CODE_SIGNING_ALLOWED=NO \
             | xcbeautify --renderer github-actions
 
