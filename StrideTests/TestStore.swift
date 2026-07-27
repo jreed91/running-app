@@ -28,18 +28,64 @@ import SwiftData
 /// A crash here reports as a 0.000s failure on whichever tests had not finished, in *any*
 /// suite sharing the host — which is why this looked for so long like a cross-suite
 /// concurrency bug, and why the suites named in the failures were usually innocent.
+///
+/// ## Two entry points, and why
+///
+/// `makeContext()` opens a bare `ModelContainer`; `makeContainer()` builds a whole
+/// `AppContainer`. The split exists because `AppContainer.init` is not a store opener —
+/// it is the app's composition root, and constructing one wires four repositories and
+/// fourteen services, including an `AVSpeechSynthesizer` that configures the app's audio
+/// session, `NotificationService.shared` (which installs the `UNUserNotificationCenter`
+/// delegate), an instrumented `URLSession`, the CloudKit diagnostics observers, and a
+/// long-lived `Task` reading the synced-run tap stream. Every one of those is retained for
+/// the rest of the process by `retained` below.
+///
+/// Around ninety of those were being built per run, and the overwhelming majority of the
+/// call sites only ever reached `container.modelContainer.mainContext` through them.
+/// Reach for `makeContainer()` only when the test genuinely exercises a service or
+/// repository the container owns; when a `ModelContext` is all that is wanted, which is
+/// the usual case, `makeContext()` is the same fixture without the app attached.
 @MainActor
 enum TestStore {
+
+    /// Built once rather than per container. `Schema.init` walks all eight `@Model` types
+    /// and reflects over their properties, and the result is immutable and shareable —
+    /// there is no reason for every store in the run to pay for its own copy.
+    private static let schema = StrideSchema.make()
 
     /// Containers are held for the process lifetime so nothing is ever released while a
     /// context handed out from it is still in use. Cheap: a probe built and saved through
     /// 400 containers with no growth in open file descriptors.
-    private static var retained: [AppContainer] = []
+    private static var retained: [Any] = []
 
-    /// A fresh, empty container with a store file nothing else touches.
+    /// A fresh, empty `ModelContext` over a store file nothing else touches.
     ///
-    /// Prefer this to `AppContainer.preview()` in tests. Binding `preview()` to a local is
-    /// not enough on its own — it still shares `/dev/null` with every other in-memory
+    /// This is the one to reach for by default. It gives the same isolation guarantee as
+    /// `makeContainer()` — its own file URL, retained for the process lifetime — without
+    /// constructing the app's service graph behind it.
+    static func makeContext() -> ModelContext {
+        let config = ModelConfiguration(schema: schema, url: makeStoreURL())
+        let container: ModelContainer
+        do {
+            container = try ModelContainer(for: schema, configurations: [config])
+        } catch {
+            // Unrecoverable and never expected: the URL is freshly generated under the
+            // temporary directory, so nothing is there to migrate or collide with. Trapping
+            // here names the fixture; letting it propagate would surface as an unrelated
+            // failure in whichever test asked for the context.
+            fatalError("[TestStore] Could not open a scratch store at \(config.url): \(error)")
+        }
+        retained.append(container)
+        return container.mainContext
+    }
+
+    /// A fresh, empty `AppContainer` with a store file nothing else touches.
+    ///
+    /// Only for tests that exercise something the container owns — a repository, a
+    /// service, the wiring between them. For a plain `ModelContext`, use `makeContext()`.
+    ///
+    /// Prefer this to `AppContainer.preview()`. Binding `preview()` to a local is not
+    /// enough on its own — it still shares `/dev/null` with every other in-memory
     /// container in the host.
     static func makeContainer() -> AppContainer {
         let container = AppContainer(
@@ -50,11 +96,6 @@ enum TestStore {
         )
         retained.append(container)
         return container
-    }
-
-    /// The main context of a fresh, empty container.
-    static func makeContext() -> ModelContext {
-        makeContainer().modelContainer.mainContext
     }
 
     /// A unique store URL under the temporary directory. Left behind deliberately: the

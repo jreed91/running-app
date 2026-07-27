@@ -192,6 +192,18 @@ func testName() {
 
 UI tests use XCTest in `StrideUITests/` and launch with `--uitesting`. `Stride/App/UITestingSupport.swift` contains app-side support for deterministic UI-test behavior.
 
+A test that needs SwiftData goes through `StrideTests/TestStore.swift`, never through
+`AppContainer.preview()` or a hand-rolled in-memory `ModelConfiguration` — both share one
+store across the host and abort the whole run. It has two entry points, and the choice
+matters for suite runtime:
+
+- **`TestStore.makeContext()`** — the default. A bare `ModelContainer` over its own store
+  file. Use it whenever a `ModelContext` is all the test needs.
+- **`TestStore.makeContainer()`** — only when the test exercises a repository or service the
+  `AppContainer` owns. Building one wires the app's entire service graph (audio session,
+  notification delegate, CloudKit diagnostics, a long-lived observer task), all retained for
+  the rest of the process.
+
 Current unit coverage includes pace calculations, training plan structure/progression, route generation, AI coach behavior, strength library behavior, persistence graph, restore/deduplication, missed-workout detection, and app-container behavior. Add focused tests when changing shared services, repositories, SwiftData models, or cross-feature workflows.
 
 ## Navigation

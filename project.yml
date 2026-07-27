@@ -40,7 +40,6 @@ settings:
     # `Sendable` value types in `Core/Models`, where main-actor isolation and a
     # `Sendable` conformance fight each other. That is a migration with a compiler in
     # the loop, not a build-setting flip.
-    DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
     SUPPORTED_PLATFORMS: "iphoneos iphonesimulator"
   configs:
     Debug:
@@ -50,9 +49,24 @@ settings:
       # disables cross-module optimizations).
       ENABLE_TESTABILITY: YES
       SWIFT_OPTIMIZATION_LEVEL: "-Onone"
+      # `dwarf`, not `dwarf-with-dsym`. This was in `settings.base`, so every Debug
+      # build — which is to say every test run, local and CI — ran dsymutil over the
+      # app, the widget extension, and both test bundles to produce symbol archives
+      # nothing then read: a dSYM exists to symbolicate a crash report from a build
+      # you no longer have, which is an archive's problem, not a test bundle's.
+      # Debug binaries carry their DWARF inline, so the debugger and the test
+      # reporter are unaffected.
+      DEBUG_INFORMATION_FORMAT: dwarf
+      # Build for the machine running the tests rather than every architecture the
+      # simulator SDK supports.
+      ONLY_ACTIVE_ARCH: YES
     Release:
       ENABLE_TESTABILITY: NO
       SWIFT_OPTIMIZATION_LEVEL: "-O"
+      # The configuration that is actually archived and shipped is the one that needs
+      # a dSYM: it is what symbolicates TestFlight and App Store crash reports.
+      DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+      ONLY_ACTIVE_ARCH: NO
 
 packages:
   Pulse:

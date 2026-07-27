@@ -12,8 +12,7 @@ struct NotificationServiceTests {
     /// and synced to CloudKit). The tap-to-review flow now rides on the review snapshot.
     @Test("QA synced-run test notification never inserts a run into the store")
     func qaSyncedRunDoesNotPolluteStore() async throws {
-        let container = TestStore.makeContainer()
-        let context = container.modelContainer.mainContext
+        let context = TestStore.makeContext()
 
         let before = try context.fetch(FetchDescriptor<RunWorkout>()).count
         try await NotificationService.shared.triggerSyncedRunTestNotification(in: context)
