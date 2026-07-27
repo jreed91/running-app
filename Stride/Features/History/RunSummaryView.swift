@@ -46,6 +46,10 @@ struct RunSummaryView: View {
     @State var selectedSplitElevKm: Int? = nil
     /// Which split chart the tab row is showing (N22).
     @State var selectedSplitMetric: SplitChartMetric = .pace
+
+    /// The bucketed series behind the split charts, resolved once per run (N34). `nil` until
+    /// the first resolve, which `chartedSplits` covers with the run's stored splits.
+    @State var resolvedSplitSeries: SplitChartSeries.Resolved?
     @State private var showDeleteConfirmation = false
 
     // Sizes that have to track the text beside them rather than staying pinned (U2).
@@ -124,20 +128,14 @@ struct RunSummaryView: View {
         ProgressStatsService.estimatedVDOT(for: workout)
     }
 
-    /// Whether the splits table shows an HR column. Asked of `SplitChartMetric` rather
-    /// than re-tested here, so the table and the chart tabs can never disagree about
-    /// whether this run carries per-split heart rate.
+    /// Whether the splits table shows an HR column. Asked of `SplitChartMetric` rather than
+    /// re-tested here, so the table and the chart tabs answer "does this carry per-split
+    /// heart rate?" by one rule — but of the table's own whole-unit splits, which are not
+    /// always what the chart above it plots (N34).
     var hasSplitHR: Bool {
-        availableSplitMetrics.contains(.heartRate)
+        SplitChartMetric.available(for: workout.splits).contains(.heartRate)
     }
 
-    func split(forKm km: Int) -> Split? {
-        workout.splits.first { $0.kilometer == km }
-    }
-
-    /// Lowercase label for the unit each split bucket represents ("km" / "mi"), read from the
-    /// run's stored `splitUnit` so a mile-bucketed run reads "mi" while legacy km runs read "km".
-    var splitLabel: String { workout.splitUnit.distanceLabel }
     /// Uppercase form used in chart/table headers ("KM" / "MI").
     var splitLabelUpper: String { workout.splitUnit.splitLabel }
 
@@ -177,22 +175,40 @@ struct RunSummaryView: View {
     ///
     /// Splits are bucketed in the runner's current unit, since a run imported before splits
     /// existed has no recorded bucket unit of its own.
+    ///
+    /// The same query also stores the distance readings themselves (N34), which is what lets
+    /// the charts re-bucket a short imported run into fractions of a mile instead of drawing
+    /// its one whole-mile split as a lone marker. A run that already has splits but no
+    /// series — everything imported between N9 and N34 — comes here for the series alone.
     private func backfillSplits() async {
         let unit = appSettings.unitPreference
-        guard SplitBackfill.needsSplits(workout, splitLengthMeters: unit.splitLengthMeters),
-              let hkID = workout.healthKitWorkoutID else { return }
+        let needsSplits = SplitBackfill.needsSplits(workout, splitLengthMeters: unit.splitLengthMeters)
+        let needsSeries = SplitBackfill.needsDistanceSeries(workout)
+        guard needsSplits || needsSeries, let hkID = workout.healthKitWorkoutID else { return }
 
         let points = await container.healthKitRepository.fetchDistanceSeries(forWorkoutID: hkID)
-        let splits = SplitBucketing.splits(
-            from: points,
-            splitLengthMeters: unit.splitLengthMeters,
-            heartRateSamples: workout.heartRateSamples,
-            totalDurationSeconds: workout.durationSeconds
-        )
-        guard !splits.isEmpty else { return }
+        guard !points.isEmpty else { return }
 
-        workout.splits = splits
-        workout.splitUnit = unit
+        var changed = false
+        if needsSeries {
+            workout.distanceSeries = points
+            changed = true
+        }
+        if needsSplits {
+            let splits = SplitBucketing.splits(
+                from: points,
+                splitLengthMeters: unit.splitLengthMeters,
+                heartRateSamples: workout.heartRateSamples,
+                totalDurationSeconds: workout.durationSeconds
+            )
+            if !splits.isEmpty {
+                workout.splits = splits
+                workout.splitUnit = unit
+                changed = true
+            }
+        }
+        guard changed else { return }
+
         do {
             try context.save()
         } catch {
@@ -317,8 +333,13 @@ struct RunSummaryView: View {
                 if !workout.laps.isEmpty {
                     lapsSection
                 }
-                if !workout.splits.isEmpty {
+                // The card can outlive the table: a run under one whole unit has no stored
+                // splits to tabulate, but its recorded readings still bucket into a chart
+                // worth showing (N34).
+                if !chartedSplits.splits.isEmpty {
                     splitsSection
+                }
+                if !workout.splits.isEmpty {
                     splitsTable
                 }
                 if !zoneSlices.isEmpty, zoneSlices.contains(where: { $0.seconds > 0 }) {
@@ -334,8 +355,14 @@ struct RunSummaryView: View {
             // Heart-rate zones are content on the screen, so they load first; the share
             // card renders on demand (N21). Splits follow the HR load so a backfilled
             // heart-rate series can be bucketed into them (N9).
+            // Bucketed up front so a short run opens straight into its finer charts rather
+            // than showing the one whole-mile bar for as long as the two loads below take,
+            // and again after them so a backfilled heart-rate or distance series lands in
+            // the charts on the same open that fetched it (N34).
+            resolveSplitChartSeries()
             await loadHeartRateZones()
             await backfillSplits()
+            resolveSplitChartSeries()
         }
         .background(Color.surfacePrimary.ignoresSafeArea())
         .navigationTitle(displayType.localizedName)

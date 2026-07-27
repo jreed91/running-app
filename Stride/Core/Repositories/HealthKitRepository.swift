@@ -749,6 +749,10 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             run.elevationGainMeters = elevation
             run.healthKitWorkoutID = hkID
             if !coordinates.isEmpty { run.routeCoordinates = coordinates }
+            // Kept alongside the splits, not just used to build them: a one-mile import has
+            // a single whole-mile split and needs the readings behind it for the summary's
+            // charts to draw anything but one marker (N34).
+            if !distancePoints.isEmpty { run.distanceSeries = distancePoints }
             if !splits.isEmpty {
                 run.splits = splits
                 run.splitUnit = context.splitUnit

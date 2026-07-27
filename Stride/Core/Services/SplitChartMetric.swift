@@ -31,12 +31,16 @@ enum SplitChartMetric: String, CaseIterable, Hashable, Sendable {
         }
     }
 
-    /// The card's heading for this metric, in the runner's distance unit.
-    func heading(unit: UnitPreference) -> String {
+    /// The card's heading for this metric, over one bucket of the charted series.
+    ///
+    /// `bucket` is what a bar actually covers, not the runner's unit: a short run is charted
+    /// in fractions of it (`SplitChartSeries`), and "Pace per mi" over tenth-mile bars would
+    /// name a reading the chart is not showing (N34).
+    func heading(bucket: String) -> String {
         switch self {
-        case .pace:      return "Pace per \(unit.distanceLabel)"
-        case .heartRate: return "Heart rate per \(unit.distanceLabel)"
-        case .elevation: return "Elevation per \(unit.distanceLabel)"
+        case .pace:      return "Pace per \(bucket)"
+        case .heartRate: return "Heart rate per \(bucket)"
+        case .elevation: return "Elevation per \(bucket)"
         }
     }
 

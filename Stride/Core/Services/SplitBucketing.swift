@@ -51,13 +51,30 @@ extension SplitBucketing {
 
     /// One cumulative distance reading from a recorded workout: how far the runner had
     /// covered in total, and how far into the workout that reading was taken.
-    struct DistancePoint: Sendable, Equatable {
+    ///
+    /// `Codable` because a run now persists its whole series (`RunWorkout.distanceSeries`),
+    /// which is what lets the split charts re-bucket a short run at a finer resolution than
+    /// the whole mile its stored `splits` were closed on (N34). The coding keys are one
+    /// character each: a long run stores a few thousand of these, and the field names are
+    /// otherwise three times the payload.
+    struct DistancePoint: Sendable, Equatable, Codable {
         var elapsedSeconds: Double
         var cumulativeMeters: Double
+        /// Altitude at this reading, in metres, when the source had one. GPS fixes carry it;
+        /// HealthKit's distance samples do not, so imported runs leave it `nil` and their
+        /// re-bucketed splits report no gain — exactly what they reported before.
+        var altitudeMeters: Double?
 
-        init(elapsedSeconds: Double, cumulativeMeters: Double) {
+        enum CodingKeys: String, CodingKey {
+            case elapsedSeconds = "t"
+            case cumulativeMeters = "d"
+            case altitudeMeters = "a"
+        }
+
+        init(elapsedSeconds: Double, cumulativeMeters: Double, altitudeMeters: Double? = nil) {
             self.elapsedSeconds = elapsedSeconds
             self.cumulativeMeters = cumulativeMeters
+            self.altitudeMeters = altitudeMeters
         }
     }
 
@@ -98,10 +115,14 @@ extension SplitBucketing {
         for point in ordered {
             let seconds = max(0, point.elapsedSeconds)
             let meters = max(point.cumulativeMeters, series.last?.cumulativeMeters ?? 0)
+            let altitude = point.altitudeMeters.flatMap { $0.isFinite ? $0 : nil }
+            let normalized = DistancePoint(
+                elapsedSeconds: seconds, cumulativeMeters: meters, altitudeMeters: altitude
+            )
             if let last = series.last, last.elapsedSeconds == seconds {
-                series[series.count - 1] = DistancePoint(elapsedSeconds: seconds, cumulativeMeters: meters)
+                series[series.count - 1] = normalized
             } else {
-                series.append(DistancePoint(elapsedSeconds: seconds, cumulativeMeters: meters))
+                series.append(normalized)
             }
         }
         guard let lastReading = series.last,
@@ -112,9 +133,16 @@ extension SplitBucketing {
         var previous = DistancePoint(elapsedSeconds: 0, cumulativeMeters: 0)
         var bucketStartSeconds: Double = 0
         var completedBuckets = 0
+        // Positive altitude change banked into the bucket that is currently open, the same
+        // way the live tracker accumulates it fix by fix (M26) rather than taking the delta
+        // between a bucket's first and last reading.
+        var openBucketGain: Double = 0
 
         for point in series {
             defer { previous = point }
+            if let altitude = point.altitudeMeters, let previousAltitude = previous.altitudeMeters {
+                openBucketGain += max(0, altitude - previousAltitude)
+            }
             let bucketsAtPoint = bucketIndex(
                 distanceMeters: point.cumulativeMeters, splitLengthMeters: splitLengthMeters
             )
@@ -147,11 +175,15 @@ extension SplitBucketing {
                                 toSeconds: crossedAt,
                                 totalSeconds: totalSeconds
                             ),
-                            elevationGainMeters: 0,
+                            elevationGainMeters: openBucketGain,
                             cumulativeDistanceMeters: boundaryMeters
                         )
                     )
                 }
+                // The span's climb belongs to the bucket that was open when it happened, so
+                // only the first bucket closed here collects it; a span long enough to close
+                // several has no reading inside the later ones to attribute anything to.
+                openBucketGain = 0
                 bucketStartSeconds = crossedAt
             }
         }

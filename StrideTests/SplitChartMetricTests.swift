@@ -97,10 +97,20 @@ struct SplitChartMetricTests {
 
     @Test("The heading names the runner's own distance unit")
     func headingUsesUnit() {
-        #expect(SplitChartMetric.pace.heading(unit: .metric) == "Pace per km")
-        #expect(SplitChartMetric.pace.heading(unit: .imperial) == "Pace per mi")
-        #expect(SplitChartMetric.heartRate.heading(unit: .metric) == "Heart rate per km")
-        #expect(SplitChartMetric.elevation.heading(unit: .imperial) == "Elevation per mi")
+        #expect(SplitChartMetric.pace.heading(bucket: "km") == "Pace per km")
+        #expect(SplitChartMetric.pace.heading(bucket: "mi") == "Pace per mi")
+        #expect(SplitChartMetric.heartRate.heading(bucket: "km") == "Heart rate per km")
+        #expect(SplitChartMetric.elevation.heading(bucket: "mi") == "Elevation per mi")
+    }
+
+    @Test("The heading names the bucket, not the unit, on a subdivided run")
+    func headingNamesSubdividedBucket() {
+        // A one-mile run is charted on tenths (N34), and "Pace per mi" over tenth-mile bars
+        // would name a reading the chart is not showing.
+        let bucket = SplitChartSeries.bucketLabel(fraction: 0.1, unit: .imperial)
+
+        #expect(SplitChartMetric.pace.heading(bucket: bucket) == "Pace per 0.1 mi")
+        #expect(SplitChartMetric.heartRate.heading(bucket: bucket) == "Heart rate per 0.1 mi")
     }
 
     @Test("Every metric has a tab title and a footnote")

@@ -30,4 +30,19 @@ enum SplitBackfill {
         guard run.healthKitWorkoutID != nil else { return false }
         return run.distanceMeters >= splitLengthMeters
     }
+
+    /// Whether the same query is worth making for the run's distance *series* (N34).
+    ///
+    /// A run imported before the series was persisted has splits and no readings behind
+    /// them, so its split charts are stuck at whole-unit buckets — one marker for a one-mile
+    /// run. The series is the same fetch the splits came from, so a run that needs either
+    /// costs one query and gains both.
+    ///
+    /// No bucket-length floor here, unlike `needsSplits`: a run too short to cross a whole
+    /// boundary is exactly the one whose charts the finer buckets rescue.
+    static func needsDistanceSeries(_ run: RunWorkout) -> Bool {
+        guard run.distanceSeries.isEmpty else { return false }
+        guard run.healthKitWorkoutID != nil else { return false }
+        return run.distanceMeters > 0
+    }
 }

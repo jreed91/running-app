@@ -105,6 +105,20 @@ final class WorkoutTrackerService {
     /// Wall-clock elapsed time, immune to process suspension / stalled run loops (M23).
     private var stopwatch = WallClockStopwatch()
 
+    /// Cumulative distance readings for the run, persisted at finish so the run summary's
+    /// split charts can re-bucket a short run at a finer resolution than the whole mile its
+    /// splits close on (N34). Sampled rather than taken per fix — see
+    /// `distanceSeriesResolutionMeters`.
+    private var distanceSeries: [SplitBucketing.DistancePoint] = []
+
+    /// How far the runner must cover before another distance reading is banked.
+    ///
+    /// Ten metres is a quarter of the finest bucket the charts will draw (a tenth of a
+    /// kilometre), so the interpolation that finds a boundary crossing has something close
+    /// on either side of it, and an hour's run stores a few hundred readings rather than a
+    /// few thousand.
+    private let distanceSeriesResolutionMeters: Double = 10
+
     /// Elevation gain accumulated across the current split bucket. (M26 — a split's
     /// gain is the sum of positive altitude deltas within the km, not just the delta
     /// between its final two GPS fixes.) The whole-run total is the published
@@ -325,9 +339,14 @@ final class WorkoutTrackerService {
             workoutType: workoutType,
             workoutLocation: workoutLocation
         )
+        // The reading the run stopped on, so the final bucket the charts draw is bounded by
+        // where the runner actually finished rather than by the last banked point (N34).
+        recordDistancePoint(atElapsed: elapsedSeconds, altitude: lastLocation?.altitude, force: true)
+
         workout.routeCoordinates = coordinates
         workout.splits = splits
         workout.splitUnit = splitUnit
+        workout.distanceSeries = distanceSeries
         // The final lap is closed by the finish itself, so the run keeps every boundary the
         // runner marked rather than losing the one they were in when they stopped (A2).
         workout.laps = LapRecorder.laps(
@@ -366,6 +385,7 @@ final class WorkoutTrackerService {
         lastSplitDistance = 0
         splitStartElapsedSeconds = 0
         splitStartDistanceMeters = 0
+        distanceSeries = []
         elevationGainMeters = 0
         currentSplitElevationGainMeters = 0
         currentCadenceStepsPerMinute = nil
@@ -375,6 +395,24 @@ final class WorkoutTrackerService {
         pedometerActive = false
         rejectedFixCounts = [:]
         gpsSignal = nil
+    }
+
+    /// Banks a cumulative distance reading, if the runner has covered enough ground since
+    /// the last one to be worth another point (N34).
+    ///
+    /// `force` bypasses the spacing rule for the reading taken at finish, so the last
+    /// partial bucket has an end point to interpolate against.
+    private func recordDistancePoint(atElapsed elapsed: Double, altitude: Double?, force: Bool = false) {
+        let advanced = distanceMeters - (distanceSeries.last?.cumulativeMeters ?? 0)
+        guard force || advanced >= distanceSeriesResolutionMeters else { return }
+        guard elapsed.isFinite, distanceMeters.isFinite else { return }
+        distanceSeries.append(
+            SplitBucketing.DistancePoint(
+                elapsedSeconds: elapsed,
+                cumulativeMeters: distanceMeters,
+                altitudeMeters: altitude
+            )
+        )
     }
 
     /// Opens a new split bucket at the current elapsed time and distance.
@@ -443,6 +481,9 @@ final class WorkoutTrackerService {
                 if meters > 0 {
                     self.currentPaceSecondsPerKm = self.elapsedSeconds / meters * 1_000
                 }
+                // No altitude on the pedometer path, so an indoor run's re-bucketed splits
+                // report no gain — which is what a treadmill has.
+                self.recordDistancePoint(atElapsed: self.stopwatch.elapsed(at: Date()), altitude: nil)
                 self.updateSplitsForIndoor()
             }
         }
@@ -641,6 +682,10 @@ final class WorkoutTrackerService {
                         + instantaneous * paceSmoothingFactor
                     : instantaneous
             }
+
+            recordDistancePoint(
+                atElapsed: stopwatch.elapsed(at: now), altitude: location.altitude
+            )
 
             // Record a split every unit (km or mile) the runner has chosen
             if SplitBucketing.crossedBoundary(
