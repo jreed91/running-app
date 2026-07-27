@@ -60,7 +60,7 @@ struct PlanSummaryServiceTests {
 
     @Test("Summary aggregates completed workouts, distance, time, and pace")
     func summaryAggregatesCompletedWork() throws {
-        let container = AppContainer.preview()
+        let container = TestStore.makeContainer()
         let plan = try makePlan(in: container.modelContainer.mainContext)
 
         let summary = PlanSummaryService.summary(for: plan)
@@ -89,7 +89,7 @@ struct PlanSummaryServiceTests {
 
     @Test("Summary breaks down completion per workout type")
     func summaryTypeBreakdown() throws {
-        let container = AppContainer.preview()
+        let container = TestStore.makeContainer()
         let plan = try makePlan(in: container.modelContainer.mainContext)
 
         let summary = PlanSummaryService.summary(for: plan)
@@ -109,7 +109,7 @@ struct PlanSummaryServiceTests {
 
     @Test("Summary of an empty plan reports zeros without dividing by zero")
     func summaryHandlesEmptyPlan() throws {
-        let container = AppContainer.preview()
+        let container = TestStore.makeContainer()
         let context = container.modelContainer.mainContext
 
         let start = Date(timeIntervalSince1970: 1_700_000_000)
@@ -132,7 +132,7 @@ struct PlanSummaryServiceTests {
 
     @Test("Plan status derives from isActive and the end date")
     func statusDerivation() throws {
-        let container = AppContainer.preview()
+        let container = TestStore.makeContainer()
         let context = container.modelContainer.mainContext
 
         let now = Date(timeIntervalSince1970: 1_705_000_000)

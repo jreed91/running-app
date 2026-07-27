@@ -46,7 +46,7 @@ struct ScheduledDayResolverTests {
 
     @Test("A day holding a run and a gym session resolves to both, runs first")
     func pairedDayResolvesToBothSessions() throws {
-        let context = AppContainer.preview().modelContainer.mainContext
+        let context = TestStore.makeContext()
         // Insert strength first so a first-match resolver would have returned it.
         let plan = try makePlan(in: context, sessions: [
             (0, .strength, false),
@@ -61,7 +61,7 @@ struct ScheduledDayResolverTests {
 
     @Test("Rest days are excluded from sessions but present in workouts")
     func restDayIsNotASession() throws {
-        let context = AppContainer.preview().modelContainer.mainContext
+        let context = TestStore.makeContext()
         let plan = try makePlan(in: context, sessions: [(0, .rest, false)])
 
         #expect(ScheduledDayResolver.sessions(on: monday, in: plan).isEmpty)
@@ -70,7 +70,7 @@ struct ScheduledDayResolverTests {
 
     @Test("A day outside the plan, and a nil plan, resolve to nothing")
     func emptyDaysResolveToNothing() throws {
-        let context = AppContainer.preview().modelContainer.mainContext
+        let context = TestStore.makeContext()
         let plan = try makePlan(in: context, sessions: [(0, .easy, false)])
 
         #expect(ScheduledDayResolver.sessions(on: monday.addingTimeInterval(20 * 86_400), in: plan).isEmpty)
@@ -79,7 +79,7 @@ struct ScheduledDayResolverTests {
 
     @Test("Ordering is stable across repeated resolutions")
     func orderingIsStable() throws {
-        let context = AppContainer.preview().modelContainer.mainContext
+        let context = TestStore.makeContext()
         let plan = try makePlan(in: context, sessions: [
             (0, .crossTraining, false),
             (0, .strength, false),
@@ -156,7 +156,7 @@ struct ScheduledDayResolverTests {
     /// the same "Rest day · Recovery is part of training" card for all of them.
     @Test("An empty day inside the plan is a rest day")
     func emptyDayInsidePlanIsRest() throws {
-        let context = AppContainer.preview().modelContainer.mainContext
+        let context = TestStore.makeContext()
         let plan = try makePlan(in: context, sessions: [(0, .tempo, false)])
 
         // Tuesday holds nothing but is inside the plan's week.
@@ -166,7 +166,7 @@ struct ScheduledDayResolverTests {
 
     @Test("An explicit rest row is a rest day, not scheduled work")
     func explicitRestRowIsRest() throws {
-        let context = AppContainer.preview().modelContainer.mainContext
+        let context = TestStore.makeContext()
         let plan = try makePlan(in: context, sessions: [(0, .rest, false)])
 
         #expect(ScheduledDayResolver.dayState(on: monday, in: plan) == .rest)
@@ -174,7 +174,7 @@ struct ScheduledDayResolverTests {
 
     @Test("A date past the plan's end is outside it, not a rest day")
     func dateBeyondPlanIsOutside() throws {
-        let context = AppContainer.preview().modelContainer.mainContext
+        let context = TestStore.makeContext()
         let plan = try makePlan(in: context, sessions: [(0, .tempo, false)])
 
         let nextMonth = monday.addingTimeInterval(40 * 86_400)
@@ -190,7 +190,7 @@ struct ScheduledDayResolverTests {
 
     @Test("A day with work is scheduled")
     func dayWithWorkIsScheduled() throws {
-        let context = AppContainer.preview().modelContainer.mainContext
+        let context = TestStore.makeContext()
         let plan = try makePlan(in: context, sessions: [(0, .tempo, false)])
 
         #expect(ScheduledDayResolver.dayState(on: monday, in: plan) == .scheduled)

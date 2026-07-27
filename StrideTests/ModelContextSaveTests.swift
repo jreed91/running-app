@@ -12,7 +12,7 @@ struct ModelContextSaveTests {
 
     @Test("saveOrLog persists pending changes")
     func saveOrLogWritesChanges() throws {
-        let container = AppContainer.preview()
+        let container = TestStore.makeContainer()
         let context = container.modelContainer.mainContext
 
         let run = RunWorkout(
@@ -31,7 +31,7 @@ struct ModelContextSaveTests {
 
     @Test("saveOrLog on a clean context succeeds without writing")
     func saveOrLogOnCleanContextSucceeds() {
-        let container = AppContainer.preview()
+        let container = TestStore.makeContainer()
         let context = container.modelContainer.mainContext
 
         // The `hasChanges` short-circuit must report success, not failure: callers
@@ -42,7 +42,7 @@ struct ModelContextSaveTests {
 
     @Test("saveOrLog persists an edit to an already-stored model")
     func saveOrLogWritesEdits() throws {
-        let container = AppContainer.preview()
+        let container = TestStore.makeContainer()
         let context = container.modelContainer.mainContext
 
         let run = RunWorkout(

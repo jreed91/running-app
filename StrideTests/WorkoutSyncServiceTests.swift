@@ -141,12 +141,15 @@ final class MockHealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sen
 // hypotheses already ruled out (container exhaustion, context/container lifetime,
 // in-memory vs file store, the insert-then-assign-inverse graph pattern) and for the
 // `-only-testing` form that actually isolates a Swift Testing test.
-@Suite(.disabled("Traps at suite scope on iOS 27 and aborts the test host — see PR #280"))
+// Quarantined in PR #280 as "traps at suite scope". It did not: it built a container per
+// test through `AppContainer.preview()`, and every in-memory container in the host shares
+// one store (see `TestStore`). The trap surfaced at suite scope only because that is where
+// the fixtures ran.
 @MainActor
 struct WorkoutSyncServiceTests {
 
     private func makeService(mock: MockHealthKitRepository) -> (WorkoutSyncService, ModelContext) {
-        let container = AppContainer.preview()
+        let container = TestStore.makeContainer()
         let context = container.modelContainer.mainContext
         let service = WorkoutSyncService(
             healthKitRepository: mock,

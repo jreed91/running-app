@@ -31,14 +31,23 @@ enum MissedWorkoutShift {
         /// The shift that may actually be applied.
         let appliedDays: Int
 
+        /// Whether the race date is what held this shift back.
+        ///
+        /// "Nothing moved" has two causes that are indistinguishable in the numbers: the
+        /// race left no headroom, or there was nothing to move in the first place. Only
+        /// the first is the race's doing, and only the first is worth telling the runner
+        /// about — `DashboardView.pickUpNotice` reads these flags to decide whether to
+        /// blame race day, and without this it blamed race day for an empty plan.
+        let isRaceLimited: Bool
+
         /// Nothing moves — either nothing was asked for, or the race leaves no room.
         var isNoOp: Bool { appliedDays <= 0 }
 
         /// The race date forced a smaller shift than the one requested.
-        var wasClampedByRace: Bool { appliedDays < requestedDays }
+        var wasClampedByRace: Bool { isRaceLimited && appliedDays < requestedDays }
 
         /// The race date left no room to move at all, and something was asked for.
-        var wasBlockedByRace: Bool { requestedDays > 0 && appliedDays <= 0 }
+        var wasBlockedByRace: Bool { isRaceLimited && requestedDays > 0 && appliedDays <= 0 }
     }
 
     // MARK: Resolution
@@ -50,8 +59,9 @@ enum MissedWorkoutShift {
     ///   - lastMovableDate: The latest `scheduledDate` among the sessions that would
     ///     move. `nil` when there is nothing to move.
     ///   - raceDate: The plan's fixed race date, or `nil` for an open-ended plan.
-    /// - Returns: The requested and applicable shifts. An open-ended plan, or a plan
-    ///   with nothing left to move, applies the request unchanged.
+    /// - Returns: The requested and applicable shifts. An open-ended plan applies the
+    ///   request unchanged; a plan with nothing left to move resolves to a no-op, and
+    ///   says so without implicating the race.
     static func resolve(
         requestedDays: Int,
         lastMovableDate: Date?,
@@ -60,15 +70,16 @@ enum MissedWorkoutShift {
     ) -> Outcome {
         let requested = max(0, requestedDays)
         guard requested > 0, let lastMovableDate else {
-            return Outcome(requestedDays: requested, appliedDays: 0)
+            return Outcome(requestedDays: requested, appliedDays: 0, isRaceLimited: false)
         }
         guard let raceDate else {
-            return Outcome(requestedDays: requested, appliedDays: requested)
+            return Outcome(requestedDays: requested, appliedDays: requested, isRaceLimited: false)
         }
 
         return Outcome(
             requestedDays: requested,
-            appliedDays: min(requested, headroom(from: lastMovableDate, to: raceDate, calendar: calendar))
+            appliedDays: min(requested, headroom(from: lastMovableDate, to: raceDate, calendar: calendar)),
+            isRaceLimited: true
         )
     }
 
