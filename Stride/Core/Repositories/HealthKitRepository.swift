@@ -145,6 +145,16 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         HKObjectType.workoutType(),
         HKQuantityType(.distanceWalkingRunning),
         HKQuantityType(.heartRate),
+        // Read-only, and only ever summed inside a workout's own window: it is how an
+        // imported run gets a cadence, which the app's own runs take from the pedometer
+        // (A5). Nothing is ever written to it — the app's runs are already counted by the
+        // device that took the steps, and writing them again would double them.
+        //
+        // A runner who authorized before this type was added is not re-prompted until
+        // `requestAuthorization` runs again (onboarding, or Settings). Until then the
+        // cadence query returns no data and imported runs simply carry no cadence, which
+        // is the same state a treadmill import lands in — a missing stat, not an error.
+        HKQuantityType(.stepCount),
         HKSeriesType.workoutRoute()
     ]
 
@@ -706,6 +716,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
 
             let hrStats = try? await fetchHeartRateStats(for: hkWorkout)
             let hrSamples = (try? await fetchHeartRateSamples(for: hkWorkout)) ?? []
+            let cadence: Double? = try? await fetchCadenceStepsPerMinute(for: hkWorkout)
             let elevation = elevationGain(from: hkWorkout)
             let coordinates = await fetchRouteCoordinates(for: hkWorkout)
 
@@ -734,6 +745,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             run.averageHeartRate = hrStats?.avg
             run.maxHeartRate = hrStats?.max
             if !hrSamples.isEmpty { run.heartRateSamples = hrSamples }
+            run.averageCadenceStepsPerMinute = cadence
             run.elevationGainMeters = elevation
             run.healthKitWorkoutID = hkID
             if !coordinates.isEmpty { run.routeCoordinates = coordinates }
@@ -953,6 +965,42 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             avg: stats?.averageQuantity()?.doubleValue(for: bpmUnit),
             max: stats?.maximumQuantity()?.doubleValue(for: bpmUnit)
         )
+    }
+
+    /// Mean cadence for a workout in steps per minute, from the step count HealthKit
+    /// recorded against it (A5).
+    ///
+    /// There is no `cadence` quantity type for running the way there is for cycling, so
+    /// the figure is derived: total steps ÷ the workout's duration in minutes. That is the
+    /// same definition `CMPedometer.currentCadence` reports for the app's own runs, which
+    /// is what makes an imported cadence comparable with a recorded one.
+    ///
+    /// Scoped to the samples *associated with the workout* rather than merely overlapping
+    /// its window, like the heart-rate queries — a time-only predicate would fold in the
+    /// iPhone's own step count for a run recorded on a Watch and roughly double it.
+    /// Returns `nil` when the source recorded no steps, which is normal for a treadmill
+    /// import or a workout written by an app that only stored distance.
+    private func fetchCadenceStepsPerMinute(for workout: HKWorkout) async throws -> Double? {
+        guard workout.duration > 0 else { return nil }
+        let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+            HKQuery.predicateForObjects(from: workout),
+            HKQuery.predicateForSamples(
+                withStart: workout.startDate, end: workout.endDate, options: .strictStartDate
+            )
+        ])
+        let stats: HKStatistics? = try await withCheckedThrowingContinuation { cont in
+            let query = HKStatisticsQuery(
+                quantityType: HKQuantityType(.stepCount),
+                quantitySamplePredicate: predicate,
+                options: [.cumulativeSum]
+            ) { _, result, error in
+                if let error { cont.resume(throwing: error) }
+                else { cont.resume(returning: result) }
+            }
+            store.execute(query)
+        }
+        guard let steps = stats?.sumQuantity()?.doubleValue(for: .count()), steps > 0 else { return nil }
+        return steps / (workout.duration / 60)
     }
 
     /// Raw heart-rate bpm samples for a workout, in chronological order, scoped to the

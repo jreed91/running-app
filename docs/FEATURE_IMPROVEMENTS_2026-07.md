@@ -14,9 +14,22 @@ grouped into: (A) existing features that need improvement, and (B) new features
 that would meaningfully expand the product.
 
 > **Status tracking:** items marked **✅ SHIPPED** have since been built (the note
-> says where, with the landing commit). **🔨 IN PROGRESS** marks the feature
-> currently being implemented. `file:line` references in shipped items point at
-> the original analysis commit and may have drifted.
+> says where, with the landing commit where one was recorded at the time).
+> `file:line` references in shipped items point at the original analysis commit and may
+> have drifted.
+>
+> **Status as of the latest pass:** all of **P0** and **P1** are closed; **P2** and **P3**
+> are closed except the items listed below. Several were built during the
+> UX-audit passes ([`UX_ANALYSIS_2026-07-26.md`](./UX_ANALYSIS_2026-07-26.md)) without this
+> document being updated — **A3**, **A4** and **B2** are marked shipped here now, verified
+> against the source rather than against a commit message, and **B5** is marked shipped
+> rather than in progress. The latest pass built **A2** (manual laps), **A5**'s cadence
+> half, and **B6**'s route export.
+>
+> **What is genuinely open:** **A7** (target-distance-aware routes with elevation),
+> **A9** (coaching-moment notifications), **A10** (race-day hub), **B3** (watchOS),
+> **B7** (recovery/readiness — also A5's remaining third), **B8**, **B9**, and the
+> full-data export half of **B6**. Each says at its own entry what was deferred and why.
 
 **Contents**
 1. [Current feature inventory](#1-current-feature-inventory)
@@ -50,6 +63,12 @@ a **watchOS companion / WatchConnectivity**, **GPX/route export or run sharing**
 (no `ShareLink`), and **in-run audio/voice cues or haptics** (no
 `AVSpeechSynthesizer` / `CHHapticEngine`). These frame Section B.
 
+> Of that list only the **watchOS companion** is still absent. Widgets and Live Activities
+> both live in the `StrideWidgets` extension (B1, B2), run sharing and GPX export are on
+> the run detail (B5, B6), and audio cues and haptics are in the run flow (A3). The
+> paragraph above is left as written because it is what the review found; this note is
+> what is true now.
+
 ---
 
 ## 2. A. Existing features that need improvement
@@ -76,7 +95,33 @@ run tracker. **Improve:** bucket splits by the user's unit at record time (or
 store raw distance-stamped samples and bucket on display), unlocking honest
 mile splits and the custom-lap feature in A2.
 
-### A2. Active-run screen has dead "Lap" UI and no manual/auto lap feature *(medium impact, medium effort)*
+### ✅ A2. Active-run screen has dead "Lap" UI and no manual/auto lap feature *(medium impact, medium effort)*
+
+**SHIPPED.** The dead half was closed first: N20 replaced the hardcoded `"1"` cell with
+average pace and N18 removed the flag button that did nothing. This pass builds the
+feature they were missing. `WorkoutTrackerService` records a `LapRecorder.Mark` on each
+tap of a restored flag button (`activeRun.lap`, live only while a run is recording, with a
+medium haptic distinct from the split's light one). `LapRecorder` — pure, unit-tested —
+turns those boundaries into `Lap` values, and `finishWorkout` closes the final lap against
+the finish so the lap the runner was in is not lost. `RunWorkout.laps` persists them
+(`lapsData`, additive for CloudKit), and `RunSummaryView+Laps` renders a lap table above
+the splits.
+
+Two decisions worth knowing before reopening any of this:
+
+- **Auto-lap-by-distance was not built, because it already exists.** `SplitBucketing`
+  closes a bucket every kilometre or mile and has since A1. Laps are the boundaries that
+  math *cannot* know about — the top of a rep, a turnaround, the lap line on a track — so
+  the two are stored separately and a run that was never tapped carries no laps at all
+  rather than one lap restating the whole run.
+- **The lap read-out shares the grid slot with the guided step and average pace**, in that
+  order, rather than adding a seventh cell to a grid that is already clamped for Dynamic
+  Type (U2). A guided workout's step wins because that is what that screen is for (A4).
+
+*Deferred:* per-lap heart rate and elevation (the tracker has both, but a four-column lap
+table on a phone is a layout question, not a data one), and lap announcements through
+`RunVoiceCoach`.
+
 `Features/ActiveRun/ActiveRunView.swift:300` renders a `metricCell(value: "1", label: "Lap")`
 hardcoded to `1` — the lap counter never advances and there is no lap button.
 Manual laps and auto-lap-by-distance are table stakes for interval sessions.
@@ -84,7 +129,19 @@ Manual laps and auto-lap-by-distance are table stakes for interval sessions.
 button, and show per-lap pace — this directly serves the tempo/interval
 workouts the plan engine prescribes.
 
-### A3. In-run guidance is silent — no audio/voice cues, no haptics *(high impact, medium effort)*
+### ✅ A3. In-run guidance is silent — no audio/voice cues, no haptics *(high impact, medium effort)*
+
+**SHIPPED in the UX-audit passes** (`UX_ANALYSIS_2026-07-26.md` §4, passes 3–4), and
+recorded here only now — this document was not updated at the time. `RunVoiceCoach` owns
+the audio session and speaks each closed split via the pure `SplitAnnouncement`, judged
+against the guided step's target pace or the scheduled workout's band; the announcement is
+opt-in (`AppSettings.spokenSplitsEnabled`) because it is the one feature that talks over
+whatever else is playing. Haptics are declarative `sensoryFeedback` — run state, each
+split, each guided step, each strength set — so they respect the system haptics setting.
+`RunSplitFeedback` carries both, and is applied by `ActiveRunView` *and* `MainTabView` so a
+minimised run (U7) still speaks and buzzes from a pocket. This pass adds the lap haptic
+(A2). *Deferred:* spoken heart rate and distance, and lap announcements.
+
 There is no `AVSpeechSynthesizer` or `CHHapticEngine` usage anywhere. A runner
 executing a prescribed 6×800 m interval gets no spoken "rep 3, target pace 3:55,
 you're 8s fast" and no buzz at the split. For a coaching app this is the gap
@@ -92,7 +149,17 @@ between a passive logger and an active coach. **Improve:** add configurable
 audio announcements (split pace/HR/distance) and haptic split alerts, driven by
 the scheduled workout's structure so intervals and tempo blocks are cued.
 
-### A4. Training plans have no in-run structured-workout execution *(high impact, high effort)*
+### ✅ A4. Training plans have no in-run structured-workout execution *(high impact, high effort)*
+
+**SHIPPED in the UX-audit passes**, and recorded here only now. `GuidedWorkoutEngine`
+(pure, unit-tested) flattens a `WorkoutStructure` into ordered steps; `GuidedWorkoutState`
+lives on `ActiveRunPresentation` rather than in view state, so a runner three intervals in
+who minimises the HUD comes back to step 4 and not step 1; `GuidedWorkoutBanner` shows and
+advances the current step, and the metric grid's third slot shows step *n* of *m*. Flat
+easy runs and free runs leave the stepper `nil` and are unchanged. Each step change is
+cued by a heavy haptic (A3) — a transition the runner would otherwise only see by looking
+at the banner at exactly the right moment.
+
 `ScheduledWorkout` already stores a rich `WorkoutStructure` (segments/sets —
 `Core/Models/ValueTypes.swift`), but `ActiveRunView` starts a single flat run of
 one `WorkoutType` (`ActiveRunView` `startType`) and never steps the runner
@@ -101,7 +168,32 @@ cannot *guide*. **Improve:** a guided-workout mode that reads `WorkoutStructure`
 advances segments (by time/distance), and (with A3) cues each transition. This is
 the highest-leverage upgrade to the core product loop.
 
-### A5. AI coach only sees runs — no HR-zone, cadence, or recovery context *(medium impact, medium effort)*
+### ✅ A5. AI coach only sees runs — no HR-zone, cadence, or recovery context *(medium impact, medium effort)*
+
+**SHIPPED, bar recovery.** The HR-zone half landed with A6 (max HR on the profile,
+`HeartRateZoneService.timeInZones`, a zone breakdown on the run summary, and
+`CoachRunBreakdown.zoneSection`/`zoneSentence` in the prompt and the local read). This pass
+closes cadence, which was the odd one out: the pedometer has reported it on *every* run
+since N20 — outdoors as well as indoors — and the number was shown live and then thrown
+away at finish. So the app measured the one form signal it has and could never say a word
+about it.
+
+`WorkoutTrackerService` now keeps every pedometer reading and averages it onto
+`RunWorkout.averageCadenceStepsPerMinute` at finish; imported runs derive theirs from the
+step count HealthKit recorded *against the workout* (there is no running-cadence quantity
+type the way there is for cycling, so it is steps ÷ duration — the same definition
+`CMPedometer.currentCadence` reports, which is what makes the two comparable). The run
+summary shows an "Avg Cadence" stat, the coach prompt carries an `Avg cadence:` line, and
+`CoachRunBreakdown.cadenceSentence`/`cadenceFocus` (pure, unit-tested) put it in the local
+summary — the focus item only for a low cadence on an easy or long run, which is where a
+runner can change something about their form without costing themselves the session.
+
+Step count is added to HealthKit's **read** set only. Stride's own runs are already counted
+by the device that took the steps; writing them back would double them.
+
+*Still open, tracked as B7:* recovery/HRV. Nothing consumes sleep, HRV or resting HR, and a
+readiness signal is a feature of its own rather than another field on `RunWorkout`.
+
 `RunWorkout` persists only distance, duration, pace, avg/max HR, elevation,
 splits, route, weather (`Core/Models/RunWorkout.swift:8-51`). No **cadence**,
 **HR zone distribution**, ground-contact, stride length, or recovery/HRV signal
@@ -192,7 +284,18 @@ progress" / "days to race" widget leaves the most valuable glanceable surface on
 iOS empty. The data (`IntentDataProvider` already assembles Today's Run and
 Weekly Summary for Siri) is reusable, so most of the model work is done.
 
-### B2. Live Activity + Dynamic Island for the active run *(high impact, medium effort)*
+### ✅ B2. Live Activity + Dynamic Island for the active run *(high impact, medium effort)*
+
+**SHIPPED in the UX-audit passes** (`UX_ANALYSIS_2026-07-26.md` §5b, pass 6; the
+strict-concurrency break it introduced was fixed in pass 7), and recorded here only now.
+`RunLiveActivity` in `StrideWidgets` renders the Lock Screen card and both Dynamic Island
+presentations from `RunActivityAttributes.ContentState`. `RunActivityController` is the
+ActivityKit side, and the activity is driven from `WorkoutTrackerService` rather than from
+a view — deliberately, because the case a Live Activity exists for is a locked phone,
+where SwiftUI does not update a backgrounded view but the tracker's one-second timer keeps
+running. Pause and finish are pushed straight through; the elapsed clock is counted by the
+widget rather than pushed at all.
+
 No ActivityKit usage. During a tracked run the lock screen and Dynamic Island
 show nothing. This is now an expected feature for any tracker and pairs naturally
 with the existing `WorkoutTrackerService` live metrics.
@@ -215,9 +318,15 @@ counter, a user-set weekly distance/time goal with a progress ring, and
 consistency badges are proven retention features and are cheap on top of the
 existing history + `ProgressStatsService` aggregates.
 
-### 🔨 B5. Run & achievement sharing *(medium impact, low-medium effort)*
+### ✅ B5. Run & achievement sharing *(medium impact, low-medium effort)*
 
-**IN PROGRESS:** implementing v1 run share cards. A share button in the
+**SHIPPED.** The description below is what landed, with one change made after it was
+written: rendering is deferred to the Share tap rather than run on every open of the run
+detail (N21), so the card is produced by `UIActivityViewController` rather than
+`ShareLink` — the latter needs its item up front, which is what forced the pre-render. B6
+has since turned that single button into a menu. The deferred half below is still deferred.
+
+The original entry, for the record: a share button in the
 `RunSummaryView` toolbar renders a fixed-size card (headline distance/time/pace,
 the route over a dark `MKMapSnapshotter` map background via `RouteSnapshotService`
 — falling back to a self-drawn polyline when offline, and to a route-less panel
@@ -231,7 +340,36 @@ No `ShareLink` / share-card generation anywhere. Runners share runs; a
 rendered share card (map + splits + stats, or a milestone medal) is a low-cost
 growth lever built entirely from data already on `RunWorkout`.
 
-### B6. GPX / data export *(medium impact, low effort)*
+### ✅ B6. GPX / data export *(medium impact, low effort)*
+
+**SHIPPED (route export).** `GPXExport` builds a GPX 1.1 document from a run's stored
+route; the run summary's share control is now a menu — "Share run card" (B5) and "Export
+route as GPX" — and the export writes to the temporary directory and hands the URL to the
+same `ShareSheet`, which now takes arbitrary activity items rather than only a `UIImage`.
+A failed write surfaces an alert instead of doing nothing.
+
+Details that are decisions rather than defaults:
+
+- **The route carries no timestamps of its own**, so points are laid back onto the run's
+  timeline evenly — reusing `HealthKitRepository.sampleTimestamps`, which is the same
+  spacing `saveRoute` already applies when it writes this very trace to HealthKit. An
+  exported file and the Health copy of the same run therefore agree with each other.
+- **Coordinates are formatted through `en_US_POSIX` at six decimals.** A GPX with
+  `lat="52,3"` fails to parse in every reader there is, and the app's own locale would
+  otherwise decide.
+- **The track name and file name are locale-stable** (`displayName`, fixed date patterns),
+  because both are read by the importing tool rather than by the runner — the AGENTS.md
+  `displayName` vs `localizedName` rule.
+- **Indoor and fixless runs offer no export at all**, rather than a menu item that produces
+  an empty track.
+
+The pure document builder takes coordinates and timestamps so the XML can be asserted
+without a SwiftData model behind it (`GPXExportTests`).
+
+*Still open:* a full-data export. "Reset all data" still has no counterpart that gets a
+runner's history *out*, and that is the half of this item that answers the "my data is
+trapped" objection.
+
 No route or workout export path. Power users and privacy-conscious users expect
 GPX export of routes and a full-data export (the app already has a "reset all
 data" path but no export). Small, and it de-risks the "my data is trapped"
@@ -260,23 +398,25 @@ differentiating for the marathon segment.
 
 Sequenced for user-visible impact per unit of effort, reusing existing models.
 
-**P0 — close the "coach vs. logger" gap (core loop):**
-1. **A4** guided structured-workout execution (reads existing `WorkoutStructure`).
-2. **A3** in-run audio/voice cues + haptics (pairs with A4).
-3. **✅ A1** real mile splits *(shipped)* **+ A2** working laps (unblocks interval feedback).
+**P0 — close the "coach vs. logger" gap (core loop) — ✅ DONE:**
+1. **✅ A4** guided structured-workout execution (reads existing `WorkoutStructure`).
+2. **✅ A3** in-run audio/voice cues + haptics (pairs with A4).
+3. **✅ A1** real mile splits **+ ✅ A2** working laps (unblocks interval feedback).
 
-**P1 — glanceable + platform surfaces (high impact, reuse existing data):**
-4. **✅ B1** Widgets *(shipped)*.
-5. **B2** Live Activity / Dynamic Island (reuse `WorkoutTrackerService`).
-6. **✅ B4** streaks & goals *(shipped)*.
+**P1 — glanceable + platform surfaces (high impact, reuse existing data) — ✅ DONE:**
+4. **✅ B1** Widgets.
+5. **✅ B2** Live Activity / Dynamic Island (reuse `WorkoutTrackerService`).
+6. **✅ B4** streaks & goals.
 
 **P2 — depth in data & coaching:**
-7. **A5** cadence capture **+ ✅ A6** HR-zone display *(shipped)*; feed the coach.
+7. **✅ A5** cadence capture **+ ✅ A6** HR-zone display; both now feed the coach. *(A5's
+   recovery third is B7, below.)*
 8. **A10** race-day hub (countdown, goal splits, result capture).
 9. **B7** recovery/readiness score.
 
 **P3 — reach & retention:**
-10. **🔨 B5** run/achievement sharing *(in progress)* **+ B6** GPX export.
+10. **✅ B5** run/achievement sharing **+ ✅ B6** GPX route export *(a full-data export is
+    still open — see B6)*.
 11. **A7** target-distance-aware routes with elevation.
 12. **✅ A8** expanded achievements *(shipped via B4)* **+ A9** coaching-moment notifications.
 
@@ -284,10 +424,12 @@ Sequenced for user-visible impact per unit of effort, reusing existing models.
 13. **B3** watchOS companion.
 14. **B8 + B9** first-class cross-training and long-run fueling.
 
-> **Note on sequencing:** P0 items are the highest leverage because the plan
-> engine already *prescribes* structured, paced workouts the app cannot yet
-> *guide the runner through* — closing that loop turns existing planning
-> investment into a felt coaching experience before any new platform surface is
-> built.
+> **Note on sequencing:** P0 was the highest leverage because the plan engine already
+> *prescribed* structured, paced workouts the app could not yet *guide the runner
+> through*. That loop is closed, and with P1 closed too, the remaining items no longer
+> queue behind each other: **A10** (race day), **B7** (recovery), **A7** (routes), **A9**
+> (notifications) and the rest of **B6** (full-data export) are independent, and are
+> ordered by impact rather than by dependency. **B3** (watchOS) is still the one that
+> changes the product's shape rather than adding to it.
 </content>
 </invoke>

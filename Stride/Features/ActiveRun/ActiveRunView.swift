@@ -112,6 +112,12 @@ struct ActiveRunView: View {
             // `MainTabView`, which owns the same feedback while the run is minimised and
             // this screen is gone — see `RunSplitFeedback`.
             .runSplitFeedback(isActive: true)
+            // A lap is marked by feel, mid-stride, without looking — so the confirmation
+            // that it registered has to be felt too (A2). Distinct from the split haptic
+            // above (`.light`) so the two can be told apart in a pocket.
+            .sensoryFeedback(.impact(weight: .medium), trigger: tracker.lapMarks.count) { old, new in
+                new > old
+            }
             // A guided interval changing step is otherwise invisible unless the runner
             // happens to be looking at the banner at that moment.
             .sensoryFeedback(trigger: presentation.guided?.stepNumber) { (oldStep: Int?, newStep: Int?) -> SensoryFeedback? in
@@ -572,14 +578,16 @@ struct ActiveRunView: View {
             // pedometer reports cadence on every run (N20).
             metricCell(value: cadenceValue, unit: "spm", label: "Cadence")
             metricCell(value: elevationValue, unit: elevationUnitLabel, label: "Elev Gain")
+            // One slot, three claimants, narrowest first. A guided workout's step is the
+            // thing that screen exists to show (A4). Failing that, a lap the runner marked
+            // is the number they marked it to see (A2) — but only once they have, since
+            // "lap 1" before any tap says nothing. Otherwise the run's average pace, which
+            // complements the live hero pace.
             if let guided {
-                // Repurpose the previously dead hardcoded "Lap" cell to show
-                // progress through the guided workout's steps (A4).
                 metricCell(value: "\(guided.stepNumber)/\(guided.stepCount)", label: "Step")
+            } else if !tracker.lapMarks.isEmpty {
+                lapCell
             } else {
-                // The "Lap" cell was dead too — there is no lap marker in the app, and
-                // the flag button that would have set one did nothing (N18/N20). Show
-                // average pace instead, which complements the live hero pace.
                 metricCell(
                     value: averagePaceSecondsPerKm.paceValueString(unit: appSettings.unitPreference),
                     unit: appSettings.unitPreference == .metric ? "/km" : "/mi",
@@ -599,6 +607,26 @@ struct ActiveRunView: View {
         .opacity(metricsAppeared ? 1 : 0)
         .scaleEffect(metricsAppeared ? 1 : 0.92)
         .adaptiveAnimation(AppAnimation.entrance.delay(0.1), value: metricsAppeared)
+    }
+
+    /// The lap in progress: its number, and the pace run inside it so far (A2).
+    ///
+    /// A lap's own pace is the point of marking one — the hero pace is instantaneous and
+    /// "Avg Pace" covers the whole run, so neither answers "how fast was that rep?".
+    private var lapCell: some View {
+        metricCell(
+            value: (tracker.currentLapPaceSecondsPerKm ?? 0)
+                .paceValueString(unit: appSettings.unitPreference),
+            unit: appSettings.unitPreference == .metric ? "/km" : "/mi",
+            // Built outside a view, so it needs `String(localized:)` to be extracted at all
+            // (AGENTS.md). The other cells hand `metricCell` a bare literal because theirs
+            // are fixed words; this one carries a number.
+            label: String(
+                localized: "Lap \(tracker.currentLapNumber)",
+                comment: "Run HUD metric cell label for the lap in progress"
+            ),
+            identifierLabel: "Lap"
+        )
     }
 
     /// Live cadence for the metric grid, `--` until the pedometer reports a sample.
@@ -651,7 +679,16 @@ struct ActiveRunView: View {
         .accessibilityIdentifier(Self.metricIdentifier("Heart Rate"))
     }
 
-    private func metricCell(value: String, unit: String? = nil, label: String) -> some View {
+    /// - Parameter identifierLabel: overrides the label the accessibility identifier is
+    ///   derived from. The lap cell needs it: its label carries the lap *number*, so
+    ///   deriving the identifier from it would rename the element on every lap and leave
+    ///   `StrideUITests` nothing stable to match.
+    private func metricCell(
+        value: String,
+        unit: String? = nil,
+        label: String,
+        identifierLabel: String? = nil
+    ) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(alignment: .lastTextBaseline, spacing: 3) {
                 Text(value)
@@ -674,7 +711,7 @@ struct ActiveRunView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
         .accessibilityValue(SpokenMetric.spoken(value: value, unit: unit))
-        .accessibilityIdentifier(Self.metricIdentifier(label))
+        .accessibilityIdentifier(Self.metricIdentifier(identifierLabel ?? label))
     }
 
     /// Stable identifier for a metric cell, e.g. `activeRun.metric.Distance`. Merging
@@ -687,9 +724,18 @@ struct ActiveRunView: View {
     // MARK: - Controls
 
     private var controls: some View {
-        // The flag/lap button that used to sit on the left is gone: it had no action,
-        // and the "Lap" cell it would have driven was hardcoded to `--` (N18/N20).
+        // The flag button that used to sit on the left was removed when it turned out to
+        // have no action behind it and no lap model to drive (N18/N20). It is back, with
+        // both (A2), and present only while there is a run to lap.
         HStack(spacing: 22) {
+            // Animated off `isRecording` (on the stack below) rather than off the primary
+            // control's own trigger: that one flips on every pause, and the lap button has
+            // to survive a pause without flickering out and back.
+            if tracker.isRecording {
+                lapButton
+                    .transition(.scale(scale: 0.7).combined(with: .opacity))
+            }
+
             // Primary pause/play
             Group {
                 if tracker.trackingState == .active {
@@ -737,11 +783,33 @@ struct ActiveRunView: View {
             .accessibilityHint("Choose to save or discard this run")
             .accessibilityIdentifier("activeRun.finish")
         }
+        .adaptiveAnimation(AppAnimation.bouncy, value: tracker.isRecording)
         .padding(.horizontal, AppSpacing.lg)
         .padding(.bottom, AppSpacing.huge)
         .opacity(controlsAppeared ? 1 : 0)
         .offset(y: controlsAppeared ? 0 : 30)
         .adaptiveAnimation(AppAnimation.entrance.delay(0.2), value: controlsAppeared)
+    }
+
+    /// Marks a lap boundary (A2).
+    ///
+    /// Deliberately the same 64pt glass treatment as Finish, on the opposite side of the
+    /// primary control: both are secondary to pause/resume, and a heads-down runner picks
+    /// them by position. It stays enabled while paused — the tracker takes a mark either
+    /// way, because a runner who stops at the top of a climb and then marks it means the
+    /// boundary rather than the hold.
+    private var lapButton: some View {
+        Button {
+            tracker.markLap()
+        } label: {
+            glassControlButton(size: 64) {
+                StrideIcon(name: .flag, size: 22, color: .white, strokeWeight: 2.2)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Mark lap")
+        .accessibilityHint("Closes the current lap and starts the next one")
+        .accessibilityIdentifier("activeRun.lap")
     }
 
     // MARK: - Control button helpers

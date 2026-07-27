@@ -439,6 +439,8 @@ final class NotificationService: NSObject {
         let averageHeartRate: Double?
         let maxHeartRate: Double?
         let elevationGainMeters: Double?
+        /// Optional so an older snapshot written before cadence was captured still decodes (A5).
+        let averageCadenceStepsPerMinute: Double?
         let workoutTypeRaw: String
         let workoutLocationRaw: String
         let notes: String?
@@ -460,6 +462,7 @@ final class NotificationService: NSObject {
             self.averageHeartRate = workout.averageHeartRate
             self.maxHeartRate = workout.maxHeartRate
             self.elevationGainMeters = workout.elevationGainMeters
+            self.averageCadenceStepsPerMinute = workout.averageCadenceStepsPerMinute
             self.workoutTypeRaw = workout.workoutTypeRaw
             self.workoutLocationRaw = workout.workoutLocationRaw
             self.notes = workout.notes
@@ -481,6 +484,7 @@ final class NotificationService: NSObject {
             workout.averageHeartRate = averageHeartRate
             workout.maxHeartRate = maxHeartRate
             workout.elevationGainMeters = elevationGainMeters
+            workout.averageCadenceStepsPerMinute = averageCadenceStepsPerMinute
             workout.notes = notes
             workout.healthKitWorkoutID = healthKitWorkoutID
             workout.splitsData = splitsData

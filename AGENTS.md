@@ -115,7 +115,11 @@ Business logic belongs in services or repositories, not directly in SwiftUI view
 `Stride/Core/Models/ValueTypes.swift` contains codable/sendable value types used inside SwiftData models:
 
 - `Coordinate`: `CLLocationCoordinate2D` storage wrapper
-- `Split`: per-kilometer split data
+- `Split`: one bucket per kilometre or per mile, closed automatically by `SplitBucketing`
+- `Lap`: a boundary the runner marked by hand mid-run (A2). Deliberately *not* a `Split`:
+  splits close on distance whether or not anyone asked, laps close where the runner said —
+  the top of a rep, a turnaround, a track's lap line. `LapRecorder` builds them, and a run
+  that was never lapped stores none rather than one lap restating the whole run
 - `WorkoutSegment`, `WorkoutSet`, `WorkoutStructure`: structured run workout representation stored as JSON in `ScheduledWorkout`
 - `WorkoutWeather`: weather snapshot attached to completed runs
 - `RouteStep`, `GeneratedRoute`: route-generation results
@@ -249,7 +253,7 @@ issue is usually already written up, with a recommended fix:
 | [`docs/UX_ANALYSIS_2026-07-26.md`](docs/UX_ANALYSIS_2026-07-26.md) | UX and SwiftUI platform conformance (third pass): design-token adoption, Dynamic Type, contrast, haptics, iOS 26+ API. Systemic gaps rather than per-screen bugs. **All items closed** — two of them by a documented decision rather than by code, so read those before reopening them. |
 | [`docs/APP_ANALYSIS_2026-07-24.md`](docs/APP_ANALYSIS_2026-07-24.md) | Current open bugs, UX issues, and cleanup (second pass). Start here. |
 | [`docs/APP_ANALYSIS_2026-07.md`](docs/APP_ANALYSIS_2026-07.md) | First-pass audit; all numbered bugs fixed. Its design (§5) and coverage (§8) sections are still live. |
-| [`docs/FEATURE_IMPROVEMENTS_2026-07.md`](docs/FEATURE_IMPROVEMENTS_2026-07.md) | Product/feature roadmap with shipped-status tracking. |
+| [`docs/FEATURE_IMPROVEMENTS_2026-07.md`](docs/FEATURE_IMPROVEMENTS_2026-07.md) | Product/feature roadmap with shipped-status tracking. **The live one** — the two bug audits and the UX audit are closed bar items blocked on CI or a device, so this is where the remaining work is. Its header lists what is genuinely open. |
 | [`docs/REPO_ANALYSIS.md`](docs/REPO_ANALYSIS.md) | Operational review: CI, secrets hygiene, test depth. |
 | [`docs/CLOUDKIT_VALIDATION.md`](docs/CLOUDKIT_VALIDATION.md) | CloudKit sync validation steps. |
 

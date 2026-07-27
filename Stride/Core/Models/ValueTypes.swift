@@ -29,6 +29,28 @@ struct Split: Codable, Hashable, Sendable {
     var cumulativeDistanceMeters: Double
 }
 
+// MARK: - Lap
+
+/// One lap of a run, closed by the runner tapping the lap control (A2).
+///
+/// Laps are **manual** and so are not splits: a split closes every kilometre or mile
+/// whether the runner asked for it or not, while a lap closes exactly where they said
+/// — the top of a rep, the bottom of a hill, the lap line on a track. A run that was
+/// never lapped carries none, which is why this is stored separately from ``Split``
+/// rather than folded into it.
+struct Lap: Codable, Hashable, Sendable {
+    /// 1-based position in the run.
+    var number: Int
+    /// Elapsed run time at which this lap opened, in seconds. Lap 1 opens at 0.
+    var startElapsedSeconds: Double
+    var durationSeconds: Double
+    var distanceMeters: Double
+    /// Average pace across the lap in seconds per kilometre, regardless of the runner's
+    /// display unit — the same convention ``Split/paceSecondsPerKm`` uses. `0` for a lap
+    /// that covered no measurable distance, which formats as "--:--".
+    var paceSecondsPerKm: Double
+}
+
 // MARK: - WorkoutInterval
 
 /// A single repeat within an interval training session.
