@@ -7,13 +7,40 @@ import Charts
 
 extension RunSummaryView {
 
+    // MARK: Charted series
+
+    /// The splits the charts plot, and what one of them covers.
+    ///
+    /// Not the run's stored `splits`: those close on a whole kilometre or mile, so a one-mile
+    /// run charted exactly one marker and a 5K charted three (N34). `SplitChartSeries`
+    /// re-buckets a short run's recorded distance readings into fractions of the unit and
+    /// falls back to the stored splits for everything else — including every run recorded
+    /// before those readings were kept.
+    ///
+    /// Resolved once per run into `@State` rather than recomputed in `body`: re-bucketing
+    /// decodes a few thousand readings, and dragging across a chart re-evaluates `body` on
+    /// every touch.
+    var chartedSplits: SplitChartSeries.Resolved {
+        resolvedSplitSeries
+            ?? SplitChartSeries.Resolved(splits: workout.splits, fraction: 1, unit: workout.splitUnit)
+    }
+
+    /// Recomputes `chartedSplits`. Called on open and again after a backfill, which is what
+    /// gives an older imported run its readings.
+    func resolveSplitChartSeries() {
+        resolvedSplitSeries = SplitChartSeries.resolve(for: workout, unit: appSettings.unitPreference)
+    }
+
     // MARK: Splits section
 
     /// The metrics this run's splits can chart. The rule lives in `SplitChartMetric`
     /// (N22/D1) so "does this run carry per-split heart rate or elevation?" can be tested
     /// without the view.
+    ///
+    /// Asked of the charted series rather than the stored splits, since that is what the
+    /// tabs would be switching between.
     var availableSplitMetrics: [SplitChartMetric] {
-        SplitChartMetric.available(for: workout.splits)
+        SplitChartMetric.available(for: chartedSplits.splits)
     }
 
     /// The pace chart's footnote names the dashed baseline and its pace, since the line
@@ -35,7 +62,9 @@ extension RunSummaryView {
             sectionHeader(title: "Splits")
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 10) {
-                    Text(metric.heading(unit: appSettings.unitPreference))
+                    // "Pace per 0.1 mi" on a subdivided run: the heading names what a bar
+                    // covers, which is no longer always the runner's whole unit (N34).
+                    Text(metric.heading(bucket: chartedSplits.bucketLabel))
                         .font(.dsFootnote.weight(.bold))
                     Spacer()
                     if availableSplitMetrics.count > 1 {
@@ -56,15 +85,78 @@ extension RunSummaryView {
         }
     }
 
+    // MARK: Chart axis
+
+    /// The charted split with this bucket number.
+    private func chartedSplit(forBucket bucket: Int) -> Split? {
+        chartedSplits.splits.first { $0.kilometer == bucket }
+    }
+
+    /// Distance covered by the end of a bucket, in the charted unit: "3" on whole-unit
+    /// splits, "0.4" on tenths.
+    ///
+    /// The x axis plots bucket numbers because that is what a `Split` carries, but a bucket
+    /// number means nothing once a bucket is a tenth of a mile — so every label, tooltip and
+    /// spoken point names the distance instead.
+    private func splitDistanceLabel(_ split: Split) -> String {
+        // A split with no recorded cumulative distance falls back to its bucket number,
+        // which is what the axis showed before it named distances at all.
+        guard split.cumulativeDistanceMeters > 0 else { return "\(split.kilometer)" }
+        return SplitChartSeries.axisLabel(
+            cumulativeMeters: split.cumulativeDistanceMeters,
+            unit: chartedSplits.unit,
+            fraction: chartedSplits.fraction
+        )
+    }
+
+    private func splitDistanceLabel(forBucket bucket: Int) -> String? {
+        chartedSplit(forBucket: bucket).map { splitDistanceLabel($0) }
+    }
+
+    /// "0.4 mi" — a bucket named the way the axis names it, plus the unit.
+    private func splitTooltipTitle(_ split: Split) -> String {
+        "\(splitDistanceLabel(split)) \(chartedSplits.unit.distanceLabel)"
+    }
+
+    /// Buckets to label on the x axis: roughly five, evenly spaced, counted back from the
+    /// last so the run's finishing distance is always one of them.
+    private var splitAxisTicks: [Int] {
+        let splits = chartedSplits.splits
+        guard !splits.isEmpty else { return [] }
+        let step = max(1, Int((Double(splits.count) / 5).rounded(.up)))
+        var ticks: [Int] = []
+        var index = splits.count - 1
+        while index >= 0 {
+            ticks.append(splits[index].kilometer)
+            index -= step
+        }
+        ticks.reverse()
+        return ticks
+    }
+
+    /// Shared by all three charts so a bar, a point and a tooltip all name the same bucket
+    /// the same way.
+    private var splitXAxis: some AxisContent {
+        AxisMarks(values: splitAxisTicks) { value in
+            AxisGridLine()
+            AxisTick()
+            AxisValueLabel {
+                if let bucket = value.as(Int.self), let label = splitDistanceLabel(forBucket: bucket) {
+                    Text(label)
+                }
+            }
+        }
+    }
+
     // MARK: Split pace chart
 
     /// This run's average split pace, the line the pace bars are drawn against.
     private var averageSplitPace: Double? {
-        SplitPaceStats.averagePaceSecondsPerKm(workout.splits)
+        SplitPaceStats.averagePaceSecondsPerKm(chartedSplits.splits)
     }
 
     private var splitPaceYDomain: AutomaticScaleDomain {
-        workout.splits.count > 1 && averageSplitPace != nil
+        chartedSplits.splits.count > 1 && averageSplitPace != nil
             ? .automatic(includesZero: false, reversed: true)
             : .automatic
     }
@@ -78,15 +170,17 @@ extension RunSummaryView {
     /// average pace to each split's pace on a reversed, zero-free scale, so faster splits
     /// rise above the dashed average line and slower ones hang below it, coloured to match.
     ///
-    /// Bucket labels come from the run's stored `splitUnit`, so a mile-bucketed run reads
-    /// "mi 4" and a legacy kilometre-bucketed one still reads "km 4".
+    /// Axis labels come from the bucket's cumulative distance in the charted unit, so a
+    /// mile-bucketed run reads "4", a mile run charted on tenths reads "0.4", and a legacy
+    /// kilometre-bucketed one still counts kilometres.
     private var splitPaceChart: some View {
+        let splits = chartedSplits.splits
         // Deviation bars need something to deviate from, and a lone split is its own
         // average — that run keeps a plain zero-anchored bar, which is honest when there is
         // nothing to compare it with.
-        let average = workout.splits.count > 1 ? averageSplitPace : nil
+        let average = splits.count > 1 ? averageSplitPace : nil
         return Chart {
-            ForEach(workout.splits, id: \.kilometer) { split in
+            ForEach(splits, id: \.kilometer) { split in
                 let tone = splitPaceTone(split.paceSecondsPerKm, average: average)
                     .opacity(selectedSplitPaceKm == nil || selectedSplitPaceKm == split.kilometer ? 1.0 : 0.4)
                 if let average {
@@ -118,8 +212,8 @@ extension RunSummaryView {
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
             }
 
-            if let km = selectedSplitPaceKm, let split = split(forKm: km) {
-                RuleMark(x: .value(splitLabelUpper, km))
+            if let bucket = selectedSplitPaceKm, let split = chartedSplit(forBucket: bucket) {
+                RuleMark(x: .value(splitLabelUpper, bucket))
                     .foregroundStyle(.secondary.opacity(0.4))
                     .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
                     .annotation(
@@ -145,13 +239,14 @@ extension RunSummaryView {
                 }
             }
         }
+        .chartXAxis { splitXAxis }
         .chartXSelection(value: $selectedSplitPaceKm)
         .chartAccessibility("Split pace chart", splitPaceSummary)
     }
 
     private func splitPaceTooltip(_ split: Split, average: Double?) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("\(splitLabel) \(split.kilometer)")
+            Text(splitTooltipTitle(split))
                 .font(.caption2).foregroundStyle(.secondary)
             Text(split.paceSecondsPerKm.paceString(unit: appSettings.unitPreference))
                 .font(.caption).bold()
@@ -184,20 +279,20 @@ extension RunSummaryView {
 
     // MARK: Split chart accessibility (N18)
 
-    /// Accessibility points for a split chart: each bucket labelled the way the axis
-    /// labels it ("km 3"), with the value the chart plots.
+    /// Accessibility points for a split chart: each bucket labelled by the distance it ends
+    /// at ("0.4 mi"), with the value the chart plots.
     private func splitPoints(
         _ splits: [Split],
         value: (Split) -> Double
     ) -> [ChartAccessibility.Point] {
-        splits.map { ChartAccessibility.Point(label: "\(splitLabel) \($0.kilometer)", value: value($0)) }
+        splits.map { ChartAccessibility.Point(label: splitTooltipTitle($0), value: value($0)) }
     }
 
     /// The chart is read against the run's average now, so the spoken summary names it
     /// first — otherwise a VoiceOver user gets the split values with nothing to judge them
     /// against, which is exactly what the bars show sighted users.
     private var splitPaceSummary: String {
-        let values = ChartAccessibility.summary(splitPoints(workout.splits) { $0.paceSecondsPerKm }) {
+        let values = ChartAccessibility.summary(splitPoints(chartedSplits.splits) { $0.paceSecondsPerKm }) {
             SpokenMetric.spoken(measurement: $0.paceString(unit: appSettings.unitPreference))
         }
         guard let average = averageSplitPace else { return values }
@@ -213,7 +308,7 @@ extension RunSummaryView {
 
     private var splitElevationSummary: String {
         ChartAccessibility.summary(
-            splitPoints(workout.splits) {
+            splitPoints(chartedSplits.splits) {
                 $0.elevationGainMeters.elevationValue(unit: appSettings.unitPreference)
             }
         ) {
@@ -224,7 +319,7 @@ extension RunSummaryView {
     // MARK: Split HR chart
 
     private var splitHRChart: some View {
-        let hrSplits = workout.splits.filter { $0.heartRate != nil }
+        let hrSplits = chartedSplits.splits.filter { $0.heartRate != nil }
         return Chart {
             ForEach(hrSplits, id: \.kilometer) { split in
                 LineMark(
@@ -239,8 +334,9 @@ extension RunSummaryView {
                 .foregroundStyle(.zoneInterval)
                 .symbolSize(selectedSplitHRKm == split.kilometer ? 80 : 36)
             }
-            if let km = selectedSplitHRKm, let split = split(forKm: km), let hr = split.heartRate {
-                RuleMark(x: .value(splitLabelUpper, km))
+            if let bucket = selectedSplitHRKm, let split = chartedSplit(forBucket: bucket),
+               let hr = split.heartRate {
+                RuleMark(x: .value(splitLabelUpper, bucket))
                     .foregroundStyle(.secondary.opacity(0.4))
                     .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
                     .annotation(
@@ -248,7 +344,7 @@ extension RunSummaryView {
                         overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
                     ) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("\(splitLabel) \(km)")
+                            Text(splitTooltipTitle(split))
                                 .font(.caption2).foregroundStyle(.secondary)
                             Text("\(Int(hr)) bpm")
                                 .font(.caption).bold()
@@ -260,6 +356,7 @@ extension RunSummaryView {
         }
         .frame(height: 120)
         .chartYAxisLabel("bpm")
+        .chartXAxis { splitXAxis }
         .chartXSelection(value: $selectedSplitHRKm)
         .chartAccessibility("Split heart rate chart", splitHeartRateSummary(hrSplits))
     }
@@ -268,7 +365,7 @@ extension RunSummaryView {
 
     private var splitElevationChart: some View {
         Chart {
-            ForEach(workout.splits, id: \.kilometer) { split in
+            ForEach(chartedSplits.splits, id: \.kilometer) { split in
                 let gain = split.elevationGainMeters.elevationValue(unit: appSettings.unitPreference)
                 BarMark(
                     x: .value(splitLabelUpper, split.kilometer),
@@ -279,9 +376,9 @@ extension RunSummaryView {
                         .opacity(selectedSplitElevKm == nil || selectedSplitElevKm == split.kilometer ? 1.0 : 0.5)
                 )
             }
-            if let km = selectedSplitElevKm, let split = split(forKm: km) {
+            if let bucket = selectedSplitElevKm, let split = chartedSplit(forBucket: bucket) {
                 let gain = split.elevationGainMeters.elevationValue(unit: appSettings.unitPreference)
-                RuleMark(x: .value(splitLabelUpper, km))
+                RuleMark(x: .value(splitLabelUpper, bucket))
                     .foregroundStyle(.secondary.opacity(0.4))
                     .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
                     .annotation(
@@ -289,7 +386,7 @@ extension RunSummaryView {
                         overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
                     ) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("\(splitLabel) \(km)")
+                            Text(splitTooltipTitle(split))
                                 .font(.caption2).foregroundStyle(.secondary)
                             Text("\(gain >= 0 ? "+" : "")\(Int(gain)) \(appSettings.unitPreference.elevationLabel)")
                                 .font(.caption).bold()
@@ -301,12 +398,16 @@ extension RunSummaryView {
         }
         .frame(height: 100)
         .chartYAxisLabel(appSettings.unitPreference.elevationLabel)
+        .chartXAxis { splitXAxis }
         .chartXSelection(value: $selectedSplitElevKm)
         .chartAccessibility("Split elevation chart", splitElevationSummary)
     }
 
     // MARK: Splits table
 
+    /// The table stays on the run's stored whole-unit splits even when the charts above it
+    /// are drawn on fractions: "4:12 for mile 3" is the number a runner reads off a table,
+    /// and forty rows of tenth-mile paces is not a table anyone reads.
     var splitsTable: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {

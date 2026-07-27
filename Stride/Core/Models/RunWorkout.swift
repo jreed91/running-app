@@ -54,6 +54,16 @@ final class RunWorkout {
     /// JSON-encoded `[Coordinate]`.
     var routeData: Data?
 
+    /// JSON-encoded `[SplitBucketing.DistancePoint]` — the run's cumulative distance
+    /// readings, with altitude where the source had it.
+    ///
+    /// `splits` is closed on whole kilometre/mile boundaries, so a one-mile run has exactly
+    /// one of them and its pace and heart-rate charts drew a single marker (N34). The series
+    /// is the same data those splits were bucketed from, kept so the charts can re-bucket a
+    /// short run at a finer resolution. Optional, and `nil` for every run recorded or
+    /// imported before this: those still chart their stored splits.
+    var distanceSeriesData: Data?
+
     /// Back-reference to the ``ScheduledWorkout`` this run fulfilled, if any.
     /// The inverse is declared on ``ScheduledWorkout/completedWorkout``; SwiftData infers it here.
     var scheduledWorkout: ScheduledWorkout?
@@ -90,6 +100,13 @@ final class RunWorkout {
     var routeCoordinates: [Coordinate] {
         get { routeData?.decode([Coordinate].self) ?? [] }
         set { routeData = .encoded(newValue, keeping: routeData) }
+    }
+
+    /// The run's cumulative distance readings, empty when it was recorded before the series
+    /// was persisted. `SplitChartSeries` re-buckets these for the split charts (N34).
+    var distanceSeries: [SplitBucketing.DistancePoint] {
+        get { distanceSeriesData?.decode([SplitBucketing.DistancePoint].self) ?? [] }
+        set { distanceSeriesData = newValue.isEmpty ? nil : .encoded(newValue, keeping: distanceSeriesData) }
     }
 
     /// Raw heart-rate bpm samples for this run (empty if none captured/available).

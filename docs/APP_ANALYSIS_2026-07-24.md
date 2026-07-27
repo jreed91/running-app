@@ -845,6 +845,37 @@ partially fills — behaviour that reads as a bug from the outside.
 **Fix:** backfill samples during import (N9's pass can do both), or run a bounded
 backfill for the visible period with a progress indicator.
 
+### ✅ N34. The split charts draw one marker for a short run
+
+**FIXED:** the charts no longer plot the run's stored `splits`.
+
+A `Split` closes on a whole kilometre or mile because that is the number a runner reads
+off the splits *table*. As a chart it falls apart on anything short: a one-mile run has
+exactly one split, so "Pace per mi" and "Heart rate per mi" each drew a single bar or
+point with nothing to compare it against, a 5K drew three, and a run under one whole
+unit had no splits at all and so hid the card entirely.
+
+- **The readings behind the splits are kept.** `RunWorkout.distanceSeries` stores the
+  run's cumulative distance readings (with altitude where the source had one), written
+  by `WorkoutTrackerService` every 10 m of a live run and by the importer from the same
+  HealthKit distance samples it already buckets splits from.
+- **The charts re-bucket short runs.** `SplitChartSeries` picks the coarsest fraction of
+  the runner's unit that still yields six buckets — whole, half, quarter, tenth — so a
+  mile charts on tenths, a 5K on half-kilometres, and a 10K keeps the whole-unit splits
+  its table shows. The table itself is untouched: forty rows of tenth-mile paces is not
+  a table anyone reads.
+- **The card names what a bar covers.** The heading reads "Pace per 0.1 mi" when
+  subdivided, and the x axis labels distance covered ("0.4") rather than bucket number,
+  which is the only thing that stays honest once a bucket is a tenth of a mile.
+- **Older imported runs catch up.** `SplitBackfill.needsDistanceSeries` sends a run that
+  has splits but no readings through the one HealthKit query the run detail already
+  makes. Runs recorded in-app before this keep charting their stored splits — there is
+  no per-fix timing left to re-bucket them from.
+
+Covered by `SplitChartSeriesTests` and the new cases in `SplitBackfillTests`.
+
+`Stride/Core/Services/SplitChartSeries.swift`; `Stride/Features/History/RunSummaryView+Splits.swift`
+
 ---
 
 ## 4. Cleanup, dead code & drift

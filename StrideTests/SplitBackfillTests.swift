@@ -72,4 +72,39 @@ struct SplitBackfillTests {
     func nonPositiveBucketLengthIsSkipped() {
         #expect(!SplitBackfill.needsSplits(makeRun(), splitLengthMeters: 0))
     }
+
+    // MARK: Distance series (N34)
+
+    @Test("A run imported with splits but no readings is a candidate for the series alone")
+    func importedRunWithSplitsStillNeedsTheSeries() {
+        let run = makeRun(splits: [split(1), split(2)])
+
+        #expect(!SplitBackfill.needsSplits(run, splitLengthMeters: 1_000))
+        #expect(SplitBackfill.needsDistanceSeries(run))
+    }
+
+    @Test("A run that already has its readings is left alone")
+    func runWithSeriesIsSkipped() {
+        let run = makeRun()
+        run.distanceSeries = [
+            SplitBucketing.DistancePoint(elapsedSeconds: 300, cumulativeMeters: 1_000)
+        ]
+
+        #expect(!SplitBackfill.needsDistanceSeries(run))
+    }
+
+    @Test("An app-recorded run has no HealthKit workout to fetch readings from")
+    func appRecordedRunNeedsNoSeriesFetch() {
+        #expect(!SplitBackfill.needsDistanceSeries(makeRun(hkID: nil)))
+    }
+
+    /// Unlike `needsSplits`, there is no whole-bucket floor: a 600 m shakeout crosses no
+    /// mile boundary, and its readings are exactly what give it a chart at all (N34).
+    @Test("A run too short for one whole bucket still wants its readings")
+    func subBucketRunWantsTheSeries() {
+        let run = makeRun(distanceMeters: 600)
+
+        #expect(!SplitBackfill.needsSplits(run, splitLengthMeters: 1_000))
+        #expect(SplitBackfill.needsDistanceSeries(run))
+    }
 }
