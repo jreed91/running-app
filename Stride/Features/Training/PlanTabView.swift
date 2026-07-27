@@ -336,7 +336,13 @@ private struct SmartAdaptPlanCard: View {
             }
             .buttonStyle(.plain)
             .disabled(!isEnabled)
-            .opacity(isEnabled ? 1 : 0.55)
+            // Not `.opacity(0.55)`: that multiplied into text already carrying alpha —
+            // `.secondary` is ~60%, so the subtitle landed near 33% effective and read as
+            // broken rather than disabled. Desaturating the accent to grey is the part
+            // that actually signals "off"; the copy stays at full contrast so it can
+            // still be read, which is the whole point of the row explaining itself.
+            .grayscale(isEnabled ? 0 : 1)
+            .opacity(isEnabled ? 1 : 0.9)
 
             if let unavailableReason {
                 Text(unavailableReason)

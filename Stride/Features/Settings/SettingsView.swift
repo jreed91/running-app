@@ -670,9 +670,17 @@ struct SettingsView: View {
                     .frame(width: 32, height: 32)
                 StrideIcon(name: icon, size: 16, color: iconColor, strokeWeight: 2.0)
             }
-            Text(title).font(.bodyRegular)
-            Spacer()
+            Text(title).font(.bodyRegular).layoutPriority(1)
+            Spacer(minLength: AppSpacing.md)
+            // A trailing control is a value, not prose: hold it to one line so it cannot
+            // grow the row from the inside. `AIProvider.appleOnDevice` ("On-device (Apple
+            // Intelligence)") wrapped to three lines in a `Picker` and drew straight over
+            // this row's own title and the footnote beneath the card. Truncation matches
+            // what Settings.app does with a long picker value — the full text is still
+            // there in the menu, and the footnote below spells the choice out.
             trailing()
+                .lineLimit(1)
+                .truncationMode(.tail)
         }
         .padding(.horizontal, AppSpacing.lg)
         .padding(.vertical, AppSpacing.md)

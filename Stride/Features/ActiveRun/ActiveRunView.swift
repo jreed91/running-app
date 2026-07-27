@@ -458,7 +458,12 @@ struct ActiveRunView: View {
 
     private var heroPace: some View {
         VStack(spacing: 6) {
-            Text(tracker.currentPaceSecondsPerKm.paceString(unit: appSettings.unitPreference))
+            // `paceValueString`, not `paceString`: the caption below already names the
+            // unit, and `paceString` bakes " min/mi" into the value. Twelve characters of
+            // 120pt monospaced type is ~860pt against a 402pt screen, so even at the 0.6
+            // scale floor the hero truncated to "8:51 min…" and ran off the right edge —
+            // during a real run, not just at rest.
+            Text(tracker.currentPaceSecondsPerKm.paceValueString(unit: appSettings.unitPreference))
                 .font(.metricHero)
                 .kerning(-4.8)                       // -0.04em at 120pt
                 .lineSpacing(-12)

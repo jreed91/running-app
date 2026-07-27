@@ -277,36 +277,42 @@ struct ProgressDashboardView: View {
 
     private var weeklyVolumeChart: some View {
         chartCard("WEEKLY VOLUME") {
-            Chart {
-                ForEach(weeklyBuckets, id: \.weekStart) { bucket in
-                    BarMark(
-                        x: .value("Week", bucket.weekStart, unit: .weekOfYear),
-                        y: .value(appSettings.unitPreference.distanceLabel, distanceValue(bucket.meters))
-                    )
-                    .foregroundStyle(Color.brand.gradient)
-                    .cornerRadius(AppRadius.micro)
-                }
-                if let selected = selectedVolumeDate, let bucket = closestWeekBucket(to: selected) {
-                    selectionRule(x: .value("Week", bucket.weekStart)) {
-                        tooltipContainer {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(bucket.weekStart, format: .dateTime.month(.abbreviated).day())
-                                    .font(.caption2).foregroundStyle(.secondary)
-                                Text(String(format: "%.1f %@", distanceValue(bucket.meters), appSettings.unitPreference.distanceLabel))
-                                    .font(.caption).bold()
+            // Every other chart on this tab says why it is empty; this one drew an
+            // unexplained 160pt of blank card instead.
+            if weeklyBuckets.isEmpty {
+                emptyDataPlaceholder("No distance data in this period")
+            } else {
+                Chart {
+                    ForEach(weeklyBuckets, id: \.weekStart) { bucket in
+                        BarMark(
+                            x: .value("Week", bucket.weekStart, unit: .weekOfYear),
+                            y: .value(appSettings.unitPreference.distanceLabel, distanceValue(bucket.meters))
+                        )
+                        .foregroundStyle(Color.brand.gradient)
+                        .cornerRadius(AppRadius.micro)
+                    }
+                    if let selected = selectedVolumeDate, let bucket = closestWeekBucket(to: selected) {
+                        selectionRule(x: .value("Week", bucket.weekStart)) {
+                            tooltipContainer {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(bucket.weekStart, format: .dateTime.month(.abbreviated).day())
+                                        .font(.caption2).foregroundStyle(.secondary)
+                                    Text(String(format: "%.1f %@", distanceValue(bucket.meters), appSettings.unitPreference.distanceLabel))
+                                        .font(.caption).bold()
+                                }
                             }
                         }
                     }
                 }
-            }
-            .frame(height: 160)
-            .chartXAxis {
-                AxisMarks(values: .stride(by: .month)) {
-                    AxisValueLabel(format: .dateTime.month(.abbreviated))
+                .frame(height: 160)
+                .chartXAxis {
+                    AxisMarks(values: .stride(by: .month)) {
+                        AxisValueLabel(format: .dateTime.month(.abbreviated))
+                    }
                 }
+                .chartXSelection(value: $selectedVolumeDate)
+                .chartAccessibility("Weekly volume chart", weeklyVolumeSeries)
             }
-            .chartXSelection(value: $selectedVolumeDate)
-            .chartAccessibility("Weekly volume chart", weeklyVolumeSeries)
         }
     }
 
@@ -424,12 +430,19 @@ struct ProgressDashboardView: View {
                     }
                 }
                 .frame(height: 140)
+                // Pace never approaches zero, so the default zero-anchored domain pushed
+                // every point into the top quarter of the plot and flattened the trend
+                // the card exists to show. Bracket the data instead.
+                .chartYScale(domain: paceDomain(paceWorkouts))
                 .chartYAxis {
                     AxisMarks { value in
                         AxisValueLabel {
-                            if let secs = value.as(Double.self) {
-                                Text(secs.paceString(unit: appSettings.unitPreference)
-                                    .replacingOccurrences(of: " \(appSettings.unitPreference.paceLabel)", with: ""))
+                            // `paceValueString` is the bare "M:SS" form — the axis has no
+                            // room for a unit, and the card's own footnote carries it.
+                            // Guarded because a tick at or below zero formats as the
+                            // "--:--" placeholder, which rendered as a literal axis label.
+                            if let secs = value.as(Double.self), secs > 0 {
+                                Text(secs.paceValueString(unit: appSettings.unitPreference))
                             }
                         }
                     }
@@ -441,6 +454,20 @@ struct ProgressDashboardView: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    /// A y-domain that brackets the paces actually run, with a little air above and
+    /// below so the fastest and slowest points are not drawn on the frame.
+    ///
+    /// Padding is a share of the spread rather than a fixed number of seconds, so a
+    /// tight month and a varied year both fill the plot. A single run — or a set that
+    /// happens to share one pace — has no spread to scale, so it falls back to a
+    /// half-minute either side rather than collapsing to a zero-height domain.
+    private func paceDomain(_ workouts: [RunWorkout]) -> ClosedRange<Double> {
+        let paces = workouts.map(\.averagePaceSecondsPerKm)
+        guard let fastest = paces.min(), let slowest = paces.max() else { return 0...1 }
+        let padding = max((slowest - fastest) * 0.15, 30)
+        return max(0, fastest - padding)...(slowest + padding)
     }
 
     // MARK: - Heart rate trend chart
@@ -681,6 +708,10 @@ struct ProgressDashboardView: View {
                     }
                 }
                 .frame(height: 140)
+                // Same reason as the pace chart: VDOT sits in the 30s–50s for most
+                // runners, so a zero-anchored domain spends half the plot on numbers
+                // nobody will record and flattens the trend the card exists to show.
+                .chartYScale(domain: vo2Domain)
                 .chartXAxis {
                     AxisMarks(values: .stride(by: .month)) {
                         AxisValueLabel(format: .dateTime.month(.abbreviated))
@@ -693,6 +724,15 @@ struct ProgressDashboardView: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    /// Brackets the recorded VDOT values, padded like ``paceDomain(_:)`` and clamped so
+    /// the axis never runs below zero on a very low estimate.
+    private var vo2Domain: ClosedRange<Double> {
+        let values = vo2Points.map(\.vdot)
+        guard let lowest = values.min(), let highest = values.max() else { return 0...1 }
+        let padding = max((highest - lowest) * 0.15, 2)
+        return max(0, lowest - padding)...(highest + padding)
     }
 
     // MARK: - Period summary card

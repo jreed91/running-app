@@ -504,14 +504,19 @@ struct DashboardView: View {
                 )
             }
 
-            let dist = recentWorkouts
-                .filter { cal.isDate($0.date, inSameDayAs: day) }
-                .reduce(0.0) { $0 + $1.distanceMeters }
+            let runsOnDay = recentWorkouts.filter { cal.isDate($0.date, inSameDayAs: day) }
+            let dist = runsOnDay.reduce(0.0) { $0 + $1.distanceMeters }
 
-            // Color by dominant workout type that day
-            let workout = workoutOnDay(day)
+            // Colour by the type of the run that was actually *run*, falling back to what
+            // was scheduled only on a day with no run yet. The bar's height already comes
+            // from `recentWorkouts`; reading its colour from `workoutOnDay` alone meant
+            // the two disagreed — a completed tempo run on a day the plan does not cover
+            // fell through to `.zoneEasy` and drew blue.
+            let dominantType = runsOnDay
+                .max { $0.distanceMeters < $1.distanceMeters }?
+                .workoutType ?? workoutOnDay(day)?.workoutType
             let color: Color
-            switch workout?.workoutType {
+            switch dominantType {
             case .tempo:                color = .zoneTempo
             case .interval, .race:      color = .zoneInterval
             default:                    color = .zoneEasy
@@ -667,12 +672,38 @@ struct DashboardView: View {
 
     /// Shown for a date the active plan doesn't cover — scrolling to next month is not
     /// the plan prescribing rest (N23).
+    ///
+    /// A date *before* the plan begins gets its own wording. Onboarding hands back a plan
+    /// that starts on the coming week boundary, so the runner's very first Home screen was
+    /// the grey "Outside your plan" card — the same dead end shown for scrolling into
+    /// December, on the one day they most need to be told things are working.
     private var outsidePlanCard: some View {
-        emptyDayCard(
+        let upcoming = activePlan.flatMap { plan -> TrainingPlan? in
+            Calendar.current.startOfDay(for: selectedDate)
+                < Calendar.current.startOfDay(for: plan.startDate) ? plan : nil
+        }
+
+        return emptyDayCard(
             icon: .calendar,
-            tint: .secondary,
-            title: "Outside your plan",
-            subtitle: activePlan.map { plan in
+            tint: upcoming == nil ? .secondary : .brand,
+            title: upcoming == nil ? "Outside your plan" : "Your plan starts soon",
+            subtitle: upcoming.map { plan in
+                let days = Calendar.current.dateComponents(
+                    [.day],
+                    from: Calendar.current.startOfDay(for: selectedDate),
+                    to: Calendar.current.startOfDay(for: plan.startDate)
+                ).day ?? 0
+                let when = days == 1
+                    ? String(localized: "tomorrow", comment: "When a training plan's first day falls")
+                    : String(
+                        localized: "in \(days) days",
+                        comment: "When a training plan's first day falls"
+                    )
+                return String(
+                    localized: "Week 1 begins \(when). Start a free run any time before then.",
+                    comment: "Subtitle for the day card shown before a plan's first day"
+                )
+            } ?? activePlan.map { plan in
                 "Your plan runs \(plan.startDate.formatted(.dateTime.month().day())) – "
                     + "\(plan.endDate.formatted(.dateTime.month().day()))."
             } ?? "This day isn't part of your training plan."

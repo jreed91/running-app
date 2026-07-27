@@ -37,6 +37,15 @@ final class AsyncGate: @unchecked Sendable {
 }
 
 final class MockHealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendable {
+    /// Explicit and `@MainActor` because the stored properties below are split across
+    /// two isolations: the run-fetch state is MainActor-confined and its defaults are
+    /// MainActor-isolated expressions, while `lock`/`_enableCalls` are nonisolated. The
+    /// *implicit* memberwise initializer would have to be both at once, which Swift 6.3
+    /// rejects outright ("cannot be both nonisolated and main actor-isolated"). Every
+    /// suite that builds this mock is already `@MainActor`, so isolating the init costs
+    /// nothing.
+    @MainActor init() {}
+
     let isAvailable = true
     let isAuthorized = true
 

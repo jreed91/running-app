@@ -18,7 +18,16 @@ struct StrideApp: App {
         // UI-test state from a later hook would be too late to matter.
         UITestingSupport.prepareIfNeeded()
 
-        _container = State(initialValue: AppContainer(inMemory: UITestingSupport.isEnabled))
+        // `isHostingUnitTests` as well as `isEnabled`: a unit-test run launches this app
+        // as its host, and the real on-disk/CloudKit store it used to open outlived every
+        // individual test in the same coordinator.
+        let appContainer = AppContainer(
+            inMemory: UITestingSupport.isEnabled || UITestingSupport.isHostingUnitTests
+        )
+        // Before the first view reads the store, so a seeded screen never renders its
+        // empty state first and animates the data in. No-op without --seed-demo-data.
+        DemoDataSeed.populateIfNeeded(appContainer.modelContainer)
+        _container = State(initialValue: appContainer)
         _appSettings = State(initialValue: AppSettings())
         _authService = State(initialValue: AuthService())
     }
@@ -32,7 +41,11 @@ struct StrideApp: App {
                 .modelContainer(container.modelContainer)
                 .task {
                     PulseIntegrationService.activateIfNeeded()
-                    guard !UITestingSupport.isEnabled else { return }
+                    // Also skipped when hosting unit tests: the HealthKit observer and
+                    // the startup sync were running underneath every unit-test run,
+                    // mutating the store the tests were asserting on.
+                    guard !UITestingSupport.isEnabled,
+                          !UITestingSupport.isHostingUnitTests else { return }
                     // An app killed mid-run leaves its Live Activity on the Lock Screen
                     // with nothing behind it to update or end (U5b). The run went with the
                     // process, so the card comes down here rather than going stale.
@@ -288,7 +301,9 @@ struct ContentView: View {
 
     @MainActor
     private func reconcileActivePlanIntegrations() async {
-        guard !UITestingSupport.isEnabled, let plan = activePlans.first else { return }
+        guard !UITestingSupport.isEnabled,
+              !UITestingSupport.isHostingUnitTests,
+              let plan = activePlans.first else { return }
 
         if appSettings.morningReminderEnabled {
             await container.notificationService.scheduleMorningReminders(for: plan)
