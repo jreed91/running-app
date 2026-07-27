@@ -37,6 +37,15 @@ final class AsyncGate: @unchecked Sendable {
 }
 
 final class MockHealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendable {
+    /// Explicit and `@MainActor` because the stored properties below are split across
+    /// two isolations: the run-fetch state is MainActor-confined and its defaults are
+    /// MainActor-isolated expressions, while `lock`/`_enableCalls` are nonisolated. The
+    /// *implicit* memberwise initializer would have to be both at once, which Swift 6.3
+    /// rejects outright ("cannot be both nonisolated and main actor-isolated"). Every
+    /// suite that builds this mock is already `@MainActor`, so isolating the init costs
+    /// nothing.
+    @MainActor init() {}
+
     let isAvailable = true
     let isAuthorized = true
 
@@ -56,13 +65,6 @@ final class MockHealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sen
     private let lock = NSLock()
     private var _enableCalls = 0
     var enableCalls: Int { lock.withLock { _enableCalls } }
-
-    /// Declared explicitly, and on the main actor, because the implicit one cannot exist:
-    /// the `@MainActor` stored properties above have to have their defaults evaluated on the
-    /// main actor, while the `nonisolated` ones do not, so Swift 6.2 rejects the synthesized
-    /// initializer as "both nonisolated and main actor-isolated". Every construction site is
-    /// inside the `@MainActor` suite below, so this costs the tests nothing.
-    @MainActor init() {}
 
     func requestAuthorization() async throws {}
 

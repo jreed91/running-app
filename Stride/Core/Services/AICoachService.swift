@@ -713,6 +713,16 @@ struct AICoachService: Sendable {
             summaryBits.append(zoneSentence)
         }
 
+        // Cadence: captured on every run but discarded at finish until A5, so no coaching
+        // read — local or model — could ever say anything about form.
+        let cadence = workout.averageCadenceStepsPerMinute
+        if let cadenceSentence = CoachRunBreakdown.cadenceSentence(cadence) {
+            summaryBits.append(cadenceSentence)
+        }
+        if let cadenceFocus = CoachRunBreakdown.cadenceFocus(cadence, workoutType: workout.workoutType) {
+            focus.append(cadenceFocus)
+        }
+
         // An easy or long run that spent a big share of its time at threshold or above is
         // the one zone read that changes the next session's advice.
         if let hardShare = CoachRunBreakdown.hardEffortShare(heartRateZones),
@@ -960,6 +970,10 @@ struct AICoachService: Sendable {
         let avgHR = workout.averageHeartRate.map { "\(Int($0)) bpm" } ?? "n/a"
         let maxHR = workout.maxHeartRate.map { "\(Int($0)) bpm" } ?? "n/a"
         let elevation = workout.elevationGainMeters.map { $0.elevationString(unit: unitPreference) } ?? "n/a"
+        // The one form signal the app records. Given raw rather than judged — the model has
+        // the run's pace and type beside it, which is what makes a number interpretable (A5).
+        let cadence = workout.averageCadenceStepsPerMinute
+            .map { "\(Int($0.rounded())) spm" } ?? "n/a"
         let weather = workout.weather.map {
             "\($0.conditionDescription), \($0.temperatureString(unit: unitPreference)), humidity \(Int($0.humidityPercent))%"
         } ?? "n/a"
@@ -998,6 +1012,7 @@ struct AICoachService: Sendable {
         Avg pace: \(avgPace)
         Avg HR: \(avgHR)
         Max HR: \(maxHR)
+        Avg cadence: \(cadence)
         Elevation gain: \(elevation)
         Weather: \(weather)
         \(profileContext)

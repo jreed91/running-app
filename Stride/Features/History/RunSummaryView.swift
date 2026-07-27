@@ -67,6 +67,11 @@ struct RunSummaryView: View {
     /// `ImageRenderer` pass is far too expensive to run on every run-detail open.
     @State private var shareCard: ShareCardImage?
     @State private var isRenderingShareCard = false
+    /// The run's route written out as GPX (B6), non-nil only while its share sheet is up.
+    @State private var gpxFile: ExportedFile?
+    /// Shown when the export could not be written — a full disk or a sandbox refusal is
+    /// rare, but silently doing nothing when the runner taps Export is worse.
+    @State private var exportErrorMessage: String?
 
     /// Runs the coach's per-run insight summarises.
     static let insightHistoryRunCount = 8
@@ -227,6 +232,26 @@ struct RunSummaryView: View {
         shareCard = ShareCardImage(image: uiImage)
     }
 
+    /// Writes this run's route out as GPX and presents the share sheet (B6).
+    ///
+    /// The file goes to the temporary directory because it exists only to be handed to
+    /// whatever the runner picks in the share sheet — the system clears it, and keeping a
+    /// second copy of every exported route inside the app's container would be a slowly
+    /// growing pile of duplicated GPS traces for no benefit. Overwriting a same-named
+    /// leftover from an earlier export of the same run is deliberate.
+    private func exportGPX() {
+        guard let document = GPXExport.document(for: workout) else { return }
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(GPXExport.fileName(for: workout))
+        do {
+            try document.write(to: url, atomically: true, encoding: .utf8)
+            gpxFile = ExportedFile(url: url)
+        } catch {
+            AppLogger.log("GPX export failed: \(error.localizedDescription)", label: "Share", level: .error)
+            exportErrorMessage = error.localizedDescription
+        }
+    }
+
     var recentHistory: [RunWorkout] {
         recentRuns.filter { $0.id != workout.id }
     }
@@ -287,6 +312,11 @@ struct RunSummaryView: View {
                 plannedWorkoutSection
                 // Splits and heart-rate zones come before the coaching read: they are the
                 // evidence the insight is written from, and the insight now cites them.
+                // Laps lead that block when there are any — they are the boundaries the
+                // runner chose, and the per-unit splits below are the automatic reading (A2).
+                if !workout.laps.isEmpty {
+                    lapsSection
+                }
                 if !workout.splits.isEmpty {
                     splitsSection
                     splitsTable
@@ -321,9 +351,24 @@ struct RunSummaryView: View {
             }
             ToolbarItem(placement: .primaryAction) {
                 // Always present, rather than popping into the toolbar seconds after the
-                // screen appears once a pre-render finished (N21).
-                Button {
-                    Task { await renderShareCard() }
+                // screen appears once a pre-render finished (N21). A menu rather than a
+                // button since B6 gave the run a second thing to send: the picture of it
+                // and the data behind it are different asks, and neither is the default.
+                Menu {
+                    Button {
+                        Task { await renderShareCard() }
+                    } label: {
+                        Label("Share run card", systemImage: "photo")
+                    }
+                    // Only for runs that have a route — an indoor run has nothing to put in
+                    // a GPX, so the option is absent rather than disabled and unexplained.
+                    if !workout.routeCoordinates.isEmpty {
+                        Button {
+                            exportGPX()
+                        } label: {
+                            Label("Export route as GPX", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
+                        }
+                    }
                 } label: {
                     if isRenderingShareCard {
                         ProgressView()
@@ -348,6 +393,17 @@ struct RunSummaryView: View {
         }
         .sheet(item: $shareCard) { card in
             ShareSheet(image: card.image)
+        }
+        .sheet(item: $gpxFile) { file in
+            ShareSheet(items: [file.url])
+        }
+        .alert("Couldn't export this route", isPresented: Binding(
+            get: { exportErrorMessage != nil },
+            set: { if !$0 { exportErrorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(exportErrorMessage ?? "")
         }
         .sheet(item: $coachChatRequest) { request in
             AICoachChatView(workout: workout, initialPrompt: request.prompt)

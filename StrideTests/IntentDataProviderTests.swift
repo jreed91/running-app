@@ -15,7 +15,16 @@ struct IntentDataProviderTests {
     @Test("Weekly summary sums only the current Monday-based week")
     func weeklySummaryUsesMondayWeek() async throws {
         let schema = StrideSchema.make()
-        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        // File-backed, not in-memory. `IntentModelActor` is a `@ModelActor`, so it reads
+        // through its own `ModelContext` on its own executor while this test writes
+        // through `mainContext`. An in-memory store does not survive that second
+        // connection here — it throws "No eligible connection available", which is an
+        // ObjC exception and so aborts the whole test host rather than failing a test.
+        // A temporary file store is also the truer fixture: `IntentDataProvider`
+        // opens the app's on-disk store in production, never an in-memory one.
+        let storeURL = Self.makeTemporaryStoreURL()
+        defer { Self.removeStoreArtifacts(at: storeURL) }
+        let config = ModelConfiguration(schema: schema, url: storeURL)
         let container = try ModelContainer(for: schema, configurations: [config])
         let context = container.mainContext
 
@@ -43,7 +52,16 @@ struct IntentDataProviderTests {
     @Test("Today's Run ignores a retired plan's day and reads the active plan's")
     func todaysRunUsesTheActivePlan() async throws {
         let schema = StrideSchema.make()
-        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        // File-backed, not in-memory. `IntentModelActor` is a `@ModelActor`, so it reads
+        // through its own `ModelContext` on its own executor while this test writes
+        // through `mainContext`. An in-memory store does not survive that second
+        // connection here — it throws "No eligible connection available", which is an
+        // ObjC exception and so aborts the whole test host rather than failing a test.
+        // A temporary file store is also the truer fixture: `IntentDataProvider`
+        // opens the app's on-disk store in production, never an in-memory one.
+        let storeURL = Self.makeTemporaryStoreURL()
+        defer { Self.removeStoreArtifacts(at: storeURL) }
+        let config = ModelConfiguration(schema: schema, url: storeURL)
         let container = try ModelContainer(for: schema, configurations: [config])
         let context = container.mainContext
 
@@ -101,5 +119,19 @@ struct IntentDataProviderTests {
         #expect(!text(.crossTraining).contains("run"))
         #expect(text(.rest) == "Today is a rest day.")
         #expect(TodaysRunIntent.dialogText(for: nil) == "No run scheduled for today.")
+    }
+
+    // MARK: - Fixtures
+
+    private static func makeTemporaryStoreURL() -> URL {
+        URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("store")
+    }
+
+    private static func removeStoreArtifacts(at url: URL) {
+        for suffix in ["", "-shm", "-wal"] {
+            try? FileManager.default.removeItem(at: URL(fileURLWithPath: url.path + suffix))
+        }
     }
 }

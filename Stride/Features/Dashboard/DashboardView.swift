@@ -526,14 +526,19 @@ struct DashboardView: View {
                 )
             }
 
-            let dist = recentWorkouts
-                .filter { cal.isDate($0.date, inSameDayAs: day) }
-                .reduce(0.0) { $0 + $1.distanceMeters }
+            let runsOnDay = recentWorkouts.filter { cal.isDate($0.date, inSameDayAs: day) }
+            let dist = runsOnDay.reduce(0.0) { $0 + $1.distanceMeters }
 
-            // Color by dominant workout type that day
-            let workout = workoutOnDay(day)
+            // Colour by the type of the run that was actually *run*, falling back to what
+            // was scheduled only on a day with no run yet. The bar's height already comes
+            // from `recentWorkouts`; reading its colour from `workoutOnDay` alone meant
+            // the two disagreed — a completed tempo run on a day the plan does not cover
+            // fell through to `.zoneEasy` and drew blue.
+            let dominantType = runsOnDay
+                .max { $0.distanceMeters < $1.distanceMeters }?
+                .workoutType ?? workoutOnDay(day)?.workoutType
             let color: Color
-            switch workout?.workoutType {
+            switch dominantType {
             case .tempo:                color = .zoneTempo
             case .interval, .race:      color = .zoneInterval
             default:                    color = .zoneEasy
@@ -706,23 +711,42 @@ struct DashboardView: View {
     /// date attached, so this one is branded, counts down, and names what to do meanwhile —
     /// the free-run button is directly beneath it (S4).
     private func planStartsSoonCard(daysUntilStart: Int) -> some View {
-        emptyDayCard(
+        let when: String = {
+            switch daysUntilStart {
+            case 0:
+                return String(localized: "today", comment: "When a training plan's first day falls")
+            case 1:
+                return String(localized: "tomorrow", comment: "When a training plan's first day falls")
+            default:
+                return String(
+                    localized: "in \(daysUntilStart) days",
+                    comment: "When a training plan's first day falls"
+                )
+            }
+        }()
+
+        return emptyDayCard(
             icon: .calendar,
             tint: .brand,
-            title: daysUntilStart == 0
-                ? "Your plan starts today"
-                : daysUntilStart == 1
-                    ? "Your plan starts tomorrow"
-                    : "Your plan starts in \(daysUntilStart) days",
-            subtitle: activePlan.map { plan in
-                "Week 1 begins \(plan.startDate.formatted(.dateTime.weekday(.wide).month().day()))."
-                    + " Free runs before then still count."
-            } ?? "Free runs before then still count."
+            title: String(
+                localized: "Your plan starts soon",
+                comment: "Title for the day card shown before a plan's first day"
+            ),
+            subtitle: String(
+                localized: "Week 1 begins \(when). Start a free run any time before then.",
+                comment: "Subtitle for the day card shown before a plan's first day"
+            )
         )
     }
 
     /// Shown for a date past the end of the active plan — scrolling to next month is not
     /// the plan prescribing rest (N23).
+    ///
+    /// Dates *before* the plan begins never reach here: `ScheduledDayResolver` classifies
+    /// those as `.beforePlanStart`, which `planStartsSoonCard` answers. That split matters
+    /// because onboarding hands back a plan starting on the coming week boundary, so the
+    /// runner's very first Home screen used to be this grey card — the same dead end shown
+    /// for scrolling into December, on the one day they most need to be told things work.
     private var outsidePlanCard: some View {
         emptyDayCard(
             icon: .calendar,

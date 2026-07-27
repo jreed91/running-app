@@ -4,6 +4,14 @@ final class StrideUITests: XCTestCase {
 
     private var app: XCUIApplication!
 
+    /// Matched by *type*, not by identifier. `MainTabView` sets
+    /// `.accessibilityIdentifier("main.tabs")` on the `TabView`, and as of iOS 27 that
+    /// lands on the container rather than on the tab bar element the system builds from
+    /// it — `app.tabBars["main.tabs"]` matches nothing, while the bar itself is present
+    /// with an empty identifier. There is only ever one tab bar on screen, so the type
+    /// alone is unambiguous.
+    private var tabBar: XCUIElement { app.tabBars.firstMatch }
+
     override func setUpWithError() throws {
         continueAfterFailure = false
         app = XCUIApplication()
@@ -18,12 +26,12 @@ final class StrideUITests: XCTestCase {
     func testE2EOnboardingCreatesTrainingPlanAndDashboard() throws {
         completeOnboarding()
 
-        XCTAssertTrue(app.tabBars["main.tabs"].waitForExistence(timeout: 8))
+        XCTAssertTrue(tabBar.waitForExistence(timeout: 8))
         XCTAssertTrue(app.navigationBars["Today"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["This Week"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["dashboard.startFreeRun"].waitForExistence(timeout: 5))
 
-        app.tabBars["main.tabs"].buttons["Plan"].tap()
+        tabBar.buttons["Plan"].tap()
         XCTAssertTrue(app.navigationBars["My Plan"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["PACE INSIGHTS"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["TRAINING WEEKS"].waitForExistence(timeout: 5))
@@ -32,7 +40,6 @@ final class StrideUITests: XCTestCase {
     func testE2ETabNavigationShowsPrimaryScreens() throws {
         completeOnboarding()
 
-        let tabBar = app.tabBars["main.tabs"]
         XCTAssertTrue(tabBar.waitForExistence(timeout: 8))
 
         assertTab("Home", showsNavigationTitle: "Today")
@@ -45,7 +52,6 @@ final class StrideUITests: XCTestCase {
     func testE2EFreeRunHUDOpensFromDashboard() throws {
         completeOnboarding()
 
-        let tabBar = app.tabBars["main.tabs"]
         XCTAssertTrue(tabBar.waitForExistence(timeout: 8))
         tabBar.buttons["Home"].tap()
 
@@ -69,7 +75,6 @@ final class StrideUITests: XCTestCase {
     func testRunHUDClosesBeforeTheRunStarts() throws {
         completeOnboarding()
 
-        let tabBar = app.tabBars["main.tabs"]
         XCTAssertTrue(tabBar.waitForExistence(timeout: 8))
         tabBar.buttons["Home"].tap()
 
@@ -86,7 +91,7 @@ final class StrideUITests: XCTestCase {
     }
 
     private func completeOnboarding() {
-        if app.tabBars["main.tabs"].waitForExistence(timeout: 1) {
+        if tabBar.waitForExistence(timeout: 1) {
             return
         }
 
@@ -112,7 +117,7 @@ final class StrideUITests: XCTestCase {
         XCTAssertTrue(startTraining.waitForExistence(timeout: 5))
         startTraining.tap()
 
-        XCTAssertTrue(app.tabBars["main.tabs"].waitForExistence(timeout: 10))
+        XCTAssertTrue(tabBar.waitForExistence(timeout: 10))
     }
 
     private func tapPrimaryCTA(step: Int, expectedTitle: String) {
@@ -123,7 +128,6 @@ final class StrideUITests: XCTestCase {
     }
 
     private func assertTab(_ tabLabel: String, showsNavigationTitle title: String) {
-        let tabBar = app.tabBars["main.tabs"]
         XCTAssertTrue(tabBar.buttons[tabLabel].waitForExistence(timeout: 5))
         tabBar.buttons[tabLabel].tap()
         XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 5), "\(tabLabel) did not show \(title)")

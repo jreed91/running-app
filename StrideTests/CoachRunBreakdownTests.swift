@@ -233,4 +233,43 @@ struct CoachRunBreakdownTests {
         #expect(abs(share - 200.0 / 2_000.0) < 0.0001)
         #expect(CoachRunBreakdown.hardEffortShare([]) == nil)
     }
+
+    // MARK: Cadence (A5)
+
+    @Test("Cadence sentence reports the number, and flags only a low one")
+    func cadenceSentence() throws {
+        let healthy = try #require(CoachRunBreakdown.cadenceSentence(176.4))
+        #expect(healthy == "Average cadence was 176 steps per minute.")
+        #expect(healthy.contains("low") == false)
+
+        let low = try #require(CoachRunBreakdown.cadenceSentence(151.6))
+        #expect(low.contains("152 steps per minute"))
+        #expect(low.contains("low side"))
+        #expect(low.contains("overstriding"))
+    }
+
+    @Test("Cadence sentence is absent when the run recorded none")
+    func cadenceSentenceWithoutData() {
+        #expect(CoachRunBreakdown.cadenceSentence(nil) == nil)
+        #expect(CoachRunBreakdown.cadenceSentence(0) == nil)
+        #expect(CoachRunBreakdown.cadenceSentence(.infinity) == nil)
+    }
+
+    @Test("Cadence focus is given only for a low cadence on an aerobic run")
+    func cadenceFocusIsScoped() throws {
+        // Low, on the two session types where changing something about form is free.
+        #expect(CoachRunBreakdown.cadenceFocus(150, workoutType: .easy) != nil)
+        #expect(CoachRunBreakdown.cadenceFocus(150, workoutType: .longRun) != nil)
+
+        // Low, but on a session with a target of its own — not the day to fiddle with form.
+        #expect(CoachRunBreakdown.cadenceFocus(150, workoutType: .interval) == nil)
+        #expect(CoachRunBreakdown.cadenceFocus(150, workoutType: .race) == nil)
+
+        // Fine, or missing — nothing to say either way.
+        #expect(CoachRunBreakdown.cadenceFocus(178, workoutType: .easy) == nil)
+        #expect(CoachRunBreakdown.cadenceFocus(nil, workoutType: .easy) == nil)
+
+        let focus = try #require(CoachRunBreakdown.cadenceFocus(150, workoutType: .easy))
+        #expect(focus.contains("150 spm"))
+    }
 }
