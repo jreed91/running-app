@@ -8,7 +8,7 @@ import Testing
 @MainActor
 struct WorkoutDeletionTests {
 
-    private func makeContainer() -> AppContainer { AppContainer.preview() }
+    private func makeContainer() -> AppContainer { TestStore.makeContainer() }
 
     @Test("Deleting a linked run resets the scheduled day and writes a tombstone")
     func deletingRunResetsScheduledAndTombstones() throws {

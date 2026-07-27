@@ -58,7 +58,7 @@ struct AdaptableWorkoutSelectorTests {
 
     @Test("Only run sessions are adaptable — never strength, cross-training, or rest")
     func nonRunSessionsAreExcluded() throws {
-        let context = AppContainer.preview().modelContainer.mainContext
+        let context = TestStore.makeContext()
         let plan = try makePlan(in: context, sessions: [
             (1, .easy, false),
             (1, .strength, false),
@@ -74,7 +74,7 @@ struct AdaptableWorkoutSelectorTests {
 
     @Test("The race is never adaptable, even though it is a run")
     func raceIsExcluded() throws {
-        let context = AppContainer.preview().modelContainer.mainContext
+        let context = TestStore.makeContext()
         let plan = try makePlan(in: context, sessions: [
             (5, .race, false),
             (2, .longRun, false),
@@ -98,7 +98,7 @@ struct AdaptableWorkoutSelectorTests {
 
     @Test("Completed sessions are left alone so the record of what was run is not rewritten")
     func completedSessionsAreExcluded() throws {
-        let context = AppContainer.preview().modelContainer.mainContext
+        let context = TestStore.makeContext()
         let plan = try makePlan(in: context, sessions: [
             (1, .tempo, true),
             (2, .easy, false),
@@ -112,7 +112,7 @@ struct AdaptableWorkoutSelectorTests {
 
     @Test("Past sessions are excluded, and today's is kept")
     func pastSessionsAreExcluded() throws {
-        let context = AppContainer.preview().modelContainer.mainContext
+        let context = TestStore.makeContext()
         let plan = try makePlan(in: context, sessions: [
             (-2, .easy, false),
             (0, .tempo, false),
@@ -127,7 +127,7 @@ struct AdaptableWorkoutSelectorTests {
 
     @Test("A session earlier today is still adaptable — the day is the boundary, not the hour")
     func earlierTodayIsStillAdaptable() throws {
-        let context = AppContainer.preview().modelContainer.mainContext
+        let context = TestStore.makeContext()
         let plan = try makePlan(in: context, sessions: [(0, .tempo, false)])
 
         // The session is scheduled at the anchor instant; "now" is twelve hours later.
@@ -141,7 +141,7 @@ struct AdaptableWorkoutSelectorTests {
 
     @Test("Results are ordered earliest first regardless of relationship order")
     func resultsAreSortedByDate() throws {
-        let context = AppContainer.preview().modelContainer.mainContext
+        let context = TestStore.makeContext()
         let plan = try makePlan(in: context, sessions: [
             (6, .longRun, false),
             (1, .easy, false),
@@ -157,7 +157,7 @@ struct AdaptableWorkoutSelectorTests {
 
     @Test("Feedback on a run never rewrites the session that run fulfilled")
     func afterBoundExcludesTheCompletedSession() throws {
-        let context = AppContainer.preview().modelContainer.mainContext
+        let context = TestStore.makeContext()
         let plan = try makePlan(in: context, sessions: [
             (1, .tempo, false),
             (4, .easy, false),
@@ -172,7 +172,7 @@ struct AdaptableWorkoutSelectorTests {
 
     @Test("Without an `after` bound the next adaptable session is simply the soonest")
     func nextIsTheSoonest() throws {
-        let context = AppContainer.preview().modelContainer.mainContext
+        let context = TestStore.makeContext()
         let plan = try makePlan(in: context, sessions: [
             (4, .easy, false),
             (1, .tempo, false),
@@ -191,7 +191,7 @@ struct AdaptableWorkoutSelectorTests {
 
     @Test("A plan whose remaining sessions are all non-run yields no candidates")
     func exhaustedPlanYieldsNothing() throws {
-        let context = AppContainer.preview().modelContainer.mainContext
+        let context = TestStore.makeContext()
         let plan = try makePlan(in: context, sessions: [
             (1, .strength, false),
             (2, .rest, false),

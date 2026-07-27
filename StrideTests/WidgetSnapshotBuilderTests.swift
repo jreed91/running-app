@@ -45,12 +45,14 @@ struct WidgetSnapshotBuilderTests {
 
     // MARK: Fixtures
 
-    /// Model graphs are built inside a real (in-memory) context, the way
-    /// `ScheduledDayResolverTests` does it: the builder walks `plan.weeks` and
-    /// `week.workouts`, and those inverse relationships are only maintained for inserted
-    /// objects.
+    /// Model graphs are built inside a real context, the way `ScheduledDayResolverTests`
+    /// does it: the builder walks `plan.weeks` and `week.workouts`, and those inverse
+    /// relationships are only maintained for inserted objects.
+    ///
+    /// Every call site here is `makePlan(in: makeContext(), …)`, which is exactly the shape
+    /// `TestStore` exists to make safe — see its documentation.
     private func makeContext() -> ModelContext {
-        AppContainer.preview().modelContainer.mainContext
+        TestStore.makeContext()
     }
 
     private func run(on date: Date, meters: Double = 5_000) -> RunWorkout {
