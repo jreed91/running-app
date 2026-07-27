@@ -173,6 +173,42 @@ enum CoachRunBreakdown {
         return hard / total
     }
 
+    // MARK: - Cadence (A5)
+
+    /// Below this, adding steps is the standard first thing to try — it shortens the
+    /// stride and moves the footstrike back under the hips. Well under the ~180 spm
+    /// figure that gets quoted, because that number is an elite average and a recreational
+    /// runner at 168 has nothing to fix.
+    static let lowCadenceStepsPerMinute: Double = 160
+
+    /// The run's cadence as one sentence, or `nil` when the run carries none.
+    ///
+    /// Reported as an observation, not a diagnosis: cadence varies with pace, terrain and
+    /// height, so the sentence says what it was and — only when it is low — what that
+    /// usually means.
+    static func cadenceSentence(_ stepsPerMinute: Double?) -> String? {
+        guard let cadence = stepsPerMinute, cadence > 0, cadence.isFinite else { return nil }
+        let rounded = Int(cadence.rounded())
+        guard cadence < lowCadenceStepsPerMinute else {
+            return "Average cadence was \(rounded) steps per minute."
+        }
+        return "Average cadence was \(rounded) steps per minute, on the low side — "
+            + "usually a sign of overstriding."
+    }
+
+    /// A cadence focus item for the coach, when there is one worth giving.
+    ///
+    /// Only for low cadence on an easy or long run: those are the sessions where a runner
+    /// has the attention to change something about their form, and where doing so does not
+    /// cost them the workout's own target.
+    static func cadenceFocus(_ stepsPerMinute: Double?, workoutType: WorkoutType) -> String? {
+        guard let cadence = stepsPerMinute, cadence > 0, cadence.isFinite,
+              cadence < lowCadenceStepsPerMinute,
+              workoutType == .easy || workoutType == .longRun else { return nil }
+        return "Try lifting cadence a few steps per minute on easy runs — "
+            + "shorter, quicker strides at the same pace, from \(Int(cadence.rounded())) spm."
+    }
+
     // MARK: - Helpers
 
     private static func secondsString(_ value: Double) -> String {

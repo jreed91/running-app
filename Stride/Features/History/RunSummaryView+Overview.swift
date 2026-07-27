@@ -146,6 +146,11 @@ extension RunSummaryView {
             if let maxHR = workout.maxHeartRate {
                 statCell(value: "\(Int(maxHR))", unit: "bpm", label: "Max HR", tone: hrTone(maxHR))
             }
+            // Cadence was live-only until A5 — the HUD showed it mid-run and nothing kept
+            // it, so the run you had just finished could not tell you what it was.
+            if let cadence = workout.averageCadenceStepsPerMinute, cadence > 0 {
+                statCell(value: "\(Int(cadence.rounded()))", unit: "spm", label: "Avg Cadence")
+            }
             if let gain = workout.elevationGainMeters {
                 statCell(
                     value: "\(Int(gain.elevationValue(unit: appSettings.unitPreference)))",

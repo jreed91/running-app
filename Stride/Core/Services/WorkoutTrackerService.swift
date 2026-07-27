@@ -69,6 +69,13 @@ final class WorkoutTrackerService {
     /// second hardcoded `--` can show a real number on outdoor runs too (N20).
     private(set) var currentCadenceStepsPerMinute: Double?
 
+    /// Boundaries of the laps the runner has marked by hand, oldest first (A2).
+    ///
+    /// Published rather than private because the HUD counts them: the runner is on lap
+    /// `lapMarks.count + 1`. `LapRecorder` turns them into ``Lap`` values here and on the
+    /// run summary, so both read the boundaries the same way.
+    private(set) var lapMarks: [LapRecorder.Mark] = []
+
     // MARK: Private
 
     private var workoutType: WorkoutType = .easy
@@ -144,6 +151,11 @@ final class WorkoutTrackerService {
     private let pedometer = CMPedometer()
     private var pedometerActive = false
 
+    /// Every cadence reading the pedometer delivered during the run, averaged onto the
+    /// finished `RunWorkout` (A5). The live HUD only ever needed the newest one, so this
+    /// number used to end with the run.
+    private var cadenceSamples: [Double] = []
+
     /// The run's Live Activity (U5b), if one is wired up.
     ///
     /// Held weakly because `AppContainer` owns it, and driven from here rather than from a
@@ -176,6 +188,43 @@ final class WorkoutTrackerService {
     /// than each caller spelling out the same two-case comparison.
     var isRecording: Bool {
         trackingState == .active || trackingState == .paused
+    }
+
+    // MARK: Laps (A2)
+
+    /// The lap the runner is currently in, 1-based. A run that has never been lapped is on
+    /// lap 1, which is why the HUD only shows this once a lap has actually been marked.
+    var currentLapNumber: Int { lapMarks.count + 1 }
+
+    /// Distance covered since the current lap opened, in metres.
+    var currentLapDistanceMeters: Double {
+        max(0, distanceMeters - (lapMarks.last?.distanceMeters ?? 0))
+    }
+
+    /// Elapsed time in the current lap, in seconds.
+    var currentLapElapsedSeconds: Double {
+        max(0, elapsedSeconds - (lapMarks.last?.elapsedSeconds ?? 0))
+    }
+
+    /// Average pace across the current lap so far, in seconds per kilometre, or `nil`
+    /// before the lap has covered measurable ground.
+    var currentLapPaceSecondsPerKm: Double? {
+        SplitBucketing.splitPaceSecondsPerKm(
+            deltaSeconds: currentLapElapsedSeconds,
+            deltaMeters: currentLapDistanceMeters
+        )
+    }
+
+    /// Closes the current lap and opens the next one.
+    ///
+    /// Only while recording: a lap marked before the start or after the finish has no run
+    /// to belong to. Paused counts as recording — a runner who stops at the top of a climb
+    /// and then marks it means the boundary, not the hold.
+    func markLap() {
+        guard isRecording else { return }
+        lapMarks.append(
+            LapRecorder.Mark(elapsedSeconds: elapsedSeconds, distanceMeters: distanceMeters)
+        )
     }
 
     /// Set the workout location before calling `startWorkout`. No-op once a workout is active.
@@ -279,8 +328,18 @@ final class WorkoutTrackerService {
         workout.routeCoordinates = coordinates
         workout.splits = splits
         workout.splitUnit = splitUnit
+        // The final lap is closed by the finish itself, so the run keeps every boundary the
+        // runner marked rather than losing the one they were in when they stopped (A2).
+        workout.laps = LapRecorder.laps(
+            marks: lapMarks,
+            finish: LapRecorder.Mark(elapsedSeconds: elapsedSeconds, distanceMeters: distanceMeters)
+        )
         if elevationGainMeters > 0 {
             workout.elevationGainMeters = elevationGainMeters
+        }
+        if !cadenceSamples.isEmpty {
+            workout.averageCadenceStepsPerMinute =
+                cadenceSamples.reduce(0, +) / Double(cadenceSamples.count)
         }
         if !hrSamples.isEmpty {
             workout.averageHeartRate = hrSamples.reduce(0, +) / Double(hrSamples.count)
@@ -310,6 +369,8 @@ final class WorkoutTrackerService {
         elevationGainMeters = 0
         currentSplitElevationGainMeters = 0
         currentCadenceStepsPerMinute = nil
+        cadenceSamples = []
+        lapMarks = []
         indoorDistanceBaselineMeters = 0
         pedometerActive = false
         rejectedFixCounts = [:]
@@ -371,6 +432,9 @@ final class WorkoutTrackerService {
                 guard let self, self.trackingState == .active else { return }
                 if let stepsPerMinute, stepsPerMinute > 0 {
                     self.currentCadenceStepsPerMinute = stepsPerMinute
+                    // Kept, not just displayed: the run's mean cadence is what the coach
+                    // reads for form, and it can only be built while the run happens (A5).
+                    self.cadenceSamples.append(stepsPerMinute)
                 }
                 guard providesDistance else { return }
                 self.distanceMeters = meters

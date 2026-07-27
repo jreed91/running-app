@@ -238,16 +238,34 @@ struct ShareCardImage: Identifiable {
     let image: UIImage
 }
 
-/// System share sheet for an already-rendered card.
+/// A file the app just wrote for the runner to send on — today the GPX export (B6).
+///
+/// Same shape and same reason as `ShareCardImage`: the file is produced by the tap, so
+/// having one *is* the signal to present the share sheet.
+struct ExportedFile: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+/// System share sheet for something the app has already produced — a rendered card, or a
+/// GPX file written to a temporary URL (B6).
 ///
 /// `ShareLink` needs its item up front, which is what forced the card to be rendered
 /// before anyone asked to share it. Presenting `UIActivityViewController` directly keeps
-/// the render on the tap that needs it while still being one tap for the user.
+/// the work on the tap that needs it while still being one tap for the user.
 struct ShareSheet: UIViewControllerRepresentable {
-    let image: UIImage
+    let items: [Any]
+
+    init(items: [Any]) {
+        self.items = items
+    }
+
+    init(image: UIImage) {
+        self.init(items: [image])
+    }
 
     func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: [image], applicationActivities: nil)
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
     }
 
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}

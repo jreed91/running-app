@@ -13,6 +13,14 @@ final class RunWorkout {
     var averageHeartRate: Double?
     var maxHeartRate: Double?
     var elevationGainMeters: Double?
+    /// Mean cadence over the run, in steps per minute.
+    ///
+    /// The pedometer has reported cadence on every run since N20, but only to the live
+    /// HUD — it was discarded at finish, so the coach could never say anything about form
+    /// and no screen could show it after the fact (A5). Optional so the CloudKit schema
+    /// stays additive and so a run recorded without a pedometer reading stays honestly
+    /// blank rather than claiming zero.
+    var averageCadenceStepsPerMinute: Double?
     /// Raw-backed storage for `workoutType` to keep CloudKit fields primitive.
     var workoutTypeRaw: String = WorkoutType.easy.rawValue
     /// Raw-backed storage for `workoutLocation` to keep CloudKit fields primitive.
@@ -34,6 +42,10 @@ final class RunWorkout {
 
     /// JSON-encoded `[Split]`.
     var splitsData: Data?
+
+    /// JSON-encoded `[Lap]` — the laps the runner marked by hand during the run (A2).
+    /// `nil` for the runs that were never lapped, which is most of them.
+    var lapsData: Data?
 
     /// JSON-encoded `[Double]` of raw heart-rate bpm samples captured during the run
     /// (app-recorded) or fetched from HealthKit. Backs the time-in-zone breakdown (A6).
@@ -67,6 +79,12 @@ final class RunWorkout {
     var splits: [Split] {
         get { splitsData?.decode([Split].self) ?? [] }
         set { splitsData = .encoded(newValue, keeping: splitsData) }
+    }
+
+    /// The laps the runner marked during this run, in order. Empty for an unlapped run.
+    var laps: [Lap] {
+        get { lapsData?.decode([Lap].self) ?? [] }
+        set { lapsData = newValue.isEmpty ? nil : .encoded(newValue, keeping: lapsData) }
     }
 
     var routeCoordinates: [Coordinate] {
