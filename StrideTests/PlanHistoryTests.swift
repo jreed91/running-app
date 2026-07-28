@@ -97,6 +97,98 @@ struct PlanHistoryTests {
         #expect(actives.first?.id == new.id)
     }
 
+    // MARK: - Creating a plan on top of an active one
+
+    /// The service under test with a mock scheduler, so the fire-and-forget task
+    /// `activateNewPlan` starts can never reach WorkoutKit from a unit-test host.
+    private func makeLifecycle(context: ModelContext) -> PlanLifecycleService {
+        PlanLifecycleService(
+            trainingPlanService: TrainingPlanService(),
+            planRepository: PlanRepository(context: context),
+            healthKitRepository: MockHealthKitRepository(),
+            notificationService: .shared
+        )
+    }
+
+    @Test("activateNewPlan retires the previous plan in the same save")
+    func activateNewPlanRetiresPreviousPlan() throws {
+        let context = TestStore.makeContext()
+        let lifecycle = makeLifecycle(context: context)
+
+        let old = try makePlan(in: context, completeFirstWorkout: true, isActive: true)
+        let new = TrainingPlan(
+            targetRace: .halfMarathon,
+            goalTimeSeconds: 5_400,
+            startDate: Date(),
+            endDate: Date().addingTimeInterval(6 * 86_400)
+        )
+
+        try lifecycle.activateNewPlan(new, context: context, morningRemindersEnabled: false)
+
+        // The store work is complete when the call returns: the sheet that called this can
+        // dismiss immediately, and the WorkoutKit pass it left running has nothing the user
+        // is waiting on. This is the assertion that would fail if the awaits came back.
+        #expect(context.hasChanges == false)
+
+        // The invariant holds at every point an observer could look — no window in which
+        // both plans read as active, which is what set `StrideApp`'s dedup-and-resync
+        // racing the creation screen.
+        let actives = try context.fetch(
+            FetchDescriptor<TrainingPlan>(predicate: #Predicate { $0.isActive })
+        )
+        #expect(actives.count == 1)
+        #expect(actives.first?.id == new.id)
+
+        // The retired plan is kept as history, with its completed work (H3/N1).
+        #expect(old.isActive == false)
+        #expect(old.hasLoggedProgress == true)
+        let allPlans = try context.fetch(FetchDescriptor<TrainingPlan>())
+        #expect(allPlans.count == 2)
+    }
+
+    @Test("activateNewPlan works with no plan in the store")
+    func activateNewPlanFromEmptyStore() throws {
+        let context = TestStore.makeContext()
+        let lifecycle = makeLifecycle(context: context)
+
+        let new = TrainingPlan(
+            targetRace: .fiveK,
+            goalTimeSeconds: 1_500,
+            startDate: Date(),
+            endDate: Date().addingTimeInterval(6 * 86_400)
+        )
+        try lifecycle.activateNewPlan(new, context: context, morningRemindersEnabled: false)
+
+        let actives = try context.fetch(
+            FetchDescriptor<TrainingPlan>(predicate: #Predicate { $0.isActive })
+        )
+        #expect(actives.count == 1)
+        #expect(actives.first?.id == new.id)
+    }
+
+    @Test("activateNewPlan leaves already-retired plans alone")
+    func activateNewPlanDoesNotDisturbHistory() throws {
+        let context = TestStore.makeContext()
+        let lifecycle = makeLifecycle(context: context)
+
+        let history = try makePlan(in: context, completeFirstWorkout: true, isActive: false)
+        let active = try makePlan(in: context, completeFirstWorkout: false, isActive: true)
+
+        let new = TrainingPlan(
+            targetRace: .marathon,
+            goalTimeSeconds: 14_400,
+            startDate: Date(),
+            endDate: Date().addingTimeInterval(6 * 86_400)
+        )
+        try lifecycle.activateNewPlan(new, context: context, morningRemindersEnabled: false)
+
+        #expect(history.isActive == false)
+        #expect(active.isActive == false)
+        #expect(new.isActive == true)
+        let allPlans = try context.fetch(FetchDescriptor<TrainingPlan>())
+        #expect(allPlans.count == 3)
+    }
+
     @Test("fetchActivePlan returns the most recently created active plan")
     func fetchActivePlanIsDeterministic() throws {
         let container = TestStore.makeContainer()

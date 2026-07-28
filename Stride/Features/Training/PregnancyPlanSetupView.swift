@@ -247,8 +247,6 @@ struct PregnancyPlanSetupView: View {
         profile.strengthFocus = strengthFocus
         profile.updatedAt = Date()
 
-        let existing = (try? context.fetch(FetchDescriptor<TrainingPlan>())) ?? []
-
         let plan: TrainingPlan
         do {
             plan = try container.pregnancyPlanService.generatePlan(
@@ -265,25 +263,30 @@ struct PregnancyPlanSetupView: View {
             return
         }
 
-        context.insert(plan)
-        context.saveOrLog("the pregnancy plan created in setup")
-
-        Task {
-            if appSettings.morningReminderEnabled {
-                await container.notificationService.scheduleMorningReminders(for: plan)
-            }
-            for previous in existing {
-                try? await container.healthKitRepository.removeWorkoutPlans(for: previous)
-                previous.isActive = false
-            }
-            try? await container.healthKitRepository.syncWorkoutPlans(
-                for: plan,
+        // Retires the previous plan, saves, and syncs the Watch and the reminders behind
+        // the dismissal. Nothing here waits on `WorkoutScheduler`: awaiting a removal pass
+        // for the existing plan and then a re-sync of a plan as long as a pregnancy — before
+        // clearing `isGenerating` — is what left this screen spinning.
+        do {
+            try container.planLifecycle.activateNewPlan(
+                plan,
+                context: context,
+                morningRemindersEnabled: appSettings.morningReminderEnabled,
                 unitPreference: appSettings.unitPreference
             )
-            context.saveOrLog("the new pregnancy plan's WorkoutKit ids")
+        } catch {
+            profile.pregnancyClearedAt = nil
+            errorMessage = String(
+                localized: "Your plan couldn't be saved. Please try again.",
+                comment: "Pregnancy plan save failure"
+            )
+            AppLogger.log("Failed to save the pregnancy plan: \(error)", label: "pregnancy", level: .error)
             isGenerating = false
-            dismiss()
+            return
         }
+
+        isGenerating = false
+        dismiss()
     }
 }
 

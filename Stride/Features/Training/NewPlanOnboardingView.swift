@@ -618,13 +618,6 @@ struct NewPlanOnboardingView: View {
         profile.strengthFocus = strengthFocus
         profile.updatedAt = Date()
 
-        // Retire existing plans so there is only ever one active plan per user. Every
-        // prior plan is preserved as history (deactivated) rather than deleted, so the
-        // Plan History screen keeps a record of it — including plans the user started
-        // but never logged a workout in. Deletion stays a deliberate, user-initiated
-        // action via swipe-to-delete in the Plan History list (H3).
-        let existing = (try? context.fetch(FetchDescriptor<TrainingPlan>())) ?? []
-
         let plan: TrainingPlan
         if goalRace.isGoalRace {
             plan = container.trainingPlanService.generateRacePlan(
@@ -644,29 +637,27 @@ struct NewPlanOnboardingView: View {
                 unitPreference: appSettings.unitPreference
             )
         }
-        context.insert(plan)
+        // Retires every existing plan so there is only ever one active plan per user, and
+        // keeps each of them as history (deactivated) rather than deleting it — the Plan
+        // History screen keeps a record even of plans the runner never logged a workout in.
+        // Deletion stays a deliberate, user-initiated swipe in that list (H3). The Watch
+        // entries and the reminders follow behind the dismissal so a slow scheduler cannot
+        // hold this screen on its spinner.
         do {
-            try context.save()
+            try container.planLifecycle.activateNewPlan(
+                plan,
+                context: context,
+                morningRemindersEnabled: appSettings.morningReminderEnabled,
+                unitPreference: appSettings.unitPreference
+            )
         } catch {
-            context.delete(plan)
             isCreatingPlan = false
             planErrorMessage = "Your plan couldn't be saved. Please try again.\n\n\(error.localizedDescription)"
             AppLogger.log("Failed to save generated plan: \(error)", label: "onboarding", level: .error)
             return
         }
 
-        Task {
-            if appSettings.morningReminderEnabled {
-                await container.notificationService.scheduleMorningReminders(for: plan)
-            }
-            for previous in existing {
-                try? await container.healthKitRepository.removeWorkoutPlans(for: previous)
-                previous.isActive = false
-            }
-            try? await container.healthKitRepository.syncWorkoutPlans(for: plan, unitPreference: appSettings.unitPreference)
-            context.saveOrLog("the new plan's WorkoutKit ids")
-            isCreatingPlan = false
-            dismiss()
-        }
+        isCreatingPlan = false
+        dismiss()
     }
 }

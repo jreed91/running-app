@@ -113,6 +113,79 @@ final class PlanLifecycleService {
         return outcome
     }
 
+    // MARK: - Activation
+
+    /// Commits a freshly generated plan as *the* active plan, and hands its off-store
+    /// integrations to a task that does not gate the caller.
+    ///
+    /// Every creation screen had its own copy of this, and every copy did the same two
+    /// things — which is what left the setup sheets spinning when a plan was already
+    /// active:
+    ///
+    /// 1. The new plan was inserted **and saved** while the previous one was still
+    ///    `isActive`, so the store briefly held two active plans. That is a state the app
+    ///    reacts to: `StrideApp`'s `.task(id: activePlans.first?.id)` deduplicates and then
+    ///    re-syncs the active plan to WorkoutKit, so a second full `WorkoutScheduler` pass
+    ///    started racing the one the sheet was already running — over the same workouts, on
+    ///    the same actor. Retiring before the save means no observer ever sees two.
+    /// 2. The sheet's spinner was cleared only *after* awaiting a WorkoutKit removal for
+    ///    every plan in the store and a full re-sync of the new one. On a plan the length of
+    ///    a pregnancy that is hundreds of serialized scheduler round trips, and anything
+    ///    that stalls in there has no way out: the sheet spins with the runner's plan
+    ///    already saved behind it.
+    ///
+    /// So the store work is synchronous and complete when this returns — the plan is
+    /// active, the previous ones are retired (deactivated, never deleted: H3/N1), and it
+    /// is all in one save — while the Watch entries and the morning reminders follow in a
+    /// detached task. That is the same fire-and-forget rule `rebuildPlan` already applies
+    /// for the same reason: a scheduler that is slow, unauthorized, or wedged must not be
+    /// able to fail — or hold up — the plan the runner asked for.
+    ///
+    /// - Throws: Whatever the save throws. The plan is *not* left inserted in that case,
+    ///   and any plan retired for it is put back, so a failed attempt changes nothing.
+    func activateNewPlan(
+        _ plan: TrainingPlan,
+        context: ModelContext,
+        morningRemindersEnabled: Bool,
+        unitPreference: UnitPreference = .metric
+    ) throws {
+        // Read before the insert, and `try` rather than `try?`: a fetch that failed
+        // silently would leave the previous plan active alongside the new one, which is
+        // exactly the state this method exists to never produce.
+        let previous = try context.fetch(FetchDescriptor<TrainingPlan>())
+            .filter { $0.id != plan.id }
+        let retired = previous.filter(\.isActive)
+
+        retired.forEach { $0.isActive = false }
+        plan.isActive = true
+        context.insert(plan)
+
+        do {
+            try context.save()
+        } catch {
+            context.delete(plan)
+            retired.forEach { $0.isActive = true }
+            throw error
+        }
+
+        Task { @MainActor [healthKitRepository, notificationService] in
+            if morningRemindersEnabled {
+                await notificationService.scheduleMorningReminders(for: plan)
+            }
+            // Every previous plan, not just the retired one: the scheduler only clears the
+            // entries of the plan it is syncing, and a plan retired by launch-time dedup
+            // never had a removal pass of its own.
+            for old in previous {
+                try? await healthKitRepository.removeWorkoutPlans(for: old)
+            }
+            try? await healthKitRepository.syncWorkoutPlans(
+                for: plan,
+                unitPreference: unitPreference
+            )
+            context.saveOrLog("the new plan's WorkoutKit ids")
+        }
+    }
+
     // MARK: - Rebuild
 
     /// Retires the active plan and generates a fresh one starting from today,
