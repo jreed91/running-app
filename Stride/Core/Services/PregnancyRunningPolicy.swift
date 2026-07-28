@@ -214,9 +214,13 @@ enum PregnancyRunningPolicy {
 
     // MARK: The standing disclaimer
 
+    /// One line, and the same line everywhere it appears — the setup screen, the screening
+    /// list, the onboarding step, and the plan's guidance card. It was three sentences, and
+    /// three sentences repeated on four screens reads as boilerplate, which is how a notice
+    /// stops being read at all.
     static var medicalDisclaimer: String {
         String(
-            localized: "This plan is a starting draft built from published guidelines, not medical advice. Take it to your maternity provider, and follow what they tell you over what this app says.",
+            localized: "Please consult your doctor before starting.",
             comment: "Standing disclaimer on a pregnancy training plan"
         )
     }
