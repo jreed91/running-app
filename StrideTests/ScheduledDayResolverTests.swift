@@ -209,4 +209,63 @@ struct ScheduledDayResolverTests {
 
         #expect(ScheduledDayResolver.dayState(on: monday, in: plan) == .scheduled)
     }
+
+    // MARK: - Upcoming session
+
+    /// The dashboard's coaching cards and its "Up next" card ask what the runner is
+    /// training toward *now*, which has to include today's own session — `nextSession` is
+    /// asked relative to the browsed day and deliberately excludes it.
+    @Test("Today's outstanding session is the upcoming one, not tomorrow's")
+    func upcomingIncludesToday() throws {
+        let context = TestStore.makeContext()
+        let plan = try makePlan(in: context, sessions: [
+            (0, .tempo, false),
+            (1, .easy, false),
+        ])
+
+        #expect(ScheduledDayResolver.upcomingSession(onOrAfter: monday, in: plan)?.workoutType == .tempo)
+        #expect(ScheduledDayResolver.nextSession(after: monday, in: plan)?.workoutType == .easy)
+    }
+
+    @Test("A session already completed today is not what comes next")
+    func upcomingSkipsCompletedWork() throws {
+        let context = TestStore.makeContext()
+        let plan = try makePlan(in: context, sessions: [
+            (0, .tempo, true),
+            (2, .longRun, false),
+        ])
+
+        #expect(ScheduledDayResolver.upcomingSession(onOrAfter: monday, in: plan)?.workoutType == .longRun)
+    }
+
+    @Test("Rest days are never the upcoming session")
+    func upcomingSkipsRestDays() throws {
+        let context = TestStore.makeContext()
+        let plan = try makePlan(in: context, sessions: [
+            (0, .rest, false),
+            (3, .interval, false),
+        ])
+
+        #expect(ScheduledDayResolver.upcomingSession(onOrAfter: monday, in: plan)?.workoutType == .interval)
+    }
+
+    @Test("A finished plan, and no plan at all, have nothing upcoming")
+    func upcomingCanBeEmpty() throws {
+        let context = TestStore.makeContext()
+        let plan = try makePlan(in: context, sessions: [(0, .easy, true)])
+
+        #expect(ScheduledDayResolver.upcomingSession(onOrAfter: monday, in: plan) == nil)
+        #expect(ScheduledDayResolver.upcomingSession(onOrAfter: monday, in: nil) == nil)
+    }
+
+    @Test("On a shared day the run is the session coached toward, not the gym work")
+    func upcomingPrefersTheRunOnAPairedDay() throws {
+        let context = TestStore.makeContext()
+        let plan = try makePlan(in: context, sessions: [
+            (0, .strength, false),
+            (0, .easy, false),
+        ])
+
+        #expect(ScheduledDayResolver.upcomingSession(onOrAfter: monday, in: plan)?.workoutType == .easy)
+    }
 }

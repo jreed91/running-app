@@ -398,10 +398,22 @@ struct DashboardView: View {
                             .opacity(dashboardAppeared ? 1 : 0)
                             .offset(y: dashboardAppeared ? 0 : 20)
                             .adaptiveAnimation(AppAnimation.entrance.delay(0.12), value: dashboardAppeared)
+                        if let session = nextUpSession {
+                            nextUpSection(session)
+                                .opacity(dashboardAppeared ? 1 : 0)
+                                .offset(y: dashboardAppeared ? 0 : 20)
+                                .adaptiveAnimation(AppAnimation.entrance.delay(0.15), value: dashboardAppeared)
+                        }
+                        if !coachCards.isEmpty {
+                            SmartCoachCardsSection(cards: coachCards)
+                                .opacity(dashboardAppeared ? 1 : 0)
+                                .offset(y: dashboardAppeared ? 0 : 20)
+                                .adaptiveAnimation(AppAnimation.entrance.delay(0.18), value: dashboardAppeared)
+                        }
                         startRunButton
                             .opacity(dashboardAppeared ? 1 : 0)
                             .offset(y: dashboardAppeared ? 0 : 16)
-                            .adaptiveAnimation(AppAnimation.entrance.delay(0.18), value: dashboardAppeared)
+                            .adaptiveAnimation(AppAnimation.entrance.delay(0.22), value: dashboardAppeared)
                     }
                     .padding(.horizontal, AppSpacing.lg)
                     .padding(.vertical, AppSpacing.lg)
@@ -620,14 +632,6 @@ struct DashboardView: View {
                 case .outsidePlan:      outsidePlanCard
                 case .noPlan:           noPlanCard
                 }
-
-                // A day with nothing on it is exactly the day the runner most wants to know
-                // what *is* coming, and it is also the day this screen is mostly blank
-                // below the fold (S23). Not shown for `.noPlan` — there is nothing to look
-                // ahead to — or once the plan is behind them.
-                if let next = nextScheduledSession, selectedDayState != .noPlan {
-                    upNextCard(next)
-                }
             } else {
                 ForEach(sessionsForSelectedDate) { workout in
                     VStack(alignment: .leading, spacing: 10) {
@@ -767,41 +771,32 @@ struct DashboardView: View {
         )
     }
 
-    /// What the plan asks for next, on a day it asks for nothing.
+    // MARK: - Up Next
+
+    /// What the plan asks for next, with enough of the prescription to plan a day around.
     ///
-    /// Tapping it opens the session's detail rather than starting it: `canStart` deliberately
-    /// refuses future days so the plan is not run out of order, and a card that looks like a
-    /// start button but is not one would be worse than no card.
-    private func upNextCard(_ workout: ScheduledWorkout) -> some View {
+    /// This used to be a one-line label — workout type, date, chevron — shown *only* on
+    /// days the plan left empty (S23). It is now a standing part of the screen and carries
+    /// the prescription with it, so "what am I doing next, and can I fit it in today?" is
+    /// answerable without opening anything.
+    ///
+    /// It reads ``ScheduledDayResolver/upcomingSession(onOrAfter:in:calendar:)`` — anchored
+    /// to today, not to the browsed day — and looks one session further ahead when the
+    /// selected day is already rendering the upcoming one in full above.
+    ///
+    /// Tapping it opens the session's detail rather than starting it: `canStart`
+    /// deliberately refuses future days so the plan is not run out of order, and a card
+    /// that looks like a start button but is not one would be worse than no card.
+    private func nextUpSection(_ workout: ScheduledWorkout) -> some View {
         NavigationLink {
             WorkoutDetailView(workout: workout)
         } label: {
-            HStack(spacing: 14) {
-                ZStack {
-                    Circle()
-                        .fill(Color.brand.opacity(0.15))
-                        .frame(width: 44, height: 44)
-                    StrideIcon(name: .calendar, size: 20, color: .brand, strokeWeight: 2.2)
-                }
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("UP NEXT")
-                        .font(.dsCaption2.weight(.bold))
-                        .kerning(1.2)
-                        .foregroundStyle(.secondary)
-                    Text(workout.workoutType.localizedName)
-                        .font(.bodyStrong)
-                    Text(workout.scheduledDate.formatted(.dateTime.weekday(.wide).month().day()))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                StrideIcon(name: .chevronRight, size: 14, color: .secondary, strokeWeight: 2)
-            }
-            .padding(18)
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+            NextUpCardView(
+                briefing: NextUpBriefing.make(for: workout, unit: appSettings.unitPreference),
+                workoutType: workout.workoutType
+            )
         }
         .buttonStyle(.plain)
-        .accessibilityHint("Opens the workout's details")
     }
 
     /// Shown when there is no active plan at all — a CTA, not a rest day (N23).
@@ -933,9 +928,34 @@ struct DashboardView: View {
         ScheduledDayResolver.dayState(on: selectedDate, in: activePlan)
     }
 
-    /// The plan's next uncompleted session after the selected day, for the "Up next" card.
-    private var nextScheduledSession: ScheduledWorkout? {
-        ScheduledDayResolver.nextSession(after: selectedDate, in: activePlan)
+    /// The session the runner is training toward right now — today's, if it is still
+    /// outstanding, otherwise the next one on the plan.
+    ///
+    /// Anchored to *today* rather than to `selectedDate`: the coaching cards answer
+    /// "what should I do about my next run", and that answer must not change because the
+    /// calendar strip was scrolled back to look at last Tuesday.
+    private var upcomingSession: ScheduledWorkout? {
+        ScheduledDayResolver.upcomingSession(onOrAfter: Date(), in: activePlan)
+    }
+
+    /// What the "Up next" card shows: the upcoming session, unless the selected day is
+    /// already rendering it in full above — in which case the card looks one further
+    /// ahead rather than repeating the card directly above it.
+    private var nextUpSession: ScheduledWorkout? {
+        guard let upcoming = upcomingSession else { return nil }
+        guard sessionsForSelectedDate.contains(where: { $0.id == upcoming.id }) else { return upcoming }
+        return ScheduledDayResolver.nextSession(after: upcoming.scheduledDate, in: activePlan)
+    }
+
+    /// The coaching strip's cards. Rebuilt on each render from the same queries the rest
+    /// of the screen reads, so a run saved moments ago is already reflected in them.
+    private var coachCards: [SmartCoachCard] {
+        SmartCoachCards.cards(
+            nextSession: upcomingSession,
+            recentRuns: recentWorkouts,
+            profile: profiles.first,
+            unit: appSettings.unitPreference
+        )
     }
 
     /// Whether the selected day's sessions can still be started (today, or one day

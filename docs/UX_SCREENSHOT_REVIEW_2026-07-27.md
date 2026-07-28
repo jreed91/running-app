@@ -376,6 +376,19 @@ workout's detail rather than starting it: `canStart` deliberately refuses future
 days so the plan is not run out of order, and a card that looked like a start
 button but was not one would be worse than no card.
 
+**Extended since:** the card is no longer conditional on the day being empty, and
+it carries the prescription rather than only a name and a date. Content moved to
+[`NextUpBriefing`](../Stride/Core/Services/NextUpBriefing.swift) (distance, pace
+band, estimated time, the plan's note) and the card to
+[`NextUpCardView`](../Stride/Features/Dashboard/NextUpCardView.swift); it is
+anchored to *today* via `ScheduledDayResolver.upcomingSession(onOrAfter:in:)` so
+scrolling the week strip does not move it, and it looks one session further ahead
+when the selected day is already showing the upcoming one in full. Underneath it
+sits a **Coach Tips** strip — see
+[`SmartCoachCards`](../Stride/Core/Services/SmartCoachCards.swift) — which answers
+the other half of the question the empty screen left open: not just *what* is next
+but what to do about it.
+
 Density on the onboarding steps is untouched and stays open — see §7.
 
 ### S24 — The units control has two different designs ✅ FIXED
