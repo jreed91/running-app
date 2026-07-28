@@ -14,6 +14,11 @@ struct NumericStepperField: View {
     let title: String
     @Binding var value: Int
     let range: ClosedRange<Int>
+    /// How far one tap of the stepper moves the value. Defaults to 1, which is right for a
+    /// value nudged a unit at a time (age, max HR); a value the runner thinks about in blocks
+    /// — weekly running minutes — passes something coarser. The typed field still accepts any
+    /// number in `range` either way.
+    var step = 1
     /// Rendered after the number when the field is not being edited (e.g. "bpm").
     var suffix: String?
     /// Whether to draw `title` as a leading label. Settings rows draw their own titles and
@@ -60,7 +65,7 @@ struct NumericStepperField: View {
                 in: RoundedRectangle(cornerRadius: AppRadius.xs)
             )
 
-            Stepper(title, value: stepperBinding, in: range)
+            Stepper(title, value: stepperBinding, in: range, step: step)
                 .labelsHidden()
         }
         .task(id: value) {

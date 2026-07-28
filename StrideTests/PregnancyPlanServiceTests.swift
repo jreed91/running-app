@@ -120,6 +120,22 @@ struct PregnancyPlanServiceTests {
         #expect(plan.targetRace == .maintainFitness)
     }
 
+    @Test("Week count matches the span onboarding promises")
+    func weekCountBoundaries() throws {
+        // Onboarding's summary screen computes this span itself (`pregnancyPlanWeeks`) to
+        // promise a number of weeks before the plan exists. These are the boundaries where
+        // the two could drift apart.
+        for (daysToDue, expectedWeeks) in [(0, 1), (6, 1), (7, 2), (13, 2), (14, 3)] {
+            let profile = makeProfile()
+            profile.dueDate = start.adding(days: daysToDue)
+            let plan = try service.generatePlan(profile: profile, startDate: start)
+            #expect(
+                weeks(in: plan).count == expectedWeeks,
+                "\(daysToDue) days to the due date should be \(expectedWeeks) week(s)"
+            )
+        }
+    }
+
     @Test("Every week holds at least one session")
     func everyWeekHasWork() throws {
         let plan = try service.generatePlan(profile: makeProfile(), startDate: start)

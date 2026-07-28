@@ -17,6 +17,20 @@ struct OnboardingView: View {
     @State private var goingForward = true
 
     // Step data
+    /// Which generator onboarding is heading for. `.pregnancy` re-points three of the eight
+    /// steps (timing, calibration, and the summary) at questions a pregnancy plan actually
+    /// needs, because a due date is not a race date and a 5K time buys a pregnancy plan
+    /// nothing — it prescribes no paces. See `docs/PREGNANCY_RUNNING_EVIDENCE.md`.
+    @State private var planKind: PlanKind = .standard
+    @State private var dueDate = Date().adding(weeks: 20)
+    @State private var pregnancyScreeningConfirmed = false
+    @State private var prePregnancyWeeklyMinutes = PregnancyRunningPolicy.defaultWeeklyRunMinutes(for: .intermediate)
+    @State private var pregnancyHabituallyVigorous = false
+    /// Whether the runner has touched the weekly-minutes field. Until they do, choosing a
+    /// fitness level on the step before re-seeds it; once they have, it is theirs and the
+    /// level no longer overwrites it.
+    @State private var didEditPrePregnancyMinutes = false
+
     @State private var goalRace: RaceType = .fiveK
     @State private var raceName = RaceType.fiveK.displayName
     @State private var raceDate = Date().startOfWeek.adding(weeks: 8)
@@ -95,7 +109,31 @@ struct OnboardingView: View {
     }
 
     private var maximumStartDate: Date? {
-        goalRace.isGoalRace ? raceDate.startOfDay.adding(days: -7) : nil
+        // A pregnancy plan runs *to* the due date, so the due date is the start date's
+        // ceiling — the same role race day plays for a race plan. `startDateValid` then
+        // covers both without a second validity rule.
+        if isPregnancyPlan { return dueDate.startOfDay }
+        return goalRace.isGoalRace ? raceDate.startOfDay.adding(days: -7) : nil
+    }
+
+    // MARK: Pregnancy
+
+    private var isPregnancyPlan: Bool { planKind == .pregnancy }
+
+    private var gestationalAgeAtStart: GestationalAge {
+        GestationalAge.on(planStartDate, dueDate: dueDate)
+    }
+
+    /// Mirrors `PregnancyPlanService`'s own span so the summary screen promises the number of
+    /// weeks the generator will actually produce: from the Monday of the start week through
+    /// the week the runner is due.
+    private var pregnancyPlanWeeks: Int {
+        let days = Calendar.current.dateComponents(
+            [.day],
+            from: planStartDate.startOfWeek,
+            to: dueDate.startOfDay
+        ).day ?? 0
+        return max(1, min(42, days / 7 + 1))
     }
 
     private var startDateValid: Bool {
@@ -154,11 +192,22 @@ struct OnboardingView: View {
             }
         case 1:
             OBShell(stepIndex: 1, total: totalSteps, kicker: "Your goal",
-                    title: "What are you training for?", subtitle: "We'll build a plan around your race — or keep you running strong without one.",
+                    title: "What are you training for?",
+                    subtitle: "Pick a race distance, keep running strong without one, or choose a specialized plan.",
                     ctaLabel: "Continue",
                     onBack: retreat,
                     onCTA: advance) {
                 goalContent
+            }
+        case 2 where isPregnancyPlan:
+            OBShell(stepIndex: 2, total: totalSteps, kicker: "Timing",
+                    title: "When are you due?",
+                    subtitle: "Your plan runs from the start date through the week you're due, easing off as it goes.",
+                    ctaLabel: "Continue",
+                    ctaEnabled: startDateValid,
+                    onBack: retreat,
+                    onCTA: advance) {
+                pregnancyTimingContent
             }
         case 2:
             OBShell(stepIndex: 2, total: totalSteps, kicker: "Timing",
@@ -178,9 +227,25 @@ struct OnboardingView: View {
         // control on this step now, pre-set and there to be corrected rather than asked.
         case 3:
             OBShell(stepIndex: 3, total: totalSteps, kicker: "About you",
-                    title: "How would you describe your running?", subtitle: "We'll calibrate volume and pace from here.",
+                    title: "How would you describe your running?",
+                    subtitle: isPregnancyPlan
+                        ? "Sets the starting point for your weekly volume. A pregnancy plan prescribes effort, not pace."
+                        : "We'll calibrate volume and pace from here.",
                     ctaLabel: "Continue", onBack: retreat, onCTA: advance) {
                 levelContent
+            }
+        // A 5K time buys a pregnancy plan nothing — it prescribes no paces — so the
+        // calibration slot asks the two things that plan is actually built from, and carries
+        // the screening gate that decides whether it gets built at all.
+        case 4 where isPregnancyPlan:
+            OBShell(stepIndex: 4, total: totalSteps, kicker: "Health check",
+                    title: "A couple of checks first.",
+                    subtitle: "Stride won't build a pregnancy plan until you've read this and confirmed it.",
+                    ctaLabel: "Continue",
+                    ctaEnabled: pregnancyScreeningConfirmed,
+                    onBack: retreat,
+                    onCTA: advance) {
+                pregnancyHealthContent
             }
         case 4:
             OBShell(stepIndex: 4, total: totalSteps, kicker: "Calibrate",
@@ -199,11 +264,16 @@ struct OnboardingView: View {
                 scheduleContent
             }
         case 6:
+            // A pregnancy plan cannot skip strength outright: the daily pelvic floor
+            // prescription rides on that session, so clearing the equipment falls back to
+            // bodyweight rather than to nothing. The secondary label says which it is.
             OBShell(stepIndex: 6, total: totalSteps, kicker: "Strength Training",
                     title: "What equipment do you have?",
-                    subtitle: "We'll add 1–2 strength sessions per week tailored to your gear.",
+                    subtitle: isPregnancyPlan
+                        ? "We'll add 1–2 sessions per week, each opening with pelvic floor work."
+                        : "We'll add 1–2 strength sessions per week tailored to your gear.",
                     ctaLabel: "Continue",
-                    secondaryLabel: "Skip strength training",
+                    secondaryLabel: isPregnancyPlan ? "Bodyweight only" : "Skip strength training",
                     onSecondary: { selectedEquipment.removeAll(); advance() },
                     onBack: retreat,
                     onCTA: advance) {
@@ -225,12 +295,24 @@ struct OnboardingView: View {
                 permissionsContent
             }
         default:
-            OBReady(goalRace: goalRace, planWeeks: planWeeks,
+            if isPregnancyPlan {
+                OBPregnancyReady(
+                    planWeeks: pregnancyPlanWeeks,
+                    gestationalAgeAtStart: gestationalAgeAtStart,
+                    runDaysPerWeek: max(selectedDays.count, 1),
                     progressTotal: totalSteps,
-                    goalTimeSeconds: goalFinishTimeSeconds,
-                    estimatedWorkouts: estimatedWorkouts, peakKm: peakKm,
-                    isCreatingPlan: isCreatingPlan, onBack: retreat,
-                    onViewPlan: { isCreatingPlan = true; createProfileAndPlan() })
+                    isCreatingPlan: isCreatingPlan,
+                    onBack: retreat,
+                    onViewPlan: { isCreatingPlan = true; createProfileAndPlan() }
+                )
+            } else {
+                OBReady(goalRace: goalRace, planWeeks: planWeeks,
+                        progressTotal: totalSteps,
+                        goalTimeSeconds: goalFinishTimeSeconds,
+                        estimatedWorkouts: estimatedWorkouts, peakKm: peakKm,
+                        isCreatingPlan: isCreatingPlan, onBack: retreat,
+                        onViewPlan: { isCreatingPlan = true; createProfileAndPlan() })
+            }
         }
     }
 
@@ -250,16 +332,76 @@ struct OnboardingView: View {
     private var goalContent: some View {
         VStack(spacing: 10) {
             ForEach(RaceType.allCases, id: \.self) { race in
-                OBRaceCard(race: race, isSelected: goalRace == race) {
+                OBRaceCard(race: race, isSelected: !isPregnancyPlan && goalRace == race) {
+                    planKind = .standard
                     goalRace = race
                     recalibrateRaceDate()
                 }
             }
 
-            if goalRace.usesCustomDistance {
+            if !isPregnancyPlan, goalRace.usesCustomDistance {
                 OBCustomDistanceCard(distanceKm: $customDistanceKm)
                     .onChange(of: customDistanceKm) { _, _ in recalibrateRaceDate() }
             }
+
+            // Below a heading of its own rather than as a sixth race card: the five above are
+            // all answers to "how far", and this one selects a different generator and
+            // re-points the rest of onboarding.
+            HStack {
+                Text("SPECIALIZED")
+                    .font(.sectionHeader)
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+            .padding(.top, AppSpacing.sm)
+
+            OBSpecializedPlanCard(isSelected: isPregnancyPlan) {
+                planKind = .pregnancy
+                // A pregnancy plan genuinely has no goal race, which is what
+                // `.maintainFitness` means. `PlanKind` carries the rest.
+                goalRace = .maintainFitness
+                recalibrateDueDate()
+            }
+        }
+    }
+
+    // MARK: - Pregnancy content
+
+    private var pregnancyTimingContent: some View {
+        VStack(spacing: 16) {
+            OBDueDateCard(
+                dueDate: $dueDate,
+                gestationalAgeAtStart: gestationalAgeAtStart,
+                minimumDate: minimumStartDate
+            )
+
+            OBStartDateCard(
+                startDate: $planStart,
+                planWeeks: pregnancyPlanWeeks,
+                isRacePlan: false,
+                minimumDate: minimumStartDate,
+                maximumDate: maximumStartDate
+            )
+        }
+        .onChange(of: planStart) { _, _ in recalibrateDueDate() }
+    }
+
+    private var pregnancyHealthContent: some View {
+        VStack(spacing: 16) {
+            OBPregnancyHealthCheckCard(isConfirmed: $pregnancyScreeningConfirmed)
+            OBPrePregnancyRunningCard(
+                weeklyMinutes: $prePregnancyWeeklyMinutes,
+                habituallyVigorous: $pregnancyHabituallyVigorous,
+                onEditMinutes: { didEditPrePregnancyMinutes = true }
+            )
+        }
+    }
+
+    /// Keeps the due date ahead of the start date. A plan that ends before it begins is the
+    /// one input combination `PregnancyPlanService` refuses outright.
+    private func recalibrateDueDate() {
+        if dueDate.startOfDay < planStartDate {
+            dueDate = planStartDate.adding(weeks: 1)
         }
     }
 
@@ -300,11 +442,20 @@ struct OnboardingView: View {
                     OBFitnessRow(selection: selection, goalRace: goalRace, isSelected: fitnessSelection == selection) {
                         fitnessSelection = selection
                         fitnessLevel = selection.fitnessLevel
+                        seedPrePregnancyMinutesIfUntouched()
                     }
                 }
             }
             unitsRow
         }
+    }
+
+    /// A pregnancy plan tapers from the runner's pre-pregnancy weekly minutes, so the field
+    /// on the next step opens at something plausible for the level they just picked rather
+    /// than at the same number for everyone.
+    private func seedPrePregnancyMinutesIfUntouched() {
+        guard isPregnancyPlan, !didEditPrePregnancyMinutes else { return }
+        prePregnancyWeeklyMinutes = PregnancyRunningPolicy.defaultWeeklyRunMinutes(for: fitnessLevel)
     }
 
     /// Units, folded into the step above rather than asked as one of its own (U10).
@@ -769,6 +920,14 @@ struct OnboardingView: View {
         profile.customDistanceMeters = goalRace.usesCustomDistance ? effectiveRaceDistanceMeters : nil
         profile.selectedEquipment = Array(selectedEquipment)
         profile.strengthFocus = strengthFocus
+        if isPregnancyPlan {
+            profile.dueDate = dueDate.startOfDay
+            // The screening step's Continue button is the only thing that reaches here, so
+            // this records that the gate was passed for the plan about to be built.
+            profile.pregnancyClearedAt = Date()
+            profile.prePregnancyWeeklyRunMinutes = prePregnancyWeeklyMinutes
+            profile.pregnancyHabituallyVigorous = pregnancyHabituallyVigorous
+        }
         // Only record HR-zone inputs if the user actually engaged with them; otherwise leave
         // them nil so no zones are shown until the user opts in (Settings › Heart Rate Zones).
         if didEnterHR {
@@ -777,7 +936,27 @@ struct OnboardingView: View {
         }
         context.insert(profile)
         let plan: TrainingPlan
-        if goalRace.isGoalRace {
+        if isPregnancyPlan {
+            do {
+                plan = try container.pregnancyPlanService.generatePlan(
+                    profile: profile,
+                    startDate: planStartDate
+                )
+            } catch {
+                // Unreachable by the UI: the screening step's Continue button is what sets
+                // `pregnancyClearedAt` above, and `startDateValid` already bounds the start
+                // date by the due date. If it does fire, keep the profile — the Plan tab can
+                // build a plan — rather than stranding onboarding on a spinner.
+                AppLogger.log(
+                    "Pregnancy plan generation failed during onboarding: \(error.localizedDescription)",
+                    label: "Onboarding",
+                    level: .error
+                )
+                context.saveOrLog("the profile created during onboarding")
+                isCreatingPlan = false
+                return
+            }
+        } else if goalRace.isGoalRace {
             plan = container.trainingPlanService.generateRacePlan(
                 profile: profile,
                 startDate: planStartDate,

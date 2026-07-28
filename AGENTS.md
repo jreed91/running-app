@@ -174,6 +174,15 @@ to read *before* touching any number in `PregnancyRunningPolicy`:
   must not be summarised for a smaller screen — an abridged red-flag list reads as complete.
 - Stride is not a clinician, and the copy says so on the plan, in setup, and in the doc.
 
+Two entry points, and they must stay in step: **onboarding** (a "Specialized" section on the
+goal step; picking it re-points steps 2 and 4 and the summary screen — see
+`OBPregnancySubviews.swift`) and the **Plan tab's New Plan menu** (`PregnancyPlanSetupView`).
+Both collect the same four inputs — due date, screening confirmation, pre-pregnancy weekly
+minutes, habitual vigorous running — and both write them to `UserProfile` before calling the
+generator. Onboarding also computes the plan's week span itself, to promise a number before
+the plan exists; `weekCountBoundaries` in `PregnancyPlanServiceTests` is what keeps that
+promise honest.
+
 ## Persistence and Sync
 
 - SwiftData is the local persistence layer.
