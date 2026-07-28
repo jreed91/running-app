@@ -949,12 +949,20 @@ struct DashboardView: View {
 
     /// The coaching strip's cards. Rebuilt on each render from the same queries the rest
     /// of the screen reads, so a run saved moments ago is already reflected in them.
+    ///
+    /// The day state is resolved for **today**, not for `selectedDate`: it is what tells
+    /// the coach whether the runner is on a rest day, waiting for a plan to start, or
+    /// past the end of one, and scrolling the week strip to look at last Tuesday must not
+    /// change the advice.
     private var coachCards: [SmartCoachCard] {
         SmartCoachCards.cards(
-            nextSession: upcomingSession,
-            recentRuns: recentWorkouts,
-            profile: profiles.first,
-            unit: appSettings.unitPreference
+            SmartCoachCards.Context(
+                nextSession: upcomingSession,
+                recentRuns: recentWorkouts,
+                profile: profiles.first,
+                dayState: ScheduledDayResolver.dayState(on: Date(), in: activePlan),
+                unit: appSettings.unitPreference
+            )
         )
     }
 

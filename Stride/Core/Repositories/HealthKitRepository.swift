@@ -73,6 +73,18 @@ protocol HealthKitRepositoryProtocol: Sendable {
     /// `fetchHeartRateSamples(forWorkoutID:)` backfills heart rate. Returns `[]` if the
     /// workout or its samples can't be found.
     func fetchDistanceSeries(forWorkoutID id: String) async -> [SplitBucketing.DistancePoint]
+    /// The most recent body-mass sample in kilograms, or `nil` when there is none, the
+    /// type is unauthorized, or HealthKit is unavailable.
+    ///
+    /// Read-only and never written: a running app has no business recording someone's
+    /// weight. It exists so the coach's fuelling advice can be an amount rather than a
+    /// guideline range — carbohydrate and fluid guidance is written per kilogram, so
+    /// without a mass the cards can only quote both ends of a wide band.
+    ///
+    /// Returns `nil` rather than throwing on every failure path. A missing weight
+    /// degrades one line of one card to a range; it is never worth surfacing an error
+    /// for, and HealthKit reports "denied" and "no samples" identically anyway.
+    func fetchLatestBodyMassKilograms() async -> Double?
     /// Enables HealthKit background delivery for running workouts at `.immediate` frequency.
     /// Safe to call multiple times — HealthKit is idempotent.
     func enableBackgroundDelivery() async throws
@@ -155,6 +167,16 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         // cadence query returns no data and imported runs simply carry no cadence, which
         // is the same state a treadmill import lands in — a missing stat, not an error.
         HKQuantityType(.stepCount),
+        // Read-only, and read exactly once per launch to personalise the coach's fuelling
+        // amounts (carbohydrate and fluid guidance is written per kilogram). Nothing is
+        // ever written to it — a running app has no business recording someone's weight,
+        // and the Settings field is a local fallback rather than a Health entry.
+        //
+        // As with `stepCount`, a runner who authorized before this type was added is not
+        // re-prompted until `requestAuthorization` runs again. Until then the query
+        // returns nothing and the cards quote guideline ranges, which is the same state
+        // a runner who has never weighed themselves lands in.
+        HKQuantityType(.bodyMass),
         HKSeriesType.workoutRoute()
     ]
 
@@ -1041,6 +1063,29 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
     func fetchDistanceSeries(forWorkoutID id: String) async -> [SplitBucketing.DistancePoint] {
         guard let workout = await hkWorkout(withID: id) else { return [] }
         return (try? await fetchDistanceSeries(for: workout)) ?? []
+    }
+
+    func fetchLatestBodyMassKilograms() async -> Double? {
+        guard isAvailable else { return nil }
+        let type = HKQuantityType(.bodyMass)
+
+        let sample: HKQuantitySample? = try? await withCheckedThrowingContinuation { cont in
+            let query = HKSampleQuery(
+                sampleType: type,
+                predicate: nil,
+                limit: 1,
+                sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)]
+            ) { _, result, error in
+                if let error { cont.resume(throwing: error) }
+                else { cont.resume(returning: result?.first as? HKQuantitySample) }
+            }
+            store.execute(query)
+        }
+
+        // Kilograms regardless of how Health displays it: the unit here is the storage
+        // unit, and the coach's rates are all per kilogram. Converting at the boundary
+        // means nothing downstream has to know a pound exists.
+        return sample?.quantity.doubleValue(for: .gramUnit(with: .kilo))
     }
 
     /// Resolves a stored HealthKit UUID string back to its workout, so samples can be

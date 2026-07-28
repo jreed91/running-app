@@ -195,6 +195,25 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
             rowDivider
+            // Feeds the coach's fuelling amounts, which are all per kilogram (see
+            // `CoachNutrition`). Apple Health is the primary source and replaces this on
+            // the next launch when it has a sample, so the footnote below says so rather
+            // than letting an overwritten value look like a bug.
+            settingsRow(icon: .ruler, iconColor: .zoneMarathon, title: "Weight") {
+                NumericStepperField(
+                    title: "Weight",
+                    value: bodyMassBinding(for: profile),
+                    range: bodyMassRange,
+                    suffix: bodyMassUnitSuffix,
+                    showsLabel: false
+                )
+            }
+            Text(bodyMassFootnote)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.leading, 62)
+                .padding(.bottom, 10)
+            rowDivider
             settingsRow(icon: .heart, iconColor: .destructive, title: "Gender") {
                 Picker("", selection: profileGenderBinding(for: profile)) {
                     ForEach(Gender.allCases, id: \.self) { Text($0.localizedName).tag($0) }
@@ -689,6 +708,86 @@ struct SettingsView: View {
                 profile.gender = newValue
                 persistProfileEdit(profile)
             }
+        )
+    }
+
+    // MARK: Body mass
+
+    /// Kilograms per pound, for the imperial round-trip below.
+    private static let poundsPerKilogram = 2.20462
+
+    /// The weight shown, in the runner's own unit.
+    ///
+    /// Stored as kilograms always — every rate in `CoachNutrition` is per kilogram, and a
+    /// stored number whose meaning moved with a display toggle would be a data bug
+    /// waiting to happen. Converting here means the toggle changes what is drawn and
+    /// nothing else.
+    ///
+    /// `NumericStepperField` is integer-valued, which is the right resolution: fuelling
+    /// amounts are rounded to whole grams and 50 ml, so a tenth of a kilo cannot move
+    /// them. The round-trip through pounds is lossy for that reason and deliberately so —
+    /// re-reading 158 lb as 71.667 kg and drawing it back as 158 lb is stable.
+    private func bodyMassBinding(for profile: UserProfile) -> Binding<Int> {
+        Binding(
+            get: {
+                guard let kilograms = profile.bodyMassKilograms else { return bodyMassPlaceholder }
+                return Int((displayMass(fromKilograms: kilograms)).rounded())
+            },
+            set: { newValue in
+                let kilograms = kilograms(fromDisplay: Double(newValue))
+                guard profile.bodyMassKilograms != kilograms else { return }
+                profile.bodyMassKilograms = kilograms
+                persistProfileEdit(profile)
+            }
+        )
+    }
+
+    private func displayMass(fromKilograms kilograms: Double) -> Double {
+        appSettings.unitPreference == .metric
+            ? kilograms
+            : kilograms * Self.poundsPerKilogram
+    }
+
+    private func kilograms(fromDisplay value: Double) -> Double {
+        appSettings.unitPreference == .metric
+            ? value
+            : value / Self.poundsPerKilogram
+    }
+
+    /// What the stepper shows before a weight is known.
+    ///
+    /// A middle-of-the-range value rather than the range's floor: the field has to show
+    /// *something*, and starting at 30 kg means a runner who taps the stepper once has
+    /// told the coach they weigh 31 kg. Nothing is written until they actually edit it,
+    /// so this is a starting point for the control, not a stored default.
+    private var bodyMassPlaceholder: Int {
+        appSettings.unitPreference == .metric ? 70 : 154
+    }
+
+    private var bodyMassRange: ClosedRange<Int> {
+        // Mirrors `CoachNutrition.validMass`, converted: anything outside it is a
+        // mis-entry or the wrong unit, and the coach ignores it anyway.
+        appSettings.unitPreference == .metric ? 25...250 : 55...550
+    }
+
+    private var bodyMassUnitSuffix: String {
+        appSettings.unitPreference == .metric
+            ? String(localized: "kg", comment: "Body mass unit")
+            : String(localized: "lb", comment: "Body mass unit")
+    }
+
+    /// Says where the number comes from, because Health overwrites it.
+    ///
+    /// Without this, a runner who types a weight and finds it changed after the next
+    /// launch has watched the app silently discard their input. Naming Health as the
+    /// source makes that behaviour a stated rule rather than a bug.
+    private var bodyMassFootnote: String {
+        String(
+            localized: """
+            Used to work out your fuelling amounts. Read from Apple Health when it has \
+            your weight — what you type here applies now and until Health next supplies one.
+            """,
+            comment: "Settings footnote under the weight field"
         )
     }
 

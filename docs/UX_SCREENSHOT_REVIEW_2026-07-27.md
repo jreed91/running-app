@@ -389,6 +389,14 @@ sits a **Coach Tips** strip — see
 the other half of the question the empty screen left open: not just *what* is next
 but what to do about it.
 
+That strip started as three equally-sized cards, which made its own ranking
+invisible — nothing told the runner which of the three actually mattered. It is now
+a **primary card and two supporting ones**: the highest-scoring card is drawn
+larger, tinted by tone, and carries a derivation line showing where its numbers came
+from; the rest are compact rows beneath it. The four empty states each have their
+own card now rather than sharing one, so a rest day, a plan that hasn't started, a
+finished plan and no plan at all no longer read as the same absence.
+
 Density on the onboarding steps is untouched and stays open — see §7.
 
 ### S24 — The units control has two different designs ✅ FIXED
