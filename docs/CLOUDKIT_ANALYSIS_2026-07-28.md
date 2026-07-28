@@ -9,9 +9,13 @@ Scope: the SwiftData ↔ CloudKit mirroring stack — `project.yml` capabilities
 the restore flow, and `docs/CLOUDKIT_VALIDATION.md`. It does **not** cover iCloud
 key-value storage beyond noting where it interacts with the sync toggle.
 
-Nothing in this pass changes behaviour. §5 lists the fixes; each one alters how
-the app opens its persistent store, which `AGENTS.md` requires be validated on a
-physical device, so they are written up rather than applied.
+**Status: all six findings are fixed** — see the ✅ notes in §3. The audit is kept in full
+rather than trimmed to a changelog, because the reasoning is what stops F1 being
+reintroduced by the next `ModelConfiguration` that omits an argument.
+
+The fixes change how the app opens its persistent store, and `AGENTS.md` requires that be
+validated on a physical device. **That validation has not been run** — §6 is the device
+checklist, not a build order.
 
 ---
 
@@ -22,9 +26,10 @@ constraint Apple documents, and the two places where CloudKit cannot enforce a
 guarantee (uniqueness, relationship ordering) already have hand-written
 mitigations. That part of the setup is better than most.
 
-The **store configuration** has one defect that undoes several of the app's
-stated behaviours, and one missing operational step that can make sync fail
-silently in the App Store build only. Both are §5 fixes.
+The **store configuration** had one defect that undid several of the app's stated
+behaviours, and one missing operational step that could make sync fail silently in the
+App Store build only. Both are fixed; §5 records what each fix was and what it has to
+keep true.
 
 | Area | Status |
 | --- | --- |
@@ -32,11 +37,12 @@ silently in the App Store build only. Both are §5 fixes.
 | CloudKit-compatible schema (all 8 models) | ✅ Conformant |
 | Explicit container selection for the sync path | ✅ Conformant |
 | Uniqueness / relationship-ordering mitigations | ✅ Conformant |
-| Non-sync store configurations | ❌ **F1** — do not actually disable sync |
-| Development-schema initialisation & production deploy | ❌ **F2** — absent |
-| `SavedRoute` 1 MB blob risk | ⚠️ **F3** — the documented risk isn't real |
-| Test coverage of the sync decision | ⚠️ **F4** — asserts a label, not behaviour |
-| Simulator carve-out | ⚠️ **F5** — unnecessary and non-functional |
+| Non-sync store configurations | ✅ **F1 FIXED** — every config now names `cloudKitDatabase` |
+| Development-schema initialisation & production deploy | ✅ **F2 FIXED** — initializer added, release gate documented |
+| `SavedRoute` 1 MB blob risk | ✅ **F3 FIXED** — comment corrected |
+| Test coverage of the sync decision | ✅ **F4 FIXED** — `CloudKitConfigurationTests` |
+| Simulator carve-out | ✅ **F5 FIXED** — kept, now effective, reason documented |
+| CloudKit state on the debug screen | ✅ **F6 FIXED** — status + recent events |
 
 ---
 
@@ -87,12 +93,13 @@ Apple's constraints `[S1]`, `[S4]`, checked against every type in
 
 ### 2.3 Explicit container selection on the sync path
 
-`AppContainer.swift:206-210` passes `cloudKitDatabase: .private(ckContainerID)`.
-This is exactly the pattern Apple prescribes for opting out of automatic
-discovery `[S1]`, and it is what makes the sync path deterministic. The inline
-comment ("Explicit container ID so every code path targets the same CloudKit
-store") states the right intent — §3.1 is about the paths where it wasn't
-applied.
+The sync path passed `cloudKitDatabase: .private(…)` even before this audit — exactly the
+pattern Apple prescribes for opting out of automatic discovery `[S1]`, and what makes it
+deterministic. Its inline comment ("Explicit container ID so every code path targets the
+same CloudKit store") stated the right intent; F1 was about the paths where that intent
+was not applied. Container selection now runs through
+`AppContainer.makeConfiguration`, and the identifier lives on
+`StrideSchema.cloudKitContainerID` so no caller spells it out.
 
 ### 2.4 The two hand-written mitigations are the right ones
 
@@ -132,6 +139,11 @@ observes the same notification and unwraps `CKPartialErrorsByItemIDKey` and
 ## 3. Findings
 
 ### F1 — (High) Every "local-only" store configuration still syncs to CloudKit
+
+> ✅ **FIXED** — `AppContainer.makeConfiguration` now builds every configuration and names
+> `cloudKitDatabase` on each (`.private` when mirroring, `.none` otherwise); tier 2
+> recreates with the primary configuration so the "data comes back from iCloud" alert stays
+> true; `IntentDataProvider`, `TestStore`, and `IntentDataProviderTests` pass `.none`.
 
 `ModelConfiguration`'s URL-based initialiser is declared `[S5]`:
 
@@ -205,6 +217,11 @@ where mirroring is intended. See §5.1.
 
 ### F2 — (High) The CloudKit schema is never initialised, and no deploy step is documented
 
+> ✅ **FIXED** — `CloudKitSchemaInitializer` (`#if DEBUG`, run with `--init-cloudkit-schema`)
+> uploads the full schema following Apple's sample, called from `StrideApp.init` before the
+> `ModelContainer` exists. `docs/CLOUDKIT_VALIDATION.md` gains a **Release gate** section
+> covering initialisation, CloudKit Console verification, and Deploy Schema Changes.
+
 Nothing in the tree calls `initializeCloudKitSchema()`. Apple is unambiguous
 that this is a required development step, not an optimisation `[S1]`:
 
@@ -244,6 +261,10 @@ halves one problem.
 
 ### F3 — (Medium) The `SavedRoute` 1 MB warning is contradicted by Apple's documentation
 
+> ✅ **FIXED** — the comment at `SavedRoute.swift:9` now states the documented behaviour
+> (automatic `_ckAsset` promotion) and records `.externalStorage` as an optional *local*
+> optimisation rather than a blocked sync fix.
+
 `SavedRoute.swift:9-13` carries a standing warning:
 
 > NOTE: these are *not* yet marked `@Attribute(.externalStorage)`, so a very long route can push a record past the ~1 MB CKRecord limit and silently stop syncing. Enabling external storage is the correct fix but changes the persistent store format and must ship with a device-tested CloudKit migration.
@@ -274,6 +295,11 @@ local optimisation, tracked separately if wanted.
 
 ### F4 — (Medium) The tests assert the persistence *label*, not the persistence *behaviour*
 
+> ✅ **FIXED** — `StrideTests/CloudKitConfigurationTests.swift` asserts
+> `cloudKitContainerIdentifier` on the built configuration for every combination of
+> in-memory / sync-on / sync-off, plus that the fallback genuinely differs from the primary.
+> `CloudKitDiagnosticsTests` covers the event and error flattening.
+
 `AppContainerTests.syncDisabledUsesLocalStore` (`AppContainerTests.swift:16-38`)
 asserts `container.persistenceMode == .localOnly`. But `persistenceMode` is a
 value `AppContainer` assigns to itself at `:225` from the same `cloudKitEnabled`
@@ -293,6 +319,12 @@ makes it the highest-value test in this document.
 
 ### F5 — (Low) The simulator carve-out is both non-functional and unnecessary
 
+> ✅ **FIXED** — kept and now effective. Resolved in favour of keeping it, for a reason this
+> write-up originally missed: the unit-test suite runs in the simulator and builds real
+> file-backed containers, so without the carve-out every test run writes into the team's
+> development container. `shouldUseCloudKit`, `AGENTS.md`, and
+> `docs/CLOUDKIT_VALIDATION.md` now all say that.
+
 `AppContainer.shouldUseCloudKit` (`:421-430`) returns `false` under
 `targetEnvironment(simulator)`. `AGENTS.md:192` states this as a rule
 ("Simulator builds intentionally disable CloudKit") and
@@ -311,6 +343,10 @@ and the two docs should agree; today all three describe a behaviour that isn't
 happening.
 
 ### F6 — (Low) `CloudKitDebugView` shows no CloudKit state
+
+> ✅ **FIXED** — the screen now shows `Active Store`, **Mirroring To** (read back off the
+> live configuration), live `CKAccountStatus`, and the recent
+> `NSPersistentCloudKitContainer` events via `AppContainer.recentCloudKitEvents`.
 
 `CloudKitDebugView` renders local SwiftData rows plus the sync toggle. Its own
 footer is honest about it — *"local SwiftData records mirrored by CloudKit plus
@@ -351,10 +387,10 @@ Things checked that turned out fine, recorded so the next pass doesn't re-derive
 
 ---
 
-## 5. Recommended fixes
+## 5. The fixes
 
-Ordered by value. §5.1 and §5.2 travel together; §5.2 is the only one that can be
-verified in CI.
+All applied. Kept in full because each records a constraint the code has to go on
+satisfying, not just a change that was made. §5.2 is the only one verifiable in CI.
 
 ### 5.1 Make every non-sync configuration explicit — F1, F5
 
@@ -450,15 +486,24 @@ Add `CKAccountStatus`, `persistenceMode`, the container ID, and the last few
 
 ---
 
-## 6. Suggested order
+## 6. Device validation still owed
 
-1. **§5.2** — the test, first, so it fails against today's code and documents the
-   defect executably.
-2. **§5.1** — the configuration fix, with the Tier-2 decision made explicitly.
-   Device-validate per `docs/CLOUDKIT_VALIDATION.md` plus the sync-off assertion.
-3. **§5.4** — schema initialisation, then deploy to production. Must precede the
-   next App Store submission.
-4. **§5.3**, **§5.5**, **§5.6** — documentation and diagnostics; no behaviour risk.
+The code changes are in; none of the below has been run. Everything here needs hardware,
+which is why it could not be done in the same pass.
+
+1. **The sync-off assertion.** Turn iCloud Sync off, restart, confirm
+   `Settings > CloudKit Debug > Mirroring To` reads `Not mirroring`, create a run, and
+   confirm no new record appears in CloudKit Console. This is the one that proves F1 is
+   actually fixed — `CloudKitConfigurationTests` proves the configuration is right, not
+   that SwiftData honours it.
+2. **A full pass of `docs/CLOUDKIT_VALIDATION.md`** with sync back on, two devices. The
+   fallback tiers changed shape (tier 1 is now genuinely a different configuration; tier 2
+   recreates mirrored), so the fallback section matters as much as the happy path.
+3. **The release gate** — run `--init-cloudkit-schema` once on a device, verify the record
+   types in CloudKit Console, and **Deploy Schema Changes**. Must precede the next App
+   Store submission, and note that deployment is additive-only and irreversible.
+4. **A `xcodegen generate` + full build and test run.** No Swift toolchain was available
+   where these changes were written, so nothing here has been compiled.
 
 ---
 

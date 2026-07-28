@@ -1,3 +1,4 @@
+import CloudKit
 import SwiftUI
 import SwiftData
 
@@ -11,6 +12,12 @@ struct CloudKitDebugView: View {
     static let recordLimit = 50
 
     @Environment(AppSettings.self) private var appSettings
+    @Environment(AppContainer.self) private var container
+
+    /// The live iCloud account state. This screen is where a tester is sent to work
+    /// out why sync is quiet, and "not signed into iCloud" is the most common answer —
+    /// previously it was only reachable from the onboarding restore screen (F6).
+    @State private var accountStatus: CKAccountStatus?
 
     @Query(CloudKitDebugView.profilesDescriptor) private var profiles: [UserProfile]
     @Query(CloudKitDebugView.plansDescriptor) private var plans: [TrainingPlan]
@@ -59,12 +66,19 @@ struct CloudKitDebugView: View {
         List {
             Section {
                 labeled("iCloud Sync Enabled", value: appSettings.iCloudSyncEnabled ? "Yes" : "No")
+                labeled("Active Store", value: container.persistenceMode.displayName)
+                // The one that answers "is this launch actually syncing?". The preference
+                // above is what the user asked for; this is what SwiftData was handed.
+                labeled("Mirroring To", value: container.cloudKitContainerIdentifier ?? "Not mirroring")
+                labeled("iCloud Account", value: accountStatusText)
                 labeled("UserDefaults Unit Preference", value: AppSettings.syncedUnitPreference().displayName)
             } header: {
                 Text("CloudKit Status")
             } footer: {
                 Text("This screen shows local SwiftData records mirrored by CloudKit plus iCloud key-value settings. Each table is capped at \(Self.recordLimit) records.")
             }
+
+            eventSection
 
             recordSection(title: "User Profiles", records: profiles.map(profilePayload))
             recordSection(title: "Training Plans", records: plans.map(planPayload))
@@ -74,6 +88,71 @@ struct CloudKitDebugView: View {
             recordSection(title: "Saved Routes", records: savedRoutes.map(savedRoutePayload))
         }
         .navigationTitle("CloudKit Debug")
+        .task {
+            accountStatus = try? await CKContainer(
+                identifier: StrideSchema.cloudKitContainerID
+            ).accountStatus()
+        }
+    }
+
+    // MARK: - Sync status
+
+    private var accountStatusText: String {
+        guard let accountStatus else { return "Checking…" }
+        return switch accountStatus {
+        case .available: "Available"
+        case .noAccount: "Not signed in"
+        case .restricted: "Restricted"
+        case .couldNotDetermine: "Could not determine"
+        case .temporarilyUnavailable: "Temporarily unavailable"
+        @unknown default: "Unknown"
+        }
+    }
+
+    /// The sync events `docs/CLOUDKIT_VALIDATION.md` asks a tester to look for. They
+    /// are still written to Pulse; this puts the recent ones next to the state they
+    /// describe, so validation does not depend on a second app.
+    @ViewBuilder
+    private var eventSection: some View {
+        Section {
+            if container.recentCloudKitEvents.isEmpty {
+                // Split rather than a ternary inside `Text` so both strings stay plain
+                // literals the compiler extracts into the string catalogue.
+                if container.cloudKitContainerIdentifier == nil {
+                    Text("Not mirroring, so no events will arrive.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("No events yet this launch.")
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                ForEach(container.recentCloudKitEvents) { event in
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack {
+                            Text(event.kind.displayName.capitalized)
+                            Spacer()
+                            Text(event.status.displayName)
+                                .foregroundStyle(statusColor(for: event.status))
+                        }
+                        Text(event.observedAt.formatted(date: .omitted, time: .standard))
+                            .font(.dsCaption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        } header: {
+            Text("Recent Sync Events")
+        } footer: {
+            Text("Newest first, capped at \(CloudKitDiagnostics.eventHistoryLimit). A healthy launch shows `setup finished`, then `export`/`import` pairs.")
+        }
+    }
+
+    private func statusColor(for status: CloudKitEventSummary.Status) -> Color {
+        switch status {
+        case .started: .secondary
+        case .finished: .brand
+        case .failed: .red
+        }
     }
 
     @ViewBuilder

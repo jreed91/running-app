@@ -20,9 +20,19 @@ enum IntentDataProvider {
     /// Opens the same on-disk store that AppContainer uses, without CloudKit
     /// sync overhead. Safe for read-only intent access alongside the main container.
     /// Uses `StrideSchema` so the schema can never drift from the app's.
+    ///
+    /// `.none` is what makes the first sentence true. Omitting `cloudKitDatabase:`
+    /// defaults it to `.automatic`, so each of the four intents that calls this was
+    /// standing up a *second* CloudKit-mirroring container over the very store file the
+    /// app already has open for mirroring — the arrangement Apple's own schema-init
+    /// sample unloads its store to avoid (F1).
     static func makeContainer() throws -> ModelContainer {
         let schema = StrideSchema.make()
-        let config = ModelConfiguration(schema: schema, url: StrideSchema.storeURL)
+        let config = ModelConfiguration(
+            schema: schema,
+            url: StrideSchema.storeURL,
+            cloudKitDatabase: .none
+        )
         return try ModelContainer(for: schema, configurations: [config])
     }
 }

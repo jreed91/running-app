@@ -18,6 +18,13 @@ struct StrideApp: App {
         // UI-test state from a later hook would be too late to matter.
         UITestingSupport.prepareIfNeeded()
 
+        // Before the ModelContainer below, and it unloads its own store first: Apple's
+        // guidance is to avoid two frameworks mirroring the same store at once. No-op
+        // without --init-cloudkit-schema, and compiled out of release builds entirely.
+        #if DEBUG
+        CloudKitSchemaInitializer.runIfRequested()
+        #endif
+
         // `isHostingUnitTests` as well as `isEnabled`: a unit-test run launches this app
         // as its host, and the real on-disk/CloudKit store it used to open outlived every
         // individual test in the same coordinator.

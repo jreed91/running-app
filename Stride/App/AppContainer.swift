@@ -1,5 +1,4 @@
 import Foundation
-import CloudKit
 import Observation
 import CoreData
 import SwiftData
@@ -28,6 +27,23 @@ final class AppContainer {
         case localFallback
         case recreatedLocalFallback
         case emergencyInMemory
+
+        /// Shown on both Settings → Active Store and the CloudKit debug screen. One
+        /// definition so the two cannot drift into describing the same launch differently.
+        ///
+        /// Deliberately not localized: this is a diagnostic label that appears in bug
+        /// reports and in `docs/CLOUDKIT_VALIDATION.md`'s failure-sign list, and it has
+        /// to be the same string whoever reads it.
+        var displayName: String {
+            switch self {
+            case .cloudKit: "CloudKit"
+            case .inMemory: "In-Memory"
+            case .localOnly: "Local Only"
+            case .localFallback: "Local Fallback"
+            case .recreatedLocalFallback: "Recreated Local Store"
+            case .emergencyInMemory: "Emergency In-Memory"
+            }
+        }
     }
 
     /// A store-open problem worth interrupting the user for.
@@ -112,6 +128,20 @@ final class AppContainer {
     /// the user toggles back rather than latching for the rest of the session.
     let syncPreferenceAtLaunch: Bool
 
+    /// The CloudKit container this launch is mirroring into, or `nil` when it isn't.
+    ///
+    /// Read back off the configuration that was actually used rather than recomputed,
+    /// so the debug screen reports what SwiftData was handed and not what the app
+    /// intended — the distinction F1 turned on.
+    let cloudKitContainerIdentifier: String?
+
+    /// The most recent `NSPersistentCloudKitContainer` lifecycle events, newest first.
+    ///
+    /// Empty when sync is off, and empty until the first event arrives. Backs the
+    /// CloudKit debug screen so a TestFlight tester can answer "is sync working?"
+    /// without opening the Pulse console (F6).
+    private(set) var recentCloudKitEvents: [CloudKitEventSummary] = []
+
     // MARK: Repositories
 
     let workoutRepository: WorkoutRepositoryProtocol
@@ -189,9 +219,6 @@ final class AppContainer {
         // exist yet at the point AppContainer is initialized.
         let syncEnabled = syncEnabledOverride ?? AppSettings.syncedICloudEnabled()
 
-        // Explicit container ID so every code path targets the same CloudKit store.
-        let ckContainerID = "iCloud.com.running.stride"
-
         // Shared on-disk URL keeps the CloudKit store and any local-fallback store
         // pointing at the same SQLite file. When CloudKit recovers, NSPersistentCloudKitContainer
         // picks up records that were written during an outage and pushes them automatically.
@@ -199,21 +226,24 @@ final class AppContainer {
 
         let cloudKitEnabled = forceCloudKit ?? Self.shouldUseCloudKit(syncEnabled: syncEnabled, inMemory: inMemory)
 
-        let config: ModelConfiguration
-        if inMemory {
-            config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-        } else if cloudKitEnabled {
-            config = ModelConfiguration(
-                schema: schema,
-                url: storeURL,
-                cloudKitDatabase: .private(ckContainerID)
-            )
-        } else {
-            config = ModelConfiguration(schema: schema, url: storeURL)
-        }
+        let config = Self.makeConfiguration(
+            schema: schema,
+            storeURL: storeURL,
+            inMemory: inMemory,
+            cloudKitEnabled: cloudKitEnabled
+        )
 
-        // Fallback uses the SAME on-disk URL — data is never orphaned in a separate store.
-        let localConfig = ModelConfiguration(schema: schema, url: storeURL)
+        // Fallback uses the SAME on-disk URL — data is never orphaned in a separate
+        // store — and states `.none`, which is what makes it a genuinely different
+        // configuration from `config` and so capable of recovering a CloudKit-caused
+        // open failure. It used to omit `cloudKitDatabase:` entirely, which meant it
+        // was the same mirrored configuration under a different name (F1).
+        let localConfig = Self.makeConfiguration(
+            schema: schema,
+            storeURL: storeURL,
+            inMemory: false,
+            cloudKitEnabled: false
+        )
         let container: ModelContainer
         let persistenceMode: PersistenceMode
         var movedAsideStoreName: String? = nil
@@ -265,7 +295,12 @@ final class AppContainer {
                     level: .warning
                 )
 
-                if let c = try? modelContainerFactory(schema, [localConfig]) {
+                // Recreated with the *primary* configuration rather than `localConfig`:
+                // with sync on, the fresh store has to be mirrored, or the alert's
+                // promise — "if you had iCloud Sync on, your data will come back down
+                // from iCloud shortly" — is false and the runner is left staring at an
+                // empty app. With sync off it is `.none`, which is what it was anyway.
+                if let c = try? modelContainerFactory(schema, [config]) {
                     container = c
                     persistenceMode = .recreatedLocalFallback
                     movedAsideStoreName = storeURL.lastPathComponent + backupTag
@@ -295,6 +330,11 @@ final class AppContainer {
         self.modelContainer = container
         self.persistenceMode = persistenceMode
         self.syncPreferenceAtLaunch = syncEnabled
+        // The configuration that actually opened, not `config` — a fallback tier may
+        // have replaced it, and each tier makes its own CloudKit decision.
+        self.cloudKitContainerIdentifier = container.configurations
+            .compactMap(\.cloudKitContainerIdentifier)
+            .first
         self.storeRecoveryNotice = StoreRecoveryNotice(
             mode: persistenceMode,
             movedAsideStoreName: movedAsideStoreName
@@ -366,6 +406,50 @@ final class AppContainer {
         }
     }
 
+    // MARK: - Store configuration
+
+    /// Builds the `ModelConfiguration` for one store open.
+    ///
+    /// **Every configuration states `cloudKitDatabase` explicitly, including the ones
+    /// that do not sync.** The parameter defaults to `.automatic`, which Apple documents
+    /// as "enables managed CloudKit sync using the primary ubiquity container from the
+    /// app's entitlements" — and `Stride.entitlements` names one. So a configuration that
+    /// omitted the argument mirrored to iCloud whatever it was called: the local-only
+    /// path, the fallback, the simulator carve-out, and `IntentDataProvider` all synced,
+    /// and the iCloud Sync toggle reported "Local Only" while still uploading every run
+    /// (F1). Naming the option is the whole fix, so do not drop it from a new call site.
+    ///
+    /// See `docs/CLOUDKIT_ANALYSIS_2026-07-28.md` §3 F1.
+    ///
+    /// Pure and static so the sync decision is assertable off-device —
+    /// `CloudKitConfigurationTests` reads `cloudKitContainerIdentifier` back off the
+    /// result, which is the only part of this that a simulator can check.
+    static func makeConfiguration(
+        schema: Schema,
+        storeURL: URL,
+        inMemory: Bool,
+        cloudKitEnabled: Bool,
+        containerID: String = StrideSchema.cloudKitContainerID
+    ) -> ModelConfiguration {
+        if inMemory {
+            // An in-memory store has nothing to mirror, but `.automatic` here would still
+            // have SwiftData resolve a container from the entitlements. Say `.none`.
+            return ModelConfiguration(
+                schema: schema,
+                isStoredInMemoryOnly: true,
+                cloudKitDatabase: .none
+            )
+        }
+        if cloudKitEnabled {
+            return ModelConfiguration(
+                schema: schema,
+                url: storeURL,
+                cloudKitDatabase: .private(containerID)
+            )
+        }
+        return ModelConfiguration(schema: schema, url: storeURL, cloudKitDatabase: .none)
+    }
+
     // MARK: - Store failure classification
 
     /// Cocoa error codes that mean "this file cannot be read by this build", as
@@ -410,7 +494,12 @@ final class AppContainer {
         factory: (Schema, [ModelConfiguration]) throws -> ModelContainer
     ) -> (ModelContainer, PersistenceMode) {
         AppLogger.log("Falling back to an in-memory store — data will not persist this launch", label: "AppContainer", level: .critical)
-        let memConfig = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let memConfig = Self.makeConfiguration(
+            schema: schema,
+            storeURL: StrideSchema.storeURL,
+            inMemory: true,
+            cloudKitEnabled: false
+        )
         do {
             return (try factory(schema, [memConfig]), .emergencyInMemory)
         } catch {
@@ -418,7 +507,18 @@ final class AppContainer {
         }
     }
 
-    private static func shouldUseCloudKit(syncEnabled: Bool, inMemory: Bool) -> Bool {
+    /// Whether this launch should mirror to CloudKit.
+    ///
+    /// The simulator carve-out is not a platform limitation — Apple states you "can run
+    /// and test Core Data with CloudKit apps using Simulator". It is here because the
+    /// unit-test suite runs in the simulator and builds real file-backed containers
+    /// (`AppContainerTests` does, with a `storeURLOverride`), so without it every test
+    /// run would write into the team's real development container. Device validation
+    /// per `docs/CLOUDKIT_VALIDATION.md` remains how sync is actually verified.
+    ///
+    /// Until F1 was fixed this returned `false` and then handed back a configuration
+    /// that synced anyway, so none of the above was true.
+    static func shouldUseCloudKit(syncEnabled: Bool, inMemory: Bool) -> Bool {
         guard syncEnabled, !inMemory else { return false }
 
         #if targetEnvironment(simulator)
@@ -618,80 +718,43 @@ final class AppContainer {
             return
         }
 
-        let eventType: String
-        switch event.type {
-        case .setup: eventType = "setup"
-        case .import: eventType = "import"
-        case .export: eventType = "export"
-        @unknown default: eventType = "unknown"
+        // Flattened here, at the notification boundary: the event is not `Sendable` and
+        // this callback runs on whatever thread CloudKit posted from, so nothing past
+        // this line may touch it.
+        let summary = CloudKitEventSummary(event: event)
+
+        let logLevel: AppLogger.Level = switch summary.status {
+        case .started: .debug
+        case .finished: .info
+        case .failed: .error
+        }
+        AppLogger.log(summary.logLine, label: "CloudKit", level: logLevel)
+
+        if let error = event.error {
+            for line in CloudKitDiagnostics.errorDiagnosticLines(error, path: "event.error") {
+                AppLogger.log(line, label: "CloudKit", level: .error)
+            }
         }
 
-        let status: String
-        let logLevel: AppLogger.Level
-        if event.endDate == nil {
-            status = "started"
-            logLevel = .debug
-        } else if let error = event.error {
-            status = "failed (\(error.localizedDescription))"
-            logLevel = .error
-        } else {
-            status = "finished"
-            logLevel = .info
-        }
-
-        AppLogger.log("Event \(event.identifier) \(eventType) \(status)", label: "CloudKit", level: logLevel)
-
-        guard let error = event.error else { return }
-        for line in Self.cloudKitErrorDiagnosticLines(error, path: "event.error") {
-            AppLogger.log(line, label: "CloudKit", level: .error)
+        Task { @MainActor [weak self] in
+            self?.record(summary)
         }
     }
 
-    nonisolated private static func cloudKitErrorDiagnosticLines(_ error: Error, path: String) -> [String] {
-        let nsError = error as NSError
-        var lines = [
-            "\(path): domain=\(nsError.domain) code=\(nsError.code) desc=\(nsError.localizedDescription)"
-        ]
-
-        if let failureReason = nsError.localizedFailureReason, !failureReason.isEmpty {
-            lines.append("\(path): failureReason=\(failureReason)")
+    /// Keeps the newest events for the CloudKit debug screen, newest first.
+    private func record(_ summary: CloudKitEventSummary) {
+        // One operation posts a "started" event and then a "finished"/"failed" event
+        // under the same identifier. Replacing in place keeps the list a list of
+        // operations rather than of notifications.
+        if let existing = recentCloudKitEvents.firstIndex(where: {
+            $0.identifier == summary.identifier && $0.kind == summary.kind
+        }) {
+            recentCloudKitEvents.remove(at: existing)
         }
-        if let recoverySuggestion = nsError.localizedRecoverySuggestion, !recoverySuggestion.isEmpty {
-            lines.append("\(path): recoverySuggestion=\(recoverySuggestion)")
+        recentCloudKitEvents.insert(summary, at: 0)
+        if recentCloudKitEvents.count > CloudKitDiagnostics.eventHistoryLimit {
+            recentCloudKitEvents.removeLast(recentCloudKitEvents.count - CloudKitDiagnostics.eventHistoryLimit)
         }
-
-        if nsError.domain == CKError.errorDomain {
-            if let ckCode = CKError.Code(rawValue: nsError.code) {
-                lines.append("\(path): ckCode=\(ckCode)")
-            }
-            if let requestUUIDEntry = nsError.userInfo.first(where: { entry in
-                String(describing: entry.key).localizedCaseInsensitiveContains("uuid")
-            }), let requestID = requestUUIDEntry.value as? String {
-                lines.append("\(path): \(requestUUIDEntry.key)=\(requestID)")
-            }
-        }
-
-        if let partialErrors = nsError.userInfo[CKPartialErrorsByItemIDKey] as? [AnyHashable: Any], !partialErrors.isEmpty {
-            lines.append("\(path): partialErrors.count=\(partialErrors.count)")
-            for (itemID, value) in partialErrors.sorted(by: { "\($0.key)" < "\($1.key)" }) {
-                guard let nestedError = value as? NSError else {
-                    lines.append("\(path): partial[\(itemID)]=\(String(describing: value))")
-                    continue
-                }
-                lines.append(
-                    contentsOf: cloudKitErrorDiagnosticLines(
-                        nestedError,
-                        path: "\(path).partial[\(itemID)]"
-                    )
-                )
-            }
-        }
-
-        if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? NSError {
-            lines.append(contentsOf: cloudKitErrorDiagnosticLines(underlying, path: "\(path).underlying"))
-        }
-
-        return lines
     }
 
 }
