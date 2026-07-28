@@ -14,6 +14,7 @@ enum StrideWidgetKind {
     static let weeklyGoal = "StrideWeeklyGoalWidget"
     static let raceCountdown = "StrideRaceCountdownWidget"
     static let streak = "StrideStreakWidget"
+    static let coachTip = "StrideCoachTipWidget"
 }
 
 // MARK: - StrideWidgetsBundle
@@ -22,7 +23,7 @@ enum StrideWidgetKind {
 ///
 /// It started as the home for the run's Live Activity (U5b) — an `ActivityConfiguration`
 /// can only be declared by a widget extension, not by the app — and now also carries the
-/// Home Screen and Lock Screen widgets (B1). All four of the latter are `StaticConfiguration`s
+/// Home Screen and Lock Screen widgets (B1). All five of the latter are `StaticConfiguration`s
 /// over the same ``StrideSnapshotProvider``: the extension cannot reach the app's SwiftData
 /// store, so everything they draw comes from the one snapshot the app publishes into the
 /// shared App Group. See ``WidgetSnapshot``.
@@ -34,5 +35,6 @@ struct StrideWidgetsBundle: WidgetBundle {
         WeeklyGoalWidget()
         RaceCountdownWidget()
         StreakWidget()
+        CoachTipWidget()
     }
 }

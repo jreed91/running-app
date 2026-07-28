@@ -95,6 +95,53 @@ actor IntentModelActor {
         }
     }
 
+    /// The coach's single highest-priority card, right now.
+    ///
+    /// Runs `SmartCoachCards` **directly**, unlike the widget extension, which has to be
+    /// handed a finished string through `WidgetSnapshot`. Intents open the same on-disk
+    /// store the app does (`IntentDataProvider.makeContainer`), so the scheduled workouts,
+    /// logged runs and profile the selection needs are all right here. Siri therefore
+    /// answers from the same thresholds the dashboard draws, without a second opinion
+    /// compiled anywhere.
+    ///
+    /// `SmartCoachCard` is `Sendable`, so the card crosses the actor boundary as-is and
+    /// nothing has to be flattened into a transfer struct the way `TodaysRunData` is.
+    func coachTip(unit: UnitPreference, now: Date = Date()) throws -> SmartCoachCard? {
+        // Only the active plan can answer "what should I do next" — retired plans keep
+        // their future days, the same trap `todaysRun()` guards against.
+        var planDescriptor = FetchDescriptor<TrainingPlan>(
+            predicate: #Predicate { $0.isActive },
+            sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
+        )
+        planDescriptor.fetchLimit = 1
+        let plan = try modelContext.fetch(planDescriptor).first
+
+        // Bounded like the dashboard's own query: the widest window any rule looks
+        // through is 90 days of cadence, so the newest 120 runs is more than enough and
+        // an unbounded fetch inside an intent is a cost paid on every invocation.
+        var runDescriptor = FetchDescriptor<RunWorkout>(
+            sortBy: [SortDescriptor(\RunWorkout.date, order: .reverse)]
+        )
+        runDescriptor.fetchLimit = 120
+        let runs = try modelContext.fetch(runDescriptor)
+
+        var profileDescriptor = FetchDescriptor<UserProfile>(
+            sortBy: [SortDescriptor(\UserProfile.updatedAt, order: .reverse)]
+        )
+        profileDescriptor.fetchLimit = 1
+        let profile = try modelContext.fetch(profileDescriptor).first
+
+        let context = SmartCoachCards.Context(
+            nextSession: ScheduledDayResolver.upcomingSession(onOrAfter: now, in: plan),
+            recentRuns: runs,
+            profile: profile,
+            dayState: ScheduledDayResolver.dayState(on: now, in: plan),
+            unit: unit,
+            now: now
+        )
+        return SmartCoachCards.cards(context, limit: 1).first
+    }
+
     func weeklySummary() throws -> WeeklySummaryData {
         // Use the app-wide Monday-based week (`Date.startOfWeek`) so Siri's
         // weekly total matches the dashboard. `Calendar.current`'s default

@@ -31,5 +31,17 @@ struct StrideShortcuts: AppShortcutsProvider {
             shortTitle: "Weekly Summary",
             systemImageName: "chart.bar.fill"
         )
+        AppShortcut(
+            intent: CoachTipIntent(),
+            phrases: [
+                "What should I eat before my run in \(.applicationName)",
+                "What does my coach say in \(.applicationName)",
+                "Coach tip in \(.applicationName)",
+                "How should I fuel in \(.applicationName)",
+                "What should I focus on in \(.applicationName)",
+            ],
+            shortTitle: "Coach Tip",
+            systemImageName: "flame.fill"
+        )
     }
 }

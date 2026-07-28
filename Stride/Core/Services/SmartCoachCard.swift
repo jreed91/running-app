@@ -64,6 +64,17 @@ struct SmartCoachCard: Identifiable, Equatable, Sendable {
     enum Category: String, Sendable {
         case nutrition
         case training
+
+        /// The overline as it is drawn. Lives here rather than in the dashboard's view
+        /// because the widget snapshot ships it too, and the dashboard and the Home
+        /// Screen calling the same card two different things is exactly the drift the
+        /// snapshot's "finished strings" rule exists to prevent.
+        var label: String {
+            switch self {
+            case .nutrition: return String(localized: "FUEL", comment: "Coach card category overline")
+            case .training:  return String(localized: "TRAINING", comment: "Coach card category overline")
+            }
+        }
     }
 
     enum Tone: String, Sendable {
@@ -74,7 +85,24 @@ struct SmartCoachCard: Identifiable, Equatable, Sendable {
 
     let kind: Kind
     let title: String
+    /// The dashboard's copy: two to four sentences, written for a screen the runner is
+    /// already looking at.
     let message: String
+    /// The same advice in one short sentence, for the surfaces that cannot take the long
+    /// form — a `systemSmall` widget, a Lock Screen accessory, a spoken Siri answer.
+    ///
+    /// **It must not depend on when it is read.** The dashboard renders `message` the
+    /// instant it is computed, but a glance is written into ``WidgetSnapshot`` when the
+    /// app happens to run and read whenever the runner looks at their Home Screen, so
+    /// "about 30 minutes ago" would be a lie by lunchtime. Relevance is handled
+    /// separately by ``expiresAt``; this is only about wording.
+    ///
+    /// There is a second reason, and it is the one that bites hardest. `WidgetSnapshot`
+    /// is `Equatable` so `WidgetRefreshService` can skip a reload when nothing moved —
+    /// WidgetKit budgets reloads per widget per day. A glance containing an elapsed time
+    /// would differ on every single write, so every foreground would spend a reload and
+    /// the one that matters, right after a run is saved, would be the one dropped.
+    let glance: String
     let tone: Tone
     /// How much this matters right now, 0–1. Ordering is by this and nothing else.
     let score: Double
@@ -82,24 +110,45 @@ struct SmartCoachCard: Identifiable, Equatable, Sendable {
     /// total". Shown under the primary card, because a computed figure with no visible
     /// basis reads as a guess. Nil for cards that assert no number.
     let derivation: String?
+    /// When this card stops being worth showing, or `nil` when it does not go off.
+    ///
+    /// Where `glance` keeps the *wording* true, this keeps the *relevance* true: a refuel
+    /// prompt is pointless three hours after the run, and a race-day card is wrong the
+    /// morning after. Read at render time, the way `RaceCountdown.daysRemaining(asOf:)`
+    /// is, because the app is not running to retract it.
+    ///
+    /// Anchored to the data — a run's finish, a race's date — and never to `now`. An
+    /// expiry computed as "two hours from this write" would move on every write, which
+    /// is the reload-budget trap again.
+    let expiresAt: Date?
 
     init(
         kind: Kind,
         title: String,
         message: String,
+        glance: String,
         tone: Tone,
         score: Double,
-        derivation: String? = nil
+        derivation: String? = nil,
+        expiresAt: Date? = nil
     ) {
         self.kind = kind
         self.title = title
         self.message = message
+        self.glance = glance
         self.tone = tone
         // Clamped at the boundary rather than trusted: a rule that divides by a
         // near-zero baseline can produce something absurd, and a score outside 0–1
         // would silently own the top slot forever.
         self.score = score.clamped(to: 0...1)
         self.derivation = derivation
+        self.expiresAt = expiresAt
+    }
+
+    /// Whether the card is still worth showing at `now`.
+    func isValid(asOf now: Date) -> Bool {
+        guard let expiresAt else { return true }
+        return now < expiresAt
     }
 
     var id: String { kind.rawValue }
