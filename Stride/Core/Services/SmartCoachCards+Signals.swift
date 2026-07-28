@@ -99,7 +99,8 @@ extension SmartCoachCards {
         let duration = NextUpBriefing.estimatedDurationSeconds(for: next)
         let fluid = CoachNutrition.fluid(
             bodyMassKg: context.bodyMassKilograms,
-            feelsLikeCelsius: weather.feelsLikeCelsius
+            feelsLikeCelsius: weather.feelsLikeCelsius,
+            unit: context.unit
         )
         let humidity = Int(weather.humidityPercent.rounded())
 
@@ -114,6 +115,10 @@ extension SmartCoachCards {
                 seconds per \(unitWord(context.unit)) slower for the same effort.
                 """,
                 comment: "Coach card body for hot or humid conditions"
+            ),
+            glance: String(
+                localized: "Plan on \(fluid.amount), and let the pace sit slower for the same effort.",
+                comment: "Short coach tip for hot or humid conditions"
             ),
             tone: .caution,
             score: score,
@@ -171,6 +176,13 @@ extension SmartCoachCards {
                 """,
                 comment: "Coach card body for a sharp increase in weekly volume"
             ),
+            // Number-free on purpose: the percentage is computed over a rolling seven-day
+            // window, so it drifts as runs age out of it even when nothing new is logged.
+            // The advice does not drift, and it is the part that fits on a widget.
+            glance: String(
+                localized: "Volume is up sharply. Hold it here for a week before adding more.",
+                comment: "Short coach tip for a sharp increase in weekly volume"
+            ),
             tone: .caution,
             score: score,
             derivation: CoachNutrition.derivation([
@@ -222,6 +234,10 @@ extension SmartCoachCards {
                 hands it all back and then some.
                 """,
                 comment: "Coach card body for a run whose second half was slower"
+            ),
+            glance: String(
+                localized: "Open the next one 10–15 seconds per \(unitWord(context.unit)) slower.",
+                comment: "Short coach tip for a run whose second half was slower"
             ),
             tone: .caution,
             score: score,
@@ -285,6 +301,10 @@ extension SmartCoachCards {
                 """,
                 comment: "Coach card body when easy and hard runs are run at similar paces"
             ),
+            glance: String(
+                localized: "Hold the easy days 30–45 seconds per \(unitWord(context.unit)) further back.",
+                comment: "Short coach tip when easy and hard runs are run at similar paces"
+            ),
             tone: .neutral,
             score: score,
             derivation: CoachNutrition.derivation([
@@ -345,6 +365,10 @@ extension SmartCoachCards {
                 than out in front. Try it on the easy days first.
                 """,
                 comment: "Coach card body for low running cadence"
+            ),
+            glance: String(
+                localized: "Nudge your turnover about 5% higher, starting on the easy days.",
+                comment: "Short coach tip for low running cadence"
             ),
             tone: .neutral,
             score: score,

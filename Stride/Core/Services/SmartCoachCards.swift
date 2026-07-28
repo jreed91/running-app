@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - SmartCoachCards
 
-/// Chooses the dashboard's coaching cards.
+/// Chooses the coaching cards — for the dashboard, the widgets, and Siri alike.
 ///
 /// The selection is the feature. It runs in three steps, and each one exists because the
 /// previous design got something wrong:
@@ -25,6 +25,17 @@ import Foundation
 /// whose on-device model is unavailable — and every rule is pinned on both sides of its
 /// threshold in tests, which is the part that matters for advice about training and
 /// eating.
+///
+/// ## Three surfaces, one selection
+///
+/// The dashboard runs this directly. **App Intents** run it directly too — they open the
+/// same store through `IntentDataProvider`, so Siri answers from the same thresholds
+/// rather than a second opinion. The **widget extension cannot**: it is a separate
+/// process with no access to SwiftData, so the app runs the selection and publishes the
+/// winning card into ``WidgetSnapshot`` as finished strings, exactly as it does for every
+/// other widget field. That is what `SmartCoachCard.glance` and
+/// `SmartCoachCard.expiresAt` are for — see their notes on why a widget-bound card must
+/// not have a clock in its wording.
 ///
 /// Pure and stateless, with an injectable `now` and `calendar` throughout.
 enum SmartCoachCards {
@@ -73,6 +84,16 @@ enum SmartCoachCards {
         var bodyMassKilograms: Double? {
             CoachNutrition.validMass(profile?.bodyMassKilograms)
         }
+
+        /// Midnight at the end of race day, for the race cards' expiry.
+        ///
+        /// Derived from the race date rather than from `now` on purpose: an expiry
+        /// computed as "two hours from this write" moves on every write, and a snapshot
+        /// that differs on every write spends a WidgetKit reload on every foreground.
+        var endOfRaceDay: Date? {
+            guard let raceDate = profile?.raceDate else { return nil }
+            return calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: raceDate))
+        }
     }
 
     // MARK: - Entry point
@@ -115,22 +136,34 @@ enum SmartCoachCards {
     /// The one card the runner's current state always has to offer.
     static func card(for situation: CoachSituation, context: Context) -> SmartCoachCard? {
         switch situation {
-        case .raceDay:                          return raceDayCard(context)
-        case .raceWeek(let daysOut):            return raceWeekCard(daysOut: daysOut)
-        case .returningFromLayoff(let days):    return comebackCard(days: days)
-        case .recovering(let minutes):          return refuelCard(minutesSinceFinish: minutes, context: context)
-        case .sessionAhead(let shape):          return sessionCard(shape: shape, context: context)
-        case .restDay:                          return restDayCard(context)
-        case .beforePlanStart(let days):        return planStartsSoonCard(daysUntilStart: days)
-        case .planFinished:                     return planFinishedCard()
-        case .noPlan:                           return noPlanCard()
+        case .raceDay:
+            return raceDayCard(context)
+        case .raceWeek(let daysOut):
+            return raceWeekCard(daysOut: daysOut, expiresAt: context.endOfRaceDay)
+        case .returningFromLayoff(let days):
+            return comebackCard(days: days)
+        case .recovering(let minutes):
+            return refuelCard(minutesSinceFinish: minutes, context: context)
+        case .sessionAhead(let shape):
+            return sessionCard(shape: shape, context: context)
+        case .restDay:
+            return restDayCard(context)
+        case .beforePlanStart(let days):
+            return planStartsSoonCard(daysUntilStart: days)
+        case .planFinished:
+            return planFinishedCard()
+        case .noPlan:
+            return noPlanCard()
         }
     }
 
     // MARK: Race
 
     private static func raceDayCard(_ context: Context) -> SmartCoachCard {
-        let carbs = CoachNutrition.preSessionCarbohydrate(bodyMassKg: context.bodyMassKilograms)
+        let carbs = CoachNutrition.preSessionCarbohydrate(
+            bodyMassKg: context.bodyMassKilograms,
+            unit: context.unit
+        )
         return SmartCoachCard(
             kind: .raceDay,
             title: String(localized: "Race day", comment: "Coach card title"),
@@ -143,13 +176,18 @@ enum SmartCoachCards {
                 """,
                 comment: "Coach card body for race day"
             ),
+            glance: String(
+                localized: "\(carbs.amount) two to three hours before the start. Nothing new.",
+                comment: "Short coach tip for race day"
+            ),
             tone: .positive,
             score: 1,
-            derivation: carbs.derivation
+            derivation: carbs.derivation,
+            expiresAt: context.endOfRaceDay
         )
     }
 
-    private static func raceWeekCard(daysOut: Int) -> SmartCoachCard {
+    private static func raceWeekCard(daysOut: Int, expiresAt: Date?) -> SmartCoachCard {
         let title = daysOut == 1
             ? String(localized: "Race is tomorrow", comment: "Coach card title")
             : String(localized: "Race week — \(daysOut) days out", comment: "Coach card title")
@@ -175,8 +213,13 @@ enum SmartCoachCards {
             kind: .raceWeek,
             title: title,
             message: message,
+            glance: String(
+                localized: "Hold your usual carbohydrate through the taper so you start topped up.",
+                comment: "Short coach tip for race week"
+            ),
             tone: .positive,
-            score: 1
+            score: 1,
+            expiresAt: expiresAt
         )
     }
 
@@ -194,6 +237,12 @@ enum SmartCoachCards {
                 """,
                 comment: "Coach card body after a gap in training"
             ),
+            // No day count: it grows while the snapshot sits on disk, and the advice is
+            // the same whether it has been six days or sixteen.
+            glance: String(
+                localized: "Come back with twenty to thirty minutes easy, not where the plan left off.",
+                comment: "Short coach tip after a gap in training"
+            ),
             tone: .caution,
             score: 1,
             derivation: String(
@@ -210,7 +259,10 @@ enum SmartCoachCards {
     /// top slot for the whole time.
     private static func refuelCard(minutesSinceFinish: Int, context: Context) -> SmartCoachCard? {
         guard let run = context.recentRuns.first else { return nil }
-        let intake = CoachNutrition.recovery(bodyMassKg: context.bodyMassKilograms)
+        let intake = CoachNutrition.recovery(
+            bodyMassKg: context.bodyMassKilograms,
+            unit: context.unit
+        )
         let windowMinutes = CoachSituation.recoveryWindowSeconds / 60
         let remaining = 1 - (Double(minutesSinceFinish) / windowMinutes).clamped(to: 0...1)
 
@@ -225,11 +277,22 @@ enum SmartCoachCards {
                 """,
                 comment: "Coach card body shown shortly after a demanding run"
             ),
+            // The elapsed minutes are deliberately absent. This is the card that proves
+            // why: written into the snapshot they would be wrong within the hour, and
+            // they would make the snapshot differ on every single write.
+            glance: String(
+                localized: "\(intake.amount) within the hour.",
+                comment: "Short coach tip shown shortly after a demanding run"
+            ),
             tone: .positive,
             // Floors at 0.45 rather than zero: even late in the window this outranks a
             // routine preparation note, because it expires and that one does not.
             score: 0.45 + 0.55 * remaining,
-            derivation: intake.derivation
+            derivation: intake.derivation,
+            // Anchored to the run's finish, so it is the same instant on every write.
+            expiresAt: run.date
+                .addingTimeInterval(run.durationSeconds)
+                .addingTimeInterval(CoachSituation.recoveryWindowSeconds)
         )
     }
 
@@ -252,11 +315,13 @@ enum SmartCoachCards {
             let duration = NextUpBriefing.estimatedDurationSeconds(for: workout) ?? 0
             let carbs = CoachNutrition.inSessionCarbohydrate(
                 bodyMassKg: context.bodyMassKilograms,
-                durationSeconds: duration
+                durationSeconds: duration,
+                unit: context.unit
             )
             let fluid = CoachNutrition.fluid(
                 bodyMassKg: context.bodyMassKilograms,
-                feelsLikeCelsius: recentFeelsLike(context)
+                feelsLikeCelsius: recentFeelsLike(context),
+                unit: context.unit
             )
             return SmartCoachCard(
                 kind: .longRunFuel,
@@ -271,13 +336,22 @@ enum SmartCoachCards {
                     """,
                     comment: "Coach card body for a session long enough to need fuel during it"
                 ),
+                // No day word: "Tomorrow's" is false the moment the snapshot outlives
+                // midnight, and the widget already prints the session's own day label.
+                glance: String(
+                    localized: "\(carbs.amount) from forty-five minutes in, with \(fluid.amount) of fluid.",
+                    comment: "Short coach tip for a long session"
+                ),
                 tone: .neutral,
                 score: 0.6,
                 derivation: carbs.derivation
             )
 
         case .quality:
-            let carbs = CoachNutrition.preSessionCarbohydrate(bodyMassKg: context.bodyMassKilograms)
+            let carbs = CoachNutrition.preSessionCarbohydrate(
+                bodyMassKg: context.bodyMassKilograms,
+                unit: context.unit
+            )
             return SmartCoachCard(
                 kind: .sessionFuel,
                 title: String(localized: "Eat before the hard one", comment: "Coach card title"),
@@ -288,6 +362,10 @@ enum SmartCoachCards {
                     the difference between hitting the last rep and hanging on through it.
                     """,
                     comment: "Coach card body for a quality session"
+                ),
+                glance: String(
+                    localized: "\(carbs.amount) two to three hours before the session.",
+                    comment: "Short coach tip for a quality session"
                 ),
                 tone: .neutral,
                 score: 0.5,
@@ -307,6 +385,10 @@ enum SmartCoachCards {
                     """,
                     comment: "Coach card body for an ordinary easy run"
                 ),
+                glance: String(
+                    localized: "Short enough to run on what you've already eaten. Lay the kit out.",
+                    comment: "Short coach tip for an ordinary easy run"
+                ),
                 tone: .positive,
                 // Low on purpose. This is the card for "nothing needs saying", so almost
                 // any real signal should outrank it.
@@ -325,6 +407,10 @@ enum SmartCoachCards {
                     """,
                     comment: "Coach card body for a strength or cross-training day"
                 ),
+                glance: String(
+                    localized: "Gym rather than a run. Eat normally and get protein in afterwards.",
+                    comment: "Short coach tip for a strength or cross-training day"
+                ),
                 tone: .positive,
                 score: 0.2
             )
@@ -338,7 +424,10 @@ enum SmartCoachCards {
     // not a problem at all.
 
     private static func restDayCard(_ context: Context) -> SmartCoachCard {
-        let intake = CoachNutrition.recovery(bodyMassKg: context.bodyMassKilograms)
+        let intake = CoachNutrition.recovery(
+            bodyMassKg: context.bodyMassKilograms,
+            unit: context.unit
+        )
         return SmartCoachCard(
             kind: .restDay,
             title: String(localized: "Rest is the training", comment: "Coach card title"),
@@ -349,6 +438,10 @@ enum SmartCoachCards {
                 spread across the day keeps tomorrow's session from starting flat.
                 """,
                 comment: "Coach card body for a rest day"
+            ),
+            glance: String(
+                localized: "Eat normally rather than cutting back — adaptation happens on the rest day.",
+                comment: "Short coach tip for a rest day"
             ),
             tone: .positive,
             score: 0.4,
@@ -376,6 +469,10 @@ enum SmartCoachCards {
                 """,
                 comment: "Coach card body before a plan begins"
             ),
+            glance: String(
+                localized: "Keep ticking over with an easy run before week 1 begins.",
+                comment: "Short coach tip before a plan begins"
+            ),
             tone: .positive,
             score: 0.55
         )
@@ -393,6 +490,10 @@ enum SmartCoachCards {
                 """,
                 comment: "Coach card body once a plan has ended"
             ),
+            glance: String(
+                localized: "Take a few easy days, then build the next block in the Plan tab.",
+                comment: "Short coach tip once a plan has ended"
+            ),
             tone: .neutral,
             score: 0.6
         )
@@ -409,6 +510,10 @@ enum SmartCoachCards {
                 needs a goal and a rough 5K time to start.
                 """,
                 comment: "Coach card body when there is no training plan"
+            ),
+            glance: String(
+                localized: "Free runs still count. Build a plan when you want the sessions chosen.",
+                comment: "Short coach tip when there is no training plan"
             ),
             tone: .neutral,
             score: 0.7

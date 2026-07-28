@@ -51,6 +51,15 @@ enum CoachNutrition {
     static let fluidHeatCeilingCelsius = 32.0
     /// Apparent temperature below which the temperate rate applies unchanged.
     static let fluidHeatFloorCelsius = 20.0
+    /// The guideline hourly range quoted when body mass is unknown, in millilitres.
+    /// Stored metric and converted for display, so the two units cannot drift apart.
+    static let fluidGuidelineLowerMillilitres = 400.0
+    static let fluidGuidelineUpperMillilitres = 800.0
+
+    // MARK: Conversions
+
+    static let poundsPerKilogram = 2.20462
+    static let millilitresPerFluidOunce = 29.5735
 
     // MARK: - Target
 
@@ -69,7 +78,11 @@ enum CoachNutrition {
     // MARK: - In-session carbohydrate
 
     /// Carbohydrate per hour for a session long enough to fuel during it.
-    static func inSessionCarbohydrate(bodyMassKg: Double?, durationSeconds: Double) -> Target {
+    static func inSessionCarbohydrate(
+        bodyMassKg: Double?,
+        durationSeconds: Double,
+        unit: UnitPreference
+    ) -> Target {
         guard let mass = validMass(bodyMassKg) else {
             return Target(
                 amount: String(
@@ -96,8 +109,8 @@ enum CoachNutrition {
                 comment: "Computed carbohydrate rate"
             ),
             derivation: derivation([
-                rateText(carbGramsPerKilogramPerHour, unit: "g/kg/h"),
-                massText(mass),
+                rateText(carbGramsPerKilogramPerHour, per: "g/kg/h"),
+                massText(mass, unit: unit),
                 isWorthTotalling ? durationText(hours) : nil,
                 isWorthTotalling ? totalText(Int(total.rounded())) : nil
             ]),
@@ -108,7 +121,7 @@ enum CoachNutrition {
     // MARK: - Pre-session carbohydrate
 
     /// The carbohydrate in the meal before a quality session.
-    static func preSessionCarbohydrate(bodyMassKg: Double?) -> Target {
+    static func preSessionCarbohydrate(bodyMassKg: Double?, unit: UnitPreference) -> Target {
         guard let mass = validMass(bodyMassKg) else {
             return Target(
                 amount: String(
@@ -124,8 +137,8 @@ enum CoachNutrition {
         return Target(
             amount: String(localized: "about \(grams) g of carbohydrate", comment: "Computed pre-session carbohydrate"),
             derivation: derivation([
-                rateText(preSessionCarbGramsPerKilogram, unit: "g/kg"),
-                massText(mass)
+                rateText(preSessionCarbGramsPerKilogram, per: "g/kg"),
+                massText(mass, unit: unit)
             ]),
             isPersonalised: true
         )
@@ -134,7 +147,7 @@ enum CoachNutrition {
     // MARK: - Recovery
 
     /// Carbohydrate and protein for the window straight after a demanding run.
-    static func recovery(bodyMassKg: Double?) -> Target {
+    static func recovery(bodyMassKg: Double?, unit: UnitPreference) -> Target {
         guard let mass = validMass(bodyMassKg) else {
             return Target(
                 amount: String(
@@ -154,9 +167,9 @@ enum CoachNutrition {
                 comment: "Computed recovery intake"
             ),
             derivation: derivation([
-                rateText(recoveryCarbGramsPerKilogram, unit: "g/kg"),
-                rateText(recoveryProteinGramsPerKilogram, unit: "g/kg protein"),
-                massText(mass)
+                rateText(recoveryCarbGramsPerKilogram, per: "g/kg"),
+                rateText(recoveryProteinGramsPerKilogram, per: "g/kg protein"),
+                massText(mass, unit: unit)
             ]),
             isPersonalised: true
         )
@@ -168,29 +181,36 @@ enum CoachNutrition {
     ///
     /// Linear between the two anchors rather than stepped: a card that says 6 ml/kg at
     /// 19° and 10 at 21° would be describing the threshold, not the weather.
-    static func fluid(bodyMassKg: Double?, feelsLikeCelsius: Double?) -> Target {
+    static func fluid(
+        bodyMassKg: Double?,
+        feelsLikeCelsius: Double?,
+        unit: UnitPreference
+    ) -> Target {
         let rate = fluidRate(feelsLikeCelsius: feelsLikeCelsius)
 
         guard let mass = validMass(bodyMassKg) else {
             return Target(
-                amount: String(
-                    localized: "400–800 ml an hour",
-                    comment: "Guideline fluid rate when body mass is unknown"
+                amount: volumeRangeText(
+                    lowerMillilitres: fluidGuidelineLowerMillilitres,
+                    upperMillilitres: fluidGuidelineUpperMillilitres,
+                    unit: unit
                 ),
                 derivation: missingMassDerivation(),
                 isPersonalised: false
             )
         }
 
-        // Rounded to the nearest 50 ml: nobody measures a bottle to 10 ml, and "637 ml"
-        // claims a precision that a sweat-rate anchor does not have.
-        let perHour = Int(((mass * rate) / 50).rounded() * 50)
         return Target(
-            amount: String(localized: "\(perHour) ml an hour", comment: "Computed fluid rate"),
+            amount: volumeText(millilitres: mass * rate, unit: unit),
             derivation: derivation([
-                rateText(rate, unit: "ml/kg/h"),
-                massText(mass),
-                feelsLikeCelsius.map { feelsLikeText($0) }
+                // The rate's *volume* follows the runner's unit; its per-kilogram basis
+                // does not, because that is how the guidance is written everywhere,
+                // including where the bottles are marked in ounces. `massText` prints the
+                // kilograms alongside the pounds for imperial so the line still multiplies
+                // out in front of the reader.
+                rateText(convertedVolume(millilitres: rate, unit: unit), per: volumeRateUnit(unit)),
+                massText(mass, unit: unit),
+                feelsLikeCelsius.map { feelsLikeText($0, unit: unit) }
             ]),
             isPersonalised: true
         )
@@ -223,17 +243,94 @@ enum CoachNutrition {
         return kept.isEmpty ? nil : kept.joined(separator: " · ")
     }
 
-    private static func rateText(_ value: Double, unit: String) -> String {
-        // One decimal, trimmed: "0.9 g/kg/h", "6 ml/kg/h".
-        let rounded = (value * 10).rounded() / 10
-        let number = rounded == rounded.rounded()
-            ? String(Int(rounded))
-            : String(format: "%.1f", rounded)
+    // MARK: Volume
+
+    /// Millilitres in the runner's own unit — millilitres, or US fluid ounces.
+    ///
+    /// Carbohydrate and protein deliberately stay in **grams for both units**: gels, bars
+    /// and nutrition labels are marked in grams the world over, including where the
+    /// bottles are marked in ounces, so converting them would be translating away from
+    /// the number printed on the packet. Fluid is the opposite — a runner filling a
+    /// 20 oz bottle cannot act on "450 ml".
+    static func convertedVolume(millilitres: Double, unit: UnitPreference) -> Double {
+        switch unit {
+        case .metric:   return millilitres
+        case .imperial: return millilitres / millilitresPerFluidOunce
+        }
+    }
+
+    /// A volume, rounded to something a bottle can actually be filled to.
+    ///
+    /// Metric rounds to 50 ml and imperial to the nearest fluid ounce (about 30 ml) —
+    /// both far coarser than the arithmetic, because a sweat-rate anchor does not support
+    /// "637 ml" and nobody pours to that anyway.
+    static func volumeText(millilitres: Double, unit: UnitPreference) -> String {
+        switch unit {
+        case .metric:
+            let rounded = Int((millilitres / 50).rounded() * 50)
+            return String(localized: "\(rounded) ml an hour", comment: "Computed fluid rate, metric")
+        case .imperial:
+            let ounces = Int(convertedVolume(millilitres: millilitres, unit: unit).rounded())
+            return String(localized: "\(ounces) fl oz an hour", comment: "Computed fluid rate, imperial")
+        }
+    }
+
+    /// The guideline range, converted the same way, so the two units cannot drift.
+    static func volumeRangeText(
+        lowerMillilitres: Double,
+        upperMillilitres: Double,
+        unit: UnitPreference
+    ) -> String {
+        switch unit {
+        case .metric:
+            let low = Int((lowerMillilitres / 50).rounded() * 50)
+            let high = Int((upperMillilitres / 50).rounded() * 50)
+            return String(localized: "\(low)–\(high) ml an hour", comment: "Guideline fluid range, metric")
+        case .imperial:
+            let low = Int(convertedVolume(millilitres: lowerMillilitres, unit: unit).rounded())
+            let high = Int(convertedVolume(millilitres: upperMillilitres, unit: unit).rounded())
+            return String(localized: "\(low)–\(high) fl oz an hour", comment: "Guideline fluid range, imperial")
+        }
+    }
+
+    private static func volumeRateUnit(_ unit: UnitPreference) -> String {
+        switch unit {
+        case .metric:   return "ml/kg/h"
+        case .imperial: return "fl oz/kg/h"
+        }
+    }
+
+    // MARK: Derivation fragments
+
+    /// A rate, to two significant figures — "0.9 g/kg/h", "6 ml/kg/h", "0.2 fl oz/kg/h".
+    ///
+    /// Two significant figures rather than one decimal because converting a volume rate
+    /// into fluid ounces pushes it below 1, where a single decimal would round 0.203 to
+    /// "0.2" and 0.14 to "0.1" — the second of which loses a third of the value.
+    private static func rateText(_ value: Double, per unit: String) -> String {
+        let number: String
+        if value >= 1 {
+            let rounded = (value * 10).rounded() / 10
+            number = rounded == rounded.rounded() ? String(Int(rounded)) : String(format: "%.1f", rounded)
+        } else {
+            number = String(format: "%.2f", value)
+        }
         return "\(number) \(unit)"
     }
 
-    private static func massText(_ mass: Double) -> String {
-        String(format: "%.0f kg", mass)
+    /// The runner's weight, in their own unit.
+    ///
+    /// Imperial carries the kilograms in brackets, because the rate beside it is
+    /// per-kilogram: without them the line states a rate, a weight and a total that do not
+    /// multiply out, which is worse than showing no working at all. The Settings field
+    /// they set this in reads in pounds, so pounds lead.
+    private static func massText(_ mass: Double, unit: UnitPreference) -> String {
+        switch unit {
+        case .metric:
+            return String(format: "%.0f kg", mass)
+        case .imperial:
+            return String(format: "%.0f lb (%.0f kg)", mass * poundsPerKilogram, mass)
+        }
     }
 
     private static func durationText(_ hours: Double) -> String {
@@ -244,8 +341,14 @@ enum CoachNutrition {
         String(localized: "\(grams) g total", comment: "Total computed carbohydrate in a derivation line")
     }
 
-    private static func feelsLikeText(_ celsius: Double) -> String {
-        String(format: "felt %.0f°C", celsius)
+    /// Matches `WorkoutWeather.feelsLikeString(unit:)`, which is what the heat card's own
+    /// sentence prints — the derivation under it saying 27 °C while the sentence above
+    /// says 81 °F is the exact mismatch this whole change is about.
+    private static func feelsLikeText(_ celsius: Double, unit: UnitPreference) -> String {
+        switch unit {
+        case .metric:   return String(format: "felt %.0f°C", celsius)
+        case .imperial: return String(format: "felt %.0f°F", celsius * 9 / 5 + 32)
+        }
     }
 
     /// Says why a figure is a range rather than a number. Shown instead of hiding the

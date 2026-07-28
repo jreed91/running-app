@@ -161,12 +161,9 @@ private struct CoachCardIcon: View {
 
 private extension SmartCoachCard {
 
-    var categoryLabel: String {
-        switch category {
-        case .nutrition: return String(localized: "FUEL", comment: "Coach card category overline")
-        case .training:  return String(localized: "TRAINING", comment: "Coach card category overline")
-        }
-    }
+    /// The overline text. Defined on `Category` in the model rather than here, because
+    /// the widget snapshot ships the same string — see `WidgetSnapshot.CoachTip`.
+    var categoryLabel: String { category.label }
 
     var icon: StrideIconName {
         switch kind {
@@ -210,6 +207,7 @@ private extension SmartCoachCard {
                 Start it topped up, then take 65 g an hour from about forty-five minutes \
                 in, with 450 ml an hour of fluid.
                 """,
+                glance: "65 g an hour from forty-five minutes in, with 450 ml an hour of fluid.",
                 tone: .neutral,
                 score: 0.6,
                 derivation: "0.9 g/kg/h · 72 kg · ~1.9 h · 123 g total"
@@ -218,6 +216,7 @@ private extension SmartCoachCard {
                 kind: .load,
                 title: "Big week — hold it there",
                 message: "You've covered 52.0 km in the last seven days, 26% up on the seven before.",
+                glance: "Volume is up sharply. Hold it here for a week before adding more.",
                 tone: .caution,
                 score: 0.42
             ),
@@ -225,6 +224,7 @@ private extension SmartCoachCard {
                 kind: .polarization,
                 title: "Let the easy days be easy",
                 message: "Your easy runs are averaging 5:12 min/km — only 4% slower than your hard ones.",
+                glance: "Hold the easy days 30–45 seconds per km further back.",
                 tone: .neutral,
                 score: 0.31
             ),

@@ -37,8 +37,103 @@ enum WidgetSnapshotBuilder {
             ),
             streak: streak(runs: runs, now: now, calendar: calendar),
             race: race(plan: plan, profile: profile, now: now, calendar: calendar),
+            coachTip: coachTip(
+                plan: plan,
+                runs: runs,
+                profile: profile,
+                unit: unit,
+                now: now,
+                calendar: calendar
+            ),
             generatedAt: now
         )
+    }
+
+    // MARK: - Coach tip
+
+    /// The winning coaching card, ready for the extension to draw.
+    ///
+    /// This is the whole of the widget's share of the coach. `SmartCoachCards` reads
+    /// scheduled workouts, logged runs, weather and the profile — none of which the
+    /// extension can reach — so the selection runs here, in the app, and the extension
+    /// gets the answer rather than the inputs. The alternative, a second set of
+    /// thresholds compiled into the widget, is exactly the divergence the "finished
+    /// strings" rule at the top of `WidgetSnapshot` exists to prevent.
+    ///
+    /// The **glance** text goes into the snapshot, never `message`: see
+    /// `SmartCoachCard.glance` for why a widget-bound string cannot contain a clock.
+    static func coachTip(
+        plan: TrainingPlan?,
+        runs: [RunWorkout],
+        profile: UserProfile?,
+        unit: UnitPreference,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> WidgetSnapshot.CoachTip? {
+        // Only the *active* plan, for the same reason `nextWorkout` filters on it: a
+        // retired plan keeps its future days, and a Home Screen advising on a plan the
+        // runner replaced is worse than one advising on nothing.
+        let livePlan = (plan?.isActive == true) ? plan : nil
+
+        let context = SmartCoachCards.Context(
+            nextSession: ScheduledDayResolver.upcomingSession(
+                onOrAfter: now,
+                in: livePlan,
+                calendar: calendar
+            ),
+            recentRuns: runs,
+            profile: profile,
+            dayState: ScheduledDayResolver.dayState(on: now, in: livePlan, calendar: calendar),
+            unit: unit,
+            now: now,
+            calendar: calendar
+        )
+
+        guard let card = SmartCoachCards.cards(context, limit: 1).first else { return nil }
+        return WidgetSnapshot.CoachTip(
+            title: card.title,
+            message: card.glance,
+            categoryLabel: card.category.label,
+            symbolName: symbolName(for: card.kind),
+            tint: tint(for: card.tone),
+            expiresAt: card.expiresAt
+        )
+    }
+
+    /// SF Symbols for the coaching kinds.
+    ///
+    /// A separate mapping from the dashboard's `StrideIcon` glyphs, because a widget
+    /// draws SF Symbols and the app draws its own `Canvas` icon set. Both are presentation
+    /// and both live beside the surface that renders them; the *card* stays free of either.
+    static func symbolName(for kind: SmartCoachCard.Kind) -> String {
+        switch kind {
+        case .raceDay, .raceWeek:  return "flag.checkered"
+        case .refuel:              return "heart.fill"
+        case .longRunFuel:         return "flame.fill"
+        case .sessionFuel:         return "flame.fill"
+        case .heat:                return "thermometer.sun.fill"
+        case .restDay:             return "moon.zzz.fill"
+        case .fade:                return "chart.line.downtrend.xyaxis"
+        case .polarization:        return "tortoise.fill"
+        case .cadence:             return "metronome.fill"
+        case .load:                return "mountain.2.fill"
+        case .comeback:            return "figure.run"
+        case .prep:                return "checkmark.circle.fill"
+        case .planStartsSoon:      return "calendar"
+        case .planFinished:        return "flag.fill"
+        case .noPlan:              return "plus.circle.fill"
+        }
+    }
+
+    /// Tone drives the accent, matching the dashboard: a caution reads as one wherever it
+    /// came from. `.tempo` is the palette's amber, which is what `Color.warning` is on the
+    /// app side — the snapshot's `Tint` is a fixed set of palette names, not a free colour.
+    static func tint(for tone: SmartCoachCard.Tone) -> WidgetSnapshot.Tint {
+        switch tone {
+        case .positive: return .success
+        case .neutral:  return .brand
+        case .caution:  return .tempo
+        }
     }
 
     // MARK: - Next workout

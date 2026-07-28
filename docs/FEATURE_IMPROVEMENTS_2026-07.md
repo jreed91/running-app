@@ -438,6 +438,24 @@ Two things fell out of that and are worth knowing on their own:
   who had dropped from 182 to 170 — a real change, usually a tired one — was told
   nothing at all.
 
+**On all three surfaces since.** The dashboard, the Home Screen and Siri now answer
+from the one selection rather than from three:
+
+- **App Intents** call `SmartCoachCards` directly — they open the same store through
+  `IntentDataProvider`, so `CoachTipIntent` ("what should I eat before my run?")
+  runs the same thresholds the dashboard draws.
+- **The widget extension cannot**, having no access to SwiftData, so the app runs the
+  selection and publishes the winning card into `WidgetSnapshot.coachTip` as finished
+  strings — the same treatment every other widget field already gets. `CoachTipWidget`
+  renders it in small, medium and Lock Screen sizes.
+
+Two fields on `SmartCoachCard` exist for that hop, and both are about the gap between
+when the snapshot is *written* and when it is *read*: `glance` is a short form with no
+clock in its wording (the dashboard's copy says "about 30 minutes ago", which would be a
+lie by lunchtime — and would make the snapshot differ on every write, spending WidgetKit's
+whole daily reload budget on foregrounds), and `expiresAt` carries relevance separately,
+resolved against the widget's own entry date.
+
 **Still open:** the *log*. Recording what was actually taken on a long run — gels,
 fluid, when — is a model change and an in-run control, and none of it exists yet.
 The advice above is prescriptive only; it never claims to know what the runner ate.
