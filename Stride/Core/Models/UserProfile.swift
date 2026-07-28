@@ -45,6 +45,22 @@ final class UserProfile {
     /// JSON-encoded `[Int]` backing store for preferred run weekdays.
     /// Access via the `preferredRunDayIndices` extension property — never persist `[Int]` directly.
     var preferredRunDayIndicesData: Data?
+    /// Estimated due date, set when the runner is building a pregnancy plan. Nil otherwise —
+    /// it is what makes `PregnancyPlanService` able to run at all.
+    var dueDate: Date?
+    /// When the runner confirmed the contraindication screen and that they have discussed
+    /// running with their maternity provider. `PregnancyPlanService.generatePlan` refuses to
+    /// build a plan while this is nil; it is the app's record that the gate was passed, not
+    /// a clinical clearance, and it is re-confirmed every time a plan is built.
+    var pregnancyClearedAt: Date?
+    /// Weekly running minutes before pregnancy. A pregnancy plan tapers from *this*, not from
+    /// a VDOT-derived volume, because what a runner was actually doing is the only defensible
+    /// starting point for a percentage taper.
+    var prePregnancyWeeklyRunMinutes: Int?
+    /// Whether the runner habitually did vigorous-intensity running before pregnancy. ACOG
+    /// Committee Opinion 804 keys its "may continue" allowance on exactly this, so it is
+    /// stored as its own answer rather than inferred from `fitnessLevel`.
+    var pregnancyHabituallyVigorous: Bool?
     /// JSON-encoded `[String]` of `StrengthEquipment` rawValues the user owns.
     var selectedEquipmentData: Data?
     /// Raw-backed storage for `strengthFocus` to keep CloudKit fields primitive.

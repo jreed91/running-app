@@ -483,8 +483,19 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         workout: ScheduledWorkout,
         unitPreference: UnitPreference
     ) -> CustomWorkout {
-        let warmupGoal: WorkoutGoal = structure.warmup.distanceMeters
-            .map { distanceGoal(meters: $0, unitPreference: unitPreference) } ?? .open
+        // Distance, then duration, then open — the same order the work segments below use.
+        // A time-based bookend used to fall through to `.open`, which quietly turned a
+        // prescribed five-minute walk into "run until you press next" on the Watch. Every
+        // pregnancy-plan session is built that way, and so is any structure that measures a
+        // warm-up in minutes.
+        let warmupGoal: WorkoutGoal
+        if let dist = structure.warmup.distanceMeters {
+            warmupGoal = distanceGoal(meters: dist, unitPreference: unitPreference)
+        } else if let duration = structure.warmup.durationSeconds, duration > 0 {
+            warmupGoal = .time(duration, UnitDuration.seconds)
+        } else {
+            warmupGoal = .open
+        }
         let warmupName: String? = structure.warmup.label.isEmpty ? nil : structure.warmup.label
         let warmupStep = WorkoutStep(
             goal: warmupGoal,
@@ -527,8 +538,14 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             return IntervalBlock(steps: steps, iterations: set.repetitions)
         }
 
-        let cooldownGoal: WorkoutGoal = structure.cooldown.distanceMeters
-            .map { distanceGoal(meters: $0, unitPreference: unitPreference) } ?? .open
+        let cooldownGoal: WorkoutGoal
+        if let dist = structure.cooldown.distanceMeters {
+            cooldownGoal = distanceGoal(meters: dist, unitPreference: unitPreference)
+        } else if let duration = structure.cooldown.durationSeconds, duration > 0 {
+            cooldownGoal = .time(duration, UnitDuration.seconds)
+        } else {
+            cooldownGoal = .open
+        }
         let cooldownName: String? = structure.cooldown.label.isEmpty ? nil : structure.cooldown.label
         let cooldownStep = WorkoutStep(
             goal: cooldownGoal,

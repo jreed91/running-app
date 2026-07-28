@@ -13,7 +13,10 @@ struct CoachTipIntent: AppIntent {
     static let openAppWhenRun = false
 
     func perform() async throws -> some IntentResult & ProvidesDialog & ShowsSnippetView {
-        let unit = AppSettings.syncedUnitPreference()
+        // `AppSettings` is `@MainActor`, and so is this static read of it; `perform()` is
+        // not. Hopping is what the other intents do — see `WeeklySummaryIntent` and
+        // `RunWorkoutEntity` — and it is cheap: the value comes from UserDefaults.
+        let unit = await MainActor.run { AppSettings.syncedUnitPreference() }
         let container = try IntentDataProvider.makeContainer()
         let actor = IntentModelActor(modelContainer: container)
         let card = try await actor.coachTip(unit: unit)

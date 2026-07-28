@@ -122,6 +122,10 @@ final class AppContainer {
     // MARK: Services
 
     let trainingPlanService: TrainingPlanService
+    /// Builds pregnancy plans. A sibling of `trainingPlanService` rather than a mode of it:
+    /// the two share the SwiftData models and nothing else. See
+    /// `docs/PREGNANCY_RUNNING_EVIDENCE.md`.
+    let pregnancyPlanService: PregnancyPlanService
     let workoutTrackerService: WorkoutTrackerService
     let notificationService: NotificationService
     let workoutAnalyticsService: WorkoutAnalyticsService
@@ -306,6 +310,7 @@ final class AppContainer {
 
         let planService = TrainingPlanService()
         self.trainingPlanService = planService
+        self.pregnancyPlanService = PregnancyPlanService()
         let tracker = WorkoutTrackerService()
         self.workoutTrackerService = tracker
         let activityController = RunActivityController()
