@@ -79,7 +79,7 @@ struct CloudKitEventSummary: Identifiable, Equatable, Sendable {
         }
 
         self.init(
-            identifier: event.identifier,
+            identifier: event.identifier.uuidString,
             kind: kind,
             status: status,
             observedAt: observedAt
