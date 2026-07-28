@@ -128,12 +128,59 @@ struct WidgetSnapshot: Codable, Sendable, Equatable {
         }
     }
 
+    // MARK: Coach tip
+
+    /// The single highest-scoring coaching card, chosen by `SmartCoachCards` in the app.
+    ///
+    /// The widget extension cannot run that selection: it has no access to the SwiftData
+    /// store, and every rule in it reads scheduled workouts, logged runs and the profile.
+    /// So the app runs it and publishes the winner here, the same way it publishes a
+    /// formatted distance rather than a count of metres. One set of thresholds decides
+    /// what the dashboard, the Home Screen and Siri all say.
+    ///
+    /// The text is the card's **glance** form rather than its dashboard copy, for two
+    /// reasons that both come back to the same fact — this file is written when the app
+    /// runs and read whenever the runner looks at their phone. A glance carries no clock
+    /// in its wording, so it cannot go stale between those two moments; and it is
+    /// identical across writes when nothing has changed, which is what lets
+    /// `WidgetRefreshService` skip a reload. A tip reading "about 30 minutes ago" would
+    /// differ on every write and spend WidgetKit's whole daily reload budget on
+    /// foregrounds.
+    struct CoachTip: Codable, Sendable, Equatable {
+        /// The card's heading — "Practise your fuelling", "Race day".
+        var title: String
+        /// One short, time-independent sentence of advice.
+        var message: String
+        /// "FUEL" or "TRAINING", the same overline the dashboard card carries.
+        var categoryLabel: String
+        var symbolName: String
+        var tint: Tint
+        /// When the advice stops being worth showing — the end of a refuelling window, or
+        /// of race day. `nil` for tips that do not go off.
+        ///
+        /// A **date**, resolved at render time, for the same reason
+        /// ``NextWorkout/scheduledDate`` is: the app is not running two hours later to
+        /// retract it, and the widget's timeline already crosses those boundaries itself.
+        var expiresAt: Date?
+
+        /// Whether the tip is still worth drawing. A widget that has one expire falls
+        /// back to its empty state rather than showing advice that has gone off.
+        func isValid(asOf now: Date) -> Bool {
+            guard let expiresAt else { return true }
+            return now < expiresAt
+        }
+    }
+
     // MARK: Payload
 
     var nextWorkout: NextWorkout?
     var weekly: WeeklyGoal
     var streak: Streak
     var race: RaceCountdown?
+    /// Optional so a snapshot written before this field existed still decodes — the app
+    /// is the only writer, but a widget can be woken against a file the previous build
+    /// left behind.
+    var coachTip: CoachTip?
 
     /// When the app last wrote this. The widget uses it to notice a snapshot that has
     /// gone stale enough to be misleading rather than merely old.
@@ -171,6 +218,7 @@ struct WidgetSnapshot: Codable, Sendable, Equatable {
             ),
             streak: Streak(current: 0, longest: 0, isActiveToday: false),
             race: nil,
+            coachTip: nil,
             generatedAt: generatedAt
         )
     }
@@ -205,6 +253,17 @@ struct WidgetSnapshot: Codable, Sendable, Equatable {
                 date: now.addingTimeInterval(60 * 60 * 24 * 63),
                 phaseLabel: "Build · Week 6 of 16",
                 goalTimeText: "3:29:00"
+            ),
+            coachTip: CoachTip(
+                title: String(localized: "Practise your fuelling", comment: "Coach card title"),
+                message: String(
+                    localized: "65 g an hour from forty-five minutes in, with 450 ml an hour of fluid.",
+                    comment: "Sample coach tip"
+                ),
+                categoryLabel: String(localized: "FUEL", comment: "Coach card category overline"),
+                symbolName: "flame.fill",
+                tint: .tempo,
+                expiresAt: nil
             ),
             generatedAt: now
         )

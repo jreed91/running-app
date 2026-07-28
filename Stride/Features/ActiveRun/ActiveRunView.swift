@@ -1001,13 +1001,9 @@ struct ActiveRunView: View {
     }
 }
 
-// MARK: - Comparable+clamped
-
-private extension Comparable {
-    func clamped(to range: ClosedRange<Self>) -> Self {
-        max(range.lowerBound, min(self, range.upperBound))
-    }
-}
+// `Comparable.clamped(to:)` used to be file-private here. It now lives in
+// `Shared/Extensions/Comparable+Clamped.swift`, because the coach's nutrition rates
+// needed the same three lines and two private copies is how they drift.
 
 // The hand-rolled `Color.mix(with:by:)` that used to live here blended through
 // `UIColor` in sRGB and dropped alpha. `Color.mix(with:by:in:)` has been native

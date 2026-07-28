@@ -218,6 +218,17 @@ struct ContentView: View {
         } message: { notice in
             Text(notice.message)
         }
+        // Keyed on the profile so it re-runs after a restore delivers one, and so it does
+        // not fire on every root rebuild. One Health read per launch — the coach's
+        // fuelling amounts are per kilogram, and this is where that kilogram comes from.
+        .task(id: profiles.first?.id) {
+            guard let profile = profiles.first else { return }
+            await BodyMassSync.refresh(
+                profile: profile,
+                repository: container.healthKitRepository,
+                context: context
+            )
+        }
         .task(id: activePlans.first?.id) {
             deduplicate()
             await reconcileActivePlanIntegrations()

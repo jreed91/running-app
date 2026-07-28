@@ -216,6 +216,15 @@ Rules that fall out of it, and that a change here has to keep:
 - **All content decisions live in `WidgetSnapshotBuilder`**, which is pure and takes an
   injectable `now`/`calendar`. The extension does no logic beyond reading the file, so this is
   the whole of the widgets' testable surface (`StrideTests/WidgetSnapshotBuilderTests.swift`).
+- **A string in the snapshot must not contain a clock.** This is the sharpest form of the
+  date rule above, and the coach tip is where it bites: `SmartCoachCards` runs in the app
+  and its dashboard copy says things like "about 30 minutes ago", so the snapshot ships
+  `SmartCoachCard.glance` — a short form written to be true whenever it is read — and
+  never `message`. Relevance is carried separately by `expiresAt`, which the widget
+  resolves against its *entry* date. Both are anchored to the data (a run's finish, a
+  race's date) rather than to `now`, because a value derived from `now` differs on every
+  write, and a snapshot that differs on every write spends a reload on every foreground.
+  `StrideTests/CoachTipSurfacesTests.swift` asserts the no-clock rule over every card kind.
 - **`WidgetRefreshService` only reloads WidgetKit when the snapshot actually changed.**
   Reloads are budgeted per widget per day; spending one on every foreground would mean the
   reload right after a run is the one that gets dropped.

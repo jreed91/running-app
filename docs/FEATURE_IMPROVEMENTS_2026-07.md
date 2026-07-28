@@ -405,6 +405,57 @@ render, and on a device whose on-device model is unavailable, and every one of t
 is pinned on both sides of its threshold in
 [`SmartCoachCardsTests`](../StrideTests/SmartCoachCardsTests.swift).
 
+**Rebuilt since, as a selection algorithm rather than a rule list.** The first
+version was eleven independent rules ordered by a hand-written priority list, which
+made the list the design: the answer to "why am I seeing this card" was "because it
+was seventh". Selection now runs in three steps.
+
+1. [`CoachSituation`](../Stride/Core/Services/CoachSituation.swift) resolves the
+   runner's state — race day, race week, a lay-off, the recovery window, the shape
+   of the next session, or one of the four states where the plan has nothing
+   outstanding. Each state owns exactly one card, including the empty ones, which
+   used to share a single fallback that said the same thing about four different
+   problems.
+2. Race day, race week and a long lay-off are **exclusive** and take the strip
+   outright. A second card there is not extra help, it is something to read past.
+3. Everything else **scores**. Each rule reports how far past its threshold the
+   runner actually is, normalised to 0–1, so a 45% volume jump and a 21% one are no
+   longer the same card with the same claim on attention. The top score is drawn as
+   the primary card with its derivation line; the next two sit compact underneath.
+
+Two things fell out of that and are worth knowing on their own:
+
+- [`CoachNutrition`](../Stride/Core/Services/CoachNutrition.swift) computes amounts
+  rather than quoting ranges. Sports-nutrition guidance is written per kilogram, so
+  with a body mass — read from HealthKit, with a Settings field as the fallback —
+  the same rules give "65 g an hour" instead of "30–60 g an hour", and every card
+  shows its working (`0.9 g/kg/h · 72 kg · ~2.2 h · 143 g total`). Without a mass
+  the ranges still appear and the derivation says what would sharpen them.
+- [`CoachBaseline`](../Stride/Core/Services/CoachBaseline.swift) moves thresholds
+  from published constants to the runner's own once there is enough history
+  (8 readings). This is what the cadence rule needed: against a fixed 165 spm, a
+  runner who has always turned over at 158 was told to fix how they run, while one
+  who had dropped from 182 to 170 — a real change, usually a tired one — was told
+  nothing at all.
+
+**On all three surfaces since.** The dashboard, the Home Screen and Siri now answer
+from the one selection rather than from three:
+
+- **App Intents** call `SmartCoachCards` directly — they open the same store through
+  `IntentDataProvider`, so `CoachTipIntent` ("what should I eat before my run?")
+  runs the same thresholds the dashboard draws.
+- **The widget extension cannot**, having no access to SwiftData, so the app runs the
+  selection and publishes the winning card into `WidgetSnapshot.coachTip` as finished
+  strings — the same treatment every other widget field already gets. `CoachTipWidget`
+  renders it in small, medium and Lock Screen sizes.
+
+Two fields on `SmartCoachCard` exist for that hop, and both are about the gap between
+when the snapshot is *written* and when it is *read*: `glance` is a short form with no
+clock in its wording (the dashboard's copy says "about 30 minutes ago", which would be a
+lie by lunchtime — and would make the snapshot differ on every write, spending WidgetKit's
+whole daily reload budget on foregrounds), and `expiresAt` carries relevance separately,
+resolved against the widget's own entry date.
+
 **Still open:** the *log*. Recording what was actually taken on a long run — gels,
 fluid, when — is a model change and an in-run control, and none of it exists yet.
 The advice above is prescriptive only; it never claims to know what the runner ate.
@@ -413,7 +464,9 @@ Also open, and the natural next step rather than a gap in the above: the strip i
 deterministic by design and does not yet consult the on-device coach.
 `AICoachService` could take these same signals as context and rewrite the top card
 in the runner's own history, with the rule-based text as the fallback whenever the
-model is unavailable — which is most of the reason the rules were built first.
+model is unavailable — which is most of the reason the rules were built first. The
+scoring makes that easier rather than harder: there is now a single, ranked, already
+-computed signal to hand the model, instead of eleven booleans.
 
 ---
 
