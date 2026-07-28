@@ -104,12 +104,40 @@ enum ScheduledDayResolver {
         in plan: TrainingPlan?,
         calendar: Calendar = .current
     ) -> ScheduledWorkout? {
+        earliestOutstandingSession(in: plan, calendar: calendar) { scheduledDay in
+            scheduledDay > calendar.startOfDay(for: date)
+        }
+    }
+
+    /// The next uncompleted, non-rest session from `date` **inclusive** — the session the
+    /// runner is training toward right now.
+    ///
+    /// Distinct from ``nextSession(after:in:calendar:)``, which is asked relative to
+    /// whichever day the dashboard's calendar strip is browsing. The coaching cards and
+    /// the "Up next" card have to answer the same question no matter which day is
+    /// selected — advice about Thursday's tempo should not change because the runner
+    /// scrolled to look at last week.
+    static func upcomingSession(
+        onOrAfter date: Date,
+        in plan: TrainingPlan?,
+        calendar: Calendar = .current
+    ) -> ScheduledWorkout? {
+        earliestOutstandingSession(in: plan, calendar: calendar) { scheduledDay in
+            scheduledDay >= calendar.startOfDay(for: date)
+        }
+    }
+
+    /// The earliest outstanding session whose day passes `isEligible`.
+    private static func earliestOutstandingSession(
+        in plan: TrainingPlan?,
+        calendar: Calendar,
+        isEligible: (Date) -> Bool
+    ) -> ScheduledWorkout? {
         guard let plan else { return nil }
-        let day = calendar.startOfDay(for: date)
         return (plan.weeks ?? [])
             .flatMap { $0.workouts ?? [] }
             .filter { $0.workoutType != .rest && !$0.isCompleted }
-            .filter { calendar.startOfDay(for: $0.scheduledDate) > day }
+            .filter { isEligible(calendar.startOfDay(for: $0.scheduledDate)) }
             // Date first, then the display order — *not* `isOrderedBefore` alone, which
             // ranks by session kind before date and would answer with next week's run over
             // tomorrow's gym session.

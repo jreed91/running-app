@@ -28,7 +28,8 @@ that would meaningfully expand the product.
 >
 > **What is genuinely open:** **A7** (target-distance-aware routes with elevation),
 > **A9** (coaching-moment notifications), **A10** (race-day hub), **B3** (watchOS),
-> **B7** (recovery/readiness — also A5's remaining third), **B8**, **B9**, and the
+> **B7** (recovery/readiness — also A5's remaining third), **B8**, the logging half of
+> **B9** (its fuelling-advice half shipped as the dashboard's Coach Tips strip), and the
 > full-data export half of **B6**. Each says at its own entry what was deferred and why.
 
 **Contents**
@@ -387,10 +388,32 @@ non-running cardio; cross-training days are scheduled but not executable in-app.
 **Expand:** at minimum import and display cross-training/cycling from HealthKit
 against the plan, so cross-training days can be completed like runs.
 
-### B9. Nutrition / hydration logging for long runs & races *(low impact, medium effort)*
+### B9. Nutrition / hydration logging for long runs & races *(low impact, medium effort)* — 🟡 PARTIAL
 Absent entirely. Marathon plans (the app's longest-horizon product) benefit from
 fueling reminders and a simple long-run hydration/gel log. Niche but
 differentiating for the marathon segment.
+
+**Half of this shipped** as the *advice* side, without the log:
+[`SmartCoachCards`](../Stride/Core/Services/SmartCoachCards.swift) puts a fuelling
+strip on the dashboard. It covers race-week carbohydrate, the recovery window after
+a hard or long run, fuelling *during* a session past 16 km or ninety minutes,
+eating before a quality session, and pre-hydration when the last logged run's
+weather was hot or humid — plus the training-side cards (fade, easy-versus-hard
+separation, cadence, seven-day load ramp, coming back after a gap). Every rule is a
+threshold over data the app already holds, so the cards are there offline, on first
+render, and on a device whose on-device model is unavailable, and every one of them
+is pinned on both sides of its threshold in
+[`SmartCoachCardsTests`](../StrideTests/SmartCoachCardsTests.swift).
+
+**Still open:** the *log*. Recording what was actually taken on a long run — gels,
+fluid, when — is a model change and an in-run control, and none of it exists yet.
+The advice above is prescriptive only; it never claims to know what the runner ate.
+
+Also open, and the natural next step rather than a gap in the above: the strip is
+deterministic by design and does not yet consult the on-device coach.
+`AICoachService` could take these same signals as context and rewrite the top card
+in the runner's own history, with the rule-based text as the fallback whenever the
+model is unavailable — which is most of the reason the rules were built first.
 
 ---
 
