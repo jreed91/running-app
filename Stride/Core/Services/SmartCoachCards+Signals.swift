@@ -99,7 +99,8 @@ extension SmartCoachCards {
         let duration = NextUpBriefing.estimatedDurationSeconds(for: next)
         let fluid = CoachNutrition.fluid(
             bodyMassKg: context.bodyMassKilograms,
-            feelsLikeCelsius: weather.feelsLikeCelsius
+            feelsLikeCelsius: weather.feelsLikeCelsius,
+            unit: context.unit
         )
         let humidity = Int(weather.humidityPercent.rounded())
 

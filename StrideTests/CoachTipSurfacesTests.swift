@@ -72,14 +72,15 @@ struct CoachTipSurfacesTests {
         nextSession: ScheduledWorkout? = nil,
         runs: [RunWorkout] = [],
         profile: UserProfile? = nil,
-        dayState: ScheduledDayResolver.DayState = .noPlan
+        dayState: ScheduledDayResolver.DayState = .noPlan,
+        unit: UnitPreference = .metric
     ) -> SmartCoachCards.Context {
         SmartCoachCards.Context(
             nextSession: nextSession,
             recentRuns: runs,
             profile: profile,
             dayState: dayState,
-            unit: .metric,
+            unit: unit,
             now: now
         )
     }
@@ -89,15 +90,15 @@ struct CoachTipSurfacesTests {
     /// The rule the widget depends on. A glance is written when the app runs and read
     /// whenever the runner looks at their Home Screen, so anything in it that counts —
     /// minutes, days, "tomorrow" — is a lie waiting to happen.
-    @Test("No glance contains a relative time word")
-    func glancesCarryNoClock() throws {
+    @Test("No glance contains a relative time word", arguments: [UnitPreference.metric, .imperial])
+    func glancesCarryNoClock(unit: UnitPreference) throws {
         let context = TestStore.makeContext()
         let forbidden = [
             "minutes ago", "hours ago", "days ago", "days since",
             "today", "tomorrow", "yesterday", "this week", "last week"
         ]
 
-        for card in try everyKindOfCard(in: context) {
+        for card in try everyKindOfCard(in: context, unit: unit) {
             let glance = card.glance.lowercased()
             for word in forbidden {
                 #expect(
@@ -108,14 +109,34 @@ struct CoachTipSurfacesTests {
         }
     }
 
-    @Test("Every glance is shorter than its dashboard message and is a real sentence")
-    func glancesAreShortAndPresent() throws {
+    @Test(
+        "Every glance is shorter than its dashboard message and is a real sentence",
+        arguments: [UnitPreference.metric, .imperial]
+    )
+    func glancesAreShortAndPresent(unit: UnitPreference) throws {
         let context = TestStore.makeContext()
-        for card in try everyKindOfCard(in: context) {
+        for card in try everyKindOfCard(in: context, unit: unit) {
             #expect(!card.glance.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             #expect(card.glance.count < card.message.count, "\(card.kind.rawValue) glance is not shorter")
             // A widget line, not a paragraph.
             #expect(card.glance.count <= 90, "\(card.kind.rawValue) glance is \(card.glance.count) characters")
+        }
+    }
+
+    /// The bug this suite missed the first time: every fixture ran metric, so a card
+    /// pouring millilitres at a runner who set miles looked perfectly correct.
+    @Test("No imperial card quotes a metric volume or weight")
+    func imperialCardsCarryNoMetricUnits() throws {
+        let context = TestStore.makeContext()
+        for card in try everyKindOfCard(in: context, unit: .imperial) {
+            for text in [card.message, card.glance] {
+                #expect(!text.contains(" ml"), "\(card.kind.rawValue) quotes millilitres: \(text)")
+                #expect(!text.contains("°C"), "\(card.kind.rawValue) quotes Celsius: \(text)")
+            }
+            // Kilograms survive only inside the derivation's bracketed basis, never in
+            // anything the runner is being asked to act on.
+            #expect(!card.message.contains(" kg"), "\(card.kind.rawValue) message quotes kilograms")
+            #expect(!card.glance.contains(" kg"), "\(card.kind.rawValue) glance quotes kilograms")
         }
     }
 
@@ -315,7 +336,10 @@ struct CoachTipSurfacesTests {
 
     /// One card of every kind the selection can produce, so the contracts above are
     /// checked against all of them rather than the handful a single fixture happens to hit.
-    private func everyKindOfCard(in context: ModelContext) throws -> [SmartCoachCard] {
+    private func everyKindOfCard(
+        in context: ModelContext,
+        unit: UnitPreference = .metric
+    ) throws -> [SmartCoachCard] {
         var cards: [SmartCoachCard] = []
 
         func add(_ built: [SmartCoachCard]) {
@@ -334,15 +358,15 @@ struct CoachTipSurfacesTests {
             fitnessLevel: .intermediate
         )
         context.insert(racer)
-        add(SmartCoachCards.cards(makeContext(profile: racer)))
+        add(SmartCoachCards.cards(makeContext(profile: racer, unit: unit)))
         racer.raceDate = now.addingTimeInterval(3 * 86_400)
-        add(SmartCoachCards.cards(makeContext(profile: racer)))
+        add(SmartCoachCards.cards(makeContext(profile: racer, unit: unit)))
 
         // Lay-off, and the recovery window.
-        add(SmartCoachCards.cards(makeContext(runs: [makeRun(in: context, daysAgo: 21)])))
+        add(SmartCoachCards.cards(makeContext(runs: [makeRun(in: context, daysAgo: 21)], unit: unit)))
         add(SmartCoachCards.cards(makeContext(runs: [
             makeRun(in: context, daysAgo: 0.5 / 24, distanceMeters: 15_000, durationSeconds: 1_200, type: .longRun)
-        ])))
+        ], unit: unit)))
 
         // The three session shapes plus a gym day.
         let shapes: [(WorkoutType, Double?)] = [
@@ -355,14 +379,14 @@ struct CoachTipSurfacesTests {
                 targetDistanceMeters: distance
             )
             context.insert(session)
-            add(SmartCoachCards.cards(makeContext(nextSession: session)))
+            add(SmartCoachCards.cards(makeContext(nextSession: session, unit: unit)))
         }
 
         // The four empty states.
         for state: ScheduledDayResolver.DayState in [
             .rest, .beforePlanStart(daysUntilStart: 3), .outsidePlan, .noPlan
         ] {
-            add(SmartCoachCards.cards(makeContext(dayState: state)))
+            add(SmartCoachCards.cards(makeContext(dayState: state, unit: unit)))
         }
 
         // The signals.
@@ -370,7 +394,7 @@ struct CoachTipSurfacesTests {
             makeRun(in: context, daysAgo: 1, distanceMeters: 25_000),
             makeRun(in: context, daysAgo: 4, distanceMeters: 25_000),
             makeRun(in: context, daysAgo: 9, distanceMeters: 12_000)
-        ])))
+        ], unit: unit)))
 
         let hot = makeRun(in: context, daysAgo: 1)
         hot.weather = WorkoutWeather(
@@ -387,7 +411,7 @@ struct CoachTipSurfacesTests {
             targetDistanceMeters: 8_000
         )
         context.insert(outdoor)
-        add(SmartCoachCards.cards(makeContext(nextSession: outdoor, runs: [hot])))
+        add(SmartCoachCards.cards(makeContext(nextSession: outdoor, runs: [hot], unit: unit)))
 
         let faded = makeRun(in: context, daysAgo: 1)
         faded.splits = [300, 300, 390, 400].enumerated().map { index, pace in
@@ -399,20 +423,20 @@ struct CoachTipSurfacesTests {
                 cumulativeDistanceMeters: Double(index + 1) * 1_000
             )
         }
-        add(SmartCoachCards.cards(makeContext(runs: [faded])))
+        add(SmartCoachCards.cards(makeContext(runs: [faded], unit: unit)))
 
         add(SmartCoachCards.cards(makeContext(runs: [
             makeRun(in: context, daysAgo: 2, distanceMeters: 10_000, durationSeconds: 3_120, type: .easy),
             makeRun(in: context, daysAgo: 4, distanceMeters: 10_000, durationSeconds: 3_120, type: .easy),
             makeRun(in: context, daysAgo: 6, distanceMeters: 10_000, durationSeconds: 3_000, type: .tempo)
-        ])))
+        ], unit: unit)))
 
         let slow = (1...3).map { index -> RunWorkout in
             let run = makeRun(in: context, daysAgo: Double(index) * 2)
             run.averageCadenceStepsPerMinute = 152
             return run
         }
-        add(SmartCoachCards.cards(makeContext(runs: slow)))
+        add(SmartCoachCards.cards(makeContext(runs: slow, unit: unit)))
 
         // Every kind should be reachable; if one is not, the contracts below would
         // silently stop covering it.

@@ -160,7 +160,10 @@ enum SmartCoachCards {
     // MARK: Race
 
     private static func raceDayCard(_ context: Context) -> SmartCoachCard {
-        let carbs = CoachNutrition.preSessionCarbohydrate(bodyMassKg: context.bodyMassKilograms)
+        let carbs = CoachNutrition.preSessionCarbohydrate(
+            bodyMassKg: context.bodyMassKilograms,
+            unit: context.unit
+        )
         return SmartCoachCard(
             kind: .raceDay,
             title: String(localized: "Race day", comment: "Coach card title"),
@@ -256,7 +259,10 @@ enum SmartCoachCards {
     /// top slot for the whole time.
     private static func refuelCard(minutesSinceFinish: Int, context: Context) -> SmartCoachCard? {
         guard let run = context.recentRuns.first else { return nil }
-        let intake = CoachNutrition.recovery(bodyMassKg: context.bodyMassKilograms)
+        let intake = CoachNutrition.recovery(
+            bodyMassKg: context.bodyMassKilograms,
+            unit: context.unit
+        )
         let windowMinutes = CoachSituation.recoveryWindowSeconds / 60
         let remaining = 1 - (Double(minutesSinceFinish) / windowMinutes).clamped(to: 0...1)
 
@@ -309,11 +315,13 @@ enum SmartCoachCards {
             let duration = NextUpBriefing.estimatedDurationSeconds(for: workout) ?? 0
             let carbs = CoachNutrition.inSessionCarbohydrate(
                 bodyMassKg: context.bodyMassKilograms,
-                durationSeconds: duration
+                durationSeconds: duration,
+                unit: context.unit
             )
             let fluid = CoachNutrition.fluid(
                 bodyMassKg: context.bodyMassKilograms,
-                feelsLikeCelsius: recentFeelsLike(context)
+                feelsLikeCelsius: recentFeelsLike(context),
+                unit: context.unit
             )
             return SmartCoachCard(
                 kind: .longRunFuel,
@@ -340,7 +348,10 @@ enum SmartCoachCards {
             )
 
         case .quality:
-            let carbs = CoachNutrition.preSessionCarbohydrate(bodyMassKg: context.bodyMassKilograms)
+            let carbs = CoachNutrition.preSessionCarbohydrate(
+                bodyMassKg: context.bodyMassKilograms,
+                unit: context.unit
+            )
             return SmartCoachCard(
                 kind: .sessionFuel,
                 title: String(localized: "Eat before the hard one", comment: "Coach card title"),
@@ -413,7 +424,10 @@ enum SmartCoachCards {
     // not a problem at all.
 
     private static func restDayCard(_ context: Context) -> SmartCoachCard {
-        let intake = CoachNutrition.recovery(bodyMassKg: context.bodyMassKilograms)
+        let intake = CoachNutrition.recovery(
+            bodyMassKg: context.bodyMassKilograms,
+            unit: context.unit
+        )
         return SmartCoachCard(
             kind: .restDay,
             title: String(localized: "Rest is the training", comment: "Coach card title"),
