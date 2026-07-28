@@ -737,7 +737,7 @@ struct SmartCoachCardsTests {
             nextSession: session, recentRuns: runs, profile: nil, unit: .metric, now: now
         )
         let backwards = SmartCoachCards.cards(
-            nextSession: session, recentRuns: runs.reversed(), profile: nil, unit: .metric, now: now
+            nextSession: session, recentRuns: Array(runs.reversed()), profile: nil, unit: .metric, now: now
         )
         #expect(forwards == backwards)
     }
