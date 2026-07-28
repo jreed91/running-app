@@ -16,6 +16,14 @@ final class TrainingPlan {
     var customDistanceMeters: Double?
     var raceName: String?
     var raceDate: Date?
+    /// Raw-backed storage for `planKind` to keep CloudKit fields primitive. Defaulted so a
+    /// plan synced from a client that predates pregnancy plans reads back as `.standard`.
+    var planKindRaw: String = PlanKind.standard.rawValue
+    /// Estimated due date, set only on a `.pregnancy` plan. It is this plan's clock the way
+    /// `raceDate` is a race plan's: every weekly prescription is indexed by the gestational
+    /// age it implies. Deliberately not folded into `raceDate` — a due date is an estimate to
+    /// train around, not a date to peak on.
+    var dueDate: Date?
     var startDate: Date = Date()
     var endDate: Date = Date()
     var isActive: Bool = false
@@ -79,6 +87,25 @@ final class TrainingPlan {
     var targetRace: RaceType {
         get { RaceType(rawValue: targetRaceRaw) ?? .fiveK }
         set { targetRaceRaw = newValue.rawValue }
+    }
+
+    var planKind: PlanKind {
+        get { PlanKind(rawValue: planKindRaw) ?? .standard }
+        set { planKindRaw = newValue.rawValue }
+    }
+
+    /// True for plans built by ``PregnancyPlanService``.
+    ///
+    /// Three places have to ask: `TrainingPlanService.refreshPaces` (which would overwrite
+    /// an effort-based prescription with VDOT paces), `AdaptableWorkoutSelector` (which
+    /// gates both Smart Adapt and apply-coach-feedback), and anything that offers to add a
+    /// race. See `docs/PREGNANCY_RUNNING_EVIDENCE.md`.
+    var isPregnancyPlan: Bool { planKind == .pregnancy }
+
+    /// Gestational age on `date` for a pregnancy plan; nil for every other kind.
+    func gestationalAge(on date: Date = Date()) -> GestationalAge? {
+        guard isPregnancyPlan, let dueDate else { return nil }
+        return GestationalAge.on(date, dueDate: dueDate)
     }
 
     /// The goal race distance in meters, honoring a user-defined custom distance.

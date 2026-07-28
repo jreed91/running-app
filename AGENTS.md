@@ -103,6 +103,8 @@ Business logic belongs in services or repositories, not directly in SwiftUI view
 `Stride/Core/Models/Enums.swift` contains shared enums:
 
 - `RaceType`: `.maintainFitness`, `.fiveK`, `.halfMarathon`, `.marathon`
+- `PlanKind`: `.standard`, `.pregnancy` — *which generator built the plan*, a separate axis from
+  `RaceType`, which is *what the runner is training for*. See "Pregnancy plans" below.
 - `FitnessLevel`: `.beginner`, `.intermediate`, `.advanced`
 - `WorkoutType`: `.easy`, `.tempo`, `.interval`, `.longRun`, `.race`, `.rest`, `.crossTraining`, `.strength`
 - `TrainingPhase`: `.base`, `.build`, `.peak`, `.taper`
@@ -125,6 +127,11 @@ Business logic belongs in services or repositories, not directly in SwiftUI view
 - `RouteStep`, `GeneratedRoute`: route-generation results
 - `StrengthExercise`, `StrengthWorkoutPlan`, `CompletedStrengthSet`: strength workout representation
 
+`Stride/Core/Models/PregnancyPlanTypes.swift` holds the pregnancy vocabulary: `GestationalAge`
+(weeks+days from the due date — a pregnancy plan's clock, the way `raceDate` is a race plan's),
+`PregnancyTrimester`, `PregnancyEffort` (talk test + Borg range, the only intensity prescription
+a pregnancy plan makes), `PregnancyRedFlag`, and `PregnancyContraindication`.
+
 ## Training Plan Logic
 
 `TrainingPlanService` generates periodized plans:
@@ -134,6 +141,38 @@ Business logic belongs in services or repositories, not directly in SwiftUI view
 3. Weekly volume uses progressive overload with regular cutback weeks.
 4. Plans balance easy/long running with quality work such as tempo and intervals.
 5. Adaptation logic in `AppContainer.adaptedWorkout(scheduled:history:profile:)` adjusts scheduled workouts based on recent run history.
+
+### Pregnancy plans
+
+`PregnancyPlanService` is a **sibling** of `TrainingPlanService`, not a mode of it. A race plan
+periodises upward toward a fixed date and prescribes by VDOT-derived pace; a pregnancy plan
+tapers downward toward an estimated due date, prescribes by effort and duration, and has no
+goal race, no intervals, and no race week. They share only the SwiftData models, which is what
+lets the Plan tab, the widgets, history, and HealthKit sync handle a pregnancy plan without
+knowing it is one.
+
+Rules a change here has to keep — all of them sourced in
+[`docs/PREGNANCY_RUNNING_EVIDENCE.md`](docs/PREGNANCY_RUNNING_EVIDENCE.md), which is the file
+to read *before* touching any number in `PregnancyRunningPolicy`:
+
+- **Every number carries its source.** `PregnancyRunningPolicy` is deliberately a wall of
+  constants with citations attached rather than logic scattered through the generator. A
+  prescription in a health feature with no source behind it is what that arrangement exists to
+  prevent.
+- **`TrainingPlan.planKind` is the discriminator**, not `RaceType`. A pregnancy plan carries
+  `.maintainFitness` as its race type because it genuinely has no goal race.
+- **No pace targets, ever.** Pregnancy moves the pace–effort relationship week by week, so
+  every generated session leaves `targetPaceLowerBound`/`targetPaceUpperBound` nil and
+  prescribes minutes plus a talk-test effort. `PregnancyPlanServiceTests` asserts this.
+- **Three things must never touch a pregnancy plan**: `TrainingPlanService.refreshPaces` (would
+  write VDOT bands over it), `AdaptableWorkoutSelector` (gates both Smart Adapt and
+  apply-coach-feedback, and returns no candidates for one), and anything that adds a race. Each
+  guard is a one-line `plan.isPregnancyPlan` check and each is tested.
+- **The screening gate is load-bearing.** `generatePlan` throws unless
+  `UserProfile.pregnancyClearedAt` is set, so a future caller cannot route around
+  `PregnancyPlanSetupView`. The contraindication and red-flag lists are reproduced in full and
+  must not be summarised for a smaller screen — an abridged red-flag list reads as complete.
+- Stride is not a clinician, and the copy says so on the plan, in setup, and in the doc.
 
 ## Persistence and Sync
 
@@ -267,6 +306,7 @@ issue is usually already written up, with a recommended fix:
 | [`docs/APP_ANALYSIS_2026-07-24.md`](docs/APP_ANALYSIS_2026-07-24.md) | Current open bugs, UX issues, and cleanup (second pass). Start here. |
 | [`docs/APP_ANALYSIS_2026-07.md`](docs/APP_ANALYSIS_2026-07.md) | First-pass audit; all numbered bugs fixed. Its design (§5) and coverage (§8) sections are still live. |
 | [`docs/FEATURE_IMPROVEMENTS_2026-07.md`](docs/FEATURE_IMPROVEMENTS_2026-07.md) | Product/feature roadmap with shipped-status tracking. **The live one** — the two bug audits and the UX audit are closed bar items blocked on CI or a device, so this is where the remaining work is. Its header lists what is genuinely open. |
+| [`docs/PREGNANCY_RUNNING_EVIDENCE.md`](docs/PREGNANCY_RUNNING_EVIDENCE.md) | The published guidelines and studies behind every number in `PregnancyRunningPolicy`, with each row mapped to the code rule it drives. **Read before changing any of those numbers** — and update the row in the same change. |
 | [`docs/REPO_ANALYSIS.md`](docs/REPO_ANALYSIS.md) | Operational review: CI, secrets hygiene, test depth. |
 | [`docs/CLOUDKIT_VALIDATION.md`](docs/CLOUDKIT_VALIDATION.md) | CloudKit sync validation steps. |
 

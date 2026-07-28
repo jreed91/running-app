@@ -71,6 +71,37 @@ enum RaceType: String, Codable, CaseIterable, Sendable {
     }
 }
 
+// MARK: - PlanKind
+
+/// What kind of plan a `TrainingPlan` is.
+///
+/// A separate axis from `RaceType` rather than another case on it, because the two answer
+/// different questions: `RaceType` is *what the runner is training for*, `PlanKind` is *which
+/// generator built the plan and which rules govern it*. A pregnancy plan has no goal race —
+/// it carries `.maintainFitness` — but it must never be re-paced from VDOT, adapted by the
+/// AI coach, or handed intervals, and that is what this discriminates on.
+///
+/// Decoding an unknown raw value falls back to `.standard` so an older client reading a
+/// synced plan degrades rather than fails, the way `FitnessLevel` does.
+enum PlanKind: String, Codable, CaseIterable, Sendable {
+    case standard
+    case pregnancy
+
+    var displayName: String {
+        switch self {
+        case .standard:  return "Training Plan"
+        case .pregnancy: return "Pregnancy Plan"
+        }
+    }
+
+    var localizedName: String {
+        switch self {
+        case .standard:  return String(localized: "Training Plan", comment: "Kind of training plan")
+        case .pregnancy: return String(localized: "Pregnancy Plan", comment: "Kind of training plan")
+        }
+    }
+}
+
 // MARK: - FitnessLevel
 
 enum FitnessLevel: String, Codable, CaseIterable, Sendable {

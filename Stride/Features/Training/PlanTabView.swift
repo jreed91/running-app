@@ -15,6 +15,7 @@ struct PlanTabView: View {
     @Query(sort: \RunWorkout.date, order: .reverse) private var recentWorkouts: [RunWorkout]
 
     @State private var showNewPlanSheet = false
+    @State private var showPregnancyPlanSheet = false
     @State private var showRouteGenius = false
     @State private var isAdaptingPlan = false
     @State private var smartAdaptProgress = SmartAdaptProgress.idle
@@ -31,26 +32,38 @@ struct PlanTabView: View {
                         VStack(spacing: 20) {
                             PlanOverviewCard(plan: plan)
 
-                            SmartAdaptPlanCard(
-                                workoutCount: remainingAdaptableWorkouts(in: plan).count,
-                                isAdapting: isAdaptingPlan,
-                                progress: smartAdaptProgress,
-                                unavailableReason: smartAdaptUnavailableReason(for: plan)
-                            ) {
-                                adaptTask?.cancel()
-                                adaptTask = Task { await adaptRemainingWorkouts(in: plan) }
+                            // Smart Adapt and Pace Insights are both VDOT machinery, and a
+                            // pregnancy plan has no pace targets to insight about and is not
+                            // the coach's to rewrite (`AdaptableWorkoutSelector` already
+                            // returns nothing for one). Showing a permanently-empty card
+                            // instead of the guidance that does apply would be worse than
+                            // showing neither.
+                            if plan.isPregnancyPlan {
+                                PregnancyPlanGuidanceCard(plan: plan)
+                            } else {
+                                SmartAdaptPlanCard(
+                                    workoutCount: remainingAdaptableWorkouts(in: plan).count,
+                                    isAdapting: isAdaptingPlan,
+                                    progress: smartAdaptProgress,
+                                    unavailableReason: smartAdaptUnavailableReason(for: plan)
+                                ) {
+                                    adaptTask?.cancel()
+                                    adaptTask = Task { await adaptRemainingWorkouts(in: plan) }
+                                }
                             }
 
                             RouteGeniusCard {
                                 showRouteGenius = true
                             }
 
-                            Text("PACE INSIGHTS")
-                                .font(.sectionHeader)
-                                .foregroundStyle(.secondary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                            if !plan.isPregnancyPlan {
+                                Text("PACE INSIGHTS")
+                                    .font(.sectionHeader)
+                                    .foregroundStyle(.secondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
 
-                            PaceInsightsCard(plan: plan)
+                                PaceInsightsCard(plan: plan)
+                            }
 
                             Text("TRAINING WEEKS")
                                 .font(.sectionHeader)
@@ -86,7 +99,18 @@ struct PlanTabView: View {
                     }
                 }
                 ToolbarItem(placement: .primaryAction) {
-                    Button { showNewPlanSheet = true } label: {
+                    Menu {
+                        Button {
+                            showNewPlanSheet = true
+                        } label: {
+                            Label("Training Plan", systemImage: "figure.run")
+                        }
+                        Button {
+                            showPregnancyPlanSheet = true
+                        } label: {
+                            Label("Pregnancy Plan", systemImage: "heart.text.square")
+                        }
+                    } label: {
                         Label("New Plan", systemImage: "plus")
                     }
                     .disabled(profiles.isEmpty)
@@ -94,6 +118,9 @@ struct PlanTabView: View {
             }
             .sheet(isPresented: $showNewPlanSheet) {
                 NewPlanOnboardingView()
+            }
+            .sheet(isPresented: $showPregnancyPlanSheet) {
+                PregnancyPlanSetupView()
             }
             .sheet(isPresented: $showRouteGenius) {
                 RouteGeniusView(
@@ -493,6 +520,7 @@ private struct PlanOverviewCard: View {
     }
 
     private var raceStrideIcon: StrideIconName {
+        guard !plan.isPregnancyPlan else { return .heart }
         switch plan.targetRace {
         case .maintainFitness: return .heart
         case .fiveK: return .bolt
@@ -503,10 +531,26 @@ private struct PlanOverviewCard: View {
     }
 
     private var planTitle: String {
+        if plan.isPregnancyPlan { return PlanKind.pregnancy.localizedName }
         if let name = plan.raceName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
             return name
         }
         return plan.targetRace.localizedName
+    }
+
+    /// A pregnancy plan has no goal time, so the line that would read "Goal 0:00" reports
+    /// where the pregnancy is instead — the number that actually indexes the plan.
+    private var planSubtitle: String {
+        if plan.isPregnancyPlan, let age = plan.gestationalAge() {
+            return String(
+                localized: "\(age.noteForm) weeks  ·  \(plan.totalWeeks) weeks planned",
+                comment: "Pregnancy plan subtitle: gestational age and plan length"
+            )
+        }
+        return String(
+            localized: "Goal \(plan.goalTimeSeconds.durationString)  ·  \(plan.totalWeeks) weeks",
+            comment: "Race plan subtitle: goal time and plan length"
+        )
     }
 
     var body: some View {
@@ -522,7 +566,7 @@ private struct PlanOverviewCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(planTitle)
                         .font(.dsTitle3.weight(.bold))
-                    Text("Goal \(plan.goalTimeSeconds.durationString)  ·  \(plan.totalWeeks) weeks")
+                    Text(planSubtitle)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
