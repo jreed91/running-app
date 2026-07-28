@@ -189,7 +189,26 @@ promise honest.
 - CloudKit is used for private iCloud sync when enabled and available.
 - `AppContainer` falls back from CloudKit to local storage and then emergency in-memory storage if needed.
 - `WorkoutSyncService` imports HealthKit workouts and can surface pending review workouts through `AppContainer.pendingReviewWorkout`.
-- Simulator builds intentionally disable CloudKit in `AppContainer.shouldUseCloudKit`.
+- Simulator builds disable CloudKit in `AppContainer.shouldUseCloudKit` — not because
+  Simulator can't sync (Apple says it can) but because the unit-test suite runs there and
+  builds real file-backed containers, which would otherwise write into the team's
+  development container.
+- **Every `ModelConfiguration` must name `cloudKitDatabase:`, including the ones that
+  don't sync.** The parameter defaults to `.automatic`, which Apple documents as "enables
+  managed CloudKit sync using the primary ubiquity container from the app's entitlements" —
+  and `Stride.entitlements` names one. A configuration that omits the argument therefore
+  syncs whatever it is called: this is how the local-only path, the tier-1 fallback, the
+  simulator carve-out, `IntentDataProvider`, and the test fixtures all came to mirror to
+  iCloud while Settings reported `Local Only`. Store opens in the app go through
+  `AppContainer.makeConfiguration`, which decides this in one place; anything else says
+  `.none` explicitly. See
+  [`docs/CLOUDKIT_ANALYSIS_2026-07-28.md`](docs/CLOUDKIT_ANALYSIS_2026-07-28.md) §3 F1.
+- **Changing the schema means redeploying it.** Adding a model type or a stored property —
+  even an optional one — needs a run with `--init-cloudkit-schema` on a device and a
+  **Deploy Schema Changes** in CloudKit Console before the build ships, because App Store
+  builds see only the production environment. The release gate is in
+  [`docs/CLOUDKIT_VALIDATION.md`](docs/CLOUDKIT_VALIDATION.md); deployment is additive-only
+  and cannot be undone.
 
 ## Widget Data Flow
 
@@ -327,6 +346,7 @@ issue is usually already written up, with a recommended fix:
 | [`docs/PREGNANCY_RUNNING_EVIDENCE.md`](docs/PREGNANCY_RUNNING_EVIDENCE.md) | The published guidelines and studies behind every number in `PregnancyRunningPolicy`, with each row mapped to the code rule it drives. **Read before changing any of those numbers** — and update the row in the same change. |
 | [`docs/REPO_ANALYSIS.md`](docs/REPO_ANALYSIS.md) | Operational review: CI, secrets hygiene, test depth. |
 | [`docs/CLOUDKIT_VALIDATION.md`](docs/CLOUDKIT_VALIDATION.md) | CloudKit sync validation steps. |
+| [`docs/CLOUDKIT_ANALYSIS_2026-07-28.md`](docs/CLOUDKIT_ANALYSIS_2026-07-28.md) | CloudKit setup audited against Apple's published requirements, every claim source-linked. **Read before touching `ModelConfiguration`, the store-fallback tiers, or any `@Model`'s stored properties.** All six findings fixed in code; the §6 device validation is still owed. The reasoning is kept in full because it is what stops F1 returning via the next config that omits an argument. |
 
 When you fix something listed there, mark the item **✅ FIXED** in place with a
 one-line note on where the fix landed, rather than deleting it.

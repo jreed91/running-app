@@ -273,7 +273,7 @@ struct OBWelcomeBack: View {
     }
 
     private func checkICloudStatus() async {
-        let container = CKContainer(identifier: "iCloud.com.running.stride")
+        let container = CKContainer(identifier: StrideSchema.cloudKitContainerID)
         let status = await withCheckedContinuation { (continuation: CheckedContinuation<CKAccountStatus, Never>) in
             container.accountStatus { status, _ in
                 continuation.resume(returning: status)

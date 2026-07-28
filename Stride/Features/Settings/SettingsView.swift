@@ -38,20 +38,7 @@ struct SettingsView: View {
         appSettings.iCloudSyncEnabled != container.syncPreferenceAtLaunch
     }
     private var persistenceStatusText: String {
-        switch container.persistenceMode {
-        case .cloudKit:
-            "CloudKit"
-        case .inMemory:
-            "In-Memory"
-        case .localOnly:
-            "Local Only"
-        case .localFallback:
-            "Local Fallback"
-        case .recreatedLocalFallback:
-            "Recreated Local Store"
-        case .emergencyInMemory:
-            "Emergency In-Memory"
-        }
+        container.persistenceMode.displayName
     }
 
     var body: some View {

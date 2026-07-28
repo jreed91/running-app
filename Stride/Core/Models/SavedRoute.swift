@@ -7,10 +7,18 @@ import SwiftData
 /// A user-saved running route produced by Route Genius.
 ///
 /// Route coordinates and turn-by-turn steps are stored as JSON blobs on the row
-/// store. NOTE: these are *not* yet marked `@Attribute(.externalStorage)`, so a very
-/// long route can push a record past the ~1 MB CKRecord limit and silently stop
-/// syncing. Enabling external storage is the correct fix but changes the persistent
-/// store format and must ship with a device-tested CloudKit migration.
+/// store. They are not marked `@Attribute(.externalStorage)`, and that is fine for
+/// sync: Core Data generates a companion `CD_<field>_ckAsset` field for every
+/// variable-length attribute and, per Apple, "if a field's value grows too large to
+/// store within the record size limit of 1MB, Core Data automatically converts the
+/// value to an external asset", transitioning between the two transparently. A long
+/// route syncs as an asset rather than failing.
+///
+/// This comment used to claim the opposite — that a long route would "silently stop
+/// syncing" without external storage — and deferred the change behind a CloudKit
+/// migration it does not need (F3). `.externalStorage` remains a reasonable *local*
+/// optimisation, keeping large blobs out of the SQLite row; it is simply not a
+/// sync-correctness fix. `RunWorkout`'s five blob fields are in the same position.
 @Model
 final class SavedRoute {
     #Index<SavedRoute>([\.id], [\.createdAt])

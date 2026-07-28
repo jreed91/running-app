@@ -64,7 +64,15 @@ enum TestStore {
     /// `makeContainer()` — its own file URL, retained for the process lifetime — without
     /// constructing the app's service graph behind it.
     static func makeContext() -> ModelContext {
-        let config = ModelConfiguration(schema: schema, url: makeStoreURL())
+        // `.none`, and not by omission. The test host *is* the Stride app, so its
+        // entitlements name a CloudKit container, and `cloudKitDatabase`'s default of
+        // `.automatic` resolves from exactly those — every scratch store in the suite
+        // was mirroring test fixtures into the team's real development container (F1).
+        let config = ModelConfiguration(
+            schema: schema,
+            url: makeStoreURL(),
+            cloudKitDatabase: .none
+        )
         let container: ModelContainer
         do {
             container = try ModelContainer(for: schema, configurations: [config])

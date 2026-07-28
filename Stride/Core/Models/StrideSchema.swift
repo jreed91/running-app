@@ -25,4 +25,10 @@ enum StrideSchema {
     static var storeURL: URL {
         URL.applicationSupportDirectory.appending(path: "Stride.store")
     }
+
+    /// The one CloudKit container this app mirrors into, named here so no caller
+    /// has to spell it out. It must match `com.apple.developer.icloud-container-identifiers`
+    /// in `project.yml`; a store opened against a different identifier silently
+    /// syncs somewhere else.
+    static let cloudKitContainerID = "iCloud.com.running.stride"
 }

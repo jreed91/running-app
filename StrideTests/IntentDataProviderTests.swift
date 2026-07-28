@@ -24,7 +24,10 @@ struct IntentDataProviderTests {
         // opens the app's on-disk store in production, never an in-memory one.
         let storeURL = Self.makeTemporaryStoreURL()
         defer { Self.removeStoreArtifacts(at: storeURL) }
-        let config = ModelConfiguration(schema: schema, url: storeURL)
+        // `.none` to match `IntentDataProvider`, and because the test host is the app:
+        // omitting it defaults to `.automatic`, which resolves the container out of the
+        // host's entitlements and syncs the fixture to iCloud (F1).
+        let config = ModelConfiguration(schema: schema, url: storeURL, cloudKitDatabase: .none)
         let container = try ModelContainer(for: schema, configurations: [config])
         let context = container.mainContext
 
@@ -61,7 +64,10 @@ struct IntentDataProviderTests {
         // opens the app's on-disk store in production, never an in-memory one.
         let storeURL = Self.makeTemporaryStoreURL()
         defer { Self.removeStoreArtifacts(at: storeURL) }
-        let config = ModelConfiguration(schema: schema, url: storeURL)
+        // `.none` to match `IntentDataProvider`, and because the test host is the app:
+        // omitting it defaults to `.automatic`, which resolves the container out of the
+        // host's entitlements and syncs the fixture to iCloud (F1).
+        let config = ModelConfiguration(schema: schema, url: storeURL, cloudKitDatabase: .none)
         let container = try ModelContainer(for: schema, configurations: [config])
         let context = container.mainContext
 
