@@ -34,6 +34,14 @@ final class UserProfile {
     /// User's max heart rate in bpm, driving the HR-zone breakdowns (A6). Nil until set; a value
     /// entered by the user overrides the age-based estimate.
     var maxHeartRateBPM: Int?
+    /// Body mass in kilograms, driving the coach's fuelling amounts.
+    ///
+    /// Always kilograms on disk whatever the runner's unit preference — every rate in
+    /// `CoachNutrition` is per kilogram, and storing the display unit would mean the
+    /// stored number changed meaning when they flipped the toggle. Nil until HealthKit
+    /// supplies one or the runner types one in Settings, and the cards quote guideline
+    /// ranges until then rather than disappearing.
+    var bodyMassKilograms: Double?
     /// JSON-encoded `[Int]` backing store for preferred run weekdays.
     /// Access via the `preferredRunDayIndices` extension property — never persist `[Int]` directly.
     var preferredRunDayIndicesData: Data?

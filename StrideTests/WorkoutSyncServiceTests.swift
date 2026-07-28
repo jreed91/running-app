@@ -111,6 +111,13 @@ final class MockHealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sen
 
     func fetchDistanceSeries(forWorkoutID id: String) async -> [SplitBucketing.DistancePoint] { [] }
 
+    /// Settable so a suite can stand in a weight; `nil` is the state a runner who has
+    /// never recorded one lands in, which is what most of these tests want. A plain
+    /// `var` like `enableGate` above — the class is already `@unchecked Sendable`.
+    var bodyMassKilograms: Double?
+
+    func fetchLatestBodyMassKilograms() async -> Double? { bodyMassKilograms }
+
     func enableBackgroundDelivery() async throws {
         lock.withLock { _enableCalls += 1 }
         if let gate = enableGate { await gate.wait() }
