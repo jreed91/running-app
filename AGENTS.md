@@ -190,6 +190,14 @@ promise honest.
 - `AppContainer` falls back from CloudKit to local storage and then emergency in-memory storage if needed.
 - `WorkoutSyncService` imports HealthKit workouts and can surface pending review workouts through `AppContainer.pendingReviewWorkout`.
 - Simulator builds intentionally disable CloudKit in `AppContainer.shouldUseCloudKit`.
+- **The three bullets above describe intent, not current behaviour.** A
+  `ModelConfiguration` built without an explicit `cloudKitDatabase:` argument defaults to
+  `.automatic`, which Apple documents as "enables managed CloudKit sync using the primary
+  ubiquity container from the app's entitlements" — and `Stride.entitlements` names one. So
+  the local-only path, the tier-1 fallback, the simulator carve-out, and
+  `IntentDataProvider` all mirror to iCloud today, and the iCloud Sync toggle does not turn
+  sync off. Pass `cloudKitDatabase: .none` on any configuration meant to be local. See
+  [`docs/CLOUDKIT_ANALYSIS_2026-07-28.md`](docs/CLOUDKIT_ANALYSIS_2026-07-28.md) §3 F1.
 
 ## Widget Data Flow
 
@@ -327,6 +335,7 @@ issue is usually already written up, with a recommended fix:
 | [`docs/PREGNANCY_RUNNING_EVIDENCE.md`](docs/PREGNANCY_RUNNING_EVIDENCE.md) | The published guidelines and studies behind every number in `PregnancyRunningPolicy`, with each row mapped to the code rule it drives. **Read before changing any of those numbers** — and update the row in the same change. |
 | [`docs/REPO_ANALYSIS.md`](docs/REPO_ANALYSIS.md) | Operational review: CI, secrets hygiene, test depth. |
 | [`docs/CLOUDKIT_VALIDATION.md`](docs/CLOUDKIT_VALIDATION.md) | CloudKit sync validation steps. |
+| [`docs/CLOUDKIT_ANALYSIS_2026-07-28.md`](docs/CLOUDKIT_ANALYSIS_2026-07-28.md) | CloudKit setup audited against Apple's published requirements, every claim source-linked. The schema is clean; the store *configuration* is not. **Read before touching `ModelConfiguration` anywhere** — every config that omits `cloudKitDatabase:` defaults to `.automatic` and syncs, so "local only", the sync toggle, the tier-1 fallback, and the App Intents store all mirror to iCloud today. All items open. |
 
 When you fix something listed there, mark the item **✅ FIXED** in place with a
 one-line note on where the fix landed, rather than deleting it.
