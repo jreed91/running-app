@@ -215,6 +215,59 @@ struct SplitChartSeriesTests {
         #expect(resolved.splits == workout.splits)
     }
 
+    // MARK: Chart selection
+
+    /// Buckets 1…`count`, carrying a heart rate only for the buckets in `withHeartRate`.
+    private func selectableSplits(count: Int, withHeartRate: Set<Int>? = nil) -> [Split] {
+        (1...count).compactMap { bucket in
+            let carriesHeartRate = withHeartRate?.contains(bucket) ?? true
+            guard carriesHeartRate else { return nil }
+            return Split(
+                kilometer: bucket,
+                paceSecondsPerKm: 300,
+                heartRate: 150,
+                elevationGainMeters: 0,
+                cumulativeDistanceMeters: Double(bucket) * mile
+            )
+        }
+    }
+
+    @Test("A selection on a plotted bucket resolves to that bucket")
+    func selectionOnABucketResolvesToIt() {
+        let splits = selectableSplits(count: 5)
+
+        #expect(SplitChartSeries.nearestSplit(to: 3, in: splits)?.kilometer == 3)
+        #expect(SplitChartSeries.nearestSplit(to: 1, in: splits)?.kilometer == 1)
+        #expect(SplitChartSeries.nearestSplit(to: 5, in: splits)?.kilometer == 5)
+    }
+
+    /// The heart-rate chart is drawn only from line and point marks, so its x axis scales
+    /// continuously and a selection arrives from between two markers. Matching a bucket
+    /// exactly left the chart with a hover that showed nothing at all.
+    @Test("A selection between markers resolves to the nearer one")
+    func selectionBetweenMarkersResolvesToTheNearest() {
+        let splits = selectableSplits(count: 10, withHeartRate: [2, 8])
+
+        #expect(SplitChartSeries.nearestSplit(to: 3, in: splits)?.kilometer == 2)
+        #expect(SplitChartSeries.nearestSplit(to: 7, in: splits)?.kilometer == 8)
+        // Exactly between the two: one of them wins, and the lower one wins consistently
+        // so the tooltip doesn't flicker while a finger sits still.
+        #expect(SplitChartSeries.nearestSplit(to: 5, in: splits)?.kilometer == 2)
+    }
+
+    @Test("A selection past either end resolves to the end marker")
+    func selectionOffTheEndsResolvesToTheEndMarkers() {
+        let splits = selectableSplits(count: 4)
+
+        #expect(SplitChartSeries.nearestSplit(to: 0, in: splits)?.kilometer == 1)
+        #expect(SplitChartSeries.nearestSplit(to: 99, in: splits)?.kilometer == 4)
+    }
+
+    @Test("A chart with nothing plotted resolves no selection")
+    func selectionOnAnEmptyChartResolvesToNothing() {
+        #expect(SplitChartSeries.nearestSplit(to: 3, in: []) == nil)
+    }
+
     // MARK: Persistence
 
     @Test("The distance series round-trips through the run's stored JSON")

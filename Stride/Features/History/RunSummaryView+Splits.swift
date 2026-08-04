@@ -318,8 +318,30 @@ extension RunSummaryView {
 
     // MARK: Split HR chart
 
+    /// The splits the HR chart plots: only the buckets that carry a reading, since a run
+    /// can lose its strap partway and a gap is more honest than a line drawn through zero.
+    private var heartRateSplits: [Split] {
+        chartedSplits.splits.filter { $0.heartRate != nil }
+    }
+
+    /// The split the HR chart's tooltip is showing, resolved from the raw selection.
+    ///
+    /// Not an exact bucket match, the way the pace and elevation charts get away with. Those
+    /// two are drawn from `BarMark`s, which band their x axis, so a selection always lands on
+    /// a bucket that exists. This chart is drawn only from `LineMark`/`PointMark`, so its x
+    /// axis is continuous and `chartXSelection` reports the position between two markers —
+    /// which matched no split, and left the chart with a hover that highlighted nothing and
+    /// showed no value. `nearestSplit` snaps to the marker beside the finger instead, and
+    /// snaps within the plotted splits so a bucket with no reading resolves to one that has
+    /// it rather than to nothing.
+    private var selectedHeartRateSplit: Split? {
+        guard let bucket = selectedSplitHRKm else { return nil }
+        return SplitChartSeries.nearestSplit(to: bucket, in: heartRateSplits)
+    }
+
     private var splitHRChart: some View {
-        let hrSplits = chartedSplits.splits.filter { $0.heartRate != nil }
+        let hrSplits = heartRateSplits
+        let selected = selectedHeartRateSplit
         return Chart {
             ForEach(hrSplits, id: \.kilometer) { split in
                 LineMark(
@@ -332,11 +354,10 @@ extension RunSummaryView {
                     y: .value("bpm", split.heartRate ?? 0)
                 )
                 .foregroundStyle(.zoneInterval)
-                .symbolSize(selectedSplitHRKm == split.kilometer ? 80 : 36)
+                .symbolSize(selected?.kilometer == split.kilometer ? 80 : 36)
             }
-            if let bucket = selectedSplitHRKm, let split = chartedSplit(forBucket: bucket),
-               let hr = split.heartRate {
-                RuleMark(x: .value(splitLabelUpper, bucket))
+            if let split = selected, let hr = split.heartRate {
+                RuleMark(x: .value(splitLabelUpper, split.kilometer))
                     .foregroundStyle(.secondary.opacity(0.4))
                     .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
                     .annotation(
@@ -356,6 +377,12 @@ extension RunSummaryView {
         }
         .frame(height: 120)
         .chartYAxisLabel("bpm")
+        // Every bucket of the run, banded — the same x axis the pace and elevation charts
+        // get for free from their `BarMark`s. It keeps the three tabs in step (a bucket sits
+        // at the same place whichever one is showing, and a missing reading reads as a gap
+        // rather than being closed up), and it makes the selection snap to a bucket instead
+        // of reporting a fraction between two of them.
+        .chartXScale(domain: chartedSplits.splits.map(\.kilometer), type: .category)
         .chartXAxis { splitXAxis }
         .chartXSelection(value: $selectedSplitHRKm)
         .chartAccessibility("Split heart rate chart", splitHeartRateSummary(hrSplits))

@@ -117,6 +117,26 @@ enum SplitChartSeries {
         return Resolved(splits: splits, fraction: fraction, unit: unit)
     }
 
+    // MARK: Chart selection
+
+    /// The split a chart selection at `bucket` refers to, out of the splits that chart
+    /// actually plots.
+    ///
+    /// A selection is not guaranteed to name a plotted bucket. `chartXSelection` reports
+    /// the position under the finger, and a chart drawn only from `LineMark`/`PointMark`
+    /// scales its x axis continuously — so the value comes back from somewhere between two
+    /// buckets rather than on one of them. A chart that also filters its splits (the heart
+    /// rate one plots only the buckets carrying a reading) can be handed a bucket it has no
+    /// mark for even when the value does land squarely on one.
+    ///
+    /// Matching the nearest plotted split covers both: a tooltip follows the finger to the
+    /// marker beside it instead of appearing only on the exact touches that happen to
+    /// resolve to a plotted bucket. Ties go to the lower bucket, so a touch exactly between
+    /// two markers picks one and stays there.
+    static func nearestSplit(to bucket: Int, in splits: [Split]) -> Split? {
+        splits.min { abs($0.kilometer - bucket) < abs($1.kilometer - bucket) }
+    }
+
     // MARK: Axis labels
 
     /// The distance a bucket ends at, in the runner's unit, for the chart's x axis.
