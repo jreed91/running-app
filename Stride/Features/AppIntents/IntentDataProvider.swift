@@ -77,11 +77,11 @@ actor IntentModelActor {
     // MARK: - RunWorkoutEntity fetches (Siri / Spotlight / Apple Intelligence)
 
     func recentRunEntities(limit: Int, unit: UnitPreference) throws -> [RunWorkoutEntity] {
-        var descriptor = FetchDescriptor<RunWorkout>(
-            sortBy: [SortDescriptor(\.date, order: .reverse)]
-        )
-        descriptor.fetchLimit = limit
-        return try modelContext.fetch(descriptor).map { $0.runWorkoutEntity(unit: unit) }
+        // Runs, not walks (N38). Siri and Spotlight offer these as "your runs", and the
+        // limit has to count runs or a week of walking empties the list.
+        return try modelContext
+            .fetch(RunWorkout.runsOnlyDescriptor(fetchLimit: limit))
+            .map { $0.runWorkoutEntity(unit: unit) }
     }
 
     func runEntities(ids: [UUID], unit: UnitPreference) throws -> [RunWorkoutEntity] {
@@ -94,15 +94,13 @@ actor IntentModelActor {
 
     func runEntities(matching query: String, unit: UnitPreference) throws -> [RunWorkoutEntity] {
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        var descriptor = FetchDescriptor<RunWorkout>(
-            sortBy: [SortDescriptor(\.date, order: .reverse)]
-        )
-        descriptor.fetchLimit = 50
-        return try modelContext.fetch(descriptor).compactMap { run in
-            let entity = run.runWorkoutEntity(unit: unit)
-            guard needle.isEmpty || entity.title.lowercased().contains(needle) else { return nil }
-            return entity
-        }
+        return try modelContext
+            .fetch(RunWorkout.runsOnlyDescriptor(fetchLimit: 50))
+            .compactMap { run in
+                let entity = run.runWorkoutEntity(unit: unit)
+                guard needle.isEmpty || entity.title.lowercased().contains(needle) else { return nil }
+                return entity
+            }
     }
 
     /// The coach's single highest-priority card, right now.
@@ -129,11 +127,10 @@ actor IntentModelActor {
         // Bounded like the dashboard's own query: the widest window any rule looks
         // through is 90 days of cadence, so the newest 120 runs is more than enough and
         // an unbounded fetch inside an intent is a cost paid on every invocation.
-        var runDescriptor = FetchDescriptor<RunWorkout>(
-            sortBy: [SortDescriptor(\RunWorkout.date, order: .reverse)]
-        )
-        runDescriptor.fetchLimit = 120
-        let runs = try modelContext.fetch(runDescriptor)
+        let runs = try modelContext.fetch(RunWorkout.runsOnlyDescriptor(
+            sortBy: [SortDescriptor(\RunWorkout.date, order: .reverse)],
+            fetchLimit: 120
+        ))
 
         var profileDescriptor = FetchDescriptor<UserProfile>(
             sortBy: [SortDescriptor(\UserProfile.updatedAt, order: .reverse)]
@@ -159,8 +156,11 @@ actor IntentModelActor {
         // run whenever the current day is a Sunday or Monday.
         let startOfWeek = Date().startOfWeek
         let endOfWeek = startOfWeek.adding(days: 7)
+        // "How far have I run this week" — so walks are excluded, matching the same
+        // total on the dashboard and in the weekly widget (N38).
+        let walkRaw = WorkoutType.walk.rawValue
         let predicate = #Predicate<RunWorkout> {
-            $0.date >= startOfWeek && $0.date < endOfWeek
+            $0.date >= startOfWeek && $0.date < endOfWeek && $0.workoutTypeRaw != walkRaw
         }
         let workouts = try modelContext.fetch(FetchDescriptor<RunWorkout>(predicate: predicate))
         return WeeklySummaryData(totalMeters: workouts.reduce(0.0) { $0 + $1.distanceMeters })

@@ -89,6 +89,9 @@ struct ProgressStatsService: Sendable {
     /// Returns 0 when there's no distance to divide by, matching callers'
     /// existing "no data" sentinel for this stat.
     static func distanceWeightedAveragePaceSecondsPerKm(for runs: [RunWorkout]) -> Double {
+        // Walking pace is roughly twice running pace, so a single imported walk moves
+        // this average further than any run in the set could (N38).
+        let runs = runs.runsOnly
         let totalDistanceMeters = runs.reduce(0) { $0 + $1.distanceMeters }
         guard totalDistanceMeters > 0 else { return 0 }
         let totalDurationSeconds = runs.reduce(0) { $0 + $1.durationSeconds }

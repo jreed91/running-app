@@ -70,8 +70,10 @@ enum SmartCoachCards {
         ) {
             self.nextSession = nextSession
             // Sorted once, here, so no rule downstream can be affected by the order the
-            // caller's query happened to return.
-            self.recentRuns = recentRuns.sorted { $0.date > $1.date }
+            // caller's query happened to return — and narrowed to runs for the same
+            // reason: every rule reads this as running history, so "you haven't run in
+            // twelve days" must not be answered by a walk (N38).
+            self.recentRuns = recentRuns.runsOnly.sorted { $0.date > $1.date }
             self.profile = profile
             self.dayState = dayState
             self.unit = unit

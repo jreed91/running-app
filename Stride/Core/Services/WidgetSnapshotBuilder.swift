@@ -26,7 +26,10 @@ enum WidgetSnapshotBuilder {
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> WidgetSnapshot {
-        WidgetSnapshot(
+        // The Home Screen's week, streak and coach tip are all about running, so walks
+        // are dropped before any of them is built (N38).
+        let runs = runs.runsOnly
+        return WidgetSnapshot(
             nextWorkout: nextWorkout(in: plan, unit: unit, now: now, calendar: calendar),
             weekly: weekly(
                 runs: runs,
@@ -243,7 +246,7 @@ enum WidgetSnapshotBuilder {
         case .tempo:           return .tempo
         case .interval, .race: return .interval
         case .strength:        return .brand
-        case .rest, .crossTraining: return .neutral
+        case .rest, .crossTraining, .walk: return .neutral
         }
     }
 
@@ -264,7 +267,7 @@ enum WidgetSnapshotBuilder {
         )
         let weekStart = StreakGoalService.startOfWeek(for: now, calendar: calendar)
         let weekEnd = calendar.date(byAdding: .day, value: 7, to: weekStart) ?? weekStart
-        let runCount = runs.filter { $0.date >= weekStart && $0.date < weekEnd }.count
+        let runCount = runs.runsOnly.filter { $0.date >= weekStart && $0.date < weekEnd }.count
 
         let hasGoal = goalMeters > 0
         let statusText: String

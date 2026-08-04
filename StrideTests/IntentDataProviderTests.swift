@@ -123,6 +123,7 @@ struct IntentDataProviderTests {
         #expect(text(.race) == "You have a Race today.")
         #expect(text(.strength) == "You have a Strength session today.")
         #expect(!text(.crossTraining).contains("run"))
+        #expect(!text(.walk).contains("run"))
         #expect(text(.rest) == "Today is a rest day.")
         #expect(TodaysRunIntent.dialogText(for: nil) == "No run scheduled for today.")
     }

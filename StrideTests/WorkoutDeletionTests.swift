@@ -104,5 +104,7 @@ struct WorkoutDeletionTests {
         #expect(!WorkoutType.rest.isRunType)
         #expect(!WorkoutType.crossTraining.isRunType)
         #expect(!WorkoutType.strength.isRunType)
+        // A walk is recorded history, never a session a plan day can be completed by (N38).
+        #expect(!WorkoutType.walk.isRunType)
     }
 }

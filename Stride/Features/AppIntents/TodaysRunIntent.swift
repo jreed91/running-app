@@ -37,6 +37,8 @@ struct TodaysRunIntent: AppIntent {
             default:
                 return String(localized: "You have a \(name) run today.", comment: "Siri answer for a run")
             }
+        case .walk:
+            return String(localized: "You have a \(name.lowercased()) today.", comment: "Siri answer for a walk")
         case .strength:
             return String(localized: "You have a \(name) session today.", comment: "Siri answer for a strength session")
         case .crossTraining:

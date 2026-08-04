@@ -22,7 +22,11 @@ struct AchievementsView: View {
     /// distance and the longest streak ever recorded — a window would quietly
     /// redefine all three. What made this screen expensive was recomputing those
     /// derivations several times per render, and that is fixed in `body`.
-    @Query(sort: [SortDescriptor(\RunWorkout.date)])
+    ///
+    /// Runs only, and for the same reason the window is absent: a medal is a running
+    /// record, the badges count kilometres run and days run in a row, and an imported
+    /// walk would quietly redefine all of them (N38).
+    @Query(RunWorkout.runsOnlyDescriptor(sortBy: [SortDescriptor(\RunWorkout.date)]))
     private var workouts: [RunWorkout]
 
     @Environment(AppSettings.self) private var appSettings

@@ -3,6 +3,12 @@ import SwiftData
 
 // MARK: - Protocol
 
+/// Runs, not walks.
+///
+/// Every fetch here returns running history and skips imported walks (N38) — these
+/// results feed pace refresh, plan adaptation and "your last run", none of which a walk
+/// belongs in. History, which shows everything the runner recorded, queries the store
+/// directly rather than through this.
 protocol WorkoutRepositoryProtocol {
     func save(_ workout: RunWorkout) throws
     func fetchAll() throws -> [RunWorkout]
@@ -27,26 +33,24 @@ final class WorkoutRepository: WorkoutRepositoryProtocol {
     }
 
     func fetchAll() throws -> [RunWorkout] {
-        let descriptor = FetchDescriptor<RunWorkout>(
-            sortBy: [SortDescriptor(\.date, order: .reverse)]
-        )
-        return try context.fetch(descriptor)
+        try context.fetch(RunWorkout.runsOnlyDescriptor())
     }
 
     func fetch(from startDate: Date, to endDate: Date) throws -> [RunWorkout] {
+        let walkRaw = WorkoutType.walk.rawValue
         let descriptor = FetchDescriptor<RunWorkout>(
-            predicate: #Predicate { $0.date >= startDate && $0.date <= endDate },
+            predicate: #Predicate {
+                $0.date >= startDate && $0.date <= endDate && $0.workoutTypeRaw != walkRaw
+            },
             sortBy: [SortDescriptor(\.date, order: .reverse)]
         )
         return try context.fetch(descriptor)
     }
 
     func fetchRecent(limit: Int) throws -> [RunWorkout] {
-        var descriptor = FetchDescriptor<RunWorkout>(
-            sortBy: [SortDescriptor(\.date, order: .reverse)]
-        )
-        descriptor.fetchLimit = limit
-        return try context.fetch(descriptor)
+        // The walk exclusion is in the fetch, not applied to its result: `fetchRecent(1)`
+        // filtered afterwards returns nothing at all whenever the newest entry is a walk.
+        try context.fetch(RunWorkout.runsOnlyDescriptor(fetchLimit: limit))
     }
 
     /// Deletes a run and repairs every invariant a raw `context.delete` would leave broken:

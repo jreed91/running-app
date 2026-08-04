@@ -118,7 +118,9 @@ enum CoachSituation: Equatable, Sendable {
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> CoachSituation {
-        let runs = recentRuns.sorted { $0.date > $1.date }
+        // Runs only: a layoff is a layoff from running, and the refuelling window opens
+        // after a demanding run rather than after a stroll (N38).
+        let runs = recentRuns.runsOnly.sorted { $0.date > $1.date }
 
         if let race = raceProximity(profile: profile, now: now, calendar: calendar) {
             return race == 0 ? .raceDay : .raceWeek(daysOut: race)

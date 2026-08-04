@@ -1,11 +1,12 @@
 import SwiftUI
 import SwiftData
 
-/// Lets the user retroactively import older running workouts from Apple Health
-/// that predate the app's automatic 60-day sync window.
+/// Lets the user retroactively import older workouts from Apple Health — runs, and
+/// walks when walk import is on — that predate the app's automatic 60-day sync window.
 struct HealthKitImportView: View {
     @Environment(\.modelContext) private var context
     @Environment(AppContainer.self) private var container
+    @Environment(AppSettings.self) private var appSettings
     @Query private var existingWorkouts: [RunWorkout]
 
     @State private var startDate: Date = Calendar.current.date(
@@ -48,7 +49,14 @@ struct HealthKitImportView: View {
         } header: {
             Text("Date Range")
         } footer: {
-            Text("Only running activities not already in this app will be imported.")
+            // Two `Text` literals rather than one with a ternary inside it: a ternary of
+            // two string literals infers `String`, not `LocalizedStringKey`, so neither
+            // arm would be extracted for translation.
+            if appSettings.walkImportEnabled {
+                Text("Runs and walks not already in this app will be imported.")
+            } else {
+                Text("Only running activities not already in this app will be imported.")
+            }
         }
     }
 
@@ -118,18 +126,32 @@ struct HealthKitImportView: View {
             let existingIDs = Set(existingWorkouts.compactMap(\.healthKitWorkoutID)).union(tombstonedIDs)
             let skipped = allHKWorkouts.filter { existingIDs.contains($0.uuid.uuidString) }.count
 
+            let importContext = WorkoutImportContext.resolve(from: context)
             let newWorkouts = try await repo.fetchImportableWorkouts(
                 from: startDate,
                 to: Date(),
                 existingIDs: existingIDs,
-                context: WorkoutImportContext.resolve(from: context)
+                context: importContext
             )
+            // The same walks the background sync brings in, over the range the runner
+            // chose here — a retroactive import that quietly covered only half of what
+            // Stride imports would be the more surprising behaviour (N38).
+            let newWalks = appSettings.walkImportEnabled
+                ? try await repo.fetchImportableWalkingWorkouts(
+                    from: startDate,
+                    to: Date(),
+                    existingIDs: existingIDs,
+                    context: importContext
+                )
+                : []
 
-            for workout in newWorkouts {
+            for workout in newWorkouts + newWalks {
                 context.insert(workout)
             }
-            if !newWorkouts.isEmpty {
+            if !newWorkouts.isEmpty || !newWalks.isEmpty {
                 try context.save()
+                // Weather is attached to runs only, matching the background sync: it feeds
+                // the coach's per-run analysis, which never reads a walk.
                 for workout in newWorkouts {
                     if let coordinate = workout.routeCoordinates.first {
                         await container.attachWeather(to: workout, coordinate: coordinate)
@@ -137,7 +159,7 @@ struct HealthKitImportView: View {
                 }
             }
 
-            importState = .done(imported: newWorkouts.count, skipped: skipped)
+            importState = .done(imported: newWorkouts.count + newWalks.count, skipped: skipped)
         } catch {
             importState = .failed(error.localizedDescription)
         }

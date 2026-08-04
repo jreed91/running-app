@@ -218,6 +218,14 @@ enum WorkoutType: String, Codable, CaseIterable, Sendable {
     case rest = "Rest"
     case crossTraining = "Cross Training"
     case strength = "Strength"
+    /// A walk imported from Apple Health.
+    ///
+    /// The only type here that no generator ever prescribes: it exists so a walking
+    /// workout can be *recorded* without being mistaken for a run. Everything that
+    /// reasons about training load asks `countsAsRunning` (or `Sequence.runsOnly`)
+    /// rather than listing types, because a walk in the weekly mileage, the VDOT
+    /// trend, or the streak is a wrong number rather than a missing one.
+    case walk = "Walk"
 
     var displayName: String { rawValue }
 
@@ -234,6 +242,7 @@ enum WorkoutType: String, Codable, CaseIterable, Sendable {
         case .rest:          return String(localized: "Rest", comment: "Workout type")
         case .crossTraining: return String(localized: "Cross Training", comment: "Workout type")
         case .strength:      return String(localized: "Strength", comment: "Workout type")
+        case .walk:          return String(localized: "Walk", comment: "Workout type")
         }
     }
 
@@ -245,14 +254,25 @@ enum WorkoutType: String, Codable, CaseIterable, Sendable {
     }
 
     /// True for workout types that are fulfilled by a run and can therefore be
-    /// linked to an imported `RunWorkout`. Strength, cross-training, and rest days
-    /// must never be matched to (or completed by) an imported run.
+    /// linked to an imported `RunWorkout`. Strength, cross-training, rest days, and
+    /// walks must never be matched to (or completed by) an imported run.
     var isRunType: Bool {
         switch self {
         case .easy, .tempo, .interval, .longRun, .race: return true
-        case .rest, .crossTraining, .strength: return false
+        case .rest, .crossTraining, .strength, .walk: return false
         }
     }
+
+    /// Whether a *completed* workout of this type is running that counts as training.
+    ///
+    /// `isRunType` answers a question about the plan — "can an imported run complete a
+    /// day scheduled as this?" — and every non-run type answers it the same way, which
+    /// is why the two are separate. This one is asked of recorded history: weekly volume,
+    /// VDOT, pace trends, personal records, the streak, and everything the coach reads.
+    /// `.walk` is the case that makes the distinction earn its keep — a walk is real
+    /// history and belongs in the log, but it is not a run and must never be averaged,
+    /// totalled, or extrapolated with them.
+    var countsAsRunning: Bool { self != .walk }
 
     /// The kind of session a workout type represents.
     ///
@@ -263,12 +283,13 @@ enum WorkoutType: String, Codable, CaseIterable, Sendable {
     /// silently deleted the runner's strength session (N6), and the dashboard's day
     /// resolution orders and renders a day's sessions by kind (N12).
     enum SessionKind: String, Sendable {
-        case run, strength, crossTraining, rest
+        case run, walk, strength, crossTraining, rest
     }
 
     var sessionKind: SessionKind {
         switch self {
         case .easy, .tempo, .interval, .longRun, .race: return .run
+        case .walk:          return .walk
         case .strength:      return .strength
         case .crossTraining: return .crossTraining
         case .rest:          return .rest

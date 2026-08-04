@@ -35,7 +35,9 @@ struct StreakGoalService: Sendable {
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> StreakSummary {
-        let days = Set(runs.map { calendar.startOfDay(for: $0.date) })
+        // A streak is a *running* streak. Filtered here rather than at the caller
+        // because that is the claim the number makes on screen (N38).
+        let days = Set(runs.runsOnly.map { calendar.startOfDay(for: $0.date) })
         guard !days.isEmpty else { return .empty }
 
         // Longest run of consecutive days across all recorded days.
@@ -97,7 +99,8 @@ struct StreakGoalService: Sendable {
         var remainingMeters: Double { max(goalMeters - completedMeters, 0) }
     }
 
-    /// Sums the current week's run distance and compares it to `goalMeters`.
+    /// Sums the current week's run distance and compares it to `goalMeters`. The weekly
+    /// goal is a running goal, so imported walks are not counted toward it (N38).
     static func weeklyProgress(
         for runs: [RunWorkout],
         goalMeters: Double,
@@ -106,7 +109,7 @@ struct StreakGoalService: Sendable {
     ) -> WeeklyGoalProgress {
         let weekStart = startOfWeek(for: now, calendar: calendar)
         let weekEnd = calendar.date(byAdding: .day, value: 7, to: weekStart) ?? weekStart
-        let completed = runs
+        let completed = runs.runsOnly
             .filter { $0.date >= weekStart && $0.date < weekEnd }
             .reduce(0) { $0 + $1.distanceMeters }
         return WeeklyGoalProgress(goalMeters: goalMeters, completedMeters: completed)
@@ -156,6 +159,9 @@ struct StreakGoalService: Sendable {
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> [Achievement] {
+        // Every badge below counts running: kilometres run, weeks run, days run in a
+        // row. Filtered once here so no milestone has to remember (N38).
+        let runs = runs.runsOnly
         let longestStreak = streak(for: runs, now: now, calendar: calendar).longest
         let lifetimeMeters = runs.reduce(0) { $0 + $1.distanceMeters }
         let bestWeekMeters = bestWeeklyVolumeMeters(for: runs, calendar: calendar)

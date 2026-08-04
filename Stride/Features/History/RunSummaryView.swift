@@ -98,9 +98,12 @@ struct RunSummaryView: View {
         linked.fetchLimit = 1
         _scheduledLinkingThisRun = Query(linked)
 
-        var recent = FetchDescriptor<RunWorkout>(sortBy: [SortDescriptor(\.date, order: .reverse)])
-        recent.fetchLimit = Self.adaptationHistoryRunCount + 1
-        _recentRuns = Query(recent)
+        // Runs only: both coach requests read this as the runner's training history, and
+        // the limit has to count runs for the "one more than the longest slice" promise
+        // above to hold (N38).
+        _recentRuns = Query(RunWorkout.runsOnlyDescriptor(
+            fetchLimit: Self.adaptationHistoryRunCount + 1
+        ))
 
         let tempo = WorkoutType.tempo.rawValue
         let race = WorkoutType.race.rawValue
@@ -309,6 +312,12 @@ struct RunSummaryView: View {
            !name.isEmpty {
             return name
         }
+        if workout.isWalk {
+            return String(
+                localized: "\(workout.workoutLocation.localizedName) Walk",
+                comment: "Title for an imported walk, e.g. Outdoor Walk"
+            )
+        }
         return workout.scheduledWorkout?.workoutType.localizedName ?? "\(workout.workoutLocation.localizedName) Run"
     }
 
@@ -317,13 +326,23 @@ struct RunSummaryView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 titleBlock
-                if workout.scheduledWorkout == nil {
+                // A walk can never fulfil a planned session, so the screen does not offer
+                // to link one — the same rule the importer's linker applies (N38).
+                if workout.scheduledWorkout == nil, !workout.isWalk {
                     linkToPlannedWorkoutButton
                 }
                 routeMap
-                aiCoachAccessCard
+                // The coach and the pace read are both written against the runner's
+                // training paces, which say nothing about a walk. Absent rather than
+                // shown empty: an insight on a walk is not a smaller insight, it is one
+                // about the wrong thing.
+                if !workout.isWalk {
+                    aiCoachAccessCard
+                }
                 statsGrid
-                paceInsightsSection
+                if !workout.isWalk {
+                    paceInsightsSection
+                }
                 weatherSection
                 plannedWorkoutSection
                 // Splits and heart-rate zones come before the coaching read: they are the
@@ -345,7 +364,9 @@ struct RunSummaryView: View {
                 if !zoneSlices.isEmpty, zoneSlices.contains(where: { $0.seconds > 0 }) {
                     heartRateZoneSection
                 }
-                aiCoachSection
+                if !workout.isWalk {
+                    aiCoachSection
+                }
             }
             .padding(.horizontal, AppSpacing.lg)
             .padding(.bottom, AppSpacing.xxxl)

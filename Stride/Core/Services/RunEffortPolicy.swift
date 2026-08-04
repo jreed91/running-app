@@ -30,4 +30,25 @@ enum RunEffortPolicy {
     static func canCompleteScheduledWorkout(_ workout: RunWorkout) -> Bool {
         isRealRun(distanceMeters: workout.distanceMeters, durationSeconds: workout.durationSeconds)
     }
+
+    // MARK: - Walks
+
+    /// Distance a walk must exceed, in metres.
+    ///
+    /// Higher than the run floor, and deliberately: the run floor exists to reject
+    /// mis-taps, while this one also has to reject the walks that are not sessions. A
+    /// runner starts a *run* on purpose, so almost anything recorded is real; walking
+    /// workouts are started for the errand as readily as for the exercise, and a
+    /// history filled with four-minute walks to the shop is worse than no walk import
+    /// at all. Five minutes and 400 m is roughly the shortest thing anyone starts a
+    /// workout for.
+    static let minimumWalkDistanceMeters: Double = 400
+
+    /// Duration a walk must reach, in seconds.
+    static let minimumWalkDurationSeconds: Double = 5 * 60
+
+    /// Whether a walk of this size is worth importing as a session.
+    static func isRealWalk(distanceMeters: Double, durationSeconds: Double) -> Bool {
+        distanceMeters > minimumWalkDistanceMeters && durationSeconds >= minimumWalkDurationSeconds
+    }
 }

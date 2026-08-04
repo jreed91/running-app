@@ -787,7 +787,9 @@ struct AICoachService: Sendable {
                 return "\(interval.repetitions)x \(distance) at \(pace), recovery \(interval.recoverySeconds.durationString)"
             }.joined(separator: "\n")
 
-        let recent = recentHistory.prefix(8).map { run in
+        // Runs only: these rows are the evidence the model re-paces a session from, and
+        // an imported walk in them reads as a run taken at half speed (N38).
+        let recent = recentHistory.runsOnly.prefix(8).map { run in
             let avgHR = run.averageHeartRate.map { "\(Int($0)) bpm" } ?? "n/a"
             return "\(run.date.formatted(date: .abbreviated, time: .omitted)) | \(run.workoutType.displayName) | \(run.distanceMeters.distanceString(unit: unitPreference)) | avg pace \(run.averagePaceSecondsPerKm.paceString(unit: unitPreference)) | duration \(run.durationSeconds.durationString) | avg HR \(avgHR)"
         }.joined(separator: "\n")
@@ -839,7 +841,7 @@ struct AICoachService: Sendable {
         let goalTime = (plan?.goalTimeSeconds ?? profile.goalFinishTime).durationString
         let selectedRunDays = preferredRunDayNames(for: profile)
         let planLongRunDays = longRunDayNames(in: plan)
-        let recent = recentHistory.prefix(8).map { run in
+        let recent = recentHistory.runsOnly.prefix(8).map { run in
             let avgHR = run.averageHeartRate.map { "\(Int($0)) bpm" } ?? "n/a"
             return "\(run.date.formatted(date: .abbreviated, time: .omitted)) | \(run.workoutType.displayName) | \(run.distanceMeters.distanceString(unit: unitPreference)) | pace \(run.averagePaceSecondsPerKm.paceString(unit: unitPreference)) | \(run.durationSeconds.durationString) | HR \(avgHR)"
         }.joined(separator: "\n")
@@ -999,7 +1001,7 @@ struct AICoachService: Sendable {
             maxHR: profile?.effectiveMaxHeartRate.map(Double.init)
         )
 
-        let recent = recentHistory.prefix(5).map { run in
+        let recent = recentHistory.runsOnly.prefix(5).map { run in
             "\(run.date.formatted(date: .abbreviated, time: .omitted)) • \(run.workoutType.displayName) • \(run.distanceMeters.distanceString(unit: unitPreference)) • \(run.averagePaceSecondsPerKm.paceString(unit: unitPreference))"
         }.joined(separator: "\n")
         let recentSection = recent.isEmpty ? "No recent runs." : recent

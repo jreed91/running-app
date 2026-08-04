@@ -93,6 +93,20 @@ final class AppSettings {
         }
     }
 
+    /// Whether walking workouts recorded in Apple Health are imported alongside runs (N38).
+    ///
+    /// On by default: a walking *workout* is one somebody deliberately started, so there
+    /// are few of them and each is a session the runner meant to record — recovery days,
+    /// the walk half of a run/walk, the weeks around an injury. Off is for the runner who
+    /// wants the log to be running and nothing else; turning it off stops future imports
+    /// and leaves the walks already imported in place, since deleting a runner's history
+    /// behind a toggle is not a thing a settings switch should do.
+    var walkImportEnabled: Bool {
+        didSet {
+            persist(walkImportEnabled, forKey: Self.walkImportKey)
+        }
+    }
+
     /// The user's weekly running-distance goal, in metres. Drives the weekly
     /// progress ring and consistency badges on the Progress → Achievements tab.
     var weeklyGoalMeters: Double {
@@ -115,6 +129,9 @@ final class AppSettings {
     static let morningReminderKey = "morningReminderEnabled"
     static let spokenSplitsKey = "spokenSplitsEnabled"
     static let weeklyGoalMetersKey = "weeklyGoalMeters"
+    /// Internal so `WorkoutSyncService` can read the same key without an `AppSettings`,
+    /// the way the unit preference is read during a background sync.
+    static let walkImportKey = "walkImportEnabled"
 
     /// Default weekly goal (20 km) applied when the user has never set one.
     static let defaultWeeklyGoalMeters = 20_000.0
@@ -139,6 +156,7 @@ final class AppSettings {
         let reminderStored = Self.hasStoredValue(forKey: Self.morningReminderKey, defaults: defaults, ubiquitous: ubiquitous)
         let spokenSplitsStored = Self.hasStoredValue(forKey: Self.spokenSplitsKey, defaults: defaults, ubiquitous: ubiquitous)
         let weeklyGoalStored = Self.hasStoredValue(forKey: Self.weeklyGoalMetersKey, defaults: defaults, ubiquitous: ubiquitous)
+        let walkImportStored = Self.hasStoredValue(forKey: Self.walkImportKey, defaults: defaults, ubiquitous: ubiquitous)
 
         let raw = Self.readString(forKey: Self.unitPreferenceKey, defaults: defaults, ubiquitous: ubiquitous) ?? ""
         // No stored choice falls back to what the device already measures in, not to
@@ -170,6 +188,11 @@ final class AppSettings {
             ? Self.readBool(forKey: Self.spokenSplitsKey, defaults: defaults, ubiquitous: ubiquitous)
             : false
 
+        // Default to true (walks imported) when the key has never been set — see the property.
+        self.walkImportEnabled = walkImportStored
+            ? Self.readBool(forKey: Self.walkImportKey, defaults: defaults, ubiquitous: ubiquitous)
+            : true
+
         // Default to 20 km when the user has never set a weekly goal.
         self.weeklyGoalMeters = weeklyGoalStored
             ? (Self.readDouble(forKey: Self.weeklyGoalMetersKey, defaults: defaults, ubiquitous: ubiquitous) ?? Self.defaultWeeklyGoalMeters)
@@ -184,6 +207,7 @@ final class AppSettings {
         if reminderStored { persist(morningReminderEnabled, forKey: Self.morningReminderKey) }
         if spokenSplitsStored { persist(spokenSplitsEnabled, forKey: Self.spokenSplitsKey) }
         if weeklyGoalStored { persist(weeklyGoalMeters, forKey: Self.weeklyGoalMetersKey) }
+        if walkImportStored { persist(walkImportEnabled, forKey: Self.walkImportKey) }
 
         observeExternalChanges()
     }
@@ -244,6 +268,11 @@ final class AppSettings {
             if value != spokenSplitsEnabled { spokenSplitsEnabled = value }
         }
 
+        if Self.hasStoredValue(forKey: Self.walkImportKey, defaults: defaults, ubiquitous: ubiquitous) {
+            let value = Self.readBool(forKey: Self.walkImportKey, defaults: defaults, ubiquitous: ubiquitous)
+            if value != walkImportEnabled { walkImportEnabled = value }
+        }
+
         if let value = Self.readDouble(forKey: Self.weeklyGoalMetersKey, defaults: defaults, ubiquitous: ubiquitous),
            value != weeklyGoalMeters {
             weeklyGoalMeters = value
@@ -295,6 +324,19 @@ final class AppSettings {
             ubiquitous: NSUbiquitousKeyValueStore.default
         ) ?? ""
         return UnitPreference(rawValue: raw) ?? .metric
+    }
+
+    /// Whether walking workouts should be imported, read without an `AppSettings`.
+    ///
+    /// A HealthKit sync can run while the app is in the background, before the observable
+    /// settings object exists, so `WorkoutSyncService` resolves the toggle the same way it
+    /// resolves the unit preference. Defaults to `true` when the runner has never chosen.
+    static func syncedWalkImportEnabled() -> Bool {
+        let defaults = UserDefaults.standard
+        let ubiquitous = NSUbiquitousKeyValueStore.default
+        return hasStoredValue(forKey: walkImportKey, defaults: defaults, ubiquitous: ubiquitous)
+            ? readBool(forKey: walkImportKey, defaults: defaults, ubiquitous: ubiquitous)
+            : true
     }
 
     static func syncedICloudEnabled() -> Bool {

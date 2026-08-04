@@ -26,9 +26,13 @@ enum ProgressPeriodStats {
     /// The cutoff is a rolling window rather than a calendar boundary, matching what the
     /// range picker promises ("3M" is the last three months, not the last three
     /// calendar months).
+    ///
+    /// Imported walks are dropped here rather than at the screen (N38). Everything the
+    /// Progress tab draws flows through this one function, so this is where "the Progress
+    /// tab is about running" is true once instead of at every chart.
     static func runs(in allRuns: [RunWorkout], withinDays days: Int, now: Date = Date()) -> [RunWorkout] {
         let cutoff = now.addingTimeInterval(-Double(days) * 86_400)
-        return allRuns.filter { $0.date >= cutoff }
+        return allRuns.runsOnly.filter { $0.date >= cutoff }
     }
 
     // MARK: VDOT series

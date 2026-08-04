@@ -246,6 +246,7 @@ private struct DayCell: View {
         case .interval, .race:      return .zoneInterval
         case .rest, .crossTraining: return Color.secondary
         case .strength:             return .brand
+        case .walk:                 return .zoneRecovery
         }
     }
 }
@@ -312,12 +313,15 @@ struct DashboardView: View {
     /// The dashboard reads runs only for *this week* — the seven load bars and the two
     /// week totals — so the newest 60 is far more than it can use, where the unbounded
     /// query loaded every run ever logged on every render (D6).
+    ///
+    /// Imported walks are excluded in the fetch rather than in the bars: every number on
+    /// this screen is a running number, and the limit has to count runs to mean what the
+    /// comment above says (N38).
     static var recentRunsDescriptor: FetchDescriptor<RunWorkout> {
-        var descriptor = FetchDescriptor<RunWorkout>(
-            sortBy: [SortDescriptor(\RunWorkout.date, order: .reverse)]
+        RunWorkout.runsOnlyDescriptor(
+            sortBy: [SortDescriptor(\RunWorkout.date, order: .reverse)],
+            fetchLimit: 60
         )
-        descriptor.fetchLimit = 60
-        return descriptor
     }
 
     @Query(DashboardView.recentRunsDescriptor)

@@ -97,10 +97,12 @@ enum WidgetRefreshService {
     }
 
     /// Every run, because the longest-streak figure is defined over all of them —
-    /// the same read `AchievementsView` already makes with an unbounded `@Query`.
+    /// the same read `AchievementsView` already makes with an unbounded `@Query`, and
+    /// walks are excluded here for the same reason they are there (N38).
     private static func runs(in context: ModelContext) -> [RunWorkout] {
-        let descriptor = FetchDescriptor<RunWorkout>(sortBy: [SortDescriptor(\.date)])
-        return (try? context.fetch(descriptor)) ?? []
+        (try? context.fetch(RunWorkout.runsOnlyDescriptor(
+            sortBy: [SortDescriptor(\.date)]
+        ))) ?? []
     }
 
     private static func profile(in context: ModelContext) -> UserProfile? {
