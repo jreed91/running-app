@@ -168,9 +168,12 @@ enum ScheduledDayResolver {
     /// How many days after the scheduled day a session can still be started.
     static let maximumDaysLateToStart = 1
 
-    /// Sort order used for a day's sessions: run work first, then strength,
+    /// Sort order used for a day's sessions: run work first, then walks, strength,
     /// cross-training, and rest; ties broken by scheduled time, then by ID so the
     /// order is fully determined.
+    ///
+    /// No generator schedules a walk, so that rank is only ever reached by data — it
+    /// is here so the ordering stays total rather than because a plan day can hold one.
     private static func isOrderedBefore(_ lhs: ScheduledWorkout, _ rhs: ScheduledWorkout) -> Bool {
         let lhsRank = kindRank(lhs.workoutType.sessionKind)
         let rhsRank = kindRank(rhs.workoutType.sessionKind)
@@ -182,9 +185,10 @@ enum ScheduledDayResolver {
     private static func kindRank(_ kind: WorkoutType.SessionKind) -> Int {
         switch kind {
         case .run:           return 0
-        case .strength:      return 1
-        case .crossTraining: return 2
-        case .rest:          return 3
+        case .walk:          return 1
+        case .strength:      return 2
+        case .crossTraining: return 3
+        case .rest:          return 4
         }
     }
 }

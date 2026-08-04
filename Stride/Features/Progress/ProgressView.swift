@@ -62,8 +62,14 @@ struct ProgressDashboardView: View {
         let windowDays = ChartRange.year.days + 7
         let cutoff = Calendar.current.date(byAdding: .day, value: -windowDays, to: Date())
             ?? Date.distantPast
+        // Imported walks never reach this screen (N38): every chart on it — volume, pace,
+        // heart rate, elevation, VO₂ — is a statement about running. `ProgressPeriodStats`
+        // enforces the same rule for callers that hand it an unfiltered list; excluding
+        // them in the fetch also keeps the heart-rate backfill below from spending its
+        // HealthKit queries on walks.
+        let walkRaw = WorkoutType.walk.rawValue
         _workouts = Query(
-            filter: #Predicate<RunWorkout> { $0.date >= cutoff },
+            filter: #Predicate<RunWorkout> { $0.date >= cutoff && $0.workoutTypeRaw != walkRaw },
             sort: [SortDescriptor(\RunWorkout.date)]
         )
     }

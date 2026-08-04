@@ -54,6 +54,21 @@ protocol HealthKitRepositoryProtocol: Sendable {
         existingIDs: Set<String>,
         context: WorkoutImportContext
     ) async throws -> [RunWorkout]
+    /// Fetches walking workouts from HealthKit, converts them to `RunWorkout` models
+    /// carrying ``WorkoutType/walk``, and skips any whose HK UUID is already in
+    /// `existingIDs` (N38).
+    ///
+    /// Same model, same enrichment and the same split bucketing as a run — a walk has a
+    /// route, a heart rate and a pace like anything else, and reusing the model is what
+    /// gives it the history row, the map and the charts. What it does not share is the
+    /// classification: a walk is always `.walk`, never inferred against the runner's
+    /// paces, and never counted as running (see `Sequence.runsOnly`).
+    @MainActor func fetchImportableWalkingWorkouts(
+        from startDate: Date,
+        to endDate: Date,
+        existingIDs: Set<String>,
+        context: WorkoutImportContext
+    ) async throws -> [RunWorkout]
     /// Fetches strength workouts (traditional, functional, core) from HealthKit,
     /// converts them to StrengthWorkout models, and skips any whose HK UUID is
     /// already in `existingIDs`.
@@ -641,7 +656,8 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
 
     func registerObserverQuery(handler: @escaping @Sendable (_ completion: @escaping @Sendable () -> Void) -> Void) {
         guard isAvailable else { return }
-        // Observe all running workouts (outdoor and treadmill share the .running activity type)
+        // Unfiltered on purpose: the sync pass behind this handler imports runs, walks and
+        // strength sessions, so the observer has to fire for all of them.
         let query = HKObserverQuery(
             sampleType: .workoutType(),
             predicate: nil
@@ -713,6 +729,50 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         RunEffortPolicy.isRealRun(distanceMeters: distanceMeters, durationSeconds: durationSeconds)
     }
 
+    /// Which activity an import pass is converting.
+    ///
+    /// Runs and walks are enriched identically — the samples HealthKit holds against a
+    /// workout do not depend on what the workout was — so the two differ only in the
+    /// floor they must clear and the type they land with, which is exactly what this
+    /// carries. Anything more than that belongs in the shared path, not in a branch.
+    enum ImportKind: Sendable {
+        case run
+        case walk
+
+        /// Whether a workout of this size is worth importing at all.
+        func isImportable(distanceMeters: Double, durationSeconds: Double) -> Bool {
+            switch self {
+            case .run:
+                return HealthKitRepository.isImportableWorkout(
+                    distanceMeters: distanceMeters, durationSeconds: durationSeconds
+                )
+            case .walk:
+                return RunEffortPolicy.isRealWalk(
+                    distanceMeters: distanceMeters, durationSeconds: durationSeconds
+                )
+            }
+        }
+
+        /// The type an imported workout lands with. A walk is never classified against
+        /// the runner's training paces — it is a walk however briskly it was taken.
+        func workoutType(
+            distanceMeters: Double,
+            durationSeconds: Double,
+            paces: TrainingPaces?
+        ) -> WorkoutType {
+            switch self {
+            case .run:
+                return HealthKitRepository.inferWorkoutType(
+                    distanceMeters: distanceMeters,
+                    durationSeconds: durationSeconds,
+                    paces: paces
+                )
+            case .walk:
+                return .walk
+            }
+        }
+    }
+
     /// Fetches running workouts from HealthKit in the given range, converts each to a
     /// `RunWorkout` (with heart rate and elevation from associated HealthKit samples),
     /// and returns only those whose HK UUID is not already in `existingIDs`.
@@ -723,6 +783,77 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         context: WorkoutImportContext = .unknownRunner
     ) async throws -> [RunWorkout] {
         let hkWorkouts = try await fetchWorkouts(from: startDate, to: endDate)
+        return await importWorkouts(
+            hkWorkouts,
+            kind: .run,
+            existingIDs: existingIDs,
+            context: context,
+            label: "running"
+        )
+    }
+
+    // MARK: - Walking workout import
+
+    @MainActor func fetchImportableWalkingWorkouts(
+        from startDate: Date,
+        to endDate: Date,
+        existingIDs: Set<String>,
+        context: WorkoutImportContext = .unknownRunner
+    ) async throws -> [RunWorkout] {
+        let hkWorkouts = try await fetchWalkingWorkouts(from: startDate, to: endDate)
+        return await importWorkouts(
+            hkWorkouts,
+            kind: .walk,
+            existingIDs: existingIDs,
+            context: context,
+            label: "walking"
+        )
+    }
+
+    /// Walking workouts only.
+    ///
+    /// Deliberately just `.walking`, not `.hiking` — a hike is its own activity with its
+    /// own distance profile, and folding it in would put a six-hour day on a mountain in
+    /// the history list labelled "Walk". Passive step tracking is not touched either:
+    /// this is the workout type, so only sessions somebody actually started appear.
+    private func fetchWalkingWorkouts(from startDate: Date, to endDate: Date) async throws -> [HKWorkout] {
+        let typePredicate = HKQuery.predicateForWorkouts(with: .walking)
+        let datePredicate = HKQuery.predicateForSamples(
+            withStart: startDate, end: endDate, options: .strictStartDate
+        )
+        let compound = NSCompoundPredicate(andPredicateWithSubpredicates: [typePredicate, datePredicate])
+        return try await withCheckedThrowingContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: .workoutType(),
+                predicate: compound,
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)]
+            ) { _, samples, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume(returning: (samples as? [HKWorkout]) ?? [])
+                }
+            }
+            store.execute(query)
+        }
+    }
+
+    /// Converts fetched HealthKit workouts into `RunWorkout` models, skipping the ones
+    /// already imported and the ones too small to be a session.
+    ///
+    /// One path for runs and walks: the samples HealthKit holds against a workout —
+    /// heart rate, cadence, elevation, route, the distance series the splits are
+    /// bucketed from — are the same either way, so only `kind` differs (the floor to
+    /// clear, and the type to land with).
+    @MainActor
+    private func importWorkouts(
+        _ hkWorkouts: [HKWorkout],
+        kind: ImportKind,
+        existingIDs: Set<String>,
+        context: WorkoutImportContext,
+        label: String
+    ) async -> [RunWorkout] {
         var result: [RunWorkout] = []
         var skippedExisting = 0
         var skippedTinyShell = 0
@@ -748,7 +879,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
                     )
                 }
             }
-            guard Self.isImportableWorkout(distanceMeters: distanceMeters, durationSeconds: hkWorkout.duration) else {
+            guard kind.isImportable(distanceMeters: distanceMeters, durationSeconds: hkWorkout.duration) else {
                 skippedTinyShell += 1
                 continue
             }
@@ -774,7 +905,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
                 date: hkWorkout.startDate,
                 distanceMeters: distanceMeters,
                 durationSeconds: hkWorkout.duration,
-                workoutType: Self.inferWorkoutType(
+                workoutType: kind.workoutType(
                     distanceMeters: distanceMeters,
                     durationSeconds: hkWorkout.duration,
                     paces: context.paces
@@ -799,7 +930,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             result.append(run)
         }
         AppLogger.log(
-            "HealthKit import candidates: fetched=\(hkWorkouts.count), importable=\(result.count), existing=\(skippedExisting), tinyShell=\(skippedTinyShell)",
+            "HealthKit \(label) import candidates: fetched=\(hkWorkouts.count), importable=\(result.count), existing=\(skippedExisting), tooSmall=\(skippedTinyShell)",
             label: "HealthKit",
             level: .debug
         )

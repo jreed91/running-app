@@ -100,6 +100,22 @@ final class MockHealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sen
         return runFetchResults.removeFirst()
     }
 
+    /// Walks the mock hands back, newest pass first, mirroring `runFetchResults`.
+    @MainActor var walkFetchResults: [[RunWorkout]] = []
+    @MainActor private(set) var walkFetchCalls = 0
+
+    @MainActor
+    func fetchImportableWalkingWorkouts(
+        from startDate: Date,
+        to endDate: Date,
+        existingIDs: Set<String>,
+        context: WorkoutImportContext
+    ) async throws -> [RunWorkout] {
+        walkFetchCalls += 1
+        guard !walkFetchResults.isEmpty else { return [] }
+        return walkFetchResults.removeFirst()
+    }
+
     @MainActor
     func fetchImportableStrengthWorkouts(
         from startDate: Date,

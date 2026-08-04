@@ -106,7 +106,8 @@ Business logic belongs in services or repositories, not directly in SwiftUI view
 - `PlanKind`: `.standard`, `.pregnancy` — *which generator built the plan*, a separate axis from
   `RaceType`, which is *what the runner is training for*. See "Pregnancy plans" below.
 - `FitnessLevel`: `.beginner`, `.intermediate`, `.advanced`
-- `WorkoutType`: `.easy`, `.tempo`, `.interval`, `.longRun`, `.race`, `.rest`, `.crossTraining`, `.strength`
+- `WorkoutType`: `.easy`, `.tempo`, `.interval`, `.longRun`, `.race`, `.rest`, `.crossTraining`,
+  `.strength`, `.walk` — the last of which no generator ever prescribes; see "Walking workouts" below
 - `TrainingPhase`: `.base`, `.build`, `.peak`, `.taper`
 - `RouteType`: `.loop`, `.outAndBack`
 - `WorkoutLocation`: `.outdoor`, `.indoor`
@@ -188,7 +189,7 @@ promise honest.
 - SwiftData is the local persistence layer.
 - CloudKit is used for private iCloud sync when enabled and available.
 - `AppContainer` falls back from CloudKit to local storage and then emergency in-memory storage if needed.
-- `WorkoutSyncService` imports HealthKit workouts and can surface pending review workouts through `AppContainer.pendingReviewWorkout`.
+- `WorkoutSyncService` imports HealthKit workouts — runs, walks, and strength sessions — and can surface pending review workouts through `AppContainer.pendingReviewWorkout`. See "Walking workouts" below for the rules the walk half carries.
 - Simulator builds disable CloudKit in `AppContainer.shouldUseCloudKit` — not because
   Simulator can't sync (Apple says it can) but because the unit-test suite runs there and
   builds real file-backed containers, which would otherwise write into the team's
@@ -209,6 +210,44 @@ promise honest.
   builds see only the production environment. The release gate is in
   [`docs/CLOUDKIT_VALIDATION.md`](docs/CLOUDKIT_VALIDATION.md); deployment is additive-only
   and cannot be undone.
+
+## Walking workouts
+
+Walking workouts recorded in Apple Health are imported alongside runs (N38). They are
+stored as `RunWorkout` rows carrying `WorkoutType.walk` — the same model, which is what
+gives a walk the history row, the map, the splits and the heart-rate charts without a
+second copy of any of it — and the whole feature rests on one invariant:
+
+> **A walk is history, never training.**
+
+The rules a change here has to keep:
+
+- **`Sequence.runsOnly` and `RunWorkout.runsOnlyDescriptor()` are the two forms of that
+  invariant**, in memory and in the fetch. Anything that means *running* — weekly volume,
+  average pace, VDOT and the fitness trend, personal records, the streak, the coach's read
+  on recent load, the widgets' week, the plan's pace refresh, Siri's totals — goes through
+  one of them. Anything that means *what the runner recorded* — the History list, a
+  deletion, the HealthKit dedup set — takes everything. Use the **descriptor** whenever the
+  fetch is bounded: filtering a `fetchLimit`-ed result afterwards silently shortens the page.
+- **`WorkoutType.countsAsRunning` is the predicate behind both**, and it is a different
+  question from `isRunType`. `isRunType` asks "can an imported run complete a day scheduled
+  as this?"; `countsAsRunning` is asked of recorded history. `.walk` is the case that makes
+  the distinction earn its keep.
+- **A walk never completes a plan day.** `WorkoutSyncService.linkToScheduledWorkouts` filters
+  them out, the walk pass never calls it, and the run summary hides its link-to-plan button
+  for a walk. `WalkImportTests` pins all three.
+- **Walks import quietly**: no synced-run notification, no review sheet, no weather fetch.
+  A banner per walk is what makes people turn notifications off.
+- **The floor is `RunEffortPolicy.isRealWalk`, not `isRealRun`.** Runs are started on
+  purpose so almost anything recorded is real; a walking workout is as readily the walk to
+  the shop, so the floor is 400 m and five minutes.
+- Import is on by default and switchable in **Settings → Data → Import Walks**
+  (`AppSettings.walkImportEnabled`, read during background sync via
+  `AppSettings.syncedWalkImportEnabled()`). Turning it off stops future imports and leaves
+  the walks already imported alone.
+- Only `HKWorkoutActivityType.walking` is read — not `.hiking`, and not passive step
+  tracking. Adding `.walk` needed no CloudKit schema change: it is a new raw value in an
+  existing `String` field.
 
 ## Widget Data Flow
 

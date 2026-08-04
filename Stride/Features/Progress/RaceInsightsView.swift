@@ -23,8 +23,10 @@ struct RaceInsightsView: View {
         // set here rather than in a computed property.
         let cutoff = Calendar.current.date(byAdding: .day, value: -365, to: Date())
             ?? Date.distantPast
+        // Runs only — this screen predicts race times (N38).
+        let walkRaw = WorkoutType.walk.rawValue
         _workouts = Query(
-            filter: #Predicate<RunWorkout> { $0.date >= cutoff },
+            filter: #Predicate<RunWorkout> { $0.date >= cutoff && $0.workoutTypeRaw != walkRaw },
             sort: [SortDescriptor(\RunWorkout.date)]
         )
     }

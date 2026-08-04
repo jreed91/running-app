@@ -103,6 +103,43 @@ struct AppSettingsTests {
         #expect(ubiquitous.has(AppSettings.iCloudSyncKey) == false)
     }
 
+    // MARK: - Walk import (N38)
+
+    @Test("Fresh install imports walks without seeding iCloud")
+    func walkImportDefaultsOnWithoutSeeding() {
+        let defaults = InMemoryStore()
+        let ubiquitous = InMemoryStore()
+
+        let settings = AppSettings(defaults: defaults, ubiquitous: ubiquitous)
+
+        #expect(settings.walkImportEnabled)
+        #expect(ubiquitous.has(AppSettings.walkImportKey) == false)
+        #expect(defaults.has(AppSettings.walkImportKey) == false)
+    }
+
+    @Test("Turning walk import off round-trips through both stores")
+    func walkImportChangeSyncs() {
+        let defaults = InMemoryStore()
+        let ubiquitous = InMemoryStore()
+        let settings = AppSettings(defaults: defaults, ubiquitous: ubiquitous)
+
+        settings.walkImportEnabled = false
+
+        #expect(defaults.object(forKey: AppSettings.walkImportKey) as? Bool == false)
+        #expect(ubiquitous.object(forKey: AppSettings.walkImportKey) as? Bool == false)
+    }
+
+    @Test("A stored walk-import choice is read back on launch")
+    func walkImportReadOnLaunch() {
+        let defaults = InMemoryStore()
+        let ubiquitous = InMemoryStore()
+        ubiquitous.set(false, forKey: AppSettings.walkImportKey)
+
+        let settings = AppSettings(defaults: defaults, ubiquitous: ubiquitous)
+
+        #expect(settings.walkImportEnabled == false)
+    }
+
     // MARK: - Weekly goal (B4)
 
     @Test("Fresh install defaults the weekly goal to 20 km without seeding iCloud")

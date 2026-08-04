@@ -241,7 +241,59 @@ final class WorkoutSyncService {
             )
         }
 
+        await syncWalkingWorkouts(source: source, lookbackCutoff: cutoff, existingIDs: existingIDs)
         await syncStrengthWorkouts(source: source, lookbackCutoff: cutoff)
+    }
+
+    // MARK: - Walking workout sync
+
+    /// Imports walking workouts from HealthKit as `.walk` runs (N38).
+    ///
+    /// Quieter than the run pass, in the three ways that matter:
+    ///
+    /// - **No plan linking.** A walk can never complete a scheduled day, so it is never
+    ///   offered to `linkToScheduledWorkouts`. Turning a missed easy run into a completed
+    ///   one because the runner walked the dog is the failure this exists to prevent.
+    /// - **No notification and no review sheet.** The synced-run banner exists to say
+    ///   "your run is in, come and look at it". A walk is context, not an achievement;
+    ///   a banner per walk is the kind of thing people turn all notifications off over.
+    /// - **No weather.** The weather snapshot is fetched per workout from WeatherKit and
+    ///   is read by the coach's run analysis, which never looks at a walk.
+    ///
+    /// `existingIDs` is the same set the run pass used — one fetch covers both, since
+    /// walks and runs share the `RunWorkout` table and the tombstone table.
+    private func syncWalkingWorkouts(
+        source: String,
+        lookbackCutoff: Date,
+        existingIDs: Set<String>
+    ) async {
+        guard AppSettings.syncedWalkImportEnabled() else { return }
+
+        let walks: [RunWorkout]
+        do {
+            walks = try await healthKitRepository.fetchImportableWalkingWorkouts(
+                from: lookbackCutoff,
+                to: Date(),
+                existingIDs: existingIDs,
+                context: WorkoutImportContext.resolve(from: context)
+            )
+        } catch {
+            AppLogger.log(
+                "Failed to import HealthKit walking workouts (\(source)): \(error.localizedDescription)",
+                label: "HealthKit",
+                level: .error
+            )
+            return
+        }
+
+        guard !walks.isEmpty else { return }
+        for walk in walks { context.insert(walk) }
+        context.saveOrLog("imported walking workouts")
+        AppLogger.log(
+            "Imported \(walks.count) HealthKit walking workout(s) during \(source) sync.",
+            label: "HealthKit",
+            level: .info
+        )
     }
 
     /// Days of history a routine sync looks back over.
@@ -288,8 +340,12 @@ final class WorkoutSyncService {
     /// the run's own `workoutType` from the schedule — the run keeps the type inferred from its
     /// data; the schedule link records which planned session it fulfilled. Workout type is used
     /// only as a tiebreaker when several run days share the same date.
+    ///
+    /// Walks are excluded on the same principle as the gym day, from the other side: an
+    /// imported walk is not a run and must not complete one. The walk sync pass never calls
+    /// this, and the guard here is what keeps that true if a future caller does (N38).
     private func linkToScheduledWorkouts(_ runWorkouts: [RunWorkout]) {
-        let toLink = runWorkouts.filter { $0.scheduledWorkout == nil }
+        let toLink = runWorkouts.runsOnly.filter { $0.scheduledWorkout == nil }
         guard !toLink.isEmpty else { return }
 
         let descriptor = FetchDescriptor<ScheduledWorkout>(

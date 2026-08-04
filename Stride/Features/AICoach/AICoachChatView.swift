@@ -18,11 +18,12 @@ struct AICoachChatView: View {
     /// Nothing here needs a true total: the header's "Runs" count is only rendered when
     /// there is no latest run at all, which means this fetch came back empty.
     static var recentRunsDescriptor: FetchDescriptor<RunWorkout> {
-        var descriptor = FetchDescriptor<RunWorkout>(
-            sortBy: [SortDescriptor(\RunWorkout.date, order: .reverse)]
+        // Runs only (N38): the coach is being asked about training, and a walk taking one
+        // of the eight prompt slots costs the model a run it would otherwise have read.
+        RunWorkout.runsOnlyDescriptor(
+            sortBy: [SortDescriptor(\RunWorkout.date, order: .reverse)],
+            fetchLimit: promptRunCount
         )
-        descriptor.fetchLimit = promptRunCount
-        return descriptor
     }
 
     @Query(AICoachChatView.recentRunsDescriptor)

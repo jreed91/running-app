@@ -12,7 +12,9 @@ struct PlanTabView: View {
     private var activePlans: [TrainingPlan]
 
     @Query private var profiles: [UserProfile]
-    @Query(sort: \RunWorkout.date, order: .reverse) private var recentWorkouts: [RunWorkout]
+    /// Newest runs first, walks excluded — this feeds Smart Adapt and the pace insights,
+    /// both of which read it as training history (N38).
+    @Query(RunWorkout.runsOnlyDescriptor()) private var recentWorkouts: [RunWorkout]
 
     @State private var showNewPlanSheet = false
     @State private var showPregnancyPlanSheet = false

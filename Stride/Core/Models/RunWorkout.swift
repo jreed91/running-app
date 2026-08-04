@@ -147,6 +147,14 @@ final class RunWorkout {
         set { splitUnitRaw = newValue.rawValue }
     }
 
+    /// A walk imported from Apple Health rather than a run (`WorkoutType.walk`).
+    ///
+    /// Walks share this model because they are the same shape of thing — a distance, a
+    /// duration, a route, splits, heart rate — and so get the history row, the map, and
+    /// the split charts for free. What they must not share is the training maths; see
+    /// ``Swift/Sequence/runsOnly``.
+    var isWalk: Bool { workoutType == .walk }
+
     init(
         date: Date = Date(),
         distanceMeters: Double,
@@ -163,5 +171,50 @@ final class RunWorkout {
             : 0
         self.workoutType = workoutType
         self.workoutLocation = workoutLocation
+    }
+}
+
+// MARK: - Running history
+
+extension Sequence where Element == RunWorkout {
+
+    /// The runs, with imported walks dropped.
+    ///
+    /// `RunWorkout` is the app's record of "a thing you covered a distance doing", and
+    /// since walk import (N38) that includes walks. Every aggregate that means *running*
+    /// — weekly volume, average pace, VDOT and the fitness trend, personal records, the
+    /// streak, the coach's read on recent load, the widgets' week — has to say so, or a
+    /// 40-minute stroll lands in the same average as a tempo run and quietly moves a
+    /// number the runner trusts.
+    ///
+    /// The rule for a call site: if the answer is about **training**, ask for `runsOnly`.
+    /// If it is about **what happened** — the History list, a deletion, the HealthKit
+    /// dedup set — take everything.
+    var runsOnly: [RunWorkout] { filter { $0.workoutType.countsAsRunning } }
+
+    /// The imported walks, for the rare caller that wants only them.
+    var walksOnly: [RunWorkout] { filter { $0.isWalk } }
+}
+
+extension RunWorkout {
+
+    /// A fetch that returns runs and leaves imported walks in the store (N38).
+    ///
+    /// The store-level counterpart to ``Swift/Sequence/runsOnly``, and the form to reach
+    /// for whenever a fetch is *bounded* — `fetchLimit`, or a `@Query` the view pages
+    /// through. Filtering those in memory afterwards silently shortens the page: ask for
+    /// the newest 60 and get 41 once the runner has walked, which is a different bug in
+    /// every screen it happens on.
+    static func runsOnlyDescriptor(
+        sortBy: [SortDescriptor<RunWorkout>] = [SortDescriptor(\.date, order: .reverse)],
+        fetchLimit: Int? = nil
+    ) -> FetchDescriptor<RunWorkout> {
+        let walkRaw = WorkoutType.walk.rawValue
+        var descriptor = FetchDescriptor<RunWorkout>(
+            predicate: #Predicate { $0.workoutTypeRaw != walkRaw },
+            sortBy: sortBy
+        )
+        descriptor.fetchLimit = fetchLimit
+        return descriptor
     }
 }

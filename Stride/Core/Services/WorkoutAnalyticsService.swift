@@ -79,6 +79,12 @@ struct WorkoutAnalyticsService: Sendable {
     /// Analyses `history` and produces a ``PerformanceSnapshot``.
     /// `now` is injectable so callers (and tests) can pin the reference date.
     func snapshot(from history: [RunWorkout], profile: UserProfile, now: Date = Date()) -> PerformanceSnapshot {
+        // Every figure below is a statement about running fitness — a pace trend, a
+        // weekly volume, a VDOT — so imported walks are dropped once here rather than
+        // remembered by each of the six passes (N38). The pace trend is the sharpest
+        // case: a couple of walks in an eight-week window read as a runner losing form.
+        let history = history.runsOnly
+
         // 1. Recent VDOT from best race effort. Only genuine race efforts are used:
         // tempo/interval session averages fold in warm-up, recovery jogs, and
         // cool-down, so treating them as race efforts biases VDOT (and every

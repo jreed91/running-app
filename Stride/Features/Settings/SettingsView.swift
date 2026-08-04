@@ -335,6 +335,19 @@ struct SettingsView: View {
             .buttonStyle(.plain)
             .foregroundStyle(.primary)
 
+            rowDivider
+            settingsRow(icon: .tortoise, iconColor: .zoneRecovery, title: "Import Walks") {
+                Toggle("", isOn: Bindable(appSettings).walkImportEnabled)
+                    .labelsHidden()
+                    .tint(.brand)
+                    .accessibilityIdentifier("settings.importWalks")
+            }
+            Text("Brings walking workouts from Apple Health into your history. They're kept out of your training stats — mileage, pace, records, and streaks stay running-only.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.leading, 62)
+                .padding(.bottom, 10)
+
             if BuildEnvironment.showsTestFlightDiagnostics {
                 rowDivider
                 NavigationLink {

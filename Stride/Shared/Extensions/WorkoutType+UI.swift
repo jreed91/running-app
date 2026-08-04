@@ -12,6 +12,10 @@ extension WorkoutType {
         case .rest:          return .moon
         case .crossTraining: return .dumbbell
         case .strength:      return .barbell
+        // Not `.walk`: that glyph is already `.easy`'s, and a walk in the history list
+        // has to be told apart from an easy run at a glance. The tortoise is the set's
+        // "deliberately slow" mark, which is what a walk is.
+        case .walk:          return .tortoise
         }
     }
 
@@ -26,6 +30,7 @@ extension WorkoutType {
         case .rest:          return "moon.zzz"
         case .crossTraining: return "dumbbell"
         case .strength:      return "figure.strengthtraining.traditional"
+        case .walk:          return "figure.walk"
         }
     }
 
@@ -36,6 +41,7 @@ extension WorkoutType {
         case .tempo:           return .zoneTempo
         case .interval, .race: return .zoneInterval
         case .strength:        return .brand
+        case .walk:            return .zoneRecovery
         default:               return .secondary
         }
     }
