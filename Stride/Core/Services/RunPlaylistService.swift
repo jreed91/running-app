@@ -30,7 +30,7 @@ final class RunPlaylistService {
         case notARunSession
         case noTracksFound
         case libraryWriteFailed(String)
-        case playbackUnavailable
+        case playlistMissingInMusic
 
         var errorDescription: String? {
             switch self {
@@ -54,10 +54,10 @@ final class RunPlaylistService {
                     localized: "Couldn't save the playlist to Apple Music. \(reason)",
                     comment: "Error when writing a playlist to the Apple Music library fails"
                 )
-            case .playbackUnavailable:
+            case .playlistMissingInMusic:
                 return String(
-                    localized: "Couldn't start this playlist. Open it in Apple Music instead.",
-                    comment: "Error when the system music player cannot start a built playlist"
+                    localized: "Couldn't find this playlist in Apple Music. It may have been renamed or deleted — tap Rebuild to make it again.",
+                    comment: "Error when the playlist Stride built is no longer in the media library under its name"
                 )
             }
         }
@@ -159,39 +159,58 @@ final class RunPlaylistService {
     /// audio session is never touched. `RunVoiceCoach` owns that session and ducks whatever is
     /// playing; this is just another thing for it to duck.
     ///
-    /// Play parameters are the supported handle on a library playlist. They are read from the
-    /// stored link where present, and re-read from the library for links written before they
-    /// were stored.
+    /// **The queue is the `MPMediaPlaylist` itself, looked up in the media library.** An earlier
+    /// version built an `MPMusicPlayerPlayParametersQueueDescriptor` out of the *playlist's*
+    /// play parameters and always failed, and the mistake was structural rather than a matter of
+    /// tuning: that descriptor takes a queue of **item** parameters — the songs — so a
+    /// playlist's own parameters are not a thing it can represent. `MPMediaPlaylist` is a
+    /// subclass of `MPMediaItemCollection`, which `setQueue(with:)` accepts directly, so the
+    /// whole playlist can be queued with no per-track bookkeeping and no bridging between
+    /// frameworks.
+    ///
+    /// Matched by name, which is why the name is stored on the link: MusicKit's playlist ID and
+    /// MediaPlayer's `persistentID` are different identifier spaces, and a rebuild rewrites the
+    /// same playlist rather than renaming it, so the stored name stays current. A runner who
+    /// renames it in Apple Music breaks the match, and gets told to rebuild.
     func play(_ link: RunPlaylistLink) async throws {
-        var parametersData = link.playParametersData
-        if parametersData == nil, let playlist = await libraryPlaylist(withID: link.playlistID) {
-            parametersData = Self.playParametersData(for: playlist)
+        // MusicKit authorization and media-library authorization are the same permission behind
+        // `NSAppleMusicUsageDescription`, so an authorized MusicKit state normally means this is
+        // authorized too. Checked rather than requested: the request API is completion-based and
+        // the prompt has already been shown by the build.
+        guard MPMediaLibrary.authorizationStatus() == .authorized else {
+            throw PlaylistError.notAuthorized
         }
 
-        // MusicKit's `PlayParameters` and MediaPlayer's `MPMusicPlayerPlayParameters` are both
-        // `Codable` over the same `playParams` shape, so JSON is the bridge between the two
-        // frameworks. Deliberately not `MPMusicPlayerPlayParameters(dictionary:)`: that
-        // initializer is failable and its dictionary is documented as coming straight from the
-        // Apple Music API rather than being assembled locally.
-        guard let parametersData,
-              let parameters = try? JSONDecoder().decode(
-                  MPMusicPlayerPlayParameters.self,
-                  from: parametersData
-              )
-        else {
-            throw PlaylistError.playbackUnavailable
+        guard let playlist = Self.mediaPlaylist(named: link.name) else {
+            AppLogger.log(
+                "No MPMediaPlaylist named \(link.name) in the media library",
+                label: "RunPlaylist",
+                level: .error
+            )
+            throw PlaylistError.playlistMissingInMusic
         }
 
-        let descriptor = MPMusicPlayerPlayParametersQueueDescriptor(playParametersQueue: [parameters])
+        guard !playlist.items.isEmpty else {
+            AppLogger.log(
+                "MPMediaPlaylist \(link.name) is empty",
+                label: "RunPlaylist",
+                level: .error
+            )
+            throw PlaylistError.playlistMissingInMusic
+        }
+
         let player = MPMusicPlayerController.systemMusicPlayer
-        player.setQueue(with: descriptor)
+        player.setQueue(with: playlist)
         player.play()
     }
 
-    /// MusicKit's play parameters for a playlist, as JSON.
-    private static func playParametersData(for playlist: Playlist) -> Data? {
-        guard let parameters = playlist.playParameters else { return nil }
-        return try? JSONEncoder().encode(parameters)
+    /// The media library's playlist with this name, if it has one.
+    private static func mediaPlaylist(named name: String) -> MPMediaPlaylist? {
+        let collections = MPMediaQuery.playlists().collections ?? []
+        return collections
+            .lazy
+            .compactMap { $0 as? MPMediaPlaylist }
+            .first { $0.name == name }
     }
 
     // MARK: - Building
@@ -254,7 +273,6 @@ final class RunPlaylistService {
             totalSeconds: tracks.reduce(0) { $0 + $1.seconds },
             builtAt: Date(),
             usedCatalog: usedCatalog,
-            playParametersData: Self.playParametersData(for: playlist),
             tracks: tracks
         )
         RunPlaylistStore.save(link, in: defaults)

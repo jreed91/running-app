@@ -175,18 +175,6 @@ struct RunPlaylistLink: Codable, Hashable, Sendable {
     /// from their own library. Drives nothing but the wording of the confirmation.
     var usedCatalog: Bool
 
-    /// JSON-encoded MusicKit `PlayParameters` for the created playlist, which is what lets
-    /// the Play button work.
-    ///
-    /// Captured at build time because **iOS has no deep link to a private library playlist**.
-    /// `music://music.apple.com/library` opens the library, but every deeper path — including
-    /// one carrying a playlist's own ID — fails with "item not available", and that is Apple's
-    /// documented behaviour rather than a URL waiting to be spelled correctly. Play parameters
-    /// are the supported handle on a library playlist, so they are stored rather than a URL
-    /// being constructed. Optional so links written before this existed still decode; those
-    /// fall back to re-reading the playlist from the library.
-    var playParametersData: Data?
-
     /// The playlist's tracks in order. Empty for links written before they were stored, which
     /// is what the detail screen checks before offering to show them.
     var tracks: [RunPlaylistTrack]
@@ -202,7 +190,6 @@ struct RunPlaylistLink: Codable, Hashable, Sendable {
         totalSeconds: Double,
         builtAt: Date,
         usedCatalog: Bool,
-        playParametersData: Data? = nil,
         tracks: [RunPlaylistTrack] = []
     ) {
         self.workoutID = workoutID
@@ -212,7 +199,6 @@ struct RunPlaylistLink: Codable, Hashable, Sendable {
         self.totalSeconds = totalSeconds
         self.builtAt = builtAt
         self.usedCatalog = usedCatalog
-        self.playParametersData = playParametersData
         self.tracks = tracks
     }
 
@@ -220,7 +206,7 @@ struct RunPlaylistLink: Codable, Hashable, Sendable {
     /// decodes instead of taking the whole stored link down with it.
     enum CodingKeys: String, CodingKey {
         case workoutID, playlistID, name, trackCount, totalSeconds, builtAt, usedCatalog
-        case playParametersData, tracks
+        case tracks
     }
 
     init(from decoder: any Decoder) throws {
@@ -232,7 +218,6 @@ struct RunPlaylistLink: Codable, Hashable, Sendable {
         totalSeconds = try container.decode(Double.self, forKey: .totalSeconds)
         builtAt = try container.decode(Date.self, forKey: .builtAt)
         usedCatalog = try container.decode(Bool.self, forKey: .usedCatalog)
-        playParametersData = try container.decodeIfPresent(Data.self, forKey: .playParametersData)
         tracks = try container.decodeIfPresent([RunPlaylistTrack].self, forKey: .tracks) ?? []
     }
 }

@@ -443,23 +443,9 @@ struct RunPlaylistStoreTests {
         #expect(RunPlaylistStore.link(for: second, in: defaults) != nil)
     }
 
-    /// The Play button's handle on the playlist has to survive a round trip, because iOS has
-    /// no deep link to a private library playlist and these parameters are the alternative.
-    @Test("Play parameters round-trip with the link")
-    func playParametersSurvive() throws {
-        let defaults = try makeDefaults()
-        let id = UUID()
-        var stored = link(workoutID: id)
-        stored.playParametersData = Data("{\"id\":\"p.123\",\"isLibrary\":true}".utf8)
-        RunPlaylistStore.save(stored, in: defaults)
-
-        let read = try #require(RunPlaylistStore.link(for: id, in: defaults))
-        #expect(read.playParametersData == stored.playParametersData)
-    }
-
-    /// Links written before play parameters were stored must still decode, or every playlist
-    /// built by an earlier build would read as missing rather than as needing a re-fetch.
-    @Test("A link without play parameters still decodes")
+    /// Links written by earlier builds must still decode, or every playlist already built would
+    /// read as missing rather than simply carrying no track list.
+    @Test("A link from an earlier build still decodes")
     func legacyLinkDecodes() throws {
         let json = """
         {
@@ -474,7 +460,6 @@ struct RunPlaylistStoreTests {
         """
         let decoded = try JSONDecoder().decode(RunPlaylistLink.self, from: Data(json.utf8))
         #expect(decoded.playlistID == "p.legacy")
-        #expect(decoded.playParametersData == nil)
         // No tracks rather than a decode failure — the card keeps such a link as a plain row
         // instead of pushing an empty track list.
         #expect(decoded.tracks.isEmpty)
