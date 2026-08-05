@@ -390,13 +390,23 @@ ScheduledWorkout  →  RunPlaylistPlanner  →  RunPlaylistPlan   (pure, tested)
   So the button launches Music and cannot land on the playlist, which is why it is the
   secondary action and is labelled `Open Apple Music` rather than `Open in Music` — the
   earlier label promised a destination and is what made the feature read as broken. The
-  playlist's name is on the card, to be found by eye. Playback instead hands a
-  play-parameters queue to `MPMusicPlayerController.systemMusicPlayer` — the same player the
-  Music app drives, so Now Playing, the Lock Screen and Control Center all show Music, and
-  Stride's audio session is still never touched. `ApplicationMusicPlayer` would make Stride
-  the player and is the thing being avoided. The parameters are captured into
-  `RunPlaylistLink.playParametersData` at build time and re-read from the library when a
-  link predates that field.
+  playlist's name is on the card, to be found by eye.
+- **Playback queues the `MPMediaPlaylist`, not a play-parameters descriptor.** `play(_:)` looks
+  the playlist up by name through `MPMediaQuery.playlists()` and hands it to
+  `MPMusicPlayerController.systemMusicPlayer` — the same player the Music app drives, so Now
+  Playing, the Lock Screen and Control Center all show Music and Stride's audio session is
+  still never touched. `ApplicationMusicPlayer` would make Stride the player and is the thing
+  being avoided.
+
+  The first attempt built an `MPMusicPlayerPlayParametersQueueDescriptor` from the *playlist's*
+  play parameters and always failed with "couldn't start this playlist". The mistake was
+  structural, not a matter of tuning: that descriptor takes a queue of **item** parameters — the
+  songs — so a playlist's own parameters are not something it can represent. `MPMediaPlaylist`
+  is an `MPMediaItemCollection`, which `setQueue(with:)` takes directly, so the whole playlist
+  queues with no per-track bookkeeping and no bridging between frameworks. Matching is by name,
+  which is why the name is on the link: MusicKit's playlist ID and MediaPlayer's `persistentID`
+  are different identifier spaces. A runner who renames the playlist breaks the match and is
+  told to rebuild.
 - **Stride is the only place the playlist can be read, so the track list is stored, not
   fetched.** Because no URL opens a private library playlist, `RunPlaylistDetailView` is the
   one surface where a runner can see what they are about to run to — and a screen standing in
