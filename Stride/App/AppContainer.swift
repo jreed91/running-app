@@ -162,6 +162,10 @@ final class AppContainer {
     let routeGeniusService: RouteGeniusService
     let workoutSyncService: WorkoutSyncService
     let weatherService: WeatherService
+    /// Reads tomorrow's forecast and decides whether the session in it needs to change
+    /// (N39). Every number it acts on lives in `HeatAdaptationPolicy`; see
+    /// `docs/HEAT_ADAPTATION_EVIDENCE.md`.
+    let heatAdvisoryService: HeatAdvisoryService
     let aiCoachService: AICoachService
 
     /// Speaks split announcements during a run (U4). Owned here rather than by the run
@@ -367,6 +371,10 @@ final class AppContainer {
         )
         let weather = WeatherService()
         self.weatherService = weather
+        self.heatAdvisoryService = HeatAdvisoryService(
+            weatherService: weather,
+            notificationService: notifications
+        )
         self.aiCoachService = AICoachService()
         self.runVoiceCoach = RunVoiceCoach()
         self.activeRunPresentation = ActiveRunPresentation()
@@ -670,6 +678,11 @@ final class AppContainer {
     /// reference to a `RunWorkout` that is about to be deleted — so it goes first.
     func resetAllData(context: ModelContext) async {
         pendingReviewWorkout = nil
+        // The advisory and its dismissals live in UserDefaults, outside the store the
+        // lifecycle service is about to tear down — the same reason the widget snapshot is
+        // cleared below. Dismissals go too: they name workouts that will not exist a
+        // moment from now.
+        await heatAdvisoryService.clear(includingDismissals: true)
         await planLifecycle.resetAllData(context: context)
         // The App Group container is outside the store `PlanLifecycleService` just tore
         // down, so without this the Home Screen would be the one place the deleted plan

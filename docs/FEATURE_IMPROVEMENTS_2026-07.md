@@ -27,7 +27,8 @@ that would meaningfully expand the product.
 > half, and **B6**'s route export.
 >
 > **What is genuinely open:** **A7** (target-distance-aware routes with elevation),
-> **A9** (coaching-moment notifications), **A10** (race-day hub), **B3** (watchOS),
+> **A9**'s remaining notifications (its pre-session weather warning shipped as the heat
+> advisory, N39), **A10** (race-day hub), **B3** (watchOS),
 > **B7** (recovery/readiness — also A5's remaining third), **B8**, the logging half of
 > **B9** (its fuelling-advice half shipped as the dashboard's Coach Tips strip), and the
 > full-data export half of **B6**. Each says at its own entry what was deferred and why.
@@ -238,11 +239,22 @@ no consistency badges — the retention mechanics a training app leans on.
 **Improve:** expand into a proper achievements/streak system (see B4).
 
 ### A9. Notifications are one-dimensional (morning reminder + sync banner) *(low impact, low effort)*
-`NotificationService` schedules only morning workout reminders and synced-run
-banners. No pre-long-run weather warning, no "you're 2 days into a streak", no
-weekly-recap push, no missed-workout nudge tied to the recovery card. **Improve:**
-add a small set of coaching-moment notifications keyed off existing detectors
-(`MissedWorkoutDetector`, `WeatherService`).
+
+**PARTLY SHIPPED (N39) — the weather half.** The pre-session weather warning
+this item asked for now exists as a heat advisory: `HeatAdvisoryService` reads
+tomorrow's hourly forecast at the coordinate of the runner's last recorded run,
+scores it with `HeatAdaptationPolicy`, and — when the tier clears the threshold
+for that session type — fires a banner at 18:00 the evening before with the
+conditions, a cooler hour if the day has one, and a tap that opens the
+adaptation sheet. Applying it eases the pace bands, trims quality volume or
+long-run distance, converts hard sessions to easy above `.severe`, and drops
+pace targets entirely in extreme heat. Every threshold is sourced in
+[`HEAT_ADAPTATION_EVIDENCE.md`](./HEAT_ADAPTATION_EVIDENCE.md); the dashboard
+card is `HeatAdvisoryCard`, the setting is **Settings → App → Heat Adaptation**.
+
+**Still open:** the streak nudge, the weekly recap, and the missed-workout push
+tied to the recovery card. `MissedWorkoutDetector` already computes what the last
+of those would say.
 
 ### A10. Custom race distance exists but race-day experience doesn't *(medium impact, medium effort)*
 The plan builds toward `raceDate`/`raceName` (`UserProfile:15-16`) but there is

@@ -357,6 +357,16 @@ struct DashboardView: View {
     @Namespace private var workoutCardNamespace
     @State private var dashboardAppeared = false
 
+    /// The advisory whose sheet is open. Held separately from the service's published
+    /// advisory so that answering it can take the card down immediately without pulling
+    /// the sheet out from under itself mid-dismissal.
+    @State private var heatSheetAdvisory: HeatAdvisory?
+
+    /// The live heat advisory, published by the service rather than read here: the
+    /// refresh that produces it runs from the scene root, so a copy cached in `@State` on
+    /// appear would miss the one that arrives a moment later.
+    private var heatAdvisory: HeatAdvisory? { container.heatAdvisoryService.advisory }
+
     private var activePlan: TrainingPlan? { activePlans.first }
 
     private var missedWorkoutInfo: MissedWorkoutInfo? {
@@ -382,6 +392,21 @@ struct DashboardView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
+                        // Above the week summary, and deliberately so: this is the one
+                        // card on the screen that is a question rather than a readout,
+                        // and it goes stale at midnight. It is also the only card here
+                        // with no way to put it away except by answering it.
+                        if let advisory = heatAdvisory {
+                            HeatAdvisoryCard(
+                                advisory: advisory,
+                                unit: appSettings.unitPreference,
+                                onAdapt: { heatSheetAdvisory = advisory },
+                                onKeepAsPlanned: { answerHeatAdvisory(advisory) }
+                            )
+                            .opacity(dashboardAppeared ? 1 : 0)
+                            .offset(y: dashboardAppeared ? 0 : 20)
+                            .adaptiveAnimation(AppAnimation.entrance.delay(0.03), value: dashboardAppeared)
+                        }
                         weekSummaryCard
                             .opacity(dashboardAppeared ? 1 : 0)
                             .offset(y: dashboardAppeared ? 0 : 20)
@@ -434,6 +459,52 @@ struct DashboardView: View {
             .fullScreenCover(item: $strengthWorkout) { workout in
                 StrengthActiveView(scheduledWorkout: workout)
             }
+            .sheet(item: $heatSheetAdvisory) { advisory in
+                HeatAdaptationSheet(
+                    advisory: advisory,
+                    workout: scheduledWorkout(id: advisory.workoutID),
+                    unit: appSettings.unitPreference,
+                    onAnswered: { answerHeatAdvisory(advisory) }
+                )
+                // The decision is the feature. A swipe-away is the outcome the runner
+                // would take at 21:00 on a Monday and regret at 16:00 on a Tuesday, so
+                // the sheet has no Close button and no drag-to-dismiss — the only exits
+                // are its two buttons, and both of them count as an answer.
+                .interactiveDismissDisabled(true)
+            }
+            .task {
+                // An advisory written last night should be on screen before the forecast
+                // refresh at the scene root has had a chance to run.
+                container.heatAdvisoryService.loadStoredAdvisory()
+            }
+            // Raised, not merely offered. An unanswered advisory presents itself the
+            // moment Home is on screen — including the launch that follows a tap on the
+            // evening banner, where `initial: true` is what catches an advisory that was
+            // already loaded before this modifier started observing.
+            .onChange(of: heatAdvisory, initial: true) { _, _ in
+                presentHeatAdvisoryIfNeeded()
+            }
+            // A strength session is a `fullScreenCover` owned by this same view, and a
+            // sheet raised over one from the same presenter does not reliably appear —
+            // it just leaves the binding set with nothing on screen. So the advisory
+            // waits for the cover to close and asks then.
+            .onChange(of: strengthWorkout) { _, _ in
+                presentHeatAdvisoryIfNeeded()
+            }
+            // The evening banner promises "tap to move it", so a tap has to land on the
+            // sheet rather than merely foregrounding the app. A tap that arrives before
+            // this loop exists — the cold-launch case — is buffered by the service and
+            // replayed here, the same way a synced-run tap is (D4).
+            .task {
+                for await idString in container.notificationService.heatAdvisoryTaps {
+                    guard let id = UUID(uuidString: idString) else { continue }
+                    container.appNavigation.select(.home)
+                    let advisory = container.heatAdvisoryService.loadStoredAdvisory()
+                    if let advisory, advisory.workoutID == id {
+                        heatSheetAdvisory = advisory
+                    }
+                }
+            }
             // `alert(_:item:)` (iOS 27): presentation follows the optional directly, so
             // the bridging `Binding` is gone and the message reads the item it was
             // given rather than re-reading the state behind a `?? ""`.
@@ -446,6 +517,45 @@ struct DashboardView: View {
                 Text(alert.message)
             }
         }
+    }
+
+    // MARK: - Heat advisory
+
+    /// Raises the adaptation sheet for an unanswered advisory.
+    ///
+    /// The advisory is a question rather than a notice, so it is presented rather than
+    /// left to be noticed — the card behind it is what the runner sees *after* answering
+    /// has become impossible to avoid, and on the session's own day once the evening's
+    /// window has closed.
+    ///
+    /// Held back in UI tests, where an unconditional modal over the Home tab would block
+    /// every flow that starts there.
+    private func presentHeatAdvisoryIfNeeded() {
+        guard let advisory = heatAdvisory else { return }
+        guard heatSheetAdvisory == nil, strengthWorkout == nil else { return }
+        guard !UITestingSupport.isEnabled, !UITestingSupport.isHostingUnitTests else { return }
+        heatSheetAdvisory = advisory
+    }
+
+    /// Records the runner's answer and takes the card down.
+    ///
+    /// Both answers land here — applying the adaptation and declining it — because both
+    /// are decisions, and a card that stays up after the runner has decided is a card they
+    /// learn to ignore. The dismissal is keyed by session *and* tier in
+    /// `HeatAdvisoryStore`, so a forecast that worsens overnight still gets to ask again.
+    private func answerHeatAdvisory(_ advisory: HeatAdvisory) {
+        withAnimation(AppAnimation.bouncy) {
+            container.heatAdvisoryService.markAnswered(advisory)
+        }
+    }
+
+    /// The plan row an advisory names, or `nil` if it has since been completed or deleted.
+    private func scheduledWorkout(id: UUID) -> ScheduledWorkout? {
+        var descriptor = FetchDescriptor<ScheduledWorkout>(
+            predicate: #Predicate { $0.id == id }
+        )
+        descriptor.fetchLimit = 1
+        return (try? context.fetch(descriptor))?.first
     }
 
     // MARK: - Week Summary Card
@@ -959,7 +1069,7 @@ struct DashboardView: View {
     /// past the end of one, and scrolling the week strip to look at last Tuesday must not
     /// change the advice.
     private var coachCards: [SmartCoachCard] {
-        SmartCoachCards.cards(
+        let cards = SmartCoachCards.cards(
             SmartCoachCards.Context(
                 nextSession: upcomingSession,
                 recentRuns: recentWorkouts,
@@ -968,6 +1078,12 @@ struct DashboardView: View {
                 unit: appSettings.unitPreference
             )
         )
+        // The coach's heat card reasons backwards, from the weather recorded on the last
+        // run; the advisory reasons forwards, from tomorrow's forecast. Both are about the
+        // heat, and stacking them puts two hydration tips on one screen — so when there is
+        // a forecast on the page, the retrospective one stands down.
+        guard heatAdvisory != nil else { return cards }
+        return cards.filter { $0.kind != .heat }
     }
 
     /// Whether the selected day's sessions can still be started (today, or one day

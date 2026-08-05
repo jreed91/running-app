@@ -121,6 +121,17 @@ struct WorkoutWeather: Codable, Hashable, Sendable {
     var feelsLikeCelsius: Double
     /// Relative humidity as a percentage (0–100).
     var humidityPercent: Double
+    /// Dew point in Celsius, when the forecast supplied one.
+    ///
+    /// Optional because it is newer than the type: rows written before this field existed
+    /// decode with `nil`, and `HeatAdaptationPolicy.dewPointCelsius(for:)` derives one
+    /// from temperature and humidity in that case. Costs no CloudKit schema change —
+    /// `WorkoutWeather` is JSON inside `RunWorkout.weatherData`, not a stored property.
+    ///
+    /// Carried rather than always derived because it is the number that decides whether
+    /// sweat can evaporate, which is the whole of `HeatAdaptationPolicy`'s primary scale;
+    /// see `docs/HEAT_ADAPTATION_EVIDENCE.md` §1.
+    var dewPointCelsius: Double?
     /// Wind speed in km/h.
     var windSpeedKmh: Double
     /// SF Symbol name for the weather condition (e.g. "sun.max.fill").
@@ -146,6 +157,17 @@ struct WorkoutWeather: Codable, Hashable, Sendable {
         switch unit {
         case .metric:   return String(format: "%.0f km/h", windSpeedKmh)
         case .imperial: return String(format: "%.0f mph", windSpeedKmh * 0.621371)
+        }
+    }
+
+    /// The dew point as shown, derived from temperature and humidity when the forecast
+    /// carried none — so this never reads as missing data to someone who can see the
+    /// humidity right beside it.
+    func dewPointString(unit: UnitPreference) -> String {
+        let celsius = HeatAdaptationPolicy.dewPointCelsius(for: self)
+        switch unit {
+        case .metric:   return String(format: "%.0f°C", celsius)
+        case .imperial: return String(format: "%.0f°F", celsius * 9 / 5 + 32)
         }
     }
 }

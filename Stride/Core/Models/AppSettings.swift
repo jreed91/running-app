@@ -93,6 +93,20 @@ final class AppSettings {
         }
     }
 
+    /// Whether Stride checks tomorrow's forecast and offers to adapt a session that falls
+    /// in the heat.
+    ///
+    /// On by default. It costs one WeatherKit call a day, it only ever speaks up when the
+    /// conditions clear a published threshold, and the runner it exists for — the one who
+    /// would otherwise set off into a 30 °C tempo with a pace band that stopped being
+    /// achievable — is not the runner who goes looking through Settings for a feature they
+    /// have never heard of. Off leaves the plan exactly as generated and sends nothing.
+    var heatAdaptationEnabled: Bool {
+        didSet {
+            persist(heatAdaptationEnabled, forKey: Self.heatAdaptationKey)
+        }
+    }
+
     /// Whether walking workouts recorded in Apple Health are imported alongside runs (N38).
     ///
     /// On by default: a walking *workout* is one somebody deliberately started, so there
@@ -132,6 +146,8 @@ final class AppSettings {
     /// Internal so `WorkoutSyncService` can read the same key without an `AppSettings`,
     /// the way the unit preference is read during a background sync.
     static let walkImportKey = "walkImportEnabled"
+    /// Internal so `HeatAdvisoryService`'s callers can gate on the same key.
+    static let heatAdaptationKey = "heatAdaptationEnabled"
 
     /// Default weekly goal (20 km) applied when the user has never set one.
     static let defaultWeeklyGoalMeters = 20_000.0
@@ -157,6 +173,7 @@ final class AppSettings {
         let spokenSplitsStored = Self.hasStoredValue(forKey: Self.spokenSplitsKey, defaults: defaults, ubiquitous: ubiquitous)
         let weeklyGoalStored = Self.hasStoredValue(forKey: Self.weeklyGoalMetersKey, defaults: defaults, ubiquitous: ubiquitous)
         let walkImportStored = Self.hasStoredValue(forKey: Self.walkImportKey, defaults: defaults, ubiquitous: ubiquitous)
+        let heatAdaptationStored = Self.hasStoredValue(forKey: Self.heatAdaptationKey, defaults: defaults, ubiquitous: ubiquitous)
 
         let raw = Self.readString(forKey: Self.unitPreferenceKey, defaults: defaults, ubiquitous: ubiquitous) ?? ""
         // No stored choice falls back to what the device already measures in, not to
@@ -193,6 +210,11 @@ final class AppSettings {
             ? Self.readBool(forKey: Self.walkImportKey, defaults: defaults, ubiquitous: ubiquitous)
             : true
 
+        // Default to true (heat advisories on) when the key has never been set — see the property.
+        self.heatAdaptationEnabled = heatAdaptationStored
+            ? Self.readBool(forKey: Self.heatAdaptationKey, defaults: defaults, ubiquitous: ubiquitous)
+            : true
+
         // Default to 20 km when the user has never set a weekly goal.
         self.weeklyGoalMeters = weeklyGoalStored
             ? (Self.readDouble(forKey: Self.weeklyGoalMetersKey, defaults: defaults, ubiquitous: ubiquitous) ?? Self.defaultWeeklyGoalMeters)
@@ -208,6 +230,7 @@ final class AppSettings {
         if spokenSplitsStored { persist(spokenSplitsEnabled, forKey: Self.spokenSplitsKey) }
         if weeklyGoalStored { persist(weeklyGoalMeters, forKey: Self.weeklyGoalMetersKey) }
         if walkImportStored { persist(walkImportEnabled, forKey: Self.walkImportKey) }
+        if heatAdaptationStored { persist(heatAdaptationEnabled, forKey: Self.heatAdaptationKey) }
 
         observeExternalChanges()
     }
@@ -271,6 +294,11 @@ final class AppSettings {
         if Self.hasStoredValue(forKey: Self.walkImportKey, defaults: defaults, ubiquitous: ubiquitous) {
             let value = Self.readBool(forKey: Self.walkImportKey, defaults: defaults, ubiquitous: ubiquitous)
             if value != walkImportEnabled { walkImportEnabled = value }
+        }
+
+        if Self.hasStoredValue(forKey: Self.heatAdaptationKey, defaults: defaults, ubiquitous: ubiquitous) {
+            let value = Self.readBool(forKey: Self.heatAdaptationKey, defaults: defaults, ubiquitous: ubiquitous)
+            if value != heatAdaptationEnabled { heatAdaptationEnabled = value }
         }
 
         if let value = Self.readDouble(forKey: Self.weeklyGoalMetersKey, defaults: defaults, ubiquitous: ubiquitous),

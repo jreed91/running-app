@@ -305,6 +305,33 @@ struct SettingsView: View {
                     }
             }
             rowDivider
+            settingsRow(icon: .flame, iconColor: .warning, title: "Heat Adaptation") {
+                Toggle("", isOn: Bindable(appSettings).heatAdaptationEnabled)
+                    .labelsHidden()
+                    .tint(.brand)
+                    .accessibilityIdentifier("settings.heatAdaptation")
+                    .onChange(of: appSettings.heatAdaptationEnabled) { _, enabled in
+                        // Same shape as the morning reminder above (N16): turning it off
+                        // has to take down the advisory and its pending banner now, not at
+                        // the next launch, and turning it on has to ask for permission
+                        // before the first evening slot arrives.
+                        Task {
+                            guard enabled else {
+                                await container.heatAdvisoryService.clear()
+                                return
+                            }
+                            if !(await container.notificationService.isAuthorized) {
+                                try? await container.notificationService.requestAuthorization()
+                            }
+                        }
+                    }
+            }
+            Text("Checks tomorrow's forecast where you usually run. When a session lands in heat or humidity that would change what it's worth doing, Stride asks the evening before whether to ease it.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.leading, 62)
+                .padding(.bottom, 10)
+            rowDivider
             // The one setting that makes the app talk over the runner's music, so it
             // says what it will say and stays off until asked (U4).
             settingsRow(icon: .ruler, iconColor: .zoneEasy, title: "Spoken Splits") {
