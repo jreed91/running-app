@@ -231,8 +231,9 @@ final class RunPlaylistService {
 
         let usedCatalog = canPlayCatalogContent
         let pools = await trackPools(for: plan, sources: sources)
-        let songs = fill(plan: plan, from: pools)
-        guard !songs.isEmpty else { throw PlaylistError.noTracksFound }
+        let placed = fill(plan: plan, from: pools)
+        guard !placed.isEmpty else { throw PlaylistError.noTracksFound }
+        let songs = placed.map(\.song)
 
         let name = RunPlaylistPlanner.playlistName(for: workout.workoutType, date: workout.scheduledDate)
         let description = RunPlaylistPlanner.playlistDescription(for: plan)
@@ -244,17 +245,22 @@ final class RunPlaylistService {
             replacing: existing?.playlistID
         )
 
+        let tracks = placed.map(track(from:))
         let link = RunPlaylistLink(
             workoutID: workout.id,
             playlistID: playlist.id.rawValue,
             name: name,
-            trackCount: songs.count,
-            totalSeconds: songs.reduce(0) { $0 + duration(of: $1) },
+            trackCount: tracks.count,
+            totalSeconds: tracks.reduce(0) { $0 + $1.seconds },
             builtAt: Date(),
             usedCatalog: usedCatalog,
-            playParametersData: Self.playParametersData(for: playlist)
+            playParametersData: Self.playParametersData(for: playlist),
+            tracks: tracks
         )
         RunPlaylistStore.save(link, in: defaults)
+        // Storing a track list per session is what makes the links worth bounding — see
+        // `RunPlaylistStore.prune`.
+        RunPlaylistStore.prune(in: defaults)
         return link
     }
 
@@ -441,8 +447,15 @@ final class RunPlaylistService {
     /// A song is used once across the whole playlist: hearing the same track in the warm-up
     /// and again in the last interval is the sort of thing that makes a generated playlist
     /// feel generated. A block whose pool runs dry simply ends short rather than repeating.
-    private func fill(plan: RunPlaylistPlan, from pools: [RunPlaylistEnergy: [Song]]) -> [Song] {
-        var ordered: [Song] = []
+    /// A song together with the block it was placed in, which is what lets the playlist be
+    /// shown grouped by block rather than as a flat list.
+    private struct PlacedSong {
+        var song: Song
+        var energy: RunPlaylistEnergy
+    }
+
+    private func fill(plan: RunPlaylistPlan, from pools: [RunPlaylistEnergy: [Song]]) -> [PlacedSong] {
+        var ordered: [PlacedSong] = []
         var used = Set<String>()
 
         for block in plan.blocks {
@@ -454,11 +467,21 @@ final class RunPlaylistService {
                 let id = song.id.rawValue
                 guard !used.contains(id) else { continue }
                 used.insert(id)
-                ordered.append(song)
+                ordered.append(PlacedSong(song: song, energy: block.energy))
                 accumulated += duration(of: song)
             }
         }
 
         return ordered
+    }
+
+    private func track(from placed: PlacedSong) -> RunPlaylistTrack {
+        RunPlaylistTrack(
+            id: placed.song.id.rawValue,
+            title: placed.song.title,
+            artist: placed.song.artistName,
+            seconds: duration(of: placed.song),
+            energy: placed.energy
+        )
     }
 }

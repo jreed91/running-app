@@ -89,6 +89,65 @@ struct RunPlaylistPlan: Codable, Hashable, Sendable {
     }
 }
 
+// MARK: - Tracks
+
+/// One track in a built playlist, as Stride placed it.
+///
+/// Stored on the link rather than re-read from Apple Music when the runner wants to look at
+/// the playlist, and the reason is the whole history of this feature: iOS will not open a
+/// private library playlist, so this list is the *only* place the playlist can be seen. A
+/// screen that needs authorization, a library round trip and a network to render is a screen
+/// that can fail, and it is standing in for something that already failed three times. This
+/// renders instantly, offline, and cannot error.
+///
+/// What it costs is that it shows the playlist **as Stride built it**. If the runner reorders
+/// or deletes tracks in Apple Music, this does not follow — which is why the detail screen
+/// says so rather than presenting itself as a live mirror.
+struct RunPlaylistTrack: Codable, Hashable, Sendable, Identifiable {
+    /// `MusicItemID.rawValue`. Also what makes a track unique within a playlist.
+    var id: String
+    var title: String
+    var artist: String
+    var seconds: Double
+    /// The block this track was placed in — the reason a playlist is worth looking at rather
+    /// than just playing, since it is what shows the shape actually landed.
+    var energy: RunPlaylistEnergy
+}
+
+/// A run of consecutive tracks sharing an energy — one block of the playlist, as heard.
+struct RunPlaylistTrackSection: Identifiable, Hashable, Sendable {
+    var energy: RunPlaylistEnergy
+    var tracks: [RunPlaylistTrack]
+
+    /// Stable within a playlist: blocks never repeat an energy back-to-back (the planner
+    /// coalesces them), so position plus energy identifies a section.
+    var id: String { "\(index)-\(energy.rawValue)" }
+    var index: Int
+
+    var seconds: Double { tracks.reduce(0) { $0 + $1.seconds } }
+
+    /// Groups an ordered track list back into the blocks it was built from.
+    ///
+    /// Consecutive tracks of one energy are one section. That reproduces the plan's blocks
+    /// exactly, because `RunPlaylistPlanner` guarantees no two neighbouring blocks share an
+    /// energy — so a change of energy in this list is always a block boundary and never a
+    /// split within one.
+    static func sections(from tracks: [RunPlaylistTrack]) -> [RunPlaylistTrackSection] {
+        var sections: [RunPlaylistTrackSection] = []
+        for track in tracks {
+            if var last = sections.last, last.energy == track.energy {
+                last.tracks.append(track)
+                sections[sections.count - 1] = last
+            } else {
+                sections.append(
+                    RunPlaylistTrackSection(energy: track.energy, tracks: [track], index: sections.count)
+                )
+            }
+        }
+        return sections
+    }
+}
+
 // MARK: - Link
 
 /// The record that a playlist was built for a session, and which playlist it is.
@@ -128,6 +187,13 @@ struct RunPlaylistLink: Codable, Hashable, Sendable {
     /// fall back to re-reading the playlist from the library.
     var playParametersData: Data?
 
+    /// The playlist's tracks in order. Empty for links written before they were stored, which
+    /// is what the detail screen checks before offering to show them.
+    var tracks: [RunPlaylistTrack]
+
+    /// The tracks grouped back into the blocks they were built from.
+    var sections: [RunPlaylistTrackSection] { RunPlaylistTrackSection.sections(from: tracks) }
+
     init(
         workoutID: UUID,
         playlistID: String,
@@ -136,7 +202,8 @@ struct RunPlaylistLink: Codable, Hashable, Sendable {
         totalSeconds: Double,
         builtAt: Date,
         usedCatalog: Bool,
-        playParametersData: Data? = nil
+        playParametersData: Data? = nil,
+        tracks: [RunPlaylistTrack] = []
     ) {
         self.workoutID = workoutID
         self.playlistID = playlistID
@@ -146,5 +213,26 @@ struct RunPlaylistLink: Codable, Hashable, Sendable {
         self.builtAt = builtAt
         self.usedCatalog = usedCatalog
         self.playParametersData = playParametersData
+        self.tracks = tracks
+    }
+
+    /// Decodes `tracks` as empty when absent, so a link written by an earlier build still
+    /// decodes instead of taking the whole stored link down with it.
+    enum CodingKeys: String, CodingKey {
+        case workoutID, playlistID, name, trackCount, totalSeconds, builtAt, usedCatalog
+        case playParametersData, tracks
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        workoutID = try container.decode(UUID.self, forKey: .workoutID)
+        playlistID = try container.decode(String.self, forKey: .playlistID)
+        name = try container.decode(String.self, forKey: .name)
+        trackCount = try container.decode(Int.self, forKey: .trackCount)
+        totalSeconds = try container.decode(Double.self, forKey: .totalSeconds)
+        builtAt = try container.decode(Date.self, forKey: .builtAt)
+        usedCatalog = try container.decode(Bool.self, forKey: .usedCatalog)
+        playParametersData = try container.decodeIfPresent(Data.self, forKey: .playParametersData)
+        tracks = try container.decodeIfPresent([RunPlaylistTrack].self, forKey: .tracks) ?? []
     }
 }
