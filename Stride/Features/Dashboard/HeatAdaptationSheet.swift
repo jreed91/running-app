@@ -49,11 +49,11 @@ struct HeatAdaptationSheet: View {
             .background(Color.surfacePrimary)
             .navigationTitle("Heat check")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }
-                }
-            }
+            // No cancellation item, and the presenter disables drag-to-dismiss: this
+            // sheet is a decision, and the two buttons in `actionBar` are the only way
+            // out of it. "Run it as planned" is a real answer, not a way of avoiding one
+            // — the runner who chooses it has read the forecast, which is the whole point
+            // of asking the night before.
             .safeAreaInset(edge: .bottom) { actionBar }
         }
     }

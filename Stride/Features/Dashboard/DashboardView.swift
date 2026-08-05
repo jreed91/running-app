@@ -392,6 +392,21 @@ struct DashboardView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
+                        // Above the week summary, and deliberately so: this is the one
+                        // card on the screen that is a question rather than a readout,
+                        // and it goes stale at midnight. It is also the only card here
+                        // with no way to put it away except by answering it.
+                        if let advisory = heatAdvisory {
+                            HeatAdvisoryCard(
+                                advisory: advisory,
+                                unit: appSettings.unitPreference,
+                                onAdapt: { heatSheetAdvisory = advisory },
+                                onKeepAsPlanned: { answerHeatAdvisory(advisory) }
+                            )
+                            .opacity(dashboardAppeared ? 1 : 0)
+                            .offset(y: dashboardAppeared ? 0 : 20)
+                            .adaptiveAnimation(AppAnimation.entrance.delay(0.03), value: dashboardAppeared)
+                        }
                         weekSummaryCard
                             .opacity(dashboardAppeared ? 1 : 0)
                             .offset(y: dashboardAppeared ? 0 : 20)
@@ -407,17 +422,6 @@ struct DashboardView: View {
                             .opacity(dashboardAppeared ? 1 : 0)
                             .offset(y: dashboardAppeared ? 0 : 20)
                             .adaptiveAnimation(AppAnimation.entrance.delay(0.08), value: dashboardAppeared)
-                        }
-                        if let advisory = heatAdvisory {
-                            HeatAdvisoryCard(
-                                advisory: advisory,
-                                unit: appSettings.unitPreference,
-                                onAdapt: { heatSheetAdvisory = advisory },
-                                onKeepAsPlanned: { answerHeatAdvisory(advisory) }
-                            )
-                            .opacity(dashboardAppeared ? 1 : 0)
-                            .offset(y: dashboardAppeared ? 0 : 20)
-                            .adaptiveAnimation(AppAnimation.entrance.delay(0.10), value: dashboardAppeared)
                         }
                         selectedDaySection
                             .opacity(dashboardAppeared ? 1 : 0)
@@ -462,11 +466,30 @@ struct DashboardView: View {
                     unit: appSettings.unitPreference,
                     onAnswered: { answerHeatAdvisory(advisory) }
                 )
+                // The decision is the feature. A swipe-away is the outcome the runner
+                // would take at 21:00 on a Monday and regret at 16:00 on a Tuesday, so
+                // the sheet has no Close button and no drag-to-dismiss — the only exits
+                // are its two buttons, and both of them count as an answer.
+                .interactiveDismissDisabled(true)
             }
             .task {
                 // An advisory written last night should be on screen before the forecast
                 // refresh at the scene root has had a chance to run.
                 container.heatAdvisoryService.loadStoredAdvisory()
+            }
+            // Raised, not merely offered. An unanswered advisory presents itself the
+            // moment Home is on screen — including the launch that follows a tap on the
+            // evening banner, where `initial: true` is what catches an advisory that was
+            // already loaded before this modifier started observing.
+            .onChange(of: heatAdvisory, initial: true) { _, _ in
+                presentHeatAdvisoryIfNeeded()
+            }
+            // A strength session is a `fullScreenCover` owned by this same view, and a
+            // sheet raised over one from the same presenter does not reliably appear —
+            // it just leaves the binding set with nothing on screen. So the advisory
+            // waits for the cover to close and asks then.
+            .onChange(of: strengthWorkout) { _, _ in
+                presentHeatAdvisoryIfNeeded()
             }
             // The evening banner promises "tap to move it", so a tap has to land on the
             // sheet rather than merely foregrounding the app. A tap that arrives before
@@ -497,6 +520,22 @@ struct DashboardView: View {
     }
 
     // MARK: - Heat advisory
+
+    /// Raises the adaptation sheet for an unanswered advisory.
+    ///
+    /// The advisory is a question rather than a notice, so it is presented rather than
+    /// left to be noticed — the card behind it is what the runner sees *after* answering
+    /// has become impossible to avoid, and on the session's own day once the evening's
+    /// window has closed.
+    ///
+    /// Held back in UI tests, where an unconditional modal over the Home tab would block
+    /// every flow that starts there.
+    private func presentHeatAdvisoryIfNeeded() {
+        guard let advisory = heatAdvisory else { return }
+        guard heatSheetAdvisory == nil, strengthWorkout == nil else { return }
+        guard !UITestingSupport.isEnabled, !UITestingSupport.isHostingUnitTests else { return }
+        heatSheetAdvisory = advisory
+    }
 
     /// Records the runner's answer and takes the card down.
     ///

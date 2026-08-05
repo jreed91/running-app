@@ -299,6 +299,14 @@ WeatherKit  →  WeatherService.hourlyForecast  →  [ForecastHour]
   delivers immediately if the app is opened later that same evening, and sends nothing once
   the session's own day has begun — a warning the runner can no longer plan around is the
   thing the feature exists to avoid. From then on the dashboard card is the surface.
+- **An unanswered advisory is a decision, not a notice.** It sits at the very top of the
+  Home tab, above the week summary, and `HeatAdaptationSheet` presents itself over Home the
+  moment one exists — with no Close button and `interactiveDismissDisabled(true)`, so the
+  only exits are "Apply to tomorrow's workout" and "Run it as planned". Both count as an
+  answer and both clear the card; nothing else does, including a relaunch. Auto-presentation
+  is held back in UI tests (a modal over Home would block every flow starting there) and
+  while the strength `fullScreenCover` is up (a sheet raised over a cover from the same
+  presenter silently fails to appear), retrying when that closes.
 - Applying an adaptation goes through `HeatAdaptationPolicy.apply`, which touches the
   prescription and nothing else, and clears `healthKitPlanID` because the workout already
   on the Watch describes the old one. The structured form's per-segment paces move with the
