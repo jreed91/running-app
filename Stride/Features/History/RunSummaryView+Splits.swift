@@ -377,12 +377,12 @@ extension RunSummaryView {
         }
         .frame(height: 120)
         .chartYAxisLabel("bpm")
-        // Every bucket of the run, banded — the same x axis the pace and elevation charts
-        // get for free from their `BarMark`s. It keeps the three tabs in step (a bucket sits
-        // at the same place whichever one is showing, and a missing reading reads as a gap
-        // rather than being closed up), and it makes the selection snap to a bucket instead
-        // of reporting a fraction between two of them.
-        .chartXScale(domain: chartedSplits.splits.map(\.kilometer), type: .category)
+        // The x scale is left to Charts to infer, as it is on the other two tabs. Forcing a
+        // categorical one here — to band the axis the way the pace and elevation charts are
+        // banded by their `BarMark`s — crashed at runtime: bucket numbers are `Int`, whose
+        // primitive plottable value is continuous, and a category scale over them is not a
+        // combination Charts accepts. Snapping the selection in `selectedHeartRateSplit` is
+        // what makes the hover work, and it needs nothing from the scale.
         .chartXAxis { splitXAxis }
         .chartXSelection(value: $selectedSplitHRKm)
         .chartAccessibility("Split heart rate chart", splitHeartRateSummary(hrSplits))
