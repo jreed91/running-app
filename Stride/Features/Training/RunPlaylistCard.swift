@@ -160,14 +160,20 @@ struct RunPlaylistCard: View {
             .padding()
             .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.sm))
 
+            // Play, rather than a link to the playlist: iOS has no deep link to a private
+            // library playlist, so the handoff is a queue on the system music player. "Open in
+            // Music" below lands on the library, which is as deep as a URL is allowed to go.
             HStack(spacing: 10) {
                 Button {
-                    if let url = RunPlaylistService.openURL(for: link) { openURL(url) }
+                    Task { await play(link) }
                 } label: {
-                    Text("Open in Music")
-                        .font(.dsFootnote.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, AppSpacing.sm)
+                    HStack(spacing: 6) {
+                        Image(systemName: "play.fill")
+                        Text("Play")
+                            .font(.dsFootnote.weight(.semibold))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, AppSpacing.sm)
                 }
                 .buttonStyle(.borderedProminent)
 
@@ -185,6 +191,24 @@ struct RunPlaylistCard: View {
                 .buttonStyle(.bordered)
                 .disabled(isBuilding)
             }
+
+            Button {
+                if let url = RunPlaylistService.musicLibraryURL { openURL(url) }
+            } label: {
+                Text("Open in Music")
+                    .font(.dsFootnote.weight(.semibold))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.tint)
+        }
+    }
+
+    private func play(_ link: RunPlaylistLink) async {
+        errorMessage = nil
+        do {
+            try await service.play(link)
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 

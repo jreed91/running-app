@@ -1,5 +1,6 @@
 import Foundation
 import MusicKit
+import MediaPlayer
 
 /// Builds a playlist for a scheduled session in the runner's Apple Music library.
 ///
@@ -29,6 +30,7 @@ final class RunPlaylistService {
         case notARunSession
         case noTracksFound
         case libraryWriteFailed(String)
+        case playbackUnavailable
 
         var errorDescription: String? {
             switch self {
@@ -51,6 +53,11 @@ final class RunPlaylistService {
                 return String(
                     localized: "Couldn't save the playlist to Apple Music. \(reason)",
                     comment: "Error when writing a playlist to the Apple Music library fails"
+                )
+            case .playbackUnavailable:
+                return String(
+                    localized: "Couldn't start this playlist. Open it in Apple Music instead.",
+                    comment: "Error when the system music player cannot start a built playlist"
                 )
             }
         }
@@ -122,9 +129,60 @@ final class RunPlaylistService {
         RunPlaylistStore.link(for: workout.id, in: defaults)
     }
 
-    /// The URL that opens a built playlist in Apple Music.
-    static func openURL(for link: RunPlaylistLink) -> URL? {
-        URL(string: "music://music.apple.com/library/playlist/\(link.playlistID)")
+    /// Opens the Music app on the runner's library.
+    ///
+    /// The library root is as deep as a URL can go. `music://music.apple.com/library` works;
+    /// `…/library/playlist/<id>` — and every other deeper path — fails with "item not
+    /// available", because iOS supports deep links to *catalogue* playlists only and a
+    /// playlist Stride created in somebody's library is private by definition. An earlier
+    /// version of this file built that URL anyway and the button was dead on device. Playback
+    /// goes through ``play(_:)`` instead; this is the browse-and-edit escape hatch.
+    static var musicLibraryURL: URL? {
+        URL(string: "music://music.apple.com/library")
+    }
+
+    /// Starts a built playlist on the **system** music player.
+    ///
+    /// Deliberately `MPMusicPlayerController.systemMusicPlayer` and not
+    /// `ApplicationMusicPlayer`: the queue is handed to the same player the Music app itself
+    /// drives, so the Now Playing controls, the Lock Screen and Control Center all show Music,
+    /// Stride does not become a music player, and — the part that matters here — Stride's
+    /// audio session is never touched. `RunVoiceCoach` owns that session and ducks whatever is
+    /// playing; this is just another thing for it to duck.
+    ///
+    /// Play parameters are the supported handle on a library playlist. They are read from the
+    /// stored link where present, and re-read from the library for links written before they
+    /// were stored.
+    func play(_ link: RunPlaylistLink) async throws {
+        var parametersData = link.playParametersData
+        if parametersData == nil, let playlist = await libraryPlaylist(withID: link.playlistID) {
+            parametersData = Self.playParametersData(for: playlist)
+        }
+
+        // MusicKit's `PlayParameters` and MediaPlayer's `MPMusicPlayerPlayParameters` are both
+        // `Codable` over the same `playParams` shape, so JSON is the bridge between the two
+        // frameworks. Deliberately not `MPMusicPlayerPlayParameters(dictionary:)`: that
+        // initializer is failable and its dictionary is documented as coming straight from the
+        // Apple Music API rather than being assembled locally.
+        guard let parametersData,
+              let parameters = try? JSONDecoder().decode(
+                  MPMusicPlayerPlayParameters.self,
+                  from: parametersData
+              )
+        else {
+            throw PlaylistError.playbackUnavailable
+        }
+
+        let descriptor = MPMusicPlayerPlayParametersQueueDescriptor(playParametersQueue: [parameters])
+        let player = MPMusicPlayerController.systemMusicPlayer
+        player.setQueue(with: descriptor)
+        player.play()
+    }
+
+    /// MusicKit's play parameters for a playlist, as JSON.
+    private static func playParametersData(for playlist: Playlist) -> Data? {
+        guard let parameters = playlist.playParameters else { return nil }
+        return try? JSONEncoder().encode(parameters)
     }
 
     // MARK: - Building
@@ -184,7 +242,8 @@ final class RunPlaylistService {
             trackCount: songs.count,
             totalSeconds: songs.reduce(0) { $0 + duration(of: $1) },
             builtAt: Date(),
-            usedCatalog: usedCatalog
+            usedCatalog: usedCatalog,
+            playParametersData: Self.playParametersData(for: playlist)
         )
         RunPlaylistStore.save(link, in: defaults)
         return link

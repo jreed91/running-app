@@ -376,6 +376,18 @@ ScheduledWorkout  →  RunPlaylistPlanner  →  RunPlaylistPlan   (pure, tested)
   app created — and the runner may simply have deleted it — so both cases fall back to
   creating a fresh one and re-pointing the link. Pools are shuffled per build, which is what
   makes a rebuild worth doing.
+- **There is no deep link to a private library playlist, so do not add one back.**
+  `music://music.apple.com/library` opens the Music app on the library and is as deep as a URL
+  is allowed to go; `…/library/playlist/<id>` and every other deeper path fail with *"item not
+  available"*, because iOS supports deep links to **catalogue** playlists only and a playlist
+  Stride created in somebody's library is private by definition. The first version of this
+  feature constructed that URL and shipped a dead button. Playback instead hands a
+  play-parameters queue to `MPMusicPlayerController.systemMusicPlayer` — the same player the
+  Music app drives, so Now Playing, the Lock Screen and Control Center all show Music, and
+  Stride's audio session is still never touched. `ApplicationMusicPlayer` would make Stride
+  the player and is the thing being avoided. The parameters are captured into
+  `RunPlaylistLink.playParametersData` at build time and re-read from the library when a
+  link predates that field.
 - **A missing subscription is a supported path, not a blocked one.** `MusicSubscription`
   decides whether tracks come from the catalogue or the runner's own library; a
   non-subscriber gets a playlist either way and is told afterwards where it came from. There
