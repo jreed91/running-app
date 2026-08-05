@@ -161,8 +161,9 @@ struct RunPlaylistCard: View {
             .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.sm))
 
             // Play, rather than a link to the playlist: iOS has no deep link to a private
-            // library playlist, so the handoff is a queue on the system music player. "Open in
-            // Music" below lands on the library, which is as deep as a URL is allowed to go.
+            // library playlist — not to the playlist and not even to the library root, both of
+            // which make Music open and then show an error. The handoff is a queue on the
+            // system music player, and the button below only launches Music.
             HStack(spacing: 10) {
                 Button {
                     Task { await play(link) }
@@ -192,10 +193,13 @@ struct RunPlaylistCard: View {
                 .disabled(isBuilding)
             }
 
+            // "Open Apple Music", not "Open in Music": it launches the app and cannot land on
+            // the playlist, and a label promising otherwise is what made this read as broken.
+            // The playlist's name is above, which is what to look for once Music is open.
             Button {
-                if let url = RunPlaylistService.musicLibraryURL { openURL(url) }
+                if let url = RunPlaylistService.musicAppURL { openURL(url) }
             } label: {
-                Text("Open in Music")
+                Text("Open Apple Music")
                     .font(.dsFootnote.weight(.semibold))
             }
             .buttonStyle(.plain)

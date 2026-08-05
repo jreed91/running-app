@@ -129,16 +129,25 @@ final class RunPlaylistService {
         RunPlaylistStore.link(for: workout.id, in: defaults)
     }
 
-    /// Opens the Music app on the runner's library.
+    /// Launches the Music app, and nothing more specific than that.
     ///
-    /// The library root is as deep as a URL can go. `music://music.apple.com/library` works;
-    /// `…/library/playlist/<id>` — and every other deeper path — fails with "item not
-    /// available", because iOS supports deep links to *catalogue* playlists only and a
-    /// playlist Stride created in somebody's library is private by definition. An earlier
-    /// version of this file built that URL anyway and the button was dead on device. Playback
-    /// goes through ``play(_:)`` instead; this is the browse-and-edit escape hatch.
-    static var musicLibraryURL: URL? {
-        URL(string: "music://music.apple.com/library")
+    /// **Bare `music://`, with no path — do not add one back.** This took three attempts on
+    /// device and every failure was a path being rejected:
+    ///
+    /// 1. `music://music.apple.com/library/playlist/<id>` — Music opens, "item not available".
+    ///    iOS deep links reach *catalogue* playlists only, and a playlist Stride created in
+    ///    somebody's library is private by definition.
+    /// 2. `music://music.apple.com/library` — widely documented as working, and it does not:
+    ///    Music opens and still shows an error. The library root is no more linkable than the
+    ///    playlist was.
+    /// 3. Bare `music://` — no path, so there is nothing for Music to reject.
+    ///
+    /// So this cannot land on the playlist, which is why it is the *secondary* action and is
+    /// labelled for what it does rather than what would be nicer. ``play(_:)`` is how a runner
+    /// actually starts the playlist, and the card shows the playlist's name so it can be found
+    /// by eye once Music is open.
+    static var musicAppURL: URL? {
+        URL(string: "music://")
     }
 
     /// Starts a built playlist on the **system** music player.
