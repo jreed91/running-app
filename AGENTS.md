@@ -376,12 +376,21 @@ ScheduledWorkout  →  RunPlaylistPlanner  →  RunPlaylistPlan   (pure, tested)
   app created — and the runner may simply have deleted it — so both cases fall back to
   creating a fresh one and re-pointing the link. Pools are shuffled per build, which is what
   makes a rebuild worth doing.
-- **There is no deep link to a private library playlist, so do not add one back.**
-  `music://music.apple.com/library` opens the Music app on the library and is as deep as a URL
-  is allowed to go; `…/library/playlist/<id>` and every other deeper path fail with *"item not
-  available"*, because iOS supports deep links to **catalogue** playlists only and a playlist
-  Stride created in somebody's library is private by definition. The first version of this
-  feature constructed that URL and shipped a dead button. Playback instead hands a
+- **The Music app URL is bare `music://`. Do not give it a path.** Every path tried on device
+  was rejected, each time with Music opening and then showing an error, and the published
+  advice was wrong about the second one:
+  1. `music://music.apple.com/library/playlist/<id>` — *"item not available"*. iOS deep links
+     reach **catalogue** playlists only, and a playlist Stride created in somebody's library is
+     private by definition.
+  2. `music://music.apple.com/library` — widely documented as working, including on Apple's own
+     forums. It is not: Music opens and still errors. The library root is no more linkable than
+     the playlist.
+  3. Bare `music://` — no path, nothing to reject.
+
+  So the button launches Music and cannot land on the playlist, which is why it is the
+  secondary action and is labelled `Open Apple Music` rather than `Open in Music` — the
+  earlier label promised a destination and is what made the feature read as broken. The
+  playlist's name is on the card, to be found by eye. Playback instead hands a
   play-parameters queue to `MPMusicPlayerController.systemMusicPlayer` — the same player the
   Music app drives, so Now Playing, the Lock Screen and Control Center all show Music, and
   Stride's audio session is still never touched. `ApplicationMusicPlayer` would make Stride
