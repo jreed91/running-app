@@ -26,6 +26,18 @@ struct WorkoutDetailView: View {
         return hasRaceName || matchesRaceDate
     }
 
+    /// The playlist shape for this session, or nil when there is nothing to score (N40).
+    ///
+    /// Nil covers rest days, strength and cross-training sessions, and any run whose length
+    /// cannot be estimated — `RunPlaylistPlanner` decides all three, so the card's presence
+    /// and its contents can never disagree. A session already behind the runner is excluded
+    /// here rather than there: the planner is about what a session *is*, and offering to
+    /// build a playlist for a run that has been completed is a question about *when*.
+    private var playlistPlan: RunPlaylistPlan? {
+        guard !workout.isCompleted else { return nil }
+        return RunPlaylistPlanner.plan(for: .init(workout: workout))
+    }
+
     private var goalRaceName: String {
         if let name = goalRacePlan?.raceName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
             return name
@@ -63,6 +75,9 @@ struct WorkoutDetailView: View {
                         }
                         if let notes = workout.notes {
                             notesSection(notes: notes)
+                        }
+                        if let playlistPlan {
+                            RunPlaylistCard(workout: workout, plan: playlistPlan)
                         }
                     }
                     .padding(.horizontal, AppSpacing.lg)

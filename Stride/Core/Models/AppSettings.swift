@@ -121,6 +121,57 @@ final class AppSettings {
         }
     }
 
+    /// Per-tier run-playlist sources: an Apple Music **library playlist ID** the runner
+    /// chose to fill one energy tier from, or empty to use `MusicEnergyPolicy`'s genre table.
+    ///
+    /// Three flat strings rather than a dictionary because `persist` deals in the three
+    /// primitive types the `KeyValueStore` protocol carries, and widening that protocol to
+    /// store a codable map for one feature is the wrong trade. Read them through
+    /// ``playlistSources`` rather than individually.
+    ///
+    /// These sync through iCloud KVS like every other non-device-local setting: an Apple
+    /// Music library playlist has the same ID on every device the runner signs into, so the
+    /// choice is meaningful on all of them. (The *link* from a session to its generated
+    /// playlist is a different thing and deliberately does not sync — see `RunPlaylistStore`.)
+    var calmPlaylistSourceID: String {
+        didSet { persist(calmPlaylistSourceID, forKey: Self.calmPlaylistSourceKey) }
+    }
+
+    var steadyPlaylistSourceID: String {
+        didSet { persist(steadyPlaylistSourceID, forKey: Self.steadyPlaylistSourceKey) }
+    }
+
+    var hardPlaylistSourceID: String {
+        didSet { persist(hardPlaylistSourceID, forKey: Self.hardPlaylistSourceKey) }
+    }
+
+    /// The runner's per-tier overrides, in the shape `RunPlaylistService` takes.
+    /// Tiers left on the genre-table default are omitted rather than sent as empty strings.
+    var playlistSources: [RunPlaylistEnergy: String] {
+        var sources: [RunPlaylistEnergy: String] = [:]
+        for energy in RunPlaylistEnergy.allCases {
+            let id = playlistSourceID(for: energy)
+            if !id.isEmpty { sources[energy] = id }
+        }
+        return sources
+    }
+
+    func playlistSourceID(for energy: RunPlaylistEnergy) -> String {
+        switch energy {
+        case .calm:   return calmPlaylistSourceID
+        case .steady: return steadyPlaylistSourceID
+        case .hard:   return hardPlaylistSourceID
+        }
+    }
+
+    func setPlaylistSourceID(_ id: String, for energy: RunPlaylistEnergy) {
+        switch energy {
+        case .calm:   calmPlaylistSourceID = id
+        case .steady: steadyPlaylistSourceID = id
+        case .hard:   hardPlaylistSourceID = id
+        }
+    }
+
     /// The user's weekly running-distance goal, in metres. Drives the weekly
     /// progress ring and consistency badges on the Progress → Achievements tab.
     var weeklyGoalMeters: Double {
@@ -148,6 +199,9 @@ final class AppSettings {
     static let walkImportKey = "walkImportEnabled"
     /// Internal so `HeatAdvisoryService`'s callers can gate on the same key.
     static let heatAdaptationKey = "heatAdaptationEnabled"
+    private static let calmPlaylistSourceKey   = "runPlaylistSource.calm"
+    private static let steadyPlaylistSourceKey = "runPlaylistSource.steady"
+    private static let hardPlaylistSourceKey   = "runPlaylistSource.hard"
 
     /// Default weekly goal (20 km) applied when the user has never set one.
     static let defaultWeeklyGoalMeters = 20_000.0
@@ -174,6 +228,9 @@ final class AppSettings {
         let weeklyGoalStored = Self.hasStoredValue(forKey: Self.weeklyGoalMetersKey, defaults: defaults, ubiquitous: ubiquitous)
         let walkImportStored = Self.hasStoredValue(forKey: Self.walkImportKey, defaults: defaults, ubiquitous: ubiquitous)
         let heatAdaptationStored = Self.hasStoredValue(forKey: Self.heatAdaptationKey, defaults: defaults, ubiquitous: ubiquitous)
+        let calmSourceStored = Self.hasStoredValue(forKey: Self.calmPlaylistSourceKey, defaults: defaults, ubiquitous: ubiquitous)
+        let steadySourceStored = Self.hasStoredValue(forKey: Self.steadyPlaylistSourceKey, defaults: defaults, ubiquitous: ubiquitous)
+        let hardSourceStored = Self.hasStoredValue(forKey: Self.hardPlaylistSourceKey, defaults: defaults, ubiquitous: ubiquitous)
 
         let raw = Self.readString(forKey: Self.unitPreferenceKey, defaults: defaults, ubiquitous: ubiquitous) ?? ""
         // No stored choice falls back to what the device already measures in, not to
@@ -215,6 +272,12 @@ final class AppSettings {
             ? Self.readBool(forKey: Self.heatAdaptationKey, defaults: defaults, ubiquitous: ubiquitous)
             : true
 
+        // Empty means "use MusicEnergyPolicy's genre table", which is the default every
+        // runner starts on — the feature is meant to work with no setup at all.
+        self.calmPlaylistSourceID = Self.readString(forKey: Self.calmPlaylistSourceKey, defaults: defaults, ubiquitous: ubiquitous) ?? ""
+        self.steadyPlaylistSourceID = Self.readString(forKey: Self.steadyPlaylistSourceKey, defaults: defaults, ubiquitous: ubiquitous) ?? ""
+        self.hardPlaylistSourceID = Self.readString(forKey: Self.hardPlaylistSourceKey, defaults: defaults, ubiquitous: ubiquitous) ?? ""
+
         // Default to 20 km when the user has never set a weekly goal.
         self.weeklyGoalMeters = weeklyGoalStored
             ? (Self.readDouble(forKey: Self.weeklyGoalMetersKey, defaults: defaults, ubiquitous: ubiquitous) ?? Self.defaultWeeklyGoalMeters)
@@ -231,6 +294,9 @@ final class AppSettings {
         if weeklyGoalStored { persist(weeklyGoalMeters, forKey: Self.weeklyGoalMetersKey) }
         if walkImportStored { persist(walkImportEnabled, forKey: Self.walkImportKey) }
         if heatAdaptationStored { persist(heatAdaptationEnabled, forKey: Self.heatAdaptationKey) }
+        if calmSourceStored { persist(calmPlaylistSourceID, forKey: Self.calmPlaylistSourceKey) }
+        if steadySourceStored { persist(steadyPlaylistSourceID, forKey: Self.steadyPlaylistSourceKey) }
+        if hardSourceStored { persist(hardPlaylistSourceID, forKey: Self.hardPlaylistSourceKey) }
 
         observeExternalChanges()
     }
@@ -304,6 +370,21 @@ final class AppSettings {
         if let value = Self.readDouble(forKey: Self.weeklyGoalMetersKey, defaults: defaults, ubiquitous: ubiquitous),
            value != weeklyGoalMeters {
             weeklyGoalMeters = value
+        }
+
+        if let value = Self.readString(forKey: Self.calmPlaylistSourceKey, defaults: defaults, ubiquitous: ubiquitous),
+           value != calmPlaylistSourceID {
+            calmPlaylistSourceID = value
+        }
+
+        if let value = Self.readString(forKey: Self.steadyPlaylistSourceKey, defaults: defaults, ubiquitous: ubiquitous),
+           value != steadyPlaylistSourceID {
+            steadyPlaylistSourceID = value
+        }
+
+        if let value = Self.readString(forKey: Self.hardPlaylistSourceKey, defaults: defaults, ubiquitous: ubiquitous),
+           value != hardPlaylistSourceID {
+            hardPlaylistSourceID = value
         }
     }
 

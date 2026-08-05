@@ -315,6 +315,81 @@ WeatherKit  →  WeatherService.hourlyForecast  →  [ForecastHour]
 - On by default, switchable in **Settings → App → Heat Adaptation**
   (`AppSettings.heatAdaptationEnabled`).
 
+## Run playlists
+
+Stride builds a playlist shaped like the session and saves it into the runner's Apple
+Music library (N40). The split of responsibilities mirrors the heat feature, and the two
+boundaries at the top are what a change here has to keep:
+
+```text
+ScheduledWorkout  →  RunPlaylistPlanner  →  RunPlaylistPlan   (pure, tested)
+                          ↑                       ↓
+                  MusicEnergyPolicy        RunPlaylistService  (MusicKit: auth, tracks, write)
+                  (every number)                  ↓
+                                          MusicLibrary.shared  →  a real library playlist
+                                                  ↓
+                                          RunPlaylistLink  →  UserDefaults (RunPlaylistStore)
+                                                  ↓
+                                  RunPlaylistCard (Plan → workout detail)
+                                  RunPlaylistSettingsView (access + per-tier overrides)
+```
+
+- **Stride writes a playlist; it never plays one.** The result is a real Apple Music
+  playlist, so it syncs to the Watch, opens in the Music app and outlives Stride, and the
+  runner presses play themselves. The app does not become a music player and it never
+  touches the audio session — `RunVoiceCoach` owns that, and it exists to *duck* whatever
+  the runner chose rather than to replace it. `ApplicationMusicPlayer` appears nowhere.
+- **No claim is ever made about tempo.** The Apple Music catalogue publishes no BPM —
+  `Songs.Attributes` carries genre, duration and artwork and nothing about the beat — so
+  cadence-matched playlists are not buildable from Apple's data and nothing in the UI
+  pretends otherwise. Genre is the only signal Apple gives, so genre is what the tiers are
+  built from, and the Settings screen says so in as many words. Adding real BPM means
+  adding a third-party audio-analysis source, which is a network dependency and a second
+  API key, not a tweak.
+- **`MusicEnergyPolicy` is editorial, not evidence, and says so at the top.** It is shaped
+  like `HeatAdaptationPolicy` and `PregnancyRunningPolicy` — one wall of constants rather
+  than judgements scattered through a generator — but it carries no citations because there
+  are none to carry. Do not add scientific-sounding sourcing to a genre table; that is the
+  same failure as an unsourced health prescription, pointing the other way.
+- **A pregnancy session is capped at the `steady` tier**, and the cap is asked of
+  `TrainingPlan.planKind` via `Session.isPregnancyPlan`, never inferred from the session. A
+  pregnancy plan carries its moderate day as `WorkoutType.tempo`, so mapping by type alone
+  scores it `hard` — exactly the reading those plans are designed to avoid. Its effort
+  ceiling is "talk but not sing"; the music's ceiling matches. Nothing here reads or writes
+  a pace, so the no-pace-targets rule is untouched.
+- **`RunPlaylistPlanner.WorkingBlock` tracks what each block is made of**, and that is
+  load-bearing rather than incidental. Smoothing by "merge into the longer neighbour" reads
+  fine until you trace 10 × 400 m: the first rep's long neighbour is the 15-minute warm-up,
+  so the interval body gets eaten a rep at a time and the session comes out as one calm
+  block. Two rules fix it and both are tested — a **short** neighbour is preferred to a long
+  one, and a merged block is named for the energy that contributed the most seconds.
+- **The link lives in `UserDefaults`, not on `ScheduledWorkout`.** A new stored property on
+  a `@Model` means a `--init-cloudkit-schema` run and a **Deploy Schema Changes** before the
+  build can ship, and this feature does not need that gate: the thing worth syncing — the
+  playlist — already syncs through the runner's Apple Music account. What stays device-local
+  is Stride's note of which playlist belongs to which session, so a second device offers to
+  build rather than to open. `AppContainer.resetAllData` clears the links for the same reason
+  it clears the widget snapshot; it deliberately does **not** delete the playlists, which are
+  in the runner's library and not Stride's.
+- **Rebuilding replaces the same playlist's contents** (`MusicLibrary.edit`), so a runner who
+  rebuilds three times has one playlist and not three. `edit` throws for a playlist another
+  app created — and the runner may simply have deleted it — so both cases fall back to
+  creating a fresh one and re-pointing the link. Pools are shuffled per build, which is what
+  makes a rebuild worth doing.
+- **A missing subscription is a supported path, not a blocked one.** `MusicSubscription`
+  decides whether tracks come from the catalogue or the runner's own library; a
+  non-subscriber gets a playlist either way and is told afterwards where it came from. There
+  is no upsell: a feature that answers "build me a playlist" with a subscription offer is not
+  answering the question.
+- Two registrations, and both fail the way a missing App Group does — silently locally, then
+  fatally at export. `NSAppleMusicUsageDescription` is in `project.yml`'s `info:` block
+  (without it the prompt never appears and authorization returns `.denied`), and the
+  **MusicKit** service must be enabled on the `com.running.stride` App ID at
+  [developer.apple.com → Identifiers](https://developer.apple.com/account/resources/identifiers).
+  Automatic signing can look that service up but never create it.
+- Entry point is the **Plan tab → workout detail** card, on any run that is not yet
+  completed. Access and the per-tier overrides live in **Settings → Run Playlists**.
+
 ## Widget Data Flow
 
 The widget extension **cannot read the SwiftData store.** It is a separate process with its

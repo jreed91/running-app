@@ -174,6 +174,12 @@ final class AppContainer {
     /// mid-sentence.
     let runVoiceCoach: RunVoiceCoach
 
+    /// Builds an Apple Music playlist shaped like a scheduled session (N40). Deliberately
+    /// *not* related to `runVoiceCoach` despite both being about sound: this one writes a
+    /// playlist into the runner's library and never plays anything, so it never touches the
+    /// audio session the voice coach owns.
+    let runPlaylistService: RunPlaylistService
+
     /// Creating, shifting, rebuilding, and destroying training plans (D2). The container
     /// wires it and hands it out; it does not orchestrate it.
     let planLifecycle: PlanLifecycleService
@@ -377,6 +383,7 @@ final class AppContainer {
         )
         self.aiCoachService = AICoachService()
         self.runVoiceCoach = RunVoiceCoach()
+        self.runPlaylistService = RunPlaylistService()
         self.activeRunPresentation = ActiveRunPresentation()
         self.workoutSyncService = WorkoutSyncService(
             healthKitRepository: hkRepository,
@@ -683,6 +690,11 @@ final class AppContainer {
         // cleared below. Dismissals go too: they name workouts that will not exist a
         // moment from now.
         await heatAdvisoryService.clear(includingDismissals: true)
+        // Same reasoning for the run-playlist links: they name workouts that are about to
+        // stop existing. The playlists themselves stay — they are in the runner's Apple
+        // Music library, not Stride's, and this button does not get to delete somebody's
+        // music.
+        RunPlaylistStore.removeAll()
         await planLifecycle.resetAllData(context: context)
         // The App Group container is outside the store `PlanLifecycleService` just tore
         // down, so without this the Home Screen would be the one place the deleted plan

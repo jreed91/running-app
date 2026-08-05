@@ -168,6 +168,10 @@ targets:
 
     dependencies:
       - sdk: WeatherKit.framework
+      # Run playlists (N40). Declared explicitly, like WeatherKit: the framework needs no
+      # entitlement, but it does need the **MusicKit** service enabled on the
+      # `com.running.stride` App ID before a signed build can be exported.
+      - sdk: MusicKit.framework
       - sdk: ActivityKit.framework
       # `WidgetCenter.reloadAllTimelines()` — the app is what tells the widgets their
       # data moved (B1). See `WidgetRefreshService`.
@@ -205,6 +209,13 @@ targets:
         NSHealthUpdateUsageDescription: "Stride saves your completed runs to Apple Health."
         NSMotionUsageDescription: "Stride uses motion data to measure cadence during runs."
         NSWeatherKitUsageDescription: "Stride uses WeatherKit to record the conditions at the start of your run."
+        # Run playlists (N40). Required before `MusicAuthorization.request()` will do
+        # anything — without the key the prompt never appears and the request returns
+        # `.denied`. The **MusicKit** service must also be enabled on the App ID at
+        # developer.apple.com → Identifiers; like the App Group, automatic signing can look
+        # it up but never create it, so a build without it archives and then fails to
+        # export. See AGENTS.md → "Run playlists".
+        NSAppleMusicUsageDescription: "Stride saves a playlist for your run to your Apple Music library."
         # The run's Lock Screen / Dynamic Island presence (U5b). Without this key
         # `Activity.request` throws and the run records with no activity at all.
         NSSupportsLiveActivities: true

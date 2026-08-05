@@ -58,6 +58,7 @@ What ships today, so the gaps below are read in context:
 | Sync | HealthKit import, CloudKit private sync, weather attach | `Core/Services/WorkoutSyncService.swift` |
 | Siri / Intents | Today's Run, Run Details, Weekly Summary | `Features/AppIntents/` |
 | Notifications | Morning workout reminders, synced-run banners | `Core/Services/NotificationService.swift` |
+| Run playlists | Apple Music playlist shaped to a session's energy blocks, saved to the runner's library (N40) | `Core/Services/RunPlaylistPlanner.swift`, `Core/Services/RunPlaylistService.swift` |
 
 **Structurally absent** (no source references anywhere in the tree, verified by
 search): home-screen **Widgets** (WidgetKit), **Live Activities** (ActivityKit),

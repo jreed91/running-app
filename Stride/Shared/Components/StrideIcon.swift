@@ -38,6 +38,7 @@ enum StrideIconName: String {
     case bell
     case flag
     case gear
+    case music
 }
 
 struct StrideIcon: View {
@@ -493,6 +494,21 @@ struct StrideIcon: View {
                 var sp = Path(); sp.move(to: a); sp.addLine(to: b)
                 ctx.stroke(sp, with: .foreground, style: stroke)
             }
+
+        case .music:
+            // Beamed pair of eighth notes: two note heads, two stems, one beam.
+            ctx.fill(Path(ellipseIn: CGRect(x: 4, y: 15.2, width: 5, height: 4)), with: .foreground)
+            ctx.fill(Path(ellipseIn: CGRect(x: 14.5, y: 13.2, width: 5, height: 4)), with: .foreground)
+            var stems = Path()
+            stems.move(to: CGPoint(x: 9, y: 17.2))
+            stems.addLine(to: CGPoint(x: 9, y: 6))
+            stems.move(to: CGPoint(x: 19.5, y: 15.2))
+            stems.addLine(to: CGPoint(x: 19.5, y: 4))
+            ctx.stroke(stems, with: .foreground, style: stroke)
+            var beam = Path()
+            beam.move(to: CGPoint(x: 9, y: 6))
+            beam.addLine(to: CGPoint(x: 19.5, y: 4))
+            ctx.stroke(beam, with: .foreground, style: stroke)
         }
     }
 }
