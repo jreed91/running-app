@@ -115,4 +115,36 @@ struct RunPlaylistLink: Codable, Hashable, Sendable {
     /// False when the runner has no Apple Music subscription and the playlist was filled
     /// from their own library. Drives nothing but the wording of the confirmation.
     var usedCatalog: Bool
+
+    /// JSON-encoded MusicKit `PlayParameters` for the created playlist, which is what lets
+    /// the Play button work.
+    ///
+    /// Captured at build time because **iOS has no deep link to a private library playlist**.
+    /// `music://music.apple.com/library` opens the library, but every deeper path — including
+    /// one carrying a playlist's own ID — fails with "item not available", and that is Apple's
+    /// documented behaviour rather than a URL waiting to be spelled correctly. Play parameters
+    /// are the supported handle on a library playlist, so they are stored rather than a URL
+    /// being constructed. Optional so links written before this existed still decode; those
+    /// fall back to re-reading the playlist from the library.
+    var playParametersData: Data?
+
+    init(
+        workoutID: UUID,
+        playlistID: String,
+        name: String,
+        trackCount: Int,
+        totalSeconds: Double,
+        builtAt: Date,
+        usedCatalog: Bool,
+        playParametersData: Data? = nil
+    ) {
+        self.workoutID = workoutID
+        self.playlistID = playlistID
+        self.name = name
+        self.trackCount = trackCount
+        self.totalSeconds = totalSeconds
+        self.builtAt = builtAt
+        self.usedCatalog = usedCatalog
+        self.playParametersData = playParametersData
+    }
 }

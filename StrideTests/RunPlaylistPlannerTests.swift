@@ -356,6 +356,40 @@ struct RunPlaylistStoreTests {
         #expect(RunPlaylistStore.link(for: second, in: defaults) != nil)
     }
 
+    /// The Play button's handle on the playlist has to survive a round trip, because iOS has
+    /// no deep link to a private library playlist and these parameters are the alternative.
+    @Test("Play parameters round-trip with the link")
+    func playParametersSurvive() throws {
+        let defaults = try makeDefaults()
+        let id = UUID()
+        var stored = link(workoutID: id)
+        stored.playParametersData = Data("{\"id\":\"p.123\",\"isLibrary\":true}".utf8)
+        RunPlaylistStore.save(stored, in: defaults)
+
+        let read = try #require(RunPlaylistStore.link(for: id, in: defaults))
+        #expect(read.playParametersData == stored.playParametersData)
+    }
+
+    /// Links written before play parameters were stored must still decode, or every playlist
+    /// built by an earlier build would read as missing rather than as needing a re-fetch.
+    @Test("A link without play parameters still decodes")
+    func legacyLinkDecodes() throws {
+        let json = """
+        {
+          "workoutID": "\(UUID().uuidString)",
+          "playlistID": "p.legacy",
+          "name": "Stride · Easy · 1 Aug",
+          "trackCount": 9,
+          "totalSeconds": 1800,
+          "builtAt": 776000000,
+          "usedCatalog": true
+        }
+        """
+        let decoded = try JSONDecoder().decode(RunPlaylistLink.self, from: Data(json.utf8))
+        #expect(decoded.playlistID == "p.legacy")
+        #expect(decoded.playParametersData == nil)
+    }
+
     /// What `AppContainer.resetAllData` relies on: no link outlives the plan it names.
     @Test("removeAll clears every link and nothing else")
     func removeAllIsThorough() throws {
