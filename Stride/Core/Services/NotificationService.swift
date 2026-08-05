@@ -55,6 +55,31 @@ final class NotificationService: NSObject {
     /// A tap that arrived with nothing listening yet, replayed to the first listener.
     private var bufferedSyncedRunTapID: String?
 
+    /// Taps on a HEAT_ADVISORY notification, as a stream of the workout's `id.uuidString`.
+    ///
+    /// Same shape as `syncedRunTaps`, and for the same reason (D4): this service is a
+    /// process-wide singleton, so a stored callback would belong to whichever
+    /// `AppContainer` was built last. The banner says "tap to move it", and a tap that
+    /// merely foregrounds the app onto whatever tab was open last does not honour that.
+    var heatAdvisoryTaps: AsyncStream<String> {
+        AsyncStream(bufferingPolicy: .unbounded) { continuation in
+            let id = UUID()
+            heatAdvisoryTapListeners[id] = continuation
+            if let buffered = bufferedHeatAdvisoryTapID {
+                bufferedHeatAdvisoryTapID = nil
+                continuation.yield(buffered)
+            }
+            continuation.onTermination = { [weak self] _ in
+                Task { @MainActor in self?.heatAdvisoryTapListeners[id] = nil }
+            }
+        }
+    }
+
+    private var heatAdvisoryTapListeners: [UUID: AsyncStream<String>.Continuation] = [:]
+
+    /// A heat-advisory tap that woke the app before any listener existed.
+    private var bufferedHeatAdvisoryTapID: String?
+
     func installAsDelegate() {
         center.delegate = self
     }
@@ -63,6 +88,7 @@ final class NotificationService: NSObject {
     private enum Category {
         static let workoutReminder = "WORKOUT_REMINDER"
         static let syncedRun       = "SYNCED_RUN"
+        static let heatAdvisory    = "HEAT_ADVISORY"
     }
 
     // Notification identifier helpers
@@ -70,6 +96,15 @@ final class NotificationService: NSObject {
         static func morning(_ workout: ScheduledWorkout) -> String {
             "morning-\(workout.id.uuidString)"
         }
+
+        /// Keyed by session **and tier**, matching `HeatAdvisoryStore`'s dismissal key: a
+        /// forecast that worsens overnight is a different warning about a different day
+        /// and gets its own request rather than being swallowed as a duplicate.
+        static func heatAdvisory(_ advisory: HeatAdvisory) -> String {
+            "\(heatAdvisoryPrefix)\(advisory.workoutID.uuidString).\(advisory.tier.rawValue)"
+        }
+
+        static let heatAdvisoryPrefix = "heat-advisory-"
     }
 
     // MARK: Authorization
@@ -255,6 +290,131 @@ final class NotificationService: NSObject {
         try await center.add(request)
     }
 
+    // MARK: Heat advisories
+
+    /// When a heat advisory should reach the runner.
+    enum HeatAdvisoryDelivery: Equatable, Sendable {
+        /// Still ahead of the evening slot — schedule it.
+        case scheduled(Date)
+        /// The evening before, but past the slot: the app happened to be open late, and
+        /// the warning is still actionable tonight. Deliver it now rather than dropping it.
+        case immediate
+        /// The session's day has already begun. The dashboard card is the surface for
+        /// that; a banner on the morning of is a warning the runner can no longer plan
+        /// around, which is the thing this feature exists to avoid.
+        case skip
+    }
+
+    /// The evening slot: 18:00 the day before the session.
+    ///
+    /// Late enough that the forecast has settled and the runner is off their feet, early
+    /// enough to still change tomorrow — set an alarm an hour earlier, book the treadmill,
+    /// swap the session with an easy day. Pure so both branches are unit-testable.
+    static func heatAdvisoryDelivery(
+        for scheduledDate: Date,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> HeatAdvisoryDelivery {
+        let sessionDay = calendar.startOfDay(for: scheduledDate)
+        guard now < sessionDay else { return .skip }
+
+        var components = calendar.dateComponents([.year, .month, .day], from: sessionDay.addingTimeInterval(-86_400))
+        components.hour = heatAdvisoryHour
+        components.minute = 0
+        components.second = 0
+
+        guard let slot = calendar.date(from: components) else { return .skip }
+        return now < slot ? .scheduled(slot) : .immediate
+    }
+
+    static let heatAdvisoryHour = 18
+
+    /// Warns the runner the evening before that tomorrow's session is going to be hot.
+    ///
+    /// Replaces any pending advisory first, so a forecast that changed during the day
+    /// cannot leave last night's number queued alongside tonight's.
+    func scheduleHeatAdvisory(
+        _ advisory: HeatAdvisory,
+        unit: UnitPreference = .metric,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) async {
+        guard await isAuthorized else { return }
+
+        let delivery = Self.heatAdvisoryDelivery(for: advisory.scheduledDate, now: now, calendar: calendar)
+        guard delivery != .skip else { return }
+
+        await cancelHeatAdvisories()
+
+        let content = UNMutableNotificationContent()
+        content.title = String(
+            localized: "Tomorrow looks hot",
+            comment: "Notification title warning that tomorrow's session falls in the heat"
+        )
+        content.body = Self.heatAdvisoryBody(advisory, unit: unit)
+        content.sound = .default
+        content.categoryIdentifier = Category.heatAdvisory
+        content.userInfo = ["heatAdvisoryWorkoutID": advisory.workoutID.uuidString]
+
+        let trigger: UNCalendarNotificationTrigger?
+        switch delivery {
+        case let .scheduled(fireDate):
+            let components = calendar.dateComponents(
+                [.year, .month, .day, .hour, .minute, .second],
+                from: fireDate
+            )
+            trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+        case .immediate, .skip:
+            trigger = nil
+        }
+
+        let request = UNNotificationRequest(
+            identifier: NotificationID.heatAdvisory(advisory),
+            content: content,
+            trigger: trigger
+        )
+        try? await center.add(request)
+    }
+
+    /// Removes every pending heat advisory. Called before scheduling a new one, when the
+    /// setting is switched off, and when the plan stops having a session to warn about.
+    func cancelHeatAdvisories() async {
+        let pending = await center.pendingNotificationRequests()
+        let ids = pending
+            .filter { $0.identifier.hasPrefix(NotificationID.heatAdvisoryPrefix) }
+            .map(\.identifier)
+        guard !ids.isEmpty else { return }
+        center.removePendingNotificationRequests(withIdentifiers: ids)
+    }
+
+    /// The banner's copy: what it will be, and the one thing to do about it.
+    ///
+    /// Internal rather than private so `HeatAdvisoryTests` can assert the conditions
+    /// reach the body — a warning that says "it'll be hot" and no number is one the runner
+    /// has to open the app to act on, which defeats sending it the night before.
+    static func heatAdvisoryBody(_ advisory: HeatAdvisory, unit: UnitPreference) -> String {
+        let conditions = String(
+            localized: """
+                \(advisory.workoutType.localizedName) at \
+                \(advisory.conditions.feelsLikeString(unit: unit)), \
+                dew point \(advisory.conditions.dewPointString(unit: unit)).
+                """,
+            comment: "First sentence of the heat advisory notification: the session and the conditions"
+        )
+
+        if let cooler = advisory.cooler {
+            let time = cooler.start.formatted(.dateTime.hour().minute())
+            return conditions + " " + String(
+                localized: "It's \(cooler.conditions.feelsLikeString(unit: unit)) at \(time) — tap to move it or ease the targets.",
+                comment: "Second sentence of the heat advisory notification when a cooler hour exists"
+            )
+        }
+        return conditions + " " + String(
+            localized: "Tap to ease tomorrow's targets before you head out.",
+            comment: "Second sentence of the heat advisory notification"
+        )
+    }
+
     // MARK: Cancellation
 
     /// Cancels every pending reminder belonging to `plan` — used when a plan is
@@ -418,6 +578,16 @@ final class NotificationService: NSObject {
         )
     }
 
+    private func handleHeatAdvisoryTap(workoutID: String) {
+        guard !heatAdvisoryTapListeners.isEmpty else {
+            bufferedHeatAdvisoryTapID = workoutID
+            return
+        }
+        for listener in heatAdvisoryTapListeners.values {
+            listener.yield(workoutID)
+        }
+    }
+
     private func handleSyncedRunTap(workoutID: String) {
         UserDefaults.standard.set(workoutID, forKey: Self.pendingReviewWorkoutIDKey)
         guard !syncedRunTapListeners.isEmpty else {
@@ -514,6 +684,16 @@ extension NotificationService: UNUserNotificationCenterDelegate {
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
         let content = response.notification.request.content
+
+        if content.categoryIdentifier == Category.heatAdvisory,
+           let workoutID = content.userInfo["heatAdvisoryWorkoutID"] as? String {
+            Task { @MainActor in
+                self.handleHeatAdvisoryTap(workoutID: workoutID)
+            }
+            completionHandler()
+            return
+        }
+
         guard
             content.categoryIdentifier == Category.syncedRun,
             let workoutID = content.userInfo["workoutID"] as? String

@@ -63,14 +63,7 @@ final class WeatherService: Sendable {
                     AppLogger.log("No historical weather for past workout — skipping", label: "WeatherKit", level: .debug)
                     return nil
                 }
-                let result = WorkoutWeather(
-                    temperatureCelsius: hour.temperature.converted(to: UnitTemperature.celsius).value,
-                    feelsLikeCelsius: hour.apparentTemperature.converted(to: UnitTemperature.celsius).value,
-                    humidityPercent: hour.humidity * 100,
-                    windSpeedKmh: hour.wind.speed.converted(to: UnitSpeed.kilometersPerHour).value,
-                    conditionSymbol: hour.symbolName,
-                    conditionDescription: hour.condition.description
-                )
+                let result = Self.summary(from: hour)
                 AppLogger.log(
                     "Weather (historical): \(result.conditionDescription), \(String(format: "%.0f", result.temperatureCelsius))°C",
                     label: "WeatherKit",
@@ -115,14 +108,7 @@ final class WeatherService: Sendable {
         if let hour = weather.hourlyForecast.min(by: {
             abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date))
         }) {
-            let result = WorkoutWeather(
-                temperatureCelsius: hour.temperature.converted(to: UnitTemperature.celsius).value,
-                feelsLikeCelsius: hour.apparentTemperature.converted(to: UnitTemperature.celsius).value,
-                humidityPercent: hour.humidity * 100,
-                windSpeedKmh: hour.wind.speed.converted(to: UnitSpeed.kilometersPerHour).value,
-                conditionSymbol: hour.symbolName,
-                conditionDescription: hour.condition.description
-            )
+            let result = Self.summary(from: hour)
             AppLogger.log(
                 "Weather (hourly): \(result.conditionDescription), \(String(format: "%.0f", result.temperatureCelsius))°C",
                 label: "WeatherKit",
@@ -136,6 +122,7 @@ final class WeatherService: Sendable {
             temperatureCelsius: c.temperature.converted(to: UnitTemperature.celsius).value,
             feelsLikeCelsius: c.apparentTemperature.converted(to: UnitTemperature.celsius).value,
             humidityPercent: c.humidity * 100,
+            dewPointCelsius: c.dewPoint.converted(to: UnitTemperature.celsius).value,
             windSpeedKmh: c.wind.speed.converted(to: UnitSpeed.kilometersPerHour).value,
             conditionSymbol: c.symbolName,
             conditionDescription: c.condition.description
@@ -146,6 +133,86 @@ final class WeatherService: Sendable {
             level: .info
         )
         return result
+        #endif
+    }
+
+    #if !targetEnvironment(simulator)
+    /// One hourly reading as the app stores it.
+    ///
+    /// Three call sites built this by hand — the historical path, the live hourly path,
+    /// and now the forecast — and the field most likely to be forgotten in a fourth is the
+    /// newest one, `dewPoint`, which is the number `HeatAdaptationPolicy` scores on.
+    private static func summary(from hour: HourWeather) -> WorkoutWeather {
+        WorkoutWeather(
+            temperatureCelsius: hour.temperature.converted(to: UnitTemperature.celsius).value,
+            feelsLikeCelsius: hour.apparentTemperature.converted(to: UnitTemperature.celsius).value,
+            humidityPercent: hour.humidity * 100,
+            dewPointCelsius: hour.dewPoint.converted(to: UnitTemperature.celsius).value,
+            windSpeedKmh: hour.wind.speed.converted(to: UnitSpeed.kilometersPerHour).value,
+            conditionSymbol: hour.symbolName,
+            conditionDescription: hour.condition.description
+        )
+    }
+    #endif
+}
+
+// MARK: - Forecasting a day the runner has not run yet
+
+/// One hour of a forecast day, as `HeatAdaptationPolicy` consumes it.
+struct ForecastHour: Equatable, Sendable {
+    let date: Date
+    let conditions: WorkoutWeather
+}
+
+extension WeatherService {
+
+    /// The hourly forecast across one local day at `coordinate`, earliest first.
+    ///
+    /// Distinct from `fetchWeather(at:date:)`, which answers "what were the conditions at
+    /// this instant" for a run that has already happened. This answers "what is the whole
+    /// of this day going to be like", because the advisory has two questions to settle —
+    /// how bad the planned hour is, and whether some other hour is materially better —
+    /// and asking WeatherKit once for the day is how they stay consistent with each other.
+    ///
+    /// WeatherKit's hourly forecast reaches about ten days ahead, so the day-before
+    /// advisory this exists for is comfortably inside it. Empty on any failure: a forecast
+    /// is supplemental in exactly the way a recorded run's weather is, and must never be
+    /// the reason a screen fails to load.
+    func hourlyForecast(
+        at coordinate: Coordinate,
+        on day: Date,
+        calendar: Calendar = .current
+    ) async -> [ForecastHour] {
+        #if targetEnvironment(simulator)
+        AppLogger.log("WeatherKit forecast skipped on simulator — run on device", label: "WeatherKit", level: .debug)
+        return []
+        #else
+        let start = calendar.startOfDay(for: day)
+        guard let end = calendar.date(byAdding: .day, value: 1, to: start) else { return [] }
+
+        let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        do {
+            let hours = try await WeatherKit.WeatherService.shared.weather(
+                for: location,
+                including: .hourly(startDate: start, endDate: end)
+            )
+            let forecast = hours
+                .map { ForecastHour(date: $0.date, conditions: Self.summary(from: $0)) }
+                .sorted { $0.date < $1.date }
+            AppLogger.log(
+                "Forecast for \(start.formatted(.dateTime.month().day())): \(forecast.count) hourly readings",
+                label: "WeatherKit",
+                level: .debug
+            )
+            return forecast
+        } catch {
+            AppLogger.log(
+                "Forecast request failed: \((error as NSError).localizedDescription) — skipping",
+                label: "WeatherKit",
+                level: .error
+            )
+            return []
+        }
         #endif
     }
 }

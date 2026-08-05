@@ -249,6 +249,64 @@ The rules a change here has to keep:
   tracking. Adding `.walk` needed no CloudKit schema change: it is a new raw value in an
   existing `String` field.
 
+## Weather-tuned workouts
+
+Stride reads tomorrow's forecast where the runner actually runs, and asks — the evening
+before — whether a session that falls in the heat should change (N39). The split of
+responsibilities is the point of the feature and is what a change here has to keep:
+
+```text
+WeatherKit  →  WeatherService.hourlyForecast  →  [ForecastHour]
+                                                       ↓
+                              HeatAdvisoryService (plumbing: which session, whose
+                              location, what to persist, when to notify)
+                                                       ↓
+                              HeatAdaptationPolicy (every judgement, every number — pure)
+                                                       ↓
+                    HeatAdvisory  →  UserDefaults  →  HeatAdvisoryCard / HeatAdaptationSheet
+                                  →  NotificationService.scheduleHeatAdvisory (18:00, day before)
+```
+
+- **Every number carries its source.** `HeatAdaptationPolicy` is a wall of constants with
+  citations attached, and [`docs/HEAT_ADAPTATION_EVIDENCE.md`](docs/HEAT_ADAPTATION_EVIDENCE.md)
+  is the file to read *before* touching any of them — the same arrangement, and the same
+  reason, as `PregnancyRunningPolicy`. Update the doc's row in the same change.
+- **The tier is the worst of three scales**, never an average: temperature + dew point
+  (°F sum), dew point alone, and apparent temperature. No single one covers both a dry
+  38 °C afternoon and a saturated 24 °C dawn, and both change what a session should be.
+  `SmartCoachCards.heatCard` takes `max` of two urgencies for the same reason.
+- **Dew point, not relative humidity.** `WorkoutWeather.dewPointCelsius` is optional
+  because it is newer than the type; rows without it fall back to the Magnus derivation in
+  `HeatAdaptationPolicy.dewPointCelsius(for:)`. It cost no CloudKit schema change —
+  `WorkoutWeather` is JSON inside `RunWorkout.weatherData`, not a stored property.
+- **The prompt threshold depends on the session.** Quality and long runs prompt from
+  `.moderate`, easy runs from `.high`, and a race never prompts at all — the same
+  fixed-point rule `AdaptableWorkoutSelector` and `MissedWorkoutShift` follow. Pregnancy
+  plans are excluded outright: their sessions are prescribed by effort, which already
+  self-corrects in heat.
+- **The advisory is derived data and lives in `UserDefaults`, not SwiftData.** It is
+  rebuilt from the plan and the forecast whenever the app runs, it is worthless once the
+  session is behind the runner, and it describes a forecast rather than something that
+  happened. A `@Model` for it would mean a schema deployment and rows syncing between
+  devices that will each re-derive it more accurately from their own location.
+- **Dismissals are keyed by session *and* tier.** Answering a `.moderate` advisory settles
+  the moderate one; a forecast that worsens to `.severe` overnight is new information about
+  a materially different day and gets to ask again.
+- **Location comes from the last recorded run's start**, not from a live location request.
+  No new permission, and it answers the question that matters — where this person will be
+  running tomorrow, not where the phone is tonight.
+- **The banner fires at 18:00 the day before** (`NotificationService.heatAdvisoryDelivery`),
+  delivers immediately if the app is opened later that same evening, and sends nothing once
+  the session's own day has begun — a warning the runner can no longer plan around is the
+  thing the feature exists to avoid. From then on the dashboard card is the surface.
+- Applying an adaptation goes through `HeatAdaptationPolicy.apply`, which touches the
+  prescription and nothing else, and clears `healthKitPlanID` because the workout already
+  on the Watch describes the old one. The structured form's per-segment paces move with the
+  band, or the structure is cleared — leaving it would have the guided-run engine calling
+  out the pace the runner just agreed to back off from.
+- On by default, switchable in **Settings → App → Heat Adaptation**
+  (`AppSettings.heatAdaptationEnabled`).
+
 ## Widget Data Flow
 
 The widget extension **cannot read the SwiftData store.** It is a separate process with its
@@ -383,6 +441,7 @@ issue is usually already written up, with a recommended fix:
 | [`docs/APP_ANALYSIS_2026-07.md`](docs/APP_ANALYSIS_2026-07.md) | First-pass audit; all numbered bugs fixed. Its design (§5) and coverage (§8) sections are still live. |
 | [`docs/FEATURE_IMPROVEMENTS_2026-07.md`](docs/FEATURE_IMPROVEMENTS_2026-07.md) | Product/feature roadmap with shipped-status tracking. **The live one** — the two bug audits and the UX audit are closed bar items blocked on CI or a device, so this is where the remaining work is. Its header lists what is genuinely open. |
 | [`docs/PREGNANCY_RUNNING_EVIDENCE.md`](docs/PREGNANCY_RUNNING_EVIDENCE.md) | The published guidelines and studies behind every number in `PregnancyRunningPolicy`, with each row mapped to the code rule it drives. **Read before changing any of those numbers** — and update the row in the same change. |
+| [`docs/HEAT_ADAPTATION_EVIDENCE.md`](docs/HEAT_ADAPTATION_EVIDENCE.md) | The dew-point, temperature-sum and ACSM sources behind every number in `HeatAdaptationPolicy` — the tier scales, the pace-adjustment bands, what changes about a session, and why heat acclimatisation is deliberately not modelled. **Read before changing any of those numbers** — and update the row in the same change. |
 | [`docs/REPO_ANALYSIS.md`](docs/REPO_ANALYSIS.md) | Operational review: CI, secrets hygiene, test depth. |
 | [`docs/CLOUDKIT_VALIDATION.md`](docs/CLOUDKIT_VALIDATION.md) | CloudKit sync validation steps. |
 | [`docs/CLOUDKIT_ANALYSIS_2026-07-28.md`](docs/CLOUDKIT_ANALYSIS_2026-07-28.md) | CloudKit setup audited against Apple's published requirements, every claim source-linked. **Read before touching `ModelConfiguration`, the store-fallback tiers, or any `@Model`'s stored properties.** All six findings fixed in code; the §6 device validation is still owed. The reasoning is kept in full because it is what stops F1 returning via the next config that omits an argument. |

@@ -294,6 +294,15 @@ struct ContentView: View {
                 await container.notificationService.scheduleMorningReminders(for: plan)
             }
         }
+        // The forecast for tomorrow moves during today, and the app has no background
+        // wake of its own to catch it — so every foreground is an opportunity to re-read
+        // it and re-arm the evening banner. Cheap by construction: the service returns
+        // without touching WeatherKit unless there is an eligible session tomorrow and
+        // the stored forecast has aged out (`HeatAdvisory.forecastLifetime`).
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            Task { await refreshHeatAdvisory() }
+        }
         // The widgets' catch-all (B1). `.background` is the one that matters — it is the
         // last chance to publish whatever the runner just did before they go and look at
         // the Home Screen — and `.active` covers a snapshot that went stale while the app
@@ -329,6 +338,10 @@ struct ContentView: View {
             await container.notificationService.cancelAllMorningReminders()
         }
 
+        // A new plan replaces tomorrow's session outright, so an advisory built against
+        // the old one is about a workout that no longer exists.
+        await refreshHeatAdvisory()
+
         do {
             try await container.healthKitRepository.syncWorkoutPlans(
                 for: plan,
@@ -343,6 +356,32 @@ struct ContentView: View {
                 level: .error
             )
         }
+    }
+
+    /// Re-reads tomorrow's forecast and re-arms the evening heat banner.
+    ///
+    /// Runs the same fetch the advisory's location and start-hour heuristics need — the
+    /// newest twenty runs, walks excluded, because "when and where does this person run"
+    /// is a training question. Bounded through `runsOnlyDescriptor` rather than filtered
+    /// afterwards, so a runner who walks does not get a shorter sample than one who
+    /// doesn't (N38).
+    @MainActor
+    private func refreshHeatAdvisory() async {
+        guard !UITestingSupport.isEnabled, !UITestingSupport.isHostingUnitTests else { return }
+
+        let recentRuns = (try? context.fetch(
+            RunWorkout.runsOnlyDescriptor(
+                sortBy: [SortDescriptor(\RunWorkout.date, order: .reverse)],
+                fetchLimit: 20
+            )
+        )) ?? []
+
+        await container.heatAdvisoryService.refresh(
+            plan: activePlans.first,
+            recentRuns: recentRuns,
+            isEnabled: appSettings.heatAdaptationEnabled,
+            unit: appSettings.unitPreference
+        )
     }
 
     private func requestMissingPermissionsAfterRestoreIfNeeded() async {
