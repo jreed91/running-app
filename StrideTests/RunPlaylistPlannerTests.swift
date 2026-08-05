@@ -304,6 +304,93 @@ struct MusicEnergyPolicyTests {
     }
 }
 
+// MARK: - Track grouping tests
+
+/// The track list is the only place a runner can see the playlist — iOS opens neither a private
+/// library playlist nor the library root — so the grouping that gives it its shape is tested.
+struct RunPlaylistTrackSectionTests {
+
+    private func track(_ id: String, _ energy: RunPlaylistEnergy, seconds: Double = 200) -> RunPlaylistTrack {
+        RunPlaylistTrack(id: id, title: "Track \(id)", artist: "Artist", seconds: seconds, energy: energy)
+    }
+
+    @Test("Consecutive tracks of one energy become one section")
+    func consecutiveTracksGroup() {
+        let sections = RunPlaylistTrackSection.sections(from: [
+            track("1", .calm), track("2", .calm),
+            track("3", .hard), track("4", .hard), track("5", .hard),
+            track("6", .calm)
+        ])
+        #expect(sections.map(\.energy) == [.calm, .hard, .calm])
+        #expect(sections.map { $0.tracks.count } == [2, 3, 1])
+    }
+
+    @Test("A section's duration is the sum of its tracks")
+    func sectionDurationSums() {
+        let sections = RunPlaylistTrackSection.sections(from: [
+            track("1", .hard, seconds: 180), track("2", .hard, seconds: 220)
+        ])
+        #expect(sections.count == 1)
+        #expect(sections[0].seconds == 400)
+    }
+
+    @Test("Section IDs are unique so the list can be rendered")
+    func sectionIDsAreUnique() {
+        let sections = RunPlaylistTrackSection.sections(from: [
+            track("1", .calm), track("2", .hard), track("3", .calm), track("4", .hard)
+        ])
+        #expect(Set(sections.map(\.id)).count == sections.count)
+    }
+
+    @Test("No tracks means no sections")
+    func emptyInputGivesNoSections() {
+        #expect(RunPlaylistTrackSection.sections(from: []).isEmpty)
+    }
+
+    /// The grouping only reproduces the plan's blocks because the planner guarantees no two
+    /// neighbouring blocks share an energy. This ties the two halves together.
+    @Test("Grouping reproduces the plan's block sequence")
+    func groupingMatchesPlanBlocks() throws {
+        let set = WorkoutSet(
+            repetitions: 1,
+            workSegment: WorkoutSegment(
+                distanceMeters: nil, durationSeconds: 25 * 60,
+                targetPaceSecondsPerKm: nil, label: "Tempo"
+            ),
+            recoverySegment: WorkoutSegment(
+                distanceMeters: nil, durationSeconds: 0,
+                targetPaceSecondsPerKm: nil, label: ""
+            ),
+            label: "Tempo"
+        )
+        let bookend = WorkoutSegment(
+            distanceMeters: nil, durationSeconds: 10 * 60,
+            targetPaceSecondsPerKm: nil, label: "Bookend"
+        )
+        let plan = try #require(
+            RunPlaylistPlanner.plan(
+                for: RunPlaylistPlanner.Session(
+                    workoutType: .tempo,
+                    structure: WorkoutStructure(
+                        warmup: bookend,
+                        mainSets: [set],
+                        cooldown: bookend,
+                        totalEstimatedDistanceMeters: 10_000,
+                        totalEstimatedDurationSeconds: 0
+                    )
+                )
+            )
+        )
+
+        // One track per block is enough to check the sequence survives the round trip.
+        let tracks = plan.blocks.enumerated().map { index, block in
+            track("\(index)", block.energy)
+        }
+        let sections = RunPlaylistTrackSection.sections(from: tracks)
+        #expect(sections.map(\.energy) == plan.blocks.map(\.energy))
+    }
+}
+
 // MARK: - Store tests
 
 struct RunPlaylistStoreTests {
@@ -388,6 +475,56 @@ struct RunPlaylistStoreTests {
         let decoded = try JSONDecoder().decode(RunPlaylistLink.self, from: Data(json.utf8))
         #expect(decoded.playlistID == "p.legacy")
         #expect(decoded.playParametersData == nil)
+        // No tracks rather than a decode failure — the card keeps such a link as a plain row
+        // instead of pushing an empty track list.
+        #expect(decoded.tracks.isEmpty)
+    }
+
+    @Test("Tracks round-trip with the link")
+    func tracksSurvive() throws {
+        let defaults = try makeDefaults()
+        let id = UUID()
+        var stored = link(workoutID: id)
+        stored.tracks = [
+            RunPlaylistTrack(id: "t1", title: "One", artist: "A", seconds: 200, energy: .calm),
+            RunPlaylistTrack(id: "t2", title: "Two", artist: "B", seconds: 210, energy: .hard)
+        ]
+        RunPlaylistStore.save(stored, in: defaults)
+
+        let read = try #require(RunPlaylistStore.link(for: id, in: defaults))
+        #expect(read.tracks == stored.tracks)
+        #expect(read.sections.map(\.energy) == [.calm, .hard])
+    }
+
+    /// Storing a track list per session is what makes retention matter, so both halves of that
+    /// are pinned: old links go, recent ones stay.
+    @Test("Pruning drops links past retention and keeps the rest")
+    func pruneRespectsRetention() throws {
+        let defaults = try makeDefaults()
+        let now = Date()
+        let fresh = UUID()
+        let stale = UUID()
+
+        var recent = link(workoutID: fresh)
+        recent.builtAt = now.addingTimeInterval(-24 * 60 * 60)
+        RunPlaylistStore.save(recent, in: defaults)
+
+        var old = link(workoutID: stale)
+        old.builtAt = now.addingTimeInterval(-(RunPlaylistStore.retention + 60))
+        RunPlaylistStore.save(old, in: defaults)
+
+        RunPlaylistStore.prune(now: now, in: defaults)
+
+        #expect(RunPlaylistStore.link(for: fresh, in: defaults) != nil)
+        #expect(RunPlaylistStore.link(for: stale, in: defaults) == nil)
+    }
+
+    @Test("Pruning leaves unrelated settings alone")
+    func pruneIsScoped() throws {
+        let defaults = try makeDefaults()
+        defaults.set("keep me", forKey: "unrelatedSetting")
+        RunPlaylistStore.prune(in: defaults)
+        #expect(defaults.string(forKey: "unrelatedSetting") == "keep me")
     }
 
     /// What `AppContainer.resetAllData` relies on: no link outlives the plan it names.

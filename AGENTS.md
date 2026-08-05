@@ -397,6 +397,19 @@ ScheduledWorkout  →  RunPlaylistPlanner  →  RunPlaylistPlan   (pure, tested)
   the player and is the thing being avoided. The parameters are captured into
   `RunPlaylistLink.playParametersData` at build time and re-read from the library when a
   link predates that field.
+- **Stride is the only place the playlist can be read, so the track list is stored, not
+  fetched.** Because no URL opens a private library playlist, `RunPlaylistDetailView` is the
+  one surface where a runner can see what they are about to run to — and a screen standing in
+  for something that already failed on device should not itself need authorization, a library
+  round trip and a network to render. `RunPlaylistLink.tracks` is written at build time and the
+  screen groups it back into blocks via `RunPlaylistTrackSection.sections(from:)`, which works
+  only because the planner guarantees no two neighbouring blocks share an energy. The cost is
+  that it shows the playlist *as Stride built it* and does not follow edits made in Apple
+  Music, which the screen says in a line rather than implying a freshness it lacks.
+- **A track list per session is why links are pruned.** A name and an ID would have been
+  negligible forever; twenty tracks per session in `UserDefaults` — read into memory whole — is
+  not, so `RunPlaylistStore.prune` drops links past `retention` after each build. Pruning a
+  link never touches the playlist.
 - **A missing subscription is a supported path, not a blocked one.** `MusicSubscription`
   decides whether tracks come from the catalogue or the runner's own library; a
   non-subscriber gets a playlist either way and is told afterwards where it came from. There

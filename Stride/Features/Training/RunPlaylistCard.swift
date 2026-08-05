@@ -142,23 +142,45 @@ struct RunPlaylistCard: View {
         .disabled(isBuilding)
     }
 
+    private func playlistRow(link: RunPlaylistLink, showsChevron: Bool) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "music.note.list")
+                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(link.name)
+                    .font(.bodyStrong)
+                    .lineLimit(1)
+                Text(summary(for: link))
+                    .font(.dsFootnote)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            if showsChevron {
+                StrideIcon(name: .chevronRight, size: 12,
+                           color: Color.secondary.opacity(0.5), strokeWeight: 2)
+            }
+        }
+        .padding()
+        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.sm))
+    }
+
     private func builtState(link: RunPlaylistLink) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                Image(systemName: "music.note.list")
-                    .foregroundStyle(.secondary)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(link.name)
-                        .font(.bodyStrong)
-                        .lineLimit(1)
-                    Text(summary(for: link))
-                        .font(.dsFootnote)
-                        .foregroundStyle(.secondary)
+            // Tapping through to the track list is how a runner sees what they are about to
+            // run to, and Stride is the only place they can: iOS opens neither the playlist
+            // nor the library. A link written before tracks were stored has none, so it stays
+            // a plain row rather than pushing an empty screen.
+            if link.tracks.isEmpty {
+                playlistRow(link: link, showsChevron: false)
+            } else {
+                NavigationLink {
+                    RunPlaylistDetailView(link: link)
+                } label: {
+                    playlistRow(link: link, showsChevron: true)
                 }
-                Spacer()
+                .buttonStyle(.plain)
+                .foregroundStyle(.primary)
             }
-            .padding()
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.sm))
 
             // Play, rather than a link to the playlist: iOS has no deep link to a private
             // library playlist — not to the playlist and not even to the library root, both of

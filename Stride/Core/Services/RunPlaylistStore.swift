@@ -29,6 +29,34 @@ enum RunPlaylistStore {
         defaults.removeObject(forKey: key(for: workoutID))
     }
 
+    /// How long a link is kept. A playlist built for a session four months ago is not something
+    /// anyone is going back to look at.
+    static let retention: TimeInterval = 120 * 24 * 60 * 60
+
+    /// Drops links older than ``retention``.
+    ///
+    /// Worth doing only because a link now carries its full track list — a name and an ID per
+    /// session would have been negligible forever, but twenty tracks per session in
+    /// `UserDefaults`, which is read into memory whole, is a number that should not grow without
+    /// a bound. Called after each build, which is the only thing that adds one.
+    ///
+    /// Pruning a link does not touch the playlist: that is in the runner's Apple Music library
+    /// and stays there. All they lose is Stride's offer to play it from the session.
+    static func prune(now: Date = Date(), in defaults: UserDefaults = .standard) {
+        for key in defaults.dictionaryRepresentation().keys where key.hasPrefix(keyPrefix) {
+            guard let data = defaults.data(forKey: key),
+                  let link = try? JSONDecoder().decode(RunPlaylistLink.self, from: data)
+            else {
+                // Undecodable under our own prefix: a format we no longer read. Drop it.
+                defaults.removeObject(forKey: key)
+                continue
+            }
+            if now.timeIntervalSince(link.builtAt) > retention {
+                defaults.removeObject(forKey: key)
+            }
+        }
+    }
+
     /// Drops every stored link.
     ///
     /// Called from `AppContainer.resetAllData` for the same reason the widget snapshot is
