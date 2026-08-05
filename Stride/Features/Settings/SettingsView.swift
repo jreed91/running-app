@@ -53,6 +53,7 @@ struct SettingsView: View {
                     appCard
                     dataCard
                     routeGeniusCard
+                    runPlaylistsCard
                     aiCoachCard
                     if BuildEnvironment.showsTestFlightDiagnostics {
                         notificationTestingCard
@@ -388,6 +389,29 @@ struct SettingsView: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(.primary)
             }
+        }
+    }
+
+    // MARK: - Run Playlists card
+
+    private var runPlaylistsCard: some View {
+        settingsSection("Run Playlists") {
+            NavigationLink {
+                RunPlaylistSettingsView()
+            } label: {
+                settingsRow(icon: .music, iconColor: .brand, title: "Apple Music") {
+                    StrideIcon(name: .chevronRight, size: 12,
+                               color: Color.secondary.opacity(0.5), strokeWeight: 2)
+                }
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.primary)
+
+            Text("Builds a playlist shaped like the session — calmer through the warm-up and cool-down, harder through the work — and saves it to your Apple Music library. Start one from any run in your plan.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.leading, 62)
+                .padding(.bottom, 10)
         }
     }
 
