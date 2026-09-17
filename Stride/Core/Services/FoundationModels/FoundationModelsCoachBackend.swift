@@ -80,8 +80,7 @@ struct FoundationModelsCoachBackend: OnDeviceCoachGenerating {
             availability: availability,
             quota: quota,
             resetDate: usage.resetDate,
-            canRequestLimitIncrease: usage.limitIncreaseSuggestion != nil,
-            contextSize: model.contextSize
+            canRequestLimitIncrease: usage.limitIncreaseSuggestion != nil
         )
     }
 
