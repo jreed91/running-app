@@ -30,7 +30,7 @@ struct SettingsView: View {
     @State private var workoutKitResendStatus: String?
     /// Private Cloud Compute availability + daily quota, refreshed whenever the model
     /// picker changes. `nil` until read, and on devices with no server model at all.
-    @State private var serverModelStatus: ServerModelStatus?
+    @State private var pccStatus: ServerModelStatus?
     #endif
 
     private var profile: UserProfile? { profiles.first }
@@ -459,18 +459,18 @@ struct SettingsView: View {
                 }
                 .labelsHidden()
             }
-            if appSettings.aiProvider == .applePrivateCloud, let status = serverModelStatus {
+            if appSettings.aiProvider == .applePrivateCloud, let status = pccStatus {
                 rowDivider
                 privateCloudComputeStatusRow(status)
             }
-            Text(aiProviderFootnote)
+            Text(Self.aiProviderFootnote(for: appSettings.aiProvider, status: pccStatus))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, AppSpacing.lg)
                 .padding(.bottom, 14)
         }
         .task(id: appSettings.aiProvider) {
-            serverModelStatus = await container.aiCoachService.serverModelStatus()
+            pccStatus = await container.aiCoachService.serverModelStatus()
         }
     }
 
@@ -504,15 +504,21 @@ struct SettingsView: View {
         }
     }
 
-    private var aiProviderFootnote: String {
-        switch appSettings.aiProvider {
+    /// Static and status-in-hand rather than a computed property reading `pccStatus`:
+    /// the footnote is a pure function of the provider and the snapshot, so it reads the
+    /// same way the row above it does and has nothing to fall out of step with.
+    private static func aiProviderFootnote(
+        for provider: AIProvider,
+        status: ServerModelStatus?
+    ) -> String {
+        switch provider {
         case .appleOnDevice:
             return "Runs on your device with Apple Intelligence. No API key, no cost, and your training data never leaves your iPhone. Requires a supported device with Apple Intelligence enabled."
         case .applePrivateCloud:
             // The unavailable case is worth spelling out: the runner picked the server
             // model and is quietly getting the on-device one, which is the fallback
             // working as designed rather than a failure.
-            if let status = serverModelStatus, !status.isAvailable {
+            if let status, !status.isAvailable {
                 switch status.availability {
                 case .deviceNotEligible:
                     return "Private Cloud Compute needs a newer iPhone. Coaching runs on the on-device model instead."

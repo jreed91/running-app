@@ -99,9 +99,12 @@ struct ServerModelStatus: Sendable, Equatable {
     var resetDate: Date?
     /// Whether the system offers an upgrade path worth surfacing a button for.
     var canRequestLimitIncrease: Bool
-    /// The model's context window in tokens (32K for PCC vs. 8K on-device) — used by the
-    /// Settings footnote so the number never drifts from the SDK.
-    var contextSize: Int
+
+    // Deliberately no `contextSize`: `PrivateCloudComputeLanguageModel.contextSize` is
+    // `nonisolated(nonsending) var { get async throws }`, so reading it needs an isolated
+    // caller plus `try await`. Nothing here shows a token count to a runner, so carrying
+    // it would mean threading async-throws through this whole snapshot for a number that
+    // never reaches the screen.
 
     var isAvailable: Bool { availability == .available }
 

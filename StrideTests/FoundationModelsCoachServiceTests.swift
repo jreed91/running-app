@@ -316,8 +316,7 @@ struct FoundationModelsCoachServiceTests {
                 availability: .available,
                 quota: .belowLimit(approachingLimit: true),
                 resetDate: reset,
-                canRequestLimitIncrease: true,
-                contextSize: 32_768
+                canRequestLimitIncrease: true
             )
         )
         let service = AICoachService(onDeviceBackend: backend)
@@ -328,7 +327,6 @@ struct FoundationModelsCoachServiceTests {
         #expect(status?.isLimitReached == false)
         #expect(status?.resetDate == reset)
         #expect(status?.canRequestLimitIncrease == true)
-        #expect(status?.contextSize == 32_768)
     }
 
     @Test("Quota messages only appear when there is something to say")
@@ -338,8 +336,7 @@ struct FoundationModelsCoachServiceTests {
                 availability: .available,
                 quota: quota,
                 resetDate: nil,
-                canRequestLimitIncrease: false,
-                contextSize: 32_768
+                canRequestLimitIncrease: false
             )
         }
 

@@ -338,7 +338,7 @@ Cloud Compute](https://developer.apple.com/documentation/foundationmodels/adding
 | `init()` | convenience, no arguments |
 | `availability` | `.available` / `.unavailable(.deviceNotEligible)` / `.unavailable(.systemNotReady)` |
 | `quotaUsage` | `.status` → `.belowLimit(info)` (`info.isApproachingLimit`) / `.limitReached`; plus `isLimitReached`, `resetDate`, `limitIncreaseSuggestion?.show()` |
-| `contextSize` | `Int` — 32K on PCC vs. ~8K on-device |
+| `contextSize` | **`nonisolated(nonsending) var { get async throws }`** — not a plain property. Needs `try await` *and* an isolated caller, or the compiler rejects it with "Caller isolation inheriting-isolated property 'contextSize' cannot be accessed from outside of the actor". `ServerModelStatus` deliberately omits it |
 | `Error` | `.quotaLimitReached` / `.networkFailure` / `.serviceUnavailable` — **catchable**, and non-frozen, so switch with `@unknown default` |
 | `ContextOptions` | `init(includeSchemaInPrompt: Bool? = nil, reasoningLevel: ReasoningLevel? = nil)`; levels `.light` / `.moderate` / `.deep` |
 
