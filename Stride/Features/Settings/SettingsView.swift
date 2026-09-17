@@ -24,13 +24,17 @@ struct SettingsView: View {
     @State private var showResetConfirmation = false
     @State private var showPulseConsole = false
     @State private var notificationTestStatus: String?
+    /// Private Cloud Compute availability + daily quota, refreshed whenever the model
+    /// picker changes. `nil` until read, and on devices with no server model at all.
+    ///
+    /// Outside the `#if DEBUG` block below on purpose: the AI Coach card ships in
+    /// Release, so a debug-only declaration compiles in Debug and then fails the archive
+    /// with "Cannot find 'pccStatus' in scope".
+    @State private var pccStatus: ServerModelStatus?
     #if DEBUG
     @State private var seedWeeks = 8
     @State private var completionCutoff = Date()
     @State private var workoutKitResendStatus: String?
-    /// Private Cloud Compute availability + daily quota, refreshed whenever the model
-    /// picker changes. `nil` until read, and on devices with no server model at all.
-    @State private var pccStatus: ServerModelStatus?
     #endif
 
     private var profile: UserProfile? { profiles.first }
