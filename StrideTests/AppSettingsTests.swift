@@ -265,4 +265,45 @@ struct AppSettingsTests {
 
         #expect(settings.iCloudSyncEnabled == true)
     }
+
+    // MARK: - Private Cloud Compute default
+
+    @Test("A fresh install defaults AI coaching to Private Cloud Compute")
+    func freshInstallDefaultsToPrivateCloudCompute() {
+        let defaults = InMemoryStore()
+        let ubiquitous = InMemoryStore()
+
+        let settings = AppSettings(defaults: defaults, ubiquitous: ubiquitous)
+
+        #expect(settings.aiProvider == .applePrivateCloud)
+        #expect(settings.aiProvider.usesPrivateCloudCompute)
+        // Same M15 rule as every other setting: the default is in-memory only, so a real
+        // choice that iCloud KVS has not delivered yet cannot be clobbered by it.
+        #expect(ubiquitous.has("aiProvider") == false)
+        #expect(defaults.has("aiProvider") == false)
+    }
+
+    @Test("A runner who explicitly chose the on-device model keeps it")
+    func storedOnDeviceChoiceSurvivesTheNewDefault() {
+        let defaults = InMemoryStore()
+        let ubiquitous = InMemoryStore()
+        defaults.set(AIProvider.appleOnDevice.rawValue, forKey: "aiProvider")
+
+        let settings = AppSettings(defaults: defaults, ubiquitous: ubiquitous)
+
+        #expect(settings.aiProvider == .appleOnDevice)
+        #expect(settings.aiProvider.usesPrivateCloudCompute == false)
+    }
+
+    @Test("An unrecognized stored provider falls back to Private Cloud Compute")
+    func unknownStoredProviderFallsBackToTheDefault() {
+        let defaults = InMemoryStore()
+        let ubiquitous = InMemoryStore()
+        // e.g. a provider removed in a later build, or a corrupted value.
+        defaults.set("openai_gpt4", forKey: "aiProvider")
+
+        let settings = AppSettings(defaults: defaults, ubiquitous: ubiquitous)
+
+        #expect(settings.aiProvider == .applePrivateCloud)
+    }
 }

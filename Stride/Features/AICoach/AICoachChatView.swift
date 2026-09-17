@@ -414,13 +414,29 @@ struct AICoachChatView: View {
                 messages.append(
                     AICoachChatMessage(
                         sender: .coach,
-                        text: "I could not reach \(appSettings.aiProvider.localizedName). Make sure Apple Intelligence is enabled on this device, then try again.",
+                        text: Self.failureText(for: error, provider: appSettings.aiProvider),
                         metrics: [],
                         status: .setupNeeded
                     )
                 )
             }
         }
+    }
+
+    /// Hitting the daily Private Cloud Compute allowance is not a setup problem, and
+    /// telling a runner to go and enable Apple Intelligence — which is already on — sends
+    /// them somewhere that cannot help. Name the real cause and, when the framework knows
+    /// it, when the allowance comes back.
+    private static func failureText(for error: any Error, provider: AIProvider) -> String {
+        if let coachError = error as? OnDeviceCoachError,
+           case .serverQuotaExceeded(let resetDate) = coachError {
+            guard let resetDate else {
+                return "You have used today's Private Cloud Compute requests. They refresh daily — or switch to the on-device model in Settings to keep going now."
+            }
+            let refresh = resetDate.formatted(date: .omitted, time: .shortened)
+            return "You have used today's Private Cloud Compute requests. They refresh at \(refresh) — or switch to the on-device model in Settings to keep going now."
+        }
+        return "I could not reach \(provider.localizedName). Make sure Apple Intelligence is enabled on this device, then try again."
     }
 
     @MainActor

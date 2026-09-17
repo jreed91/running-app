@@ -112,7 +112,8 @@ Business logic belongs in services or repositories, not directly in SwiftUI view
 - `RouteType`: `.loop`, `.outAndBack`
 - `WorkoutLocation`: `.outdoor`, `.indoor`
 - `UnitPreference`: `.metric`, `.imperial`
-- `AIProvider`: `.appleOnDevice`, `.applePrivateCloud` (Apple Foundation Models only — no third-party providers or API keys)
+- `AIProvider`: `.appleOnDevice`, `.applePrivateCloud` (Apple Foundation Models only — no third-party providers or API keys).
+  `.applePrivateCloud` is the **default** for new installs; see "AI coaching models" below
 - `StrengthEquipment` and `StrengthFocus`
 
 `Stride/Core/Models/ValueTypes.swift` contains codable/sendable value types used inside SwiftData models:
@@ -433,6 +434,55 @@ ScheduledWorkout  →  RunPlaylistPlanner  →  RunPlaylistPlan   (pure, tested)
   Automatic signing can look that service up but never create it.
 - Entry point is the **Plan tab → workout detail** card, on any run that is not yet
   completed. Access and the per-tier overrides live in **Settings → Run Playlists**.
+
+## AI coaching models
+
+AI coaching runs entirely on Apple's Foundation Models framework. There are no third-party
+providers, no API keys and no per-token cost. Two models sit behind one API, chosen by
+`AIProvider` in **Settings → AI Coach → Model**:
+
+| | `.appleOnDevice` | `.applePrivateCloud` (default) |
+| --- | --- | --- |
+| Type | `SystemLanguageModel.default` | `PrivateCloudComputeLanguageModel` (iOS 27+) |
+| Context | ~8K tokens | 32K tokens |
+| Network | none | required |
+| Entitlement | none | `com.apple.developer.private-cloud-compute` |
+
+Both conform to `LanguageModel`, so `LanguageModelSession`, the `@Generable` schemas in
+`FoundationModelsCoachTypes.swift`, the instructions and every downstream mapping are shared.
+`FoundationModelsCoachBackend.withServerFallback` is the only place the two differ.
+
+- **Private Cloud Compute is the default for new installs** (`AppSettings`). It is safe as a
+  default because it *degrades* rather than fails: every server request is gated on
+  `PrivateCloudComputeLanguageModel.availability`, and a `.networkFailure` or
+  `.serviceUnavailable` is retried on the on-device model, which is what Apple's guidance
+  asks for. A runner who explicitly picked on-device keeps that choice — the default only
+  applies when the key has never been written (the same M15 no-clobber rule as every other
+  setting).
+- **The daily quota is the one failure that is not silently downgraded.** PCC gives each
+  person a daily request allowance (raisable via iCloud+), and Apple asks apps to keep that
+  status *visible* rather than spring it in a dismissible alert. So
+  `.quotaLimitReached` becomes `OnDeviceCoachError.serverQuotaExceeded(resetDate:)`,
+  **Settings → AI Coach** renders `ServerModelStatus` with the "Show options" upgrade button
+  (`QuotaUsage.limitIncreaseSuggestion.show()`), and the chat view names the real cause
+  instead of telling the runner to go and enable Apple Intelligence.
+- **Reasoning level** is set per task through `ContextOptions(reasoningLevel:)` and only on
+  the server path: `.light` for chat (a runner is waiting on it), `.moderate` for run
+  insights and single-workout adaptation, `.deep` for whole-plan adaptation. When passing
+  `contextOptions` to the guided-generation overload, keep `includeSchemaInPrompt: true` —
+  that overload drops the standalone argument and its default is `true`, so omitting it
+  loses the schema bias.
+- `AICoachService` never imports `FoundationModels`. It talks to `OnDeviceCoachGenerating`,
+  and PCC state reaches the UI as `ServerModelStatus`, a plain value type. That is what keeps
+  the coach testable with a fake backend — see `StrideTests/FoundationModelsCoachServiceTests.swift`.
+
+The entitlement is **managed**: Apple assigns it to the developer account on request (App
+Store Small Business Program, under 2M first-time downloads), and unlike App Groups or
+HealthKit it cannot be self-served in the developer portal. Until it is granted, automatic
+signing cannot issue a matching profile and signed builds fail at export. An unentitled
+build still runs — `availability` reports unavailable and every request goes on-device.
+
+Reference: [Adding server-side intelligence with Private Cloud Compute](https://developer.apple.com/documentation/foundationmodels/adding-server-side-intelligence-with-private-cloud-compute).
 
 ## Widget Data Flow
 

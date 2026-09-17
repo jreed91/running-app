@@ -244,8 +244,16 @@ final class AppSettings {
             : false
 
         let providerRaw = Self.readString(forKey: Self.aiProviderKey, defaults: defaults, ubiquitous: ubiquitous) ?? ""
-        // New installs default to Apple's on-device model: no API key, private, free.
-        self.aiProvider = AIProvider(rawValue: providerRaw) ?? .appleOnDevice
+        // Default to Apple's Private Cloud Compute model: still keyless, still free, still
+        // private, but with 32K of context and stronger reasoning than the on-device model
+        // — which matters for the coach, whose prompts carry weeks of run history.
+        //
+        // Safe as a default because it degrades rather than fails. PCC needs an eligible
+        // device, the entitlement and a network connection, and when any of those is
+        // missing `FoundationModelsCoachBackend` silently runs the request on-device.
+        // A runner who explicitly picked on-device keeps that choice — this only applies
+        // when the key has never been written.
+        self.aiProvider = AIProvider(rawValue: providerRaw) ?? .applePrivateCloud
 
         // Default to true (sync on) when the key has never been set.
         self.iCloudSyncEnabled = syncStored

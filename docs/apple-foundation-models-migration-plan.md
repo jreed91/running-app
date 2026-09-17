@@ -298,25 +298,25 @@ Cloud BYO-key was dropped entirely. Concretely:
   `extractFencedJSON`, `extractBalancedObject`, partial-object salvage, …) were deleted.
 - `AIIntegrationService.swift` (OpenAI/Anthropic `URLSession` code + request/response
   structs) was deleted; `AIProviderChatMessage` moved into `AICoachService.swift`.
-- Deployment target raised to **iOS 27.0**. `STRIDE_ENABLE_IOS27_MODELS` was briefly
-  defined in `project.yml`, but the shipping iOS 27 SDK does **not** expose
-  `PrivateCloudComputeLanguageModel` (Xcode Cloud failed with "Cannot find
-  'PrivateCloudComputeLanguageModel' in scope"), so the flag was removed again and the
-  Private Cloud Compute path in `FoundationModelsCoachBackend` remains compiled out.
-  When the "Apple Private Cloud Compute" provider is selected, `makeSession` falls
-  through to the on-device model. Re-enable the flag only after the PCC symbols are
-  verified against a released SDK.
+- Deployment target raised to **iOS 27.0**. Private Cloud Compute is now the **default**
+  provider and the path is compiled in unconditionally — see "Phase 2: Private Cloud
+  Compute is live" below for the state that supersedes the flag history here.
+  `STRIDE_ENABLE_IOS27_MODELS` was briefly defined in `project.yml` when the path was
+  written against *guessed* WWDC26 symbol names, and Xcode Cloud failed with "Cannot find
+  'PrivateCloudComputeLanguageModel' in scope"; the flag was removed and the path stayed
+  compiled out. The symbols have since been confirmed against Apple's published
+  documentation (`PrivateCloudComputeLanguageModel`, iOS 27.0+), so the flag is gone for
+  good and the gate is `availability` at runtime instead of a compile-time `#if`.
   - **Availability gate (crash fix).** Running inference on
     `PrivateCloudComputeLanguageModel` without the Private Cloud Compute entitlement
     traps inside `Executor.assertEntitled()` — a fatal `EXC_BREAKPOINT`, not a
     catchable Swift error, so the `do/catch` around inference can't recover (observed
     on TestFlight build 135 when a user selected "Apple Private Cloud Compute").
-    Following Apple's documented pattern (WWDC26 session 319), `makeSession` now
-    constructs the model and checks its `isAvailable` property *before* creating the
-    session, falling back to the on-device model when PCC can't be used.
-    `isAvailable` reflects the entitlement, device eligibility, and whether Apple
-    Intelligence is enabled, so this is fail-safe: it only routes to on-device, never
-    crashes.
+    **This gate must survive every refactor of `FoundationModelsCoachBackend`.**
+    `withServerFallback` checks `model.availability == .available` *before* creating the
+    session, and falls back to the on-device model otherwise. `availability` reflects the
+    entitlement, device eligibility, and whether Apple Intelligence is enabled, so this is
+    fail-safe: it only routes to on-device, never crashes.
   - **Enabling PCC (entitlement).** PCC is a *restricted* entitlement Apple grants per
     developer account: request it at
     `https://developer.apple.com/contact/request/private-cloud-compute/` (requires
@@ -326,6 +326,47 @@ Cloud BYO-key was dropped entirely. Concretely:
     `project.yml`; `isAvailable` then returns `true` and coaching routes to PCC.
     Until the grant is in the provisioning profile, the app safely uses the on-device
     model.
+
+### Phase 2: Private Cloud Compute is live
+
+Verified against Apple's published docs, [Adding server-side intelligence with Private
+Cloud Compute](https://developer.apple.com/documentation/foundationmodels/adding-server-side-intelligence-with-private-cloud-compute):
+
+| Symbol | Shape |
+| --- | --- |
+| `PrivateCloudComputeLanguageModel` | `final class`, iOS 27.0+, conforms to `LanguageModel` |
+| `init()` | convenience, no arguments |
+| `availability` | `.available` / `.unavailable(.deviceNotEligible)` / `.unavailable(.systemNotReady)` |
+| `quotaUsage` | `.status` → `.belowLimit(info)` (`info.isApproachingLimit`) / `.limitReached`; plus `isLimitReached`, `resetDate`, `limitIncreaseSuggestion?.show()` |
+| `contextSize` | `Int` — 32K on PCC vs. ~8K on-device |
+| `Error` | `.quotaLimitReached` / `.networkFailure` / `.serviceUnavailable` — **catchable**, and non-frozen, so switch with `@unknown default` |
+| `ContextOptions` | `init(includeSchemaInPrompt: Bool? = nil, reasoningLevel: ReasoningLevel? = nil)`; levels `.light` / `.moderate` / `.deep` |
+
+What landed:
+
+- `com.apple.developer.private-cloud-compute: true` in `project.yml` (Boolean; a **managed**
+  entitlement Apple assigns per account — it cannot be self-served in the portal).
+- `AppSettings` defaults new installs to `.applePrivateCloud`. A stored choice always wins,
+  so a runner who picked on-device keeps it.
+- `withServerFallback` is the single branch point: gate on `availability`, retry on-device
+  for `.networkFailure` / `.serviceUnavailable` (Apple's documented guidance), and convert
+  `.quotaLimitReached` into `OnDeviceCoachError.serverQuotaExceeded(resetDate:)`.
+- Reasoning per task, server path only: `.light` chat, `.moderate` insight and single-workout
+  adaptation, `.deep` whole-plan adaptation. With the `contextOptions` overload keep
+  `includeSchemaInPrompt: true` — that overload drops the standalone argument and defaults
+  it to `true`, so omitting it silently loses the guided-generation schema bias.
+- Quota is surfaced, not swallowed: `ServerModelStatus` (a plain value type, so
+  `AICoachService` and the views still never import `FoundationModels`) drives a
+  **Settings → AI Coach** status row with the `limitIncreaseSuggestion` upgrade button, and
+  `AICoachChatView` names the real cause instead of blaming Apple Intelligence setup.
+
+Still open:
+
+- Token-level streaming still emits a single partial; `streamResponse(to:generating:)` is
+  unverified on-device.
+- `model.tokenCount(for:)` pre-flight trimming (see the risk table) is not implemented — PCC's
+  32K window makes it much less pressing for the plan-adaptation prompt.
+
 - Settings drops the API-key `SecureField` and model-override field; `SettingsView`,
   `RunSummaryView`, `AICoachChatView`, and `PlanTabView` copy no longer mentions keys.
 - Tests: `AICoachServiceTests.swift` (cloud JSON-parse tests) removed;
@@ -463,9 +504,9 @@ build + on-device test pass on an Apple-Intelligence-eligible device is still re
 - `Stride/Core/Services/FoundationModels/`
   - `OnDeviceCoachGenerating.swift` — backend protocol + `OnDeviceCoachFactory` (no FM import).
   - `FoundationModelsCoachTypes.swift` — `@Generable` types + mappers to existing structs.
-  - `FoundationModelsCoachBackend.swift` — `LanguageModelSession` backend; Phase 2 PCC path
-    behind `#if STRIDE_ENABLE_IOS27_MODELS` + `if #available(iOS 27.0, *)`.
-- `AppSettings.hasAICredentials` / `isAICoachReady`; default provider now `.appleOnDevice`.
+  - `FoundationModelsCoachBackend.swift` — `LanguageModelSession` backend for both models;
+    the PCC path is compiled in and gated at runtime by `withServerFallback`.
+- `AppSettings.hasAICredentials` / `isAICoachReady`; default provider now `.applePrivateCloud`.
 - `AICoachService` branches Apple providers to the on-device backend (producing the existing
   structured types), with a local-heuristic fallback; on-device instruction/prompt builders.
 - `StrideTests/FoundationModelsCoachServiceTests.swift` — provider flags, availability
@@ -475,8 +516,8 @@ build + on-device test pass on an Apple-Intelligence-eligible device is still re
 provider-aware footnote), `RunSummaryView` / `AICoachChatView` / `PlanTabView` now gate on
 `hasAICredentials` instead of a raw key check.
 
-**Deployment target** unchanged at iOS 26.0; Phase 2 iOS 27 symbols are compiled out by
-default (see `project.yml`).
+**Deployment target** iOS 27.0 on every target, so the iOS 27 symbols
+(`PrivateCloudComputeLanguageModel`, `ContextOptions`) need no `#if` and no `#available`.
 
 ### Verify-against-SDK checklist (beta-era symbols)
 - [ ] `SystemLanguageModel.default.availability` cases (`deviceNotEligible`,
@@ -484,7 +525,10 @@ default (see `project.yml`).
 - [ ] `LanguageModelSession(model:instructions:)` accepting a `String` instructions value.
 - [ ] `session.respond(to:generating:)` → `.content`, and `respond(to:)` → `.content`.
 - [ ] `@Generable` / `@Guide(.range/.count)` and `@Generable` enums.
-- [ ] Phase 2 only: `PrivateCloudComputeLanguageModel`, `GenerationOptions(reasoningLevel:)`.
+- [x] `PrivateCloudComputeLanguageModel` — verified against Apple's docs; see the symbol
+      table in "Phase 2: Private Cloud Compute is live". Note the reasoning level lives on
+      `ContextOptions(reasoningLevel:)`, **not** `GenerationOptions`, and the PCC error enum
+      is catchable (`.quotaLimitReached` / `.networkFailure` / `.serviceUnavailable`).
 - [ ] Confirm the `@Generable` macro preserves the memberwise initializer (used by the
       mapping tests); adjust the tests if it generates a different init.
 

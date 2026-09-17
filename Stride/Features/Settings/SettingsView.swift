@@ -28,6 +28,9 @@ struct SettingsView: View {
     @State private var seedWeeks = 8
     @State private var completionCutoff = Date()
     @State private var workoutKitResendStatus: String?
+    /// Private Cloud Compute availability + daily quota, refreshed whenever the model
+    /// picker changes. `nil` until read, and on devices with no server model at all.
+    @State private var serverModelStatus: ServerModelStatus?
     #endif
 
     private var profile: UserProfile? { profiles.first }
@@ -456,11 +459,48 @@ struct SettingsView: View {
                 }
                 .labelsHidden()
             }
+            if appSettings.aiProvider == .applePrivateCloud, let status = serverModelStatus {
+                rowDivider
+                privateCloudComputeStatusRow(status)
+            }
             Text(aiProviderFootnote)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, AppSpacing.lg)
                 .padding(.bottom, 14)
+        }
+        .task(id: appSettings.aiProvider) {
+            serverModelStatus = await container.aiCoachService.serverModelStatus()
+        }
+    }
+
+    /// Apple asks apps not to spring the daily Private Cloud Compute limit on people in a
+    /// dismissible alert, but to keep the current standing visible and offer the upgrade
+    /// flow — so the quota lives here, next to the model picker that opted into it.
+    @ViewBuilder
+    private func privateCloudComputeStatusRow(_ status: ServerModelStatus) -> some View {
+        settingsRow(
+            icon: status.isAvailable ? .bolt : .gear,
+            iconColor: status.isLimitReached ? .red : (status.isApproachingLimit ? .orange : .brand),
+            title: "Private Cloud Compute"
+        ) {
+            if status.canRequestLimitIncrease {
+                Button("Show options") {
+                    container.aiCoachService.presentServerLimitIncrease()
+                }
+                .font(.caption)
+            } else {
+                Text(status.isAvailable ? "Ready" : "Unavailable")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        if let message = status.quotaMessage {
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(status.isLimitReached ? .red : .orange)
+                .padding(.horizontal, AppSpacing.lg)
+                .padding(.bottom, 6)
         }
     }
 
@@ -469,7 +509,18 @@ struct SettingsView: View {
         case .appleOnDevice:
             return "Runs on your device with Apple Intelligence. No API key, no cost, and your training data never leaves your iPhone. Requires a supported device with Apple Intelligence enabled."
         case .applePrivateCloud:
-            return "Uses Apple Private Cloud Compute for deeper analysis on longer requests. No API key required; data is processed with Apple's Private Cloud Compute privacy guarantees."
+            // The unavailable case is worth spelling out: the runner picked the server
+            // model and is quietly getting the on-device one, which is the fallback
+            // working as designed rather than a failure.
+            if let status = serverModelStatus, !status.isAvailable {
+                switch status.availability {
+                case .deviceNotEligible:
+                    return "Private Cloud Compute needs a newer iPhone. Coaching runs on the on-device model instead."
+                case .systemNotReady, .unknownReason, .available:
+                    return "Private Cloud Compute is not ready right now, so coaching runs on the on-device model. It needs Apple Intelligence turned on and a network connection."
+                }
+            }
+            return "Runs on Apple's servers with Private Cloud Compute: a larger context window and deeper reasoning than the on-device model, with no API key and no cost. Apple does not store your data, and requests fall back to the on-device model when the network or your daily allowance is out."
         }
     }
 

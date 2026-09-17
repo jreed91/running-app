@@ -88,11 +88,10 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.running.stride
         PRODUCT_NAME: Stride
-        # NOTE: STRIDE_ENABLE_IOS27_MODELS is intentionally NOT defined. The shipping
-        # iOS 27 SDK does not expose `PrivateCloudComputeLanguageModel` (build fails
-        # with "Cannot find 'PrivateCloudComputeLanguageModel' in scope"), so the
-        # Phase 2 Private Cloud Compute path in FoundationModelsCoachBackend stays
-        # compiled out until the symbols are verified against a released SDK.
+        # NOTE: STRIDE_ENABLE_IOS27_MODELS is gone. It guarded a Private Cloud Compute
+        # path written against guessed WWDC26 symbol names; `PrivateCloudComputeLanguageModel`
+        # is now shipping in the iOS 27 SDK, so that path is compiled in unconditionally
+        # and gated at runtime instead. See the private-cloud-compute entitlement below.
         INFOPLIST_FILE: Stride/Resources/Info.plist
         TARGETED_DEVICE_FAMILY: "1"         # iPhone only
         CODE_SIGN_STYLE: Automatic
@@ -165,6 +164,21 @@ targets:
           - CloudKit
         com.apple.developer.ubiquity-kvstore-identifier: $(TeamIdentifierPrefix)$(CFBundleIdentifier)
         com.apple.developer.weatherkit: true
+        # Routes AI coaching through Apple's server-side Foundation Model on Private
+        # Cloud Compute (`PrivateCloudComputeLanguageModel`, iOS 27+). 32K context and
+        # stronger reasoning than the on-device model, still keyless and still covered
+        # by PCC's privacy guarantees — see `FoundationModelsCoachBackend`.
+        #
+        # REQUIRES the *managed* Private Cloud Compute entitlement to be assigned to the
+        # developer account and the capability enabled on the `com.running.stride` App ID.
+        # Unlike App Groups or HealthKit this one cannot be self-served: Apple grants it
+        # on request (App Store Small Business Program, under 2M first-time downloads).
+        # Until it is granted, automatic signing cannot issue a matching profile and
+        # signed builds (archive / Xcode Cloud) fail to export the same way an
+        # unregistered App Group does. The code path is *runtime*-gated on
+        # `PrivateCloudComputeLanguageModel.availability`, so an unentitled build still
+        # runs — it just falls back to the on-device model.
+        com.apple.developer.private-cloud-compute: true
 
     dependencies:
       - sdk: WeatherKit.framework
