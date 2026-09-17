@@ -101,6 +101,54 @@ private struct RecordingOnDeviceCoach: OnDeviceCoachGenerating {
     }
 }
 
+/// Reports a canned Private Cloud Compute status, and can fail chat the way an exhausted
+/// daily quota does, so the service's pass-through and error plumbing can be asserted
+/// without a real PCC session.
+private struct QuotaReportingCoach: OnDeviceCoachGenerating {
+    var status: ServerModelStatus?
+    var chatError: OnDeviceCoachError?
+
+    func isAvailable() async -> Bool { true }
+    func unavailableReason() async -> String? { nil }
+    func serverModelStatus() async -> ServerModelStatus? { status }
+
+    func generateCoachInsight(
+        instructions: String,
+        prompt: String,
+        useServerModel: Bool,
+        onPartial: @escaping @Sendable (String) -> Void
+    ) async throws -> AICoachStructuredResponse {
+        throw OnDeviceCoachError.unavailable
+    }
+
+    func generateWorkoutAdaptation(
+        instructions: String,
+        prompt: String,
+        useServerModel: Bool
+    ) async throws -> AIWorkoutAdaptationResponse {
+        throw OnDeviceCoachError.unavailable
+    }
+
+    func generatePlanAdaptation(
+        instructions: String,
+        prompt: String,
+        useServerModel: Bool,
+        onPartial: @escaping @Sendable (String) -> Void
+    ) async throws -> AIWorkoutPlanAdaptationResponse {
+        AIWorkoutPlanAdaptationResponse(adaptations: [])
+    }
+
+    func generateChatReply(
+        instructions: String,
+        context: String,
+        messages: [AIProviderChatMessage],
+        useServerModel: Bool
+    ) async throws -> String {
+        if let chatError { throw chatError }
+        return "Keep your easy runs easy."
+    }
+}
+
 private func sampleStructured() -> AICoachStructuredResponse {
     AICoachStructuredResponse(
         headline: "Strong Negative Split",
@@ -247,6 +295,74 @@ struct FoundationModelsCoachServiceTests {
 
         #expect(insight.apiReady == false)
         #expect(insight.headline == "On-Device Summary")
+    }
+
+    // MARK: - Private Cloud Compute status & quota
+
+    @Test("A backend with no server model reports no Private Cloud Compute status")
+    func noServerModelStatusByDefault() async {
+        let backend = FakeOnDeviceCoach(available: true, insight: sampleStructured())
+        let service = AICoachService(onDeviceBackend: backend)
+
+        #expect(await service.serverModelStatus() == nil)
+        #expect(await AICoachService(onDeviceBackend: nil).serverModelStatus() == nil)
+    }
+
+    @Test("Server model status is passed through from the backend")
+    func serverModelStatusIsPassedThrough() async {
+        let reset = Date(timeIntervalSince1970: 1_800_000_000)
+        let backend = QuotaReportingCoach(
+            status: ServerModelStatus(
+                availability: .available,
+                quota: .belowLimit(approachingLimit: true),
+                resetDate: reset,
+                canRequestLimitIncrease: true,
+                contextSize: 32_768
+            )
+        )
+        let service = AICoachService(onDeviceBackend: backend)
+
+        let status = await service.serverModelStatus()
+        #expect(status?.isAvailable == true)
+        #expect(status?.isApproachingLimit == true)
+        #expect(status?.isLimitReached == false)
+        #expect(status?.resetDate == reset)
+        #expect(status?.canRequestLimitIncrease == true)
+        #expect(status?.contextSize == 32_768)
+    }
+
+    @Test("Quota messages only appear when there is something to say")
+    func quotaMessageIsQuietBelowTheLimit() {
+        func status(_ quota: ServerModelStatus.Quota) -> ServerModelStatus {
+            ServerModelStatus(
+                availability: .available,
+                quota: quota,
+                resetDate: nil,
+                canRequestLimitIncrease: false,
+                contextSize: 32_768
+            )
+        }
+
+        // Comfortably below the limit is not news — no status line at all.
+        #expect(status(.belowLimit(approachingLimit: false)).quotaMessage == nil)
+        #expect(status(.belowLimit(approachingLimit: true)).quotaMessage != nil)
+        #expect(status(.limitReached).quotaMessage != nil)
+        #expect(status(.limitReached).isLimitReached)
+    }
+
+    @Test("An exhausted daily quota surfaces as an error rather than a silent downgrade")
+    func quotaExhaustionPropagatesFromChat() async {
+        let resetDate = Date(timeIntervalSince1970: 1_800_000_000)
+        let backend = QuotaReportingCoach(status: nil, chatError: .serverQuotaExceeded(resetDate: resetDate))
+        let service = AICoachService(onDeviceBackend: backend)
+
+        await #expect(throws: OnDeviceCoachError.self) {
+            _ = try await service.chatWithProvider(
+                provider: .applePrivateCloud,
+                context: "",
+                messages: []
+            )
+        }
     }
 }
 

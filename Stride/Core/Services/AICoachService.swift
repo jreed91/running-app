@@ -233,6 +233,20 @@ struct AICoachService: Sendable {
         self.onDeviceBackend = onDeviceBackend
     }
 
+    /// Availability and daily-quota state of Apple's Private Cloud Compute model, or `nil`
+    /// when this device has no server model. Settings renders it so the runner sees their
+    /// standing before a request fails, which is how Apple asks apps to handle the quota.
+    func serverModelStatus() async -> ServerModelStatus? {
+        guard let backend = onDeviceBackend else { return nil }
+        return await backend.serverModelStatus()
+    }
+
+    /// Presents the system's iCloud+ upgrade flow for a larger daily PCC allowance.
+    @MainActor
+    func presentServerLimitIncrease() {
+        onDeviceBackend?.presentLimitIncrease()
+    }
+
     func chatWithProvider(
         provider: AIProvider,
         context: String,
