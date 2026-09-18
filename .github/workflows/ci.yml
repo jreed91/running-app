@@ -300,6 +300,98 @@ jobs:
             exit 1
           fi
 
+  # ── Build (Release configuration) ───────────────────────────────────────────
+  build-release:
+    name: Build — Release config
+    runs-on: xcode-27      # see the runner-label note in `env` above
+    timeout-minutes: 60
+    # Parallel with test-ios, for the reason lint is parallel with it: a Release
+    # break and a test failure are independent facts about the same commit.
+    #
+    # WHY THIS JOB EXISTS. `test-ios` compiles the Debug configuration and nothing
+    # else, and `archive` — the only thing that ever built Release — is gated on
+    # `push` to `main`. So a declaration that exists only in Debug compiled clean
+    # through every PR check and then failed the archive *after* merge. The live
+    # example is `pccStatus` in `SettingsView`: a `@State` inside the view's
+    # `#if DEBUG` block, read by the AI Coach card, which ships in Release. Debug
+    # builds saw the declaration, Release builds did not, and the archive stopped
+    # at "Cannot find 'pccStatus' in scope". This job compiles Release on the same
+    # events the tests run on, so that class of break is a red PR check instead.
+    needs: [changes]
+    # Skipped on pushes to `main`, where `archive` already builds Release for real.
+    if: >-
+      needs.changes.outputs.ios == 'true' &&
+      !(github.event_name == 'push' && github.ref == 'refs/heads/main')
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_27*.app 2>/dev/null | sort -V | tail -1)
+          if [[ -z "$XCODE" ]]; then
+            echo "::error::No Xcode 27 toolchain found on this runner. Installed Xcodes:"
+            ls -d /Applications/Xcode_*.app 2>/dev/null || true
+            exit 1
+          fi
+          echo "Using $XCODE"
+          sudo xcode-select -switch "$XCODE"
+
+      - name: Install XcodeGen and xcbeautify
+        run: |
+          brew install xcodegen xcbeautify
+          xcodegen_installed=$(xcodegen --version | awk '{print $NF}')
+          xcbeautify_installed=$(xcbeautify --version)
+          echo "xcodegen $xcodegen_installed"
+          echo "xcbeautify $xcbeautify_installed"
+          if [[ -n "$XCODEGEN_VERSION" && "$xcodegen_installed" != "$XCODEGEN_VERSION" ]]; then
+            echo "::error::XcodeGen $xcodegen_installed does not match the pinned XCODEGEN_VERSION=$XCODEGEN_VERSION."
+            exit 1
+          fi
+          if [[ -n "$XCBEAUTIFY_VERSION" && "$xcbeautify_installed" != "$XCBEAUTIFY_VERSION" ]]; then
+            echo "::error::xcbeautify $xcbeautify_installed does not match the pinned XCBEAUTIFY_VERSION=$XCBEAUTIFY_VERSION."
+            exit 1
+          fi
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Install Swift package pins
+        run: |
+          mkdir -p Stride.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
+          cp ci_scripts/Package.resolved Stride.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+
+      - name: Cache DerivedData
+        uses: actions/cache@v4
+        with:
+          # Its own cache namespace: Debug-for-simulator and Release-for-device
+          # share no build products, so pointing this at the test job's entry would
+          # restore megabytes nothing here can reuse. Per-commit key for the same
+          # reason as the other two caches above.
+          key: deriveddata-release-${{ github.sha }}
+          path: ~/Library/Developer/Xcode/DerivedData
+          restore-keys: |
+            deriveddata-release-
+
+      - name: Build (Release, unsigned)
+        # `generic/platform=iOS` rather than a simulator destination: the archive
+        # builds for device, and a configuration check that built for the simulator
+        # would miss anything gated on the device SDK. Same flags as `archive`
+        # below, minus the archiving itself — this job exists to compile, not to
+        # produce an artifact.
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath ~/Library/Developer/Xcode/DerivedData \
+            -skipMacroValidation \
+            -skipPackagePluginValidation \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcbeautify --renderer github-actions
+
   # ── Archive (release build) ─────────────────────────────────────────────────
   archive:
     name: Archive
