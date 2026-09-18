@@ -27,8 +27,7 @@ that would meaningfully expand the product.
 > half, and **B6**'s route export.
 >
 > **What is genuinely open:** **A7** (target-distance-aware routes with elevation),
-> **A9**'s remaining notifications (its pre-session weather warning shipped as the heat
-> advisory, N39), **A10** (race-day hub), **B3** (watchOS),
+> **A10** (race-day hub), **B3** (watchOS),
 > **B7** (recovery/readiness — also A5's remaining third), **B8**, the logging half of
 > **B9** (its fuelling-advice half shipped as the dashboard's Coach Tips strip), and the
 > full-data export half of **B6**. Each says at its own entry what was deferred and why.
@@ -57,7 +56,7 @@ What ships today, so the gaps below are read in context:
 | Routes | Loop / out-and-back generation via OpenRouteService | `Core/Services/RouteGeniusService.swift` |
 | Sync | HealthKit import, CloudKit private sync, weather attach | `Core/Services/WorkoutSyncService.swift` |
 | Siri / Intents | Today's Run, Run Details, Weekly Summary | `Features/AppIntents/` |
-| Notifications | Morning workout reminders, synced-run banners | `Core/Services/NotificationService.swift` |
+| Notifications | Morning workout reminders, synced-run banners, heat advisory, streak / missed-workout / weekly-recap nudges | `Core/Services/NotificationService.swift`, `Core/Services/TrainingNudgePolicy.swift` |
 | Run playlists | Apple Music playlist shaped to a session's energy blocks, saved to the runner's library (N40) | `Core/Services/RunPlaylistPlanner.swift`, `Core/Services/RunPlaylistService.swift` |
 
 **Structurally absent** (no source references anywhere in the tree, verified by
@@ -239,9 +238,44 @@ There are no streaks, no volume milestones (first 50 km week, 1000 km lifetime),
 no consistency badges — the retention mechanics a training app leans on.
 **Improve:** expand into a proper achievements/streak system (see B4).
 
-### A9. Notifications are one-dimensional (morning reminder + sync banner) *(low impact, low effort)*
+### ✅ A9. Notifications are one-dimensional (morning reminder + sync banner) *(low impact, low effort)*
 
-**PARTLY SHIPPED (N39) — the weather half.** The pre-session weather warning
+**SHIPPED.** The weather half first (N39, below); the remaining three now follow.
+
+**The streak nudge, the missed-workout push and the weekly recap.**
+`TrainingNudgePolicy` holds every decision and is pure; `NotificationService` holds the
+copy and the `UNUserNotificationCenter` calls, the same split the heat advisory uses.
+`ContentView.refreshTrainingNudges` recomputes on every foreground and whenever the
+active plan changes, because all three are decided against *what has happened so far
+today* — a run logged at lunchtime has to take the evening's prod back down again.
+
+| Nudge | When | Says |
+| --- | --- | --- |
+| Streak | 18:00, when a streak of 3+ days has no run logged today | The streak's length and that it ends at midnight |
+| Missed workouts | 18:00, on `MissedWorkoutDetector`'s 2+ trailing missed sessions | How many went by and how far the plan can shift forward |
+| Weekly recap | Sunday 19:00 | Runs, distance, longest, and how that sat against the weekly goal |
+
+Three rules the implementation exists to keep:
+
+- **One evening push, ever.** The 18:00 slot holds either the streak nudge or the
+  missed-workout push, never both. The streak wins, because it is the one that cannot
+  be said tomorrow.
+- **A slot that has passed is decided, not assumed away.** The app has no background
+  wake, so `TrainingNudgeDelivery` resolves to `.scheduled`, `.immediate` or `.skip`
+  exactly as `HeatAdvisoryDelivery` does, and everything past the cutoff hour is dropped
+  rather than delivered too late to act on. `TrainingNudgeLog` keeps an `.immediate`
+  delivery from repeating when the app is opened twice the same evening.
+- **The push honours the card's dismissal.** The missed-workout push reads the same
+  once-a-week flag as `MissedWorkoutsRecoveryCard`
+  (`MissedWorkoutDetector.promptFlaggedDateKey`), so a card the runner has already put
+  away does not come back through a louder channel.
+
+A week with no runs in it gets no recap: the other two nudges are the surfaces for not
+having run, and a Sunday banner reading "0 runs, 0 km" is a scolding rather than a
+summary. The whole set is one switch, **Settings → App → Training Nudges**, on by
+default.
+
+**The weather half (N39).** The pre-session weather warning
 this item asked for now exists as a heat advisory: `HeatAdvisoryService` reads
 tomorrow's hourly forecast at the coordinate of the runner's last recorded run,
 scores it with `HeatAdaptationPolicy`, and — when the tier clears the threshold
@@ -252,10 +286,6 @@ long-run distance, converts hard sessions to easy above `.severe`, and drops
 pace targets entirely in extreme heat. Every threshold is sourced in
 [`HEAT_ADAPTATION_EVIDENCE.md`](./HEAT_ADAPTATION_EVIDENCE.md); the dashboard
 card is `HeatAdvisoryCard`, the setting is **Settings → App → Heat Adaptation**.
-
-**Still open:** the streak nudge, the weekly recap, and the missed-workout push
-tied to the recovery card. `MissedWorkoutDetector` already computes what the last
-of those would say.
 
 ### A10. Custom race distance exists but race-day experience doesn't *(medium impact, medium effort)*
 The plan builds toward `raceDate`/`raceName` (`UserProfile:15-16`) but there is

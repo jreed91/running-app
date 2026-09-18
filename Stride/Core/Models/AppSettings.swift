@@ -107,6 +107,19 @@ final class AppSettings {
         }
     }
 
+    /// Whether Stride sends the evening training nudges and the Sunday recap (A9).
+    ///
+    /// On by default, and deliberately one switch rather than three: the runner who wants
+    /// the streak prod but not the missed-workout push is hypothetical, and the runner who
+    /// wants none of it is the one a settings screen has to serve. Off cancels what is
+    /// pending immediately — a toggle that disagrees with the Lock Screen until tomorrow
+    /// evening is the reason the morning reminder is wired the same way (N16).
+    var trainingNudgesEnabled: Bool {
+        didSet {
+            persist(trainingNudgesEnabled, forKey: Self.trainingNudgesKey)
+        }
+    }
+
     /// Whether walking workouts recorded in Apple Health are imported alongside runs (N38).
     ///
     /// On by default: a walking *workout* is one somebody deliberately started, so there
@@ -199,6 +212,8 @@ final class AppSettings {
     static let walkImportKey = "walkImportEnabled"
     /// Internal so `HeatAdvisoryService`'s callers can gate on the same key.
     static let heatAdaptationKey = "heatAdaptationEnabled"
+    /// Internal so `StrideApp` can gate the nudge refresh on the same key.
+    static let trainingNudgesKey = "trainingNudgesEnabled"
     private static let calmPlaylistSourceKey   = "runPlaylistSource.calm"
     private static let steadyPlaylistSourceKey = "runPlaylistSource.steady"
     private static let hardPlaylistSourceKey   = "runPlaylistSource.hard"
@@ -228,6 +243,7 @@ final class AppSettings {
         let weeklyGoalStored = Self.hasStoredValue(forKey: Self.weeklyGoalMetersKey, defaults: defaults, ubiquitous: ubiquitous)
         let walkImportStored = Self.hasStoredValue(forKey: Self.walkImportKey, defaults: defaults, ubiquitous: ubiquitous)
         let heatAdaptationStored = Self.hasStoredValue(forKey: Self.heatAdaptationKey, defaults: defaults, ubiquitous: ubiquitous)
+        let trainingNudgesStored = Self.hasStoredValue(forKey: Self.trainingNudgesKey, defaults: defaults, ubiquitous: ubiquitous)
         let calmSourceStored = Self.hasStoredValue(forKey: Self.calmPlaylistSourceKey, defaults: defaults, ubiquitous: ubiquitous)
         let steadySourceStored = Self.hasStoredValue(forKey: Self.steadyPlaylistSourceKey, defaults: defaults, ubiquitous: ubiquitous)
         let hardSourceStored = Self.hasStoredValue(forKey: Self.hardPlaylistSourceKey, defaults: defaults, ubiquitous: ubiquitous)
@@ -280,6 +296,11 @@ final class AppSettings {
             ? Self.readBool(forKey: Self.heatAdaptationKey, defaults: defaults, ubiquitous: ubiquitous)
             : true
 
+        // Default to true (nudges on) when the key has never been set — see the property.
+        self.trainingNudgesEnabled = trainingNudgesStored
+            ? Self.readBool(forKey: Self.trainingNudgesKey, defaults: defaults, ubiquitous: ubiquitous)
+            : true
+
         // Empty means "use MusicEnergyPolicy's genre table", which is the default every
         // runner starts on — the feature is meant to work with no setup at all.
         self.calmPlaylistSourceID = Self.readString(forKey: Self.calmPlaylistSourceKey, defaults: defaults, ubiquitous: ubiquitous) ?? ""
@@ -302,6 +323,7 @@ final class AppSettings {
         if weeklyGoalStored { persist(weeklyGoalMeters, forKey: Self.weeklyGoalMetersKey) }
         if walkImportStored { persist(walkImportEnabled, forKey: Self.walkImportKey) }
         if heatAdaptationStored { persist(heatAdaptationEnabled, forKey: Self.heatAdaptationKey) }
+        if trainingNudgesStored { persist(trainingNudgesEnabled, forKey: Self.trainingNudgesKey) }
         if calmSourceStored { persist(calmPlaylistSourceID, forKey: Self.calmPlaylistSourceKey) }
         if steadySourceStored { persist(steadyPlaylistSourceID, forKey: Self.steadyPlaylistSourceKey) }
         if hardSourceStored { persist(hardPlaylistSourceID, forKey: Self.hardPlaylistSourceKey) }
@@ -373,6 +395,11 @@ final class AppSettings {
         if Self.hasStoredValue(forKey: Self.heatAdaptationKey, defaults: defaults, ubiquitous: ubiquitous) {
             let value = Self.readBool(forKey: Self.heatAdaptationKey, defaults: defaults, ubiquitous: ubiquitous)
             if value != heatAdaptationEnabled { heatAdaptationEnabled = value }
+        }
+
+        if Self.hasStoredValue(forKey: Self.trainingNudgesKey, defaults: defaults, ubiquitous: ubiquitous) {
+            let value = Self.readBool(forKey: Self.trainingNudgesKey, defaults: defaults, ubiquitous: ubiquitous)
+            if value != trainingNudgesEnabled { trainingNudgesEnabled = value }
         }
 
         if let value = Self.readDouble(forKey: Self.weeklyGoalMetersKey, defaults: defaults, ubiquitous: ubiquitous),

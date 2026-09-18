@@ -313,6 +313,33 @@ struct SettingsView: View {
                     }
             }
             rowDivider
+            settingsRow(icon: .bell, iconColor: .brand, title: "Training Nudges") {
+                Toggle("", isOn: Bindable(appSettings).trainingNudgesEnabled)
+                    .labelsHidden()
+                    .tint(.brand)
+                    .accessibilityIdentifier("settings.trainingNudges")
+                    .onChange(of: appSettings.trainingNudgesEnabled) { _, enabled in
+                        // Same shape as the two toggles around it (N16): off has to take
+                        // down what is already queued rather than waiting for the next
+                        // launch to reconcile, and on has to ask for permission before
+                        // this evening's slot arrives. The next foreground re-arms.
+                        Task {
+                            guard enabled else {
+                                await container.notificationService
+                                    .cancelTrainingNudges(includingLog: true)
+                                return
+                            }
+                            if !(await container.notificationService.isAuthorized) {
+                                try? await container.notificationService.requestAuthorization()
+                            }
+                        }
+                    }
+            }
+            Text("An evening reminder when a run streak is about to end or the plan has slipped behind, and a recap of your week on Sunday evening. At most one a day.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.leading, 62)
+            rowDivider
             settingsRow(icon: .flame, iconColor: .warning, title: "Heat Adaptation") {
                 Toggle("", isOn: Bindable(appSettings).heatAdaptationEnabled)
                     .labelsHidden()
