@@ -31,6 +31,11 @@ xcodebuild test -scheme Stride -destination 'platform=iOS Simulator,name=iPhone 
 
 # Build for release/archive
 xcodebuild archive -scheme Stride -archivePath build/Stride.xcarchive
+
+# Compile the shipping configuration without archiving — what CI's `build-release`
+# job runs, and the fastest way to catch a Debug-only declaration read by Release code
+xcodebuild build -scheme Stride -configuration Release \
+  -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO
 ```
 
 GPS, HealthKit, WeatherKit, CloudKit, and background delivery behavior require device entitlements and may need a physical device. The simulator is suitable for pure logic tests and most UI flow checks.
@@ -592,6 +597,16 @@ Strict concurrency is enabled. Key patterns:
 - **A new signed bundle needs an App ID registered before it can be exported.** Every target that ships inside the app — today that is the `StrideWidgets` extension — is signed separately and needs its own identifier at [developer.apple.com → Identifiers](https://developer.apple.com/account/resources/identifiers). Xcode Cloud's signing proxy is read-only, so automatic signing there can find an App ID but never create one: an unregistered identifier archives cleanly and then fails all three "Exporting for … Distribution" steps with `Automatic signing cannot register bundle identifier`. Register the identifier (and enable any capability the target's entitlements ask for) *before* the first archive, and again after any rename.
 - **TestFlight "What to Test" is a changelog, and commit subjects are what testers read.** `ci_scripts/ci_post_xcodebuild.sh` turns the commits in each archive into a bulleted list in `TestFlight/WhatToTest.en-US.txt`. Merge commits are dropped (their subject names a branch, not a change) and `WIP`/`fixup!`/`squash!` subjects are filtered, so the line that reaches testers is the subject of a real commit — write it as something a tester could act on. Xcode Cloud exposes no "previous build" commit, so the range is taken from the newest `testflight/*` tag if one exists, else from the pull request HEAD merged, else the last 15 commits; pushing a `testflight/<build>` tag after a release makes the next build's range exact. Preview any build's notes with `CI_XCODEBUILD_ACTION=archive sh ci_scripts/ci_post_xcodebuild.sh`.
 - **The App Group is a registration of its own.** `group.com.running.stride` must exist under [Identifiers → App Groups](https://developer.apple.com/account/resources/identifiers) and the **App Groups** capability must be enabled on *both* App IDs (`com.running.stride` and `com.running.stride.StrideWidgets`) before either can be exported. It fails exactly the way an unregistered bundle identifier does, and for the same reason: automatic signing can look a group up but never create one. Locally, a missing group is silent rather than fatal — `FileManager.containerURL(forSecurityApplicationGroupIdentifier:)` returns `nil`, the app skips its write, and the widgets show their "Open Stride to sync" card forever. If widgets are permanently empty on device, check this first.
+- **A `#if DEBUG` block is a Release compile error waiting to happen.** Anything declared
+  inside one — a `@State` property, a helper view, a method, a whole type — does not exist
+  in the configuration that archives, so a single non-debug reference to it compiles clean
+  locally and fails the archive with `Cannot find 'x' in scope`. `pccStatus` in
+  `SettingsView` was exactly that: a `@State` inside the view's debug block, read by the AI
+  Coach card, which ships. When a declaration is used by anything that is not itself inside
+  `#if DEBUG`, it belongs outside the block. CI now catches this — the `build-release` job
+  in `.github/workflows/ci.yml` compiles `-configuration Release` for
+  `generic/platform=iOS` on every PR, alongside the Debug tests — but the check costs a
+  full runner, so keep the scoping right rather than relying on it.
 - Keep secrets out of git and out of `UserDefaults`/iCloud KVS. Tokens belong in the Keychain via `KeychainStore`, the way the OpenRouteService key is handled.
 - **User-facing text is localizable.** `Text("…")`, `Button("…")`, `.navigationTitle("…")`
   and friends take a `LocalizedStringKey`, so a literal written there is extracted into
