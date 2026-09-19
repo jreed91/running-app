@@ -27,7 +27,7 @@ that would meaningfully expand the product.
 > half, and **B6**'s route export.
 >
 > **What is genuinely open:** **A7** (target-distance-aware routes with elevation),
-> **A10** (race-day hub), **B3** (watchOS),
+> the weather half of **A10** (the rest of the race-day hub shipped), **B3** (watchOS),
 > **B7** (recovery/readiness — also A5's remaining third), **B8**, the logging half of
 > **B9** (its fuelling-advice half shipped as the dashboard's Coach Tips strip), and the
 > full-data export half of **B6**. Each says at its own entry what was deferred and why.
@@ -287,7 +287,44 @@ pace targets entirely in extreme heat. Every threshold is sourced in
 [`HEAT_ADAPTATION_EVIDENCE.md`](./HEAT_ADAPTATION_EVIDENCE.md); the dashboard
 card is `HeatAdvisoryCard`, the setting is **Settings → App → Heat Adaptation**.
 
-### A10. Custom race distance exists but race-day experience doesn't *(medium impact, medium effort)*
+### ✅ A10. Custom race distance exists but race-day experience doesn't *(medium impact, medium effort)*
+
+**SHIPPED (race-day hub), except the weather half.**
+[`RaceDayPlan`](../Stride/Core/Services/RaceDayPlan.swift) resolves the whole arc —
+countdown, taper status, the goal ladder, the split table and the result — as one pure
+value with an injectable `now`, and
+[`RaceDayHubView`](../Stride/Features/Training/RaceDayHubView.swift) draws it.
+[`RaceCountdownCard`](../Stride/Features/Training/RaceCountdownCard.swift) is the entry
+point: on the Plan tab all season, and on the dashboard from a fortnight out until three
+days after.
+
+Details that are decisions rather than defaults:
+
+- **The goal ladder is built *down* from the time the runner set, not up from it.** A
+  runner who typed “3:30 marathon” has already named their ambitious number, so that is
+  the A goal; B and C are +3 % and +7 %. Inventing a faster rung above their own goal
+  would be the app raising it for them on the one morning it has no business doing that.
+- **The predicted finish sits beside the ladder rather than inside it.** It comes from
+  quality efforts in the last eight weeks via `ProgressStatsService.estimatedVDOT`,
+  falling back to the profile's 5 K estimate. A goal is a decision and a prediction is a
+  measurement; folding the second into the first would have the hub arguing with the
+  runner.
+- **Splits are even-pace only.** A negative-split plan needs a start time and a course
+  profile, and the app stores neither. The table closes on the race distance rather than
+  on a whole marker — the marathon's last 195 m is its own “Finish” row.
+- **There is no manual result entry.** A race is recorded the way every other run is, in
+  the app or imported from Health, so the hub reads the race-day run: the one linked to
+  the plan's race workout, else the longest run that day covering at least 95 % of the
+  race distance — which is what stops a race-morning shakeout being reported as the race.
+- **A pregnancy plan gets no hub at all**, even with a stale `raceDate` left on the
+  profile.
+
+*Still open:* the **weather** half. `WeatherService.hourlyForecast(at:on:)` reaches ten
+days ahead and `HeatAdvisoryService.usualRunLocation` supplies a coordinate with no new
+permission, so the data is there — but the app stores a race *date* and no start time,
+and picking an hour to report would be inventing one. Storing a race start time is the
+prerequisite, and that is a change to onboarding rather than to the hub.
+
 The plan builds toward `raceDate`/`raceName` (`UserProfile:15-16`) but there is
 no race-day countdown, no taper-status view, no goal-pace race plan, and no
 post-race result capture/celebration. **Improve:** a race-day hub (countdown,
@@ -530,7 +567,8 @@ Sequenced for user-visible impact per unit of effort, reusing existing models.
 **P2 — depth in data & coaching:**
 7. **✅ A5** cadence capture **+ ✅ A6** HR-zone display; both now feed the coach. *(A5's
    recovery third is B7, below.)*
-8. **A10** race-day hub (countdown, goal splits, result capture).
+8. **✅ A10** race-day hub (countdown, goal splits, taper status, result) — *race-day
+   weather still open; it needs a stored race start time first.*
 9. **B7** recovery/readiness score.
 
 **P3 — reach & retention:**
@@ -546,8 +584,8 @@ Sequenced for user-visible impact per unit of effort, reusing existing models.
 > **Note on sequencing:** P0 was the highest leverage because the plan engine already
 > *prescribed* structured, paced workouts the app could not yet *guide the runner
 > through*. That loop is closed, and with P1 closed too, the remaining items no longer
-> queue behind each other: **A10** (race day), **B7** (recovery), **A7** (routes), **A9**
-> (notifications) and the rest of **B6** (full-data export) are independent, and are
+> queue behind each other: **B7** (recovery), **A7** (routes) and the rest of **B6**
+> (full-data export) are independent, and are
 > ordered by impact rather than by dependency. **B3** (watchOS) is still the one that
 > changes the product's shape rather than adding to it.
 </content>

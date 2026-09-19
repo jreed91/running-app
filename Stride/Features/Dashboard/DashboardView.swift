@@ -369,6 +369,17 @@ struct DashboardView: View {
 
     private var activePlan: TrainingPlan? { activePlans.first }
 
+    /// The goal race, but only once it is close enough to be a thing about *today* — the
+    /// Plan tab is where the countdown lives all season (A10).
+    private var racePlan: RaceDayPlan? {
+        guard let resolved = RaceDayPlan.resolve(
+            profile: profiles.first,
+            plan: activePlan,
+            runs: recentWorkouts
+        ), resolved.deservesDashboardPlacement else { return nil }
+        return resolved
+    }
+
     private var missedWorkoutInfo: MissedWorkoutInfo? {
         guard let plan = activePlan else { return nil }
         guard let info = MissedWorkoutDetector.detect(in: plan) else { return nil }
@@ -411,6 +422,17 @@ struct DashboardView: View {
                             .opacity(dashboardAppeared ? 1 : 0)
                             .offset(y: dashboardAppeared ? 0 : 20)
                             .adaptiveAnimation(AppAnimation.entrance.delay(0.05), value: dashboardAppeared)
+                        if let racePlan = racePlan {
+                            NavigationLink {
+                                RaceDayHubView()
+                            } label: {
+                                RaceCountdownCard(racePlan: racePlan, unit: appSettings.unitPreference)
+                            }
+                            .buttonStyle(.plain)
+                            .opacity(dashboardAppeared ? 1 : 0)
+                            .offset(y: dashboardAppeared ? 0 : 20)
+                            .adaptiveAnimation(AppAnimation.entrance.delay(0.07), value: dashboardAppeared)
+                        }
                         if let info = missedWorkoutInfo {
                             MissedWorkoutsRecoveryCard(
                                 info: info,
