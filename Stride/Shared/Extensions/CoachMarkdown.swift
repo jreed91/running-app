@@ -14,7 +14,7 @@ enum CoachMarkdown {
     /// handled when it throws, stripped so the fallback reads as plain prose.
     private static let inlineMarkers = ["**", "__", "`", "###", "##", "#", ">", "_"]
 
-    private static let listPrefixes = ["- ", "* ", "+ "]
+    private static let listPrefixes = ["- ", "* ", "+ ", "• "]
 
     /// The text with inline markup and any leading list marker removed.
     static func stripped(_ text: String) -> String {
@@ -58,5 +58,96 @@ enum CoachMarkdown {
             return attributed
         }
         return AttributedString(stripped(trimmed))
+    }
+}
+
+// MARK: - Block structure
+
+extension CoachMarkdown {
+
+    /// One renderable piece of a coach reply: a paragraph, a heading, or a list item.
+    ///
+    /// A reply is not one run of prose. The model writes paragraphs, and when it is
+    /// listing things it writes `- ` lines and `1. ` lines. Handing the whole reply to a
+    /// single `Text` rendered all of that as one block with the markers still in it,
+    /// because `attributed(_:)` strips a block marker only from the *start* of the
+    /// string it is given — the first line of a reply, and nothing after it. Splitting
+    /// the reply first means every line gets that treatment, and a list can be laid out
+    /// as a list instead of as a paragraph with hyphens in the middle of it.
+    struct Block: Identifiable, Equatable, Sendable {
+        enum Kind: Equatable, Sendable {
+            case paragraph
+            case heading
+            /// A bulleted item.
+            case bullet
+            /// A numbered item, carrying the number the model wrote.
+            case numbered(Int)
+        }
+
+        /// Position in the reply. Stable for the lifetime of a given string, which is
+        /// all `ForEach` needs, and cheaper than hashing the text.
+        let id: Int
+        let kind: Kind
+        /// The line's text with its block marker removed. Inline markup is left in
+        /// place for `attributed(_:)` to apply.
+        let text: String
+    }
+
+    /// `text` split into the blocks a coach reply is actually made of.
+    ///
+    /// Follows the markdown convention the model is writing to: a blank line ends a
+    /// paragraph, consecutive plain lines are one paragraph, and a list marker starts a
+    /// new item. Anything unrecognised is prose, so a reply with no markup at all comes
+    /// back as one paragraph and renders exactly as it did before.
+    static func blocks(_ text: String) -> [Block] {
+        var parsed: [Block] = []
+        var paragraph: [String] = []
+
+        func flushParagraph() {
+            guard !paragraph.isEmpty else { return }
+            parsed.append(
+                Block(id: parsed.count, kind: .paragraph, text: paragraph.joined(separator: " "))
+            )
+            paragraph = []
+        }
+
+        func append(_ kind: Block.Kind, _ body: String) {
+            let trimmed = body.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty else { return }
+            parsed.append(Block(id: parsed.count, kind: kind, text: trimmed))
+        }
+
+        for rawLine in text.components(separatedBy: .newlines) {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+
+            if line.isEmpty {
+                flushParagraph()
+                continue
+            }
+
+            if let prefix = blockPrefixes.first(where: { line.hasPrefix($0) }) {
+                flushParagraph()
+                append(.heading, String(line.dropFirst(prefix.count)))
+                continue
+            }
+
+            if let prefix = listPrefixes.first(where: { line.hasPrefix($0) }) {
+                flushParagraph()
+                append(.bullet, String(line.dropFirst(prefix.count)))
+                continue
+            }
+
+            if let range = line.range(of: #"^(\d+)\.\s+"#, options: .regularExpression) {
+                flushParagraph()
+                let number = Int(line[range].prefix { $0.isNumber }) ?? parsed.count + 1
+                append(.numbered(number), String(line[range.upperBound...]))
+                continue
+            }
+
+            paragraph.append(line)
+        }
+        flushParagraph()
+
+        return parsed
     }
 }

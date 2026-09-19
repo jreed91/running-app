@@ -285,11 +285,10 @@ extension RunSummaryView {
                 .kerning(1.1)
                 .foregroundStyle(.secondary)
 
-            Text(markdownText(CoachInsightText.fullAnalysis(for: insight)))
+            CoachText(CoachInsightText.fullAnalysis(for: insight))
                 .font(.dsFootnote)
                 .foregroundStyle(.secondary)
                 .lineSpacing(3)
-                .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)

@@ -61,11 +61,11 @@ enum AdaptedWorkoutKind: String, Sendable {
 @available(iOS 26.0, *)
 @Generable
 struct GeneratedEvidence: Sendable {
-    @Guide(description: "Short metric label, at most 10 characters")
+    @Guide(description: "What this number is, in plain words, at most 10 characters (for example \"Avg pace\")")
     let label: String
-    @Guide(description: "Compact metric value, at most 12 characters")
+    @Guide(description: "The value with its unit, as a watch shows it, at most 12 characters (for example \"5:20/km\")")
     let value: String
-    @Guide(description: "Optional change indicator, at most 8 characters")
+    @Guide(description: "Optional change against the runner's usual, at most 8 characters (for example \"+15s\")")
     let delta: String?
     let tone: CoachTone
 }
@@ -73,12 +73,12 @@ struct GeneratedEvidence: Sendable {
 @available(iOS 26.0, *)
 @Generable
 struct GeneratedActionItem: Sendable {
-    @Guide(description: "Specific action, at most 6 words")
+    @Guide(description: "What to do, said as an instruction to the runner, at most 6 words")
     let title: String
-    @Guide(description: "One sentence explaining what to do and why")
+    @Guide(description: "One plain sentence, addressed to \"you\", saying what to do and why")
     let detail: String
     let priority: ActionPriority
-    @Guide(description: "Compact metric badge, at most 10 characters")
+    @Guide(description: "The number this action turns on, with its unit, at most 10 characters")
     let metric: String
     let tone: CoachTone
 }
@@ -86,26 +86,26 @@ struct GeneratedActionItem: Sendable {
 @available(iOS 26.0, *)
 @Generable
 struct GeneratedNextWorkout: Sendable {
-    @Guide(description: "Specific next workout recommendation")
+    @Guide(description: "The next run to do, named the way a coach would say it (for example \"Easy 5 km at 6:10 per km\")")
     let title: String
-    @Guide(description: "One sentence explaining why this should come next")
+    @Guide(description: "One plain sentence, addressed to \"you\", saying why this comes next")
     let rationale: String
 }
 
 @available(iOS 26.0, *)
 @Generable
 struct GeneratedCoachInsight: Sendable {
-    @Guide(description: "Short coaching headline, at most 8 words")
+    @Guide(description: "The one thing to know about this run, in plain words, at most 8 words")
     let headline: String
-    @Guide(description: "One plain-language sentence with the main takeaway")
+    @Guide(description: "The main takeaway in one plain sentence, addressed to \"you\", with no jargon")
     let summary: String
-    @Guide(description: "A 2-3 sentence coaching explanation: the read, the key evidence, and the practical adjustment")
+    @Guide(description: "2-3 short, plain sentences addressed to \"you\": what happened, the number that shows it, and what to do about it. Write paces as minutes and seconds, and explain any training term you use")
     let fullAnalysis: String
     @Guide(description: "Confidence score", .range(0...100))
     let confidence: Int
-    @Guide(description: "Exactly four compact evidence chips", .count(4))
+    @Guide(description: "Exactly four short numbers that back up the read", .count(4))
     let evidence: [GeneratedEvidence]
-    @Guide(description: "Exactly three prioritised, actionable items", .count(3))
+    @Guide(description: "Exactly three things to do next, most important first", .count(3))
     let actionItems: [GeneratedActionItem]
     let nextWorkout: GeneratedNextWorkout
 }
@@ -135,7 +135,7 @@ struct GeneratedWorkoutAdaptation: Sendable {
     let targetPaceLowerBound: Double?
     @Guide(description: "Upper bound of the target pace in seconds per kilometre", .range(120...900))
     let targetPaceUpperBound: Double?
-    @Guide(description: "One concise paragraph explaining why this adaptation is appropriate")
+    @Guide(description: "One or two plain sentences, addressed to \"you\", saying what changed and why. Write paces as minutes and seconds (for example \"5:20 per km\"), never as a count of seconds")
     let explanation: String
     @Guide(description: "Interval prescription; empty unless the workout type is interval")
     let intervals: [GeneratedAdaptationInterval]
@@ -153,7 +153,7 @@ struct GeneratedPlanAdaptationItem: Sendable {
     let targetPaceLowerBound: Double?
     @Guide(description: "Upper bound of the target pace in seconds per kilometre", .range(120...900))
     let targetPaceUpperBound: Double?
-    @Guide(description: "One short sentence explaining the change, under 120 characters")
+    @Guide(description: "One plain sentence under 120 characters, addressed to \"you\", saying what changed and why. Write paces as minutes and seconds, never as a count of seconds")
     let explanation: String
     let intervals: [GeneratedAdaptationInterval]
 }
