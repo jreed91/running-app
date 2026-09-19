@@ -27,10 +27,9 @@ extension RunSummaryView {
                 Spacer()
                 ProgressView().controlSize(.small)
             }
-            Text(markdownText(aiStreamBuffer))
+            CoachText(aiStreamBuffer)
                 .font(.dsSubhead)
                 .lineSpacing(3)
-                .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)

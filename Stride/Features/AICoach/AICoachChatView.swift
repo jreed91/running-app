@@ -235,11 +235,13 @@ struct AICoachChatView: View {
                     coachBubbleHeader(message)
                 }
 
-                Text(markdownText(message.text))
+                // `CoachText`, not `Text`: a reply with a list in it is a list, and
+                // the single-`Text` version showed every marker after the first line
+                // as a literal `- ` in the middle of a sentence (see `CoachMarkdown`).
+                CoachText(message.text)
                     .font(.dsSubhead)
                     .lineSpacing(3)
                     .foregroundStyle(message.sender == .coach ? Color.primary : Color.white)
-                    .fixedSize(horizontal: false, vertical: true)
 
                 if !message.metrics.isEmpty {
                     metricGrid(message.metrics)
@@ -499,12 +501,6 @@ struct AICoachChatView: View {
 
     private var canSendDraft: Bool {
         !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    private func markdownText(_ text: String) -> AttributedString {
-        // A sixth copy of the same fallback, and the weakest of them — it stripped only
-        // `**`, so a backtick or heading marker showed up raw in chat (N27).
-        CoachMarkdown.attributed(text)
     }
 
     private var providerMessages: [AIProviderChatMessage] {
