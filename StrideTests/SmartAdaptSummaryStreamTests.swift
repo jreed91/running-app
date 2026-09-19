@@ -2,100 +2,60 @@ import Foundation
 import Testing
 @testable import Stride
 
-/// Covers `SmartAdaptSummaryStream`, the partial-JSON scanner that used to live in
-/// `PlanTabView` (D1). It reads a document that is by definition incomplete, so the
-/// cases that matter are the half-written ones.
+/// Covers `SmartAdaptSummaryStream`, which turns the coach's streaming plan adaptation
+/// into the lines Smart Adapt lists (D1).
+///
+/// The JSON-scanning cases these tests used to carry are gone with the scanner: guided
+/// generation streams typed snapshots, and the backend publishes only the explanations
+/// that are finished, so a half-written one never reaches here. What is left is the
+/// shape of the text that does arrive.
 struct SmartAdaptSummaryStreamTests {
 
-    // MARK: Streaming
-
-    @Test("Nothing is returned before the summary array is reached")
-    func emptyBeforeArray() {
+    @Test("Nothing is returned before the coach has finished an explanation")
+    func emptyBeforeFirstExplanation() {
         #expect(SmartAdaptSummaryStream.summaries(in: "").isEmpty)
-        #expect(SmartAdaptSummaryStream.summaries(in: "{\"workouts\": [").isEmpty)
-        // The key has arrived but the array has not.
-        #expect(SmartAdaptSummaryStream.summaries(in: "{\"summary\"").isEmpty)
+        #expect(SmartAdaptSummaryStream.summaries(in: "\n").isEmpty)
+        #expect(SmartAdaptSummaryStream.summaries(in: "   \n  ").isEmpty)
     }
 
-    @Test("A half-written element is withheld until its closing quote arrives")
-    func partialElementIsNotPublished() {
-        let buffer = "{\"summary\": [\"Eased Tuesday back\", \"Kept Thursd"
-        let summaries = SmartAdaptSummaryStream.summaries(in: buffer)
+    @Test("Each explanation is published in the order the coach wrote it")
+    func explanationsInOrder() {
+        let partial = "Eased Tuesday back\nKept Thursday's tempo\nShortened the long run"
 
-        // Publishing the partial one would flicker the card through "Kept Thursd".
-        #expect(summaries == ["Eased Tuesday back"])
-    }
-
-    @Test("Each closed element is published in document order")
-    func completedElementsInOrder() {
-        let buffer = "{\"summary\": [\"First\", \"Second\", \"Third\"]}"
-
-        #expect(SmartAdaptSummaryStream.summaries(in: buffer) == ["First", "Second", "Third"])
-    }
-
-    @Test("Scanning stops at the array's closing bracket")
-    func stopsAtCloseBracket() {
-        // Strings after the array — the coach's prose fields — must not be mistaken
-        // for summaries.
-        let buffer = "{\"summary\": [\"Only this\"], \"headline\": \"Not this\"}"
-
-        #expect(SmartAdaptSummaryStream.summaries(in: buffer) == ["Only this"])
-    }
-
-    // MARK: Escapes
-
-    @Test("Escaped quotes stay inside their element rather than ending it")
-    func escapedQuoteDoesNotCloseElement() {
-        let buffer = #"{"summary": ["Called it a \"steady\" effort"]}"#
-
-        #expect(SmartAdaptSummaryStream.summaries(in: buffer) == [#"Called it a "steady" effort"#])
-    }
-
-    @Test("Whitespace escapes are decoded, and a backslash escapes itself")
-    func whitespaceAndBackslashEscapes() {
-        let buffer = #"{"summary": ["Line one\nLine two", "Tab\there", "Back\\slash"]}"#
-
-        #expect(SmartAdaptSummaryStream.summaries(in: buffer) == [
-            "Line one\nLine two",
-            "Tab\there",
-            #"Back\slash"#
+        #expect(SmartAdaptSummaryStream.summaries(in: partial) == [
+            "Eased Tuesday back",
+            "Kept Thursday's tempo",
+            "Shortened the long run"
         ])
     }
 
-    // MARK: Empty elements
+    @Test("A later snapshot supersedes the one before it")
+    func snapshotsAreCumulative() {
+        // The backend republishes everything finished so far, so the second snapshot
+        // contains the first. A caller that appended them would list the first twice.
+        let first = "Eased Tuesday back"
+        let second = "Eased Tuesday back\nKept Thursday's tempo"
 
-    @Test("Blank and whitespace-only elements are dropped, not shown as empty bullets")
-    func blankElementsAreDropped() {
-        let buffer = "{\"summary\": [\"\", \"   \", \"Real one\"]}"
-
-        #expect(SmartAdaptSummaryStream.summaries(in: buffer) == ["Real one"])
+        #expect(SmartAdaptSummaryStream.summaries(in: first).count == 1)
+        #expect(SmartAdaptSummaryStream.summaries(in: second).count == 2)
+        #expect(SmartAdaptSummaryStream.summaries(in: second).first == first)
     }
 
-    @Test("Elements are trimmed of surrounding whitespace")
-    func elementsAreTrimmed() {
-        let buffer = "{\"summary\": [\"  Padded  \"]}"
+    @Test("Blank lines are not listed as empty bullets")
+    func blankLinesAreDropped() {
+        let partial = "Eased Tuesday back\n\n   \nShortened the long run\n"
 
-        #expect(SmartAdaptSummaryStream.summaries(in: buffer) == ["Padded"])
+        #expect(SmartAdaptSummaryStream.summaries(in: partial) == [
+            "Eased Tuesday back",
+            "Shortened the long run"
+        ])
     }
 
-    // MARK: Growing buffer
-
-    @Test("Re-scanning a growing buffer never loses or reorders what it already had")
-    func growingBufferIsMonotonic() {
-        let full = "{\"summary\": [\"Alpha\", \"Beta\", \"Gamma\"]}"
-        var seen: [[String]] = []
-
-        // The view re-scans the whole accumulated buffer on every chunk, so each
-        // prefix's result must be a prefix of the next one's.
-        for length in 1...full.count {
-            let prefix = String(full.prefix(length))
-            seen.append(SmartAdaptSummaryStream.summaries(in: prefix))
-        }
-
-        for (earlier, later) in zip(seen, seen.dropFirst()) {
-            #expect(later.count >= earlier.count)
-            #expect(Array(later.prefix(earlier.count)) == earlier)
-        }
-        #expect(seen.last == ["Alpha", "Beta", "Gamma"])
+    @Test("The progress card shows a bounded number of summaries")
+    func displayLimitIsBounded() {
+        // The card is a few lines on a phone; the limit is what keeps a twelve-workout
+        // adaptation from pushing the rest of the sheet off-screen.
+        #expect(SmartAdaptSummaryStream.displayLimit > 0)
+        #expect(SmartAdaptSummaryStream.displayLimit <= 6)
     }
 }

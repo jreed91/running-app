@@ -101,19 +101,22 @@ struct FoundationModelsCoachBackend: OnDeviceCoachGenerating {
         instructions: String,
         prompt: String,
         useServerModel: Bool,
-        onPartial: @escaping @Sendable (String) -> Void
+        onPartialText: @escaping @Sendable (String) -> Void
     ) async throws -> AICoachStructuredResponse {
-        let generated = try await generate(
+        let generated = try await streamGenerate(
             instructions: instructions,
             prompt: prompt,
             generating: GeneratedCoachInsight.self,
             useServerModel: useServerModel,
-            reasoning: .moderate
+            reasoning: .moderate,
+            // `summary` is the field the run-summary preview card renders, and guided
+            // generation fills the fields in declaration order, so it lands early —
+            // `headline` is the only thing ahead of it.
+            // Every field of a partially generated value is optional until it is
+            // written, so an unwritten summary is an empty preview, not a nil one.
+            partialText: { $0.summary ?? "" },
+            onPartialText: onPartialText
         )
-        // Single emission keeps the existing streaming UI buffer populated. Token-level
-        // streaming via `session.streamResponse(to:generating:)` can be wired here once
-        // the partial-snapshot API is verified on-device.
-        onPartial(generated.summary)
         return generated.toStructuredResponse()
     }
 
@@ -136,18 +139,28 @@ struct FoundationModelsCoachBackend: OnDeviceCoachGenerating {
         instructions: String,
         prompt: String,
         useServerModel: Bool,
-        onPartial: @escaping @Sendable (String) -> Void
+        onPartialText: @escaping @Sendable (String) -> Void
     ) async throws -> AIWorkoutPlanAdaptationResponse {
-        let generated = try await generate(
+        let generated = try await streamGenerate(
             instructions: instructions,
             prompt: prompt,
             generating: GeneratedPlanAdaptation.self,
             useServerModel: useServerModel,
             // Re-planning weighs a whole block of training against competing constraints —
             // the case Apple calls out for deep reasoning.
-            reasoning: .deep
+            reasoning: .deep,
+            // Smart Adapt lists the coach's reasoning a workout at a time, so every
+            // explanation finished so far goes out, one per line. An element of a
+            // partially generated array is itself partially generated, so the newest
+            // one has no `explanation` until it is written — and that is exactly the
+            // half-finished line Smart Adapt should not be showing yet.
+            partialText: { partial in
+                (partial.adaptations ?? [])
+                    .compactMap(\.explanation)
+                    .joined(separator: "\n")
+            },
+            onPartialText: onPartialText
         )
-        onPartial(generated.adaptations.first?.explanation ?? "")
         return generated.toPlanAdaptationResponse()
     }
 
@@ -155,7 +168,8 @@ struct FoundationModelsCoachBackend: OnDeviceCoachGenerating {
         instructions: String,
         context: String,
         messages: [AIProviderChatMessage],
-        useServerModel: Bool
+        useServerModel: Bool,
+        onPartialText: @escaping @Sendable (String) -> Void
     ) async throws -> String {
         // Replays the conversation as a single prompt to mirror the stateless cloud
         // contract (callers pass the full transcript each turn).
@@ -174,20 +188,29 @@ struct FoundationModelsCoachBackend: OnDeviceCoachGenerating {
 
         let text = try await withServerFallback(
             instructions: instructions,
+            prompt: prompt,
             useServerModel: useServerModel,
             // Chat is a back-and-forth a runner is waiting on, so buy latency over depth.
             reasoning: .light
-        ) { session, reasoning in
-            let response: LanguageModelSession.Response<String>
+        ) { session, reasoning, prompt in
+            // A plain-text stream yields the reply aggregated so far, which is what the
+            // chat bubble wants, so there is nothing to accumulate here.
+            let stream: LanguageModelSession.ResponseStream<String>
             if let reasoning {
-                response = try await session.respond(
+                stream = session.streamResponse(
                     to: prompt,
                     contextOptions: ContextOptions(reasoningLevel: reasoning)
                 )
             } else {
-                response = try await session.respond(to: prompt)
+                stream = session.streamResponse(to: prompt)
             }
-            return response.content.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            var latest = ""
+            for try await snapshot in stream {
+                latest = snapshot.content
+                onPartialText(latest.trimmingCharacters(in: .whitespacesAndNewlines))
+            }
+            return latest.trimmingCharacters(in: .whitespacesAndNewlines)
         }
 
         guard !text.isEmpty else { throw OnDeviceCoachError.emptyResponse }
@@ -210,18 +233,31 @@ struct FoundationModelsCoachBackend: OnDeviceCoachGenerating {
     /// no benefit. `work` receives a reasoning level only on the server path — the
     /// on-device call stays byte-for-byte what it was, so this change cannot move
     /// on-device behaviour.
+    ///
+    /// The prompt handed to `work` is the *fitted* one. Which model is serving the request
+    /// is only settled here, and the two windows differ by a factor of four (~8K on-device
+    /// against PCC's ~32K), so a prompt can only be measured once its model is chosen —
+    /// and a request that falls back from PCC to on-device is re-fitted for the smaller
+    /// window on the way.
+    ///
+    /// A fallback that happens *mid-stream* runs `work` twice, so the partials the first
+    /// attempt published are followed by the on-device model's own, starting again from
+    /// nothing. That reads correctly on screen precisely because partials are cumulative:
+    /// the preview resets and regrows rather than splicing two models' sentences together.
     private func withServerFallback<T>(
         instructions: String,
+        prompt: String,
         useServerModel: Bool,
         reasoning: ContextOptions.ReasoningLevel,
-        _ work: (LanguageModelSession, ContextOptions.ReasoningLevel?) async throws -> T
+        _ work: (LanguageModelSession, ContextOptions.ReasoningLevel?, String) async throws -> T
     ) async throws -> T {
         if useServerModel {
             let model = PrivateCloudComputeLanguageModel()
             if model.availability == .available {
                 do {
                     let session = LanguageModelSession(model: model, instructions: instructions)
-                    return try await work(session, reasoning)
+                    let fitted = await fittedPrompt(prompt, instructions: instructions, model: model)
+                    return try await work(session, reasoning, fitted)
                 } catch let error as PrivateCloudComputeLanguageModel.Error {
                     switch error {
                     case .quotaLimitReached:
@@ -239,28 +275,40 @@ struct FoundationModelsCoachBackend: OnDeviceCoachGenerating {
             }
         }
         guard onDeviceAvailability == .available else { throw OnDeviceCoachError.unavailable }
-        let session = LanguageModelSession(
-            model: SystemLanguageModel.default,
-            instructions: instructions
-        )
-        return try await work(session, nil)
+        let model = SystemLanguageModel.default
+        let session = LanguageModelSession(model: model, instructions: instructions)
+        let fitted = await fittedPrompt(prompt, instructions: instructions, model: model)
+        return try await work(session, nil, fitted)
     }
 
-    private func generate<Content>(
+    /// Streams a guided generation, publishing text from each partial snapshot and
+    /// returning the finished value.
+    ///
+    /// The final value is rebuilt from the last snapshot's `rawContent` rather than by
+    /// collecting the stream a second time: `ResponseStream` is a single-pass sequence,
+    /// so `collect()` and a `for try await` loop are two ways of consuming the same
+    /// stream, not two things to do to one. `Content(_: GeneratedContent)` is the
+    /// `Generable` requirement that turns that raw content back into the typed value,
+    /// and it throws when the stream ended mid-structure — which is a malformed
+    /// response, and lands on `AICoachService`'s local-heuristic fallback.
+    private func streamGenerate<Content>(
         instructions: String,
         prompt: String,
         generating type: Content.Type,
         useServerModel: Bool,
-        reasoning: ContextOptions.ReasoningLevel
+        reasoning: ContextOptions.ReasoningLevel,
+        partialText: @escaping @Sendable (Content.PartiallyGenerated) -> String,
+        onPartialText: @escaping @Sendable (String) -> Void
     ) async throws -> Content where Content: Generable {
         try await withServerFallback(
             instructions: instructions,
+            prompt: prompt,
             useServerModel: useServerModel,
             reasoning: reasoning
-        ) { session, reasoning in
-            let response: LanguageModelSession.Response<Content>
+        ) { session, reasoning, prompt in
+            let stream: LanguageModelSession.ResponseStream<Content>
             if let reasoning {
-                response = try await session.respond(
+                stream = session.streamResponse(
                     to: prompt,
                     generating: type,
                     // The `contextOptions` overload drops the standalone
@@ -272,10 +320,133 @@ struct FoundationModelsCoachBackend: OnDeviceCoachGenerating {
                     )
                 )
             } else {
+                stream = session.streamResponse(to: prompt, generating: type)
+            }
+
+            var lastRawContent: GeneratedContent?
+            var lastPublished = ""
+            for try await snapshot in stream {
+                lastRawContent = snapshot.rawContent
+                let text = partialText(snapshot.content)
+                // A snapshot arrives per token, and most of them add nothing to the one
+                // field being shown. Publishing only on a change keeps the UI off the
+                // main actor for the other ninety-odd percent of them.
+                if text != lastPublished {
+                    lastPublished = text
+                    onPartialText(text)
+                }
+            }
+
+            guard let lastRawContent else { throw OnDeviceCoachError.emptyResponse }
+            do {
+                return try Content(lastRawContent)
+            } catch {
+                throw OnDeviceCoachError.malformedResponse
+            }
+        }
+    }
+
+    private func generate<Content>(
+        instructions: String,
+        prompt: String,
+        generating type: Content.Type,
+        useServerModel: Bool,
+        reasoning: ContextOptions.ReasoningLevel
+    ) async throws -> Content where Content: Generable {
+        try await withServerFallback(
+            instructions: instructions,
+            prompt: prompt,
+            useServerModel: useServerModel,
+            reasoning: reasoning
+        ) { session, reasoning, prompt in
+            let response: LanguageModelSession.Response<Content>
+            if let reasoning {
+                response = try await session.respond(
+                    to: prompt,
+                    generating: type,
+                    // See the note in `streamGenerate`: this overload defaults
+                    // `includeSchemaInPrompt` to `true` and drops the standalone argument.
+                    contextOptions: ContextOptions(
+                        includeSchemaInPrompt: true,
+                        reasoningLevel: reasoning
+                    )
+                )
+            } else {
                 response = try await session.respond(to: prompt, generating: type)
             }
             return response.content
         }
+    }
+
+    // MARK: - Context-window pre-flight
+
+    /// Fraction of a model's context window held back for the response, the guided
+    /// generation schema, and the instructions' own share of the session.
+    ///
+    /// The window covers input *and* output (Apple's `contextSize` is the total), and a
+    /// coach insight is a headline, a summary, an analysis paragraph, four evidence chips
+    /// and three action items — comfortably the largest output of the four features. A
+    /// quarter of an 8K on-device window is ~2K tokens of headroom, which is generous for
+    /// that and cheap in what it costs the prompt.
+    private static let responseHeadroomFraction = 4
+
+    /// `prompt`, shortened until the model can hold it, or unchanged when it already fits
+    /// or when the model declines to measure it.
+    ///
+    /// Failing to measure is not an error worth surfacing: the prompt that would have been
+    /// sent before this existed is still the prompt sent now, and a genuinely oversized one
+    /// fails the same way it failed before — as a thrown error that `AICoachService` turns
+    /// into the locally-computed insight. This can only improve on that, never replace it.
+    private func fittedPrompt(
+        _ prompt: String,
+        instructions: String,
+        model: some LanguageModel
+    ) async -> String {
+        guard let budget = await promptTokenBudget(for: model, instructions: instructions) else {
+            return prompt
+        }
+
+        var fitted = prompt
+        // Bounded by the row count rather than by `while true`: each pass drops exactly
+        // one row, so this cannot outlive the history block even if `tokenCount` were to
+        // report a size that never falls.
+        for _ in 0..<CoachPromptBudget.historyRowCount(in: prompt) {
+            guard let count = await tokenCount(of: fitted, model: model), count > budget else {
+                return fitted
+            }
+            guard let trimmed = CoachPromptBudget.droppingOldestHistoryRow(from: fitted) else {
+                // Nothing left that is safe to drop. Send it: an oversized prompt that
+                // the model rejects is still a better outcome than one silently gutted
+                // of the workout ids the response is keyed on.
+                return fitted
+            }
+            fitted = trimmed
+        }
+        return fitted
+    }
+
+    /// How many tokens of `contextSize` the prompt may use, or `nil` when the model
+    /// cannot be measured.
+    private func promptTokenBudget(
+        for model: some LanguageModel,
+        instructions: String
+    ) async -> Int? {
+        guard let contextSize = try? await model.contextSize, contextSize > 0 else { return nil }
+        let instructionTokens = await tokenCount(of: instructions, model: model) ?? 0
+        let budget = contextSize - contextSize / Self.responseHeadroomFraction - instructionTokens
+        return budget > 0 ? budget : nil
+    }
+
+    /// `nil` when the model cannot count, which the caller reads as "do not trim".
+    ///
+    /// `try? await` is deliberate on a property and a method whose exact effects are the
+    /// one thing here not pinned down against a shipping SDK: `contextSize` is documented
+    /// as `async throws` on `PrivateCloudComputeLanguageModel`, while the context-window
+    /// article writes both as plain calls. `try?` and `await` on an expression that turns
+    /// out to need neither are warnings, not errors, so this compiles against either
+    /// shape — and against either one, a model that will not answer costs us nothing.
+    private func tokenCount(of text: String, model: some LanguageModel) async -> Int? {
+        try? await model.tokenCount(for: text)
     }
 }
 #endif

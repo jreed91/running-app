@@ -38,6 +38,10 @@ struct AICoachChatView: View {
     @State private var messages: [AICoachChatMessage] = []
     @State private var draft = ""
     @State private var isWaitingForCoach = false
+    /// The coach's reply as it is written, shown in a live bubble until the finished
+    /// message is appended to `messages`. Empty while the model has produced nothing yet,
+    /// which is the only stretch the typing dots still cover.
+    @State private var streamingReply = ""
     @State private var didSendInitialPrompt = false
     @FocusState private var isComposerFocused: Bool
 
@@ -59,7 +63,11 @@ struct AICoachChatView: View {
                             messageRow(message)
                         }
                         if isWaitingForCoach {
-                            typingRow
+                            if streamingReply.isEmpty {
+                                typingRow
+                            } else {
+                                streamingReplyRow
+                            }
                         }
                     }
                     .padding(.horizontal, AppSpacing.lg)
@@ -253,6 +261,25 @@ struct AICoachChatView: View {
         }
     }
 
+    /// The coach's bubble while the reply is still being written.
+    ///
+    /// Built from `messageRow` rather than duplicating the bubble: the live text and the
+    /// finished message are the same thing at two moments, so when the reply lands the
+    /// bubble does not visibly change shape, position or typography — the text simply
+    /// stops growing. The metrics and status badge are left off here and applied when the
+    /// message is appended, because whether this is the opening reply is not known until
+    /// it is.
+    private var streamingReplyRow: some View {
+        messageRow(
+            AICoachChatMessage(
+                sender: .coach,
+                text: streamingReply,
+                metrics: [],
+                status: nil
+            )
+        )
+    }
+
     private var typingRow: some View {
         HStack(alignment: .top, spacing: 10) {
             coachAvatar(size: 36)
@@ -386,7 +413,11 @@ struct AICoachChatView: View {
         }
 
         isWaitingForCoach = true
-        defer { isWaitingForCoach = false }
+        streamingReply = ""
+        defer {
+            isWaitingForCoach = false
+            streamingReply = ""
+        }
 
         // The metric chips and status badge summarize the run the conversation
         // opened on. They belong to the first coach reply only — repeating them on
@@ -397,7 +428,12 @@ struct AICoachChatView: View {
             let reply = try await container.aiCoachService.chatWithProvider(
                 provider: appSettings.aiProvider,
                 context: coachContext,
-                messages: providerMessages
+                messages: providerMessages,
+                onPartialText: { text in
+                    Task { @MainActor in
+                        showStreamingReply(text)
+                    }
+                }
             )
             withAnimation(AppAnimation.snappy) {
                 messages.append(
@@ -437,6 +473,17 @@ struct AICoachChatView: View {
             return "You have used today's Private Cloud Compute requests. They refresh at \(refresh) — or switch to the on-device model in Settings to keep going now."
         }
         return "I could not reach \(provider.localizedName). Make sure Apple Intelligence is enabled on this device, then try again."
+    }
+
+    /// The reply as written so far, which replaces what the live bubble was showing —
+    /// partials are cumulative snapshots, not deltas (see `OnDeviceCoachGenerating`).
+    ///
+    /// Guarded on `isWaitingForCoach` so a snapshot that lands after the finished message
+    /// was appended cannot put the half-written version back on screen underneath it.
+    @MainActor
+    private func showStreamingReply(_ text: String) {
+        guard isWaitingForCoach else { return }
+        streamingReply = text
     }
 
     @MainActor

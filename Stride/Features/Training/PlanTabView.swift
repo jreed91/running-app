@@ -21,7 +21,6 @@ struct PlanTabView: View {
     @State private var showRouteGenius = false
     @State private var isAdaptingPlan = false
     @State private var smartAdaptProgress = SmartAdaptProgress.idle
-    @State private var smartAdaptStreamBuffer = ""
     @State private var adaptTask: Task<Void, Never>?
 
     private var activePlan: TrainingPlan? { activePlans.first }
@@ -172,11 +171,9 @@ struct PlanTabView: View {
 
         isAdaptingPlan = true
         smartAdaptProgress = .starting
-        smartAdaptStreamBuffer = ""
         defer {
             isAdaptingPlan = false
             smartAdaptProgress.finishIfNeeded()
-            smartAdaptStreamBuffer = ""
         }
 
         // Smart Adapt no longer prunes the plan first (N29). The pruning existed to
@@ -201,9 +198,9 @@ struct PlanTabView: View {
             profile: profile,
             provider: appSettings.aiProvider,
             unitPreference: appSettings.unitPreference,
-            onChunk: { chunk in
+            onPartialText: { text in
                 Task { @MainActor in
-                    appendSmartAdaptSummaryChunk(chunk)
+                    showSmartAdaptSummaries(text)
                 }
             }
         )
@@ -257,10 +254,14 @@ struct PlanTabView: View {
         smartAdaptProgress.currentMessage = "Plan updated and synced."
     }
 
+    /// The coach's finished explanations so far, which replace what was shown before.
+    ///
+    /// The buffer this used to accumulate is gone with it: streaming partials are
+    /// cumulative snapshots (see `OnDeviceCoachGenerating`), so the text handed in is
+    /// already everything written up to now.
     @MainActor
-    private func appendSmartAdaptSummaryChunk(_ chunk: String) {
-        smartAdaptStreamBuffer += chunk
-        let summaries = SmartAdaptSummaryStream.summaries(in: smartAdaptStreamBuffer)
+    private func showSmartAdaptSummaries(_ text: String) {
+        let summaries = SmartAdaptSummaryStream.summaries(in: text)
         guard !summaries.isEmpty else {
             smartAdaptProgress.currentMessage = "Reading coach summary..."
             return
