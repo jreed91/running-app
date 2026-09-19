@@ -2,10 +2,11 @@ import Foundation
 
 /// Pre-flight trimming for coach prompts that can outgrow a model's context window.
 ///
-/// The measuring half (`tokenCount(for:)` / `contextSize`) lives in
-/// `FoundationModelsCoachBackend`, where a model is in hand. The *editing* half lives
-/// here, in plain Foundation with no `FoundationModels` import, so the rule for what a
-/// prompt is allowed to lose is readable and testable without an iOS SDK.
+/// The backend reads each model's `contextSize`, where the model's concrete type is in
+/// hand. Everything else lives here, in plain Foundation with no `FoundationModels`
+/// import: both the rule for what a prompt is allowed to lose and the estimate of what it
+/// costs, so the parts that can silently produce a wrong answer are testable without an
+/// iOS SDK.
 ///
 /// The rule is deliberately narrow: only the recent-run history block shrinks, and it
 /// shrinks from its oldest end. Everything else in these prompts is either the question
@@ -14,6 +15,36 @@ import Foundation
 /// keys its result on), so dropping any of it buys tokens at the price of a wrong
 /// answer. Losing the oldest run costs the coach context it already weights least.
 enum CoachPromptBudget {
+
+    /// Characters per token this assumes when sizing a prompt.
+    ///
+    /// Deliberately low. English prose runs around four characters per token, but these
+    /// prompts are not prose: they are pipe-separated metric rows, clock times, paces and
+    /// — in the plan-adaptation prompt — a 36-character UUID per workout, all of which
+    /// tokenize far worse than words do. Three characters per token overshoots the token
+    /// count for text like that, and overshooting is the safe direction here: it trims one
+    /// run too early rather than sending a prompt the model cannot hold.
+    ///
+    /// This is an estimate because the real measurement could not be made to compile
+    /// against the shipping SDK. `tokenCount(for:)` is not a `LanguageModel` protocol
+    /// member, and the concrete `SystemLanguageModel.tokenCount(for:)` takes an
+    /// `Instructions` value rather than a `String`:
+    ///
+    ///     nonisolated(nonsending)
+    ///     final func tokenCount(for instructions: Instructions) async throws -> Int
+    ///
+    /// Restoring the real count means converting these `String` prompts into `Prompt` /
+    /// `Instructions` values and finding the matching overload on
+    /// `PrivateCloudComputeLanguageModel` too. Worth doing on a machine that can compile
+    /// it; not worth guessing at from here, which is how the first attempt broke the
+    /// archive build. The *window* is still read from the model — only the prompt's size
+    /// is estimated.
+    static let charactersPerToken = 3
+
+    /// Roughly how many tokens `text` will cost, rounded up.
+    static func estimatedTokenCount(of text: String) -> Int {
+        (text.count + charactersPerToken - 1) / charactersPerToken
+    }
 
     /// The headers `AICoachService` writes above a block of recent runs. Each block runs
     /// until the first blank line, and its rows are newest first — every caller sorts

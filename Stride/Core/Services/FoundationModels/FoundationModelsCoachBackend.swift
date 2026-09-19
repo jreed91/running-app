@@ -256,7 +256,11 @@ struct FoundationModelsCoachBackend: OnDeviceCoachGenerating {
             if model.availability == .available {
                 do {
                     let session = LanguageModelSession(model: model, instructions: instructions)
-                    let fitted = await fittedPrompt(prompt, instructions: instructions, model: model)
+                    // `try? await` rather than a plain read: PCC's `contextSize` is the
+                    // asynchronous one of the two. `try` and `await` on an expression that
+                    // turns out to need neither are warnings, not errors.
+                    let contextSize = try? await model.contextSize
+                    let fitted = fittedPrompt(prompt, instructions: instructions, contextSize: contextSize)
                     return try await work(session, reasoning, fitted)
                 } catch let error as PrivateCloudComputeLanguageModel.Error {
                     switch error {
@@ -277,7 +281,10 @@ struct FoundationModelsCoachBackend: OnDeviceCoachGenerating {
         guard onDeviceAvailability == .available else { throw OnDeviceCoachError.unavailable }
         let model = SystemLanguageModel.default
         let session = LanguageModelSession(model: model, instructions: instructions)
-        let fitted = await fittedPrompt(prompt, instructions: instructions, model: model)
+        // `SystemLanguageModel.contextSize` is a plain `Int` getter — no `await`, no
+        // `try`. The two models genuinely differ here, which is half of why this cannot
+        // be written once against `some LanguageModel`.
+        let fitted = fittedPrompt(prompt, instructions: instructions, contextSize: model.contextSize)
         return try await work(session, nil, fitted)
     }
 
@@ -390,30 +397,42 @@ struct FoundationModelsCoachBackend: OnDeviceCoachGenerating {
     /// that and cheap in what it costs the prompt.
     private static let responseHeadroomFraction = 4
 
-    /// `prompt`, shortened until the model can hold it, or unchanged when it already fits
-    /// or when the model declines to measure it.
+    /// `prompt`, shortened until it fits `contextSize`, or unchanged when it already fits
+    /// or when the model did not report a window.
     ///
-    /// Failing to measure is not an error worth surfacing: the prompt that would have been
-    /// sent before this existed is still the prompt sent now, and a genuinely oversized one
-    /// fails the same way it failed before — as a thrown error that `AICoachService` turns
-    /// into the locally-computed insight. This can only improve on that, never replace it.
+    /// `contextSize` is read by the caller, where the model's concrete type is still in
+    /// hand. It has to be: `contextSize` is a plain `Int` on `SystemLanguageModel` and
+    /// asynchronous on `PrivateCloudComputeLanguageModel`, and neither is a member of the
+    /// `LanguageModel` protocol — an earlier version of this took `some LanguageModel` and
+    /// failed to compile on exactly that ("has no member 'contextSize'").
+    ///
+    /// The prompt's size is **estimated** rather than measured; see
+    /// `CoachPromptBudget.estimatedTokenCount(of:)` for why, and what it would take to go
+    /// back to the real count. The estimate runs high, so this trims a little sooner than
+    /// it strictly must — which is the harmless direction, since what it drops is the
+    /// oldest run in the history block.
+    ///
+    /// Not being able to size the window at all is not an error worth surfacing: the
+    /// prompt that would have been sent before this existed is still the prompt sent now,
+    /// and a genuinely oversized one fails the same way it failed before — as a thrown
+    /// error that `AICoachService` turns into the locally-computed insight. This can only
+    /// improve on that, never replace it.
     private func fittedPrompt(
         _ prompt: String,
         instructions: String,
-        model: some LanguageModel
-    ) async -> String {
-        guard let budget = await promptTokenBudget(for: model, instructions: instructions) else {
-            return prompt
-        }
+        contextSize: Int?
+    ) -> String {
+        guard let contextSize, contextSize > 0 else { return prompt }
+        let budget = contextSize
+            - contextSize / Self.responseHeadroomFraction
+            - CoachPromptBudget.estimatedTokenCount(of: instructions)
+        guard budget > 0 else { return prompt }
 
         var fitted = prompt
         // Bounded by the row count rather than by `while true`: each pass drops exactly
-        // one row, so this cannot outlive the history block even if `tokenCount` were to
-        // report a size that never falls.
+        // one row, so this cannot outlive the history block.
         for _ in 0..<CoachPromptBudget.historyRowCount(in: prompt) {
-            guard let count = await tokenCount(of: fitted, model: model), count > budget else {
-                return fitted
-            }
+            guard CoachPromptBudget.estimatedTokenCount(of: fitted) > budget else { return fitted }
             guard let trimmed = CoachPromptBudget.droppingOldestHistoryRow(from: fitted) else {
                 // Nothing left that is safe to drop. Send it: an oversized prompt that
                 // the model rejects is still a better outcome than one silently gutted
@@ -423,30 +442,6 @@ struct FoundationModelsCoachBackend: OnDeviceCoachGenerating {
             fitted = trimmed
         }
         return fitted
-    }
-
-    /// How many tokens of `contextSize` the prompt may use, or `nil` when the model
-    /// cannot be measured.
-    private func promptTokenBudget(
-        for model: some LanguageModel,
-        instructions: String
-    ) async -> Int? {
-        guard let contextSize = try? await model.contextSize, contextSize > 0 else { return nil }
-        let instructionTokens = await tokenCount(of: instructions, model: model) ?? 0
-        let budget = contextSize - contextSize / Self.responseHeadroomFraction - instructionTokens
-        return budget > 0 ? budget : nil
-    }
-
-    /// `nil` when the model cannot count, which the caller reads as "do not trim".
-    ///
-    /// `try? await` is deliberate on a property and a method whose exact effects are the
-    /// one thing here not pinned down against a shipping SDK: `contextSize` is documented
-    /// as `async throws` on `PrivateCloudComputeLanguageModel`, while the context-window
-    /// article writes both as plain calls. `try?` and `await` on an expression that turns
-    /// out to need neither are warnings, not errors, so this compiles against either
-    /// shape — and against either one, a model that will not answer costs us nothing.
-    private func tokenCount(of text: String, model: some LanguageModel) async -> Int? {
-        try? await model.tokenCount(for: text)
     }
 }
 #endif
