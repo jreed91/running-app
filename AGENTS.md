@@ -321,6 +321,38 @@ WeatherKit  →  WeatherService.hourlyForecast  →  [ForecastHour]
 - On by default, switchable in **Settings → App → Heat Adaptation**
   (`AppSettings.heatAdaptationEnabled`).
 
+## Training nudges (A9)
+
+Three evening notifications beyond the 8 AM workout reminder: the **streak nudge**, the
+**missed-workout push** and the Sunday **weekly recap**. Same split as the heat advisory —
+`TrainingNudgePolicy` is pure and holds every decision, `NotificationService` holds the
+copy and the `UNUserNotificationCenter` calls, and `ContentView.refreshTrainingNudges`
+does the plumbing on every foreground and on every plan change. All of it is gated by
+`AppSettings.trainingNudgesEnabled` (**Settings → App → Training Nudges**, on by default).
+
+Rules a change here has to keep:
+
+- **The 18:00 slot holds one push.** Streak or missed-workout, never both, and the streak
+  wins because it is the one that cannot be said tomorrow. The recap keeps a Sunday 19:00
+  slot of its own so a readout is never crowded out by a prod.
+- **A missed slot is decided, not assumed away.** The app gets no background wake, so
+  `TrainingNudgeDelivery` resolves `.scheduled` / `.immediate` / `.skip` the way
+  `NotificationService.HeatAdvisoryDelivery` does. Everything past the kind's cutoff hour
+  is dropped rather than delivered too late to act on, and `TrainingNudgeLog` is what
+  keeps an `.immediate` delivery from repeating when the app is opened twice the same
+  evening. A *scheduled* request needs no such guard — it carries a stable identifier, so
+  re-arming replaces it.
+- **The push and the card share one dismissal.** The missed-workout push reads
+  `MissedWorkoutDetector.promptFlaggedDateKey`, the same once-a-week flag
+  `MissedWorkoutsRecoveryCard` writes. Two spellings of that key is how the Lock Screen
+  ends up asking a question the runner already answered on the dashboard.
+- **Nothing to say means nothing is sent.** A week with no runs gets no recap, a streak
+  under `minimumStreakToProtect` is not worth protecting, and the refresh cancels a
+  pending nudge whose reason has gone away.
+
+`triggerTrainingNudgeTestNotifications` fires one of each with sample numbers, for reading
+the copy on a real Lock Screen.
+
 ## Run playlists
 
 Stride builds a playlist shaped like the session and saves it into the runner's Apple

@@ -339,7 +339,7 @@ struct DashboardView: View {
     @State private var selectedDate = Date()
     /// Timestamp of the last time the rearrange-workouts prompt was flagged
     /// (dismissed or acted on). Used to limit the prompt to once per week.
-    @AppStorage("missedWorkoutPromptFlaggedDate") private var missedWorkoutPromptFlaggedInterval: Double = 0
+    @AppStorage(MissedWorkoutDetector.promptFlaggedDateKey) private var missedWorkoutPromptFlaggedInterval: Double = 0
     @State private var isHandlingRecovery = false
     @State private var recoveryAlert: RecoveryAlert?
 
@@ -417,7 +417,7 @@ struct DashboardView: View {
                                 isLoading: isHandlingRecovery,
                                 onPickUpWhereLeftOff: { handlePickUp(info: info) },
                                 onRebuild: { handleRebuild() },
-                                onDismiss: { missedWorkoutPromptFlaggedInterval = Date().timeIntervalSince1970 }
+                                onDismiss: { flagMissedWorkoutPrompt() }
                             )
                             .opacity(dashboardAppeared ? 1 : 0)
                             .offset(y: dashboardAppeared ? 0 : 20)
@@ -495,6 +495,20 @@ struct DashboardView: View {
             // sheet rather than merely foregrounding the app. A tap that arrives before
             // this loop exists — the cold-launch case — is buffered by the service and
             // replayed here, the same way a synced-run tap is (D4).
+            // The evening nudges point at surfaces rather than at a sheet: the recovery
+            // card is on this screen, the streak lives on Progress' Achievements tab, and
+            // so does the week the recap summarises. Buffered and replayed the same way a
+            // heat-advisory tap is, for the cold-launch case (A9, D4).
+            .task {
+                for await kind in container.notificationService.trainingNudgeTaps {
+                    switch kind {
+                    case .streak, .weeklyRecap:
+                        container.appNavigation.select(.progress)
+                    case .missedWorkouts:
+                        container.appNavigation.select(.home)
+                    }
+                }
+            }
             .task {
                 for await idString in container.notificationService.heatAdvisoryTaps {
                     guard let id = UUID(uuidString: idString) else { continue }
@@ -1112,6 +1126,15 @@ struct DashboardView: View {
 
     // MARK: - Missed Workout Recovery
 
+    /// Puts the recovery card away for the week — and takes the evening push down with
+    /// it. The two share one dismissal (`MissedWorkoutDetector.promptFlaggedDateKey`), so
+    /// a card the runner has just answered must not resurface on the Lock Screen at 18:00
+    /// (A9).
+    private func flagMissedWorkoutPrompt() {
+        missedWorkoutPromptFlaggedInterval = Date().timeIntervalSince1970
+        container.notificationService.cancelTrainingNudge(.missedWorkouts)
+    }
+
     private func handlePickUp(info: MissedWorkoutInfo) {
         guard let plan = activePlan, !isHandlingRecovery else { return }
         runRecovery(failureMessage: "We couldn't move your missed workouts forward.") {
@@ -1177,7 +1200,7 @@ struct DashboardView: View {
             do {
                 let result = try work()
                 if result.flagPrompt {
-                    missedWorkoutPromptFlaggedInterval = Date().timeIntervalSince1970
+                    flagMissedWorkoutPrompt()
                 }
                 recoveryAlert = result.notice.map {
                     RecoveryAlert(title: "Race day is in the way", message: $0)

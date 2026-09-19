@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - MissedWorkoutInfo
 
-struct MissedWorkoutInfo: Equatable {
+struct MissedWorkoutInfo: Equatable, Sendable {
     /// Number of consecutive missed workouts in the trailing streak.
     let count: Int
     /// scheduledDate of the first missed workout, normalized to start-of-day.
@@ -16,6 +16,16 @@ struct MissedWorkoutInfo: Equatable {
 struct MissedWorkoutDetector {
 
     static let minimumConsecutiveMissed = 2
+
+    /// Defaults key holding when the dashboard's recovery card was last put away
+    /// (dismissed or acted on), as a `timeIntervalSince1970`. The card shows at most once
+    /// a week and reads this to decide.
+    ///
+    /// Shared rather than spelled out at each call site because the evening push
+    /// (`TrainingNudgePolicy.missedWorkoutNudge`) has to honour the same dismissal as the
+    /// card — two spellings of the key is how the Lock Screen ends up asking a question
+    /// the runner already answered on the dashboard.
+    static let promptFlaggedDateKey = "missedWorkoutPromptFlaggedDate"
 
     /// Returns non-nil when there are 2+ consecutive past non-rest workouts that were not completed.
     ///

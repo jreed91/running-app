@@ -295,6 +295,11 @@ final class PlanLifecycleService {
         }
 
         NotificationService.clearAllReviewState()
+        // The nudges name a streak, a plan and a week that are all about to stop
+        // existing, and their delivery marks live in UserDefaults rather than the store
+        // being torn down — so without this, the first evening after a reset is silent
+        // for a reason that no longer applies (A9).
+        await notificationService.cancelTrainingNudges(includingLog: true)
 
         do {
             try context.delete(model: RunWorkout.self)

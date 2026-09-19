@@ -198,6 +198,11 @@ struct ContentView: View {
 
     @Environment(\.scenePhase) private var scenePhase
 
+    /// The dashboard recovery card's once-a-week dismissal, read here so the evening
+    /// missed-workout push honours it too (A9). Same key, same meaning — see
+    /// `MissedWorkoutDetector.promptFlaggedDateKey`.
+    @AppStorage(MissedWorkoutDetector.promptFlaggedDateKey) private var missedWorkoutPromptFlaggedInterval: Double = 0
+
     private let restoreLocationManager = CLLocationManager()
 
     var body: some View {
@@ -303,6 +308,20 @@ struct ContentView: View {
             guard phase == .active else { return }
             Task { await refreshHeatAdvisory() }
         }
+        // The nudges are decided against "what has happened so far today", so like the
+        // advisory above they are recomputed rather than armed once and left: a run
+        // logged at lunchtime has to take the evening's streak prod back down again (A9).
+        //
+        // `.background` matters as much as `.active` here, and for a reason the advisory
+        // does not have: a run finished *in Stride* is saved while the app is open, so
+        // leaving the app is the first moment after it that this can run. Without it, a
+        // runner who goes out at 17:00 and doesn't reopen the app gets an 18:00 banner
+        // telling them they haven't run. Cheap either way — a bounded fetch and pure
+        // arithmetic, no network.
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active || phase == .background else { return }
+            Task { await refreshTrainingNudges() }
+        }
         // The widgets' catch-all (B1). `.background` is the one that matters — it is the
         // last chance to publish whatever the runner just did before they go and look at
         // the Home Screen — and `.active` covers a snapshot that went stale while the app
@@ -341,6 +360,9 @@ struct ContentView: View {
         // A new plan replaces tomorrow's session outright, so an advisory built against
         // the old one is about a workout that no longer exists.
         await refreshHeatAdvisory()
+        // Same for the missed-workout push: a plan that was four sessions behind a moment
+        // ago is not the plan the runner is following now (A9).
+        await refreshTrainingNudges()
 
         do {
             try await container.healthKitRepository.syncWorkoutPlans(
@@ -383,6 +405,65 @@ struct ContentView: View {
             unit: appSettings.unitPreference
         )
     }
+
+    /// Recomputes tonight's nudge and, on a Sunday, the week's recap (A9).
+    ///
+    /// Every decision is `TrainingNudgePolicy`'s; this reads the three things it needs —
+    /// the runner's recent runs, the active plan, the weekly goal — and hands them over.
+    ///
+    /// The run fetch is bounded at `nudgeRunSampleSize`. The streak walks backwards a day
+    /// at a time, so the sample has to be at least as long as the longest streak it could
+    /// ever need to count, and a runner logging one run a day would need 200 days of
+    /// running in a row to reach the end of this one. Bounded through `runsOnlyDescriptor`
+    /// rather than filtered afterwards so a runner who walks does not get a shorter
+    /// sample than one who doesn't (N38).
+    @MainActor
+    private func refreshTrainingNudges() async {
+        guard !UITestingSupport.isEnabled, !UITestingSupport.isHostingUnitTests else { return }
+
+        let service = container.notificationService
+
+        guard appSettings.trainingNudgesEnabled else {
+            await service.cancelTrainingNudges(includingLog: true)
+            return
+        }
+
+        let runs = (try? context.fetch(
+            RunWorkout.runsOnlyDescriptor(
+                sortBy: [SortDescriptor(\RunWorkout.date, order: .reverse)],
+                fetchLimit: Self.nudgeRunSampleSize
+            )
+        )) ?? []
+
+        let streak = StreakGoalService.streak(for: runs)
+        let flaggedAt = missedWorkoutPromptFlaggedInterval == 0
+            ? nil
+            : Date(timeIntervalSince1970: missedWorkoutPromptFlaggedInterval)
+
+        if let nudge = TrainingNudgePolicy.eveningNudge(
+            streak: streak,
+            plan: activePlans.first,
+            missedPromptFlaggedAt: flaggedAt
+        ) {
+            await service.scheduleEveningNudge(nudge)
+        } else {
+            // Nothing to say tonight — and something queued from this morning may now be
+            // wrong, which is the case this branch exists for: the run that ended the
+            // streak nudge was logged at lunchtime.
+            service.cancelTrainingNudge(.streak)
+            service.cancelTrainingNudge(.missedWorkouts)
+        }
+
+        if let recap = TrainingNudgePolicy.weeklyRecap(
+            for: runs,
+            goalMeters: appSettings.weeklyGoalMeters
+        ) {
+            await service.scheduleWeeklyRecap(recap, unit: appSettings.unitPreference)
+        }
+    }
+
+    /// See `refreshTrainingNudges`.
+    private static let nudgeRunSampleSize = 200
 
     private func requestMissingPermissionsAfterRestoreIfNeeded() async {
         guard needsWorkoutKitSync, !profiles.isEmpty else { return }

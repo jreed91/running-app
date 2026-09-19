@@ -80,6 +80,32 @@ final class NotificationService: NSObject {
     /// A heat-advisory tap that woke the app before any listener existed.
     private var bufferedHeatAdvisoryTapID: String?
 
+    /// Taps on a training nudge — the streak prod, the missed-workout push, the weekly
+    /// recap — as a stream of the kind that was tapped.
+    ///
+    /// Same shape and same reason as `heatAdvisoryTaps` (D4). Each of the three points at
+    /// a different surface: the recovery card and the streak both live on the dashboard,
+    /// the recap belongs on Progress, and a tap that merely foregrounds the app onto
+    /// whichever tab was open last lands on none of them.
+    var trainingNudgeTaps: AsyncStream<TrainingNudgeKind> {
+        AsyncStream(bufferingPolicy: .unbounded) { continuation in
+            let id = UUID()
+            trainingNudgeTapListeners[id] = continuation
+            if let buffered = bufferedTrainingNudgeKind {
+                bufferedTrainingNudgeKind = nil
+                continuation.yield(buffered)
+            }
+            continuation.onTermination = { [weak self] _ in
+                Task { @MainActor in self?.trainingNudgeTapListeners[id] = nil }
+            }
+        }
+    }
+
+    private var trainingNudgeTapListeners: [UUID: AsyncStream<TrainingNudgeKind>.Continuation] = [:]
+
+    /// A training-nudge tap that woke the app before any listener existed.
+    private var bufferedTrainingNudgeKind: TrainingNudgeKind?
+
     func installAsDelegate() {
         center.delegate = self
     }
@@ -89,7 +115,14 @@ final class NotificationService: NSObject {
         static let workoutReminder = "WORKOUT_REMINDER"
         static let syncedRun       = "SYNCED_RUN"
         static let heatAdvisory    = "HEAT_ADVISORY"
+        static let trainingNudge   = "TRAINING_NUDGE"
     }
+
+    /// `userInfo` key carrying a ``TrainingNudgeKind``'s raw value on a nudge.
+    ///
+    /// `nonisolated` because the tap handler in the delegate extension is, like the
+    /// review-snapshot keys below.
+    private nonisolated static let trainingNudgeKindKey = "trainingNudgeKind"
 
     // Notification identifier helpers
     private enum NotificationID {
@@ -105,6 +138,15 @@ final class NotificationService: NSObject {
         }
 
         static let heatAdvisoryPrefix = "heat-advisory-"
+
+        /// One pending request per kind, replaced rather than accumulated: the streak
+        /// nudge is always about tonight and the recap always about this week, so a
+        /// second one is never a different message — it is the same message recomputed.
+        static func trainingNudge(_ kind: TrainingNudgeKind) -> String {
+            "\(trainingNudgePrefix)\(kind.rawValue)"
+        }
+
+        static let trainingNudgePrefix = "training-nudge-"
     }
 
     // MARK: Authorization
@@ -415,6 +457,241 @@ final class NotificationService: NSObject {
         )
     }
 
+    // MARK: Training nudges (A9)
+
+    /// Arms tonight's evening nudge — the streak prod or the missed-workout push,
+    /// whichever `TrainingNudgePolicy` picked.
+    ///
+    /// Safe to call on every foreground, which is how it is called: the pending request
+    /// carries a stable identifier so re-arming replaces rather than duplicates, and an
+    /// immediate delivery is gated on ``TrainingNudgeLog`` so a runner who opens the app
+    /// three times this evening still gets one banner.
+    ///
+    /// Cancels the *other* evening kind as it goes. The slot holds one push, and a plan
+    /// that was behind this morning and has since been shifted forward should not still
+    /// have a banner queued about it.
+    func scheduleEveningNudge(
+        _ nudge: TrainingNudge,
+        now: Date = Date(),
+        calendar: Calendar = .current,
+        defaults: UserDefaults = .standard
+    ) async {
+        guard await isAuthorized else { return }
+
+        let delivery = TrainingNudgePolicy.eveningDelivery(now: now, calendar: calendar)
+        guard delivery != .skip else { return }
+
+        let other: TrainingNudgeKind = nudge.kind == .streak ? .missedWorkouts : .streak
+        cancelTrainingNudge(other)
+
+        let content = UNMutableNotificationContent()
+        content.title = Self.trainingNudgeTitle(nudge.kind)
+        switch nudge {
+        case let .streak(streak):         content.body = Self.streakNudgeBody(streak)
+        case let .missedWorkouts(info):   content.body = Self.missedWorkoutNudgeBody(info)
+        }
+
+        await deliver(
+            content,
+            as: nudge.kind,
+            delivery: delivery,
+            now: now,
+            calendar: calendar,
+            defaults: defaults
+        )
+    }
+
+    /// Arms Sunday evening's recap of the week just finished.
+    func scheduleWeeklyRecap(
+        _ recap: WeeklyRecap,
+        unit: UnitPreference = .metric,
+        now: Date = Date(),
+        calendar: Calendar = .current,
+        defaults: UserDefaults = .standard
+    ) async {
+        guard await isAuthorized else { return }
+
+        let delivery = TrainingNudgePolicy.weeklyRecapDelivery(now: now, calendar: calendar)
+        guard delivery != .skip else { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = Self.trainingNudgeTitle(.weeklyRecap)
+        content.body = Self.weeklyRecapBody(recap, unit: unit)
+
+        await deliver(
+            content,
+            as: .weeklyRecap,
+            delivery: delivery,
+            now: now,
+            calendar: calendar,
+            defaults: defaults
+        )
+    }
+
+    /// Adds the request for `kind`, either at its slot or right now, and records the
+    /// period as handled either way. Shared by the three nudges so the log is written in
+    /// one place rather than at each call site.
+    private func deliver(
+        _ content: UNMutableNotificationContent,
+        as kind: TrainingNudgeKind,
+        delivery: TrainingNudgeDelivery,
+        now: Date,
+        calendar: Calendar,
+        defaults: UserDefaults
+    ) async {
+        let period = TrainingNudgePolicy.period(for: kind, now: now, calendar: calendar)
+
+        let trigger: UNCalendarNotificationTrigger?
+        switch delivery {
+        case let .scheduled(fireDate):
+            let components = calendar.dateComponents(
+                [.year, .month, .day, .hour, .minute, .second],
+                from: fireDate
+            )
+            trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+        case .immediate:
+            // The slot has passed, so anything already queued for it has fired. Without
+            // this guard, the second foreground of the evening repeats the banner.
+            guard !TrainingNudgeLog.hasHandled(kind, period: period, in: defaults) else { return }
+            trigger = nil
+        case .skip:
+            return
+        }
+
+        content.sound = .default
+        content.categoryIdentifier = Category.trainingNudge
+        content.userInfo = [Self.trainingNudgeKindKey: kind.rawValue]
+
+        let request = UNNotificationRequest(
+            identifier: NotificationID.trainingNudge(kind),
+            content: content,
+            trigger: trigger
+        )
+        do {
+            try await center.add(request)
+            TrainingNudgeLog.markHandled(kind, period: period, in: defaults)
+        } catch {
+            AppLogger.log(
+                "Could not arm the \(kind.rawValue) nudge: \(error.localizedDescription)",
+                label: "Notifications",
+                level: .error
+            )
+        }
+    }
+
+    /// Drops the pending request for `kind`. Used when the reason for it goes away —
+    /// the runner logs today's run, or shifts the plan forward from the recovery card.
+    func cancelTrainingNudge(_ kind: TrainingNudgeKind) {
+        center.removePendingNotificationRequests(withIdentifiers: [NotificationID.trainingNudge(kind)])
+    }
+
+    /// Drops every pending nudge, and optionally the delivery marks with it.
+    ///
+    /// `includingLog` is for switching the setting off: leaving today's marks behind
+    /// would make switching it straight back on silent until tomorrow.
+    func cancelTrainingNudges(includingLog: Bool = false, defaults: UserDefaults = .standard) async {
+        let pending = await center.pendingNotificationRequests()
+        let ids = pending
+            .filter { $0.identifier.hasPrefix(NotificationID.trainingNudgePrefix) }
+            .map(\.identifier)
+        if !ids.isEmpty {
+            center.removePendingNotificationRequests(withIdentifiers: ids)
+        }
+        if includingLog {
+            TrainingNudgeLog.clearAll(in: defaults)
+        }
+    }
+
+    /// The banner's first line. One spelling per kind, shared by the real schedule and
+    /// the QA trigger — two copies of a localized literal is two entries in
+    /// `Localizable.xcstrings` that drift the first time one of them is reworded.
+    static func trainingNudgeTitle(_ kind: TrainingNudgeKind) -> String {
+        switch kind {
+        case .streak:
+            return String(
+                localized: "Your streak is on the line",
+                comment: "Notification title when a run streak will end at midnight"
+            )
+        case .missedWorkouts:
+            return String(
+                localized: "Pick the plan back up",
+                comment: "Notification title when several planned sessions have been missed"
+            )
+        case .weeklyRecap:
+            return String(
+                localized: "Your week in running",
+                comment: "Notification title for the Sunday-evening weekly recap"
+            )
+        }
+    }
+
+    /// "Your 12-day streak ends at midnight" — the number, because the number is the
+    /// whole reason the message works, and the smallest run that saves it.
+    ///
+    /// Internal rather than private so `TrainingNudgePolicyTests` can assert the streak
+    /// length reaches the body: a nudge that says "your streak is at risk" and no number is one
+    /// the runner has to open the app to size up, which is what the banner is for.
+    static func streakNudgeBody(_ nudge: StreakNudge) -> String {
+        String(
+            localized: """
+                You haven't logged a run today, so your \(nudge.days)-day streak ends at \
+                midnight. Twenty easy minutes keeps it alive.
+                """,
+            comment: "Notification body nudging the runner to protect a run streak that ends tonight"
+        )
+    }
+
+    /// "Four sessions have gone by" — the count and how far behind the plan now is, so
+    /// the runner knows what tapping through is going to offer to do.
+    static func missedWorkoutNudgeBody(_ info: MissedWorkoutInfo) -> String {
+        let missed = String(
+            localized: "\(info.count) planned sessions have gone by unlogged.",
+            comment: "First sentence of the missed-workout notification: how many sessions were missed"
+        )
+        guard info.daysToShift > 0 else {
+            return missed + " " + String(
+                localized: "Tap to shift the rest of the plan forward and pick it back up.",
+                comment: "Second sentence of the missed-workout notification"
+            )
+        }
+        return missed + " " + String(
+            localized: "Tap to shift the rest of the plan \(info.daysToShift) days forward and pick it back up.",
+            comment: "Second sentence of the missed-workout notification, naming the shift in days"
+        )
+    }
+
+    /// The week in two sentences: what was run, and how that sat against the goal.
+    static func weeklyRecapBody(_ recap: WeeklyRecap, unit: UnitPreference) -> String {
+        let total = recap.totalMeters.distanceString(unit: unit)
+        let longest = recap.longestRunMeters.distanceString(unit: unit)
+
+        // Spelled out rather than interpolated because `String(localized:)` extracts one
+        // key per call and "1 runs" is what a single interpolation produces.
+        let totals = recap.runCount == 1
+            ? String(
+                localized: "1 run, \(total).",
+                comment: "First sentence of the weekly recap when exactly one run was logged"
+            )
+            : String(
+                localized: "\(recap.runCount) runs, \(total) — longest \(longest).",
+                comment: "First sentence of the weekly recap: run count, weekly distance, longest run"
+            )
+
+        guard recap.hasGoal else { return totals }
+        let goal = recap.goalMeters.distanceString(unit: unit)
+
+        if recap.isGoalMet {
+            return totals + " " + String(
+                localized: "That clears your \(goal) weekly goal.",
+                comment: "Second sentence of the weekly recap when the weekly goal was met"
+            )
+        }
+        return totals + " " + String(
+            localized: "\(recap.remainingMeters.distanceString(unit: unit)) short of your \(goal) goal.",
+            comment: "Second sentence of the weekly recap when the weekly goal was missed"
+        )
+    }
+
     // MARK: Cancellation
 
     /// Cancels every pending reminder belonging to `plan` — used when a plan is
@@ -436,6 +713,55 @@ final class NotificationService: NSObject {
         try await triggerWorkoutReminderTestNotification()
         try await triggerMorningReminderTestNotification()
         try await triggerSyncedRunTestNotification(in: context)
+        try await triggerTrainingNudgeTestNotifications()
+    }
+
+    /// Fires one of each A9 nudge immediately, with sample numbers, so the copy can be
+    /// read on a real Lock Screen.
+    ///
+    /// Deliberately bypasses `scheduleEveningNudge` — that path is gated on the evening
+    /// slot and the delivery log, and a QA trigger that only works between 18:00 and
+    /// 21:00, once, is not one anybody will use.
+    func triggerTrainingNudgeTestNotifications(unit: UnitPreference = .metric) async throws {
+        guard await isAuthorized else { return }
+
+        let samples: [(kind: TrainingNudgeKind, body: String)] = [
+            (.streak, Self.streakNudgeBody(StreakNudge(days: 12))),
+            (
+                .missedWorkouts,
+                Self.missedWorkoutNudgeBody(
+                    MissedWorkoutInfo(count: 3, firstMissedDate: Date(), daysToShift: 5)
+                )
+            ),
+            (
+                .weeklyRecap,
+                Self.weeklyRecapBody(
+                    WeeklyRecap(
+                        weekStart: Date(),
+                        runCount: 4,
+                        totalMeters: 32_400,
+                        longestRunMeters: 16_100,
+                        goalMeters: 30_000
+                    ),
+                    unit: unit
+                )
+            )
+        ]
+
+        for (kind, body) in samples {
+            let content = UNMutableNotificationContent()
+            content.title = Self.trainingNudgeTitle(kind)
+            content.body = body
+            content.sound = .default
+            content.categoryIdentifier = Category.trainingNudge
+            content.userInfo = [Self.trainingNudgeKindKey: kind.rawValue]
+            let request = UNNotificationRequest(
+                identifier: "test-training-nudge-\(kind.rawValue)-\(UUID().uuidString)",
+                content: content,
+                trigger: nil
+            )
+            try await center.add(request)
+        }
     }
 
     func triggerWorkoutReminderTestNotification() async throws {
@@ -578,6 +904,16 @@ final class NotificationService: NSObject {
         )
     }
 
+    private func handleTrainingNudgeTap(kind: TrainingNudgeKind) {
+        guard !trainingNudgeTapListeners.isEmpty else {
+            bufferedTrainingNudgeKind = kind
+            return
+        }
+        for listener in trainingNudgeTapListeners.values {
+            listener.yield(kind)
+        }
+    }
+
     private func handleHeatAdvisoryTap(workoutID: String) {
         guard !heatAdvisoryTapListeners.isEmpty else {
             bufferedHeatAdvisoryTapID = workoutID
@@ -684,6 +1020,16 @@ extension NotificationService: UNUserNotificationCenterDelegate {
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
         let content = response.notification.request.content
+
+        if content.categoryIdentifier == Category.trainingNudge,
+           let raw = content.userInfo[Self.trainingNudgeKindKey] as? String,
+           let kind = TrainingNudgeKind(rawValue: raw) {
+            Task { @MainActor in
+                self.handleTrainingNudgeTap(kind: kind)
+            }
+            completionHandler()
+            return
+        }
 
         if content.categoryIdentifier == Category.heatAdvisory,
            let workoutID = content.userInfo["heatAdvisoryWorkoutID"] as? String {
