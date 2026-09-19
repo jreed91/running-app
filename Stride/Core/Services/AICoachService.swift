@@ -247,10 +247,14 @@ struct AICoachService: Sendable {
         onDeviceBackend?.presentLimitIncrease()
     }
 
+    /// - Parameter onPartialText: the reply as written so far, delivered repeatedly while
+    ///   the coach writes. Each call supersedes the last (see `OnDeviceCoachGenerating`),
+    ///   so the chat renders the value it is handed rather than appending it.
     func chatWithProvider(
         provider: AIProvider,
         context: String,
-        messages: [AIProviderChatMessage]
+        messages: [AIProviderChatMessage],
+        onPartialText: @escaping @Sendable (String) -> Void = { _ in }
     ) async throws -> String {
         guard let backend = onDeviceBackend, await backend.isAvailable() else {
             throw OnDeviceCoachError.unavailable
@@ -259,7 +263,8 @@ struct AICoachService: Sendable {
             instructions: Self.chatInstructions,
             context: context,
             messages: messages,
-            useServerModel: provider.usesPrivateCloudCompute
+            useServerModel: provider.usesPrivateCloudCompute,
+            onPartialText: onPartialText
         )
     }
 
@@ -274,7 +279,7 @@ struct AICoachService: Sendable {
         provider: AIProvider,
         heartRateZones: [HRZoneSlice] = [],
         unitPreference: UnitPreference = .metric,
-        onChunk: @escaping @Sendable (String) -> Void = { _ in }
+        onPartialText: @escaping @Sendable (String) -> Void = { _ in }
     ) async -> AICoachInsight {
         let context = makePromptContext(
             workout: workout,
@@ -303,7 +308,7 @@ struct AICoachService: Sendable {
                     instructions: Self.insightInstructions,
                     prompt: prompt,
                     useServerModel: provider.usesPrivateCloudCompute,
-                    onPartial: onChunk
+                    onPartialText: onPartialText
                 )
                 return makeInsight(from: structured, provider: provider)
             } catch {
@@ -399,7 +404,7 @@ struct AICoachService: Sendable {
         profile: UserProfile,
         provider: AIProvider,
         unitPreference: UnitPreference = .metric,
-        onChunk: @escaping @Sendable (String) -> Void = { _ in }
+        onPartialText: @escaping @Sendable (String) -> Void = { _ in }
     ) async -> [UUID: ScheduledWorkout] {
         let adaptableWorkouts = workouts.filter {
             $0.workoutType != .rest
@@ -420,7 +425,7 @@ struct AICoachService: Sendable {
             instructions: Self.planAdaptationInstructions,
             prompt: Self.planAdaptationPrompt(context: adaptationContext),
             useServerModel: provider.usesPrivateCloudCompute,
-            onPartial: onChunk
+            onPartialText: onPartialText
         )
 
         guard let structured else { return [:] }

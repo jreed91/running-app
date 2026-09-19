@@ -135,9 +135,9 @@ extension RunSummaryView {
             provider: appSettings.aiProvider,
             heartRateZones: zoneSlices,
             unitPreference: appSettings.unitPreference,
-            onChunk: { chunk in
+            onPartialText: { text in
                 Task { @MainActor in
-                    appendInsightStreamChunk(chunk)
+                    setInsightStreamText(text)
                 }
             }
         )
@@ -225,9 +225,15 @@ extension RunSummaryView {
         return "\(date) \(workout.workoutType.localizedName)"
     }
 
+    /// The coach's summary as written so far, which replaces what was shown before.
+    ///
+    /// This used to append, back when the backend emitted the finished summary once and
+    /// "the chunk" and "the whole text" were the same string. Streaming partials are
+    /// cumulative snapshots (see `OnDeviceCoachGenerating`), so appending them would
+    /// render the summary once per token.
     @MainActor
-    private func appendInsightStreamChunk(_ chunk: String) {
-        aiStreamBuffer += chunk
+    private func setInsightStreamText(_ text: String) {
+        aiStreamBuffer = text
     }
 
     var hasAIKey: Bool {

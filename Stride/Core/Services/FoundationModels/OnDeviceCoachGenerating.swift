@@ -9,6 +9,12 @@ import Foundation
 /// only thing that differs between the on-device and Private Cloud Compute models is
 /// which model backs the session; the prompts, the `@Generable` schemas and every
 /// downstream mapping are identical (Apple ships one unified API for both).
+///
+/// **Partial text is cumulative.** Every `onPartialText` closure below receives the
+/// whole text generated so far, not the delta since the previous call, because that is
+/// what `LanguageModelSession.streamResponse` yields: each element is a snapshot of the
+/// growing value, not the tokens added to it. Callers assign the value they are given;
+/// appending it would repeat the reply once per snapshot.
 protocol OnDeviceCoachGenerating: Sendable {
 
     /// Whether a model is currently usable (eligible device, Apple Intelligence enabled,
@@ -32,11 +38,14 @@ protocol OnDeviceCoachGenerating: Sendable {
     @MainActor
     func presentLimitIncrease()
 
+    /// - Parameter onPartialText: the coach's summary **as written so far**, delivered
+    ///   repeatedly while the model generates. Each call supersedes the last, so a UI
+    ///   assigns it rather than appending — see the note on `OnDeviceCoachGenerating`.
     func generateCoachInsight(
         instructions: String,
         prompt: String,
         useServerModel: Bool,
-        onPartial: @escaping @Sendable (String) -> Void
+        onPartialText: @escaping @Sendable (String) -> Void
     ) async throws -> AICoachStructuredResponse
 
     func generateWorkoutAdaptation(
@@ -45,18 +54,24 @@ protocol OnDeviceCoachGenerating: Sendable {
         useServerModel: Bool
     ) async throws -> AIWorkoutAdaptationResponse
 
+    /// - Parameter onPartialText: every per-workout explanation completed so far, one
+    ///   per line, superseded on each call.
     func generatePlanAdaptation(
         instructions: String,
         prompt: String,
         useServerModel: Bool,
-        onPartial: @escaping @Sendable (String) -> Void
+        onPartialText: @escaping @Sendable (String) -> Void
     ) async throws -> AIWorkoutPlanAdaptationResponse
 
+    /// - Parameter onPartialText: the reply as written so far, superseded on each call.
+    ///   The chat bubble renders this directly, which is the whole point of streaming it:
+    ///   a coaching answer takes seconds to generate and the runner is watching.
     func generateChatReply(
         instructions: String,
         context: String,
         messages: [AIProviderChatMessage],
-        useServerModel: Bool
+        useServerModel: Bool,
+        onPartialText: @escaping @Sendable (String) -> Void
     ) async throws -> String
 }
 

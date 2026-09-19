@@ -360,12 +360,38 @@ What landed:
   **Settings → AI Coach** status row with the `limitIncreaseSuggestion` upgrade button, and
   `AICoachChatView` names the real cause instead of blaming Apple Intelligence setup.
 
+### Phase 2: streaming and context pre-flight are live
+
+- **Token-level streaming is wired on all three streaming paths.** `generateCoachInsight`
+  and `generatePlanAdaptation` go through `streamGenerate`, which runs
+  `session.streamResponse(to:generating:)` and publishes text off each snapshot;
+  `generateChatReply` streams `ResponseStream<String>` straight into the chat bubble, which
+  is what the runner notices — the chat used to sit on a typing indicator for the whole
+  generation. Both models take the same path: `withServerFallback` picks the model, so
+  on-device and PCC stream identically.
+- **Partials are cumulative, and that is now the contract.** `streamResponse` yields a
+  snapshot of the growing value, not the tokens added to it, so every `onPartialText`
+  closure is documented as superseding the last and the three call sites assign rather
+  than append. The parameter was renamed from `onChunk`/`onPartial` so the compiler makes
+  every caller look at it.
+- The finished value comes from the last snapshot's `rawContent` via
+  `Content(_: GeneratedContent)`, not from `collect()`: `ResponseStream` is single-pass, so
+  iterating it and collecting it are two ways of consuming the same stream.
+- `SmartAdaptSummaryStream` lost its partial-JSON scanner. It was looking for a `"summary"`
+  key that guided generation never emits, so Smart Adapt showed "Reading coach summary…"
+  for the whole run; the backend now publishes each finished explanation on its own line.
+- **`model.tokenCount(for:)` pre-flight trimming is implemented.** `withServerFallback`
+  fits the prompt to whichever model it chose (`fittedPrompt`), reserving a quarter of
+  `contextSize` plus the instructions for the response. `CoachPromptBudget` holds the
+  editing rule in plain Foundation, so what a prompt may lose is testable without an SDK:
+  only the recent-run block shrinks, oldest row first, never below one row, and never the
+  workout ids the plan response is keyed on.
+
 Still open:
 
-- Token-level streaming still emits a single partial; `streamResponse(to:generating:)` is
-  unverified on-device.
-- `model.tokenCount(for:)` pre-flight trimming (see the risk table) is not implemented — PCC's
-  32K window makes it much less pressing for the plan-adaptation prompt.
+- Nothing here is compiler-checked. Every symbol below needs a build on a real SDK, and
+  three of them could not be confirmed against Apple's published docs at all — see the
+  checklist.
 
 - Settings drops the API-key `SecureField` and model-override field; `SettingsView`,
   `RunSummaryView`, `AICoachChatView`, and `PlanTabView` copy no longer mentions keys.
@@ -531,6 +557,26 @@ provider-aware footnote), `RunSummaryView` / `AICoachChatView` / `PlanTabView` n
       is catchable (`.quotaLimitReached` / `.networkFailure` / `.serviceUnavailable`).
 - [ ] Confirm the `@Generable` macro preserves the memberwise initializer (used by the
       mapping tests); adjust the tests if it generates a different init.
+- [x] `ResponseStream` element shape — verified against Apple's docs: iterating yields
+      `ResponseStream.Snapshot`, whose `content` is `Content.PartiallyGenerated` and whose
+      `rawContent` is `GeneratedContent`. `Generable` inherits
+      `ConvertibleFromGeneratedContent.init(_:) throws`, which is how `streamGenerate`
+      rebuilds the finished value.
+- [ ] **Unconfirmed:** `session.streamResponse(to:generating:contextOptions:)`. The
+      `contextOptions` overload is confirmed on `respond(to:generating:)` and already
+      shipped in this file; the streaming twin is assumed by symmetry. If it does not
+      exist, drop `contextOptions` from the streaming call in `streamGenerate` — the cost
+      is `.deep` reasoning on plan adaptation, not correctness.
+- [ ] **Unconfirmed:** `tokenCount(for:)` and `contextSize` as `LanguageModel` *protocol*
+      requirements. Both are documented (`contextSize` on
+      `PrivateCloudComputeLanguageModel`, both in "Managing the context window"), but not
+      as protocol members, and `fittedPrompt` takes `some LanguageModel`. If they are
+      concrete-only, give `fittedPrompt` a concrete overload per model.
+- [ ] **Unconfirmed:** whether `tokenCount(for:)` / `contextSize` are `async throws`. This
+      file writes `try? await` on both, which the repo's own note on
+      `PrivateCloudComputeLanguageModel.contextSize` supports. `try`/`await` on an
+      expression needing neither is a warning rather than an error, so this compiles
+      either way — but the warnings should be cleaned up once the real shape is known.
 
 ---
 
