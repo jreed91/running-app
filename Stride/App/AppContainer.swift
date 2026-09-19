@@ -666,7 +666,7 @@ final class AppContainer {
         profile: UserProfile,
         provider: AIProvider,
         unitPreference: UnitPreference = .metric,
-        onPartialText: @escaping @Sendable (String) -> Void = { _ in }
+        onPartialText: @escaping @MainActor @Sendable (String) -> Void = { _ in }
     ) async -> [UUID: ScheduledWorkout] {
         await aiCoachService.adaptScheduledWorkoutsWithProvider(
             scheduled: workouts,

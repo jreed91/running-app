@@ -15,6 +15,15 @@ import Foundation
 /// what `LanguageModelSession.streamResponse` yields: each element is a snapshot of the
 /// growing value, not the tokens added to it. Callers assign the value they are given;
 /// appending it would repeat the reply once per snapshot.
+///
+/// **And it is delivered on the main actor, awaited.** The closures are `@MainActor` and
+/// the backend `await`s each one before pulling the next snapshot, so a caller writes
+/// view state directly inside it — no `Task { @MainActor in … }` wrapper. That wrapper is
+/// what the first version of this used, and it is why the text still arrived in one jump:
+/// it made each update an *independent* main-actor task rather than a step of the stream,
+/// so the updates queued up and SwiftUI coalesced them into a single render instead of
+/// one per snapshot. Awaiting the update keeps them ordered and gives each one its own
+/// pass, which is also the shape of Apple's own streaming sample.
 protocol OnDeviceCoachGenerating: Sendable {
 
     /// Whether a model is currently usable (eligible device, Apple Intelligence enabled,
@@ -45,7 +54,7 @@ protocol OnDeviceCoachGenerating: Sendable {
         instructions: String,
         prompt: String,
         useServerModel: Bool,
-        onPartialText: @escaping @Sendable (String) -> Void
+        onPartialText: @escaping @MainActor @Sendable (String) -> Void
     ) async throws -> AICoachStructuredResponse
 
     func generateWorkoutAdaptation(
@@ -60,7 +69,7 @@ protocol OnDeviceCoachGenerating: Sendable {
         instructions: String,
         prompt: String,
         useServerModel: Bool,
-        onPartialText: @escaping @Sendable (String) -> Void
+        onPartialText: @escaping @MainActor @Sendable (String) -> Void
     ) async throws -> AIWorkoutPlanAdaptationResponse
 
     /// - Parameter onPartialText: the reply as written so far, superseded on each call.
@@ -71,7 +80,7 @@ protocol OnDeviceCoachGenerating: Sendable {
         context: String,
         messages: [AIProviderChatMessage],
         useServerModel: Bool,
-        onPartialText: @escaping @Sendable (String) -> Void
+        onPartialText: @escaping @MainActor @Sendable (String) -> Void
     ) async throws -> String
 }
 
