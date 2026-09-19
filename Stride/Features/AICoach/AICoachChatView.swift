@@ -430,9 +430,10 @@ struct AICoachChatView: View {
                 context: coachContext,
                 messages: providerMessages,
                 onPartialText: { text in
-                    Task { @MainActor in
-                        showStreamingReply(text)
-                    }
+                    // Assigned directly: the closure is `@MainActor` and the backend
+                    // awaits it, so this is a step of the stream rather than a task
+                    // racing it.
+                    streamingReply = text
                 }
             )
             withAnimation(AppAnimation.snappy) {
@@ -473,17 +474,6 @@ struct AICoachChatView: View {
             return "You have used today's Private Cloud Compute requests. They refresh at \(refresh) — or switch to the on-device model in Settings to keep going now."
         }
         return "I could not reach \(provider.localizedName). Make sure Apple Intelligence is enabled on this device, then try again."
-    }
-
-    /// The reply as written so far, which replaces what the live bubble was showing —
-    /// partials are cumulative snapshots, not deltas (see `OnDeviceCoachGenerating`).
-    ///
-    /// Guarded on `isWaitingForCoach` so a snapshot that lands after the finished message
-    /// was appended cannot put the half-written version back on screen underneath it.
-    @MainActor
-    private func showStreamingReply(_ text: String) {
-        guard isWaitingForCoach else { return }
-        streamingReply = text
     }
 
     @MainActor

@@ -15,9 +15,9 @@ private struct FakeOnDeviceCoach: OnDeviceCoachGenerating {
         instructions: String,
         prompt: String,
         useServerModel: Bool,
-        onPartialText: @escaping @Sendable (String) -> Void
+        onPartialText: @escaping @MainActor @Sendable (String) -> Void
     ) async throws -> AICoachStructuredResponse {
-        onPartialText(insight.summary)
+        await onPartialText(insight.summary)
         return insight
     }
 
@@ -33,7 +33,7 @@ private struct FakeOnDeviceCoach: OnDeviceCoachGenerating {
         instructions: String,
         prompt: String,
         useServerModel: Bool,
-        onPartialText: @escaping @Sendable (String) -> Void
+        onPartialText: @escaping @MainActor @Sendable (String) -> Void
     ) async throws -> AIWorkoutPlanAdaptationResponse {
         AIWorkoutPlanAdaptationResponse(adaptations: [])
     }
@@ -43,7 +43,7 @@ private struct FakeOnDeviceCoach: OnDeviceCoachGenerating {
         context: String,
         messages: [AIProviderChatMessage],
         useServerModel: Bool,
-        onPartialText: @escaping @Sendable (String) -> Void
+        onPartialText: @escaping @MainActor @Sendable (String) -> Void
     ) async throws -> String {
         "Keep your easy runs easy."
     }
@@ -69,7 +69,7 @@ private struct RecordingOnDeviceCoach: OnDeviceCoachGenerating {
         instructions: String,
         prompt: String,
         useServerModel: Bool,
-        onPartialText: @escaping @Sendable (String) -> Void
+        onPartialText: @escaping @MainActor @Sendable (String) -> Void
     ) async throws -> AICoachStructuredResponse {
         await recorder.record(prompt)
         return insight
@@ -87,7 +87,7 @@ private struct RecordingOnDeviceCoach: OnDeviceCoachGenerating {
         instructions: String,
         prompt: String,
         useServerModel: Bool,
-        onPartialText: @escaping @Sendable (String) -> Void
+        onPartialText: @escaping @MainActor @Sendable (String) -> Void
     ) async throws -> AIWorkoutPlanAdaptationResponse {
         AIWorkoutPlanAdaptationResponse(adaptations: [])
     }
@@ -97,7 +97,7 @@ private struct RecordingOnDeviceCoach: OnDeviceCoachGenerating {
         context: String,
         messages: [AIProviderChatMessage],
         useServerModel: Bool,
-        onPartialText: @escaping @Sendable (String) -> Void
+        onPartialText: @escaping @MainActor @Sendable (String) -> Void
     ) async throws -> String {
         ""
     }
@@ -118,7 +118,7 @@ private struct QuotaReportingCoach: OnDeviceCoachGenerating {
         instructions: String,
         prompt: String,
         useServerModel: Bool,
-        onPartialText: @escaping @Sendable (String) -> Void
+        onPartialText: @escaping @MainActor @Sendable (String) -> Void
     ) async throws -> AICoachStructuredResponse {
         throw OnDeviceCoachError.unavailable
     }
@@ -135,7 +135,7 @@ private struct QuotaReportingCoach: OnDeviceCoachGenerating {
         instructions: String,
         prompt: String,
         useServerModel: Bool,
-        onPartialText: @escaping @Sendable (String) -> Void
+        onPartialText: @escaping @MainActor @Sendable (String) -> Void
     ) async throws -> AIWorkoutPlanAdaptationResponse {
         AIWorkoutPlanAdaptationResponse(adaptations: [])
     }
@@ -145,13 +145,14 @@ private struct QuotaReportingCoach: OnDeviceCoachGenerating {
         context: String,
         messages: [AIProviderChatMessage],
         useServerModel: Bool,
-        onPartialText: @escaping @Sendable (String) -> Void
+        onPartialText: @escaping @MainActor @Sendable (String) -> Void
     ) async throws -> String {
         if let chatError { throw chatError }
-        // Cumulative snapshots, the way `streamResponse` delivers them.
-        onPartialText("Keep your")
-        onPartialText("Keep your easy runs")
-        onPartialText("Keep your easy runs easy.")
+        // Cumulative snapshots, the way `streamResponse` delivers them — and awaited,
+        // so the caller has applied each before the next arrives.
+        await onPartialText("Keep your")
+        await onPartialText("Keep your easy runs")
+        await onPartialText("Keep your easy runs easy.")
         return "Keep your easy runs easy."
     }
 }
@@ -369,7 +370,8 @@ struct FoundationModelsCoachServiceTests {
         }
     }
 
-    @Test("Chat hands every partial to the caller, each superseding the last")
+    @Test("Chat hands every partial to the caller, in order, before it returns")
+    @MainActor
     func chatForwardsCumulativePartials() async throws {
         let backend = QuotaReportingCoach(status: nil, chatError: nil)
         let service = AICoachService(onDeviceBackend: backend)
@@ -379,42 +381,37 @@ struct FoundationModelsCoachServiceTests {
             provider: .applePrivateCloud,
             context: "",
             messages: [],
-            onPartialText: { text in
-                Task { await partials.record(text) }
-            }
+            onPartialText: { partials.record($0) }
         )
 
         #expect(reply == "Keep your easy runs easy.")
 
-        // Each partial contains the one before it rather than continuing it: a view that
-        // appended these would render "Keep yourKeep your easy runs…".
-        let recorded = await partials.waitForCount(3)
-        #expect(recorded == [
+        // No waiting or polling here, and that is the assertion: the updates are awaited
+        // on the way through, so all of them have landed by the time the call returns.
+        // The fire-and-forget `Task` this replaced could not promise that, which is why
+        // the reply arrived in one jump instead of growing.
+        #expect(partials.texts == [
             "Keep your",
             "Keep your easy runs",
             "Keep your easy runs easy."
         ])
-        #expect(recorded.last == reply)
+
+        // Each partial contains the one before it rather than continuing it: a view that
+        // appended these would render "Keep yourKeep your easy runs…".
+        #expect(partials.texts.last == reply)
     }
 }
 
 /// Collects the partial texts a streaming call publishes.
 ///
-/// `waitForCount` exists because the partials are handed over synchronously but recorded
-/// on this actor, so the last hop can still be in flight when the call returns.
-private actor PartialRecorder {
+/// Main-actor isolated because that is where the callback is delivered — the same place
+/// a view would be writing its state from.
+@MainActor
+private final class PartialRecorder {
     private(set) var texts: [String] = []
 
     func record(_ text: String) {
         texts.append(text)
-    }
-
-    func waitForCount(_ count: Int, attempts: Int = 100) async -> [String] {
-        for _ in 0..<attempts {
-            if texts.count >= count { break }
-            try? await Task.sleep(for: .milliseconds(10))
-        }
-        return texts
     }
 }
 

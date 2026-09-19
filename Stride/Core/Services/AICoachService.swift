@@ -254,7 +254,7 @@ struct AICoachService: Sendable {
         provider: AIProvider,
         context: String,
         messages: [AIProviderChatMessage],
-        onPartialText: @escaping @Sendable (String) -> Void = { _ in }
+        onPartialText: @escaping @MainActor @Sendable (String) -> Void = { _ in }
     ) async throws -> String {
         guard let backend = onDeviceBackend, await backend.isAvailable() else {
             throw OnDeviceCoachError.unavailable
@@ -279,7 +279,7 @@ struct AICoachService: Sendable {
         provider: AIProvider,
         heartRateZones: [HRZoneSlice] = [],
         unitPreference: UnitPreference = .metric,
-        onPartialText: @escaping @Sendable (String) -> Void = { _ in }
+        onPartialText: @escaping @MainActor @Sendable (String) -> Void = { _ in }
     ) async -> AICoachInsight {
         let context = makePromptContext(
             workout: workout,
@@ -404,7 +404,7 @@ struct AICoachService: Sendable {
         profile: UserProfile,
         provider: AIProvider,
         unitPreference: UnitPreference = .metric,
-        onPartialText: @escaping @Sendable (String) -> Void = { _ in }
+        onPartialText: @escaping @MainActor @Sendable (String) -> Void = { _ in }
     ) async -> [UUID: ScheduledWorkout] {
         let adaptableWorkouts = workouts.filter {
             $0.workoutType != .rest

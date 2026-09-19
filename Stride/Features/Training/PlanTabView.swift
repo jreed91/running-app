@@ -199,9 +199,9 @@ struct PlanTabView: View {
             provider: appSettings.aiProvider,
             unitPreference: appSettings.unitPreference,
             onPartialText: { text in
-                Task { @MainActor in
-                    showSmartAdaptSummaries(text)
-                }
+                // Direct assignment on the main actor; see `OnDeviceCoachGenerating` for
+                // why this is not wrapped in a `Task`.
+                showSmartAdaptSummaries(text)
             }
         )
 

@@ -101,7 +101,7 @@ struct FoundationModelsCoachBackend: OnDeviceCoachGenerating {
         instructions: String,
         prompt: String,
         useServerModel: Bool,
-        onPartialText: @escaping @Sendable (String) -> Void
+        onPartialText: @escaping @MainActor @Sendable (String) -> Void
     ) async throws -> AICoachStructuredResponse {
         let generated = try await streamGenerate(
             instructions: instructions,
@@ -139,7 +139,7 @@ struct FoundationModelsCoachBackend: OnDeviceCoachGenerating {
         instructions: String,
         prompt: String,
         useServerModel: Bool,
-        onPartialText: @escaping @Sendable (String) -> Void
+        onPartialText: @escaping @MainActor @Sendable (String) -> Void
     ) async throws -> AIWorkoutPlanAdaptationResponse {
         let generated = try await streamGenerate(
             instructions: instructions,
@@ -169,7 +169,7 @@ struct FoundationModelsCoachBackend: OnDeviceCoachGenerating {
         context: String,
         messages: [AIProviderChatMessage],
         useServerModel: Bool,
-        onPartialText: @escaping @Sendable (String) -> Void
+        onPartialText: @escaping @MainActor @Sendable (String) -> Void
     ) async throws -> String {
         // Replays the conversation as a single prompt to mirror the stateless cloud
         // contract (callers pass the full transcript each turn).
@@ -208,7 +208,10 @@ struct FoundationModelsCoachBackend: OnDeviceCoachGenerating {
             var latest = ""
             for try await snapshot in stream {
                 latest = snapshot.content
-                onPartialText(latest.trimmingCharacters(in: .whitespacesAndNewlines))
+                // Awaited, not fired off in a detached `Task`: the update has to land
+                // before the next snapshot is pulled, or SwiftUI coalesces the lot of
+                // them into one render and the reply appears in a single jump.
+                await onPartialText(latest.trimmingCharacters(in: .whitespacesAndNewlines))
             }
             return latest.trimmingCharacters(in: .whitespacesAndNewlines)
         }
@@ -305,7 +308,7 @@ struct FoundationModelsCoachBackend: OnDeviceCoachGenerating {
         useServerModel: Bool,
         reasoning: ContextOptions.ReasoningLevel,
         partialText: @escaping @Sendable (Content.PartiallyGenerated) -> String,
-        onPartialText: @escaping @Sendable (String) -> Void
+        onPartialText: @escaping @MainActor @Sendable (String) -> Void
     ) async throws -> Content where Content: Generable {
         try await withServerFallback(
             instructions: instructions,
@@ -340,7 +343,9 @@ struct FoundationModelsCoachBackend: OnDeviceCoachGenerating {
                 // main actor for the other ninety-odd percent of them.
                 if text != lastPublished {
                     lastPublished = text
-                    onPartialText(text)
+                    // See the note in `generateChatReply`: awaited so each update gets
+                    // its own render pass.
+                    await onPartialText(text)
                 }
             }
 

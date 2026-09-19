@@ -374,6 +374,18 @@ What landed:
   closure is documented as superseding the last and the three call sites assign rather
   than append. The parameter was renamed from `onChunk`/`onPartial` so the compiler makes
   every caller look at it.
+- **Partials are delivered on the main actor and awaited.** The closures are `@MainActor`
+  and the backend `await`s each one before pulling the next snapshot, so the views assign
+  view state directly inside them.
+
+  The first version wrapped each update in `Task { @MainActor in … }`, and the reply still
+  arrived in one jump on device. That wrapper made every update an independent main-actor
+  task rather than a step of the stream: the updates queued and SwiftUI coalesced them
+  into a single render. `SWIFT_APPROACHABLE_CONCURRENCY` (see `project.yml`) is what makes
+  the shape matter — with `NonisolatedNonsendingByDefault` on, the whole generation runs
+  on the caller's actor, so the stream loop and those queued tasks compete for the same
+  main actor. Awaiting the update inline keeps them ordered, gives each its own render
+  pass, and is the shape of Apple's own streaming sample.
 - The finished value comes from the last snapshot's `rawContent` via
   `Content(_: GeneratedContent)`, not from `collect()`: `ResponseStream` is single-pass, so
   iterating it and collecting it are two ways of consuming the same stream.
@@ -567,11 +579,10 @@ provider-aware footnote), `RunSummaryView` / `AICoachChatView` / `PlanTabView` n
       `rawContent` is `GeneratedContent`. `Generable` inherits
       `ConvertibleFromGeneratedContent.init(_:) throws`, which is how `streamGenerate`
       rebuilds the finished value.
-- [ ] **Unconfirmed:** `session.streamResponse(to:generating:contextOptions:)`. The
-      `contextOptions` overload is confirmed on `respond(to:generating:)` and already
-      shipped in this file; the streaming twin is assumed by symmetry. If it does not
-      exist, drop `contextOptions` from the streaming call in `streamGenerate` — the cost
-      is `.deep` reasoning on plan adaptation, not correctness.
+- [x] `session.streamResponse(to:generating:contextOptions:)` — **confirmed by build.**
+      It was assumed by symmetry with `respond(to:generating:)`; the app has since been
+      built and run on device with this code in it, which it could not have been if the
+      overload did not exist.
 - [x] `tokenCount(for:)` / `contextSize` as `LanguageModel` protocol requirements —
       **they are not.** This broke the archive build on the first attempt:
 
