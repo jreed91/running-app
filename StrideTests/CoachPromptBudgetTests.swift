@@ -2,11 +2,12 @@ import Foundation
 import Testing
 @testable import Stride
 
-/// Covers `CoachPromptBudget`, the editing half of the context-window pre-flight.
+/// Covers `CoachPromptBudget`: the size estimate a prompt is measured against, and the
+/// rule for what it may lose to fit.
 ///
-/// The measuring half needs a real `LanguageModel` and so cannot be tested off-device;
-/// this is the half that decides what a prompt is allowed to lose, which is the half
-/// that can silently produce a wrong answer, so it is the half worth pinning down.
+/// Only the context window itself comes from the model, so everything that can silently
+/// produce a wrong answer — an estimate that undershoots, a trim that eats a workout id —
+/// is pinned down here, without an SDK.
 struct CoachPromptBudgetTests {
 
     /// Shaped like `AICoachService.makePlanAdaptationContext`: sections separated by a
@@ -30,6 +31,35 @@ struct CoachPromptBudgetTests {
         22222222-2222-2222-2222-222222222222 | Sep 24, 2026 Wed | Tempo
         """
     }
+
+    // MARK: Size estimate
+
+    @Test("The token estimate rounds up and runs ahead of the real count")
+    func estimateRoundsUp() {
+        #expect(CoachPromptBudget.estimatedTokenCount(of: "") == 0)
+        // Ceiling, not truncation: a one-character prompt costs a token, not none.
+        #expect(CoachPromptBudget.estimatedTokenCount(of: "a") == 1)
+        #expect(CoachPromptBudget.estimatedTokenCount(of: "abc") == 1)
+        #expect(CoachPromptBudget.estimatedTokenCount(of: "abcd") == 2)
+
+        // The estimate must overshoot, never undershoot: undershooting sends a prompt the
+        // model cannot hold, while overshooting drops one extra run.
+        let prose = String(repeating: "the runner held an even pace throughout ", count: 20)
+        let realisticProseTokens = prose.count / 4  // ~4 characters per token for prose
+        #expect(CoachPromptBudget.estimatedTokenCount(of: prose) > realisticProseTokens)
+    }
+
+    @Test("A UUID is not charged at prose rates")
+    func estimateCoversIdHeavyRows() {
+        // The plan prompt carries one 36-character UUID per workout, and ids tokenize far
+        // worse than words. The estimate should not come in under one token per three
+        // characters for them.
+        let id = "11111111-1111-1111-1111-111111111111"
+        #expect(id.count == 36)
+        #expect(CoachPromptBudget.estimatedTokenCount(of: id) == 12)
+    }
+
+    // MARK: Trimming
 
     @Test("The oldest run is the row that goes")
     func dropsTheOldestRun() throws {

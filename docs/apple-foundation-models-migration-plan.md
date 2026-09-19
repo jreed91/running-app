@@ -380,12 +380,17 @@ What landed:
 - `SmartAdaptSummaryStream` lost its partial-JSON scanner. It was looking for a `"summary"`
   key that guided generation never emits, so Smart Adapt showed "Reading coach summary…"
   for the whole run; the backend now publishes each finished explanation on its own line.
-- **`model.tokenCount(for:)` pre-flight trimming is implemented.** `withServerFallback`
-  fits the prompt to whichever model it chose (`fittedPrompt`), reserving a quarter of
-  `contextSize` plus the instructions for the response. `CoachPromptBudget` holds the
-  editing rule in plain Foundation, so what a prompt may lose is testable without an SDK:
-  only the recent-run block shrinks, oldest row first, never below one row, and never the
-  workout ids the plan response is keyed on.
+- **Context-window pre-flight trimming is implemented, with an estimated prompt size.**
+  `withServerFallback` fits the prompt to whichever model it chose (`fittedPrompt`),
+  reserving a quarter of `contextSize` plus the instructions for the response.
+  `CoachPromptBudget` holds both the size estimate and the editing rule in plain
+  Foundation, so what a prompt may lose is testable without an SDK: only the recent-run
+  block shrinks, oldest row first, never below one row, and never the workout ids the plan
+  response is keyed on.
+
+  The *window* is the model's real `contextSize`. The *prompt's size* is estimated at
+  three characters per token rather than measured with `tokenCount(for:)` — see the
+  archive-break note below for why, and what it takes to restore the real count.
 
 Still open:
 
@@ -567,16 +572,29 @@ provider-aware footnote), `RunSummaryView` / `AICoachChatView` / `PlanTabView` n
       shipped in this file; the streaming twin is assumed by symmetry. If it does not
       exist, drop `contextOptions` from the streaming call in `streamGenerate` — the cost
       is `.deep` reasoning on plan adaptation, not correctness.
-- [ ] **Unconfirmed:** `tokenCount(for:)` and `contextSize` as `LanguageModel` *protocol*
-      requirements. Both are documented (`contextSize` on
-      `PrivateCloudComputeLanguageModel`, both in "Managing the context window"), but not
-      as protocol members, and `fittedPrompt` takes `some LanguageModel`. If they are
-      concrete-only, give `fittedPrompt` a concrete overload per model.
-- [ ] **Unconfirmed:** whether `tokenCount(for:)` / `contextSize` are `async throws`. This
-      file writes `try? await` on both, which the repo's own note on
-      `PrivateCloudComputeLanguageModel.contextSize` supports. `try`/`await` on an
-      expression needing neither is a warning rather than an error, so this compiles
-      either way — but the warnings should be cleaned up once the real shape is known.
+- [x] `tokenCount(for:)` / `contextSize` as `LanguageModel` protocol requirements —
+      **they are not.** This broke the archive build on the first attempt:
+
+          Value of type 'some LanguageModel' has no member 'contextSize'
+          Value of type 'some LanguageModel' has no member 'tokenCount'
+
+      Both are concrete-type members, and the two models do not even agree on shape:
+      `SystemLanguageModel.contextSize` is `@backDeployed final var contextSize: Int` —
+      plain, synchronous, non-throwing — while `PrivateCloudComputeLanguageModel`'s is
+      asynchronous. `fittedPrompt` now takes an `Int?` the caller reads off the concrete
+      model, so each path uses the right shape.
+- [ ] **Open:** restore the real `tokenCount(for:)` measurement. It is not a `String`
+      call. The confirmed concrete signature is
+
+          nonisolated(nonsending)
+          final func tokenCount(for instructions: Instructions) async throws -> Int
+
+      so it needs these `String` prompts converted to `Prompt` / `Instructions` values,
+      plus the matching overload found on `PrivateCloudComputeLanguageModel`. Both are
+      cheap on a machine that can compile them and were not worth a second guess from a
+      container that cannot — hence the three-characters-per-token estimate in
+      `CoachPromptBudget`, which deliberately runs high so it trims early rather than
+      late.
 
 ---
 
