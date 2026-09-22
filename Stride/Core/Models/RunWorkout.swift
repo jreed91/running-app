@@ -84,6 +84,11 @@ final class RunWorkout {
     /// Optional so the CloudKit schema stays additive for existing records.
     var aiCoachReactionRaw: String?
 
+    /// Raw-backed storage for the runner's "how did that feel?" rating (`RunFeel`).
+    /// Optional so the CloudKit schema stays additive, and so every run recorded or
+    /// imported before the question existed reads as unrated rather than as a guess.
+    var feelRaw: Int?
+
     // MARK: Computed helpers (not persisted)
 
     var splits: [Split] {
@@ -129,6 +134,12 @@ final class RunWorkout {
     var aiCoachReaction: AICoachReaction? {
         get { aiCoachReactionRaw.flatMap(AICoachReaction.init(rawValue:)) }
         set { aiCoachReactionRaw = newValue?.rawValue }
+    }
+
+    /// How the runner said this run felt, if they answered.
+    var feel: RunFeel? {
+        get { feelRaw.flatMap(RunFeel.init(rawValue:)) }
+        set { feelRaw = newValue?.rawValue }
     }
 
     var workoutType: WorkoutType {
