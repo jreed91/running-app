@@ -397,7 +397,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
                 [.year, .month, .day, .hour, .minute],
                 from: fireDate
             )
-            let workoutPlan = makeWorkoutPlan(for: workout, unitPreference: unitPreference)
+            let workoutPlan = Self.makeWorkoutPlan(for: workout, unitPreference: unitPreference)
             await scheduler.schedule(workoutPlan, at: dateComponents)
             workout.healthKitPlanID = workoutPlan.id.uuidString
         }
@@ -426,7 +426,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
 
     // MARK: - WorkoutKit plan builder
 
-    private func makeWorkoutPlan(for workout: ScheduledWorkout, unitPreference: UnitPreference) -> WorkoutPlan {
+    static func makeWorkoutPlan(for workout: ScheduledWorkout, unitPreference: UnitPreference) -> WorkoutPlan {
         // Use the scheduled workout's own UUID so the plan ID is stable across syncs.
         let planID = workout.id
 
@@ -493,7 +493,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
     }
 
     /// Builds a ``CustomWorkout`` from a ``WorkoutStructure`` with precise distance/time goals.
-    private func makeCustomWorkout(
+    private static func makeCustomWorkout(
         from structure: WorkoutStructure,
         workout: ScheduledWorkout,
         unitPreference: UnitPreference
@@ -579,7 +579,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
     }
 
     /// Legacy path for workouts without a ``WorkoutStructure`` (flat interval array).
-    private func makeCustomWorkoutLegacy(for workout: ScheduledWorkout, unitPreference: UnitPreference) -> CustomWorkout {
+    private static func makeCustomWorkoutLegacy(for workout: ScheduledWorkout, unitPreference: UnitPreference) -> CustomWorkout {
         let warmup   = WorkoutStep(goal: .open, alert: nil)
         let cooldown = WorkoutStep(goal: .open, alert: nil)
         let blocks: [IntervalBlock]
@@ -619,14 +619,14 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         )
     }
 
-    private func distanceMeasurement(meters: Double, unitPreference: UnitPreference) -> Measurement<UnitLength> {
+    private static func distanceMeasurement(meters: Double, unitPreference: UnitPreference) -> Measurement<UnitLength> {
         switch unitPreference {
         case .metric:   return Measurement(value: meters / 1_000, unit: .kilometers)
         case .imperial: return Measurement(value: meters / 1_609.344, unit: .miles)
         }
     }
 
-    private func distanceGoal(meters: Double, unitPreference: UnitPreference) -> WorkoutGoal {
+    private static func distanceGoal(meters: Double, unitPreference: UnitPreference) -> WorkoutGoal {
         switch unitPreference {
         case .metric:
             return .distance(meters / 1_000, UnitLength.kilometers)
@@ -638,7 +638,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
     /// Builds a WorkoutKit speed-range alert from a segment's target pace so the
     /// scheduled Watch workout coaches pace, not just structure. Returns `nil`
     /// (no alert) when the segment prescribes no pace, e.g. an open recovery.
-    private func paceAlert(secondsPerKm pace: Double?) -> (any WorkoutAlert)? {
+    private static func paceAlert(secondsPerKm pace: Double?) -> (any WorkoutAlert)? {
         guard let pace,
               let range = WorkoutPaceAlert.speedRangeMetersPerSecond(forPaceSecondsPerKm: pace)
         else { return nil }

@@ -162,6 +162,19 @@ enum WidgetSnapshotBuilder {
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> WidgetSnapshot.NextWorkout? {
+        nextScheduledWorkout(in: plan, now: now, calendar: calendar)
+            .map { card(for: $0, unit: unit, now: now, calendar: calendar) }
+    }
+
+    /// The ``ScheduledWorkout`` behind ``nextWorkout(in:unit:now:calendar:)``'s card, by
+    /// the same three rules. Split out so the watch app's Start button (B3) is built from
+    /// the very session the card it sits on describes, rather than from a second lookup
+    /// that could pick a different one.
+    static func nextScheduledWorkout(
+        in plan: TrainingPlan?,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> ScheduledWorkout? {
         guard let plan, plan.isActive else { return nil }
 
         let today = calendar.startOfDay(for: now)
@@ -173,7 +186,7 @@ enum WidgetSnapshotBuilder {
 
         // 1. Today or overdue — earliest first, so a missed Tuesday shows before Thursday.
         if let due = outstanding.first(where: { calendar.startOfDay(for: $0.scheduledDate) <= today }) {
-            return card(for: due, unit: unit, now: now, calendar: calendar)
+            return due
         }
 
         // 2. A genuine rest day.
@@ -181,12 +194,11 @@ enum WidgetSnapshotBuilder {
             $0.workoutType == .rest && calendar.isDate($0.scheduledDate, inSameDayAs: today)
         }
         if let restToday {
-            return card(for: restToday, unit: unit, now: now, calendar: calendar)
+            return restToday
         }
 
         // 3. The next thing on the plan.
-        let upcoming = outstanding.first { calendar.startOfDay(for: $0.scheduledDate) > today }
-        return upcoming.map { card(for: $0, unit: unit, now: now, calendar: calendar) }
+        return outstanding.first { calendar.startOfDay(for: $0.scheduledDate) > today }
     }
 
     private static func card(

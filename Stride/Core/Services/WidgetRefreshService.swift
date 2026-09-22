@@ -19,7 +19,8 @@ import WidgetKit
 @MainActor
 enum WidgetRefreshService {
 
-    /// Rebuilds the snapshot from `context` and reloads the widgets if it moved.
+    /// Rebuilds the snapshot from `context`, sends it to the watch app, and reloads the
+    /// widgets if it moved.
     ///
     /// Failure is silent and total: no App Group (entitlement missing, or the identifier
     /// not yet registered — see ``StrideAppGroup``), no store, no write. Nothing in the
@@ -40,6 +41,15 @@ enum WidgetRefreshService {
 
         let snapshot = makeSnapshot(context: context, appSettings: appSettings, now: now)
 
+        // The watch app shows the same snapshot (B3). Sent before the comparison below:
+        // that guards WidgetKit's reload budget, and the watch has none to guard.
+        WatchSyncService.shared.publish(
+            snapshot: snapshot,
+            nextSession: WidgetSnapshotBuilder.nextScheduledWorkout(in: activePlan(in: context), now: now),
+            unit: appSettings.unitPreference,
+            now: now
+        )
+
         // `generatedAt` moves every time, so compare everything else.
         if let existing = store.load(), isEquivalent(existing, snapshot) {
             return false
@@ -51,10 +61,12 @@ enum WidgetRefreshService {
         return true
     }
 
-    /// Drops the snapshot and blanks the widgets — for "reset all data", where leaving
-    /// the last plan on the Home Screen would be the one place the deleted data survived.
+    /// Drops the snapshot and blanks the widgets and the watch app — for "reset all data",
+    /// where leaving the last plan on the Home Screen or the wrist would be the one place
+    /// the deleted data survived.
     static func clear(reload: () -> Void = { WidgetCenter.shared.reloadAllTimelines() }) {
         WidgetSnapshotStore.shared.clear()
+        WatchSyncService.shared.clear()
         reload()
     }
 

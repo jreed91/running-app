@@ -80,6 +80,7 @@ jobs:
           filters: |
             ios:
               - 'Stride/**'
+              - 'StrideWatch/**'
               - 'StrideTests/**'
               - 'StrideUITests/**'
               - 'project.yml'

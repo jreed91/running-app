@@ -9,6 +9,7 @@ Stride/Resources/Info.plist
 Stride/Resources/Stride.entitlements
 StrideWidgets/Info.plist
 StrideWidgets/StrideWidgets.entitlements
+StrideWatch/Info.plist
 
 # Xcode build artefacts
 build/
