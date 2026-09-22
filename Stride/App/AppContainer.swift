@@ -703,6 +703,8 @@ final class AppContainer {
         // Music library, not Stride's, and this button does not get to delete somebody's
         // music.
         RunPlaylistStore.removeAll()
+        // The shoe-nudge dismissals name pairs that are about to stop existing.
+        ShoeNudgeDismissals.removeAll()
         await planLifecycle.resetAllData(context: context)
         // The App Group container is outside the store `PlanLifecycleService` just tore
         // down, so without this the Home Screen would be the one place the deleted plan

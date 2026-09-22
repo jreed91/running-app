@@ -940,6 +940,7 @@ struct ActiveRunView: View {
 
     private func persistFinishedRun(_ workout: RunWorkout) {
         context.insert(workout)
+        ShoeAssignment.assignDefaultShoe(to: [workout], in: context)
         // Link the run back to its scheduled day so the plan marks it complete
         // and the calendar/recovery card don't nag about a workout that was done (H4).
         //

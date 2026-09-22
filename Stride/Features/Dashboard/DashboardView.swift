@@ -423,6 +423,10 @@ struct DashboardView: View {
                             .offset(y: dashboardAppeared ? 0 : 20)
                             .adaptiveAnimation(AppAnimation.entrance.delay(0.08), value: dashboardAppeared)
                         }
+                        ShoeReplacementCard()
+                            .opacity(dashboardAppeared ? 1 : 0)
+                            .offset(y: dashboardAppeared ? 0 : 20)
+                            .adaptiveAnimation(AppAnimation.entrance.delay(0.1), value: dashboardAppeared)
                         selectedDaySection
                             .opacity(dashboardAppeared ? 1 : 0)
                             .offset(y: dashboardAppeared ? 0 : 20)

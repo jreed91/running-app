@@ -59,6 +59,7 @@ struct SettingsView: View {
                     if let profile { heartRateCard(profile) }
                     appCard
                     dataCard
+                    shoesCard
                     routeGeniusCard
                     runPlaylistsCard
                     aiCoachCard
@@ -436,6 +437,29 @@ struct SettingsView: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(.primary)
             }
+        }
+    }
+
+    // MARK: - Shoes card
+
+    private var shoesCard: some View {
+        settingsSection("Shoes") {
+            NavigationLink {
+                ShoesView()
+            } label: {
+                settingsRow(icon: .run, iconColor: .brand, title: "My Shoes") {
+                    StrideIcon(name: .chevronRight, size: 12,
+                               color: Color.secondary.opacity(0.5), strokeWeight: 2)
+                }
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.primary)
+
+            Text("Tracks how far each pair has gone and tells you when one is nearly worn out. New runs go on your default pair; change it on any run.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.leading, 62)
+                .padding(.bottom, 10)
         }
     }
 

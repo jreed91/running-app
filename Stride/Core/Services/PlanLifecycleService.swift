@@ -310,6 +310,7 @@ final class PlanLifecycleService {
             try context.delete(model: UserProfile.self)
             try context.delete(model: SavedRoute.self)
             try context.delete(model: DeletedWorkout.self)
+            try context.delete(model: Shoe.self)
             try context.save()
             AppLogger.log("Reset All Data completed for \(plans.count) plan(s).", label: "Data", level: .notice)
         } catch {

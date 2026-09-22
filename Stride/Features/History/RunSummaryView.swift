@@ -340,6 +340,7 @@ struct RunSummaryView: View {
                     aiCoachAccessCard
                 }
                 statsGrid
+                RunShoeRow(workout: workout)
                 if !workout.isWalk {
                     paceInsightsSection
                 }
