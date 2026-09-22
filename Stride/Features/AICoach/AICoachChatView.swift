@@ -538,6 +538,7 @@ struct AICoachChatView: View {
             Average pace: \(run.averagePaceSecondsPerKm.paceString(unit: unit))
             Average heart rate: \(run.averageHeartRate.map { "\(Int($0.rounded())) bpm" } ?? "n/a")
             Max heart rate: \(run.maxHeartRate.map { "\(Int($0.rounded())) bpm" } ?? "n/a")
+            How it felt: \(run.feel?.promptDescription ?? "not rated")
             Notes: \(run.notes ?? "none")
             """
         } ?? "Current workout context: none selected."
@@ -556,7 +557,7 @@ struct AICoachChatView: View {
             .prefix(Self.promptRunCount)
             .map { run in
                 let hr = run.averageHeartRate.map { "\(Int($0.rounded())) bpm" } ?? "n/a"
-                return "\(run.date.formatted(date: .abbreviated, time: .omitted)) | \(run.workoutType.displayName) | \(run.distanceMeters.distanceString(unit: unit)) | \(run.averagePaceSecondsPerKm.paceString(unit: unit)) | avg HR \(hr)"
+                return "\(run.date.formatted(date: .abbreviated, time: .omitted)) | \(run.workoutType.displayName) | \(run.distanceMeters.distanceString(unit: unit)) | \(run.averagePaceSecondsPerKm.paceString(unit: unit)) | avg HR \(hr)\(RunFeelSignal.historySuffix(for: run.feel))"
             }
             .joined(separator: "\n")
 

@@ -137,6 +137,12 @@ Business logic belongs in services or repositories, not directly in SwiftUI view
 - `RouteStep`, `GeneratedRoute`: route-generation results
 - `StrengthExercise`, `StrengthWorkoutPlan`, `CompletedStrengthSet`: strength workout representation
 
+`Stride/Core/Models/RunFeel.swift` is the runner's post-run "how did that feel?" answer, five
+steps stored on `RunWorkout.feelRaw` (raw values are persisted — never renumber them).
+`RunFeelSignal` is the one place that judges a rating against the session's intended type
+(an easy run rated hard is a fatigue signal; a tempo rated easy means soft paces); the coach
+read, the coach chat and both plan-adaptation prompts all read it through that type.
+
 `Stride/Core/Models/PregnancyPlanTypes.swift` holds the pregnancy vocabulary: `GestationalAge`
 (weeks+days from the due date — a pregnancy plan's clock, the way `raceDate` is a race plan's),
 `PregnancyTrimester`, `PregnancyEffort` (talk test + Borg range, the only intensity prescription
