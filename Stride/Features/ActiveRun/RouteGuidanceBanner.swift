@@ -58,9 +58,9 @@ struct RouteGuidanceBanner: View {
         } label: {
             pill(tint: nil) {
                 Image(systemName: "point.topleft.down.to.point.bottomright.curvepath")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.dsFootnote.weight(.semibold))
                 Text("Follow a saved route")
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.dsFootnote.bold())
             }
         }
         .accessibilityHint("Warns you, out loud, if you leave the route during the run")
@@ -73,9 +73,9 @@ struct RouteGuidanceBanner: View {
         HStack(spacing: 8) {
             pill(tint: guide.isOffRoute ? Color.destructive : nil) {
                 Image(systemName: statusSymbol)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.dsFootnote.weight(.semibold))
                 Text(statusText(routeName: route.name))
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.dsFootnote.bold())
                     .lineLimit(1)
             }
             .accessibilityElement(children: .combine)
@@ -89,7 +89,7 @@ struct RouteGuidanceBanner: View {
                 } label: {
                     pill(tint: nil) {
                         Image(systemName: "xmark")
-                            .font(.system(size: 12, weight: .bold))
+                            .font(.dsCaption.bold())
                     }
                 }
                 .accessibilityLabel("Stop following \(route.name)")

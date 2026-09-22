@@ -105,9 +105,9 @@ struct RouteDeviationMonitor: Sendable {
         let metersPerDegreeLatitude = earthRadius * .pi / 180
         let metersPerDegreeLongitude = metersPerDegreeLatitude * cos(point.latitude * .pi / 180)
 
-        func planar(_ c: Coordinate) -> (x: Double, y: Double) {
-            ((c.longitude - point.longitude) * metersPerDegreeLongitude,
-             (c.latitude - point.latitude) * metersPerDegreeLatitude)
+        func planar(_ coordinate: Coordinate) -> (x: Double, y: Double) {
+            ((coordinate.longitude - point.longitude) * metersPerDegreeLongitude,
+             (coordinate.latitude - point.latitude) * metersPerDegreeLatitude)
         }
 
         var previous = planar(first)
@@ -120,17 +120,17 @@ struct RouteDeviationMonitor: Sendable {
         return best
     }
 
-    /// Distance from (0, 0) to the segment `a`–`b`.
+    /// Distance from (0, 0) to the segment `start`–`end`.
     private static func distanceFromOrigin(
-        toSegmentFrom a: (x: Double, y: Double),
-        to b: (x: Double, y: Double)
+        toSegmentFrom start: (x: Double, y: Double),
+        to end: (x: Double, y: Double)
     ) -> Double {
-        let dx = b.x - a.x
-        let dy = b.y - a.y
+        let dx = end.x - start.x
+        let dy = end.y - start.y
         let lengthSquared = dx * dx + dy * dy
-        guard lengthSquared > 0 else { return hypot(a.x, a.y) }
-        // Parameter of the origin's projection onto the line, clamped to the segment.
-        let t = min(max(-(a.x * dx + a.y * dy) / lengthSquared, 0), 1)
-        return hypot(a.x + t * dx, a.y + t * dy)
+        guard lengthSquared > 0 else { return hypot(start.x, start.y) }
+        // Where the origin projects onto the line, clamped to the segment.
+        let fraction = min(max(-(start.x * dx + start.y * dy) / lengthSquared, 0), 1)
+        return hypot(start.x + fraction * dx, start.y + fraction * dy)
     }
 }
