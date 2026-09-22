@@ -74,6 +74,11 @@ final class RunWorkout {
     /// the relationship after reinstall.
     var linkedScheduledWorkoutID: UUID?
 
+    /// The `Shoe` this run was run in, by ID rather than relationship for the same
+    /// out-of-order-sync reason as `linkedScheduledWorkoutID`. `nil` for every run from
+    /// before shoe tracking and every run the runner has not put a pair on.
+    var shoeID: UUID?
+
     /// JSON-encoded ``WorkoutWeather``.
     var weatherData: Data?
 

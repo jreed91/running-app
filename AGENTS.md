@@ -362,6 +362,27 @@ Rules a change here has to keep:
 `triggerTrainingNudgeTestNotifications` fires one of each with sample numbers, for reading
 the copy on a real Lock Screen.
 
+## Shoe tracking
+
+Runners add their pairs in **Settings → Shoes**; each run can name the pair it was run in,
+and Home nudges when a pair in rotation is nearly worn out. `ShoeWearPolicy` holds every
+judgement (pure, tested in `ShoeTrackingTests`), `ShoeAssignment` the few writes.
+
+- **Mileage is derived, never stored**: `startingDistanceMeters` plus the runs whose
+  `RunWorkout.shoeID` names the pair. Runs point at a shoe by UUID, not a relationship,
+  for the same out-of-order-sync reason as `linkedScheduledWorkoutID`. Views fetch through
+  `RunWorkout.shoeMileageDescriptor`, which loads only `shoeID` and `distanceMeters`.
+- **The default pair is put on new runs only from its `startDate` on**, so a retroactive
+  HealthKit import never credits old runs to new shoes. Walks are never auto-assigned.
+  The three insert paths that call `ShoeAssignment.assignDefaultShoe` are the run-finish
+  path, the background HealthKit sync and the manual import.
+- **The 800 km / 500 mi default is convention, not evidence**, and the code says so. Each
+  pair carries its own `replacementDistanceMeters`.
+- **The nudge's dismissals are keyed by pair and wear level** (`ShoeNudgeDismissals`, in
+  `UserDefaults`), so "not yet" at nearly done does not silence a pair once it is worn out.
+- Adding `Shoe` and `RunWorkout.shoeID` is a CloudKit schema change: run
+  `--init-cloudkit-schema` and deploy before shipping (see "Persistence and Sync").
+
 ## Run playlists
 
 Stride builds a playlist shaped like the session and saves it into the runner's Apple
