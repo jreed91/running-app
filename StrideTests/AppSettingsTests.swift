@@ -215,6 +215,46 @@ struct AppSettingsTests {
         #expect(settings.spokenSplitsEnabled == true)
     }
 
+    // MARK: - Spoken workout steps
+
+    @Test("Spoken workout steps are off on a fresh install, and nothing is seeded")
+    func spokenWorkoutStepsDefaultOff() {
+        let defaults = InMemoryStore()
+        let ubiquitous = InMemoryStore()
+
+        let settings = AppSettings(defaults: defaults, ubiquitous: ubiquitous)
+
+        // Off by default, like spoken splits: it talks over the runner's music.
+        #expect(settings.spokenWorkoutStepsEnabled == false)
+        #expect(ubiquitous.has(AppSettings.spokenWorkoutStepsKey) == false)
+        #expect(defaults.has(AppSettings.spokenWorkoutStepsKey) == false)
+    }
+
+    @Test("Turning spoken workout steps on round-trips through both stores, apart from splits")
+    func spokenWorkoutStepsChangeSyncs() {
+        let defaults = InMemoryStore()
+        let ubiquitous = InMemoryStore()
+        let settings = AppSettings(defaults: defaults, ubiquitous: ubiquitous)
+
+        settings.spokenWorkoutStepsEnabled = true
+
+        #expect(defaults.bool(forKey: AppSettings.spokenWorkoutStepsKey) == true)
+        #expect(ubiquitous.bool(forKey: AppSettings.spokenWorkoutStepsKey) == true)
+        #expect(settings.spokenSplitsEnabled == false)
+    }
+
+    @Test("A spoken-workout-steps change from another device is adopted mid-session")
+    func spokenWorkoutStepsExternalChange() {
+        let defaults = InMemoryStore()
+        let ubiquitous = InMemoryStore()
+        let settings = AppSettings(defaults: defaults, ubiquitous: ubiquitous)
+
+        ubiquitous.set(true, forKey: AppSettings.spokenWorkoutStepsKey)
+        settings.applyExternalValues()
+
+        #expect(settings.spokenWorkoutStepsEnabled == true)
+    }
+
     // MARK: - M15: mid-session changes arriving from another device
 
     @Test("A value that lands in iCloud while running is adopted")

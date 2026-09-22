@@ -144,6 +144,17 @@ split, each guided step, each strength set — so they respect the system haptic
 minimised run (U7) still speaks and buzzes from a pocket. This pass adds the lap haptic
 (A2). *Deferred:* spoken heart rate and distance, and lap announcements.
 
+A later pass speaks the guided steps too — the "rep 3, target pace 3:55" half of the
+original ask. `GuidedStepAnnouncement` (pure, unit-tested) builds a start cue for every step
+("Rep 3 of 6. 800 metres at 3:55 minutes per kilometre. Go.", "Recover. 90 seconds.") and
+one heads-up near the end of each rep and recovery; `GuidedWorkoutFeedback` speaks them,
+applied twice like `RunSplitFeedback`. Opt-in on its own switch
+(`AppSettings.spokenWorkoutStepsEnabled`), since a runner who wants reps called may not
+want kilometres read out mid-rep. A step cue interrupts a split still being spoken rather
+than being dropped behind it. Auto-advance moved out of `GuidedWorkoutBanner` into the same
+modifier, because the banner only exists on the HUD and a minimised session had stopped
+stepping.
+
 There is no `AVSpeechSynthesizer` or `CHHapticEngine` usage anywhere. A runner
 executing a prescribed 6×800 m interval gets no spoken "rep 3, target pace 3:55,
 you're 8s fast" and no buzz at the split. For a coaching app this is the gap
@@ -156,8 +167,9 @@ the scheduled workout's structure so intervals and tempo blocks are cued.
 **SHIPPED in the UX-audit passes**, and recorded here only now. `GuidedWorkoutEngine`
 (pure, unit-tested) flattens a `WorkoutStructure` into ordered steps; `GuidedWorkoutState`
 lives on `ActiveRunPresentation` rather than in view state, so a runner three intervals in
-who minimises the HUD comes back to step 4 and not step 1; `GuidedWorkoutBanner` shows and
-advances the current step, and the metric grid's third slot shows step *n* of *m*. Flat
+who minimises the HUD comes back to step 4 and not step 1; `GuidedWorkoutBanner` shows the
+current step and its manual Next (auto-advance is `GuidedWorkoutFeedback`'s, so it carries on
+while minimised), and the metric grid's third slot shows step *n* of *m*. Flat
 easy runs and free runs leave the stepper `nil` and are unchanged. Each step change is
 cued by a heavy haptic (A3) — a transition the runner would otherwise only see by looking
 at the banner at exactly the right moment.

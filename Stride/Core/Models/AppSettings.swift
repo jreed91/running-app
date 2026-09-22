@@ -93,6 +93,20 @@ final class AppSettings {
         }
     }
 
+    /// Whether a structured workout's steps are called out loud as the runner reaches them
+    /// — "Rep 3 of 6 … Go", "Recover. 90 seconds", and a heads-up near the end of each.
+    ///
+    /// Opt-in for the same reason ``spokenSplitsEnabled`` is: it talks over the runner's
+    /// music, and it should not start doing that unasked on the first run after an update.
+    /// A separate switch rather than folded into that one, because the runner who wants
+    /// their reps called is often the one who does *not* want a kilometre read out in the
+    /// middle of a rep.
+    var spokenWorkoutStepsEnabled: Bool {
+        didSet {
+            persist(spokenWorkoutStepsEnabled, forKey: Self.spokenWorkoutStepsKey)
+        }
+    }
+
     /// Whether Stride checks tomorrow's forecast and offers to adapt a session that falls
     /// in the heat.
     ///
@@ -206,6 +220,7 @@ final class AppSettings {
     static let iCloudSyncKey = "iCloudSyncEnabled"
     static let morningReminderKey = "morningReminderEnabled"
     static let spokenSplitsKey = "spokenSplitsEnabled"
+    static let spokenWorkoutStepsKey = "spokenWorkoutStepsEnabled"
     static let weeklyGoalMetersKey = "weeklyGoalMeters"
     /// Internal so `WorkoutSyncService` can read the same key without an `AppSettings`,
     /// the way the unit preference is read during a background sync.
@@ -240,6 +255,7 @@ final class AppSettings {
         let syncStored = Self.hasStoredValue(forKey: Self.iCloudSyncKey, defaults: defaults, ubiquitous: ubiquitous)
         let reminderStored = Self.hasStoredValue(forKey: Self.morningReminderKey, defaults: defaults, ubiquitous: ubiquitous)
         let spokenSplitsStored = Self.hasStoredValue(forKey: Self.spokenSplitsKey, defaults: defaults, ubiquitous: ubiquitous)
+        let spokenStepsStored = Self.hasStoredValue(forKey: Self.spokenWorkoutStepsKey, defaults: defaults, ubiquitous: ubiquitous)
         let weeklyGoalStored = Self.hasStoredValue(forKey: Self.weeklyGoalMetersKey, defaults: defaults, ubiquitous: ubiquitous)
         let walkImportStored = Self.hasStoredValue(forKey: Self.walkImportKey, defaults: defaults, ubiquitous: ubiquitous)
         let heatAdaptationStored = Self.hasStoredValue(forKey: Self.heatAdaptationKey, defaults: defaults, ubiquitous: ubiquitous)
@@ -286,6 +302,11 @@ final class AppSettings {
             ? Self.readBool(forKey: Self.spokenSplitsKey, defaults: defaults, ubiquitous: ubiquitous)
             : false
 
+        // Default to false (silent) when the key has never been set — see the property.
+        self.spokenWorkoutStepsEnabled = spokenStepsStored
+            ? Self.readBool(forKey: Self.spokenWorkoutStepsKey, defaults: defaults, ubiquitous: ubiquitous)
+            : false
+
         // Default to true (walks imported) when the key has never been set — see the property.
         self.walkImportEnabled = walkImportStored
             ? Self.readBool(forKey: Self.walkImportKey, defaults: defaults, ubiquitous: ubiquitous)
@@ -320,6 +341,7 @@ final class AppSettings {
         if syncStored { persist(iCloudSyncEnabled, forKey: Self.iCloudSyncKey) }
         if reminderStored { persist(morningReminderEnabled, forKey: Self.morningReminderKey) }
         if spokenSplitsStored { persist(spokenSplitsEnabled, forKey: Self.spokenSplitsKey) }
+        if spokenStepsStored { persist(spokenWorkoutStepsEnabled, forKey: Self.spokenWorkoutStepsKey) }
         if weeklyGoalStored { persist(weeklyGoalMeters, forKey: Self.weeklyGoalMetersKey) }
         if walkImportStored { persist(walkImportEnabled, forKey: Self.walkImportKey) }
         if heatAdaptationStored { persist(heatAdaptationEnabled, forKey: Self.heatAdaptationKey) }
@@ -385,6 +407,11 @@ final class AppSettings {
         if Self.hasStoredValue(forKey: Self.spokenSplitsKey, defaults: defaults, ubiquitous: ubiquitous) {
             let value = Self.readBool(forKey: Self.spokenSplitsKey, defaults: defaults, ubiquitous: ubiquitous)
             if value != spokenSplitsEnabled { spokenSplitsEnabled = value }
+        }
+
+        if Self.hasStoredValue(forKey: Self.spokenWorkoutStepsKey, defaults: defaults, ubiquitous: ubiquitous) {
+            let value = Self.readBool(forKey: Self.spokenWorkoutStepsKey, defaults: defaults, ubiquitous: ubiquitous)
+            if value != spokenWorkoutStepsEnabled { spokenWorkoutStepsEnabled = value }
         }
 
         if Self.hasStoredValue(forKey: Self.walkImportKey, defaults: defaults, ubiquitous: ubiquitous) {
