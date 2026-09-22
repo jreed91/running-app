@@ -367,6 +367,12 @@ struct DashboardView: View {
     /// appear would miss the one that arrives a moment later.
     private var heatAdvisory: HeatAdvisory? { container.heatAdvisoryService.advisory }
 
+    /// Last night's HRV, resting heart rate and sleep, for the readiness card (B7). Read
+    /// on every return to the foreground rather than once, because the screen can stay
+    /// alive overnight and yesterday's readings are the wrong answer the next morning.
+    @State private var recoveryReadings: RecoveryReadings?
+    @Environment(\.scenePhase) private var scenePhase
+
     private var activePlan: TrainingPlan? { activePlans.first }
 
     private var missedWorkoutInfo: MissedWorkoutInfo? {
@@ -471,6 +477,13 @@ struct DashboardView: View {
                 // the sheet has no Close button and no drag-to-dismiss — the only exits
                 // are its two buttons, and both of them count as an answer.
                 .interactiveDismissDisabled(true)
+            }
+            .task(id: scenePhase) {
+                guard scenePhase == .active else { return }
+                recoveryReadings = await container.healthKitRepository.fetchRecoveryReadings(
+                    endingAt: Date(),
+                    baselineDays: RecoveryReadiness.baselineDays
+                )
             }
             .task {
                 // An advisory written last night should be on screen before the forecast
@@ -1089,7 +1102,8 @@ struct DashboardView: View {
                 recentRuns: recentWorkouts,
                 profile: profiles.first,
                 dayState: ScheduledDayResolver.dayState(on: Date(), in: activePlan),
-                unit: appSettings.unitPreference
+                unit: appSettings.unitPreference,
+                recoveryReadings: recoveryReadings
             )
         )
         // The coach's heat card reasons backwards, from the weather recorded on the last

@@ -177,6 +177,7 @@ private extension SmartCoachCard {
         case .polarization:        return .tortoise
         case .cadence:             return .timer
         case .load:                return .mountain
+        case .readiness:           return .moon
         case .comeback:            return .run
         case .prep:                return .check
         case .planStartsSoon:      return .calendar

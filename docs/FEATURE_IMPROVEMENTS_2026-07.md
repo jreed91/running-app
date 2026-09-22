@@ -28,7 +28,8 @@ that would meaningfully expand the product.
 >
 > **What is genuinely open:** **A7** (target-distance-aware routes with elevation),
 > **A10** (race-day hub), **B3** (watchOS),
-> **B7** (recovery/readiness — also A5's remaining third), **B8**, the logging half of
+> **B7** (recovery/readiness — the score and dashboard card shipped; the AI coach and the
+widget do not see it yet), **B8**, the logging half of
 > **B9** (its fuelling-advice half shipped as the dashboard's Coach Tips strip), and the
 > full-data export half of **B6**. Each says at its own entry what was deferred and why.
 
@@ -419,11 +420,28 @@ GPX export of routes and a full-data export (the app already has a "reset all
 data" path but no export). Small, and it de-risks the "my data is trapped"
 objection.
 
-### B7. Recovery / readiness signal *(medium impact, medium effort)*
+### B7. Recovery / readiness signal *(medium impact, medium effort)* — 🟡 PARTIAL
 Nothing consumes sleep, HRV, or resting-HR from HealthKit. A simple daily
 readiness score (HRV + sleep + recent load) feeding the coach and the recovery
 card would differentiate the "coach" positioning and reuses the HealthKit
 plumbing already in place.
+
+**The score and the dashboard half shipped.** HealthKit now *reads* (never writes)
+SDNN heart-rate variability, resting heart rate and sleep analysis, and
+[`RecoveryReadiness`](../Stride/Core/Services/RecoveryReadiness.swift) turns them into a
+0–100 score: last night's HRV and resting HR against the runner's own preceding four
+weeks (not scored until there are seven days of it), last night's asleep time with
+overlapping sources merged, and seven days of running time against the four-week weekly
+average. When the score drops under 60 the dashboard's coach strip gets a "Recovery is
+running low" card naming what pulled it down, and suggesting the next hard session be run
+easy or moved. [`RecoveryReadinessTests`](../StrideTests/RecoveryReadinessTests.swift)
+pins each threshold.
+
+*Still open:* the AI coach chat and the run analysis do not see the score yet, and the
+widget and Siri do not show the card, because both build their coach context without a
+HealthKit read. A runner who granted Health access before this build is not asked for the
+new types until the app next requests Health access (the Health import in Settings or
+History does), so for them the card stays silent until then.
 
 ### B8. Broader workout-type support (cycling / cross-training as first-class) *(low-medium impact, medium effort)*
 `crossTraining` exists as an enum case but there's no tracking or analytics for

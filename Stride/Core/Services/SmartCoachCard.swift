@@ -57,6 +57,9 @@ struct SmartCoachCard: Identifiable, Equatable, Sendable {
         case cadence
         /// Seven-day volume jumped well past the usual guideline.
         case load
+        /// Last night's HRV, resting heart rate or sleep says the runner has not
+        /// recovered (B7).
+        case readiness
     }
 
     /// Which half of the coaching a card belongs to. Rendered as the card's overline so a
@@ -158,7 +161,7 @@ struct SmartCoachCard: Identifiable, Equatable, Sendable {
         case .raceDay, .raceWeek, .refuel, .longRunFuel, .sessionFuel, .heat, .restDay:
             return .nutrition
         case .comeback, .prep, .planStartsSoon, .planFinished, .noPlan,
-             .fade, .polarization, .cadence, .load:
+             .fade, .polarization, .cadence, .load, .readiness:
             return .training
         }
     }

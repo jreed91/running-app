@@ -134,6 +134,10 @@ final class MockHealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sen
 
     func fetchLatestBodyMassKilograms() async -> Double? { bodyMassKilograms }
 
+    func fetchRecoveryReadings(endingAt now: Date, baselineDays: Int) async -> RecoveryReadings {
+        RecoveryReadings()
+    }
+
     func enableBackgroundDelivery() async throws {
         lock.withLock { _enableCalls += 1 }
         if let gate = enableGate { await gate.wait() }
