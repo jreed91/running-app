@@ -7,7 +7,8 @@ import MapKit
 ///
 /// Flow:
 ///   1. User picks distance, route type, and starting point.
-///   2. Taps "Generate Route" → ORS API call.
+///   2. Taps "Generate Route" → Apple Maps walking directions (or OpenRouteService,
+///      when the runner has added a key in Settings).
 ///   3. Route appears on a map with turn-by-turn steps below.
 ///   4. User can save the route (name prompt) or regenerate.
 struct RouteGeniusView: View {
@@ -522,7 +523,10 @@ struct TurnByTurnRow: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(step.instruction).font(.bodyRegular)
-                Text(step.name).font(.caption).foregroundStyle(.secondary)
+                // Apple Maps steps carry no separate street name; only ORS fills it.
+                if !step.name.isEmpty {
+                    Text(step.name).font(.caption).foregroundStyle(.secondary)
+                }
             }
 
             Spacer()
