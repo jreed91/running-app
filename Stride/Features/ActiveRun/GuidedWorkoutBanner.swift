@@ -6,7 +6,10 @@ import SwiftUI
 /// It reads the ``WorkoutTrackerService`` directly so it refreshes on every live
 /// distance/time tick; the tracker is `@Observable`, so reading it in `body` is the
 /// subscription. All stepping logic lives in the pure ``GuidedWorkoutState`` (passed as
-/// a binding); this view only renders it and forwards auto/manual advances.
+/// a binding); this view only renders it and forwards the runner's manual "Next".
+///
+/// Auto-advance is not here: it is ``GuidedWorkoutFeedback``'s, which keeps stepping
+/// while the run is minimised and this banner is gone.
 struct GuidedWorkoutBanner: View {
     let tracker: WorkoutTrackerService
     @Binding var guided: GuidedWorkoutState
@@ -29,11 +32,6 @@ struct GuidedWorkoutBanner: View {
         .padding(18)
         .glassEffect(.regular, in: .rect(cornerRadius: AppRadius.xl))
         .foregroundStyle(.white)
-        // Auto-advance when the current step's distance/time target is met.
-        // Distance-based steps settle on GPS/pedometer updates, time-based on the
-        // per-second timer, so both signals are watched.
-        .onChange(of: tracker.distanceMeters) { _, _ in autoAdvanceIfNeeded() }
-        .onChange(of: tracker.elapsedSeconds) { _, _ in autoAdvanceIfNeeded() }
     }
 
     // MARK: - Header
@@ -159,19 +157,6 @@ struct GuidedWorkoutBanner: View {
     }
 
     // MARK: - Advancement
-
-    private func autoAdvanceIfNeeded() {
-        // Derived from the observed tracker rather than a parent-passed flag: the
-        // parent view does not reliably re-render on tracker state changes, but
-        // this view observes the tracker directly so its state is always current.
-        guard tracker.trackingState == .active else { return }
-        if guided.shouldAutoAdvance(
-            cumulativeDistanceMeters: tracker.distanceMeters,
-            cumulativeElapsedSeconds: tracker.elapsedSeconds
-        ) {
-            advance()
-        }
-    }
 
     private func advance() {
         guided.advance(

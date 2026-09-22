@@ -3,8 +3,9 @@ import AVFoundation
 
 // MARK: - RunVoiceCoach
 
-/// Speaks short coaching lines during a run — currently the split announcements built by
-/// ``SplitAnnouncement``.
+/// Speaks short coaching lines during a run — the split announcements built by
+/// ``SplitAnnouncement`` and the structured-workout cues built by
+/// ``GuidedStepAnnouncement``.
 ///
 /// The audio channel was the one absence U4 left open: haptics tell a runner *that*
 /// something happened, speech tells them *what*. Everything about this type is shaped by
@@ -21,6 +22,9 @@ import AVFoundation
 ///   during the previous split's sentence means the runner is moving fast enough that the
 ///   stale sentence is the less useful one, and a backlog of them read out at km 6 is
 ///   worse than silence.
+/// - The one exception is a cue that has to land *now* — "Rep 3 of 6 … Go" — which
+///   cuts off whatever is being said instead (`interrupting: true`). A split read out
+///   while the rep it belongs to has already ended is the stale one there too.
 @MainActor
 final class RunVoiceCoach {
 
@@ -42,17 +46,27 @@ final class RunVoiceCoach {
         synthesizer.delegate = sessionDeactivator
     }
 
-    /// Speaks `phrase`, or does nothing when a sentence is already in flight or the app is
-    /// under UI test.
+    /// Speaks `phrase`, or does nothing when the app is under UI test — or when a
+    /// sentence is already in flight and this one may not interrupt it.
     ///
-    /// - Parameter phrase: a complete sentence from ``SplitAnnouncement``. `nil` is
-    ///   accepted so callers can pass the builder's optional result straight through.
-    func speak(_ phrase: String?) {
+    /// - Parameters:
+    ///   - phrase: a complete sentence from ``SplitAnnouncement`` or
+    ///     ``GuidedStepAnnouncement``. `nil` is accepted so callers can pass the
+    ///     builder's optional result straight through.
+    ///   - interrupting: `true` cuts off anything being said and speaks this instead;
+    ///     `false` (the default) drops this when something is already being said.
+    func speak(_ phrase: String?, interrupting: Bool = false) {
         guard let phrase, !phrase.isEmpty else { return }
         // UI tests run on a simulator with no audio route and assert on screen state; a
         // real utterance there is a slow no-op that can also fail session activation.
         guard !UITestingSupport.isEnabled else { return }
-        guard !synthesizer.isSpeaking else { return }
+        if synthesizer.isSpeaking {
+            guard interrupting else { return }
+            // The cancelled utterance's `didCancel` still arrives, and would release the
+            // session under the sentence about to start — `RunVoiceSessionDeactivator`
+            // checks for a queued utterance before it does.
+            _ = synthesizer.stopSpeaking(at: .immediate)
+        }
         guard activateSession() else { return }
 
         let utterance = AVSpeechUtterance(string: phrase)
@@ -88,7 +102,7 @@ final class RunVoiceCoach {
             return true
         } catch {
             AppLogger.log(
-                "Couldn't start the audio session for a spoken split: \(error.localizedDescription)",
+                "Couldn't start the audio session for a spoken cue: \(error.localizedDescription)",
                 label: "RunVoiceCoach",
                 level: .warning
             )
@@ -114,10 +128,19 @@ private final class RunVoiceSessionDeactivator: NSObject, AVSpeechSynthesizerDel
         Self.deactivate()
     }
 
+    /// A cancel is either ``RunVoiceCoach/stop()``, which releases the session itself, or
+    /// an interrupting cue cutting in — and then the replacement sentence has already been
+    /// handed to the synthesizer, which `isSpeaking` reports ("speaking or has utterances
+    /// enqueued"). Deactivating then would stop that sentence as it starts.
+    ///
+    /// `didFinish` above deliberately keeps no such check: if `isSpeaking` were still
+    /// true while the last utterance's finish is delivered, the check would leave the
+    /// runner's music ducked for the rest of the run, which is the worse failure.
     nonisolated func speechSynthesizer(
         _ synthesizer: AVSpeechSynthesizer,
         didCancel utterance: AVSpeechUtterance
     ) {
+        guard !synthesizer.isSpeaking else { return }
         Self.deactivate()
     }
 
