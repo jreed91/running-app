@@ -466,17 +466,17 @@ struct SettingsView: View {
 
     private var routeGeniusCard: some View {
         settingsSection("Route Genius") {
-            settingsRow(icon: .location, iconColor: .brand, title: "ORS API Key") {
+            settingsRow(icon: .location, iconColor: .brand, title: "ORS API Key (optional)") {
                 EmptyView()
             }
-            SecureField("Paste your token here", text: Bindable(appSettings).orsAPIKey)
+            SecureField("Leave empty to use Apple Maps", text: Bindable(appSettings).orsAPIKey)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
                 .font(.dsFootnote.monospaced())
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, AppSpacing.lg)
                 .padding(.bottom, 6)
-            Text("Free key at openrouteservice.org · 2,000 routes/day · stored on-device only.")
+            Text("Routes use Apple Maps and need no key. Paste a free openrouteservice.org key to use its loop shaping instead · stored on-device only.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, AppSpacing.lg)

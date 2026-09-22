@@ -65,7 +65,10 @@ The Xcode project is generated from `project.yml` using XcodeGen. Edit `project.
 - Swift package dependency: Pulse (`Pulse`, `PulseProxy`, `PulseUI`) for diagnostics/log inspection
 - Apple frameworks/capabilities include SwiftUI, SwiftData, HealthKit, CloudKit, WeatherKit, CoreLocation, background location, Sign in with Apple, App Intents, and local notifications
 
-Route generation requires an OpenRouteService API key. It is entered at runtime
+Route generation needs no API key: by default `RouteGeniusService` builds loops and
+out-and-backs from Apple Maps walking directions (`MapKitWalkingDirections`, behind the
+`WalkingDirectionsProvider` protocol so tests can fake it). An optional OpenRouteService
+key switches it to ORS. That key is entered at runtime
 in **Settings → Route Genius API key** and stored in the Keychain via
 `KeychainStore` (`AfterFirstUnlockThisDeviceOnly`) — never in `UserDefaults` and
 never synced through iCloud KVS. No code reads `Stride/Resources/Secrets.plist`;
