@@ -178,6 +178,12 @@ final class WorkoutTrackerService {
     /// there. Optional so tests and previews construct a tracker without one.
     @ObservationIgnored weak var activityPresenter: RunActivityPresenting?
 
+    /// Called with every fix accepted into `coordinates` — what `RunRouteGuide` checks
+    /// against the route being followed (A7). A hook rather than something a view
+    /// observes, for the reason `activityPresenter` is: the off-route warning matters most
+    /// on a locked phone, where no view updates.
+    @ObservationIgnored var onAcceptedFix: (@MainActor (Coordinate) -> Void)?
+
     /// This run as the Live Activity needs it. Assembled here because the tracker is the
     /// only holder of all of it, and handed over as a value so ActivityKit stays out of
     /// this file.
@@ -653,7 +659,9 @@ final class WorkoutTrackerService {
             return
         }
 
-        coordinates.append(Coordinate(location.coordinate))
+        let accepted = Coordinate(location.coordinate)
+        coordinates.append(accepted)
+        onAcceptedFix?(accepted)
 
         if let last = previous {
             let delta = location.distance(from: last)

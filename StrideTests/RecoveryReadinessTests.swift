@@ -140,7 +140,8 @@ struct RecoveryReadinessTests {
         arguments: [(60.0, 1.0), (57.0, 1.0), (42.0, 0.0), (36.0, 0.0), (49.5, 0.5)]
     )
     func hrvScale(latest: Double, expected: Double) throws {
-        let readiness = try #require(evaluate(RecoveryReadings(heartRateVariability: days(baseline: 60, latest: latest))))
+        let readings = RecoveryReadings(heartRateVariability: days(baseline: 60, latest: latest))
+        let readiness = try #require(evaluate(readings))
         let hrv = try #require(readiness.component(.heartRateVariability))
         #expect(abs(hrv.recovery - expected) < 0.0001)
     }
@@ -150,7 +151,8 @@ struct RecoveryReadinessTests {
         arguments: [(50.0, 1.0), (52.0, 1.0), (55.0, 0.5), (58.0, 0.0), (45.0, 1.0)]
     )
     func restingScale(latest: Double, expected: Double) throws {
-        let readiness = try #require(evaluate(RecoveryReadings(restingHeartRate: days(baseline: 50, latest: latest))))
+        let readings = RecoveryReadings(restingHeartRate: days(baseline: 50, latest: latest))
+        let readiness = try #require(evaluate(readings))
         let resting = try #require(readiness.component(.restingHeartRate))
         #expect(abs(resting.recovery - expected) < 0.0001)
         #expect(resting.reading == latest - 50)
@@ -207,6 +209,27 @@ struct RecoveryReadinessTests {
         #expect(readiness.validUntil == calendar.date(byAdding: .day, value: 1, to: today))
     }
 
+    // MARK: - Coach prompt
+
+    @Test("The coach prompt carries the score, its meaning, and every component's reading")
+    func promptSummary() throws {
+        let readings = RecoveryReadings(
+            heartRateVariability: days(baseline: 60, latest: 45),
+            restingHeartRate: days(baseline: 50, latest: 54),
+            lastNightSleepSeconds: 6 * 3_600
+        )
+        let summary = try #require(evaluate(readings)).promptSummary
+        #expect(summary.hasPrefix("Readiness this morning: "))
+        #expect(summary.contains("under 60, so today should be easy or a rest day"))
+        #expect(summary.contains("Heart-rate variability 25% under their 4-week norm"))
+        #expect(summary.contains("resting heart rate 4 bpm above their 4-week norm"))
+        #expect(summary.contains("slept 6.0 hours last night"))
+
+        let rested = try #require(evaluate(RecoveryReadings(lastNightSleepSeconds: 8 * 3_600)))
+        #expect(rested.promptSummary.contains("60 or above, so the plan can stand"))
+        #expect(rested.promptSummary.contains("Slept 8.0 hours"))
+    }
+
     // MARK: - The card
 
     private func cardContext(
@@ -228,11 +251,13 @@ struct RecoveryReadinessTests {
     @Test("The card fires under 60 and stays quiet at 60 and above")
     func cardThreshold() {
         // 6.25 h of sleep scores 50; 7 h scores 80.
-        let low = SmartCoachCards.readinessCard(cardContext(readings: RecoveryReadings(lastNightSleepSeconds: 6.25 * 3_600)))
+        let short = RecoveryReadings(lastNightSleepSeconds: 6.25 * 3_600)
+        let low = SmartCoachCards.readinessCard(cardContext(readings: short))
         #expect(low?.kind == .readiness)
         #expect(low?.tone == .caution)
 
-        let fine = SmartCoachCards.readinessCard(cardContext(readings: RecoveryReadings(lastNightSleepSeconds: 7 * 3_600)))
+        let enough = RecoveryReadings(lastNightSleepSeconds: 7 * 3_600)
+        let fine = SmartCoachCards.readinessCard(cardContext(readings: enough))
         #expect(fine == nil)
 
         #expect(SmartCoachCards.readinessCard(cardContext(readings: nil)) == nil)

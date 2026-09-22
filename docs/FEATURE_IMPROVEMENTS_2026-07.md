@@ -27,9 +27,9 @@ that would meaningfully expand the product.
 > half, and **B6**'s route export.
 >
 > **What is genuinely open:** **A7** (target-distance-aware routes with elevation),
-> **A10** (race-day hub), **B3** (watchOS),
-> **B7** (recovery/readiness — the score and dashboard card shipped; the AI coach and the
-widget do not see it yet), **B8**, the logging half of
+> the weather half of **A10** (the rest of the race-day hub shipped), **B3** (watchOS),
+> **B7** (recovery/readiness — the score, dashboard card and coach chat shipped; the widget
+> does not see it yet), **B8**, the logging half of
 > **B9** (its fuelling-advice half shipped as the dashboard's Coach Tips strip), and the
 > full-data export half of **B6**. Each says at its own entry what was deferred and why.
 
@@ -145,6 +145,17 @@ split, each guided step, each strength set — so they respect the system haptic
 minimised run (U7) still speaks and buzzes from a pocket. This pass adds the lap haptic
 (A2). *Deferred:* spoken heart rate and distance, and lap announcements.
 
+A later pass speaks the guided steps too — the "rep 3, target pace 3:55" half of the
+original ask. `GuidedStepAnnouncement` (pure, unit-tested) builds a start cue for every step
+("Rep 3 of 6. 800 metres at 3:55 minutes per kilometre. Go.", "Recover. 90 seconds.") and
+one heads-up near the end of each rep and recovery; `GuidedWorkoutFeedback` speaks them,
+applied twice like `RunSplitFeedback`. Opt-in on its own switch
+(`AppSettings.spokenWorkoutStepsEnabled`), since a runner who wants reps called may not
+want kilometres read out mid-rep. A step cue interrupts a split still being spoken rather
+than being dropped behind it. Auto-advance moved out of `GuidedWorkoutBanner` into the same
+modifier, because the banner only exists on the HUD and a minimised session had stopped
+stepping.
+
 There is no `AVSpeechSynthesizer` or `CHHapticEngine` usage anywhere. A runner
 executing a prescribed 6×800 m interval gets no spoken "rep 3, target pace 3:55,
 you're 8s fast" and no buzz at the split. For a coaching app this is the gap
@@ -157,8 +168,9 @@ the scheduled workout's structure so intervals and tempo blocks are cued.
 **SHIPPED in the UX-audit passes**, and recorded here only now. `GuidedWorkoutEngine`
 (pure, unit-tested) flattens a `WorkoutStructure` into ordered steps; `GuidedWorkoutState`
 lives on `ActiveRunPresentation` rather than in view state, so a runner three intervals in
-who minimises the HUD comes back to step 4 and not step 1; `GuidedWorkoutBanner` shows and
-advances the current step, and the metric grid's third slot shows step *n* of *m*. Flat
+who minimises the HUD comes back to step 4 and not step 1; `GuidedWorkoutBanner` shows the
+current step and its manual Next (auto-advance is `GuidedWorkoutFeedback`'s, so it carries on
+while minimised), and the metric grid's third slot shows step *n* of *m*. Flat
 easy runs and free runs leave the stepper `nil` and are unchanged. Each step change is
 cued by a heavy haptic (A3) — a transition the runner would otherwise only see by looking
 at the banner at exactly the right moment.
@@ -228,6 +240,17 @@ scheduled workout's target distance. **Improve:** add a target-distance-aware
 "today's run route" suggestion (pull distance from the scheduled workout),
 surface an elevation profile, and let a `SavedRoute` be attached to a plan day.
 
+**Partly built (2026-09):** two pieces the competitive analysis ranked ahead of the
+rest. *Keyless routes:* with no OpenRouteService key, `RouteGeniusService` builds
+loops and out-and-backs from Apple Maps walking directions (`MapKitWalkingDirections`),
+so Route Genius works without Settings; an ORS key, if set, still selects ORS.
+*Route following:* the run HUD offers "Follow a saved route" before the start;
+`RunRouteGuide` checks every accepted fix against it (`RouteDeviationMonitor`: 50 m
+to leave, 30 m to rejoin, three agreeing fixes, never "off" before first joining) and
+speaks "Off route" / "Back on route", with a haptic and a status pill while the HUD is
+up. Still open: target distance from the scheduled workout, elevation, attaching a
+route to a plan day, and a map of the followed route on the HUD.
+
 ### ✅ A8. Progress "Medals" is a thin achievement layer *(medium impact, low effort)*
 
 **SHIPPED (commit `a8d8a77`, via B4):** the thin distance-PR medals layer was
@@ -288,7 +311,44 @@ pace targets entirely in extreme heat. Every threshold is sourced in
 [`HEAT_ADAPTATION_EVIDENCE.md`](./HEAT_ADAPTATION_EVIDENCE.md); the dashboard
 card is `HeatAdvisoryCard`, the setting is **Settings → App → Heat Adaptation**.
 
-### A10. Custom race distance exists but race-day experience doesn't *(medium impact, medium effort)*
+### ✅ A10. Custom race distance exists but race-day experience doesn't *(medium impact, medium effort)*
+
+**SHIPPED (race-day hub), except the weather half.**
+[`RaceDayPlan`](../Stride/Core/Services/RaceDayPlan.swift) resolves the whole arc —
+countdown, taper status, the goal ladder, the split table and the result — as one pure
+value with an injectable `now`, and
+[`RaceDayHubView`](../Stride/Features/Training/RaceDayHubView.swift) draws it.
+[`RaceCountdownCard`](../Stride/Features/Training/RaceCountdownCard.swift) is the entry
+point: on the Plan tab all season, and on the dashboard from a fortnight out until three
+days after.
+
+Details that are decisions rather than defaults:
+
+- **The goal ladder is built *down* from the time the runner set, not up from it.** A
+  runner who typed “3:30 marathon” has already named their ambitious number, so that is
+  the A goal; B and C are +3 % and +7 %. Inventing a faster rung above their own goal
+  would be the app raising it for them on the one morning it has no business doing that.
+- **The predicted finish sits beside the ladder rather than inside it.** It comes from
+  quality efforts in the last eight weeks via `ProgressStatsService.estimatedVDOT`,
+  falling back to the profile's 5 K estimate. A goal is a decision and a prediction is a
+  measurement; folding the second into the first would have the hub arguing with the
+  runner.
+- **Splits are even-pace only.** A negative-split plan needs a start time and a course
+  profile, and the app stores neither. The table closes on the race distance rather than
+  on a whole marker — the marathon's last 195 m is its own “Finish” row.
+- **There is no manual result entry.** A race is recorded the way every other run is, in
+  the app or imported from Health, so the hub reads the race-day run: the one linked to
+  the plan's race workout, else the longest run that day covering at least 95 % of the
+  race distance — which is what stops a race-morning shakeout being reported as the race.
+- **A pregnancy plan gets no hub at all**, even with a stale `raceDate` left on the
+  profile.
+
+*Still open:* the **weather** half. `WeatherService.hourlyForecast(at:on:)` reaches ten
+days ahead and `HeatAdvisoryService.usualRunLocation` supplies a coordinate with no new
+permission, so the data is there — but the app stores a race *date* and no start time,
+and picking an hour to report would be inventing one. Storing a race start time is the
+prerequisite, and that is a change to onboarding rather than to the hub.
+
 The plan builds toward `raceDate`/`raceName` (`UserProfile:15-16`) but there is
 no race-day countdown, no taper-status view, no goal-pace race plan, and no
 post-race result capture/celebration. **Improve:** a race-day hub (countdown,
@@ -437,9 +497,12 @@ running low" card naming what pulled it down, and suggesting the next hard sessi
 easy or moved. [`RecoveryReadinessTests`](../StrideTests/RecoveryReadinessTests.swift)
 pins each threshold.
 
-*Still open:* the AI coach chat and the run analysis do not see the score yet, and the
-widget and Siri do not show the card, because both build their coach context without a
-HealthKit read. A runner who granted Health access before this build is not asked for the
+The AI coach chat reads the same score: `AICoachChatView` puts
+`RecoveryReadiness.promptSummary` (the score, what it means, and each component's reading)
+into the context it sends with every message.
+
+*Still open:* the per-run analysis does not see the score, and the widget and Siri do not
+show the card, because both build their coach context without a HealthKit read. A runner who granted Health access before this build is not asked for the
 new types until the app next requests Health access (the Health import in Settings or
 History does), so for them the card stays silent until then.
 
@@ -548,7 +611,8 @@ Sequenced for user-visible impact per unit of effort, reusing existing models.
 **P2 — depth in data & coaching:**
 7. **✅ A5** cadence capture **+ ✅ A6** HR-zone display; both now feed the coach. *(A5's
    recovery third is B7, below.)*
-8. **A10** race-day hub (countdown, goal splits, result capture).
+8. **✅ A10** race-day hub (countdown, goal splits, taper status, result) — *race-day
+   weather still open; it needs a stored race start time first.*
 9. **B7** recovery/readiness score.
 
 **P3 — reach & retention:**
@@ -564,8 +628,8 @@ Sequenced for user-visible impact per unit of effort, reusing existing models.
 > **Note on sequencing:** P0 was the highest leverage because the plan engine already
 > *prescribed* structured, paced workouts the app could not yet *guide the runner
 > through*. That loop is closed, and with P1 closed too, the remaining items no longer
-> queue behind each other: **A10** (race day), **B7** (recovery), **A7** (routes), **A9**
-> (notifications) and the rest of **B6** (full-data export) are independent, and are
+> queue behind each other: **B7** (recovery), **A7** (routes) and the rest of **B6**
+> (full-data export) are independent, and are
 > ordered by impact rather than by dependency. **B3** (watchOS) is still the one that
 > changes the product's shape rather than adding to it.
 </content>

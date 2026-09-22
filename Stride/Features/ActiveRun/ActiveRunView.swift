@@ -112,6 +112,9 @@ struct ActiveRunView: View {
             // `MainTabView`, which owns the same feedback while the run is minimised and
             // this screen is gone — see `RunSplitFeedback`.
             .runSplitFeedback(isActive: true)
+            // Steps a structured workout on as each target is met and (opt-in) calls
+            // each step out loud; shared with `MainTabView` the same way.
+            .guidedWorkoutFeedback(isActive: true)
             // A lap is marked by feel, mid-stride, without looking — so the confirmation
             // that it registered has to be felt too (A2). Distinct from the split haptic
             // above (`.light`) so the two can be told apart in a pocket.
@@ -177,6 +180,7 @@ struct ActiveRunView: View {
                 // the guided stepper — goes now that the cover has actually gone.
                 if !presentation.isPresented, !tracker.isRecording {
                     presentation.end()
+                    container.runRouteGuide.stop()
                 }
             }
     }
@@ -247,6 +251,14 @@ struct ActiveRunView: View {
                     .padding(.horizontal, AppSpacing.lg)
                     .padding(.top, 18)
                 }
+                RouteGuidanceBanner(
+                    guide: container.runRouteGuide,
+                    trackingState: tracker.trackingState,
+                    isOutdoor: selectedLocation == .outdoor,
+                    unit: appSettings.unitPreference,
+                    loadSavedRoutes: { (try? container.routeRepository.fetchAll()) ?? [] }
+                )
+                .padding(.horizontal, AppSpacing.lg)
                 metricsGrid
                 Spacer()
                 controls

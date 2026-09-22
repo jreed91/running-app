@@ -379,6 +379,19 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
                 .padding(.leading, 62)
                 .padding(.bottom, 10)
+            rowDivider
+            // Off until asked, like Spoken Splits above: it talks over the runner's music.
+            settingsRow(icon: .bolt, iconColor: .zoneInterval, title: "Spoken Workout Steps") {
+                Toggle("", isOn: Bindable(appSettings).spokenWorkoutStepsEnabled)
+                    .labelsHidden()
+                    .tint(.brand)
+                    .accessibilityIdentifier("settings.spokenWorkoutSteps")
+            }
+            Text("Talks you through interval and tempo sessions: each rep, recovery and cool-down as it starts, with a heads-up just before a rep or recovery ends.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.leading, 62)
+                .padding(.bottom, 10)
         }
     }
 
@@ -453,17 +466,17 @@ struct SettingsView: View {
 
     private var routeGeniusCard: some View {
         settingsSection("Route Genius") {
-            settingsRow(icon: .location, iconColor: .brand, title: "ORS API Key") {
+            settingsRow(icon: .location, iconColor: .brand, title: "ORS API Key (optional)") {
                 EmptyView()
             }
-            SecureField("Paste your token here", text: Bindable(appSettings).orsAPIKey)
+            SecureField("Leave empty to use Apple Maps", text: Bindable(appSettings).orsAPIKey)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
                 .font(.dsFootnote.monospaced())
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, AppSpacing.lg)
                 .padding(.bottom, 6)
-            Text("Free key at openrouteservice.org · 2,000 routes/day · stored on-device only.")
+            Text("Routes use Apple Maps and need no key. Paste a free openrouteservice.org key to use its loop shaping instead · stored on-device only.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, AppSpacing.lg)

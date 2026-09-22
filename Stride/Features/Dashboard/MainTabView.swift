@@ -59,6 +59,9 @@ struct MainTabView: View {
         // while the run is minimised this view is the only one left to say so (U4/U7). The
         // HUD carries the same modifier with `isActive: true`, so the two never both fire.
         .runSplitFeedback(isActive: isRunMinimized)
+        // Likewise a guided workout's steps: advancing them, and calling them out, has to
+        // carry on while the run is minimised — see `GuidedWorkoutFeedback`.
+        .guidedWorkoutFeedback(isActive: isRunMinimized)
         // The store-recovery alert (C3) is presented by `ContentView`, not here: a
         // recreated store has no profile, so the app shows onboarding and this view
         // never appears on exactly the launch the notice describes (N5).

@@ -201,6 +201,39 @@ struct RecoveryReadiness: Equatable, Sendable {
             .sorted { $0.recovery < $1.recovery }
     }
 
+    // MARK: Coach prompt
+
+    /// The score and every component that fed it, as plain English for the AI coach's
+    /// context. Not localized: it is model input, like the rest of the prompt.
+    ///
+    /// Carries the threshold with the number, so the model reads 55 as "ease off"
+    /// rather than guessing what a readiness of 55 means on a scale it has never seen.
+    var promptSummary: String {
+        let parts = components.map { component -> String in
+            switch component.kind {
+            case .heartRateVariability:
+                let percent = Int(component.reading.rounded())
+                return percent < 0
+                    ? "heart-rate variability \(abs(percent))% under their 4-week norm"
+                    : "heart-rate variability \(percent)% above their 4-week norm"
+            case .restingHeartRate:
+                let bpm = Int(component.reading.rounded())
+                return bpm < 0
+                    ? "resting heart rate \(abs(bpm)) bpm below their 4-week norm"
+                    : "resting heart rate \(bpm) bpm above their 4-week norm"
+            case .sleep:
+                return "slept \(String(format: "%.1f", component.reading)) hours last night"
+            case .load:
+                return "the last 7 days of running were \(String(format: "%.1f", component.reading))× their usual week"
+            }
+        }
+        let verdict = Double(score) < SmartCoachCards.readinessThreshold
+            ? "under 60, so today should be easy or a rest day"
+            : "60 or above, so the plan can stand"
+        return "Readiness this morning: \(score)/100 (\(verdict)). "
+            + parts.joined(separator: "; ").capitalizedFirstCharacter + "."
+    }
+
     // MARK: Evaluation
 
     /// Nil when there is no body signal to go on.
@@ -310,5 +343,12 @@ struct RecoveryReadiness: Equatable, Sendable {
     private static func penalty(_ value: Double, from floor: Double, to ceiling: Double) -> Double {
         guard ceiling > floor else { return value >= ceiling ? 1 : 0 }
         return ((value - floor) / (ceiling - floor)).clamped(to: 0...1)
+    }
+}
+
+private extension String {
+    var capitalizedFirstCharacter: String {
+        guard let first else { return self }
+        return first.uppercased() + dropFirst()
     }
 }
