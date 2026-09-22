@@ -56,6 +56,10 @@ enum SmartCoachCards {
         var profile: UserProfile?
         var dayState: ScheduledDayResolver.DayState
         var unit: UnitPreference
+        /// Last night's HRV, resting heart rate and sleep from Apple Health, when the
+        /// caller has read them. Only the dashboard does: the widget and Siri build their
+        /// context without a HealthKit read, so the readiness card is a dashboard card.
+        var recoveryReadings: RecoveryReadings?
         var now: Date
         var calendar: Calendar
 
@@ -65,6 +69,7 @@ enum SmartCoachCards {
             profile: UserProfile?,
             dayState: ScheduledDayResolver.DayState,
             unit: UnitPreference,
+            recoveryReadings: RecoveryReadings? = nil,
             now: Date = Date(),
             calendar: Calendar = .current
         ) {
@@ -77,6 +82,7 @@ enum SmartCoachCards {
             self.profile = profile
             self.dayState = dayState
             self.unit = unit
+            self.recoveryReadings = recoveryReadings
             self.now = now
             self.calendar = calendar
         }
@@ -85,6 +91,18 @@ enum SmartCoachCards {
         /// ``CoachNutrition``; `nil` means the fuelling cards quote guideline ranges.
         var bodyMassKilograms: Double? {
             CoachNutrition.validMass(profile?.bodyMassKilograms)
+        }
+
+        /// The readiness score from ``recoveryReadings`` and the runs above, or `nil`
+        /// when Health had nothing to go on.
+        var readiness: RecoveryReadiness? {
+            guard let recoveryReadings, !recoveryReadings.isEmpty else { return nil }
+            return RecoveryReadiness.evaluate(
+                readings: recoveryReadings,
+                runs: recentRuns,
+                now: now,
+                calendar: calendar
+            )
         }
 
         /// Midnight at the end of race day, for the race cards' expiry.
