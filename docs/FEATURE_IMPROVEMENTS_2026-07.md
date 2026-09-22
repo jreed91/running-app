@@ -227,6 +227,17 @@ scheduled workout's target distance. **Improve:** add a target-distance-aware
 "today's run route" suggestion (pull distance from the scheduled workout),
 surface an elevation profile, and let a `SavedRoute` be attached to a plan day.
 
+**Partly built (2026-09):** two pieces the competitive analysis ranked ahead of the
+rest. *Keyless routes:* with no OpenRouteService key, `RouteGeniusService` builds
+loops and out-and-backs from Apple Maps walking directions (`MapKitWalkingDirections`),
+so Route Genius works without Settings; an ORS key, if set, still selects ORS.
+*Route following:* the run HUD offers "Follow a saved route" before the start;
+`RunRouteGuide` checks every accepted fix against it (`RouteDeviationMonitor`: 50 m
+to leave, 30 m to rejoin, three agreeing fixes, never "off" before first joining) and
+speaks "Off route" / "Back on route", with a haptic and a status pill while the HUD is
+up. Still open: target distance from the scheduled workout, elevation, attaching a
+route to a plan day, and a map of the followed route on the HUD.
+
 ### ✅ A8. Progress "Medals" is a thin achievement layer *(medium impact, low effort)*
 
 **SHIPPED (commit `a8d8a77`, via B4):** the thin distance-PR medals layer was

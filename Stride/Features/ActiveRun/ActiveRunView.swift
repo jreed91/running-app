@@ -177,6 +177,7 @@ struct ActiveRunView: View {
                 // the guided stepper — goes now that the cover has actually gone.
                 if !presentation.isPresented, !tracker.isRecording {
                     presentation.end()
+                    container.runRouteGuide.stop()
                 }
             }
     }
@@ -247,6 +248,14 @@ struct ActiveRunView: View {
                     .padding(.horizontal, AppSpacing.lg)
                     .padding(.top, 18)
                 }
+                RouteGuidanceBanner(
+                    guide: container.runRouteGuide,
+                    trackingState: tracker.trackingState,
+                    isOutdoor: selectedLocation == .outdoor,
+                    unit: appSettings.unitPreference,
+                    loadSavedRoutes: { (try? container.routeRepository.fetchAll()) ?? [] }
+                )
+                .padding(.horizontal, AppSpacing.lg)
                 metricsGrid
                 Spacer()
                 controls
