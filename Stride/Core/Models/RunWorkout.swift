@@ -155,6 +155,18 @@ final class RunWorkout {
     /// ``Swift/Sequence/runsOnly``.
     var isWalk: Bool { workoutType == .walk }
 
+    /// A ride, swim, row or other cardio session imported from Apple Health (B8).
+    ///
+    /// Shares the model for the same reason a walk does — duration, heart rate, route —
+    /// and completes a plan's cross-training day through the same `completedWorkout`
+    /// link a run uses. It has no running pace, and it is never running history.
+    var isCrossTraining: Bool { workoutType == .crossTraining }
+
+    /// Whether this is a run rather than an imported walk or cross-training session:
+    /// the question the run summary asks before offering coaching, pace analysis or a
+    /// link to a planned run.
+    var countsAsRunning: Bool { workoutType.countsAsRunning }
+
     init(
         date: Date = Date(),
         distanceMeters: Double,
@@ -178,7 +190,7 @@ final class RunWorkout {
 
 extension Sequence where Element == RunWorkout {
 
-    /// The runs, with imported walks dropped.
+    /// The runs, with imported walks and cross-training sessions dropped.
     ///
     /// `RunWorkout` is the app's record of "a thing you covered a distance doing", and
     /// since walk import (N38) that includes walks. Every aggregate that means *running*
@@ -198,7 +210,8 @@ extension Sequence where Element == RunWorkout {
 
 extension RunWorkout {
 
-    /// A fetch that returns runs and leaves imported walks in the store (N38).
+    /// A fetch that returns runs and leaves imported walks (N38) and cross-training
+    /// sessions (B8) in the store.
     ///
     /// The store-level counterpart to ``Swift/Sequence/runsOnly``, and the form to reach
     /// for whenever a fetch is *bounded* — `fetchLimit`, or a `@Query` the view pages
@@ -210,8 +223,9 @@ extension RunWorkout {
         fetchLimit: Int? = nil
     ) -> FetchDescriptor<RunWorkout> {
         let walkRaw = WorkoutType.walk.rawValue
+        let crossTrainingRaw = WorkoutType.crossTraining.rawValue
         var descriptor = FetchDescriptor<RunWorkout>(
-            predicate: #Predicate { $0.workoutTypeRaw != walkRaw },
+            predicate: #Predicate { $0.workoutTypeRaw != walkRaw && $0.workoutTypeRaw != crossTrainingRaw },
             sortBy: sortBy
         )
         descriptor.fetchLimit = fetchLimit

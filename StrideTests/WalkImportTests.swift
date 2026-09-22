@@ -50,7 +50,8 @@ struct WalkImportTests {
         #expect(!WorkoutType.walk.isQualitySession)
         #expect(WorkoutType.walk.sessionKind == .walk)
         // Everything else still counts, so the new case cannot have widened the rule.
-        for type in WorkoutType.allCases where type != .walk {
+        // Cross-training is the one other exception, and `CrossTrainingImportTests` owns it.
+        for type in WorkoutType.allCases where type != .walk && type != .crossTraining {
             #expect(type.countsAsRunning)
         }
     }

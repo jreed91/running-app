@@ -216,6 +216,8 @@ enum WorkoutType: String, Codable, CaseIterable, Sendable {
     case longRun = "Long Run"
     case race = "Race"
     case rest = "Rest"
+    /// A cross-training day in a plan, and since B8 also what an imported ride, swim, row
+    /// or elliptical session is recorded as. Never running: see `countsAsRunning`.
     case crossTraining = "Cross Training"
     case strength = "Strength"
     /// A walk imported from Apple Health.
@@ -272,7 +274,16 @@ enum WorkoutType: String, Codable, CaseIterable, Sendable {
     /// `.walk` is the case that makes the distinction earn its keep — a walk is real
     /// history and belongs in the log, but it is not a run and must never be averaged,
     /// totalled, or extrapolated with them.
-    var countsAsRunning: Bool { self != .walk }
+    ///
+    /// `.crossTraining` joins it once a ride or a swim can be *recorded* (B8): a 30 km
+    /// ride in the weekly running distance, or an hour on the bike as a VDOT sample, is
+    /// the same wrong number a walk would be, only larger.
+    var countsAsRunning: Bool {
+        switch self {
+        case .walk, .crossTraining: return false
+        case .easy, .tempo, .interval, .longRun, .race, .rest, .strength: return true
+        }
+    }
 
     /// The kind of session a workout type represents.
     ///

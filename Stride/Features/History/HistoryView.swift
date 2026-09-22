@@ -425,15 +425,41 @@ struct WorkoutRowView: View {
     private var rowDescription: String {
         var parts = [
             displayType.localizedName,
-            workout.date.formatted(.dateTime.weekday(.wide).month(.wide).day()),
-            workout.distanceMeters.distanceString(unit: appSettings.unitPreference),
-            workout.averagePaceSecondsPerKm.paceString(unit: appSettings.unitPreference)
+            workout.date.formatted(.dateTime.weekday(.wide).month(.wide).day())
         ]
+        if workout.isCrossTraining {
+            if workout.distanceMeters > 0 {
+                parts.append(workout.distanceMeters.distanceString(unit: appSettings.unitPreference))
+            }
+            parts.append(workout.durationSeconds.durationString)
+        } else {
+            parts.append(workout.distanceMeters.distanceString(unit: appSettings.unitPreference))
+            parts.append(workout.averagePaceSecondsPerKm.paceString(unit: appSettings.unitPreference))
+        }
         if workout.scheduledWorkout != nil { parts.append("linked to a planned workout") }
         if let weather = workout.weather {
             parts.append(weather.temperatureString(unit: appSettings.unitPreference))
         }
         return parts.joined(separator: ", ")
+    }
+
+    /// Distance, or the time for a cross-training session that recorded none (B8).
+    private var primaryMetric: String {
+        workout.isCrossTraining && workout.distanceMeters <= 0
+            ? workout.durationSeconds.durationString
+            : workout.distanceMeters.distanceString(unit: appSettings.unitPreference)
+    }
+
+    /// Pace for a run or walk; for a cross-training session its time, since a ride's
+    /// minutes per kilometre is not a pace anyone reads (B8).
+    private var secondaryMetric: String? {
+        guard workout.isCrossTraining else {
+            // `paceValueString` is the unit-less form of exactly this number. The row
+            // used to build it by string-stripping " min/km" off `paceString`, which
+            // silently stops matching the moment the app is localized (U8).
+            return workout.averagePaceSecondsPerKm.paceValueString(unit: appSettings.unitPreference)
+        }
+        return workout.distanceMeters > 0 ? workout.durationSeconds.durationString : nil
     }
 
     var body: some View {
@@ -464,14 +490,13 @@ struct WorkoutRowView: View {
             Spacer()
 
             VStack(alignment: .trailing, spacing: 3) {
-                Text(workout.distanceMeters.distanceString(unit: appSettings.unitPreference))
+                Text(primaryMetric)
                     .font(.dsSubhead.weight(.semibold).monospaced())
-                // `paceValueString` is the unit-less form of exactly this number. The row
-                // used to build it by string-stripping " min/km" off `paceString`, which
-                // silently stops matching the moment the app is localized (U8).
-                Text(workout.averagePaceSecondsPerKm.paceValueString(unit: appSettings.unitPreference))
-                    .font(.dsCaption.weight(.medium).monospaced())
-                    .foregroundStyle(.secondary)
+                if let secondaryMetric {
+                    Text(secondaryMetric)
+                        .font(.dsCaption.weight(.medium).monospaced())
+                        .foregroundStyle(.secondary)
+                }
                 if let w = workout.weather {
                     HStack(spacing: 3) {
                         Image(systemName: w.conditionSymbol)

@@ -38,9 +38,11 @@ final class WorkoutRepository: WorkoutRepositoryProtocol {
 
     func fetch(from startDate: Date, to endDate: Date) throws -> [RunWorkout] {
         let walkRaw = WorkoutType.walk.rawValue
+        let crossTrainingRaw = WorkoutType.crossTraining.rawValue
         let descriptor = FetchDescriptor<RunWorkout>(
             predicate: #Predicate {
-                $0.date >= startDate && $0.date <= endDate && $0.workoutTypeRaw != walkRaw
+                $0.date >= startDate && $0.date <= endDate
+                    && $0.workoutTypeRaw != walkRaw && $0.workoutTypeRaw != crossTrainingRaw
             },
             sortBy: [SortDescriptor(\.date, order: .reverse)]
         )

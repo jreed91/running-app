@@ -242,6 +242,7 @@ final class WorkoutSyncService {
         }
 
         await syncWalkingWorkouts(source: source, lookbackCutoff: cutoff, existingIDs: existingIDs)
+        await syncCrossTrainingWorkouts(source: source, lookbackCutoff: cutoff, existingIDs: existingIDs)
         await syncStrengthWorkouts(source: source, lookbackCutoff: cutoff)
     }
 
@@ -296,6 +297,95 @@ final class WorkoutSyncService {
         )
     }
 
+    // MARK: - Cross-training workout sync
+
+    /// Imports rides, swims, rows and other cardio from HealthKit as `.crossTraining`
+    /// sessions (B8), and lets each one complete the plan's cross-training day.
+    ///
+    /// Quiet like the walk pass — no banner, no review sheet, no weather — because the
+    /// synced-run banner and the review sheet are about a run's pace and splits, which a
+    /// ride does not have. Unlike a walk it *does* complete a plan day, but only a
+    /// cross-training one: `linkCrossTrainingToScheduledWorkouts` never considers a run
+    /// day, and the run linker never considers a cross-training session.
+    ///
+    /// `existingIDs` is the set the run pass built: all three share the `RunWorkout` and
+    /// tombstone tables, so a deleted ride is not re-imported.
+    private func syncCrossTrainingWorkouts(
+        source: String,
+        lookbackCutoff: Date,
+        existingIDs: Set<String>
+    ) async {
+        let sessions: [RunWorkout]
+        do {
+            sessions = try await healthKitRepository.fetchImportableCrossTrainingWorkouts(
+                from: lookbackCutoff,
+                to: Date(),
+                existingIDs: existingIDs,
+                context: WorkoutImportContext.resolve(from: context)
+            )
+        } catch {
+            AppLogger.log(
+                "Failed to import HealthKit cross-training workouts (\(source)): \(error.localizedDescription)",
+                label: "HealthKit",
+                level: .error
+            )
+            return
+        }
+
+        guard !sessions.isEmpty else { return }
+        for session in sessions { context.insert(session) }
+        linkCrossTrainingToScheduledWorkouts(sessions)
+        context.saveOrLog("imported cross-training workouts")
+        AppLogger.log(
+            "Imported \(sessions.count) HealthKit cross-training workout(s) during \(source) sync.",
+            label: "HealthKit",
+            level: .info
+        )
+    }
+
+    /// Matches each imported cross-training session to an unlinked cross-training day
+    /// on the same calendar day or the day before, the window runs and strength use.
+    ///
+    /// The session is stored as a `RunWorkout`, so it completes the day through the same
+    /// `completedWorkout` link a run does — which is what makes the day open onto it and
+    /// survive a CloudKit restore via `linkedRunWorkoutID`. Totals that read that link as
+    /// running (`TrainingWeek.completedDistanceKm`, the plan summary) take `runsOnly`.
+    private func linkCrossTrainingToScheduledWorkouts(_ sessions: [RunWorkout]) {
+        let toLink = sessions.filter { $0.isCrossTraining && $0.scheduledWorkout == nil }
+        guard !toLink.isEmpty else { return }
+
+        let descriptor = FetchDescriptor<ScheduledWorkout>(
+            predicate: #Predicate { $0.isCompleted == false }
+        )
+        guard let allIncomplete = try? context.fetch(descriptor) else { return }
+        var available = allIncomplete.filter {
+            $0.completedWorkout == nil
+                && $0.workoutType == .crossTraining
+                && Self.belongsToLivePlan($0)
+        }
+
+        let calendar = Calendar.current
+        // Oldest first, so two sessions on consecutive days fill their own days rather
+        // than the newer one taking the older one's slot.
+        for session in toLink.sorted(by: { $0.date < $1.date }) {
+            let sessionDay = calendar.startOfDay(for: session.date)
+            let dayMatches = available.filter { scheduled in
+                let scheduledDay = calendar.startOfDay(for: scheduled.scheduledDate)
+                let diff = calendar.dateComponents([.day], from: scheduledDay, to: sessionDay).day ?? Int.max
+                return diff >= 0 && diff <= 1
+            }
+            // Same day beats the day before.
+            guard let match = dayMatches.max(by: { $0.scheduledDate < $1.scheduledDate }) else { continue }
+
+            session.scheduledWorkout = match
+            match.completedWorkout = session
+            match.isCompleted = true
+            match.linkedRunWorkoutID = session.id
+            session.linkedScheduledWorkoutID = match.id
+            available.removeAll { $0.id == match.id }
+        }
+    }
+
     /// Days of history a routine sync looks back over.
     static let defaultLookbackDays = 7
 
@@ -343,7 +433,8 @@ final class WorkoutSyncService {
     ///
     /// Walks are excluded on the same principle as the gym day, from the other side: an
     /// imported walk is not a run and must not complete one. The walk sync pass never calls
-    /// this, and the guard here is what keeps that true if a future caller does (N38).
+    /// this, and the guard here is what keeps that true if a future caller does (N38). The
+    /// same `runsOnly` guard keeps an imported ride off a run day (B8).
     private func linkToScheduledWorkouts(_ runWorkouts: [RunWorkout]) {
         let toLink = runWorkouts.runsOnly.filter { $0.scheduledWorkout == nil }
         guard !toLink.isEmpty else { return }

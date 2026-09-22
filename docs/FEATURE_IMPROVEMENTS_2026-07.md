@@ -443,6 +443,16 @@ non-running cardio; cross-training days are scheduled but not executable in-app.
 **Expand:** at minimum import and display cross-training/cycling from HealthKit
 against the plan, so cross-training days can be completed like runs.
 
+**The import half shipped.** Cycling, swimming, rowing, elliptical, stair and Watch
+cross-training / mixed-cardio workouts of ten minutes or more are imported from Apple Health
+as `.crossTraining` sessions, appear in History with their time (and distance where the
+workout has one), and complete the plan's cross-training day on the same or the next
+calendar day. They never count as running: weekly distance, pace, VDOT, the streak and the
+coach all leave them out
+([`CrossTrainingImportTests`](../StrideTests/CrossTrainingImportTests.swift)).
+*Still open:* recording cross-training in-app, naming the activity (a ride is shown as
+"Cross Training"), a settings toggle, and the Settings import screen.
+
 ### B9. Nutrition / hydration logging for long runs & races *(low impact, medium effort)* — 🟡 PARTIAL
 Absent entirely. Marathon plans (the app's longest-horizon product) benefit from
 fueling reminders and a simple long-run hydration/gel log. Niche but

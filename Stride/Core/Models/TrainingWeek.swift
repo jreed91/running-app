@@ -29,9 +29,12 @@ final class TrainingWeek {
         return runWorkouts.allSatisfy(\.isCompleted)
     }
 
+    /// Running distance only: a cross-training day completed by an imported ride (B8) is
+    /// linked through the same `completedWorkout`, and its kilometres are not running ones.
     var completedDistanceKm: Double {
         (workouts ?? [])
             .compactMap(\.completedWorkout)
+            .runsOnly
             .reduce(0) { $0 + $1.distanceMeters / 1_000 }
     }
 

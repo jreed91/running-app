@@ -69,6 +69,15 @@ protocol HealthKitRepositoryProtocol: Sendable {
         existingIDs: Set<String>,
         context: WorkoutImportContext
     ) async throws -> [RunWorkout]
+    /// Fetches the `CrossTrainingImportPolicy` activities as `RunWorkout` models carrying
+    /// ``WorkoutType/crossTraining``, skipping any already in `existingIDs` (B8). No
+    /// walking/running samples are read, so a session has no splits, pace or cadence.
+    @MainActor func fetchImportableCrossTrainingWorkouts(
+        from startDate: Date,
+        to endDate: Date,
+        existingIDs: Set<String>,
+        context: WorkoutImportContext
+    ) async throws -> [RunWorkout]
     /// Fetches strength workouts (traditional, functional, core) from HealthKit,
     /// converts them to StrengthWorkout models, and skips any whose HK UUID is
     /// already in `existingIDs`.
@@ -738,6 +747,8 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
     enum ImportKind: Sendable {
         case run
         case walk
+        /// A ride, swim or other cardio session (B8); see `readsFootSamples`.
+        case crossTraining
 
         /// Whether a workout of this size is worth importing at all.
         func isImportable(distanceMeters: Double, durationSeconds: Double) -> Bool {
@@ -750,6 +761,8 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
                 return RunEffortPolicy.isRealWalk(
                     distanceMeters: distanceMeters, durationSeconds: durationSeconds
                 )
+            case .crossTraining:
+                return CrossTrainingImportPolicy.isRealSession(durationSeconds: durationSeconds)
             }
         }
 
@@ -769,6 +782,8 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
                 )
             case .walk:
                 return .walk
+            case .crossTraining:
+                return .crossTraining
             }
         }
     }
@@ -817,7 +832,16 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
     /// the history list labelled "Walk". Passive step tracking is not touched either:
     /// this is the workout type, so only sessions somebody actually started appear.
     private func fetchWalkingWorkouts(from startDate: Date, to endDate: Date) async throws -> [HKWorkout] {
-        let typePredicate = HKQuery.predicateForWorkouts(with: .walking)
+        try await fetchWorkouts(of: [.walking], from: startDate, to: endDate)
+    }
+
+    /// Workouts of any of `activityTypes` starting in the range, newest first.
+    private func fetchWorkouts(
+        of activityTypes: [HKWorkoutActivityType], from startDate: Date, to endDate: Date
+    ) async throws -> [HKWorkout] {
+        let typePredicate = NSCompoundPredicate(
+            orPredicateWithSubpredicates: activityTypes.map { HKQuery.predicateForWorkouts(with: $0) }
+        )
         let datePredicate = HKQuery.predicateForSamples(
             withStart: startDate, end: endDate, options: .strictStartDate
         )
@@ -837,6 +861,19 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             }
             store.execute(query)
         }
+    }
+
+    @MainActor func fetchImportableCrossTrainingWorkouts(
+        from startDate: Date,
+        to endDate: Date,
+        existingIDs: Set<String>,
+        context: WorkoutImportContext = .unknownRunner
+    ) async throws -> [RunWorkout] {
+        let types = CrossTrainingImportPolicy.activityTypes
+        let hkWorkouts = try await fetchWorkouts(of: types, from: startDate, to: endDate)
+        return await importWorkouts(
+            hkWorkouts, kind: .crossTraining, existingIDs: existingIDs, context: context, label: "cross-training"
+        )
     }
 
     /// Converts fetched HealthKit workouts into `RunWorkout` models, skipping the ones
@@ -867,7 +904,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
 
             let workoutDistanceMeters = hkWorkout.totalDistance?.doubleValue(for: .meter()) ?? 0
             let distanceMeters: Double
-            if workoutDistanceMeters > 0 {
+            if workoutDistanceMeters > 0 || !kind.readsFootSamples {
                 distanceMeters = workoutDistanceMeters
             } else {
                 distanceMeters = (try? await fetchDistanceMeters(for: hkWorkout)) ?? 0
@@ -886,13 +923,19 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
 
             let hrStats = try? await fetchHeartRateStats(for: hkWorkout)
             let hrSamples = (try? await fetchHeartRateSamples(for: hkWorkout)) ?? []
-            let cadence: Double? = try? await fetchCadenceStepsPerMinute(for: hkWorkout)
+            var cadence: Double?
+            if kind.readsFootSamples {
+                cadence = try? await fetchCadenceStepsPerMinute(for: hkWorkout)
+            }
             let elevation = elevationGain(from: hkWorkout)
             let coordinates = await fetchRouteCoordinates(for: hkWorkout)
 
             // HealthKit's distance samples carry their own timestamps, so an imported
             // run can be bucketed into real splits instead of arriving with none (N9).
-            let distancePoints = (try? await fetchDistanceSeries(for: hkWorkout)) ?? []
+            var distancePoints: [SplitBucketing.DistancePoint] = []
+            if kind.readsFootSamples {
+                distancePoints = (try? await fetchDistanceSeries(for: hkWorkout)) ?? []
+            }
             let splits = SplitBucketing.splits(
                 from: distancePoints,
                 splitLengthMeters: context.splitUnit.splitLengthMeters,

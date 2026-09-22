@@ -300,6 +300,31 @@ struct RunSummaryView: View {
         displayType.color
     }
 
+    /// The small uppercase label over the hero number: "Tempo run", but plain "Walk" or
+    /// "Cross Training" for the imported sessions that are not runs.
+    var kickerTitle: String {
+        workout.countsAsRunning
+            ? String(localized: "\(displayType.localizedName) run", comment: "Run summary kicker, e.g. Tempo run")
+            : displayType.localizedName
+    }
+
+    /// Whether the screen shows a running pace. A ride's minutes per kilometre is not
+    /// one, and an elliptical session has no distance to divide by (B8).
+    var showsPace: Bool { !workout.isCrossTraining }
+
+    /// A cross-training session with no distance — elliptical, stairs, a Watch "cross
+    /// training" workout — leads with its time instead of "0.00 km" (B8).
+    var leadsWithDuration: Bool { workout.isCrossTraining && workout.distanceMeters <= 0 }
+
+    /// The hero number: the distance, or the time for a session that has none.
+    var heroMetric: (value: String, unit: String) {
+        guard leadsWithDuration else { return titleMetric }
+        return (
+            value: workout.durationSeconds.durationString,
+            unit: String(localized: "total", comment: "Unit beside a workout's total time")
+        )
+    }
+
     var titleMetric: (value: String, unit: String) {
         let converted = appSettings.unitPreference == .imperial
             ? workout.distanceMeters / 1_609.344
@@ -318,6 +343,9 @@ struct RunSummaryView: View {
                 comment: "Title for an imported walk, e.g. Outdoor Walk"
             )
         }
+        if workout.isCrossTraining {
+            return WorkoutType.crossTraining.localizedName
+        }
         return workout.scheduledWorkout?.workoutType.localizedName ?? "\(workout.workoutLocation.localizedName) Run"
     }
 
@@ -327,20 +355,21 @@ struct RunSummaryView: View {
             VStack(alignment: .leading, spacing: 14) {
                 titleBlock
                 // A walk can never fulfil a planned session, so the screen does not offer
-                // to link one — the same rule the importer's linker applies (N38).
-                if workout.scheduledWorkout == nil, !workout.isWalk {
+                // to link one — the same rule the importer's linker applies (N38). The sheet
+                // lists run days only, so it is not offered for cross-training either (B8).
+                if workout.scheduledWorkout == nil, workout.countsAsRunning {
                     linkToPlannedWorkoutButton
                 }
                 routeMap
                 // The coach and the pace read are both written against the runner's
                 // training paces, which say nothing about a walk. Absent rather than
                 // shown empty: an insight on a walk is not a smaller insight, it is one
-                // about the wrong thing.
-                if !workout.isWalk {
+                // about the wrong thing. The same holds for a ride or a swim (B8).
+                if workout.countsAsRunning {
                     aiCoachAccessCard
                 }
                 statsGrid
-                if !workout.isWalk {
+                if workout.countsAsRunning {
                     paceInsightsSection
                 }
                 weatherSection
@@ -364,7 +393,7 @@ struct RunSummaryView: View {
                 if !zoneSlices.isEmpty, zoneSlices.contains(where: { $0.seconds > 0 }) {
                     heartRateZoneSection
                 }
-                if !workout.isWalk {
+                if workout.countsAsRunning {
                     aiCoachSection
                 }
             }

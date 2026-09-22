@@ -156,11 +156,13 @@ actor IntentModelActor {
         // run whenever the current day is a Sunday or Monday.
         let startOfWeek = Date().startOfWeek
         let endOfWeek = startOfWeek.adding(days: 7)
-        // "How far have I run this week" — so walks are excluded, matching the same
-        // total on the dashboard and in the weekly widget (N38).
+        // "How far have I run this week" — so walks (N38) and rides (B8) are excluded,
+        // matching the same total on the dashboard and in the weekly widget.
         let walkRaw = WorkoutType.walk.rawValue
+        let crossTrainingRaw = WorkoutType.crossTraining.rawValue
         let predicate = #Predicate<RunWorkout> {
-            $0.date >= startOfWeek && $0.date < endOfWeek && $0.workoutTypeRaw != walkRaw
+            $0.date >= startOfWeek && $0.date < endOfWeek
+                && $0.workoutTypeRaw != walkRaw && $0.workoutTypeRaw != crossTrainingRaw
         }
         let workouts = try modelContext.fetch(FetchDescriptor<RunWorkout>(predicate: predicate))
         return WeeklySummaryData(totalMeters: workouts.reduce(0.0) { $0 + $1.distanceMeters })
