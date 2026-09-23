@@ -165,6 +165,24 @@ struct GeneratedPlanAdaptation: Sendable {
     let adaptations: [GeneratedPlanAdaptationItem]
 }
 
+@available(iOS 26.0, *)
+@Generable
+struct GeneratedCoachTip: Sendable {
+    @Guide(description: "The tip's id, copied exactly from the list")
+    let id: String
+    @Guide(description: "A short heading said to the runner, at most 6 words")
+    let title: String
+    @Guide(description: "Two or three short, plain sentences addressed to \"you\". Keep every number, amount and unit exactly as written in the tip, and add no other numbers")
+    let message: String
+}
+
+@available(iOS 26.0, *)
+@Generable
+struct GeneratedCoachTips: Sendable {
+    @Guide(description: "Exactly one rewritten tip per id in the list, in the same order")
+    let tips: [GeneratedCoachTip]
+}
+
 // MARK: - Mapping to the existing structured value types
 
 @available(iOS 26.0, *)
@@ -253,6 +271,13 @@ extension GeneratedPlanAdaptation {
                 )
             }
         )
+    }
+}
+
+@available(iOS 26.0, *)
+extension GeneratedCoachTips {
+    func toDrafts() -> [CoachTipDraft] {
+        tips.map { CoachTipDraft(id: $0.id, title: $0.title, message: $0.message) }
     }
 }
 #endif

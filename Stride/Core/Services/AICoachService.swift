@@ -268,6 +268,30 @@ struct AICoachService: Sendable {
         )
     }
 
+    /// The model's own wording for the dashboard's Coach Tips, checked against the cards
+    /// it was written from; empty when there is no model or the request fails, which
+    /// leaves every card on its hard-coded copy. See `CoachTipRewriter`.
+    ///
+    /// Always the on-device model, whatever `AIProvider` says. This runs on its own every
+    /// time the tips change, not because the runner asked for anything, and Private
+    /// Cloud Compute's daily allowance is better spent on the chat and run reads they do
+    /// ask for.
+    func writeCoachTips(for cards: [SmartCoachCard]) async -> [CoachTipWording] {
+        guard !cards.isEmpty, let backend = onDeviceBackend, await backend.isAvailable() else {
+            return []
+        }
+        do {
+            let drafts = try await backend.generateCoachTips(
+                instructions: CoachTipRewriter.instructions,
+                prompt: CoachTipRewriter.prompt(for: cards),
+                useServerModel: false
+            )
+            return CoachTipRewriter.validated(drafts, for: cards)
+        } catch {
+            return []
+        }
+    }
+
     /// - Parameter heartRateZones: this run's time-in-zone breakdown, as shown on the run
     ///   summary. Passed in rather than derived here because computing it needs the runner's
     ///   max HR and, for older imported runs, a HealthKit backfill the view already owns.

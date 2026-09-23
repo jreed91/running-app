@@ -220,6 +220,23 @@ struct FoundationModelsCoachBackend: OnDeviceCoachGenerating {
         return text
     }
 
+    func generateCoachTips(
+        instructions: String,
+        prompt: String,
+        useServerModel: Bool
+    ) async throws -> [CoachTipDraft] {
+        let generated = try await generate(
+            instructions: instructions,
+            prompt: prompt,
+            generating: GeneratedCoachTips.self,
+            useServerModel: useServerModel,
+            // Rewording three short cards needs no deliberation, and the Home tab is
+            // already showing the hard-coded copy while this runs.
+            reasoning: .light
+        )
+        return generated.toDrafts()
+    }
+
     // MARK: - Session / model resolution
 
     /// Runs `work` against a session on the Private Cloud Compute model when the runner
