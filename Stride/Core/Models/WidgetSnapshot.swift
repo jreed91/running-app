@@ -4,11 +4,13 @@ import Foundation
 
 /// Everything Stride's Home Screen and Lock Screen widgets draw, in one value (B1).
 ///
-/// Compiled into **both** the app and `StrideWidgets`, for the same reason
-/// ``RunActivityAttributes`` is: the app writes it, the extension reads it, and two
-/// hand-written copies of a payload in two targets is how a widget silently starts
-/// rendering a field the app stopped filling in. Keep it free of anything app-only —
-/// no SwiftData, no services, no theme — or the extension stops building.
+/// Compiled into the app, `StrideWidgets` and `StrideWatch`, for the same reason
+/// ``RunActivityAttributes`` is shared: the app writes it, the extension and the watch app
+/// read it, and two hand-written copies of a payload in two targets is how a widget
+/// silently starts rendering a field the app stopped filling in. Keep it free of anything
+/// app-only — no SwiftData, no services, no theme, nothing iOS-only such as ActivityKit —
+/// or the extension and the watch app stop building. The watch receives it over
+/// WatchConnectivity rather than the App Group (see ``WatchContext``).
 ///
 /// Like the Live Activity's content state, it carries **preformatted strings** rather
 /// than raw metres and seconds. The app owns the unit preference and every formatter in
@@ -397,31 +399,4 @@ struct WidgetSnapshotStore: Sendable {
 
     private static let encoder = JSONEncoder()
     private static let decoder = JSONDecoder()
-}
-
-// MARK: - StrideWidgetDeepLink
-
-/// Where each widget lands when it is tapped.
-///
-/// Shared for the same reason ``RunActivityDeepLink`` is, and built on its scheme: the
-/// widget constructs these URLs and `StrideApp` resolves them, and two hand-written
-/// copies of a link in two targets is exactly how a deep link rots without anything
-/// failing to compile.
-enum StrideWidgetDeepLink {
-    static let planHost = "plan"
-    static let progressHost = "progress"
-    static let homeHost = "home"
-
-    /// `stride://plan` — the training plan, where the next session lives.
-    static var plan: URL? { url(host: planHost) }
-
-    /// `stride://progress` — streaks, weekly goal, achievements.
-    static var progress: URL? { url(host: progressHost) }
-
-    /// `stride://home` — the dashboard.
-    static var home: URL? { url(host: homeHost) }
-
-    private static func url(host: String) -> URL? {
-        URL(string: "\(RunActivityDeepLink.scheme)://\(host)")
-    }
 }

@@ -66,3 +66,34 @@ enum RunActivityDeepLink {
         URL(string: "\(scheme)://\(activeRunHost)")
     }
 }
+
+// MARK: - StrideWidgetDeepLink
+
+/// Where each widget lands when it is tapped.
+///
+/// Shared for the same reason ``RunActivityDeepLink`` is, and built on its scheme: the
+/// widget constructs these URLs and `StrideApp` resolves them, and two hand-written
+/// copies of a link in two targets is exactly how a deep link rots without anything
+/// failing to compile.
+///
+/// Kept in this file rather than beside ``WidgetSnapshot``: the Apple Watch app compiles
+/// `WidgetSnapshot.swift` too (B3), and watchOS has no ActivityKit to find
+/// ``RunActivityDeepLink`` in. Every target that uses this enum already compiles this file.
+enum StrideWidgetDeepLink {
+    static let planHost = "plan"
+    static let progressHost = "progress"
+    static let homeHost = "home"
+
+    /// `stride://plan` — the training plan, where the next session lives.
+    static var plan: URL? { url(host: planHost) }
+
+    /// `stride://progress` — streaks, weekly goal, achievements.
+    static var progress: URL? { url(host: progressHost) }
+
+    /// `stride://home` — the dashboard.
+    static var home: URL? { url(host: homeHost) }
+
+    private static func url(host: String) -> URL? {
+        URL(string: "\(RunActivityDeepLink.scheme)://\(host)")
+    }
+}

@@ -4,6 +4,8 @@ included:
   # `no_fixed_font_size` in particular, since a Lock Screen card is exactly where fixed
   # point sizes would break Dynamic Type.
   - StrideWidgets
+  # The Apple Watch app (B3). Same rules as the app.
+  - StrideWatch
   # Test sources are linted too. The only error-level rule they legitimately break
   # is `identifier_name.min_length` (throwaway `var c` DateComponents builders), so
   # nested `.swiftlint.yml` files in each test directory relax just that rule rather

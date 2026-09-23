@@ -406,7 +406,16 @@ show nothing. This is now an expected feature for any tracker and pairs naturall
 with the existing `WorkoutTrackerService` live metrics.
 
 ### B3. watchOS companion *(high impact, high effort)*
-There is no watch target or `WatchConnectivity`. The app imports Watch-recorded
+
+**IN PROGRESS.** A first slice adds the `StrideWatch` target: a Stride-branded watch app that
+shows today's session, the weekly goal and streak, and the race countdown (the widgets'
+`WidgetSnapshot`, sent over WatchConnectivity), and a **Start** button that opens today's
+session in the Workout app as the same structured WorkoutKit plan the phone schedules. See
+AGENTS.md → "Watch app". *Deferred:* recording the run in Stride's own watch app
+(`HKWorkoutSession`, live pace and coaching on the wrist), complications, and anything
+sent from the watch back to the phone.
+
+The original entry: there is no watch target or `WatchConnectivity`. The app imports Watch-recorded
 workouts but can't *start* a run from the wrist or show live coaching there —
 the single biggest platform gap for a running product. Large effort, but the
 domain models are already CloudKit-shared and Watch-import-aware.
