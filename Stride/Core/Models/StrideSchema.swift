@@ -16,7 +16,8 @@ enum StrideSchema {
         TrainingWeek.self,
         ScheduledWorkout.self,
         SavedRoute.self,
-        DeletedWorkout.self
+        DeletedWorkout.self,
+        Shoe.self
     ]
 
     static func make() -> Schema { Schema(models) }

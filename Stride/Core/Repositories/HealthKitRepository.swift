@@ -109,6 +109,14 @@ protocol HealthKitRepositoryProtocol: Sendable {
     /// degrades one line of one card to a range; it is never worth surfacing an error
     /// for, and HealthKit reports "denied" and "no samples" identically anyway.
     func fetchLatestBodyMassKilograms() async -> Double?
+    /// The last `baselineDays` of daily HRV and resting heart rate, and last night's
+    /// asleep time, for the readiness card (B7).
+    ///
+    /// Read-only, and like `fetchLatestBodyMassKilograms` silent on every failure path:
+    /// a type that is denied, missing or empty contributes nothing, and the readiness
+    /// score is built from whatever did come back. HealthKit reports "denied" and "no
+    /// samples" identically for reads anyway.
+    func fetchRecoveryReadings(endingAt now: Date, baselineDays: Int) async -> RecoveryReadings
     /// Enables HealthKit background delivery for running workouts at `.immediate` frequency.
     /// Safe to call multiple times — HealthKit is idempotent.
     func enableBackgroundDelivery() async throws
@@ -201,6 +209,16 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         // returns nothing and the cards quote guideline ranges, which is the same state
         // a runner who has never weighed themselves lands in.
         HKQuantityType(.bodyMass),
+        // Read-only, for the readiness card (B7): overnight HRV and resting heart rate are
+        // compared to the runner's own four-week norm, and last night's sleep is summed.
+        // Nothing is ever written to any of them.
+        //
+        // As with `stepCount` and `bodyMass`, a runner who authorized before these were
+        // added is not re-prompted until `requestAuthorization` runs again. Until then
+        // the reads return nothing and the readiness card simply never fires.
+        HKQuantityType(.heartRateVariabilitySDNN),
+        HKQuantityType(.restingHeartRate),
+        HKCategoryType(.sleepAnalysis),
         HKSeriesType.workoutRoute()
     ]
 
@@ -1277,6 +1295,94 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         // unit, and the coach's rates are all per kilogram. Converting at the boundary
         // means nothing downstream has to know a pound exists.
         return sample?.quantity.doubleValue(for: .gramUnit(with: .kilo))
+    }
+
+    // MARK: - Recovery (B7)
+
+    func fetchRecoveryReadings(endingAt now: Date, baselineDays: Int) async -> RecoveryReadings {
+        guard isAvailable else { return RecoveryReadings() }
+        let calendar = Calendar.current
+        // The baseline window plus the day being judged, from midnight so the oldest
+        // day is whole.
+        let start = calendar.date(
+            byAdding: .day,
+            value: -baselineDays,
+            to: calendar.startOfDay(for: now)
+        ) ?? now
+
+        // Three small reads, one after another: a month of daily samples is a few
+        // hundred rows at most, and running them in sequence keeps HealthKit's
+        // reference types out of concurrently-running child tasks.
+        let hrv = await quantitySamples(
+            HKQuantityType(.heartRateVariabilitySDNN),
+            unit: .secondUnit(with: .milli),
+            from: start,
+            to: now
+        )
+        let resting = await quantitySamples(
+            HKQuantityType(.restingHeartRate),
+            unit: .count().unitDivided(by: .minute()),
+            from: start,
+            to: now
+        )
+        let window = RecoveryReadings.lastNightWindow(endingAt: now, calendar: calendar)
+        let asleep = RecoveryReadings.mergedDuration(
+            of: await asleepIntervals(overlapping: window),
+            within: window
+        )
+
+        return RecoveryReadings(
+            heartRateVariability: RecoveryReadings.dailyMeans(hrv, calendar: calendar),
+            restingHeartRate: RecoveryReadings.dailyMeans(resting, calendar: calendar),
+            lastNightSleepSeconds: asleep > 0 ? asleep : nil
+        )
+    }
+
+    /// Every sample of a quantity type in the range, as plain (date, value) pairs in
+    /// `unit`. Empty on any failure.
+    private func quantitySamples(
+        _ type: HKQuantityType,
+        unit: HKUnit,
+        from start: Date,
+        to end: Date
+    ) async -> [(date: Date, value: Double)] {
+        let samples: [HKQuantitySample] = (try? await withCheckedThrowingContinuation {
+            (cont: CheckedContinuation<[HKQuantitySample], Error>) in
+            let query = HKSampleQuery(
+                sampleType: type,
+                predicate: HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate),
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: nil
+            ) { _, result, error in
+                if let error { cont.resume(throwing: error) }
+                else { cont.resume(returning: (result as? [HKQuantitySample]) ?? []) }
+            }
+            store.execute(query)
+        }) ?? []
+        return samples.map { (date: $0.startDate, value: $0.quantity.doubleValue(for: unit)) }
+    }
+
+    /// The spans any source recorded as asleep — core, deep, REM or unspecified — that
+    /// overlap `window`. In-bed and awake samples are left out: lying awake is not rest.
+    private func asleepIntervals(overlapping window: DateInterval) async -> [DateInterval] {
+        let samples: [HKCategorySample] = (try? await withCheckedThrowingContinuation {
+            (cont: CheckedContinuation<[HKCategorySample], Error>) in
+            let query = HKSampleQuery(
+                sampleType: HKCategoryType(.sleepAnalysis),
+                predicate: HKQuery.predicateForSamples(withStart: window.start, end: window.end, options: []),
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: nil
+            ) { _, result, error in
+                if let error { cont.resume(throwing: error) }
+                else { cont.resume(returning: (result as? [HKCategorySample]) ?? []) }
+            }
+            store.execute(query)
+        }) ?? []
+
+        let asleepValues = Set(HKCategoryValueSleepAnalysis.allAsleepValues.map(\.rawValue))
+        return samples
+            .filter { asleepValues.contains($0.value) && $0.endDate > $0.startDate }
+            .map { DateInterval(start: $0.startDate, end: $0.endDate) }
     }
 
     /// Resolves a stored HealthKit UUID string back to its workout, so samples can be

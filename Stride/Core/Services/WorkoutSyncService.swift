@@ -198,6 +198,7 @@ final class WorkoutSyncService {
             for workout in newWorkouts {
                 context.insert(workout)
             }
+            ShoeAssignment.assignDefaultShoe(to: newWorkouts, in: context)
             linkToScheduledWorkouts(newWorkouts)
             do {
                 try context.save()

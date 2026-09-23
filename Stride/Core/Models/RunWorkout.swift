@@ -74,6 +74,11 @@ final class RunWorkout {
     /// the relationship after reinstall.
     var linkedScheduledWorkoutID: UUID?
 
+    /// The `Shoe` this run was run in, by ID rather than relationship for the same
+    /// out-of-order-sync reason as `linkedScheduledWorkoutID`. `nil` for every run from
+    /// before shoe tracking and every run the runner has not put a pair on.
+    var shoeID: UUID?
+
     /// JSON-encoded ``WorkoutWeather``.
     var weatherData: Data?
 
@@ -83,6 +88,11 @@ final class RunWorkout {
     /// Raw-backed storage for the runner's thumbs-up/down on the cached insight (N22).
     /// Optional so the CloudKit schema stays additive for existing records.
     var aiCoachReactionRaw: String?
+
+    /// Raw-backed storage for the runner's "how did that feel?" rating (`RunFeel`).
+    /// Optional so the CloudKit schema stays additive, and so every run recorded or
+    /// imported before the question existed reads as unrated rather than as a guess.
+    var feelRaw: Int?
 
     // MARK: Computed helpers (not persisted)
 
@@ -129,6 +139,12 @@ final class RunWorkout {
     var aiCoachReaction: AICoachReaction? {
         get { aiCoachReactionRaw.flatMap(AICoachReaction.init(rawValue:)) }
         set { aiCoachReactionRaw = newValue?.rawValue }
+    }
+
+    /// How the runner said this run felt, if they answered.
+    var feel: RunFeel? {
+        get { feelRaw.flatMap(RunFeel.init(rawValue:)) }
+        set { feelRaw = newValue?.rawValue }
     }
 
     var workoutType: WorkoutType {

@@ -7,6 +7,7 @@ struct AICoachChatView: View {
 
     @Environment(AppSettings.self) private var appSettings
     @Environment(AppContainer.self) private var container
+    @Environment(\.modelContext) private var modelContext
 
     /// How many recent runs the coach prompt summarises. Also the fetch limit below —
     /// the prompt is the only consumer of more than the newest run.
@@ -43,6 +44,10 @@ struct AICoachChatView: View {
     /// which is the only stretch the typing dots still cover.
     @State private var streamingReply = ""
     @State private var didSendInitialPrompt = false
+    /// This morning's readiness (B7), so "should I rest tomorrow?" is answered from the
+    /// runner's HRV, resting heart rate and sleep, not only from their run log. `nil`
+    /// until the Health read returns, and when there is nothing in Health to score.
+    @State private var readiness: RecoveryReadiness?
     @FocusState private var isComposerFocused: Bool
 
     init(workout: RunWorkout? = nil, initialPrompt: String? = nil) {
@@ -111,6 +116,8 @@ struct AICoachChatView: View {
                 }
             }
             .task {
+                // Read first so the opening reply already has it.
+                await loadReadiness()
                 await sendInitialPromptIfNeeded()
             }
         }
@@ -526,6 +533,24 @@ struct AICoachChatView: View {
         ]
     }
 
+    /// Reads last night's recovery from Health and scores it against four weeks of runs.
+    ///
+    /// Its own fetch rather than `recentRuns`: the load component compares seven days to
+    /// twenty-eight, and the eight runs the prompt lists would make an ordinary week look
+    /// like a spike.
+    private func loadReadiness() async {
+        let now = Date()
+        let readings = await container.healthKitRepository.fetchRecoveryReadings(
+            endingAt: now,
+            baselineDays: RecoveryReadiness.baselineDays
+        )
+        guard !readings.isEmpty else { return }
+        let cutoff = now.addingTimeInterval(-Double(RecoveryReadiness.baselineDays) * 86_400)
+        let descriptor = FetchDescriptor<RunWorkout>(predicate: #Predicate { $0.date > cutoff })
+        let runs = (try? modelContext.fetch(descriptor)) ?? []
+        readiness = RecoveryReadiness.evaluate(readings: readings, runs: runs, now: now)
+    }
+
     private var coachContext: String {
         let unit = appSettings.unitPreference
         let selectedRun = latestRun.map { run in
@@ -538,6 +563,7 @@ struct AICoachChatView: View {
             Average pace: \(run.averagePaceSecondsPerKm.paceString(unit: unit))
             Average heart rate: \(run.averageHeartRate.map { "\(Int($0.rounded())) bpm" } ?? "n/a")
             Max heart rate: \(run.maxHeartRate.map { "\(Int($0.rounded())) bpm" } ?? "n/a")
+            How it felt: \(run.feel?.promptDescription ?? "not rated")
             Notes: \(run.notes ?? "none")
             """
         } ?? "Current workout context: none selected."
@@ -556,9 +582,11 @@ struct AICoachChatView: View {
             .prefix(Self.promptRunCount)
             .map { run in
                 let hr = run.averageHeartRate.map { "\(Int($0.rounded())) bpm" } ?? "n/a"
-                return "\(run.date.formatted(date: .abbreviated, time: .omitted)) | \(run.workoutType.displayName) | \(run.distanceMeters.distanceString(unit: unit)) | \(run.averagePaceSecondsPerKm.paceString(unit: unit)) | avg HR \(hr)"
+                return "\(run.date.formatted(date: .abbreviated, time: .omitted)) | \(run.workoutType.displayName) | \(run.distanceMeters.distanceString(unit: unit)) | \(run.averagePaceSecondsPerKm.paceString(unit: unit)) | avg HR \(hr)\(RunFeelSignal.historySuffix(for: run.feel))"
             }
             .joined(separator: "\n")
+
+        let recovery = readiness?.promptSummary ?? "Readiness this morning: no Health data."
 
         return """
         Unit preference: \(unit.rawValue)
@@ -566,6 +594,8 @@ struct AICoachChatView: View {
         \(selectedRun)
 
         \(planContext)
+
+        \(recovery)
 
         Recent runs:
         \(recent.isEmpty ? "No recent runs." : recent)

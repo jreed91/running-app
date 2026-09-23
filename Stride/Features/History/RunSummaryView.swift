@@ -7,7 +7,7 @@ import UIKit
 // The run detail screen. This file holds the screen's state, the values derived from
 // the run, the three on-demand loads (heart-rate zones, split backfill, share card),
 // and `body`; each section it composes lives in a `RunSummaryView+*.swift` extension
-// alongside it — Overview, TempoInsights, CoachCard, CoachSection, CoachStreaming,
+// alongside it — Overview, Feel, TempoInsights, CoachCard, CoachSection, CoachStreaming,
 // CoachComponents, Splits, HeartRateZones, PlannedWorkout, Chrome.
 //
 // The screen used to be one 2,232-line file carrying a `swiftlint:disable file_length
@@ -66,6 +66,9 @@ struct RunSummaryView: View {
     @State var nextSessionUpdateMessage: String?
     @State var coachChatRequest: AICoachChatRequest?
     @State var zoneSlices: [HRZoneSlice] = []
+    /// Whether the feel rating changed after a coach read was requested — the cue for the
+    /// feel card to point at Refresh, since that read was written without it.
+    @State var feelChangedSinceInsight = false
     /// The rendered share card (B5), non-nil only while the share sheet is up. Rendering
     /// is deferred until the user taps Share (N21) — the map snapshot plus a ×3
     /// `ImageRenderer` pass is far too expensive to run on every run-detail open.
@@ -360,6 +363,11 @@ struct RunSummaryView: View {
                 if workout.scheduledWorkout == nil, workout.countsAsRunning {
                     linkToPlannedWorkoutButton
                 }
+                // A walk is not training, so there is nothing for its rating to adjust. The
+                // rating is read against a *run's* intended type, so not a ride either (B8).
+                if workout.countsAsRunning {
+                    feelSection
+                }
                 routeMap
                 // The coach and the pace read are both written against the runner's
                 // training paces, which say nothing about a walk. Absent rather than
@@ -369,6 +377,10 @@ struct RunSummaryView: View {
                     aiCoachAccessCard
                 }
                 statsGrid
+                // Shoes are for running; a ride or a swim has none to pick (B8).
+                if !workout.isCrossTraining {
+                    RunShoeRow(workout: workout)
+                }
                 if workout.countsAsRunning {
                     paceInsightsSection
                 }

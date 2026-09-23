@@ -3,22 +3,24 @@ import CoreLocation
 
 // MARK: - RouteGeniusService
 
-/// Generates running routes via the OpenRouteService (ORS) Directions API.
+/// Generates running routes as loops or out-and-backs.
+///
+/// **Two backends, no key required.** With no OpenRouteService key — the default — routes
+/// come from Apple Maps walking directions (``MapKitWalkingDirections``): a loop is three
+/// walking legs through two waypoints, an out-and-back is one leg run twice. A runner who
+/// has pasted an ORS token into **Settings → Route Genius** keeps getting ORS routes, whose
+/// `round_trip` option shapes loops server-side.
 ///
 /// ORS docs: https://openrouteservice.org/dev/#/api-docs/v2/directions/{profile}/json/post
 ///
-/// **API key setup**: the runner pastes their ORS token into
-/// **Settings → Route Genius → ORS API Key**, which stores it in the Keychain via
-/// `KeychainStore` and reads it back through `AppSettings.orsAPIKey`. There is no
-/// bundled secrets file — the `Secrets.plist` path this comment used to document was
-/// never read by any code (N26). The simulator build accepts an empty key so the UI
-/// renders, but actual route generation requires a valid token.
+/// The ORS token lives in the Keychain via `KeychainStore` and is read back through
+/// `AppSettings.orsAPIKey`. There is no bundled secrets file — the `Secrets.plist` path
+/// this comment used to document was never read by any code (N26).
 struct RouteGeniusService: Sendable {
 
     // MARK: Errors
 
     enum RouteError: LocalizedError {
-        case missingAPIKey
         case networkError(Error)
         case unauthorized
         case forbidden
@@ -32,8 +34,6 @@ struct RouteGeniusService: Sendable {
 
         var errorDescription: String? {
             switch self {
-            case .missingAPIKey:
-                return "ORS API key not configured. Add it in Settings → Route Genius."
             case .networkError(let error):
                 return "Network error: \(error.localizedDescription)"
             case .unauthorized:
@@ -41,7 +41,7 @@ struct RouteGeniusService: Sendable {
             case .forbidden:
                 return "Route API request is forbidden (403). Check your API key and account limits."
             case .rateLimited:
-                return "Route API rate limit reached (429). Please try again in a moment."
+                return "Too many route requests in a short time. Please try again in a moment."
             case .serverError:
                 return "Route service is temporarily unavailable. Please try again."
             case .unexpectedStatusCode(let code):
@@ -62,21 +62,29 @@ struct RouteGeniusService: Sendable {
 
     private let baseURL = "https://api.openrouteservice.org"
     private let session: any StrideURLSessionProtocol
+    /// Backend used when the runner has no ORS key.
+    private let directions: any WalkingDirectionsProvider
 
     /// Defaults to a plain `URLSession` so the service fails closed: a diagnostics-
     /// capturing session is only ever used when a caller asks for one, and callers
     /// obtain it from `PulseIntegrationService.makeInstrumentedURLSession()`, which
     /// guarantees header/query redaction is installed first (S5).
-    init(session: any StrideURLSessionProtocol = URLSession(configuration: .default)) {
+    init(
+        session: any StrideURLSessionProtocol = URLSession(configuration: .default),
+        directions: any WalkingDirectionsProvider = MapKitWalkingDirections()
+    ) {
         self.session = session
+        self.directions = directions
     }
 
     // MARK: Public API
 
     /// Generates three distinct route options in parallel.
     ///
-    /// Loop routes use different ORS seeds; out-and-back routes head in three
-    /// compass directions (NE / SE / SW) so every option looks meaningfully different.
+    /// Loop routes use different ORS seeds, or with Apple Maps set off in three
+    /// different directions; out-and-back routes head in three compass directions
+    /// (NE / SE / SW) so every option looks meaningfully different.
+    /// An empty `apiKey` selects Apple Maps; any other value selects ORS.
     /// If every option fails, the first encountered ``RouteError`` is surfaced.
     func generateRouteOptions(
         start: CLLocationCoordinate2D,
@@ -84,19 +92,27 @@ struct RouteGeniusService: Sendable {
         routeType: RouteType,
         apiKey: String
     ) async throws -> [GeneratedRoute] {
-        guard !apiKey.isEmpty else { throw RouteError.missingAPIKey }
-
         let generationResult: (routes: [GeneratedRoute], firstError: Error?) = await withTaskGroup(of: Result<GeneratedRoute, Error>.self) { group in
             switch routeType {
             case .loop:
-                let configs: [(seed: Int, label: String)] = [
-                    (1,  "Option A"),
-                    (42, "Option B"),
-                    (99, "Option C")
+                // The ORS seed and the Apple Maps first-waypoint bearing each pick a
+                // different shape for the same distance.
+                let configs: [(seed: Int, bearing: Double, label: String)] = [
+                    (1,  0,   "Option A"),
+                    (42, 120, "Option B"),
+                    (99, 240, "Option C")
                 ]
                 for cfg in configs {
                     group.addTask {
                         do {
+                            if apiKey.isEmpty {
+                                return .success(try await self.generateWaypointLoop(
+                                    start: start,
+                                    distanceMeters: distanceMeters,
+                                    bearing: cfg.bearing,
+                                    label: cfg.label
+                                ))
+                            }
                             return .success(try await self.generateLoop(
                                 start: start,
                                 distanceMeters: distanceMeters,
@@ -174,6 +190,92 @@ struct RouteGeniusService: Sendable {
             ]
         ]
         return try await fetchRoute(body: body, apiKey: apiKey, label: label)
+    }
+
+    /// Straight-line distance from the start to each waypoint of a keyless loop, before
+    /// the detour factor. The start and two waypoints 60° apart form an equilateral
+    /// triangle, so the straight-line perimeter is three times this.
+    static func initialLoopWaypointOffsetMeters(targetTotalMeters: Double) -> Double {
+        max(targetTotalMeters, 0) / 3 / assumedDetourFactor
+    }
+
+    /// The two waypoints of a keyless loop: `offsetMeters` from the start, the first on
+    /// `bearing` and the second 60° clockwise of it.
+    static func loopWaypoints(
+        start: CLLocationCoordinate2D,
+        bearing: Double,
+        offsetMeters: Double
+    ) -> [CLLocationCoordinate2D] {
+        [
+            coordinate(from: start, bearing: bearing, distanceMeters: offsetMeters),
+            coordinate(from: start, bearing: bearing + 60, distanceMeters: offsetMeters)
+        ]
+    }
+
+    /// A loop built from point-to-point walking legs: start → waypoint → waypoint → start.
+    ///
+    /// Walking directions have no round-trip option, so the loop's length is steered the
+    /// way the out-and-back's is: guess the waypoint offset from the detour factor, and
+    /// if the routed loop misses the target by more than the tolerance, rescale the
+    /// offset once and keep whichever attempt came closer.
+    private func generateWaypointLoop(
+        start: CLLocationCoordinate2D,
+        distanceMeters: Double,
+        bearing: Double,
+        label: String
+    ) async throws -> GeneratedRoute {
+        var offsetMeters = Self.initialLoopWaypointOffsetMeters(targetTotalMeters: distanceMeters)
+        var loop = try await fetchWaypointLoop(start: start, bearing: bearing, offsetMeters: offsetMeters)
+
+        if !Self.isLegWithinTolerance(routedLegMeters: loop.distanceMeters, targetLegMeters: distanceMeters) {
+            offsetMeters = Self.refinedTurnaroundOffsetMeters(
+                previousOffsetMeters: offsetMeters,
+                routedLegMeters: loop.distanceMeters,
+                targetLegMeters: distanceMeters
+            )
+            if let refined = try? await fetchWaypointLoop(start: start, bearing: bearing, offsetMeters: offsetMeters) {
+                let previousMiss = abs(loop.distanceMeters - distanceMeters)
+                let refinedMiss = abs(refined.distanceMeters - distanceMeters)
+                if refinedMiss < previousMiss { loop = refined }
+            }
+        }
+
+        loop.label = label
+        return loop
+    }
+
+    private func fetchWaypointLoop(
+        start: CLLocationCoordinate2D,
+        bearing: Double,
+        offsetMeters: Double
+    ) async throws -> GeneratedRoute {
+        let stops = [start] + Self.loopWaypoints(start: start, bearing: bearing, offsetMeters: offsetMeters) + [start]
+        var legs: [GeneratedRoute] = []
+        for (from, to) in zip(stops, stops.dropFirst()) {
+            legs.append(try await directions.walkingRoute(from: from, to: to))
+        }
+        return Self.joined(legs)
+    }
+
+    /// Concatenates consecutive legs into one route, dropping each later leg's first
+    /// coordinate when it repeats the previous leg's last so the path has no zero-length
+    /// hop at the joins.
+    static func joined(_ legs: [GeneratedRoute]) -> GeneratedRoute {
+        var coordinates: [Coordinate] = []
+        for leg in legs {
+            var points = leg.coordinates[...]
+            if let last = coordinates.last, last == points.first {
+                points = points.dropFirst()
+            }
+            coordinates.append(contentsOf: points)
+        }
+        return GeneratedRoute(
+            coordinates: coordinates,
+            steps: legs.flatMap(\.steps),
+            distanceMeters: legs.reduce(0) { $0 + $1.distanceMeters },
+            durationSeconds: legs.reduce(0) { $0 + $1.durationSeconds },
+            label: ""
+        )
     }
 
     // MARK: Out-and-back generation
@@ -280,7 +382,12 @@ struct RouteGeniusService: Sendable {
         apiKey: String,
         label: String
     ) async throws -> GeneratedRoute {
-        let turnaround = coordinate(from: start, bearing: bearing, distanceMeters: offsetMeters)
+        let turnaround = Self.coordinate(from: start, bearing: bearing, distanceMeters: offsetMeters)
+        guard !apiKey.isEmpty else {
+            var leg = try await directions.walkingRoute(from: start, to: turnaround)
+            leg.label = label
+            return leg
+        }
         let body: [String: Any] = [
             "coordinates": [
                 [start.longitude, start.latitude],
@@ -463,7 +570,7 @@ struct RouteGeniusService: Sendable {
     // MARK: Geodesy helpers
 
     /// Returns a coordinate that is `distanceMeters` from `start` along `bearing` (degrees, 0 = north).
-    private func coordinate(
+    static func coordinate(
         from start: CLLocationCoordinate2D,
         bearing: Double,
         distanceMeters: Double

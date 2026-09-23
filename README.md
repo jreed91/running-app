@@ -11,10 +11,13 @@ A SwiftUI running coach app that creates adaptive training plans, tracks workout
    ```
 3. Open `Stride.xcodeproj` and run the `Stride` scheme.
 
-### Route generation API key
+### Route generation
 
-Route Genius calls the OpenRouteService Directions API and needs a token. The
-app reads it from the device Keychain, not from a file in the bundle:
+Route Genius works out of the box: with no key configured it builds routes from
+Apple Maps walking directions (`MKDirections`), which need no account or token.
+
+Optionally, a runner can use the OpenRouteService Directions API instead, whose
+`round_trip` option shapes loops server-side:
 
 1. Get a free token from [openrouteservice.org](https://openrouteservice.org).
 2. Run the app, then go to **Settings → Route Genius API key** and paste it.

@@ -65,7 +65,10 @@ The Xcode project is generated from `project.yml` using XcodeGen. Edit `project.
 - Swift package dependency: Pulse (`Pulse`, `PulseProxy`, `PulseUI`) for diagnostics/log inspection
 - Apple frameworks/capabilities include SwiftUI, SwiftData, HealthKit, CloudKit, WeatherKit, CoreLocation, background location, Sign in with Apple, App Intents, and local notifications
 
-Route generation requires an OpenRouteService API key. It is entered at runtime
+Route generation needs no API key: by default `RouteGeniusService` builds loops and
+out-and-backs from Apple Maps walking directions (`MapKitWalkingDirections`, behind the
+`WalkingDirectionsProvider` protocol so tests can fake it). An optional OpenRouteService
+key switches it to ORS. That key is entered at runtime
 in **Settings → Route Genius API key** and stored in the Keychain via
 `KeychainStore` (`AfterFirstUnlockThisDeviceOnly`) — never in `UserDefaults` and
 never synced through iCloud KVS. No code reads `Stride/Resources/Secrets.plist`;
@@ -133,6 +136,12 @@ Business logic belongs in services or repositories, not directly in SwiftUI view
 - `WorkoutWeather`: weather snapshot attached to completed runs
 - `RouteStep`, `GeneratedRoute`: route-generation results
 - `StrengthExercise`, `StrengthWorkoutPlan`, `CompletedStrengthSet`: strength workout representation
+
+`Stride/Core/Models/RunFeel.swift` is the runner's post-run "how did that feel?" answer, five
+steps stored on `RunWorkout.feelRaw` (raw values are persisted — never renumber them).
+`RunFeelSignal` is the one place that judges a rating against the session's intended type
+(an easy run rated hard is a fatigue signal; a tempo rated easy means soft paces); the coach
+read, the coach chat and both plan-adaptation prompts all read it through that type.
 
 `Stride/Core/Models/PregnancyPlanTypes.swift` holds the pregnancy vocabulary: `GestationalAge`
 (weeks+days from the due date — a pregnancy plan's clock, the way `raceDate` is a race plan's),
@@ -380,6 +389,27 @@ Rules a change here has to keep:
 
 `triggerTrainingNudgeTestNotifications` fires one of each with sample numbers, for reading
 the copy on a real Lock Screen.
+
+## Shoe tracking
+
+Runners add their pairs in **Settings → Shoes**; each run can name the pair it was run in,
+and Home nudges when a pair in rotation is nearly worn out. `ShoeWearPolicy` holds every
+judgement (pure, tested in `ShoeTrackingTests`), `ShoeAssignment` the few writes.
+
+- **Mileage is derived, never stored**: `startingDistanceMeters` plus the runs whose
+  `RunWorkout.shoeID` names the pair. Runs point at a shoe by UUID, not a relationship,
+  for the same out-of-order-sync reason as `linkedScheduledWorkoutID`. Views fetch through
+  `RunWorkout.shoeMileageDescriptor`, which loads only `shoeID` and `distanceMeters`.
+- **The default pair is put on new runs only from its `startDate` on**, so a retroactive
+  HealthKit import never credits old runs to new shoes. Walks are never auto-assigned.
+  The three insert paths that call `ShoeAssignment.assignDefaultShoe` are the run-finish
+  path, the background HealthKit sync and the manual import.
+- **The 800 km / 500 mi default is convention, not evidence**, and the code says so. Each
+  pair carries its own `replacementDistanceMeters`.
+- **The nudge's dismissals are keyed by pair and wear level** (`ShoeNudgeDismissals`, in
+  `UserDefaults`), so "not yet" at nearly done does not silence a pair once it is worn out.
+- Adding `Shoe` and `RunWorkout.shoeID` is a CloudKit schema change: run
+  `--init-cloudkit-schema` and deploy before shipping (see "Persistence and Sync").
 
 ## Run playlists
 

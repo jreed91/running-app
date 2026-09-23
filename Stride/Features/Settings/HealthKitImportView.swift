@@ -148,6 +148,9 @@ struct HealthKitImportView: View {
             for workout in newWorkouts + newWalks {
                 context.insert(workout)
             }
+            // Only runs on or after the default pair's start date get it, so reaching
+            // back a year does not put this year's shoes on last year's runs.
+            ShoeAssignment.assignDefaultShoe(to: newWorkouts, in: context)
             if !newWorkouts.isEmpty || !newWalks.isEmpty {
                 try context.save()
                 // Weather is attached to runs only, matching the background sync: it feeds

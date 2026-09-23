@@ -25,6 +25,10 @@ struct PlanTabView: View {
 
     private var activePlan: TrainingPlan? { activePlans.first }
 
+    private func raceDayPlan(for plan: TrainingPlan) -> RaceDayPlan? {
+        RaceDayPlan.resolve(profile: profiles.first, plan: plan, runs: recentWorkouts)
+    }
+
     var body: some View {
         NavigationStack {
             Group {
@@ -32,6 +36,22 @@ struct PlanTabView: View {
                     ScrollView {
                         VStack(spacing: 20) {
                             PlanOverviewCard(plan: plan)
+
+                            // The plan is built toward a race date and, until now, never
+                            // said anything else about it. This is the whole season's
+                            // countdown, so it sits here rather than on the dashboard,
+                            // which only carries it once the race is close (A10).
+                            if let racePlan = raceDayPlan(for: plan) {
+                                NavigationLink {
+                                    RaceDayHubView()
+                                } label: {
+                                    RaceCountdownCard(
+                                        racePlan: racePlan,
+                                        unit: appSettings.unitPreference
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            }
 
                             // Smart Adapt and Pace Insights are both VDOT machinery, and a
                             // pregnancy plan has no pace targets to insight about and is not

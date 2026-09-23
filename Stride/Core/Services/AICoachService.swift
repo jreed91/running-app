@@ -683,6 +683,16 @@ struct AICoachService: Sendable {
             }
         }
 
+        // The runner's own rating is the one thing here they told us rather than a sensor
+        // did, and it is what the numbers above cannot say: whether the run felt the way it
+        // was meant to. It leads the focus list when it points somewhere.
+        if let feel = workout.feel {
+            summaryBits.append(RunFeelSignal.runSentence(feel: feel, type: workout.intendedWorkoutType))
+            if let feelFocus = RunFeelSignal.runFocus(feel: feel, type: workout.intendedWorkoutType) {
+                focus.insert(feelFocus, at: 0)
+            }
+        }
+
         // Conditions and terrain are unique to each run, so let them shape the
         // analysis rather than leaning on the same generic talking points.
         if let weather = workout.weather, weather.temperatureCelsius >= 24 {
@@ -810,8 +820,9 @@ struct AICoachService: Sendable {
         // an imported walk in them reads as a run taken at half speed (N38).
         let recent = recentHistory.runsOnly.prefix(8).map { run in
             let avgHR = run.averageHeartRate.map { "\(Int($0)) bpm" } ?? "n/a"
-            return "\(run.date.formatted(date: .abbreviated, time: .omitted)) | \(run.workoutType.displayName) | \(run.distanceMeters.distanceString(unit: unitPreference)) | avg pace \(run.averagePaceSecondsPerKm.paceString(unit: unitPreference)) | duration \(run.durationSeconds.durationString) | avg HR \(avgHR)"
+            return "\(run.date.formatted(date: .abbreviated, time: .omitted)) | \(run.workoutType.displayName) | \(run.distanceMeters.distanceString(unit: unitPreference)) | avg pace \(run.averagePaceSecondsPerKm.paceString(unit: unitPreference)) | duration \(run.durationSeconds.durationString) | avg HR \(avgHR)\(RunFeelSignal.historySuffix(for: run.feel))"
         }.joined(separator: "\n")
+        let feelTrend = Self.feelTrendSection(recentHistory)
 
         return """
         Target race: \(planRace)
@@ -843,6 +854,8 @@ struct AICoachService: Sendable {
         Recent completed runs:
         \(recent.isEmpty ? "No recent completed runs." : recent)
 
+        \(feelTrend)
+
         \(coachFeedback.map { "Coach feedback to incorporate:\n\($0)" } ?? "")
         """
     }
@@ -862,8 +875,9 @@ struct AICoachService: Sendable {
         let planLongRunDays = longRunDayNames(in: plan)
         let recent = recentHistory.runsOnly.prefix(8).map { run in
             let avgHR = run.averageHeartRate.map { "\(Int($0)) bpm" } ?? "n/a"
-            return "\(run.date.formatted(date: .abbreviated, time: .omitted)) | \(run.workoutType.displayName) | \(run.distanceMeters.distanceString(unit: unitPreference)) | pace \(run.averagePaceSecondsPerKm.paceString(unit: unitPreference)) | \(run.durationSeconds.durationString) | HR \(avgHR)"
+            return "\(run.date.formatted(date: .abbreviated, time: .omitted)) | \(run.workoutType.displayName) | \(run.distanceMeters.distanceString(unit: unitPreference)) | pace \(run.averagePaceSecondsPerKm.paceString(unit: unitPreference)) | \(run.durationSeconds.durationString) | HR \(avgHR)\(RunFeelSignal.historySuffix(for: run.feel))"
         }.joined(separator: "\n")
+        let feelTrend = Self.feelTrendSection(recentHistory)
         let workoutRows = workouts.map { workout in
             let date = workout.scheduledDate.formatted(date: .abbreviated, time: .omitted)
             let weekday = workout.scheduledDate.formatted(.dateTime.weekday(.abbreviated))
@@ -899,9 +913,24 @@ struct AICoachService: Sendable {
         Recent completed runs:
         \(recent.isEmpty ? "No recent completed runs." : recent)
 
+        \(feelTrend)
+
         Scheduled workouts:
         \(workoutRows)
         """
+    }
+
+    /// How the runner's recent ratings read, for the adaptation prompts. Sits in its own
+    /// section after the history block rather than inside it, so `CoachPromptBudget` —
+    /// which trims that block row by row — never cuts it in half. Always a line, even with
+    /// nothing to report, so the model is not left to guess what a missing rating means.
+    static func feelTrendSection(_ history: [RunWorkout], now: Date = Date()) -> String {
+        let ratings = history.runsOnly.compactMap(\.feelRating)
+        let read = RunFeelSignal.trendSentence(ratings, now: now)
+            ?? (ratings.isEmpty
+                ? "The runner has not rated how any recent runs felt."
+                : "Recent ratings are in line with what each session was meant to feel like.")
+        return "How recent runs felt:\n\(read)"
     }
 
     private func preferredRunDayNames(for profile: UserProfile) -> String {
@@ -998,6 +1027,7 @@ struct AICoachService: Sendable {
         let weather = workout.weather.map {
             "\($0.conditionDescription), \($0.temperatureString(unit: unitPreference)), humidity \(Int($0.humidityPercent))%"
         } ?? "n/a"
+        let feel = workout.feel?.promptDescription ?? "not rated"
         let profileContext = profile.map {
             "Goal race: \(raceLabel(race: $0.goalRace, distanceMeters: $0.effectiveRaceDistanceMeters, unitPreference: unitPreference)), fitness level: \($0.fitnessLevel.displayName), run days/week: \($0.weeklyRunDays)"
         } ?? "No athlete profile available."
@@ -1022,6 +1052,7 @@ struct AICoachService: Sendable {
 
         let recent = recentHistory.runsOnly.prefix(5).map { run in
             "\(run.date.formatted(date: .abbreviated, time: .omitted)) • \(run.workoutType.displayName) • \(run.distanceMeters.distanceString(unit: unitPreference)) • \(run.averagePaceSecondsPerKm.paceString(unit: unitPreference))"
+                + (run.feel.map { " • felt \($0.promptName)" } ?? "")
         }.joined(separator: "\n")
         let recentSection = recent.isEmpty ? "No recent runs." : recent
 
@@ -1036,6 +1067,7 @@ struct AICoachService: Sendable {
         Avg cadence: \(cadence)
         Elevation gain: \(elevation)
         Weather: \(weather)
+        How it felt to the runner: \(feel)
         \(profileContext)
 
         Splits (one per \(splitLabel)):
@@ -1102,6 +1134,10 @@ extension AICoachService {
     executed, the split trend, the zone spread, the structure, the terrain, the \
     conditions, or the recovery it needs).
 
+    If the runner rated how the run felt, take their word for it and square it with the \
+    numbers: an easy run that felt hard matters even when the pace looked fine, and a \
+    hard session that felt easy is worth saying out loud.
+
     Treat heart rate as supporting context, not a problem, unless it is clearly and \
     substantially abnormal for this kind of run. Give no medical or clinical advice, and \
     never mention that you are an AI.
@@ -1138,6 +1174,12 @@ extension AICoachService {
     and write paces as minutes and seconds ("5:20 per km") — never as a count of \
     seconds. Say what changed and why it changed.
 
+    Recent runs may carry the runner's own rating of how they felt, on a five-step scale \
+    from very easy to very hard. Weigh it alongside pace and heart rate: easy runs that \
+    felt hard point to fatigue, so hold or ease intensity rather than add to it; quality \
+    sessions that felt easy mean the paces can firm up slightly. One rating is a hint, \
+    not a verdict.
+
     Give no medical or clinical advice, and never mention that you are an AI.
     """
 
@@ -1162,6 +1204,12 @@ extension AICoachService {
     runner, so write it the way a coach talks: one plain sentence under 120 characters, \
     addressed to "you", saying what changed and why. Write paces there as minutes and \
     seconds ("5:20 per km"), never as a count of seconds.
+
+    Recent runs may carry the runner's own rating of how they felt, on a five-step scale \
+    from very easy to very hard. Weigh it alongside pace and heart rate: easy runs that \
+    felt hard point to fatigue, so hold or ease intensity rather than add to it; quality \
+    sessions that felt easy mean the paces can firm up slightly. One rating is a hint, \
+    not a verdict.
 
     Give no medical or clinical advice, and never mention that you are an AI.
     """

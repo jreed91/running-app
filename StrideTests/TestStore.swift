@@ -48,7 +48,7 @@ import SwiftData
 @MainActor
 enum TestStore {
 
-    /// Built once rather than per container. `Schema.init` walks all eight `@Model` types
+    /// Built once rather than per container. `Schema.init` walks all nine `@Model` types
     /// and reflects over their properties, and the result is immutable and shareable —
     /// there is no reason for every store in the run to pay for its own copy.
     private static let schema = StrideSchema.make()

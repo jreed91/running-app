@@ -127,6 +127,9 @@ extension RunSummaryView {
         }
 
         let historySlice = Array(recentHistory.prefix(Self.insightHistoryRunCount))
+        // The request below reads the rating as it stands now, so the "refresh to include
+        // it" hint under the feel card is answered from here on.
+        feelChangedSinceInsight = false
         let result = await container.aiCoachService.evaluateWithProvider(
             workout: workout,
             recentHistory: historySlice,
