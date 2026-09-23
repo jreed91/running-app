@@ -65,7 +65,8 @@ extension SmartCoachCards {
             loadCard(context),
             fadeCard(context),
             polarizationCard(context),
-            cadenceCard(context)
+            cadenceCard(context),
+            readinessCard(context)
         ]
     }
 

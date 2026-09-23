@@ -120,6 +120,7 @@ enum WidgetSnapshotBuilder {
         case .polarization:        return "tortoise.fill"
         case .cadence:             return "metronome.fill"
         case .load:                return "mountain.2.fill"
+        case .readiness:           return "bed.double.fill"
         case .comeback:            return "figure.run"
         case .prep:                return "checkmark.circle.fill"
         case .planStartsSoon:      return "calendar"

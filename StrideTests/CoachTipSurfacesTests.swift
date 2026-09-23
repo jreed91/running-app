@@ -73,7 +73,8 @@ struct CoachTipSurfacesTests {
         runs: [RunWorkout] = [],
         profile: UserProfile? = nil,
         dayState: ScheduledDayResolver.DayState = .noPlan,
-        unit: UnitPreference = .metric
+        unit: UnitPreference = .metric,
+        recoveryReadings: RecoveryReadings? = nil
     ) -> SmartCoachCards.Context {
         SmartCoachCards.Context(
             nextSession: nextSession,
@@ -81,6 +82,7 @@ struct CoachTipSurfacesTests {
             profile: profile,
             dayState: dayState,
             unit: unit,
+            recoveryReadings: recoveryReadings,
             now: now
         )
     }
@@ -437,6 +439,19 @@ struct CoachTipSurfacesTests {
             return run
         }
         add(SmartCoachCards.cards(makeContext(runs: slow, unit: unit)))
+
+        // A short night after a drop in HRV.
+        let today = Calendar.current.startOfDay(for: now)
+        let hrv = (0...10).map { offset in
+            RecoveryReadings.Day(
+                day: Calendar.current.date(byAdding: .day, value: -offset, to: today)!,
+                value: offset == 0 ? 35 : 60
+            )
+        }
+        add(SmartCoachCards.cards(makeContext(
+            unit: unit,
+            recoveryReadings: RecoveryReadings(heartRateVariability: hrv, lastNightSleepSeconds: 5 * 3_600)
+        )))
 
         // Every kind should be reachable; if one is not, the contracts below would
         // silently stop covering it.

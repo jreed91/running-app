@@ -222,7 +222,7 @@ targets:
           - audio
         NSLocationWhenInUseUsageDescription: "Stride uses your location to track your route during a run."
         NSLocationAlwaysAndWhenInUseUsageDescription: "Stride uses your location in the background to continue tracking your route."
-        NSHealthShareUsageDescription: "Stride reads your workout and heart-rate history to show training insights."
+        NSHealthShareUsageDescription: "Stride reads your workout, heart-rate and sleep history to show training insights and how recovered you are."
         NSHealthUpdateUsageDescription: "Stride saves your completed runs to Apple Health."
         NSMotionUsageDescription: "Stride uses motion data to measure cadence during runs."
         NSWeatherKitUsageDescription: "Stride uses WeatherKit to record the conditions at the start of your run."

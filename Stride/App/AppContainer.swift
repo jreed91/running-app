@@ -174,6 +174,10 @@ final class AppContainer {
     /// mid-sentence.
     let runVoiceCoach: RunVoiceCoach
 
+    /// The saved route a run is following, and the off-route warning (A7). Wired into
+    /// `workoutTrackerService` below so it hears every fix, screen on or off.
+    let runRouteGuide: RunRouteGuide
+
     /// Builds an Apple Music playlist shaped like a scheduled session (N40). Deliberately
     /// *not* related to `runVoiceCoach` despite both being about sound: this one writes a
     /// playlist into the runner's library and never plays anything, so it never touches the
@@ -382,7 +386,11 @@ final class AppContainer {
             notificationService: notifications
         )
         self.aiCoachService = AICoachService()
-        self.runVoiceCoach = RunVoiceCoach()
+        let voiceCoach = RunVoiceCoach()
+        self.runVoiceCoach = voiceCoach
+        let routeGuide = RunRouteGuide(voiceCoach: voiceCoach)
+        self.runRouteGuide = routeGuide
+        tracker.onAcceptedFix = { [weak routeGuide] fix in routeGuide?.handle(fix: fix) }
         self.runPlaylistService = RunPlaylistService()
         self.activeRunPresentation = ActiveRunPresentation()
         self.workoutSyncService = WorkoutSyncService(
@@ -695,6 +703,8 @@ final class AppContainer {
         // Music library, not Stride's, and this button does not get to delete somebody's
         // music.
         RunPlaylistStore.removeAll()
+        // The shoe-nudge dismissals name pairs that are about to stop existing.
+        ShoeNudgeDismissals.removeAll()
         await planLifecycle.resetAllData(context: context)
         // The App Group container is outside the store `PlanLifecycleService` just tore
         // down, so without this the Home Screen would be the one place the deleted plan
