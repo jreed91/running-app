@@ -268,6 +268,40 @@ struct AICoachService: Sendable {
         )
     }
 
+    /// The model's own wording for the dashboard's Coach Tips, checked against the cards
+    /// it was written from; empty when there is no model or the request fails, which
+    /// leaves every card on its hard-coded copy. See `CoachTipRewriter`.
+    ///
+    /// Runs on the runner's chosen model, so Private Cloud Compute by default. Once the
+    /// daily PCC allowance is used up the tips are retried on-device rather than left on
+    /// the hard-coded copy: nobody asked for these, so unlike the chat there is no one to
+    /// tell about the quota, and the Settings status already shows it.
+    func writeCoachTips(for cards: [SmartCoachCard], provider: AIProvider) async -> [CoachTipWording] {
+        guard !cards.isEmpty, let backend = onDeviceBackend, await backend.isAvailable() else {
+            return []
+        }
+        let prompt = CoachTipRewriter.prompt(for: cards)
+        do {
+            let drafts: [CoachTipDraft]
+            do {
+                drafts = try await backend.generateCoachTips(
+                    instructions: CoachTipRewriter.instructions,
+                    prompt: prompt,
+                    useServerModel: provider.usesPrivateCloudCompute
+                )
+            } catch OnDeviceCoachError.serverQuotaExceeded(_) {
+                drafts = try await backend.generateCoachTips(
+                    instructions: CoachTipRewriter.instructions,
+                    prompt: prompt,
+                    useServerModel: false
+                )
+            }
+            return CoachTipRewriter.validated(drafts, for: cards)
+        } catch {
+            return []
+        }
+    }
+
     /// - Parameter heartRateZones: this run's time-in-zone breakdown, as shown on the run
     ///   summary. Passed in rather than derived here because computing it needs the runner's
     ///   max HR and, for older imported runs, a HealthKit backfill the view already owns.

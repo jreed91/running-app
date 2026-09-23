@@ -82,6 +82,15 @@ protocol OnDeviceCoachGenerating: Sendable {
         useServerModel: Bool,
         onPartialText: @escaping @MainActor @Sendable (String) -> Void
     ) async throws -> String
+
+    /// Rewrites the dashboard's Coach Tips in the model's own words — one draft per tip
+    /// in `prompt`, unchecked. `CoachTipRewriter.validated(_:for:)` decides which of them
+    /// are safe to show.
+    func generateCoachTips(
+        instructions: String,
+        prompt: String,
+        useServerModel: Bool
+    ) async throws -> [CoachTipDraft]
 }
 
 extension OnDeviceCoachGenerating {
@@ -91,6 +100,16 @@ extension OnDeviceCoachGenerating {
 
     @MainActor
     func presentLimitIncrease() {}
+
+    /// Backends that do not write tips leave the hard-coded copy in place, which is what
+    /// the dashboard shows whenever this throws.
+    func generateCoachTips(
+        instructions: String,
+        prompt: String,
+        useServerModel: Bool
+    ) async throws -> [CoachTipDraft] {
+        throw OnDeviceCoachError.unavailable
+    }
 }
 
 // MARK: - Server model status

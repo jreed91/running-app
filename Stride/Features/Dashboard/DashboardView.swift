@@ -373,6 +373,11 @@ struct DashboardView: View {
     @State private var recoveryReadings: RecoveryReadings?
     @Environment(\.scenePhase) private var scenePhase
 
+    /// Apple Intelligence's wording for the Coach Tips, each bound to the card text it was
+    /// written from. Empty until the model answers, and for good on a device without it —
+    /// either way the cards keep their hard-coded copy. See `CoachTipRewriter`.
+    @State private var coachTipWording: [CoachTipWording] = []
+
     private var activePlan: TrainingPlan? { activePlans.first }
 
     /// The goal race, but only once it is close enough to be a thing about *today* — the
@@ -466,7 +471,7 @@ struct DashboardView: View {
                                 .adaptiveAnimation(AppAnimation.entrance.delay(0.15), value: dashboardAppeared)
                         }
                         if !coachCards.isEmpty {
-                            SmartCoachCardsSection(cards: coachCards)
+                            SmartCoachCardsSection(cards: CoachTipRewriter.apply(coachTipWording, to: coachCards))
                                 .opacity(dashboardAppeared ? 1 : 0)
                                 .offset(y: dashboardAppeared ? 0 : 20)
                                 .adaptiveAnimation(AppAnimation.entrance.delay(0.18), value: dashboardAppeared)
@@ -510,6 +515,11 @@ struct DashboardView: View {
                     endingAt: Date(),
                     baselineDays: RecoveryReadiness.baselineDays
                 )
+            }
+            // Keyed on the cards' text, so it runs when a tip changes and not on every
+            // render; `refreshCoachTipWording` then asks only about the ones that did.
+            .task(id: CoachTipRewriter.requestKey(for: coachCards)) {
+                await refreshCoachTipWording()
             }
             .task {
                 // An advisory written last night should be on screen before the forecast
@@ -1138,6 +1148,26 @@ struct DashboardView: View {
         // a forecast on the page, the retrospective one stands down.
         guard heatAdvisory != nil else { return cards }
         return cards.filter { $0.kind != .heat }
+    }
+
+    /// Asks Apple's model (the runner's AI Coach choice, Private Cloud Compute by
+    /// default) to reword whichever Coach Tips have no wording for their current text yet. The hard-coded copy stays on screen until an answer passes
+    /// `CoachTipRewriter`'s checks, and stays for good on a card whose rewrite does not.
+    ///
+    /// Held back in UI tests and unit-test hosting, where the copy has to be the
+    /// deterministic one.
+    private func refreshCoachTipWording() async {
+        guard !UITestingSupport.isEnabled, !UITestingSupport.isHostingUnitTests else { return }
+        let cards = coachCards
+        let pending = CoachTipRewriter.cardsNeedingWording(cards, existing: coachTipWording)
+        guard !pending.isEmpty else { return }
+        let fresh = await container.aiCoachService.writeCoachTips(
+            for: pending,
+            provider: appSettings.aiProvider
+        )
+        // A newer set of cards has already started its own request.
+        guard !Task.isCancelled else { return }
+        coachTipWording = CoachTipRewriter.merging(fresh, into: coachTipWording, keeping: coachCards)
     }
 
     /// Whether the selected day's sessions can still be started (today, or one day

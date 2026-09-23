@@ -567,6 +567,16 @@ Both conform to `LanguageModel`, so `LanguageModelSession`, the `@Generable` sch
   `contextOptions` to the guided-generation overload, keep `includeSchemaInPrompt: true` —
   that overload drops the standalone argument and its default is `true`, so omitting it
   loses the schema bias.
+- **The Home tab's Coach Tips are worded by the on-device model, not chosen by it.**
+  `SmartCoachCards` still picks the cards, scores them and computes every amount; the
+  model only rewrites each card's title and message (`CoachTipRewriter`,
+  `AICoachService.writeCoachTips`). A rewrite is dropped unless its digit-written numbers
+  match the card's exactly, and it is bound to the card text it was written from, so the
+  hard-coded copy is what shows while the model writes, on devices without Apple
+  Intelligence, and wherever a rewrite fails the check. Runs on the runner's `AIProvider`
+  (PCC by default); on `.serverQuotaExceeded` it retries on-device instead of surfacing
+  the quota, since nobody asked for the tips. `glance` (widget, Siri) and `derivation`
+  are never rewritten.
 - `AICoachService` never imports `FoundationModels`. It talks to `OnDeviceCoachGenerating`,
   and PCC state reaches the UI as `ServerModelStatus`, a plain value type. That is what keeps
   the coach testable with a fake backend — see `StrideTests/FoundationModelsCoachServiceTests.swift`.
