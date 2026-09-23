@@ -197,7 +197,7 @@ private struct TypeBreakdownRow: View {
                 Circle()
                     .fill(stat.type.color.opacity(0.15))
                     .frame(width: 28, height: 28)
-                StrideIcon(name: stat.type.strideIcon, size: 13,
+                StrideIcon(name: stat.type.strideIcon, size: 16,
                            color: stat.type.color, strokeWeight: 1.8)
             }
 

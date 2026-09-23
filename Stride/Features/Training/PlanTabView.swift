@@ -1220,7 +1220,7 @@ private struct PlanWorkoutSummaryRow: View {
                 Circle()
                     .fill(workout.workoutType.color.opacity(0.15))
                     .frame(width: 32, height: 32)
-                StrideIcon(name: workout.workoutType.strideIcon, size: 15,
+                StrideIcon(name: workout.workoutType.strideIcon, size: 18,
                            color: workout.workoutType.color, strokeWeight: 1.8)
             }
             .padding(.leading, AppSpacing.xs)

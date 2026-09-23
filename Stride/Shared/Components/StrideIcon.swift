@@ -39,6 +39,29 @@ enum StrideIconName: String {
     case flag
     case gear
     case music
+
+    /// The SF Symbol that stands in for the hand-drawn glyph, or nil to draw the path.
+    ///
+    /// The workout-type glyphs were 24 pt stick figures and outlines drawn with a fixed
+    /// ~2 pt stroke, which clogged up at the 13–15 pt sizes the plan lists use and read
+    /// as blobs: the rest-day "moon" was a closed circle, the runner and walker were
+    /// hard to tell apart, the tortoise's legs were a point long. Apple's filled
+    /// symbols are hinted for small sizes and are the shapes people already recognise.
+    var systemSymbol: String? {
+        switch self {
+        case .run:      return "figure.run"
+        case .walk:     return "figure.walk"
+        case .tempo:    return "gauge.with.needle.fill"
+        case .bolt:     return "bolt.fill"
+        case .flame:    return "flame.fill"
+        case .tortoise: return "tortoise.fill"
+        case .moon:     return "moon.zzz.fill"
+        case .trophy:   return "trophy.fill"
+        case .dumbbell: return "dumbbell.fill"
+        case .barbell:  return "figure.strengthtraining.traditional"
+        default:        return nil
+        }
+    }
 }
 
 struct StrideIcon: View {
@@ -48,11 +71,33 @@ struct StrideIcon: View {
     var strokeWeight: CGFloat = 1.8
 
     var body: some View {
-        Canvas { ctx, _ in
-            draw(ctx)
+        if let symbol = name.systemSymbol {
+            Image(systemName: symbol)
+                .resizable()
+                .scaledToFit()
+                .fontWeight(symbolWeight)
+                .frame(width: size, height: size)
+                .foregroundStyle(color)
+                // The Canvas glyphs were never exposed to VoiceOver; keep it that way
+                // rather than have it start reading symbol names like "figure run".
+                .accessibilityHidden(true)
+        } else {
+            Canvas { ctx, _ in
+                draw(ctx)
+            }
+            .frame(width: size, height: size)
+            .foregroundStyle(color)
         }
-        .frame(width: size, height: size)
-        .foregroundStyle(color)
+    }
+
+    /// Call sites tune `strokeWeight` for the Canvas glyphs; carry the same intent over
+    /// to the symbol's weight so a heavier-stroked icon stays heavier.
+    private var symbolWeight: Font.Weight {
+        switch strokeWeight {
+        case ..<1.9: return .medium
+        case ..<2.3: return .semibold
+        default:     return .bold
+        }
     }
 
     // MARK: - Drawing
@@ -72,205 +117,9 @@ struct StrideIcon: View {
         let stroke = StrokeStyle(lineWidth: strokeWeight / scale, lineCap: .round, lineJoin: .round)
 
         switch name {
-        case .run:
-            // Head
-            ctx.fill(Path(ellipseIn: CGRect(x: 13.3, y: 1.8, width: 4.4, height: 4.4)), with: .foreground)
-            // Back leg → torso → front arm (one continuous stroke)
-            var main = Path()
-            main.move(to: CGPoint(x: 5,    y: 21))    // back foot
-            main.addLine(to: CGPoint(x: 8,    y: 17))   // back shin
-            main.addLine(to: CGPoint(x: 11,   y: 13))   // hip
-            main.addLine(to: CGPoint(x: 13.5, y: 8))    // torso to shoulder
-            main.addLine(to: CGPoint(x: 17.5, y: 11.5)) // front arm swing
-            ctx.stroke(main, with: .foreground, style: stroke)
-            // Front leg (knee lifted, bent)
-            var frontLeg = Path()
-            frontLeg.move(to: CGPoint(x: 11,   y: 13))  // hip
-            frontLeg.addLine(to: CGPoint(x: 14.5, y: 17)) // front thigh
-            frontLeg.addLine(to: CGPoint(x: 13,   y: 21)) // front shin / foot
-            ctx.stroke(frontLeg, with: .foreground, style: stroke)
-            // Back arm (swings upward)
-            var backArm = Path()
-            backArm.move(to: CGPoint(x: 13,   y: 9.5))
-            backArm.addLine(to: CGPoint(x: 10, y: 7))
-            ctx.stroke(backArm, with: .foreground, style: stroke)
-
-        case .walk:
-            var head = Path(ellipseIn: CGRect(x: 11, y: 2, width: 4, height: 4))
-            ctx.fill(head, with: .foreground)
-            var body = Path()
-            body.move(to: CGPoint(x: 8, y: 22))
-            body.addLine(to: CGPoint(x: 11, y: 15))
-            body.addLine(to: CGPoint(x: 13, y: 12))
-            body.addLine(to: CGPoint(x: 15, y: 15))
-            body.addLine(to: CGPoint(x: 16, y: 19))
-            body.addLine(to: CGPoint(x: 19, y: 22))
-            ctx.stroke(body, with: .foreground, style: stroke)
-            var arm = Path()
-            arm.move(to: CGPoint(x: 6, y: 15))
-            arm.addLine(to: CGPoint(x: 9, y: 13))
-            ctx.stroke(arm, with: .foreground, style: stroke)
-
-        case .tempo:
-            var circle = Path(ellipseIn: CGRect(x: 4, y: 5, width: 16, height: 16))
-            ctx.stroke(circle, with: .foreground, style: stroke)
-            var hand = Path()
-            hand.move(to: CGPoint(x: 12, y: 13))
-            hand.addLine(to: CGPoint(x: 16, y: 9))
-            ctx.stroke(hand, with: .foreground, style: stroke)
-            var dot = Path(ellipseIn: CGRect(x: 10.8, y: 11.8, width: 2.4, height: 2.4))
-            ctx.fill(dot, with: .foreground)
-            var ticks = Path()
-            ticks.move(to: CGPoint(x: 12, y: 5)); ticks.addLine(to: CGPoint(x: 12, y: 6))
-            ticks.move(to: CGPoint(x: 19, y: 13)); ticks.addLine(to: CGPoint(x: 20, y: 13))
-            ticks.move(to: CGPoint(x: 4, y: 13)); ticks.addLine(to: CGPoint(x: 5, y: 13))
-            ctx.stroke(ticks, with: .foreground, style: stroke)
-
-        case .bolt:
-            var p = Path()
-            p.move(to: CGPoint(x: 13, y: 2))
-            p.addLine(to: CGPoint(x: 4, y: 14))
-            p.addLine(to: CGPoint(x: 10, y: 14))
-            p.addLine(to: CGPoint(x: 9, y: 22))
-            p.addLine(to: CGPoint(x: 18, y: 10))
-            p.addLine(to: CGPoint(x: 12, y: 10))
-            p.closeSubpath()
-            ctx.fill(p, with: .foreground)
-
-        case .flame:
-            var p = Path()
-            p.move(to: CGPoint(x: 12, y: 2))
-            p.addCurve(to: CGPoint(x: 17, y: 12),
-                       control1: CGPoint(x: 17, y: 6),
-                       control2: CGPoint(x: 17, y: 9))
-            p.addCurve(to: CGPoint(x: 12, y: 17),
-                       control1: CGPoint(x: 17, y: 15),
-                       control2: CGPoint(x: 15, y: 17))
-            p.addCurve(to: CGPoint(x: 7, y: 12),
-                       control1: CGPoint(x: 9, y: 17),
-                       control2: CGPoint(x: 7, y: 15))
-            p.addCurve(to: CGPoint(x: 9, y: 8),
-                       control1: CGPoint(x: 7, y: 9),
-                       control2: CGPoint(x: 9, y: 10))
-            p.addCurve(to: CGPoint(x: 9, y: 4),
-                       control1: CGPoint(x: 9, y: 6),
-                       control2: CGPoint(x: 8, y: 4))
-            p.addCurve(to: CGPoint(x: 12, y: 2),
-                       control1: CGPoint(x: 10, y: 3),
-                       control2: CGPoint(x: 11, y: 2))
-            p.closeSubpath()
-            ctx.fill(p, with: .foreground)
-
-        case .tortoise:
-            var body = Path(ellipseIn: CGRect(x: 5, y: 9, width: 14, height: 10))
-            ctx.stroke(body, with: .foreground, style: stroke)
-            var shell = Path()
-            shell.move(to: CGPoint(x: 8, y: 14))
-            shell.addCurve(to: CGPoint(x: 16, y: 14),
-                           control1: CGPoint(x: 8, y: 11),
-                           control2: CGPoint(x: 16, y: 11))
-            ctx.stroke(shell, with: .foreground, style: stroke)
-            var head = Path(ellipseIn: CGRect(x: 17.4, y: 10.4, width: 3.2, height: 3.2))
-            ctx.fill(head, with: .foreground)
-            var legs = Path()
-            legs.move(to: CGPoint(x: 5, y: 19)); legs.addLine(to: CGPoint(x: 6, y: 18))
-            legs.move(to: CGPoint(x: 18, y: 19)); legs.addLine(to: CGPoint(x: 17, y: 18))
-            legs.move(to: CGPoint(x: 7, y: 9)); legs.addLine(to: CGPoint(x: 8, y: 10))
-            ctx.stroke(legs, with: .foreground, style: stroke)
-
-        case .moon:
-            var p = Path()
-            p.move(to: CGPoint(x: 20, y: 14))
-            p.addCurve(to: CGPoint(x: 12, y: 4),
-                       control1: CGPoint(x: 20, y: 14),
-                       control2: CGPoint(x: 20, y: 4))
-            p.addCurve(to: CGPoint(x: 3, y: 12),
-                       control1: CGPoint(x: 7, y: 4),
-                       control2: CGPoint(x: 3, y: 7.6))
-            p.addCurve(to: CGPoint(x: 11, y: 20),
-                       control1: CGPoint(x: 3, y: 16.4),
-                       control2: CGPoint(x: 6.6, y: 20))
-            p.addCurve(to: CGPoint(x: 20, y: 14),
-                       control1: CGPoint(x: 15.4, y: 20),
-                       control2: CGPoint(x: 20, y: 17.6))
-            p.closeSubpath()
-            ctx.stroke(p, with: .foreground, style: stroke)
-
-        case .trophy:
-            var cup = Path()
-            cup.move(to: CGPoint(x: 8, y: 4))
-            cup.addLine(to: CGPoint(x: 16, y: 4))
-            cup.addLine(to: CGPoint(x: 16, y: 8))
-            cup.addCurve(to: CGPoint(x: 8, y: 8),
-                         control1: CGPoint(x: 16, y: 12),
-                         control2: CGPoint(x: 8, y: 12))
-            cup.closeSubpath()
-            ctx.stroke(cup, with: .foreground, style: stroke)
-            var handles = Path()
-            handles.move(to: CGPoint(x: 8, y: 6))
-            handles.addLine(to: CGPoint(x: 5, y: 6))
-            handles.addLine(to: CGPoint(x: 5, y: 8))
-            handles.addCurve(to: CGPoint(x: 8, y: 11),
-                             control1: CGPoint(x: 5, y: 9.7),
-                             control2: CGPoint(x: 6.3, y: 11))
-            handles.move(to: CGPoint(x: 16, y: 6))
-            handles.addLine(to: CGPoint(x: 19, y: 6))
-            handles.addLine(to: CGPoint(x: 19, y: 8))
-            handles.addCurve(to: CGPoint(x: 16, y: 11),
-                             control1: CGPoint(x: 19, y: 9.7),
-                             control2: CGPoint(x: 17.7, y: 11))
-            ctx.stroke(handles, with: .foreground, style: stroke)
-            var base = Path()
-            base.move(to: CGPoint(x: 10, y: 14))
-            base.addLine(to: CGPoint(x: 14, y: 14))
-            base.addLine(to: CGPoint(x: 14, y: 17))
-            base.addLine(to: CGPoint(x: 16, y: 17))
-            base.addLine(to: CGPoint(x: 16, y: 19))
-            base.addLine(to: CGPoint(x: 8, y: 19))
-            base.addLine(to: CGPoint(x: 8, y: 17))
-            base.addLine(to: CGPoint(x: 10, y: 17))
-            base.closeSubpath()
-            ctx.stroke(base, with: .foreground, style: stroke)
-
-        case .dumbbell:
-            // Bars
-            var bar = Path()
-            bar.move(to: CGPoint(x: 9, y: 12)); bar.addLine(to: CGPoint(x: 15, y: 12))
-            ctx.fill(bar.strokedPath(StrokeStyle(lineWidth: 2, lineCap: .round)), with: .foreground)
-            // Left plates
-            var lp = Path(roundedRect: CGRect(x: 2, y: 8, width: 3, height: 8), cornerRadius: 1)
-            ctx.stroke(lp, with: .foreground, style: stroke)
-            var lj = Path()
-            lj.move(to: CGPoint(x: 5, y: 10)); lj.addLine(to: CGPoint(x: 7, y: 10))
-            lj.addLine(to: CGPoint(x: 7, y: 8)); lj.addLine(to: CGPoint(x: 9, y: 8))
-            lj.addLine(to: CGPoint(x: 9, y: 16)); lj.addLine(to: CGPoint(x: 7, y: 16))
-            lj.addLine(to: CGPoint(x: 7, y: 14)); lj.addLine(to: CGPoint(x: 5, y: 14))
-            ctx.stroke(lj, with: .foreground, style: stroke)
-            // Right plates
-            var rp = Path(roundedRect: CGRect(x: 19, y: 8, width: 3, height: 8), cornerRadius: 1)
-            ctx.stroke(rp, with: .foreground, style: stroke)
-            var rj = Path()
-            rj.move(to: CGPoint(x: 19, y: 10)); rj.addLine(to: CGPoint(x: 17, y: 10))
-            rj.addLine(to: CGPoint(x: 17, y: 8)); rj.addLine(to: CGPoint(x: 15, y: 8))
-            rj.addLine(to: CGPoint(x: 15, y: 16)); rj.addLine(to: CGPoint(x: 17, y: 16))
-            rj.addLine(to: CGPoint(x: 17, y: 14)); rj.addLine(to: CGPoint(x: 19, y: 14))
-            ctx.stroke(rj, with: .foreground, style: stroke)
-
-        case .barbell:
-            // Long central bar
-            var bar = Path()
-            bar.move(to: CGPoint(x: 2, y: 12)); bar.addLine(to: CGPoint(x: 22, y: 12))
-            ctx.fill(bar.strokedPath(StrokeStyle(lineWidth: 2, lineCap: .round)), with: .foreground)
-            // Left collar + plates
-            var lCollar = Path(roundedRect: CGRect(x: 5, y: 9.5, width: 2, height: 5), cornerRadius: 0.5)
-            ctx.fill(lCollar, with: .foreground)
-            var lPlate = Path(roundedRect: CGRect(x: 2, y: 8, width: 2.5, height: 8), cornerRadius: 1)
-            ctx.stroke(lPlate, with: .foreground, style: stroke)
-            // Right collar + plates
-            var rCollar = Path(roundedRect: CGRect(x: 17, y: 9.5, width: 2, height: 5), cornerRadius: 0.5)
-            ctx.fill(rCollar, with: .foreground)
-            var rPlate = Path(roundedRect: CGRect(x: 19.5, y: 8, width: 2.5, height: 8), cornerRadius: 1)
-            ctx.stroke(rPlate, with: .foreground, style: stroke)
+        case .run, .walk, .tempo, .bolt, .flame, .tortoise, .moon, .trophy, .dumbbell, .barbell:
+            // Drawn as SF Symbols in `body`; see `systemSymbol`.
+            break
 
         case .home:
             var p = Path()
