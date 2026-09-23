@@ -19,19 +19,11 @@ extension WorkoutType {
         }
     }
 
-    /// Legacy SF Symbol name — kept for any views not yet migrated to StrideIcon.
+    /// SF Symbol name for surfaces that can't use `StrideIcon` (widgets, App Intents).
+    /// Derived from `strideIcon` so the two can't drift: the old hand-kept list showed
+    /// an easy run and a walk with the same walking figure.
     var icon: String {
-        switch self {
-        case .easy:          return "figure.walk"
-        case .tempo:         return "gauge.with.needle"
-        case .interval:      return "bolt.fill"
-        case .longRun:       return "figure.run"
-        case .race:          return "trophy"
-        case .rest:          return "moon.zzz"
-        case .crossTraining: return "dumbbell"
-        case .strength:      return "figure.strengthtraining.traditional"
-        case .walk:          return "figure.walk"
-        }
+        strideIcon.systemSymbol ?? "figure.run"
     }
 
     /// Tint color for this workout type.
