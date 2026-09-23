@@ -995,6 +995,12 @@ struct ActiveRunView: View {
                 await container.attachWeather(to: workout, coordinate: coordinate)
             }
         }
+        // Only runs recorded here go to Strava by themselves; an imported one was recorded
+        // by something that likely sends it already. No-op unless connected with automatic
+        // uploads on, and the run screen shows how it went.
+        Task { @MainActor in
+            await container.stravaService.uploadFinishedRunIfEnabled(workout)
+        }
         if let profile = profiles.first, let plan = activePlans.first {
             // Runs only: this history re-derives the plan's pace targets (N38).
             let allHistory = (try? context.fetch(RunWorkout.runsOnlyDescriptor())) ?? []

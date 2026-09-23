@@ -13,3 +13,8 @@
 
 MARKETING_VERSION = 1.0
 CURRENT_PROJECT_VERSION = 2
+
+// Strava API client (optional, gitignored). Copy Strava.xcconfig.example to
+// Strava.xcconfig and fill it in; without it the Strava feature is hidden.
+// ci_post_clone.sh rewrites this file and keeps this include.
+#include? "Strava.xcconfig"

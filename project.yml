@@ -240,6 +240,12 @@ targets:
           - CFBundleURLName: com.running.stride.deeplink
             CFBundleURLSchemes:
               - stride
+        # Strava upload. Expanded from build settings that come from the gitignored
+        # `ci_scripts/Strava.xcconfig` (see its `.example`) or, on Xcode Cloud, from the
+        # STRAVA_CLIENT_ID / STRAVA_CLIENT_SECRET secrets that ci_post_clone.sh writes into
+        # it. Unset, both expand to empty and `StravaAPI.Credentials` hides the feature.
+        StravaClientID: $(STRAVA_CLIENT_ID)
+        StravaClientSecret: $(STRAVA_CLIENT_SECRET)
         # Debug-only, and stripped from every other configuration by the
         # "Strip debug-only Info.plist keys" phase below (S4). Pulse's RemoteLogger —
         # the only thing in the app that touches the local network — is compiled out

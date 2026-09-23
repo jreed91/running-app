@@ -8,7 +8,7 @@ import UIKit
 // the run, the three on-demand loads (heart-rate zones, split backfill, share card),
 // and `body`; each section it composes lives in a `RunSummaryView+*.swift` extension
 // alongside it — Overview, Feel, TempoInsights, CoachCard, CoachSection, CoachStreaming,
-// CoachComponents, Splits, HeartRateZones, PlannedWorkout, Chrome.
+// CoachComponents, Splits, HeartRateZones, PlannedWorkout, Chrome, Strava.
 //
 // The screen used to be one 2,232-line file carrying a `swiftlint:disable file_length
 // type_body_length` banner, which is the last of D1. The logic came out first — the
@@ -425,6 +425,7 @@ struct RunSummaryView: View {
                             Label("Export route as GPX", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
                         }
                     }
+                    stravaMenuItems
                 } label: {
                     if isRenderingShareCard {
                         ProgressView()
@@ -460,6 +461,11 @@ struct RunSummaryView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(exportErrorMessage ?? "")
+        }
+        .alert("Couldn't upload to Strava", isPresented: isShowingStravaFailure) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(stravaFailureMessage ?? "")
         }
         .sheet(item: $coachChatRequest) { request in
             AICoachChatView(workout: workout, initialPrompt: request.prompt)

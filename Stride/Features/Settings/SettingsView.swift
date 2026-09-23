@@ -62,6 +62,7 @@ struct SettingsView: View {
                     shoesCard
                     routeGeniusCard
                     runPlaylistsCard
+                    stravaCard
                     aiCoachCard
                     if BuildEnvironment.showsTestFlightDiagnostics {
                         notificationTestingCard
@@ -483,6 +484,28 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
                 .padding(.leading, 62)
                 .padding(.bottom, 10)
+        }
+    }
+
+    // MARK: - Strava card
+
+    private var stravaCard: some View {
+        settingsSection("Strava") {
+            NavigationLink {
+                StravaSettingsView()
+            } label: {
+                settingsRow(icon: .run, iconColor: .stravaOrange, title: "Upload to Strava") {
+                    Group {
+                        if container.stravaService.isConnected { Text("Connected") } else { Text("Off") }
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    StrideIcon(name: .chevronRight, size: 12,
+                               color: Color.secondary.opacity(0.5), strokeWeight: 2)
+                }
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.primary)
         }
     }
 

@@ -184,6 +184,10 @@ final class AppContainer {
     /// audio session the voice coach owns.
     let runPlaylistService: RunPlaylistService
 
+    /// The runner's Strava connection, and the uploads of finished runs to it. Tokens stay
+    /// in this device's Keychain; see `StravaService`.
+    let stravaService: StravaService
+
     /// Creating, shifting, rebuilding, and destroying training plans (D2). The container
     /// wires it and hands it out; it does not orchestrate it.
     let planLifecycle: PlanLifecycleService
@@ -392,6 +396,7 @@ final class AppContainer {
         self.runRouteGuide = routeGuide
         tracker.onAcceptedFix = { [weak routeGuide] fix in routeGuide?.handle(fix: fix) }
         self.runPlaylistService = RunPlaylistService()
+        self.stravaService = StravaService()
         self.activeRunPresentation = ActiveRunPresentation()
         self.workoutSyncService = WorkoutSyncService(
             healthKitRepository: hkRepository,

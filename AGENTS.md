@@ -502,6 +502,33 @@ ScheduledWorkout  →  RunPlaylistPlanner  →  RunPlaylistPlan   (pure, tested)
 - Entry point is the **Plan tab → workout detail** card, on any run that is not yet
   completed. Access and the per-tier overrides live in **Settings → Run Playlists**.
 
+## Strava upload
+
+Finished runs can go to the runner's Strava feed. `StravaAPI` is pure (URLs, requests,
+reply parsing, tested in `StravaAPITests`); `StravaService` owns the Keychain, the network
+and the call order; `StravaSettingsView` connects, and the run screen's share menu uploads
+or links to the activity (`RunSummaryView+Strava.swift`).
+
+- **The client ID and secret are build configuration, never source.** They come from
+  `STRAVA_CLIENT_ID` / `STRAVA_CLIENT_SECRET` in the gitignored `ci_scripts/Strava.xcconfig`
+  (copy the `.example`), which `Version.xcconfig` includes, and reach the app as the
+  `StravaClientID` / `StravaClientSecret` Info.plist keys. On Xcode Cloud,
+  `ci_post_clone.sh` writes that file from secret environment variables of the same names.
+  A build without them hides the feature. Strava has no PKCE, so its token endpoint needs
+  the secret and the secret ships inside the app binary; moving the token exchange and
+  refresh behind a small server is the fix if that ever matters.
+- The Strava app's **Authorization Callback Domain** must be `localhost`, matching
+  `StravaAPI.redirectURI` (`stride://localhost/strava`). The web-authentication session
+  catches that redirect itself.
+- **Tokens stay on the device** in the Keychain, and the auto-upload switch and the record
+  of uploaded runs are device-local `UserDefaults`. None of it goes through iCloud KVS.
+- **Only runs recorded in Stride upload automatically**, from `ActiveRunView`'s save path.
+  Imported runs were recorded by something that probably sends them already, so they go
+  only from the share menu. **Walks never go.**
+- A run with a route uploads as GPX (`GPXExport`), whose timestamps are spread evenly over
+  the run and which carries no heart rate. A run with no route becomes a manual activity.
+  Strava answers a second copy of a run as a duplicate, which is read as "already there".
+
 ## AI coaching models
 
 AI coaching runs entirely on Apple's Foundation Models framework. There are no third-party

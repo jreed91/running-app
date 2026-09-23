@@ -43,12 +43,24 @@ cat > "$VERSION_XCCONFIG" <<EOF
 // this file documents why it exists and holds the checked-in defaults.
 MARKETING_VERSION = $MARKETING_VERSION
 CURRENT_PROJECT_VERSION = $BUILD_NUMBER
+#include? "Strava.xcconfig"
 EOF
 
 grep -q "^CURRENT_PROJECT_VERSION = ${BUILD_NUMBER}$" "$VERSION_XCCONFIG" || {
     echo "Error: failed to write build number $BUILD_NUMBER to $VERSION_XCCONFIG" >&2
     exit 1
 }
+
+# Strava upload credentials, from the workflow's secret environment variables. Without
+# them the build simply has no Strava feature. Strava.xcconfig is gitignored, and the
+# values are never echoed.
+if [ -n "${STRAVA_CLIENT_ID:-}" ] && [ -n "${STRAVA_CLIENT_SECRET:-}" ]; then
+    echo "--- Writing Strava client configuration ---"
+    printf 'STRAVA_CLIENT_ID = %s\nSTRAVA_CLIENT_SECRET = %s\n' \
+        "$STRAVA_CLIENT_ID" "$STRAVA_CLIENT_SECRET" > ci_scripts/Strava.xcconfig
+else
+    echo "--- No Strava credentials set; building without Strava upload ---"
+fi
 
 xcodegen generate
 

@@ -34,3 +34,4 @@ TestFlight/
 
 # Local secrets (never commit)
 Stride/Resources/Secrets.plist
+ci_scripts/Strava.xcconfig

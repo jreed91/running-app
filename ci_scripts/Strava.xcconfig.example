@@ -1,0 +1,6 @@
+// Copy to ci_scripts/Strava.xcconfig (gitignored) and fill in the Client ID and
+// Client Secret from https://www.strava.com/settings/api. Version.xcconfig includes
+// it when present. Xcode Cloud writes the same file from the STRAVA_CLIENT_ID and
+// STRAVA_CLIENT_SECRET secret environment variables (see ci_post_clone.sh).
+STRAVA_CLIENT_ID =
+STRAVA_CLIENT_SECRET =
