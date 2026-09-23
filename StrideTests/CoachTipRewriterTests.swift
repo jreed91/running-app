@@ -3,7 +3,7 @@ import Testing
 @testable import Stride
 
 /// Covers `CoachTipRewriter` — what the model's wording for the Coach Tips has to get
-/// past before it is drawn — and `AICoachService.writeCoachTips(for:)`, which asks for it.
+/// past before it is drawn — and `AICoachService.writeCoachTips(for:provider:)`, which asks for it.
 ///
 /// The number check is the one that matters: these cards carry computed fuelling amounts,
 /// and a rewrite is only ever allowed to reword them, never to change them.
@@ -193,7 +193,7 @@ struct CoachTipRewriterTests {
 
     // MARK: Service
 
-    @Test func serviceReturnsOnlyValidatedWordingFromTheOnDeviceModel() async {
+    @Test func serviceReturnsOnlyValidatedWordingFromTheChosenModel() async {
         let recorder = TipRequestRecorder()
         let backend = TipWritingCoach(
             available: true,
@@ -205,13 +205,41 @@ struct CoachTipRewriterTests {
         )
         let service = AICoachService(onDeviceBackend: backend)
 
-        let wording = await service.writeCoachTips(for: [fuelCard, loadCard])
+        let wording = await service.writeCoachTips(for: [fuelCard, loadCard], provider: .applePrivateCloud)
 
         #expect(wording.map(\.kind) == [.load])
-        let request = await recorder.request
-        #expect(request?.useServerModel == false)
+        let requests = await recorder.requests
+        #expect(requests.count == 1)
+        let request = requests.first
+        #expect(request?.useServerModel == true)
         #expect(request?.instructions == CoachTipRewriter.instructions)
         #expect(request?.prompt == CoachTipRewriter.prompt(for: [fuelCard, loadCard]))
+    }
+
+    @Test func serviceStaysOnDeviceWhenTheRunnerChoseIt() async {
+        let recorder = TipRequestRecorder()
+        let service = AICoachService(
+            onDeviceBackend: TipWritingCoach(available: true, drafts: [], recorder: recorder)
+        )
+        _ = await service.writeCoachTips(for: [loadCard], provider: .appleOnDevice)
+        let requests = await recorder.requests
+        #expect(requests.map(\.useServerModel) == [false])
+    }
+
+    @Test func serviceRetriesOnDeviceWhenTheDailyAllowanceIsUsedUp() async {
+        let recorder = TipRequestRecorder()
+        let service = AICoachService(
+            onDeviceBackend: TipWritingCoach(
+                available: true,
+                drafts: [CoachTipDraft(id: "load", title: "Hold it here", message: "52.0 km this week, 26% up.")],
+                recorder: recorder,
+                serverError: .serverQuotaExceeded(resetDate: nil)
+            )
+        )
+        let wording = await service.writeCoachTips(for: [loadCard], provider: .applePrivateCloud)
+        let requests = await recorder.requests
+        #expect(requests.map(\.useServerModel) == [true, false])
+        #expect(wording.map(\.kind) == [.load])
     }
 
     @Test func serviceFallsBackToNothingWhenTheModelCannotHelp() async {
@@ -223,9 +251,9 @@ struct CoachTipRewriterTests {
         )
         let unsupported = AICoachService(onDeviceBackend: nil)
 
-        let fromUnavailable = await unavailable.writeCoachTips(for: [loadCard])
-        let fromFailing = await failing.writeCoachTips(for: [loadCard])
-        let fromUnsupported = await unsupported.writeCoachTips(for: [loadCard])
+        let fromUnavailable = await unavailable.writeCoachTips(for: [loadCard], provider: .applePrivateCloud)
+        let fromFailing = await failing.writeCoachTips(for: [loadCard], provider: .applePrivateCloud)
+        let fromUnsupported = await unsupported.writeCoachTips(for: [loadCard], provider: .applePrivateCloud)
         #expect(fromUnavailable.isEmpty)
         #expect(fromFailing.isEmpty)
         #expect(fromUnsupported.isEmpty)
@@ -241,18 +269,20 @@ private actor TipRequestRecorder {
         let useServerModel: Bool
     }
 
-    private(set) var request: Request?
+    private(set) var requests: [Request] = []
 
     func record(_ request: Request) {
-        self.request = request
+        requests.append(request)
     }
 }
 
 /// Writes canned tip drafts, or throws when `drafts` is nil, and records what it was asked.
+/// `serverError`, when set, is what a request for the server model throws instead.
 private struct TipWritingCoach: OnDeviceCoachGenerating {
     let available: Bool
     let drafts: [CoachTipDraft]?
     let recorder: TipRequestRecorder
+    var serverError: OnDeviceCoachError?
 
     func isAvailable() async -> Bool { available }
     func unavailableReason() async -> String? { available ? nil : "unavailable" }
@@ -263,6 +293,7 @@ private struct TipWritingCoach: OnDeviceCoachGenerating {
         useServerModel: Bool
     ) async throws -> [CoachTipDraft] {
         await recorder.record(.init(instructions: instructions, prompt: prompt, useServerModel: useServerModel))
+        if useServerModel, let serverError { throw serverError }
         guard let drafts else { throw OnDeviceCoachError.malformedResponse }
         return drafts
     }

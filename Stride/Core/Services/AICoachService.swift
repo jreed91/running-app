@@ -272,20 +272,30 @@ struct AICoachService: Sendable {
     /// it was written from; empty when there is no model or the request fails, which
     /// leaves every card on its hard-coded copy. See `CoachTipRewriter`.
     ///
-    /// Always the on-device model, whatever `AIProvider` says. This runs on its own every
-    /// time the tips change, not because the runner asked for anything, and Private
-    /// Cloud Compute's daily allowance is better spent on the chat and run reads they do
-    /// ask for.
-    func writeCoachTips(for cards: [SmartCoachCard]) async -> [CoachTipWording] {
+    /// Runs on the runner's chosen model, so Private Cloud Compute by default. Once the
+    /// daily PCC allowance is used up the tips are retried on-device rather than left on
+    /// the hard-coded copy: nobody asked for these, so unlike the chat there is no one to
+    /// tell about the quota, and the Settings status already shows it.
+    func writeCoachTips(for cards: [SmartCoachCard], provider: AIProvider) async -> [CoachTipWording] {
         guard !cards.isEmpty, let backend = onDeviceBackend, await backend.isAvailable() else {
             return []
         }
+        let prompt = CoachTipRewriter.prompt(for: cards)
         do {
-            let drafts = try await backend.generateCoachTips(
-                instructions: CoachTipRewriter.instructions,
-                prompt: CoachTipRewriter.prompt(for: cards),
-                useServerModel: false
-            )
+            let drafts: [CoachTipDraft]
+            do {
+                drafts = try await backend.generateCoachTips(
+                    instructions: CoachTipRewriter.instructions,
+                    prompt: prompt,
+                    useServerModel: provider.usesPrivateCloudCompute
+                )
+            } catch OnDeviceCoachError.serverQuotaExceeded(_) {
+                drafts = try await backend.generateCoachTips(
+                    instructions: CoachTipRewriter.instructions,
+                    prompt: prompt,
+                    useServerModel: false
+                )
+            }
             return CoachTipRewriter.validated(drafts, for: cards)
         } catch {
             return []

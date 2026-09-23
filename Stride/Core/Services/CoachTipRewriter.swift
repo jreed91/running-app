@@ -43,7 +43,7 @@ struct CoachTipWording: Sendable, Equatable {
 /// into `WidgetSnapshot`, where text that changes on every write spends a WidgetKit
 /// reload; `derivation` stays because it is the working behind the numbers.
 ///
-/// Pure: the generation itself is `AICoachService.writeCoachTips(for:)`.
+/// Pure: the generation itself is `AICoachService.writeCoachTips(for:provider:)`.
 enum CoachTipRewriter {
 
     /// Longest title and message accepted. Generous against the hard-coded copy (the

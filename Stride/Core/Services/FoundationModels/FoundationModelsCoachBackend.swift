@@ -231,7 +231,8 @@ struct FoundationModelsCoachBackend: OnDeviceCoachGenerating {
             generating: GeneratedCoachTips.self,
             useServerModel: useServerModel,
             // Rewording three short cards needs no deliberation, and the Home tab is
-            // already showing the hard-coded copy while this runs.
+            // already showing the hard-coded copy while this runs. Only read on the
+            // Private Cloud Compute path, like every other reasoning level here.
             reasoning: .light
         )
         return generated.toDrafts()

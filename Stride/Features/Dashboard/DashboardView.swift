@@ -1150,8 +1150,8 @@ struct DashboardView: View {
         return cards.filter { $0.kind != .heat }
     }
 
-    /// Asks the on-device model to reword whichever Coach Tips have no wording for their
-    /// current text yet. The hard-coded copy stays on screen until an answer passes
+    /// Asks Apple's model (the runner's AI Coach choice, Private Cloud Compute by
+    /// default) to reword whichever Coach Tips have no wording for their current text yet. The hard-coded copy stays on screen until an answer passes
     /// `CoachTipRewriter`'s checks, and stays for good on a card whose rewrite does not.
     ///
     /// Held back in UI tests and unit-test hosting, where the copy has to be the
@@ -1161,7 +1161,10 @@ struct DashboardView: View {
         let cards = coachCards
         let pending = CoachTipRewriter.cardsNeedingWording(cards, existing: coachTipWording)
         guard !pending.isEmpty else { return }
-        let fresh = await container.aiCoachService.writeCoachTips(for: pending)
+        let fresh = await container.aiCoachService.writeCoachTips(
+            for: pending,
+            provider: appSettings.aiProvider
+        )
         // A newer set of cards has already started its own request.
         guard !Task.isCancelled else { return }
         coachTipWording = CoachTipRewriter.merging(fresh, into: coachTipWording, keeping: coachCards)
