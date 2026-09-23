@@ -131,14 +131,16 @@ struct ShoeTrackingTests {
         let fresh = run(km: 10, on: date(2026, 9, 10))
         let alreadyShod = run(km: 5, on: date(2026, 9, 10), shoe: racer)
         let walk = run(km: 4, on: date(2026, 9, 10), type: .walk)
+        let ride = run(km: 30, on: date(2026, 9, 10), type: .crossTraining)
         let beforeThePair = run(km: 8, on: date(2026, 8, 20))
-        for workout in [fresh, alreadyShod, walk, beforeThePair] { context.insert(workout) }
+        for workout in [fresh, alreadyShod, walk, ride, beforeThePair] { context.insert(workout) }
 
-        ShoeAssignment.assignDefaultShoe(to: [fresh, alreadyShod, walk, beforeThePair], in: context)
+        ShoeAssignment.assignDefaultShoe(to: [fresh, alreadyShod, walk, ride, beforeThePair], in: context)
 
         #expect(fresh.shoeID == pegasus.id)
         #expect(alreadyShod.shoeID == racer.id)
         #expect(walk.shoeID == nil)
+        #expect(ride.shoeID == nil)
         #expect(beforeThePair.shoeID == nil)
     }
 

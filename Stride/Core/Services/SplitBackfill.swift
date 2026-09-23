@@ -24,7 +24,11 @@ enum SplitBackfill {
     ///   app-recorded run with no splits never had a distance series to bucket;
     /// - it covered at least one whole bucket, since `SplitBucketing` emits a split only
     ///   when a boundary is crossed and a 600 m shakeout can never cross one.
+    ///
+    /// Never for a cross-training session (B8): the series is walking/running distance,
+    /// which is not what a ride or a swim covered.
     static func needsSplits(_ run: RunWorkout, splitLengthMeters: Double) -> Bool {
+        guard !run.isCrossTraining else { return false }
         guard splitLengthMeters > 0 else { return false }
         guard run.splits.isEmpty else { return false }
         guard run.healthKitWorkoutID != nil else { return false }
@@ -41,6 +45,7 @@ enum SplitBackfill {
     /// No bucket-length floor here, unlike `needsSplits`: a run too short to cross a whole
     /// boundary is exactly the one whose charts the finer buckets rescue.
     static func needsDistanceSeries(_ run: RunWorkout) -> Bool {
+        guard !run.isCrossTraining else { return false }
         guard run.distanceSeries.isEmpty else { return false }
         guard run.healthKitWorkoutID != nil else { return false }
         return run.distanceMeters > 0

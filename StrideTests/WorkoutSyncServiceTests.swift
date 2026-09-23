@@ -116,6 +116,22 @@ final class MockHealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sen
         return walkFetchResults.removeFirst()
     }
 
+    /// Cross-training sessions the mock hands back, one entry per pass (B8).
+    @MainActor var crossTrainingFetchResults: [[RunWorkout]] = []
+    @MainActor private(set) var crossTrainingFetchCalls = 0
+
+    @MainActor
+    func fetchImportableCrossTrainingWorkouts(
+        from startDate: Date,
+        to endDate: Date,
+        existingIDs: Set<String>,
+        context: WorkoutImportContext
+    ) async throws -> [RunWorkout] {
+        crossTrainingFetchCalls += 1
+        guard !crossTrainingFetchResults.isEmpty else { return [] }
+        return crossTrainingFetchResults.removeFirst()
+    }
+
     @MainActor
     func fetchImportableStrengthWorkouts(
         from startDate: Date,

@@ -139,10 +139,11 @@ enum ShoeAssignment {
     ///
     /// Walks are left alone. A walk is history, not training (N38), and the pair a
     /// runner runs in is rarely the pair they walk to the shop in; they can still pick a
-    /// shoe for a walk by hand. Does not save — callers already save the runs they
-    /// insert, and this rides along with that save.
+    /// shoe for a walk by hand. Imported cross-training is left alone too (B8): a 40 km
+    /// ride on the default pair would be 40 km of wear it never took. Does not save —
+    /// callers already save the runs they insert, and this rides along with that save.
     static func assignDefaultShoe(to runs: [RunWorkout], in context: ModelContext) {
-        let candidates = runs.filter { $0.shoeID == nil && !$0.isWalk }
+        let candidates = runs.filter { $0.shoeID == nil && $0.countsAsRunning }
         guard !candidates.isEmpty else { return }
         let shoes: [Shoe]
         do {

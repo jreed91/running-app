@@ -68,8 +68,11 @@ struct ProgressDashboardView: View {
         // them in the fetch also keeps the heart-rate backfill below from spending its
         // HealthKit queries on walks.
         let walkRaw = WorkoutType.walk.rawValue
+        let crossTrainingRaw = WorkoutType.crossTraining.rawValue
         _workouts = Query(
-            filter: #Predicate<RunWorkout> { $0.date >= cutoff && $0.workoutTypeRaw != walkRaw },
+            filter: #Predicate<RunWorkout> {
+                $0.date >= cutoff && $0.workoutTypeRaw != walkRaw && $0.workoutTypeRaw != crossTrainingRaw
+            },
             sort: [SortDescriptor(\RunWorkout.date)]
         )
     }

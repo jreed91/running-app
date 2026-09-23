@@ -755,6 +755,8 @@ private struct PaceInsightsCard: View {
         (plan.weeks ?? [])
             .flatMap { $0.workouts ?? [] }
             .compactMap(\.completedWorkout)
+            // A ride that completed a cross-training day (B8) is not a VDOT sample.
+            .runsOnly
             .filter { $0.distanceMeters >= 3_000 }
     }
 

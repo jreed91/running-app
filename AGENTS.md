@@ -264,6 +264,34 @@ The rules a change here has to keep:
   tracking. Adding `.walk` needed no CloudKit schema change: it is a new raw value in an
   existing `String` field.
 
+## Cross-training workouts
+
+Rides, swims, rows, elliptical and stair sessions, and Watch "cross training" or "mixed
+cardio" workouts, are imported from Apple Health as `RunWorkout` rows carrying
+`WorkoutType.crossTraining` (B8) — the walk design above, with one difference: a
+cross-training session **completes the plan's cross-training day**.
+
+- **`WorkoutType.countsAsRunning` is false for `.crossTraining`**, so every `runsOnly` /
+  `runsOnlyDescriptor()` reader drops it. The store predicates that spell the rule out by
+  raw value (`WorkoutRepository.fetch`, `IntentDataProvider`, `ProgressView`,
+  `RaceInsightsView`) exclude both raw values; a new one has to as well.
+- **Reads through `ScheduledWorkout.completedWorkout` must take `runsOnly`** when they mean
+  running: a cross-training day links its session through that same relationship.
+  `TrainingWeek.completedDistanceKm`, `PlanSummaryService` and the plan tab's VDOT card do.
+- **Linking is one-way per kind.** `WorkoutSyncService.linkCrossTrainingToScheduledWorkouts`
+  considers only `.crossTraining` days; the run linker's `runsOnly` guard keeps a ride off a
+  run day. `CrossTrainingSyncTests` pins both directions.
+- **No walking/running samples.** `HealthKitRepository.ImportKind.readsFootSamples` is false
+  for cross-training, so the importer takes distance only as the workout reports it and
+  reads no distance series, splits or cadence. The activity list and the floor (ten
+  minutes, no distance) live in `CrossTrainingImportPolicy`.
+- Imports quietly, like walks: no banner, no review sheet, no weather. There is no settings
+  toggle, and the Settings → Import from Health screen does not import cross-training yet;
+  the background sync and History's refresh do.
+- The run summary hides pace, the coach and the link-to-plan button for a session, and
+  leads with its time when it has no distance. The activity (bike vs pool) is not stored:
+  that would be a new `RunWorkout` property and so a CloudKit schema deployment.
+
 ## Weather-tuned workouts
 
 Stride reads tomorrow's forecast where the runner actually runs, and asks — the evening

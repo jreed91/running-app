@@ -79,12 +79,18 @@ struct PlanSummaryService: Sendable {
         let scheduled = allWorkouts.filter { $0.workoutType != .rest }
         let completed = scheduled.filter(\.isCompleted)
 
-        let runs = allWorkouts.compactMap(\.completedWorkout)
+        // Runs only: a cross-training day is completed through the same link by an
+        // imported ride or swim (B8), whose distance and pace are not running ones.
+        let linked = allWorkouts.compactMap(\.completedWorkout)
+        let runs = linked.runsOnly
+        let crossTrainingSessions = linked.filter(\.isCrossTraining)
         let strengthSessions = allWorkouts.compactMap(\.completedStrengthWorkout)
 
         let completedDistance = runs.reduce(0) { $0 + $1.distanceMeters }
         let runDuration = runs.reduce(0) { $0 + $1.durationSeconds }
         let strengthDuration = strengthSessions.reduce(0) { $0 + $1.durationSeconds }
+        // Time is the one total a ride does belong in: it was training the plan asked for.
+        let crossTrainingDuration = crossTrainingSessions.reduce(0) { $0 + $1.durationSeconds }
 
         // Distance-weighted pace: total run time over total run distance.
         let averagePace: Double? = completedDistance > 0 && runDuration > 0
@@ -114,7 +120,7 @@ struct PlanSummaryService: Sendable {
             completedStrengthCount: strengthSessions.count,
             completedDistanceMeters: completedDistance,
             targetDistanceMeters: scheduled.reduce(0) { $0 + ($1.targetDistanceMeters ?? 0) },
-            totalDurationSeconds: runDuration + strengthDuration,
+            totalDurationSeconds: runDuration + strengthDuration + crossTrainingDuration,
             averagePaceSecondsPerKm: averagePace,
             longestRunMeters: runs.map(\.distanceMeters).max() ?? 0,
             weeksCompleted: weeks.filter(\.isCompleted).count,

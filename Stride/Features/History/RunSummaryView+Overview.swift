@@ -45,7 +45,7 @@ extension RunSummaryView {
                     // offset, so it drew the shape exactly behind itself and rendered
                     // nothing. The stroke below is what actually halos the dot (U1).
                     .overlay(Circle().stroke(workoutTone.opacity(0.25), lineWidth: 6))
-                Text("\(displayType.localizedName) run")
+                Text(kickerTitle)
                     .font(.dsCaption2.weight(.bold))
                     .kerning(1.4)
                     .textCase(.uppercase)
@@ -59,7 +59,7 @@ extension RunSummaryView {
             }
 
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(titleMetric.value)
+                Text(heroMetric.value)
                     // The card's hero number keeps its 56pt design size and scales
                     // from there, rather than snapping down to `dsLargeTitle` (U2).
                     .font(.system(size: heroMetricSize, weight: .semibold, design: .monospaced))
@@ -67,18 +67,24 @@ extension RunSummaryView {
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
-                Text(titleMetric.unit)
+                Text(heroMetric.unit)
                     .font(.dsCallout.weight(.semibold))
                     .foregroundStyle(.secondary)
             }
 
-            HStack(spacing: 12) {
-                metricInline(value: workout.durationSeconds.durationString, label: "total")
-                Text("·").foregroundStyle(.tertiary)
-                metricInline(
-                    value: workout.averagePaceSecondsPerKm.paceString(unit: appSettings.unitPreference).replacingOccurrences(of: " \(appSettings.unitPreference.paceLabel)", with: ""),
-                    label: appSettings.unitPreference.paceLabel
-                )
+            // A cross-training session with no distance already leads with its time, and
+            // has no running pace to follow it with (B8).
+            if !leadsWithDuration {
+                HStack(spacing: 12) {
+                    metricInline(value: workout.durationSeconds.durationString, label: "total")
+                    if showsPace {
+                        Text("·").foregroundStyle(.tertiary)
+                        metricInline(
+                            value: workout.averagePaceSecondsPerKm.paceString(unit: appSettings.unitPreference).replacingOccurrences(of: " \(appSettings.unitPreference.paceLabel)", with: ""),
+                            label: appSettings.unitPreference.paceLabel
+                        )
+                    }
+                }
             }
         }
         .padding(.top, 18)
@@ -133,13 +139,17 @@ extension RunSummaryView {
 
     var statsGrid: some View {
         LazyVGrid(columns: [.init(.flexible()), .init(.flexible())], spacing: 10) {
-            statCell(value: titleMetric.value, unit: titleMetric.unit, label: "Distance")
+            if !leadsWithDuration {
+                statCell(value: titleMetric.value, unit: titleMetric.unit, label: "Distance")
+            }
             statCell(value: workout.durationSeconds.durationString, label: "Duration")
-            statCell(
-                value: workout.averagePaceSecondsPerKm.paceString(unit: appSettings.unitPreference).replacingOccurrences(of: " \(appSettings.unitPreference.paceLabel)", with: ""),
-                unit: appSettings.unitPreference.paceLabel,
-                label: "Avg Pace"
-            )
+            if showsPace {
+                statCell(
+                    value: workout.averagePaceSecondsPerKm.paceString(unit: appSettings.unitPreference).replacingOccurrences(of: " \(appSettings.unitPreference.paceLabel)", with: ""),
+                    unit: appSettings.unitPreference.paceLabel,
+                    label: "Avg Pace"
+                )
+            }
             if let hr = workout.averageHeartRate {
                 statCell(value: "\(Int(hr))", unit: "bpm", label: "Avg HR", tone: hrTone(hr))
             }
