@@ -75,7 +75,10 @@ struct AchievementsView: View {
                 }
 
                 medalsSection
-                    .fadeSlide(appeared, delay: 0.30)
+                    .fadeSlide(
+                        appeared,
+                        delay: 0.15 + Double(StreakGoalService.AchievementCategory.allCases.count) * 0.05
+                    )
             }
             .padding(AppSpacing.lg)
             .frame(maxWidth: .infinity, alignment: .leading)

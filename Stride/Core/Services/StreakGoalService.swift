@@ -121,12 +121,16 @@ struct StreakGoalService: Sendable {
         case streak
         case lifetimeDistance
         case singleWeekVolume
+        case singleMonthVolume
+        case longestRun
 
         var systemImage: String {
             switch self {
             case .streak: return "flame.fill"
             case .lifetimeDistance: return "figure.run"
             case .singleWeekVolume: return "calendar"
+            case .singleMonthVolume: return "calendar.badge.checkmark"
+            case .longestRun: return "flag.checkered"
             }
         }
 
@@ -135,6 +139,8 @@ struct StreakGoalService: Sendable {
             case .streak: return "Streaks"
             case .lifetimeDistance: return "Lifetime Distance"
             case .singleWeekVolume: return "Big Weeks"
+            case .singleMonthVolume: return "Big Months"
+            case .longestRun: return "Long Runs"
             }
         }
     }
@@ -165,6 +171,8 @@ struct StreakGoalService: Sendable {
         let longestStreak = streak(for: runs, now: now, calendar: calendar).longest
         let lifetimeMeters = runs.reduce(0) { $0 + $1.distanceMeters }
         let bestWeekMeters = bestWeeklyVolumeMeters(for: runs, calendar: calendar)
+        let bestMonthMeters = bestMonthlyVolumeMeters(for: runs, calendar: calendar)
+        let longestRunMeters = runs.map(\.distanceMeters).max() ?? 0
 
         var result: [Achievement] = []
 
@@ -198,6 +206,32 @@ struct StreakGoalService: Sendable {
                 detail: "Run \(tier.label) in one week",
                 isEarned: bestWeekMeters >= tier.meters,
                 progress: fraction(bestWeekMeters, of: tier.meters)
+            ))
+        }
+
+        for tier in monthVolumeThresholds(unit: unit) {
+            result.append(Achievement(
+                id: "month-\(tier.label)",
+                category: .singleMonthVolume,
+                title: tier.label,
+                detail: "Run \(tier.label) in one calendar month",
+                isEarned: bestMonthMeters >= tier.meters,
+                progress: fraction(bestMonthMeters, of: tier.meters)
+            ))
+        }
+
+        for tier in longRunMilestones {
+            // Earned at 99% of the distance: a phone's GPS routinely measures a real
+            // half marathon a few hundred metres short, and a runner who ran one should
+            // not be told they didn't.
+            let target = tier.meters * longRunTolerance
+            result.append(Achievement(
+                id: "longest-\(tier.id)",
+                category: .longestRun,
+                title: tier.title,
+                detail: tier.detail,
+                isEarned: longestRunMeters >= target,
+                progress: fraction(longestRunMeters, of: target)
             ))
         }
 
@@ -247,6 +281,49 @@ struct StreakGoalService: Sendable {
         }
     }
 
+    /// Calendar-month totals. Roughly four of the matching "Big Weeks" tiers, rounded to
+    /// numbers a runner would set as a goal.
+    private static func monthVolumeThresholds(unit: UnitPreference) -> [DistanceTier] {
+        switch unit {
+        case .metric:
+            return [
+                DistanceTier(label: "100 km", meters: 100_000),
+                DistanceTier(label: "200 km", meters: 200_000),
+                DistanceTier(label: "300 km", meters: 300_000),
+            ]
+        case .imperial:
+            return [
+                DistanceTier(label: "60 mi", meters: 60 * metersPerMile),
+                DistanceTier(label: "125 mi", meters: 125 * metersPerMile),
+                DistanceTier(label: "200 mi", meters: 200 * metersPerMile),
+            ]
+        }
+    }
+
+    /// Single-run distances, named as races rather than converted into the runner's unit:
+    /// a half marathon is a half marathon in either, and "13.1 mi" is how nobody says it.
+    /// Distances come from `RaceType` so the badge and the plan agree on what one is.
+    private struct LongRunTier { let id: String; let title: String; let detail: String; let meters: Double }
+
+    private static let longRunMilestones = [
+        LongRunTier(id: "10k", title: "10K", detail: "Run 10K in a single run", meters: 10_000),
+        LongRunTier(
+            id: "half",
+            title: "Half Marathon",
+            detail: "Run a half marathon's distance in a single run",
+            meters: RaceType.halfMarathon.distanceMeters
+        ),
+        LongRunTier(
+            id: "marathon",
+            title: "Marathon",
+            detail: "Run a marathon's distance in a single run",
+            meters: RaceType.marathon.distanceMeters
+        ),
+    ]
+
+    /// Share of a long-run milestone's distance that earns it; see `achievements`.
+    static let longRunTolerance = 0.99
+
     // MARK: - Helpers
 
     /// Highest single-week (Monday-anchored) total run distance across all runs.
@@ -257,6 +334,17 @@ struct StreakGoalService: Sendable {
             totalsByWeek[weekStart, default: 0] += run.distanceMeters
         }
         return totalsByWeek.values.max() ?? 0
+    }
+
+    /// Highest calendar-month total run distance across all runs, in the injected
+    /// calendar's time zone.
+    private static func bestMonthlyVolumeMeters(for runs: [RunWorkout], calendar: Calendar) -> Double {
+        var totalsByMonth: [DateComponents: Double] = [:]
+        for run in runs {
+            let month = calendar.dateComponents([.year, .month], from: run.date)
+            totalsByMonth[month, default: 0] += run.distanceMeters
+        }
+        return totalsByMonth.values.max() ?? 0
     }
 
     /// Monday-anchored start of the week containing `date`, computed with the

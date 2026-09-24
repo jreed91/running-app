@@ -23,6 +23,11 @@ struct SettingsView: View {
 
     @State private var showResetConfirmation = false
     @State private var showPulseConsole = false
+    /// The full-history archive (B6), non-nil only while its share sheet is up.
+    @State private var dataExportFile: ExportedFile?
+    @State private var isExportingData = false
+    /// Shown when the archive could not be written, rather than the tap doing nothing.
+    @State private var dataExportErrorMessage: String?
     @State private var notificationTestStatus: String?
     /// Private Cloud Compute availability + daily quota, refreshed whenever the model
     /// picker changes. `nil` until read, and on devices with no server model at all.
@@ -85,6 +90,17 @@ struct SettingsView: View {
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("This removes your profile, all workouts, training plans, and saved routes.")
+            }
+            .sheet(item: $dataExportFile) { file in
+                ShareSheet(items: [file.url])
+            }
+            .alert("Couldn't export your data", isPresented: Binding(
+                get: { dataExportErrorMessage != nil },
+                set: { if !$0 { dataExportErrorMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(dataExportErrorMessage ?? "")
             }
         }
     }
@@ -419,6 +435,29 @@ struct SettingsView: View {
                     .accessibilityIdentifier("settings.importWalks")
             }
             Text("Brings walking workouts from Apple Health into your history. They're kept out of your training stats — mileage, pace, records, and streaks stay running-only.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.leading, 62)
+                .padding(.bottom, 10)
+
+            rowDivider
+            Button {
+                exportAllData()
+            } label: {
+                settingsRow(icon: .history, iconColor: .brand, title: "Export All Data") {
+                    if isExportingData {
+                        ProgressView()
+                    } else {
+                        StrideIcon(name: .chevronRight, size: 12,
+                                   color: Color.secondary.opacity(0.5), strokeWeight: 2)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.primary)
+            .disabled(isExportingData)
+            .accessibilityIdentifier("settings.exportAllData")
+            Text("Saves every workout, strength session and pair of shoes as spreadsheet files, with each GPS route as a GPX file, in one ZIP you can keep or send anywhere.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.leading, 62)
@@ -1005,6 +1044,44 @@ struct SettingsView: View {
     private func persistProfileEdit(_ profile: UserProfile) {
         profile.updatedAt = Date()
         context.saveOrLog("a profile edit")
+    }
+
+    /// Builds the full-history archive (B6) and presents the share sheet.
+    ///
+    /// The files' text is built here, on the main actor, because it reads SwiftData models
+    /// that belong to this view's context; only the plain strings cross to the background
+    /// task that writes and zips them, which is the part that can take a moment on a long
+    /// history.
+    private func exportAllData() {
+        guard !isExportingData else { return }
+        let exportedAt = Date()
+        let entries: [DataExport.Entry]
+        do {
+            entries = DataExport.entries(
+                runs: try context.fetch(FetchDescriptor<RunWorkout>()),
+                strengthSessions: try context.fetch(FetchDescriptor<StrengthWorkout>()),
+                shoes: try context.fetch(FetchDescriptor<Shoe>()),
+                exportedAt: exportedAt
+            )
+        } catch {
+            AppLogger.log("Data export fetch failed: \(error.localizedDescription)", label: "Export", level: .error)
+            dataExportErrorMessage = error.localizedDescription
+            return
+        }
+        let name = DataExport.archiveName(exportedAt: exportedAt)
+        isExportingData = true
+        Task {
+            let result = await Task.detached(priority: .userInitiated) {
+                Result { try DataExportWriter.writeArchive(entries: entries, name: name) }
+            }.value
+            isExportingData = false
+            switch result {
+            case .success(let url):
+                dataExportFile = ExportedFile(url: url)
+            case .failure(let error):
+                dataExportErrorMessage = error.localizedDescription
+            }
+        }
     }
 
     private func resetAll() {

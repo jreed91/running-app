@@ -188,6 +188,64 @@ struct StreakGoalServiceTests {
         #expect(badge(badges, "week-100 km")?.isEarned == false)
     }
 
+    @Test("A big calendar month earns the month-volume badges up to its total")
+    func singleMonthVolumeBadges() {
+        // Ten 12 km runs across July = 120 km, plus 90 km in June that must not be pooled.
+        let july = (1...10).map { run(on: day(2026, 7, $0), meters: 12_000) }
+        let june = (1...9).map { run(on: day(2026, 6, $0 * 3), meters: 10_000) }
+
+        let badges = StreakGoalService.achievements(for: july + june, unit: .metric, now: now, calendar: calendar)
+
+        #expect(badge(badges, "month-100 km")?.isEarned == true)
+        #expect(badge(badges, "month-200 km")?.isEarned == false)
+        #expect(abs((badge(badges, "month-200 km")?.progress ?? 0) - 0.6) < 0.0001)
+    }
+
+    @Test("Month-volume badges are unit-aware")
+    func monthVolumeBadgesImperial() {
+        // 100 km in one month ≈ 62 mi: clears 60 mi, not 125 mi.
+        let runs = (1...10).map { run(on: day(2026, 7, $0), meters: 10_000) }
+
+        let badges = StreakGoalService.achievements(for: runs, unit: .imperial, now: now, calendar: calendar)
+
+        #expect(badge(badges, "month-60 mi")?.isEarned == true)
+        #expect(badge(badges, "month-125 mi")?.isEarned == false)
+    }
+
+    @Test("Long-run badges read the single longest run, not a sum")
+    func longRunBadges() {
+        // Two 15 km runs: 30 km in total, but no single run reaches a half marathon.
+        let runs = [run(on: now, meters: 15_000), run(on: daysBefore(2, from: now), meters: 15_000)]
+
+        let badges = StreakGoalService.achievements(for: runs, unit: .metric, now: now, calendar: calendar)
+
+        #expect(badge(badges, "longest-10k")?.isEarned == true)
+        #expect(badge(badges, "longest-half")?.isEarned == false)
+        #expect(badge(badges, "longest-marathon")?.isEarned == false)
+    }
+
+    @Test("A half marathon measured slightly short by GPS still earns the badge")
+    func longRunBadgeTolerance() {
+        let shortByGPS = [run(on: now, meters: 20_950)]  // 99.3% of 21 097.5 m
+        let genuinelyShort = [run(on: now, meters: 20_500)]  // 97.2%
+
+        let earned = StreakGoalService.achievements(for: shortByGPS, unit: .metric, now: now, calendar: calendar)
+        let notEarned = StreakGoalService.achievements(for: genuinelyShort, unit: .metric, now: now, calendar: calendar)
+
+        #expect(badge(earned, "longest-half")?.isEarned == true)
+        #expect(badge(notEarned, "longest-half")?.isEarned == false)
+    }
+
+    @Test("A long walk earns no long-run badge")
+    func walksDoNotEarnLongRunBadges() {
+        let walk = RunWorkout(date: now, distanceMeters: 25_000, durationSeconds: 18_000, workoutType: .walk)
+
+        let badges = StreakGoalService.achievements(for: [walk], unit: .metric, now: now, calendar: calendar)
+
+        #expect(badge(badges, "longest-half")?.isEarned == false)
+        #expect(badge(badges, "month-100 km")?.progress == 0)
+    }
+
     private func badge(_ list: [StreakGoalService.Achievement], _ id: String) -> StreakGoalService.Achievement? {
         list.first { $0.id == id }
     }

@@ -27,11 +27,12 @@ that would meaningfully expand the product.
 > half, and **B6**'s route export.
 >
 > **What is genuinely open:** **A7** (target-distance-aware routes with elevation),
-> the weather half of **A10** (the rest of the race-day hub shipped), **B3** (watchOS),
+> **B3** (watchOS),
 > **B7** (recovery/readiness — the score, dashboard card and coach chat shipped; the widget
-> does not see it yet), **B8**, the logging half of
-> **B9** (its fuelling-advice half shipped as the dashboard's Coach Tips strip), and the
-> full-data export half of **B6**. Each says at its own entry what was deferred and why.
+> does not see it yet), **B8**, and the logging half of
+> **B9** (its fuelling-advice half shipped as the dashboard's Coach Tips strip). **B6**'s
+> full-data export and **A10**'s race-day weather have since shipped too. Each says at its
+> own entry what was deferred and why.
 
 **Contents**
 1. [Current feature inventory](#1-current-feature-inventory)
@@ -313,7 +314,7 @@ card is `HeatAdvisoryCard`, the setting is **Settings → App → Heat Adaptatio
 
 ### ✅ A10. Custom race distance exists but race-day experience doesn't *(medium impact, medium effort)*
 
-**SHIPPED (race-day hub), except the weather half.**
+**SHIPPED (race-day hub, then the weather half).**
 [`RaceDayPlan`](../Stride/Core/Services/RaceDayPlan.swift) resolves the whole arc —
 countdown, taper status, the goal ladder, the split table and the result — as one pure
 value with an injectable `now`, and
@@ -343,11 +344,20 @@ Details that are decisions rather than defaults:
 - **A pregnancy plan gets no hub at all**, even with a stale `raceDate` left on the
   profile.
 
-*Still open:* the **weather** half. `WeatherService.hourlyForecast(at:on:)` reaches ten
-days ahead and `HeatAdvisoryService.usualRunLocation` supplies a coordinate with no new
-permission, so the data is there — but the app stores a race *date* and no start time,
-and picking an hour to report would be inventing one. Storing a race start time is the
-prerequisite, and that is a change to onboarding rather than to the hub.
+**The weather half shipped later.** The hub's Race Weather card asks for a start time
+(`RaceStartTime`) and, from ten days out, shows the forecast at the start and at the
+expected finish (the A goal, else the predicted time) with the heat tier of the worse of
+the two and its pace cost from `HeatAdaptationPolicy`. `RaceDayForecast` picks the readings
+and is pure (`RaceDayForecastTests`). Decisions:
+
+- **The start time is asked for on the hub, not in onboarding.** Most runners do not know
+  a race's start time months out, and the hub is where it becomes useful.
+- **It is an `AppSettings` string synced through iCloud KVS, not a `@Model` property**, so
+  it needs no CloudKit schema deployment. It carries its own race day: change the race date
+  and the old start stops matching, rather than silently moving to the new race.
+- **The forecast is for where the runner last ran** (`usualRunLocation`), because Stride
+  stores no race location, and the card says so. A race-venue location is the next step if
+  runners travel to race.
 
 The plan builds toward `raceDate`/`raceName` (`UserProfile:15-16`) but there is
 no race-day countdown, no taper-status view, no goal-pace race plan, and no
@@ -427,6 +437,12 @@ counter, a user-set weekly distance/time goal with a progress ring, and
 consistency badges, built on the existing history + `ProgressStatsService`
 aggregates. This also delivers the retention layer A8 called for.
 
+**Extended:** two more badge rows sit under Big Weeks. **Big Months** counts the best
+calendar month (100/200/300 km, or 60/125/200 mi). **Long Runs** reads the single longest
+run against 10K, the half and the marathon, earned at 99% of the distance so a race GPS
+measured a little short still counts (`StreakGoalService.longRunTolerance`). Both count
+running only, like every other badge.
+
 No streak or weekly-goal tracking exists beyond plan adherence. A run-streak
 counter, a user-set weekly distance/time goal with a progress ring, and
 consistency badges are proven retention features and are cheap on top of the
@@ -480,9 +496,17 @@ Details that are decisions rather than defaults:
 The pure document builder takes coordinates and timestamps so the XML can be asserted
 without a SwiftData model behind it (`GPXExportTests`).
 
-*Still open:* a full-data export. "Reset all data" still has no counterpart that gets a
-runner's history *out*, and that is the half of this item that answers the "my data is
-trapped" objection.
+**SHIPPED (full-data export).** **Settings → Data → Export All Data** shares one ZIP:
+`runs.csv` (every recorded workout — runs, walks and cross-training, with a `type` column),
+`strength.csv`, `shoes.csv`, a `README.txt` naming every unit, and `routes/` holding one GPX
+per workout with a route (built by the same `GPXExport`). `DataExport` builds the files as
+pure strings (`DataExportTests`); `DataExportWriter` writes them to the temporary directory
+and zips the folder through `NSFileCoordinator`'s `.forUploading` read, so there is no
+compression dependency. Numbers go through `en_US_POSIX`, so a comma-decimal locale cannot
+break a comma-separated file, and route file names that collide in the same minute get a
+`-2` suffix. Strength sets export as per-session totals: a logged set names its exercise by
+index into the plan, not by name. There is no import back in; this is an export for the
+runner's own keeping.
 
 No route or workout export path. Power users and privacy-conscious users expect
 GPX export of routes and a full-data export (the app already has a "reset all
@@ -630,13 +654,12 @@ Sequenced for user-visible impact per unit of effort, reusing existing models.
 **P2 — depth in data & coaching:**
 7. **✅ A5** cadence capture **+ ✅ A6** HR-zone display; both now feed the coach. *(A5's
    recovery third is B7, below.)*
-8. **✅ A10** race-day hub (countdown, goal splits, taper status, result) — *race-day
-   weather still open; it needs a stored race start time first.*
+8. **✅ A10** race-day hub (countdown, goal splits, taper status, result, start time and
+   race-day forecast).
 9. **B7** recovery/readiness score.
 
 **P3 — reach & retention:**
-10. **✅ B5** run/achievement sharing **+ ✅ B6** GPX route export *(a full-data export is
-    still open — see B6)*.
+10. **✅ B5** run/achievement sharing **+ ✅ B6** GPX route export and full-data export.
 11. **A7** target-distance-aware routes with elevation.
 12. **✅ A8** expanded achievements *(shipped via B4)* **+ A9** coaching-moment notifications.
 
