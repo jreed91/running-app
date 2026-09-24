@@ -29,9 +29,9 @@ that would meaningfully expand the product.
 > **What is genuinely open:** **A7** (target-distance-aware routes with elevation),
 > the weather half of **A10** (the rest of the race-day hub shipped), **B3** (watchOS),
 > **B7** (recovery/readiness — the score, dashboard card and coach chat shipped; the widget
-> does not see it yet), **B8**, the logging half of
-> **B9** (its fuelling-advice half shipped as the dashboard's Coach Tips strip), and the
-> full-data export half of **B6**. Each says at its own entry what was deferred and why.
+> does not see it yet), **B8**, and the logging half of
+> **B9** (its fuelling-advice half shipped as the dashboard's Coach Tips strip). **B6**'s
+> full-data export has since shipped too. Each says at its own entry what was deferred and why.
 
 **Contents**
 1. [Current feature inventory](#1-current-feature-inventory)
@@ -480,9 +480,17 @@ Details that are decisions rather than defaults:
 The pure document builder takes coordinates and timestamps so the XML can be asserted
 without a SwiftData model behind it (`GPXExportTests`).
 
-*Still open:* a full-data export. "Reset all data" still has no counterpart that gets a
-runner's history *out*, and that is the half of this item that answers the "my data is
-trapped" objection.
+**SHIPPED (full-data export).** **Settings → Data → Export All Data** shares one ZIP:
+`runs.csv` (every recorded workout — runs, walks and cross-training, with a `type` column),
+`strength.csv`, `shoes.csv`, a `README.txt` naming every unit, and `routes/` holding one GPX
+per workout with a route (built by the same `GPXExport`). `DataExport` builds the files as
+pure strings (`DataExportTests`); `DataExportWriter` writes them to the temporary directory
+and zips the folder through `NSFileCoordinator`'s `.forUploading` read, so there is no
+compression dependency. Numbers go through `en_US_POSIX`, so a comma-decimal locale cannot
+break a comma-separated file, and route file names that collide in the same minute get a
+`-2` suffix. Strength sets export as per-session totals: a logged set names its exercise by
+index into the plan, not by name. There is no import back in; this is an export for the
+runner's own keeping.
 
 No route or workout export path. Power users and privacy-conscious users expect
 GPX export of routes and a full-data export (the app already has a "reset all
@@ -635,8 +643,7 @@ Sequenced for user-visible impact per unit of effort, reusing existing models.
 9. **B7** recovery/readiness score.
 
 **P3 — reach & retention:**
-10. **✅ B5** run/achievement sharing **+ ✅ B6** GPX route export *(a full-data export is
-    still open — see B6)*.
+10. **✅ B5** run/achievement sharing **+ ✅ B6** GPX route export and full-data export.
 11. **A7** target-distance-aware routes with elevation.
 12. **✅ A8** expanded achievements *(shipped via B4)* **+ A9** coaching-moment notifications.
 
