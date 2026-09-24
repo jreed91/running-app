@@ -77,6 +77,10 @@ struct RaceDayHubView: View {
                     RaceTaperCard(status: taper, unit: unit)
                 }
 
+                if showsWeather(racePlan) {
+                    RaceWeatherCard(racePlan: racePlan, runs: recentRuns, unit: unit)
+                }
+
                 if showsSplits(racePlan), let goal = selectedGoal(racePlan) {
                     RaceSplitsTable(splits: racePlan.splits(for: goal, unit: unit), goal: goal, unit: unit)
                 }
@@ -89,6 +93,14 @@ struct RaceDayHubView: View {
     /// the log it is history, and the result card is the thing worth reading.
     private func showsSplits(_ racePlan: RaceDayPlan) -> Bool {
         racePlan.result == nil
+    }
+
+    /// A start time and a forecast are about a race still to come. Once it is run — or
+    /// the day has passed without a result syncing — the card has nothing left to say.
+    private func showsWeather(_ racePlan: RaceDayPlan) -> Bool {
+        guard racePlan.result == nil else { return false }
+        if case .finished = racePlan.phase { return false }
+        return true
     }
 
     private func selectedGoal(_ racePlan: RaceDayPlan) -> RaceGoal? {

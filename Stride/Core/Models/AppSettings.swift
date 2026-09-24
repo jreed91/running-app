@@ -199,6 +199,19 @@ final class AppSettings {
         }
     }
 
+    /// The goal race's start time as `RaceStartTime.storageValue`, or empty when none has
+    /// been entered (A10). A string carrying its own race day rather than a property on
+    /// `UserProfile`, so it needs no CloudKit schema deployment and a start entered for
+    /// one race never applies to the next. Read it through ``raceStartTime``.
+    var raceStartTimeValue: String {
+        didSet { persist(raceStartTimeValue, forKey: Self.raceStartTimeKey) }
+    }
+
+    var raceStartTime: RaceStartTime? {
+        get { RaceStartTime(storageValue: raceStartTimeValue) }
+        set { raceStartTimeValue = newValue?.storageValue ?? "" }
+    }
+
     /// The user's weekly running-distance goal, in metres. Drives the weekly
     /// progress ring and consistency badges on the Progress → Achievements tab.
     var weeklyGoalMeters: Double {
@@ -232,6 +245,7 @@ final class AppSettings {
     private static let calmPlaylistSourceKey   = "runPlaylistSource.calm"
     private static let steadyPlaylistSourceKey = "runPlaylistSource.steady"
     private static let hardPlaylistSourceKey   = "runPlaylistSource.hard"
+    private static let raceStartTimeKey = "raceStartTime"
 
     /// Default weekly goal (20 km) applied when the user has never set one.
     static let defaultWeeklyGoalMeters = 20_000.0
@@ -263,6 +277,7 @@ final class AppSettings {
         let calmSourceStored = Self.hasStoredValue(forKey: Self.calmPlaylistSourceKey, defaults: defaults, ubiquitous: ubiquitous)
         let steadySourceStored = Self.hasStoredValue(forKey: Self.steadyPlaylistSourceKey, defaults: defaults, ubiquitous: ubiquitous)
         let hardSourceStored = Self.hasStoredValue(forKey: Self.hardPlaylistSourceKey, defaults: defaults, ubiquitous: ubiquitous)
+        let raceStartStored = Self.hasStoredValue(forKey: Self.raceStartTimeKey, defaults: defaults, ubiquitous: ubiquitous)
 
         let raw = Self.readString(forKey: Self.unitPreferenceKey, defaults: defaults, ubiquitous: ubiquitous) ?? ""
         // No stored choice falls back to what the device already measures in, not to
@@ -328,6 +343,9 @@ final class AppSettings {
         self.steadyPlaylistSourceID = Self.readString(forKey: Self.steadyPlaylistSourceKey, defaults: defaults, ubiquitous: ubiquitous) ?? ""
         self.hardPlaylistSourceID = Self.readString(forKey: Self.hardPlaylistSourceKey, defaults: defaults, ubiquitous: ubiquitous) ?? ""
 
+        // Empty means "no start time entered", which is every runner until they add one.
+        self.raceStartTimeValue = Self.readString(forKey: Self.raceStartTimeKey, defaults: defaults, ubiquitous: ubiquitous) ?? ""
+
         // Default to 20 km when the user has never set a weekly goal.
         self.weeklyGoalMeters = weeklyGoalStored
             ? (Self.readDouble(forKey: Self.weeklyGoalMetersKey, defaults: defaults, ubiquitous: ubiquitous) ?? Self.defaultWeeklyGoalMeters)
@@ -349,6 +367,7 @@ final class AppSettings {
         if calmSourceStored { persist(calmPlaylistSourceID, forKey: Self.calmPlaylistSourceKey) }
         if steadySourceStored { persist(steadyPlaylistSourceID, forKey: Self.steadyPlaylistSourceKey) }
         if hardSourceStored { persist(hardPlaylistSourceID, forKey: Self.hardPlaylistSourceKey) }
+        if raceStartStored { persist(raceStartTimeValue, forKey: Self.raceStartTimeKey) }
 
         observeExternalChanges()
     }
@@ -447,6 +466,11 @@ final class AppSettings {
         if let value = Self.readString(forKey: Self.hardPlaylistSourceKey, defaults: defaults, ubiquitous: ubiquitous),
            value != hardPlaylistSourceID {
             hardPlaylistSourceID = value
+        }
+
+        if let value = Self.readString(forKey: Self.raceStartTimeKey, defaults: defaults, ubiquitous: ubiquitous),
+           value != raceStartTimeValue {
+            raceStartTimeValue = value
         }
     }
 
