@@ -427,6 +427,12 @@ counter, a user-set weekly distance/time goal with a progress ring, and
 consistency badges, built on the existing history + `ProgressStatsService`
 aggregates. This also delivers the retention layer A8 called for.
 
+**Extended:** two more badge rows sit under Big Weeks. **Big Months** counts the best
+calendar month (100/200/300 km, or 60/125/200 mi). **Long Runs** reads the single longest
+run against 10K, the half and the marathon, earned at 99% of the distance so a race GPS
+measured a little short still counts (`StreakGoalService.longRunTolerance`). Both count
+running only, like every other badge.
+
 No streak or weekly-goal tracking exists beyond plan adherence. A run-streak
 counter, a user-set weekly distance/time goal with a progress ring, and
 consistency badges are proven retention features and are cheap on top of the
