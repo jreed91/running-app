@@ -69,6 +69,24 @@ Everything else uses `entrance` (staggered 80ms), `bouncy`, `snappy` and `gentle
 the route and the pin get signature motion, a route draws once, one pulse per screen, and
 under Reduce Motion the mark appears whole and the pulse is off.
 
+## Controls
+
+Shared in `Stride/Shared/Components/StrideControls.swift`. Use these rather than system or hand-drawn styles, so a button or a list looks the same on every screen.
+
+| Need | Use |
+| --- | --- |
+| A button | `.buttonStyle(.strideButton())`: `.primary` (the route, one per screen), `.secondary` (brand tint), `.quiet` (card), `.destructive`; `compact:` for rows, `fullWidth: false` to hug |
+| A filter or quick reply | `.buttonStyle(.strideChip(selected:))` |
+| A segmented choice on a page | `StrideSegmentedControl`; inside a `Form` the system `.segmented` picker, tinted by `AppChrome` |
+| Progress along a line | `StrideProgressBar(value:, tint:)`, the route on a `surfaceTertiary` track |
+| A free-standing text field | `.strideField()`; a field inside a card is a well on `surfacePrimary` with the hairline |
+| A `List` or `Form` | `.strideList()` on it and `.strideListRow()` on each `Section`, so dark mode is ink, not system black |
+| A sheet with its own scroll view | `.strideSheet()` |
+| An empty screen | `StrideEmptyState(title, systemImage:, description:) { actions }`, not `ContentUnavailableView` |
+| A chart | Bars in `.routeBar`, a progress line in `.route` at 3pt with round caps, the selection rule dashed in brand, tooltips as cards; zone and data colours stay as they are |
+
+Text on the route or on brand is always `onFill`, never white (2.8:1).
+
 ## App Store screenshots
 
 `.github/workflows/app-store-screenshots.yml` captures them from the demo history (run it

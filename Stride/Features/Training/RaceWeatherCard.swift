@@ -49,8 +49,7 @@ struct RaceWeatherCard: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Button("Add start time") { editingStartTime = true }
-                    .buttonStyle(.bordered)
-                    .tint(.brand)
+                    .buttonStyle(.strideButton(.secondary, compact: true, fullWidth: false))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -213,7 +212,9 @@ private struct RaceStartTimeEditor: View {
                 } footer: {
                     Text("Used for the race-day forecast. Syncs to your other devices.")
                 }
+                .strideListRow()
             }
+            .strideList()
             .navigationTitle("Race Start")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

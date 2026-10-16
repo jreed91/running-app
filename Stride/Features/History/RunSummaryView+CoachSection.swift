@@ -44,7 +44,7 @@ extension RunSummaryView {
                         .foregroundStyle(.onFill)
                         .padding(.horizontal, AppSpacing.md)
                         .padding(.vertical, AppSpacing.sm)
-                        .background(Color.brand, in: Capsule())
+                        .background(.route, in: Capsule())
                         .appGlow(.standard, color: .brand)
                     }
                     .buttonStyle(.plain)
@@ -164,12 +164,13 @@ extension RunSummaryView {
                         .font(.dsCaption.weight(.bold))
                         .foregroundStyle(.onFill)
                         .frame(width: 30, height: 30)
-                        .background(Color.brand, in: Circle())
+                        .background(.route, in: Circle())
                 }
                 .padding(.leading, 14)
                 .padding(.trailing, AppSpacing.sm)
                 .padding(.vertical, AppSpacing.sm)
                 .background(.surfaceSecondary, in: Capsule())
+                .overlay(Capsule().strokeBorder(.cardStroke, lineWidth: 1))
             }
             .buttonStyle(.plain)
         }

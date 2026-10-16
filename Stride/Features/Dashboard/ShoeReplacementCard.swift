@@ -68,26 +68,16 @@ struct ShoeReplacementCard: View {
                     context.saveOrLog("retiring a shoe from the dashboard")
                 } label: {
                     Text("Retire them")
-                        .font(.dsSubhead.weight(.semibold))
-                        .foregroundStyle(.onFill)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, AppSpacing.md)
-                        .background(RoundedRectangle(cornerRadius: AppRadius.md).fill(Color.brand))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.strideButton(compact: true))
 
                 Button {
                     ShoeNudgeDismissals.dismiss(shoe.id, at: wear)
                     dismissed = ShoeNudgeDismissals.load()
                 } label: {
                     Text("Not yet")
-                        .font(.dsSubhead.weight(.medium))
-                        .foregroundStyle(.primary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, AppSpacing.md)
-                        .background(RoundedRectangle(cornerRadius: AppRadius.md).fill(Color.surfaceSecondary))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.strideButton(.quiet, compact: true))
             }
         }
         .padding(18)

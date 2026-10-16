@@ -257,6 +257,7 @@ private struct HistoryEntryList: View {
             // it also writes a tombstone that keeps the run from returning on the next
             // Health sync (U6).
             .onDelete { offsets in pendingDeletion = offsets }
+            .strideListRow()
 
             if hasMore {
                 HStack {
@@ -265,8 +266,10 @@ private struct HistoryEntryList: View {
                     Spacer()
                 }
                 .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
             }
         }
+        .strideList()
         .overlay { emptyStateOverlay }
         .confirmationDialog(
             "Delete this workout?",
@@ -321,23 +324,22 @@ private struct HistoryEntryList: View {
             // A filter that hides everything has to say so *and* offer the way out —
             // otherwise the screen is indistinguishable from "no workouts yet", and the
             // control that caused it is a glyph in the toolbar.
-            ContentUnavailableView {
-                Label("No matching workouts", systemImage: "line.3.horizontal.decrease.circle")
-            } description: {
-                Text("\(filter.dateRange.localizedName) · \(filter.minimumDistance.localizedName)")
-            } actions: {
+            StrideEmptyState(
+                "No matching workouts",
+                systemImage: "line.3.horizontal.decrease.circle",
+                description: Text("\(filter.dateRange.localizedName) · \(filter.minimumDistance.localizedName)")
+            ) {
                 Button("Clear Filters") { clearFilter() }
-                    .buttonStyle(.borderedProminent)
             }
         } else {
             // The description named two actions and offered neither, leaving the only route
             // to either one an unlabelled toolbar glyph or a gesture on an empty list (S6).
             // The filter variant above already uses the `actions:` slot; so does this.
-            ContentUnavailableView {
-                Label("No workouts yet", systemImage: "figure.run.circle")
-            } description: {
-                Text("Start a run, or bring in what you've already recorded.")
-            } actions: {
+            StrideEmptyState(
+                "No workouts yet",
+                systemImage: "figure.run.circle",
+                description: Text("Start a run, or bring in what you've already recorded.")
+            ) {
                 Button("Start a Run") {
                     container.appNavigation.select(.home)
                     container.activeRunPresentation.startOrReopen(
@@ -345,12 +347,12 @@ private struct HistoryEntryList: View {
                         isRunInProgress: container.workoutTrackerService.isRecording
                     )
                 }
-                .buttonStyle(.borderedProminent)
 
                 if container.healthKitRepository.isAvailable {
                     Button("Sync Apple Health") {
                         Task { await syncNow() }
                     }
+                    .buttonStyle(.strideButton(.secondary, fullWidth: false))
                 }
             }
         }
@@ -568,7 +570,7 @@ struct StrengthWorkoutRowView: View {
                     if workout.healthKitWorkoutID != nil {
                         Image(systemName: "heart.fill")
                             .font(.dsCaption2)
-                            .foregroundStyle(.red)
+                            .foregroundStyle(.destructive)
                     }
                 }
             }

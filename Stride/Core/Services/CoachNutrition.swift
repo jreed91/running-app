@@ -313,9 +313,11 @@ enum CoachNutrition {
             let rounded = (value * 10).rounded() / 10
             number = rounded == rounded.rounded() ? String(Int(rounded)) : String(format: "%.1f", rounded)
         } else {
-            // "0.9 g/kg/h", not "0.90": two places only when the second one carries.
-            number = String(format: "%.2f", value)
-                .replacingOccurrences(of: #"0$"#, with: "", options: .regularExpression)
+            // A guideline constant like 0.9 g/kg/h reads as "0.9", not "0.90". A computed
+            // rate (6 ml/kg/h is 0.203 fl oz/kg/h) keeps two places, so a small rate is not
+            // rounded to a misleading single digit.
+            let isOneDecimal = abs((value * 10).rounded() - value * 10) < 1e-9
+            number = String(format: isOneDecimal ? "%.1f" : "%.2f", value)
         }
         return "\(number) \(unit)"
     }

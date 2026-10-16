@@ -87,7 +87,7 @@ struct AchievementsView: View {
         .background(Color.surfacePrimary)
         .overlay {
             if workouts.isEmpty {
-                ContentUnavailableView(
+                StrideEmptyState(
                     "No runs yet",
                     systemImage: "medal",
                     description: Text("Complete your first run to start a streak and earn badges.")
@@ -396,7 +396,9 @@ private struct WeeklyGoalEditor: View {
                 } footer: {
                     Text("Your target running distance each week. The Achievements ring fills as you log runs Monday through Sunday.")
                 }
+                .strideListRow()
             }
+            .strideList()
             .navigationTitle("Weekly Goal")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

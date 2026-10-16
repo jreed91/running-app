@@ -307,9 +307,7 @@ struct OBPregnancyReady: View {
                     .accessibilityLabel("Back")
                     .accessibilityIdentifier("onboarding.back.\(progressTotal)")
 
-                    ProgressView(value: 1)
-                        .progressViewStyle(.linear)
-                        .tint(.brand)
+                    StrideProgressBar(value: 1, height: 4)
                         .accessibilityHidden(true)
                     Text("\(progressTotal)/\(progressTotal)")
                         .font(.dsCaption2.weight(.bold).monospaced())

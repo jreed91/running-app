@@ -12,7 +12,7 @@ struct SavedRoutesView: View {
     var body: some View {
         Group {
             if viewModel.savedRoutes.isEmpty {
-                ContentUnavailableView(
+                StrideEmptyState(
                     "No Saved Routes",
                     systemImage: "map",
                     description: Text("Generate and save a route to see it here.")
@@ -34,7 +34,9 @@ struct SavedRoutesView: View {
                             }
                         }
                     }
+                    .strideListRow()
                 }
+                .strideList()
                 .listStyle(.insetGrouped)
             }
         }

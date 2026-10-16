@@ -108,8 +108,7 @@ struct PlanSummaryCard: View {
                         .foregroundStyle(.secondary)
                     Spacer()
                 }
-                ProgressView(value: summary.adherence)
-                    .tint(.brand)
+                StrideProgressBar(value: summary.adherence)
             }
 
             Divider()
@@ -210,8 +209,7 @@ private struct TypeBreakdownRow: View {
                 .font(.dsFootnote.weight(.medium).monospaced())
                 .foregroundStyle(.secondary)
 
-            ProgressView(value: fraction)
-                .tint(stat.type.color)
+            StrideProgressBar(value: fraction, tint: stat.type.color, height: 6)
                 .frame(width: 56)
         }
     }

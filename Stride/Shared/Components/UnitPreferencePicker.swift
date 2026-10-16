@@ -22,10 +22,11 @@ struct UnitPreferencePicker: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, AppSpacing.md)
-                    .background(
-                        selection == unit ? Color.brand : Color.clear,
-                        in: RoundedRectangle(cornerRadius: AppRadius.sm)
-                    )
+                    .background {
+                        if selection == unit {
+                            RoundedRectangle(cornerRadius: AppRadius.sm, style: .continuous).fill(.route)
+                        }
+                    }
                     // `.onFill`, not `.white`: white on `Color.brand` is 2.84:1, below even
                     // the 3.0 large-text bar, which is why `onFill` exists (U3a). The
                     // Settings copy of this control was still using white.

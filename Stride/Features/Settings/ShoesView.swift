@@ -21,11 +21,11 @@ struct ShoesView: View {
     var body: some View {
         List {
             if shoes.isEmpty {
-                ContentUnavailableView {
-                    Label("No shoes yet", systemImage: "shoeprints.fill")
-                } description: {
-                    Text("Add the pairs you run in to see how far each has gone and hear when one is nearly worn out.")
-                } actions: {
+                StrideEmptyState(
+                    "No shoes yet",
+                    systemImage: "shoeprints.fill",
+                    description: Text("Add the pairs you run in to see how far each has gone and hear when one is nearly worn out.")
+                ) {
                     Button("Add a pair") { editing = .new }
                 }
                 .listRowBackground(Color.clear)
@@ -34,13 +34,16 @@ struct ShoesView: View {
                 Section("In rotation") {
                     ForEach(inRotation) { shoe in row(shoe) }
                 }
+                .strideListRow()
             }
             if !retired.isEmpty {
                 Section("Retired") {
                     ForEach(retired) { shoe in row(shoe) }
                 }
+                .strideListRow()
             }
         }
+        .strideList()
         .navigationTitle("Shoes")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -98,7 +101,7 @@ struct ShoesView: View {
                     ShoeAssignment.retire(shoe)
                     context.saveOrLog("retiring a shoe")
                 }
-                .tint(.orange)
+                .tint(.warning)
             }
         }
         .swipeActions(edge: .leading) {
@@ -164,8 +167,8 @@ private struct ShoeRow: View {
                     }
                 }
             }
-            ProgressView(value: progress)
-                .tint(shoe.isRetired ? .secondary : tone)
+            // A fresh pair fills with the route; wear switches it to its warning colour.
+            StrideProgressBar(value: progress, tint: shoe.isRetired ? Color.secondary : (wear == .fresh ? nil : tone))
             Text("\(totalText) of \(limitText)")
                 .font(.dsCaption.monospacedDigit())
                 .foregroundStyle(.secondary)
@@ -226,12 +229,14 @@ struct ShoeEditorView: View {
                     TextField("Name, e.g. Pegasus 41", text: $name)
                     DatePicker("In use since", selection: $startDate, in: ...Date(), displayedComponents: .date)
                 }
+                .strideListRow()
                 Section {
                     distanceField("Already run in them", value: $startingDistance)
                     distanceField("Replace at", value: $replacementDistance)
                 } footer: {
                     Text("Most pairs are good for about \(defaultReplacementText). It depends on the shoe, the runner and the surface, so change it if your pairs usually last longer or shorter.")
                 }
+                .strideListRow()
                 Section {
                     Toggle("Use for new runs", isOn: $isDefault)
                         .disabled(isRetired)
@@ -241,7 +246,9 @@ struct ShoeEditorView: View {
                 } footer: {
                     Text("New runs from the day this pair went into use are put on it. You can change the shoe on any run.")
                 }
+                .strideListRow()
             }
+            .strideList()
             .navigationTitle(existing == nil ? "New Pair" : "Edit Pair")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
