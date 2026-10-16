@@ -34,9 +34,7 @@ struct PlanTabView: View {
             Group {
                 if let plan = activePlan {
                     ScrollView {
-                        VStack(spacing: 20) {
-                            PlanOverviewCard(plan: plan, isHero: raceDayPlan(for: plan) == nil)
-
+                        VStack(spacing: AppSpacing.xl) {
                             // The plan is built toward a race date and, until now, never
                             // said anything else about it. This is the whole season's
                             // countdown, so it sits here rather than on the dashboard,
@@ -52,6 +50,10 @@ struct PlanTabView: View {
                                 }
                                 .buttonStyle(.plain)
                             }
+
+                            // Below the race: when there is one, the countdown is the
+                            // screen's hero and leads it, and this card is the progress.
+                            PlanOverviewCard(plan: plan, isHero: raceDayPlan(for: plan) == nil)
 
                             // Smart Adapt and Pace Insights are both VDOT machinery, and a
                             // pregnancy plan has no pace targets to insight about and is not
@@ -79,7 +81,7 @@ struct PlanTabView: View {
 
                             if !plan.isPregnancyPlan {
                                 Text("PACE INSIGHTS")
-                                    .font(.sectionHeader)
+                                    .strideEyebrow()
                                     .foregroundStyle(.secondary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -87,7 +89,7 @@ struct PlanTabView: View {
                             }
 
                             Text("TRAINING WEEKS")
-                                .font(.sectionHeader)
+                                .strideEyebrow()
                                 .foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -120,7 +122,8 @@ struct PlanTabView: View {
                     NavigationLink {
                         TrainingPlanListView()
                     } label: {
-                        Label("Plan History", systemImage: "clock.arrow.circlepath")
+                        // Not the History tab's clock: this is past plans, not past runs.
+                        Label("Plan History", systemImage: "list.bullet.rectangle")
                     }
                 }
                 ToolbarItem(placement: .primaryAction) {
@@ -151,6 +154,7 @@ struct PlanTabView: View {
                 RouteGeniusView(
                     viewModel: container.makeRouteGeniusViewModel(appSettings: appSettings)
                 )
+                .strideSheet()
             }
         }
         .onDisappear {
@@ -350,7 +354,7 @@ private struct SmartAdaptPlanCard: View {
             Button(action: action) {
                 HStack(spacing: 14) {
                     ZStack {
-                        RoundedRectangle(cornerRadius: AppRadius.md)
+                        Circle()
                             .fill(Color.brand.opacity(0.12))
                             .frame(width: 48, height: 48)
                         if isAdapting {
@@ -365,13 +369,12 @@ private struct SmartAdaptPlanCard: View {
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text(isAdapting ? "Adapting Plan" : "Smart Adapt")
-                            .font(.dsHeadline.weight(.bold))
-                            .foregroundStyle(.brandText)
+                            .font(.dsHeadline)
 
                         Text(subtitle)
-                            .font(.caption)
+                            .font(.dsCaption)
                             .foregroundStyle(.secondary)
-                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
 
                     Spacer(minLength: 8)
@@ -391,11 +394,7 @@ private struct SmartAdaptPlanCard: View {
             .grayscale(isEnabled ? 0 : 1)
             .opacity(isEnabled ? 1 : 0.9)
 
-            if let unavailableReason {
-                Text(unavailableReason)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+
 
             if isAdapting {
                 VStack(alignment: .leading, spacing: 8) {
@@ -454,7 +453,12 @@ private struct SmartAdaptPlanCard: View {
         }
     }
 
+    /// When Smart Adapt can't run, the reason is the subtitle, inside the card. It used to
+    /// be a loose caption under it while the card still said "Adapt the remaining…".
     private var subtitle: String {
+        if let unavailableReason, !isAdapting {
+            return unavailableReason
+        }
         guard workoutCount > 0 else {
             return "No remaining run workouts are available."
         }
@@ -473,20 +477,19 @@ private struct RouteGeniusCard: View {
         Button(action: action) {
             HStack(spacing: 14) {
                 ZStack {
-                    // The route, like every "go" in the app; the old red end read as an alert.
-                    RoundedRectangle(cornerRadius: AppRadius.md)
-                        .fill(.route)
+                    // A tinted circle like every other card's icon on Plan, Home and History;
+                    // the route is for progress and "go", not a card's decoration.
+                    Circle()
+                        .fill(Color.brand.opacity(0.12))
                         .frame(width: 48, height: 48)
-                        .appGlow(.standard, color: .brand)
-                    StrideIcon(name: .bolt, size: 22, color: .onFill, strokeWeight: 2.2)
+                    StrideIcon(name: .bolt, size: 22, color: .brand, strokeWeight: 2.2)
                 }
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Route Genius")
-                        .font(.dsHeadline.weight(.bold))
-                        .foregroundStyle(.brandText)
+                        .font(.dsHeadline)
                     Text("AI-generated route matched to today's distance & elevation.")
-                        .font(.caption)
+                        .font(.dsCaption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
@@ -562,9 +565,9 @@ private struct PlanOverviewCard: View {
             // Header row: race icon + title + goal
             HStack(alignment: .top, spacing: 14) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: AppRadius.md)
+                    Circle()
                         .fill(Color.brand.opacity(0.12))
-                        .frame(width: 52, height: 52)
+                        .frame(width: 48, height: 48)
                     StrideIcon(name: raceStrideIcon, size: 26, color: .brand, strokeWeight: 2.0)
                 }
                 VStack(alignment: .leading, spacing: 4) {
@@ -576,7 +579,7 @@ private struct PlanOverviewCard: View {
                 }
                 Spacer()
                 Text("\(Int(plan.progress * 100))%")
-                    .font(.dsTitle2.monospaced())
+                    .font(.dsTitle2.monospacedDigit())
                     .foregroundStyle(.brandText)
             }
 
@@ -790,7 +793,7 @@ private struct PaceInsightsCard: View {
         } else {
             ZStack {
                 Circle().fill(statusColor).frame(width: 16, height: 16)
-                StrideIcon(name: .check, size: 8, color: .white, strokeWeight: 2.5)
+                StrideIcon(name: .check, size: 8, color: .onFill, strokeWeight: 2.5)
             }
         }
     }
@@ -878,7 +881,7 @@ private struct PaceInsightsCard: View {
             }
         }
         .padding()
-        .strideCard(cornerRadius: AppRadius.md)
+        .strideCard()
     }
 }
 
@@ -904,7 +907,7 @@ private struct PaceRow: View {
 
             HStack(alignment: .lastTextBaseline, spacing: 4) {
                 Text(value)
-                    .font(.dsSubhead.weight(.semibold).monospaced())
+                    .font(.dsSubhead.weight(.semibold).monospacedDigit())
                 Text(appSettings.unitPreference.paceLabel)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -1064,7 +1067,7 @@ private struct PlanWeekSummaryRow: View {
         .reorderContainer(for: ScheduledWorkout.self, itemID: \.id, isEnabled: canReorder) { difference in
             reschedule(difference)
         }
-        .strideCard(cornerRadius: AppRadius.md)
+        .strideCard()
         .opacity(isFutureWeek ? 0.65 : 1.0)
     }
 
@@ -1218,7 +1221,7 @@ private struct PlanWorkoutSummaryRow: View {
 
             if let dist = workout.targetDistanceMeters {
                 Text(dist.distanceString(unit: appSettings.unitPreference))
-                    .font(.dsCaption.weight(.medium).monospaced())
+                    .font(.dsCaption.weight(.medium).monospacedDigit())
                     .foregroundStyle(.secondary)
             }
 
@@ -1227,7 +1230,7 @@ private struct PlanWorkoutSummaryRow: View {
                     Circle()
                         .fill(Color.success)
                         .frame(width: 18, height: 18)
-                    StrideIcon(name: .check, size: 9, color: .white, strokeWeight: 3)
+                    StrideIcon(name: .check, size: 9, color: .onFill, strokeWeight: 3)
                 }
             }
         }

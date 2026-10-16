@@ -69,7 +69,8 @@ struct ShoeReplacementCard: View {
                 } label: {
                     Text("Retire them")
                 }
-                .buttonStyle(.strideButton(compact: true))
+                // Secondary, not the route: retiring a pair isn't the screen's "go" action.
+                .buttonStyle(.strideButton(.secondary, compact: true))
 
                 Button {
                     ShoeNudgeDismissals.dismiss(shoe.id, at: wear)
@@ -80,14 +81,7 @@ struct ShoeReplacementCard: View {
                 .buttonStyle(.strideButton(.quiet, compact: true))
             }
         }
-        .padding(18)
-        .background(
-            RoundedRectangle(cornerRadius: AppRadius.lg)
-                .fill(tone.opacity(0.07))
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppRadius.lg)
-                        .strokeBorder(tone.opacity(0.2), lineWidth: 0.5)
-                )
-        )
+        .padding(AppSpacing.lg)
+        .strideCard()
     }
 }

@@ -198,7 +198,7 @@ struct SettingsView: View {
             // `CoachNutrition`). Apple Health is the primary source and replaces this on
             // the next launch when it has a sample, so the footnote below says so rather
             // than letting an overwritten value look like a bug.
-            settingsRow(icon: .ruler, iconColor: .zoneMarathon, title: "Weight") {
+            settingsRow(icon: .ruler, iconColor: .brand, title: "Weight") {
                 NumericStepperField(
                     title: "Weight",
                     value: bodyMassBinding(for: profile),
@@ -227,7 +227,7 @@ struct SettingsView: View {
     private func heartRateCard(_ profile: UserProfile) -> some View {
         settingsSection("Heart Rate Zones") {
             // Typable as well as steppable, and the same control onboarding uses (S25).
-            settingsRow(icon: .heart, iconColor: .zoneTempo, title: "Age") {
+            settingsRow(icon: .heart, iconColor: .brand, title: "Age") {
                 NumericStepperField(
                     title: "Age",
                     value: ageBinding(for: profile),
@@ -236,7 +236,7 @@ struct SettingsView: View {
                 )
             }
             rowDivider
-            settingsRow(icon: .bolt, iconColor: .zoneInterval, title: "Max HR") {
+            settingsRow(icon: .bolt, iconColor: .brand, title: "Max HR") {
                 NumericStepperField(
                     title: "Max HR",
                     value: maxHRBinding(for: profile),
@@ -292,7 +292,7 @@ struct SettingsView: View {
                     .padding(.bottom, 10)
             }
             rowDivider
-            settingsRow(icon: .bell, iconColor: .zoneTempo, title: "Morning Reminder") {
+            settingsRow(icon: .bell, iconColor: .brand, title: "Morning Reminder") {
                 Toggle("", isOn: Bindable(appSettings).morningReminderEnabled)
                     .labelsHidden()
                     .tint(.brand)
@@ -373,7 +373,7 @@ struct SettingsView: View {
             rowDivider
             // The one setting that makes the app talk over the runner's music, so it
             // says what it will say and stays off until asked (U4).
-            settingsRow(icon: .ruler, iconColor: .zoneEasy, title: "Spoken Splits") {
+            settingsRow(icon: .ruler, iconColor: .brand, title: "Spoken Splits") {
                 Toggle("", isOn: Bindable(appSettings).spokenSplitsEnabled)
                     .labelsHidden()
                     .tint(.brand)
@@ -385,7 +385,7 @@ struct SettingsView: View {
                 .padding(.bottom, 10)
             rowDivider
             // Off until asked, like Spoken Splits above: it talks over the runner's music.
-            settingsRow(icon: .bolt, iconColor: .zoneInterval, title: "Spoken Workout Steps") {
+            settingsRow(icon: .bolt, iconColor: .brand, title: "Spoken Workout Steps") {
                 Toggle("", isOn: Bindable(appSettings).spokenWorkoutStepsEnabled)
                     .labelsHidden()
                     .tint(.brand)
@@ -415,7 +415,7 @@ struct SettingsView: View {
             .foregroundStyle(.primary)
 
             rowDivider
-            settingsRow(icon: .tortoise, iconColor: .zoneRecovery, title: "Import Walks") {
+            settingsRow(icon: .tortoise, iconColor: .brand, title: "Import Walks") {
                 Toggle("", isOn: Bindable(appSettings).walkImportEnabled)
                     .labelsHidden()
                     .tint(.brand)
@@ -539,7 +539,7 @@ struct SettingsView: View {
 
     private var aiCoachCard: some View {
         settingsSection("AI Coach") {
-            settingsRow(icon: .bolt, iconColor: .zoneTempo, title: "AI Insights") {
+            settingsRow(icon: .bolt, iconColor: .brand, title: "AI Insights") {
                 Toggle("", isOn: Bindable(appSettings).aiInsightsEnabled)
                     .labelsHidden()
                     .tint(.brand)
@@ -700,7 +700,7 @@ struct SettingsView: View {
         return settingsSection("About") {
             settingsRow(icon: .gear, iconColor: Color.secondary, title: "Version") {
                 Text(version)
-                    .font(.dsSubhead.weight(.medium).monospaced())
+                    .font(.dsSubhead.weight(.medium).monospacedDigit())
                     .foregroundStyle(.secondary)
             }
             #if canImport(PulseUI)
@@ -846,13 +846,13 @@ struct SettingsView: View {
     private func settingsSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title.uppercased())
-                .font(.sectionHeader)
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, AppSpacing.xs)
             VStack(spacing: 0) {
                 content()
             }
-            .strideCard(cornerRadius: AppRadius.md)
+            .strideCard()
         }
     }
 
@@ -883,6 +883,10 @@ struct SettingsView: View {
         }
         .padding(.horizontal, AppSpacing.lg)
         .padding(.vertical, AppSpacing.md)
+        // The controls are `Toggle("")` / `Picker("")` with hidden labels, so on their own
+        // VoiceOver read "switch button, off" with no name. Combined, the row's title names
+        // its control.
+        .accessibilityElement(children: .combine)
     }
 
     private var rowDivider: some View {

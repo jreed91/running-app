@@ -127,7 +127,7 @@ struct StrengthActiveView: View {
                 // rather than only refreshing as a side effect of logging a set (M27).
                 TimelineView(.periodic(from: startTime, by: 1)) { context in
                     Text(elapsedTimeString(asOf: context.date))
-                        .font(.dsCaption.monospaced())
+                        .font(.dsCaption.monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
             }
@@ -252,7 +252,7 @@ struct StrengthActiveView: View {
                         Stepper("\(repInput)", value: $repInput, in: 0...99)
                             .labelsHidden()
                         Text("\(repInput)")
-                            .font(.dsTitle2.monospaced())
+                            .font(.dsTitle2.monospacedDigit())
                             .frame(minWidth: 40, alignment: .center)
                     }
 
@@ -309,7 +309,7 @@ struct StrengthActiveView: View {
                     .animation(.linear(duration: 1), value: restTimeRemaining)
                 VStack(spacing: 2) {
                     Text("\(restTimeRemaining)")
-                        .font(.dsTitle1.monospaced())
+                        .font(.dsTitle1.monospacedDigit())
                     Text("sec")
                         .font(.dsCaption2)
                         .foregroundStyle(.secondary)

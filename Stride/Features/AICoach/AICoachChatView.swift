@@ -355,10 +355,10 @@ struct AICoachChatView: View {
                         .foregroundStyle(.secondary)
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
                         Text(metric.value)
-                            .font(.dsSubhead.weight(.bold).monospaced())
+                            .font(.dsSubhead.weight(.bold).monospacedDigit())
                         if let delta = metric.delta {
                             Text(delta)
-                                .font(.dsCaption2.weight(.bold).monospaced())
+                                .font(.dsCaption2.weight(.bold).monospacedDigit())
                                 .foregroundStyle(metric.tone)
                         }
                     }

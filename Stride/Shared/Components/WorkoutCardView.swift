@@ -18,7 +18,7 @@ struct WorkoutCardView: View {
                             Circle()
                                 .fill(Color.success)
                                 .frame(width: 16, height: 16)
-                            StrideIcon(name: .check, size: 9, color: .white, strokeWeight: 3)
+                            StrideIcon(name: .check, size: 9, color: .onFill, strokeWeight: 3)
                         }
                     }
                 }
@@ -35,7 +35,7 @@ struct WorkoutCardView: View {
                             )
                         }
                     }
-                    .font(.dsFootnote.weight(.medium).monospaced())
+                    .font(.dsFootnote.weight(.medium).monospacedDigit())
                     .foregroundStyle(.secondary)
                 }
 
@@ -51,7 +51,7 @@ struct WorkoutCardView: View {
             StrideIcon(name: .chevronRight, size: 12, color: Color.secondary.opacity(0.5), strokeWeight: 2)
         }
         .padding(AppSpacing.lg)
-        .strideCard(cornerRadius: AppRadius.md)
+        .strideCard()
     }
 
     private var typeIcon: some View {

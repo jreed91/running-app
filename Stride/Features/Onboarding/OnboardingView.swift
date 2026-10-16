@@ -349,7 +349,7 @@ struct OnboardingView: View {
             // re-points the rest of onboarding.
             HStack {
                 Text("SPECIALIZED")
-                    .font(.sectionHeader)
+                    .strideEyebrow()
                     .foregroundStyle(.secondary)
                 Spacer()
             }
@@ -504,7 +504,7 @@ struct OnboardingView: View {
                         .fill(Color.brand.opacity(0.2))
                         .frame(width: 44, height: 44)
                     Text(String(format: "%.0f", vdotValue))
-                        .font(.dsSubhead.weight(.bold).monospaced())
+                        .font(.dsSubhead.weight(.bold).monospacedDigit())
                         .foregroundStyle(.brandText)
                 }
                 VStack(alignment: .leading, spacing: 2) {
@@ -589,7 +589,7 @@ struct OnboardingView: View {
                                     .kerning(0.6)
                                     .opacity(isOn ? 0.85 : 0.6)
                                 Text("\(dayNumber)")
-                                    .font(.dsSubhead.weight(.bold).monospaced())
+                                    .font(.dsSubhead.weight(.bold).monospacedDigit())
                             }
                             .frame(maxWidth: .infinity)
                             .frame(height: 52)
@@ -638,7 +638,7 @@ struct OnboardingView: View {
                         .foregroundStyle(.secondary)
                     Spacer()
                     Text("\(selectedDays.count)")
-                        .font(.dsTitle3.weight(.bold).monospaced())
+                        .font(.dsTitle3.weight(.bold).monospacedDigit())
                         .foregroundStyle(.brandText)
                 }
                 .padding(.top, AppSpacing.xs)

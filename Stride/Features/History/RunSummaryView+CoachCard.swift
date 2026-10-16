@@ -14,10 +14,11 @@ extension RunSummaryView {
         } label: {
             HStack(spacing: 12) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: AppRadius.md)
-                        .fill(.white)
-                        .frame(width: 42, height: 42)
-                        .appGlow(.subtle, color: .brand)
+                    // A tinted circle like every icon tile; it was a white, glowing square,
+                    // which on the night ground was the brightest thing on the screen.
+                    Circle()
+                        .fill(Color.brand.opacity(0.12))
+                        .frame(width: 44, height: 44)
                     if isLoadingAIInsight {
                         ProgressView()
                             .controlSize(.small)
@@ -61,7 +62,7 @@ extension RunSummaryView {
                                         .frame(width: 50 * CGFloat(confidence) / 100, height: 3)
                                 }
                             Text("\(confidence)% conf.")
-                                .font(.dsCaption2.weight(.bold).monospaced())
+                                .font(.dsCaption2.weight(.bold).monospacedDigit())
                                 .foregroundStyle(.brandText)
                         }
                     }
@@ -71,19 +72,8 @@ extension RunSummaryView {
                 StrideIcon(name: .chevronRight, size: 14, color: .brand, strokeWeight: 2.4)
             }
             .padding(.horizontal, AppSpacing.lg)
-            .padding(.vertical, 14)
-            .background(
-                LinearGradient(
-                    colors: [Color.brand.opacity(0.20), Color.brand.opacity(0.075)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ),
-                in: RoundedRectangle(cornerRadius: AppRadius.lg)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: AppRadius.lg)
-                    .strokeBorder(Color.brand.opacity(0.12), lineWidth: 0.5)
-            )
+            .padding(.vertical, AppSpacing.md)
+            .strideCard()
         }
         .buttonStyle(.plain)
         .accessibilityLabel("AI Coach")

@@ -8,9 +8,8 @@ extension RunSummaryView {
 
     func sectionHeader(title: String) -> some View {
         HStack {
-            Text(title.uppercased())
-                .font(.dsCaption2.weight(.bold))
-                .kerning(1.4)
+            Text(title)
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
             Spacer()
         }
@@ -47,7 +46,7 @@ extension RunSummaryView {
                         .frame(width: 36 * CGFloat(value) / 100, height: 4)
                 }
             Text("\(value)%")
-                .font(.dsCaption2.weight(.bold).monospaced())
+                .font(.dsCaption2.weight(.bold).monospacedDigit())
                 .foregroundStyle(.secondary)
         }
     }
@@ -55,7 +54,7 @@ extension RunSummaryView {
     func evidenceChip(label: String, sub: String?, tone: Color) -> some View {
         HStack(spacing: 6) {
             Text(label)
-                .font(.dsCaption.weight(.bold).monospaced())
+                .font(.dsCaption.weight(.bold).monospacedDigit())
                 .foregroundStyle(.primary)
             if let sub {
                 Text(sub)

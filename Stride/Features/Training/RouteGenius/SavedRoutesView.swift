@@ -150,7 +150,7 @@ struct SavedRouteDetailView: View {
     private var savedRouteTurnByTurn: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("TURN-BY-TURN")
-                .font(.sectionHeader)
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
                 .padding(.bottom, 10)
 

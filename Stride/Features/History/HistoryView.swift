@@ -70,13 +70,13 @@ struct HistoryView: View {
                 displayLimit = HistoryEntryList.pageSize
             }
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .primaryAction) {
                     HistoryFilterMenu(filter: $filter)
                 }
                 if isSyncing {
-                    ToolbarItem(placement: .navigationBarTrailing) {
+                    ToolbarItem(placement: .primaryAction) {
                         ProgressView()
-                            .scaleEffect(0.8)
+                            .controlSize(.small)
                     }
                 }
             }
@@ -116,6 +116,69 @@ struct HistoryView: View {
         // A wider window than a routine sync: opening History is an explicit "show me
         // everything" gesture, and it is the screen where a missing run is noticed.
         await container.workoutSyncService.syncNow(lookbackDays: 60, source: "history")
+    }
+}
+
+// MARK: - HistoryMonthHero
+
+/// This month's runs, distance and time: History's hero.
+///
+/// Its own query rather than the list's, because the list's fetch is paged and narrowed by
+/// search and filter, and the month's totals have to count every run in it.
+private struct HistoryMonthHero: View {
+    @Environment(AppSettings.self) private var appSettings
+    @Query private var monthRuns: [RunWorkout]
+
+    init(now: Date = Date(), calendar: Calendar = .current) {
+        let start = calendar.dateInterval(of: .month, for: now)?.start ?? now
+        _monthRuns = Query(
+            filter: #Predicate<RunWorkout> { $0.date >= start },
+            sort: \.date,
+            order: .reverse
+        )
+    }
+
+    private var runs: [RunWorkout] { monthRuns.runsOnly }
+
+    private var totalTime: String {
+        let seconds = runs.reduce(0.0) { $0 + $1.durationSeconds }
+        return Duration.seconds(seconds)
+            .formatted(.units(allowed: [.hours, .minutes], width: .narrow))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.md) {
+            Text("This month")
+                .strideEyebrow()
+                .foregroundStyle(.brandText)
+            HStack(spacing: 0) {
+                cell(value: "\(runs.count)", label: "Runs")
+                Divider().frame(height: 40)
+                cell(
+                    value: runs.reduce(0.0) { $0 + $1.distanceMeters }
+                        .distanceString(unit: appSettings.unitPreference),
+                    label: "Distance"
+                )
+                Divider().frame(height: 40)
+                cell(value: totalTime, label: "Time")
+            }
+        }
+        .padding(AppSpacing.lg)
+        .heroCard()
+    }
+
+    private func cell(value: String, label: LocalizedStringKey) -> some View {
+        VStack(spacing: 2) {
+            Text(value)
+                .font(.dsTitle2.monospacedDigit())
+                .minimumScaleFactor(0.7)
+                .lineLimit(1)
+            Text(label)
+                .font(.captionStrong)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -249,6 +312,16 @@ private struct HistoryEntryList: View {
 
     var body: some View {
         List {
+            // The month at a glance, as Plan and Progress open with their hero. Only on the
+            // unfiltered list: under a search or filter the totals would describe rows the
+            // runner can't see.
+            if searchTerm.isEmpty && !filter.isActive && !entries.isEmpty {
+                HistoryMonthHero()
+                    .listRowInsets(EdgeInsets(top: AppSpacing.sm, leading: 0, bottom: AppSpacing.sm, trailing: 0))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            }
+
             ForEach(Array(displayedEntries.enumerated()), id: \.element.id) { index, entry in
                 entryRow(for: entry, index: index)
             }
@@ -313,7 +386,7 @@ private struct HistoryEntryList: View {
             VStack(spacing: 12) {
                 ProgressView()
                 Text("Checking Apple Health for recent workouts…")
-                    .font(.callout)
+                    .font(.dsCallout)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
@@ -483,7 +556,7 @@ struct WorkoutRowView: View {
                     .font(.bodyStrong)
                 HStack(spacing: 4) {
                     Text(workout.date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
-                        .font(.caption)
+                        .font(.dsCaption)
                         .foregroundStyle(.secondary)
                     if workout.scheduledWorkout != nil {
                         Image(systemName: "link")
@@ -497,10 +570,10 @@ struct WorkoutRowView: View {
 
             VStack(alignment: .trailing, spacing: 3) {
                 Text(primaryMetric)
-                    .font(.dsSubhead.weight(.semibold).monospaced())
+                    .font(.dsSubhead.weight(.semibold).monospacedDigit())
                 if let secondaryMetric {
                     Text(secondaryMetric)
-                        .font(.dsCaption.weight(.medium).monospaced())
+                        .font(.dsCaption.weight(.medium).monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
                 if let w = workout.weather {
@@ -564,7 +637,7 @@ struct StrengthWorkoutRowView: View {
                     .font(.bodyStrong)
                 HStack(spacing: 4) {
                     Text(workout.date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
-                        .font(.caption)
+                        .font(.dsCaption)
                         .foregroundStyle(.secondary)
                     if workout.scheduledWorkout != nil {
                         Image(systemName: "link")
@@ -583,11 +656,11 @@ struct StrengthWorkoutRowView: View {
 
             VStack(alignment: .trailing, spacing: 3) {
                 Text(durationLabel)
-                    .font(.dsSubhead.weight(.semibold).monospaced())
+                    .font(.dsSubhead.weight(.semibold).monospacedDigit())
                 let setCount = workout.completedSets.count
                 if setCount > 0 {
                     Text("\(setCount) sets")
-                        .font(.dsCaption.weight(.medium).monospaced())
+                        .font(.dsCaption.weight(.medium).monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
             }

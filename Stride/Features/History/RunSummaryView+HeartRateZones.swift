@@ -12,7 +12,7 @@ extension RunSummaryView {
         let total = zoneSlices.reduce(0) { $0 + $1.seconds }
         return VStack(alignment: .leading, spacing: 12) {
             Text("TIME IN HEART-RATE ZONES")
-                .font(.sectionHeader).foregroundStyle(.secondary).padding(.horizontal, AppSpacing.xs)
+                .strideEyebrow().foregroundStyle(.secondary).padding(.horizontal, AppSpacing.xs)
             // Stacked proportion bar. `GeometryReader` stays here deliberately (U7): five
             // segments each need a *width* from the container, and none of the modern
             // replacements set a frame — `visualEffect` only applies effects, and
@@ -38,7 +38,7 @@ extension RunSummaryView {
             }
         }
         .padding(AppSpacing.lg)
-        .strideCard(cornerRadius: AppRadius.md)
+        .strideCard()
     }
 
     private func zoneRow(_ slice: HRZoneSlice, total: Double) -> some View {

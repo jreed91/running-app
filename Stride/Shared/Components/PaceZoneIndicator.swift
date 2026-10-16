@@ -85,7 +85,7 @@ struct PaceZoneIndicator: View {
             StrideIcon(name: zone.strideIcon, size: 18, color: zone.color, strokeWeight: 2.0)
 
             Text(zone.rawValue.uppercased())
-                .font(.sectionHeader)
+                .strideEyebrow()
                 .foregroundStyle(zone.color)
         }
         .padding(.horizontal, AppSpacing.xl)

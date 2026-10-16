@@ -109,16 +109,9 @@ extension RunSummaryView {
                 }
             }
         }
-        .padding(18)
-        .background(
-            LinearGradient(
-                colors: [Color.warning.opacity(0.14), Color.warning.opacity(0.035)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            ),
-            in: RoundedRectangle(cornerRadius: AppRadius.lg)
-        )
-        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).strokeBorder(Color.warning.opacity(0.28), lineWidth: 0.5))
+        .padding(AppSpacing.lg)
+        // A card, not a warning: the amber ground read as an alert on every summary.
+        .strideCard()
     }
 
     private var aiAskCoachCard: some View {

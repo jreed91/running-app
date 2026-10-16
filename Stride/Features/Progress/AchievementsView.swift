@@ -152,7 +152,7 @@ struct AchievementsView: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text("This Week")
-                    .font(.sectionHeader)
+                    .strideEyebrow()
                     .foregroundStyle(.secondary)
                 Text(weekly.completedMeters.distanceString(unit: appSettings.unitPreference))
                     .font(.metricS)
@@ -196,7 +196,7 @@ struct AchievementsView: View {
         let items = achievements.filter { $0.category == category }
         return VStack(alignment: .leading, spacing: AppSpacing.sm) {
             Text(category.sectionTitle)
-                .font(.sectionHeader)
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
 
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: AppSpacing.md), count: 3), spacing: AppSpacing.md) {
@@ -246,7 +246,7 @@ struct AchievementsView: View {
     private var medalsSection: some View {
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
             Text("Distance Records")
-                .font(.sectionHeader)
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
             Text("Your fastest time at each distance")
                 .font(.bodyRegular)
@@ -320,7 +320,7 @@ struct AchievementsView: View {
             }
         }
         .padding(AppSpacing.lg)
-        .strideCard(cornerRadius: AppRadius.md)
+        .strideCard()
     }
 }
 

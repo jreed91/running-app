@@ -28,7 +28,7 @@ extension RunSummaryView {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, AppSpacing.md)
-            .strideCard(cornerRadius: AppRadius.md)
+            .strideCard()
         }
         .buttonStyle(.plain)
     }
@@ -62,7 +62,7 @@ extension RunSummaryView {
                 Text(heroMetric.value)
                     // The card's hero number keeps its 56pt design size and scales
                     // from there, rather than snapping down to `dsLargeTitle` (U2).
-                    .font(.system(size: heroMetricSize, weight: .semibold, design: .monospaced))
+                    .font(.system(size: heroMetricSize, weight: .semibold, design: .rounded).monospacedDigit())
                     .kerning(-2.2)
                     .foregroundStyle(.primary)
                     .lineLimit(1)
@@ -95,7 +95,7 @@ extension RunSummaryView {
     private func metricInline(value: String, label: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
             Text(value)
-                .font(.dsFootnote.weight(.semibold).monospaced())
+                .font(.dsFootnote.weight(.semibold).monospacedDigit())
                 .foregroundStyle(.primary)
             Text(label)
                 .font(.dsFootnote.weight(.medium))
@@ -187,7 +187,7 @@ extension RunSummaryView {
         VStack(alignment: .leading, spacing: 2) {
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text(value)
-                    .font(.dsTitle2.weight(.semibold).monospaced())
+                    .font(.dsTitle2.weight(.semibold).monospacedDigit())
                     .kerning(-0.5)
                     .foregroundStyle(tone ?? .primary)
                     .lineLimit(1)
@@ -205,7 +205,7 @@ extension RunSummaryView {
         .frame(maxWidth: .infinity)
         .padding(.horizontal, AppSpacing.lg)
         .padding(.vertical, 14)
-        .strideCard(cornerRadius: AppRadius.md)
+        .strideCard()
         .gridCellColumns(colSpan ? 2 : 1)
         // One element per cell, or the grid reads as loose fragments with no pairing
         // between a number and the metric it belongs to (N18).
@@ -263,7 +263,7 @@ extension RunSummaryView {
                 }
                 .padding(.horizontal, AppSpacing.lg)
                 .padding(.vertical, 14)
-                .strideCard(cornerRadius: AppRadius.md)
+                .strideCard()
             }
         }
     }

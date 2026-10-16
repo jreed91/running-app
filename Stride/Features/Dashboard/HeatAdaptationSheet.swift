@@ -63,7 +63,7 @@ struct HeatAdaptationSheet: View {
     private var forecastSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("\(advisory.workoutType.localizedName) · \(advisory.plannedStart.formatted(.dateTime.weekday(.wide).hour().minute()))")
-                .font(.sectionHeader)
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
 
             HStack(spacing: 0) {
@@ -108,7 +108,7 @@ struct HeatAdaptationSheet: View {
     private func changesSection(_ adaptation: HeatAdaptationPolicy.Adaptation) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("What changes")
-                .font(.sectionHeader)
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
 
             ForEach(Array(adaptation.changes.enumerated()), id: \.offset) { _, change in
@@ -131,7 +131,7 @@ struct HeatAdaptationSheet: View {
     private func coolerSection(_ cooler: HeatAdvisory.CoolerOption) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("A cooler hour")
-                .font(.sectionHeader)
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
 
             // Stated rather than actioned: the app does not know what else is in the
@@ -157,7 +157,7 @@ struct HeatAdaptationSheet: View {
     private var guidanceSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Out there")
-                .font(.sectionHeader)
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
 
             ForEach(Array(guidance.enumerated()), id: \.offset) { _, line in

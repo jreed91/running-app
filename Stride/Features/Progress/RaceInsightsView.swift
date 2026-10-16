@@ -195,7 +195,7 @@ struct RaceInsightsView: View {
 
         return VStack(alignment: .leading, spacing: 12) {
             Text("RACE FITNESS")
-                .font(.sectionHeader)
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
 
             HStack(alignment: .top, spacing: 0) {
@@ -252,7 +252,7 @@ struct RaceInsightsView: View {
             }
         }
         .padding(AppSpacing.lg)
-        .strideCard(cornerRadius: AppRadius.md)
+        .strideCard()
     }
 
     // MARK: - Card 2: Predicted Race Pace Chart
@@ -392,7 +392,7 @@ struct RaceInsightsView: View {
                 .foregroundStyle(.primary)
             Spacer()
             Text(paceText)
-                .font(.dsFootnote.weight(.semibold).monospaced())
+                .font(.dsFootnote.weight(.semibold).monospacedDigit())
                 .foregroundStyle(color)
         }
         .padding(.vertical, 10)
@@ -443,7 +443,7 @@ struct RaceInsightsView: View {
     private func metricsCell(value: String, label: String, valueColor: Color = .primary) -> some View {
         VStack(spacing: 4) {
             Text(value)
-                .font(.dsCallout.weight(.bold).monospaced())
+                .font(.dsCallout.weight(.bold).monospacedDigit())
                 .foregroundStyle(valueColor)
                 .minimumScaleFactor(0.7)
                 .lineLimit(1)
@@ -463,7 +463,7 @@ struct RaceInsightsView: View {
         let tips = improvementTips
         return VStack(alignment: .leading, spacing: 12) {
             Text("IMPROVEMENT TIPS")
-                .font(.sectionHeader)
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
 
             if tips.isEmpty {
@@ -487,20 +487,23 @@ struct RaceInsightsView: View {
             }
         }
         .padding(AppSpacing.lg)
-        .strideCard(cornerRadius: AppRadius.md)
+        .strideCard()
     }
 
     // MARK: - Shared helpers (mirrors ProgressDashboardView pattern)
 
     private func chartCard<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        // The title sits above the card, as section headers do on every other screen.
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
             Text(title)
-                .font(.sectionHeader)
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
+                .padding(.horizontal, AppSpacing.xs)
             content()
+                .padding(AppSpacing.lg)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .strideCard()
         }
-        .padding(AppSpacing.lg)
-        .strideCard(cornerRadius: AppRadius.md)
     }
 
     private func emptyDataPlaceholder(_ message: String) -> some View {
