@@ -123,12 +123,10 @@ struct RouteGeniusView: View {
                 .font(.sectionHeader)
                 .foregroundStyle(.secondary)
 
-            Picker("Start", selection: $viewModel.startMode) {
-                ForEach(StartMode.allCases, id: \.self) { mode in
-                    Label(mode.rawValue, systemImage: mode.systemImage).tag(mode)
-                }
-            }
-            .pickerStyle(.segmented)
+            StrideSegmentedControl(
+                selection: $viewModel.startMode,
+                options: StartMode.allCases
+            ) { Text($0.rawValue) }
 
             switch viewModel.startMode {
             case .address:

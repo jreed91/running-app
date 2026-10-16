@@ -367,12 +367,10 @@ struct NewPlanOnboardingView: View {
                             .onChange(of: startDate) { _, _ in recalibrateDates() }
                     }
                 } else {
-                    Picker("Set by", selection: $scheduleMode) {
-                        ForEach(ScheduleMode.allCases, id: \.self) { mode in
-                            Text(mode.rawValue).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
+                    StrideSegmentedControl(
+                        selection: $scheduleMode,
+                        options: ScheduleMode.allCases
+                    ) { Text($0.rawValue) }
                     .onChange(of: scheduleMode) { _, _ in recalibrateDates() }
 
                     if scheduleMode == .weeks {
