@@ -256,9 +256,9 @@ struct RunPlaylistCard: View {
 
     private func color(for energy: RunPlaylistEnergy) -> Color {
         switch energy {
-        case .calm:   return .teal
-        case .steady: return .green
-        case .hard:   return .orange
+        case .calm:   return .zoneRecovery
+        case .steady: return .zoneEasy
+        case .hard:   return .zoneTempo
         }
     }
 }

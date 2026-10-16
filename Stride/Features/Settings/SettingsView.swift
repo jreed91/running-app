@@ -575,7 +575,7 @@ struct SettingsView: View {
     private func privateCloudComputeStatusRow(_ status: ServerModelStatus) -> some View {
         settingsRow(
             icon: status.isAvailable ? .bolt : .gear,
-            iconColor: status.isLimitReached ? .red : (status.isApproachingLimit ? .orange : .brand),
+            iconColor: status.isLimitReached ? .destructive : (status.isApproachingLimit ? .warning : .brand),
             title: "Private Cloud Compute"
         ) {
             if status.canRequestLimitIncrease {

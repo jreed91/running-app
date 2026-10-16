@@ -151,7 +151,7 @@ struct CloudKitDebugView: View {
         switch status {
         case .started: .secondary
         case .finished: .brand
-        case .failed: .red
+        case .failed: .destructive
         }
     }
 

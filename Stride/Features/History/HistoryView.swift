@@ -319,7 +319,11 @@ private struct HistoryEntryList: View {
             }
             .padding(.horizontal, AppSpacing.huge)
         } else if !searchTerm.isEmpty {
-            ContentUnavailableView.search(text: searchTerm)
+            StrideEmptyState(
+                "No results for “\(searchTerm)”",
+                systemImage: "magnifyingglass",
+                description: Text("Check the spelling or try a new search.")
+            )
         } else if filter.isActive {
             // A filter that hides everything has to say so *and* offer the way out —
             // otherwise the screen is indistinguishable from "no workouts yet", and the

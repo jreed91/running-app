@@ -49,7 +49,7 @@ struct RunPlaylistSettingsView: View {
                         .font(.bodyStrong)
                     Spacer()
                     if service.isAuthorized {
-                        StrideIcon(name: .check, size: 16, color: .green, strokeWeight: 2)
+                        StrideIcon(name: .check, size: 16, color: .success, strokeWeight: 2)
                     }
                 }
 
