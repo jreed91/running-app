@@ -23,7 +23,7 @@ struct AssociateWorkoutSheet: View {
         NavigationStack {
             Group {
                 if unassociated.isEmpty {
-                    ContentUnavailableView(
+                    StrideEmptyState(
                         "No Available Workouts",
                         systemImage: "calendar.badge.exclamationmark",
                         description: Text("All scheduled workouts are already linked to a completed run.")
@@ -36,7 +36,9 @@ struct AssociateWorkoutSheet: View {
                             ScheduledWorkoutPickerRow(scheduled: scheduled)
                         }
                         .buttonStyle(.plain)
+                        .strideListRow()
                     }
+                    .strideList()
                 }
             }
             .navigationTitle("Link to Planned Workout")

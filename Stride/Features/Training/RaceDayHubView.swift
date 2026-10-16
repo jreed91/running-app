@@ -46,7 +46,7 @@ struct RaceDayHubView: View {
             if let racePlan = racePlan {
                 content(racePlan)
             } else {
-                ContentUnavailableView(
+                StrideEmptyState(
                     "No Goal Race",
                     systemImage: "flag.checkered",
                     description: Text("Give your plan a race date and race day lives here.")

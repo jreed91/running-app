@@ -27,6 +27,7 @@ struct HealthKitImportView: View {
             dateRangeSection
             actionSection
         }
+        .strideList()
         .navigationTitle("Import from Apple Health")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -58,6 +59,7 @@ struct HealthKitImportView: View {
                 Text("Only running activities not already in this app will be imported.")
             }
         }
+        .strideListRow()
     }
 
     private var actionSection: some View {
@@ -107,6 +109,7 @@ struct HealthKitImportView: View {
                 Button("Try Again") { importState = .idle }
             }
         }
+        .strideListRow()
     }
 
     // MARK: Import logic

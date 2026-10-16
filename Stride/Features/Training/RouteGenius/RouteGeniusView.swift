@@ -83,7 +83,7 @@ struct RouteGeniusView: View {
                 TextField("e.g. 5", text: $viewModel.distanceInput)
                     .keyboardType(.decimalPad)
                     .textFieldStyle(.plain)
-                    .font(.title2)
+                    .font(.dsTitle2)
                     .frame(maxWidth: .infinity)
 
                 Text(viewModel.unitLabel)
@@ -91,7 +91,10 @@ struct RouteGeniusView: View {
                     .foregroundStyle(.secondary)
             }
             .padding()
-            .background(.background, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            // A well in the card: the page's own ground with a hairline, not the system
+            // background (white or black), which broke the one-ground rule.
+            .background(.surfacePrimary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.md).strokeBorder(.cardStroke, lineWidth: 1))
         }
     }
 
@@ -159,7 +162,8 @@ struct RouteGeniusView: View {
                 }
             }
             .padding(10)
-            .background(.background, in: RoundedRectangle(cornerRadius: AppRadius.sm))
+            .background(.surfacePrimary, in: RoundedRectangle(cornerRadius: AppRadius.sm))
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).strokeBorder(.cardStroke, lineWidth: 1))
 
             if !viewModel.addressResults.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
@@ -184,8 +188,8 @@ struct RouteGeniusView: View {
                         }
                     }
                 }
-                .background(.background, in: RoundedRectangle(cornerRadius: AppRadius.sm))
-                .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).stroke(.separator, lineWidth: 0.5))
+                .background(.surfacePrimary, in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).strokeBorder(.cardStroke, lineWidth: 1))
             }
 
             if let selected = viewModel.selectedMapItem {
@@ -313,12 +317,8 @@ struct RouteGeniusView: View {
                 showSaveSheet = true
             } label: {
                 Label("Save This Route", systemImage: "bookmark")
-                    .font(.bodyStrong)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(.brand, in: RoundedRectangle(cornerRadius: AppRadius.md))
-                    .foregroundStyle(.onFill)
             }
+            .buttonStyle(.strideButton())
 
             if !route.steps.isEmpty {
                 TurnByTurnList(steps: route.steps, viewModel: viewModel)
@@ -340,10 +340,10 @@ struct RouteGeniusView: View {
                 }
 
                 Text("Name Your Route")
-                    .font(.title2.bold())
+                    .font(.dsTitle2)
 
                 TextField("Route name (optional)", text: $routeNameInput)
-                    .textFieldStyle(.roundedBorder)
+                    .strideField()
                     .padding(.horizontal)
 
                 Button {
@@ -351,13 +351,9 @@ struct RouteGeniusView: View {
                     showSaveSheet = false
                 } label: {
                     Text("Save")
-                        .font(.bodyStrong)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(.route, in: RoundedRectangle(cornerRadius: AppRadius.md))
-                        .foregroundStyle(.onFill)
-                        .padding(.horizontal)
                 }
+                .buttonStyle(.strideButton())
+                .padding(.horizontal)
             }
             .padding(.top, AppSpacing.huge)
             .navigationBarTitleDisplayMode(.inline)
@@ -445,18 +441,26 @@ private struct RouteTypeButton: View {
         Button(action: action) {
             VStack(spacing: 6) {
                 StrideIcon(name: type.strideIcon, size: 22,
-                           color: isSelected ? .white : .primary, strokeWeight: 2.0)
-                Text(type.localizedName).font(.caption)
+                           color: isSelected ? .onFill : .primary, strokeWeight: 2.0)
+                Text(type.localizedName).font(.captionStrong)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, AppSpacing.md)
-            .background(
-                isSelected ? Color.brand : Color.surfaceSecondary,
-                in: RoundedRectangle(cornerRadius: AppRadius.md)
-            )
-            .foregroundStyle(isSelected ? .white : .primary)
-            .animation(.easeInOut(duration: 0.15), value: isSelected)
+            // Chosen is the route with `onFill`; the others are wells in the card.
+            .background {
+                let shape = RoundedRectangle(cornerRadius: AppRadius.md, style: .continuous)
+                if isSelected {
+                    shape.fill(.route)
+                } else {
+                    shape.fill(.surfacePrimary)
+                        .overlay(shape.strokeBorder(.cardStroke, lineWidth: 1))
+                }
+            }
+            .foregroundStyle(isSelected ? Color.onFill : Color.primary)
+            .adaptiveAnimation(AppAnimation.snappy, value: isSelected)
         }
+        .buttonStyle(BouncyButtonStyle())
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 

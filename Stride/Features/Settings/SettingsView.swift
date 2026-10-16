@@ -592,7 +592,7 @@ struct SettingsView: View {
         if let message = status.quotaMessage {
             Text(message)
                 .font(.caption)
-                .foregroundStyle(status.isLimitReached ? .red : .orange)
+                .foregroundStyle(status.isLimitReached ? Color.destructive : Color.warning)
                 .padding(.horizontal, AppSpacing.lg)
                 .padding(.bottom, 6)
         }

@@ -71,6 +71,7 @@ struct PlanSetupView: View {
                 startDateSection
                 strengthSection
             }
+            .strideList()
             .navigationTitle("New Plan")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -138,6 +139,7 @@ struct PlanSetupView: View {
                 }
             }
         }
+        .strideListRow()
     }
 
     private var runDaysSection: some View {
@@ -155,9 +157,10 @@ struct PlanSetupView: View {
         } footer: {
             if selectedDays.isEmpty {
                 Text("Select at least one run day.")
-                    .foregroundStyle(.red)
+                    .foregroundStyle(.destructive)
             }
         }
+        .strideListRow()
     }
 
     private var planLengthSection: some View {
@@ -190,6 +193,7 @@ struct PlanSetupView: View {
                 }
             }
         }
+        .strideListRow()
     }
 
     private var startDateSection: some View {
@@ -197,6 +201,7 @@ struct PlanSetupView: View {
             DatePicker("First day", selection: $startDate, displayedComponents: .date)
                 .onChange(of: startDate) { _, _ in recalibrateDates() }
         }
+        .strideListRow()
     }
 
     private var strengthSection: some View {

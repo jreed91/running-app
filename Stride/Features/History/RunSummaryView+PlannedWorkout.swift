@@ -88,7 +88,7 @@ extension RunSummaryView {
                         .frame(width: 24, height: 24)
                     Image(systemName: "exclamationmark")
                         .font(.dsCaption.weight(.bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.onFill)
                 }
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Effort higher than expected")

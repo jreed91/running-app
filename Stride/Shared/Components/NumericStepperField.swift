@@ -61,7 +61,7 @@ struct NumericStepperField: View {
             .padding(.horizontal, AppSpacing.sm)
             .padding(.vertical, AppSpacing.xxs)
             .background(
-                Color.secondary.opacity(isEditing ? 0.12 : 0),
+                Color.brand.opacity(isEditing ? 0.12 : 0),
                 in: RoundedRectangle(cornerRadius: AppRadius.xs)
             )
 

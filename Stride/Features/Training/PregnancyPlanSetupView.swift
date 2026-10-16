@@ -59,6 +59,7 @@ struct PregnancyPlanSetupView: View {
                 redFlagSection
                 disclaimerSection
             }
+            .strideList()
             .navigationTitle("Pregnancy Plan")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -103,6 +104,7 @@ struct PregnancyPlanSetupView: View {
         } footer: {
             Text("Your plan runs from the start date through the week you're due. It shortens and eases as you go — it never builds toward a race.")
         }
+        .strideListRow()
     }
 
     private var screeningSection: some View {
@@ -121,6 +123,7 @@ struct PregnancyPlanSetupView: View {
         } footer: {
             Text("Stride won't build a pregnancy plan until this is confirmed. Some conditions mean no more activity than usual daily living; others mean the decision is your provider's, not this app's.")
         }
+        .strideListRow()
     }
 
     private var runningHistorySection: some View {
@@ -137,6 +140,7 @@ struct PregnancyPlanSetupView: View {
         } footer: {
             Text("Minutes, not distance — the plan tapers from what you were actually doing. If you regularly ran intervals, tempo, or races, you keep one steadier session per week until 28 weeks.")
         }
+        .strideListRow()
     }
 
     private var runDaysSection: some View {
@@ -154,11 +158,12 @@ struct PregnancyPlanSetupView: View {
         } footer: {
             if selectedDays.isEmpty {
                 Text("Select at least one run day.")
-                    .foregroundStyle(.red)
+                    .foregroundStyle(.destructive)
             } else {
                 Text("How often you run stays the same all the way through. It's the length of each run that comes down.")
             }
         }
+        .strideListRow()
     }
 
     private var strengthSection: some View {
@@ -180,6 +185,7 @@ struct PregnancyPlanSetupView: View {
         Section("Start Date") {
             DatePicker("First day", selection: $startDate, displayedComponents: .date)
         }
+        .strideListRow()
     }
 
     private var redFlagSection: some View {
@@ -190,7 +196,7 @@ struct PregnancyPlanSetupView: View {
                         .font(.callout)
                 } icon: {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.red)
+                        .foregroundStyle(.destructive)
                 }
             }
         } header: {
@@ -198,6 +204,7 @@ struct PregnancyPlanSetupView: View {
         } footer: {
             Text("This list stays on every workout in the plan.")
         }
+        .strideListRow()
     }
 
     private var disclaimerSection: some View {
@@ -206,6 +213,7 @@ struct PregnancyPlanSetupView: View {
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
+        .strideListRow()
     }
 
     // MARK: - Helpers
@@ -308,6 +316,7 @@ struct PregnancyScreeningDetailView: View {
             } footer: {
                 Text("With any of these, the guidelines advise no more strenuous activity than the usual activities of daily living.")
             }
+            .strideListRow()
 
             Section {
                 ForEach(PregnancyContraindication.relative) { item in
@@ -318,13 +327,16 @@ struct PregnancyScreeningDetailView: View {
             } footer: {
                 Text("Activity may still be right for you with any of these — the decision belongs with your maternity provider.")
             }
+            .strideListRow()
 
             Section {
                 Text(PregnancyRunningPolicy.medicalDisclaimer)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
+            .strideListRow()
         }
+        .strideList()
         .navigationTitle("Health Checklist")
         .navigationBarTitleDisplayMode(.inline)
     }

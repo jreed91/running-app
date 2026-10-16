@@ -103,7 +103,7 @@ struct PlanTabView: View {
                         .padding()
                     }
                 } else {
-                    ContentUnavailableView(
+                    StrideEmptyState(
                         "No Active Plan",
                         systemImage: "calendar.badge.plus",
                         description: Text("Tap + to generate a personalised training plan.")
@@ -403,8 +403,7 @@ private struct SmartAdaptPlanCard: View {
             if isAdapting {
                 VStack(alignment: .leading, spacing: 8) {
                     if let value = progress.fractionCompleted {
-                        ProgressView(value: value)
-                            .tint(.brand)
+                        StrideProgressBar(value: value)
                     } else {
                         ProgressView()
                             .controlSize(.small)

@@ -51,7 +51,7 @@ struct PregnancyPlanGuidanceCard: View {
                         .font(.footnote.weight(.semibold))
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(.red)
+                .foregroundStyle(.destructive)
 
                 Text(PregnancyRunningPolicy.medicalDisclaimer)
                     .font(.caption2)
@@ -115,13 +115,15 @@ struct PregnancyRedFlagListView: View {
                         Text(flag.localizedText)
                     } icon: {
                         Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.red)
+                            .foregroundStyle(.destructive)
                     }
                 }
             } footer: {
                 Text("Stop exercising immediately and contact your maternity provider if any of these happen.")
             }
+            .strideListRow()
         }
+        .strideList()
         .navigationTitle("Stop and Call")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

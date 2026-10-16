@@ -47,7 +47,7 @@ struct RunPlaylistCard: View {
             if let errorMessage {
                 Text(errorMessage)
                     .font(.dsFootnote)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(.destructive)
             }
         }
         .task {
@@ -126,19 +126,15 @@ struct RunPlaylistCard: View {
             // strings would quietly fall out of `Localizable.xcstrings`.
             HStack(spacing: 8) {
                 if isBuilding {
-                    ProgressView().controlSize(.small)
+                    ProgressView().controlSize(.small).tint(.onFill)
                     Text("Building…")
-                        .font(.bodyStrong)
                 } else {
                     Image(systemName: "music.note.list")
                     Text("Build playlist")
-                        .font(.bodyStrong)
                 }
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, AppSpacing.sm)
         }
-        .buttonStyle(.borderedProminent)
+        .buttonStyle(.strideButton())
         .disabled(isBuilding)
     }
 
@@ -193,12 +189,9 @@ struct RunPlaylistCard: View {
                     HStack(spacing: 6) {
                         Image(systemName: "play.fill")
                         Text("Play")
-                            .font(.dsFootnote.weight(.semibold))
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, AppSpacing.sm)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.strideButton(compact: true))
 
                 Button {
                     Task { await build() }
@@ -206,12 +199,9 @@ struct RunPlaylistCard: View {
                     HStack(spacing: 6) {
                         if isBuilding { ProgressView().controlSize(.mini) }
                         Text("Rebuild")
-                            .font(.dsFootnote.weight(.semibold))
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, AppSpacing.sm)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.strideButton(.secondary, compact: true))
                 .disabled(isBuilding)
             }
 

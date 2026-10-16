@@ -25,13 +25,16 @@ struct TrainingPlanListView: View {
                 Section("Current") {
                     planRows(currentPlans)
                 }
+                .strideListRow()
             }
             if !pastPlans.isEmpty {
                 Section("Past Plans") {
                     planRows(pastPlans)
                 }
+                .strideListRow()
             }
         }
+        .strideList()
         .navigationTitle("Plan History")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -73,7 +76,7 @@ struct TrainingPlanListView: View {
         }
         .overlay {
             if plans.isEmpty {
-                ContentUnavailableView(
+                StrideEmptyState(
                     "No training plans yet",
                     systemImage: "calendar.badge.plus",
                     description: Text("Plans you create appear here, along with the workouts you completed in them.")
@@ -138,8 +141,7 @@ struct PlanRowView: View {
             .font(.caption)
             .foregroundStyle(.secondary)
 
-            ProgressView(value: summary.adherence)
-                .tint(summary.status == .active ? .brand : .success)
+            StrideProgressBar(value: summary.adherence, tint: summary.status == .active ? nil : .success)
         }
         .padding(.vertical, AppSpacing.xs)
     }

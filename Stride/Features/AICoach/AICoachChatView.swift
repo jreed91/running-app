@@ -176,14 +176,9 @@ struct AICoachChatView: View {
                         Task { await send(prompt) }
                     } label: {
                         Text(prompt)
-                            .font(.dsFootnote.weight(.semibold))
                             .foregroundStyle(.brandText)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
-                            .background(.surfaceSecondary, in: Capsule())
-                            .overlay(Capsule().strokeBorder(Color.brand.opacity(0.18), lineWidth: 1))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.strideChip())
                 }
             }
             .padding(.horizontal, AppSpacing.lg)
@@ -212,9 +207,15 @@ struct AICoachChatView: View {
             } label: {
                 Image(systemName: "arrow.up")
                     .font(.dsSubhead.weight(.bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(canSendDraft ? Color.onFill : Color.secondary)
                     .frame(width: 32, height: 32)
-                    .background(canSendDraft ? Color.brand : Color.secondary.opacity(0.35), in: Circle())
+                    .background {
+                        if canSendDraft {
+                            Circle().fill(.route)
+                        } else {
+                            Circle().fill(.surfaceTertiary)
+                        }
+                    }
             }
             .buttonStyle(.plain)
             .disabled(!canSendDraft || isWaitingForCoach)
@@ -224,6 +225,7 @@ struct AICoachChatView: View {
         .padding(.trailing, 10)
         .padding(.vertical, 10)
         .background(.surfaceSecondary, in: Capsule())
+        .overlay(Capsule().strokeBorder(.cardStroke, lineWidth: 1))
         .padding(.horizontal, AppSpacing.lg)
         .padding(.bottom, AppSpacing.md)
         .background(Color.surfacePrimary)
@@ -248,18 +250,20 @@ struct AICoachChatView: View {
                 CoachText(message.text)
                     .font(.dsSubhead)
                     .lineSpacing(3)
-                    .foregroundStyle(message.sender == .coach ? Color.primary : Color.white)
+                    // `onFill` on the route, never white: white on orange is 2.8:1.
+                    .foregroundStyle(message.sender == .coach ? Color.primary : Color.onFill)
 
                 if !message.metrics.isEmpty {
                     metricGrid(message.metrics)
                 }
             }
             .padding(14)
-            .background(message.sender == .coach ? Color.surfaceSecondary : Color.brand, in: bubbleShape(for: message))
-            .overlay {
+            .background {
                 if message.sender == .coach {
-                    bubbleShape(for: message)
-                        .strokeBorder(Color.secondary.opacity(0.08), lineWidth: 0.5)
+                    bubbleShape(for: message).fill(.surfaceSecondary)
+                        .overlay(bubbleShape(for: message).strokeBorder(.cardStroke, lineWidth: 1))
+                } else {
+                    bubbleShape(for: message).fill(.route)
                 }
             }
             .frame(maxWidth: 310, alignment: message.sender == .coach ? .leading : .trailing)
@@ -368,14 +372,12 @@ struct AICoachChatView: View {
 
     private func coachAvatar(size: CGFloat) -> some View {
         ZStack {
-            LinearGradient(
-                colors: [.brand, .zoneInterval],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+            // The route, like every other "go" in the app; the red second stop read as
+            // an alert.
+            LinearGradient.route
             Image(systemName: "sparkles")
                 .font(.system(size: size * 0.38, weight: .bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(.onFill)
         }
         .frame(width: size, height: size)
         .clipShape(Circle())

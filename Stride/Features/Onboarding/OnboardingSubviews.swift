@@ -377,15 +377,10 @@ struct OBShell<Content: View>: View {
                         .accessibilityLabel("Back")
                         .accessibilityIdentifier("onboarding.back.\(stepIndex)")
 
-                        // The platform's own determinate bar, which is what this was drawing
-                        // by hand: a 4pt track filled to a fraction. It needs no
-                        // `GeometryReader` to measure itself (U7), and it is hidden from
-                        // VoiceOver because the "3/8" counter beside it already says this —
-                        // the same call `ProgressRingView` makes next to its stat (U10).
-                        ProgressView(value: Double(stepIndex), total: Double(total))
-                            .progressViewStyle(.linear)
-                            .tint(.brand)
-                            .adaptiveAnimation(AppAnimation.bouncy, value: stepIndex)
+                        // The app's route bar, filled to the step. Hidden from VoiceOver
+                        // because the "3/8" counter beside it already says this — the same
+                        // call `ProgressRingView` makes next to its stat (U10).
+                        StrideProgressBar(value: Double(stepIndex) / Double(max(total, 1)), height: 4)
                             .accessibilityHidden(true)
 
                         // Steps count 1…total (the welcome screen is step 0, uncounted;
@@ -906,7 +901,7 @@ struct OBTimeWheelColumn: View {
             .frame(maxWidth: .infinity)
             .frame(height: 116)
             .clipped()
-            .background(Color.secondary.opacity(0.05), in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .background(.surfaceTertiary, in: RoundedRectangle(cornerRadius: AppRadius.md))
             .overlay(
                 RoundedRectangle(cornerRadius: AppRadius.xs)
                     .strokeBorder(Color.brand.opacity(0.32), lineWidth: 1.5)
@@ -934,7 +929,7 @@ struct OBWheelColumnStyle: ViewModifier {
                 .frame(maxWidth: .infinity)
                 .frame(height: 116)
                 .clipped()
-                .background(Color.secondary.opacity(0.05), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                .background(.surfaceTertiary, in: RoundedRectangle(cornerRadius: AppRadius.md))
                 .overlay(
                     RoundedRectangle(cornerRadius: AppRadius.xs)
                         .strokeBorder(Color.brand.opacity(0.32), lineWidth: 1.5)
@@ -1112,9 +1107,7 @@ struct OBReady: View {
 
                     // The same bar as the step chrome, full (U7). The `GeometryReader` this
                     // replaces was measuring a width only to fill all of it.
-                    ProgressView(value: 1)
-                        .progressViewStyle(.linear)
-                        .tint(.brand)
+                    StrideProgressBar(value: 1, height: 4)
                         .accessibilityHidden(true)
                     Text("\(progressTotal)/\(progressTotal)")
                         .font(.dsCaption2.weight(.bold).monospaced())

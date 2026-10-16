@@ -28,8 +28,6 @@ struct ProgressDashboardView: View {
     @State private var selectedElevationDate: Date? = nil
     @State private var selectedVO2Date: Date? = nil
 
-    @Namespace private var rangeNamespace
-    @Namespace private var tabNamespace
     @State private var progressAppeared = false
     @State private var selectedTab: ProgressTab = .stats
 
@@ -217,59 +215,20 @@ struct ProgressDashboardView: View {
     // MARK: - Range picker
 
     private var rangePicker: some View {
-        HStack(spacing: 4) {
-            ForEach(ChartRange.allCases, id: \.self) { range in
-                Button {
-                    withAnimation(AppAnimation.bouncy) { selectedRange = range }
-                } label: {
-                    Text(range.rawValue)
-                        .font(.dsSubhead.weight(.semibold).monospaced())
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 9)
-                        .background {
-                            if selectedRange == range {
-                                RoundedRectangle(cornerRadius: AppRadius.sm)
-                                    .fill(Color.brand)
-                                    .matchedGeometryEffect(id: "rangePill", in: rangeNamespace)
-                            }
-                        }
-                        .foregroundStyle(selectedRange == range ? .white : .secondary)
-                        .adaptiveAnimation(AppAnimation.bouncy, value: selectedRange)
-                }
-                .buttonStyle(BouncyButtonStyle())
-            }
-        }
-        .padding(AppSpacing.xs)
-        .strideCard(cornerRadius: AppRadius.md)
+        StrideSegmentedControl(
+            selection: $selectedRange,
+            options: ChartRange.allCases,
+            monospaced: true
+        ) { Text($0.rawValue) }
     }
 
     // MARK: - Tab picker
 
     private var tabPicker: some View {
-        HStack(spacing: 4) {
-            ForEach(ProgressTab.allCases, id: \.self) { tab in
-                Button {
-                    withAnimation(AppAnimation.bouncy) { selectedTab = tab }
-                } label: {
-                    Text(tab.rawValue)
-                        .font(.dsSubhead.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 9)
-                        .background {
-                            if selectedTab == tab {
-                                RoundedRectangle(cornerRadius: AppRadius.sm)
-                                    .fill(Color.brand)
-                                    .matchedGeometryEffect(id: "tabPill", in: tabNamespace)
-                            }
-                        }
-                        .foregroundStyle(selectedTab == tab ? .white : .secondary)
-                        .adaptiveAnimation(AppAnimation.bouncy, value: selectedTab)
-                }
-                .buttonStyle(BouncyButtonStyle())
-            }
-        }
-        .padding(AppSpacing.xs)
-        .strideCard(cornerRadius: AppRadius.md)
+        StrideSegmentedControl(
+            selection: $selectedTab,
+            options: ProgressTab.allCases
+        ) { Text($0.rawValue) }
         .padding(.horizontal, AppSpacing.lg)
         .padding(.top, AppSpacing.sm)
         .padding(.bottom, AppSpacing.xs)
@@ -303,8 +262,8 @@ struct ProgressDashboardView: View {
                             x: .value("Week", bucket.weekStart, unit: .weekOfYear),
                             y: .value(appSettings.unitPreference.distanceLabel, distanceValue(bucket.meters))
                         )
-                        .foregroundStyle(Color.brand.gradient)
-                        .cornerRadius(AppRadius.micro)
+                        .foregroundStyle(.routeBar)
+                        .cornerRadius(AppRadius.xs)
                     }
                     if let selected = selectedVolumeDate, let bucket = closestWeekBucket(to: selected) {
                         selectionRule(x: .value("Week", bucket.weekStart)) {
@@ -419,7 +378,8 @@ struct ProgressDashboardView: View {
                             x: .value("Date", workout.date),
                             y: .value("sec/km", workout.averagePaceSecondsPerKm)
                         )
-                        .foregroundStyle(Color.brand)
+                        .foregroundStyle(.route)
+                        .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
                         .interpolationMethod(.catmullRom)
                         PointMark(
                             x: .value("Date", workout.date),
@@ -615,7 +575,7 @@ struct ProgressDashboardView: View {
                             y: .value("Zone", slice.zone.shortName)
                         )
                         .foregroundStyle(slice.zone.color)
-                        .cornerRadius(AppRadius.micro)
+                        .cornerRadius(AppRadius.xs)
                     }
                     .chartYScale(domain: HRZone.allCases.reversed().map(\.shortName))
                     .chartXAxisLabel("minutes")
@@ -654,7 +614,7 @@ struct ProgressDashboardView: View {
                                       (workout.elevationGainMeters ?? 0).elevationValue(unit: appSettings.unitPreference))
                         )
                         .foregroundStyle(Color.success.gradient)
-                        .cornerRadius(AppRadius.micro)
+                        .cornerRadius(AppRadius.xs)
                     }
                     if let selected = selectedElevationDate,
                        let workout = closestWorkout(to: selected, in: withElev),
@@ -836,9 +796,10 @@ struct ProgressDashboardView: View {
         x: PlottableValue<X>,
         @ViewBuilder label: () -> Label
     ) -> some ChartContent {
+        // The selected point is "you are here" on the chart, so the rule is the brand's.
         RuleMark(x: x)
-            .foregroundStyle(Color.secondary.opacity(0.4))
-            .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
+            .foregroundStyle(Color.brand.opacity(0.55))
+            .lineStyle(StrokeStyle(lineWidth: 1.5, lineCap: .round, dash: [4, 4]))
             .annotation(
                 position: .top,
                 overflowResolution: .init(x: .fit(to: .chart), y: .disabled),
@@ -849,7 +810,8 @@ struct ProgressDashboardView: View {
     private func tooltipContainer<C: View>(@ViewBuilder content: () -> C) -> some View {
         content()
             .padding(.horizontal, AppSpacing.sm).padding(.vertical, 5)
-            .background(Color.surfacePrimary, in: RoundedRectangle(cornerRadius: AppRadius.xs))
+            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.sm, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.sm, style: .continuous).strokeBorder(.cardStroke, lineWidth: 1))
             .appShadow(.e2)
     }
 

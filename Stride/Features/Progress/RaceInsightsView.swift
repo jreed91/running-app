@@ -268,7 +268,8 @@ struct RaceInsightsView: View {
                             x: .value("Date", point.date),
                             y: .value("Predicted Pace", point.predictedPaceSecondsPerKm)
                         )
-                        .foregroundStyle(Color.brand)
+                        .foregroundStyle(.route)
+                        .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
                         .interpolationMethod(.catmullRom)
                         PointMark(
                             x: .value("Date", point.date),
@@ -524,9 +525,10 @@ struct RaceInsightsView: View {
         x: PlottableValue<X>,
         @ViewBuilder label: () -> Label
     ) -> some ChartContent {
+        // The selected point is "you are here" on the chart, so the rule is the brand's.
         RuleMark(x: x)
-            .foregroundStyle(Color.secondary.opacity(0.4))
-            .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
+            .foregroundStyle(Color.brand.opacity(0.55))
+            .lineStyle(StrokeStyle(lineWidth: 1.5, lineCap: .round, dash: [4, 4]))
             .annotation(
                 position: .top,
                 overflowResolution: .init(x: .fit(to: .chart), y: .disabled),
@@ -537,7 +539,8 @@ struct RaceInsightsView: View {
     private func tooltipContainer<C: View>(@ViewBuilder content: () -> C) -> some View {
         content()
             .padding(.horizontal, AppSpacing.sm).padding(.vertical, 5)
-            .background(Color.surfacePrimary, in: RoundedRectangle(cornerRadius: AppRadius.xs))
+            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.sm, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.sm, style: .continuous).strokeBorder(.cardStroke, lineWidth: 1))
             .appShadow(.e2)
     }
 }

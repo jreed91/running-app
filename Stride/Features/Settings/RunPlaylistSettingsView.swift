@@ -64,11 +64,8 @@ struct RunPlaylistSettingsView: View {
                         }
                     } label: {
                         Text("Allow Apple Music")
-                            .font(.dsFootnote.weight(.semibold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, AppSpacing.sm)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.strideButton(compact: true))
                 }
             }
             .padding()

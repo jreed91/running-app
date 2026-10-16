@@ -336,7 +336,7 @@ struct NewPlanOnboardingView: View {
                     .foregroundStyle(.secondary)
             }
             .padding(14)
-            .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .background(.surfaceTertiary, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
     }
 
@@ -413,7 +413,7 @@ struct NewPlanOnboardingView: View {
                     .foregroundStyle(.secondary)
             }
             .padding(14)
-            .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .background(.surfaceTertiary, in: RoundedRectangle(cornerRadius: AppRadius.md))
         }
     }
 

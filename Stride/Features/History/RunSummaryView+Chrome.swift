@@ -65,7 +65,7 @@ extension RunSummaryView {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.xs))
+        .background(.surfaceTertiary, in: RoundedRectangle(cornerRadius: AppRadius.xs))
     }
 
     func aiTone(_ raw: String) -> Color {

@@ -38,13 +38,20 @@ struct DayToggleButton: View {
                 .font(.system(.caption, design: .rounded, weight: .bold))
                 .frame(maxWidth: .infinity)
                 .frame(height: 52)
-                .foregroundStyle(isOn ? .white : .primary)
-                .background(
-                    isOn ? Color.brand : Color(.systemFill),
-                    in: RoundedRectangle(cornerRadius: AppRadius.md)
-                )
+                // On is the route with `onFill` (white on orange is 2.8:1); off is a card.
+                .foregroundStyle(isOn ? Color.onFill : Color.primary)
+                .background {
+                    let shape = RoundedRectangle(cornerRadius: AppRadius.md, style: .continuous)
+                    if isOn {
+                        shape.fill(.route)
+                    } else {
+                        shape.fill(.surfaceSecondary)
+                            .overlay(shape.strokeBorder(.cardStroke, lineWidth: 1))
+                    }
+                }
                 .appGlow(.subtle, color: .brand, isActive: isOn)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(BouncyButtonStyle())
+        .accessibilityAddTraits(isOn ? .isSelected : [])
     }
 }

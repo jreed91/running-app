@@ -126,6 +126,16 @@ extension ShapeStyle where Self == LinearGradient {
         )
     }
 
+    /// The route standing up: amber at the foot of a bar, orange at its top. For chart
+    /// bars, where a diagonal would shade each bar differently by its position.
+    static var routeBar: LinearGradient {
+        LinearGradient(
+            colors: [Color("BrandGlow"), Color("Brand")],
+            startPoint: .bottom,
+            endPoint: .top
+        )
+    }
+
     /// A hero card's ground: `heroTop` to `heroBottom`. Warm paper in light, raised ink
     /// in dark — never a dark card on a light page.
     static var heroGround: LinearGradient {

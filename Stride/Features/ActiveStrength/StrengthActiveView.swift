@@ -273,12 +273,8 @@ struct StrengthActiveView: View {
                 logSet(exercise: exercise)
             } label: {
                 Text(exercise.durationSeconds != nil ? "Done — Next Set" : "Log Set")
-                    .font(.dsCallout.weight(.bold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
             }
-            .foregroundStyle(.onFill)
-            .background(Color.brand, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .buttonStyle(.strideButton())
 
             Button {
                 skipSet()
