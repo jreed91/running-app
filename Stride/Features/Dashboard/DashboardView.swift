@@ -659,7 +659,7 @@ struct DashboardView: View {
             weeklyLoadChart
         }
         .padding(AppSpacing.lg)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .strideCard(cornerRadius: AppRadius.lg)
         .appShadow(.e1)
     }
 

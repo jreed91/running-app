@@ -81,7 +81,7 @@ extension RunSummaryView {
                 Text(splitFootnote(metric)).font(.caption).foregroundStyle(.secondary)
             }
             .padding(AppSpacing.lg)
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .strideCard(cornerRadius: AppRadius.md)
         }
     }
 
@@ -456,7 +456,7 @@ extension RunSummaryView {
             }
         }
         .padding(AppSpacing.lg)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .strideCard(cornerRadius: AppRadius.md)
     }
 
     @ViewBuilder

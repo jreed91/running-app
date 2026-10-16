@@ -252,7 +252,7 @@ struct RaceInsightsView: View {
             }
         }
         .padding(AppSpacing.lg)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .strideCard(cornerRadius: AppRadius.md)
     }
 
     // MARK: - Card 2: Predicted Race Pace Chart
@@ -486,7 +486,7 @@ struct RaceInsightsView: View {
             }
         }
         .padding(AppSpacing.lg)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .strideCard(cornerRadius: AppRadius.md)
     }
 
     // MARK: - Shared helpers (mirrors ProgressDashboardView pattern)
@@ -499,7 +499,7 @@ struct RaceInsightsView: View {
             content()
         }
         .padding(AppSpacing.lg)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .strideCard(cornerRadius: AppRadius.md)
     }
 
     private func emptyDataPlaceholder(_ message: String) -> some View {

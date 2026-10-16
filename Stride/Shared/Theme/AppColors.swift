@@ -9,13 +9,18 @@ extension Color {
     /// through `LinearGradient.route`; on its own it is a highlight, never text on a
     /// light surface (1.9:1 on white).
     static let brandGlow = Color("BrandGlow")
+    /// Orange for *text and small glyphs*: eyebrows, links, inline figures. `brand` is
+    /// 3.1:1 on white, too light for text under 24pt; this is `#C2410C` in light (4.7:1
+    /// on the page, 4.5:1 on a hero) and the brand orange itself in dark (7:1).
+    static let brandText = Color("BrandText")
     /// A data colour for a second chart series (VO₂ max). Not part of the brand.
     static let brandSecondary = Color("BrandSecondary")
 
     // MARK: Ink — the night-map ground of the Route Loop identity
 
-    /// The always-dark navy of the app icon. Hero cards, the share card and onboarding
-    /// sit on it in both appearances, so their text uses `onInk` / `onInkMuted`.
+    /// The always-dark navy of the app icon: the app mark, the share card and the dark
+    /// appearance's ground. In-app heroes use `heroGround`, which follows the appearance,
+    /// so a light page never carries a dark card.
     static let ink = Color("Ink")
     /// The icon's darkest stop: the bottom of an ink gradient.
     static let inkDeep = Color("InkDeep")
@@ -26,6 +31,17 @@ extension Color {
     /// The faint map-grid line drawn by `MapGridPattern` on page surfaces. On `ink`
     /// use `MapGridPattern(onInk: true)`, which draws in white.
     static let mapGrid = Color("MapGrid")
+
+    // MARK: Hero and card chrome — one ground per appearance
+
+    /// The top of a hero card: a warm dawn tint in light, raised ink in dark. Paired with
+    /// `heroBottom` by `LinearGradient.heroGround`; see `.heroCard()`.
+    static let heroTop = Color("HeroTop")
+    /// The bottom of a hero card: the card colour itself, so a hero reads as a card that
+    /// catches the light rather than a different object on the page.
+    static let heroBottom = Color("HeroBottom")
+    /// The hairline around cards and heroes: ink 8% in light, white 8% in dark.
+    static let cardStroke = Color("CardStroke")
 
     // MARK: Pace Zones
 
@@ -68,6 +84,10 @@ extension Color {
 extension ShapeStyle where Self == Color {
     static var brand: Color { Color("Brand") }
     static var brandGlow: Color { Color("BrandGlow") }
+    static var brandText: Color { Color("BrandText") }
+    static var heroTop: Color { Color("HeroTop") }
+    static var heroBottom: Color { Color("HeroBottom") }
+    static var cardStroke: Color { Color("CardStroke") }
     static var brandSecondary: Color { Color("BrandSecondary") }
     static var ink: Color { Color("Ink") }
     static var inkDeep: Color { Color("InkDeep") }
@@ -103,6 +123,16 @@ extension ShapeStyle where Self == LinearGradient {
             colors: [Color("BrandGlow"), Color("Brand")],
             startPoint: .bottomLeading,
             endPoint: .topTrailing
+        )
+    }
+
+    /// A hero card's ground: `heroTop` to `heroBottom`. Warm paper in light, raised ink
+    /// in dark — never a dark card on a light page.
+    static var heroGround: LinearGradient {
+        LinearGradient(
+            colors: [Color("HeroTop"), Color("HeroBottom")],
+            startPoint: .topTrailing,
+            endPoint: .bottomLeading
         )
     }
 

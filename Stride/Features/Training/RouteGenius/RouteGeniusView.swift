@@ -70,7 +70,7 @@ struct RouteGeniusView: View {
             startPointPicker
         }
         .padding()
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .strideCard(cornerRadius: AppRadius.md)
     }
 
     private var distanceField: some View {
@@ -251,7 +251,7 @@ struct RouteGeniusView: View {
         }
         .frame(maxWidth: .infinity)
         .padding()
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .strideCard(cornerRadius: AppRadius.md)
     }
 
     // MARK: Error card
@@ -498,7 +498,7 @@ private struct TurnByTurnList: View {
                     }
                 }
             }
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .strideCard(cornerRadius: AppRadius.md)
         }
     }
 }

@@ -270,7 +270,7 @@ struct WorkoutDetailView: View {
                 }
             }
         }
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.sm))
+        .strideCard(cornerRadius: AppRadius.sm)
         .overlay(
             RoundedRectangle(cornerRadius: AppRadius.sm)
                 .strokeBorder(workout.workoutType.color.opacity(0.15), lineWidth: 0.5)
@@ -306,7 +306,7 @@ struct WorkoutDetailView: View {
                     }
                 }
                 .padding()
-                .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                .strideCard(cornerRadius: AppRadius.sm)
             }
         }
     }
@@ -324,7 +324,7 @@ struct WorkoutDetailView: View {
             Text(notes)
                 .font(.bodyRegular)
                 .padding()
-                .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                .strideCard(cornerRadius: AppRadius.md)
         }
     }
 
@@ -393,7 +393,7 @@ struct ExerciseRow: View {
             }
         }
         .padding(AppSpacing.md)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .strideCard(cornerRadius: AppRadius.md)
     }
 
     private var repsLabel: String {
@@ -619,7 +619,7 @@ private struct WorkoutSetRow: View {
             Spacer()
         }
         .padding()
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .strideCard(cornerRadius: AppRadius.md)
     }
 
     @ViewBuilder

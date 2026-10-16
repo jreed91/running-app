@@ -135,7 +135,7 @@ struct SettingsView: View {
             Spacer()
         }
         .padding(18)
-        .inkHero()
+        .heroCard()
     }
 
     // MARK: - Account card
@@ -253,7 +253,7 @@ struct SettingsView: View {
                 } label: {
                     HStack {
                         Text("Reset to age estimate (\(UserProfile.estimatedMaxHeartRate(forAge: profile.age ?? UserProfile.assumedAge)) bpm)")
-                            .font(.caption).foregroundStyle(.brand)
+                            .font(.caption).foregroundStyle(.brandText)
                         Spacer()
                     }
                     .padding(.horizontal, AppSpacing.lg).padding(.vertical, AppSpacing.md)
@@ -852,7 +852,7 @@ struct SettingsView: View {
             VStack(spacing: 0) {
                 content()
             }
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .strideCard(cornerRadius: AppRadius.md)
         }
     }
 

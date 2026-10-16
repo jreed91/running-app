@@ -26,8 +26,8 @@ struct NextUpCardView: View {
             }
         }
         .padding(18)
-        // The screen's hero: the night map of the Route Loop identity.
-        .inkHero()
+        // The screen's hero: daylight paper in light, raised ink in dark.
+        .heroCard()
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityDescription)
         .accessibilityHint("Opens the workout's details")

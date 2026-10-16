@@ -476,7 +476,7 @@ struct OnboardingView: View {
                 .accessibilityIdentifier("onboarding.units")
         }
         .padding(AppSpacing.lg)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .strideCard(cornerRadius: AppRadius.md)
     }
 
     // MARK: - Time content
@@ -496,7 +496,7 @@ struct OnboardingView: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 18)
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+            .strideCard(cornerRadius: AppRadius.lg)
 
             HStack(spacing: 14) {
                 ZStack {
@@ -505,7 +505,7 @@ struct OnboardingView: View {
                         .frame(width: 44, height: 44)
                     Text(String(format: "%.0f", vdotValue))
                         .font(.dsSubhead.weight(.bold).monospaced())
-                        .foregroundStyle(.brand)
+                        .foregroundStyle(.brandText)
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text("VDOT \(String(format: "%.0f", vdotValue)) · \(vdotLabel)")
@@ -560,7 +560,7 @@ struct OnboardingView: View {
         }
         .padding(.horizontal, AppSpacing.lg)
         .padding(.vertical, 14)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .strideCard(cornerRadius: AppRadius.md)
     }
 
     // MARK: - Schedule content
@@ -603,7 +603,7 @@ struct OnboardingView: View {
                 }
             }
             .padding(14)
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+            .strideCard(cornerRadius: AppRadius.lg)
 
             VStack(alignment: .leading, spacing: 10) {
                 Text("Long run day")
@@ -639,12 +639,12 @@ struct OnboardingView: View {
                     Spacer()
                     Text("\(selectedDays.count)")
                         .font(.dsTitle3.weight(.bold).monospaced())
-                        .foregroundStyle(.brand)
+                        .foregroundStyle(.brandText)
                 }
                 .padding(.top, AppSpacing.xs)
             }
             .padding(AppSpacing.lg)
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .strideCard(cornerRadius: AppRadius.md)
         }
     }
 

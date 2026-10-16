@@ -23,7 +23,7 @@ extension RunSummaryView {
                 Text("COACHING READ")
                     .font(.dsCaption2.weight(.bold))
                     .kerning(1.4)
-                    .foregroundStyle(.brand)
+                    .foregroundStyle(.brandText)
                 Spacer()
                 ProgressView().controlSize(.small)
             }
@@ -33,7 +33,7 @@ extension RunSummaryView {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .strideCard(cornerRadius: AppRadius.md)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Coach analysis, still writing")
     }
@@ -52,7 +52,7 @@ extension RunSummaryView {
                 AIInsightSkeletonShape().frame(maxWidth: 260, minHeight: 14, maxHeight: 14)
             }
             .padding()
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .strideCard(cornerRadius: AppRadius.md)
 
             // Action Plan skeleton
             VStack(alignment: .leading, spacing: 8) {
@@ -77,7 +77,7 @@ extension RunSummaryView {
                 AIInsightSkeletonShape().frame(maxWidth: 200, minHeight: 11, maxHeight: 11)
             }
             .padding()
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .strideCard(cornerRadius: AppRadius.md)
         }
     }
 

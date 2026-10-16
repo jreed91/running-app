@@ -37,6 +37,7 @@ struct StrideApp: App {
         _container = State(initialValue: appContainer)
         _appSettings = State(initialValue: AppSettings())
         _authService = State(initialValue: AuthService())
+        AppChrome.apply()
     }
 
     var body: some Scene {
