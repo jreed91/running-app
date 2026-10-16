@@ -35,7 +35,7 @@ struct PlanTabView: View {
                 if let plan = activePlan {
                     ScrollView {
                         VStack(spacing: 20) {
-                            PlanOverviewCard(plan: plan)
+                            PlanOverviewCard(plan: plan, isHero: raceDayPlan(for: plan) == nil)
 
                             // The plan is built toward a race date and, until now, never
                             // said anything else about it. This is the whole season's
@@ -110,6 +110,10 @@ struct PlanTabView: View {
                     )
                 }
             }
+            // The page's own ground, as on Home and Progress. Without it the tab drew the
+            // system background, so its white cards sat on white (and ink cards on black).
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.surfacePrimary)
             .navigationTitle("My Plan")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
@@ -375,14 +379,7 @@ private struct SmartAdaptPlanCard: View {
                     StrideIcon(name: .chevronRight, size: 12, color: .brand, strokeWeight: 2.4)
                 }
                 .padding(AppSpacing.lg)
-                .background(
-                    RoundedRectangle(cornerRadius: AppRadius.lg)
-                        .fill(Color.brand.opacity(0.08))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: AppRadius.lg)
-                                .strokeBorder(Color.brand.opacity(0.2), lineWidth: 0.5)
-                        )
-                )
+                .strideCard()
             }
             .buttonStyle(.plain)
             .disabled(!isEnabled)
@@ -476,17 +473,12 @@ private struct RouteGeniusCard: View {
         Button(action: action) {
             HStack(spacing: 14) {
                 ZStack {
+                    // The route, like every "go" in the app; the old red end read as an alert.
                     RoundedRectangle(cornerRadius: AppRadius.md)
-                        .fill(
-                            LinearGradient(
-                                colors: [.brand, .destructive],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                        .fill(.route)
                         .frame(width: 48, height: 48)
                         .appGlow(.standard, color: .brand)
-                    StrideIcon(name: .bolt, size: 22, color: .white, strokeWeight: 2.2)
+                    StrideIcon(name: .bolt, size: 22, color: .onFill, strokeWeight: 2.2)
                 }
 
                 VStack(alignment: .leading, spacing: 3) {
@@ -504,20 +496,7 @@ private struct RouteGeniusCard: View {
                 StrideIcon(name: .chevronRight, size: 12, color: .brand, strokeWeight: 2.4)
             }
             .padding(AppSpacing.lg)
-            .background(
-                RoundedRectangle(cornerRadius: AppRadius.lg)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.brand.opacity(0.10), Color.destructive.opacity(0.04)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: AppRadius.lg)
-                            .strokeBorder(Color.brand.opacity(0.2), lineWidth: 0.5)
-                    )
-            )
+            .strideCard()
         }
         .buttonStyle(.plain)
     }
@@ -527,6 +506,9 @@ private struct RouteGeniusCard: View {
 
 private struct PlanOverviewCard: View {
     let plan: TrainingPlan
+    /// The overview is Plan's hero when there is no race countdown to be it: one hero per
+    /// screen, and a plan without a race date still has a card that matters most.
+    var isHero = false
     @Environment(AppSettings.self) private var appSettings
 
     private var weeksCompleted: Int {
@@ -624,7 +606,7 @@ private struct PlanOverviewCard: View {
             }
         }
         .padding()
-        .strideCard(cornerRadius: AppRadius.md)
+        .strideSurface(isHero: isHero)
     }
 }
 
@@ -690,11 +672,11 @@ private struct PhaseProgressBar: View {
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     Capsule()
-                        .fill(Color.secondary.opacity(0.16))
+                        .fill(.surfaceTertiary)
                         .frame(height: 10)
 
                     Capsule()
-                        .fill(Color.brand)
+                        .fill(.route)
                         .frame(
                             width: max(geo.size.width * CGFloat(plan.progress), plan.progress > 0 ? 6 : 0),
                             height: 10

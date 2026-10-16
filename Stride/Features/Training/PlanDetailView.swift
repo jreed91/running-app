@@ -36,6 +36,7 @@ struct PlanDetailView: View {
             .padding()
             .frame(maxWidth: .infinity)
         }
+        .background(Color.surfacePrimary)
         .navigationTitle("\(planTitle) Plan")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

@@ -27,6 +27,7 @@ struct StrengthSummaryView: View {
             }
             .padding(AppSpacing.lg)
         }
+        .background(Color.surfacePrimary)
         .navigationTitle("Strength Workout")
         .navigationBarTitleDisplayMode(.inline)
     }

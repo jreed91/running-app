@@ -192,13 +192,15 @@ struct ProgressDashboardView: View {
             )
         }
         .padding(AppSpacing.lg)
-        .strideCard(cornerRadius: AppRadius.md)
+        // The period's totals are what matters most on Progress, so they are its hero,
+        // as today's session is on Home and the race is on Plan.
+        .heroCard()
     }
 
     private func summaryStatCell(value: String, label: String) -> some View {
         VStack(spacing: 2) {
             Text(value)
-                .font(.dsTitle2.monospaced())
+                .font(.dsTitle2.monospacedDigit())
                 .foregroundStyle(.primary)
                 .minimumScaleFactor(0.7)
                 .lineLimit(1)

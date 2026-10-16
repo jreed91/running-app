@@ -269,6 +269,17 @@ extension View {
         listRowBackground(Color.surfaceSecondary)
     }
 
+    /// `.heroCard()` when this card is the screen's one hero, `.strideCard()` otherwise, for
+    /// a card that is the hero only on some screens or in some states.
+    @ViewBuilder
+    func strideSurface(isHero: Bool, cornerRadius: CGFloat = AppRadius.lg) -> some View {
+        if isHero {
+            heroCard(cornerRadius: cornerRadius)
+        } else {
+            strideCard(cornerRadius: cornerRadius)
+        }
+    }
+
     /// A sheet on the page's ground, with the larger sheet radius. The system sheet is
     /// otherwise grey glass in light and black in dark.
     func strideSheet() -> some View {
