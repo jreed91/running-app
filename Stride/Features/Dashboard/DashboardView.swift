@@ -157,7 +157,7 @@ private struct DayCell: View {
 
             ZStack {
                 Circle()
-                    .fill(circleBackground)
+                    .fill(circleFill)
                     .frame(width: 32, height: 32)
                     .adaptiveAnimation(AppAnimation.snappy, value: isSelected)
                 Text(date.formatted(.dateTime.day()))
@@ -227,15 +227,18 @@ private struct DayCell: View {
         return "\(day), \(list)"
     }
 
-    private var circleBackground: Color {
-        if isToday { return .brand }
-        if isSelected { return Color.brand.opacity(0.12) }
-        return .clear
+    /// Today is the route gradient — "you are here" in the Route Loop language — with
+    /// `onFill` digits (6:1). White on orange was 3.1:1.
+    private var circleFill: AnyShapeStyle {
+        if isToday { return AnyShapeStyle(.route) }
+        if isSelected { return AnyShapeStyle(Color.brand.opacity(0.12)) }
+        return AnyShapeStyle(Color.clear)
     }
 
     private var numberForeground: Color {
-        if isToday { return .white }
-        if isSelected { return .brand }
+        // The selected day's tint carries the state; orange digits on it would be
+        // about 2.8:1, so the number stays `.primary` (bold) like any other day.
+        if isToday { return .onFill }
         return .primary
     }
 
@@ -647,7 +650,7 @@ struct DashboardView: View {
                     // it is redundant to VoiceOver rather than missing from it — say so
                     // explicitly instead of leaving an unlabelled element (U10). It also
                     // used to recompute `pct` under a second name.
-                    ProgressRingView(progress: pct, size: 44, lineWidth: 5, color: .brand)
+                    ProgressRingView(progress: pct, size: 44, lineWidth: 5)
                         .accessibilityHidden(true)
                 }
             }
@@ -867,7 +870,7 @@ struct DashboardView: View {
             // Inside the label so the press bounce scales the pill, not just its text.
             .background(
                 RoundedRectangle(cornerRadius: AppRadius.lg)
-                    .fill(Color.brand)
+                    .fill(.route)
                     .appGlow(.strong, color: .brand)
             )
         }
@@ -1046,7 +1049,7 @@ struct DashboardView: View {
             // while the text shrank inside a stationary pill.
             .background(
                 RoundedRectangle(cornerRadius: AppRadius.lg)
-                    .fill(Color.brand)
+                    .fill(.route)
                     .appGlow(.strong, color: .brand)
             )
         }
@@ -1288,19 +1291,19 @@ struct DashboardView: View {
 
 // MARK: - ProgressRingView
 
+/// The week's progress drawn as a route: the Route Loop gradient on a faint track.
 private struct ProgressRingView: View {
     let progress: Double
     let size: CGFloat
     let lineWidth: CGFloat
-    let color: Color
 
     var body: some View {
         ZStack {
             Circle()
-                .stroke(color.opacity(0.15), lineWidth: lineWidth)
+                .stroke(Color.brand.opacity(0.15), lineWidth: lineWidth)
             Circle()
                 .trim(from: 0, to: progress)
-                .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                .stroke(.route, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                 .rotationEffect(.degrees(-90))
                 .adaptiveAnimation(AppAnimation.gentle, value: progress)
         }

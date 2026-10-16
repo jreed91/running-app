@@ -407,7 +407,7 @@ struct OBPregnancyReady: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, AppSpacing.lg)
-                .background(Color.brand, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                .background(.route, in: RoundedRectangle(cornerRadius: AppRadius.lg))
                 .appGlow(.strong, color: .brand)
                 .overlay(
                     RoundedRectangle(cornerRadius: AppRadius.lg)

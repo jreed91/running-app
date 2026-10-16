@@ -752,6 +752,8 @@ Strict concurrency is enabled. Key patterns:
   must not move with the device language.
 - Do not introduce new third-party packages without an explicit reason and a `project.yml` update.
 - For frontend/UI work, match the existing theme primitives in `Stride/Shared/Theme/` and reusable components in `Stride/Shared/Components/`.
+  The visual identity is Route Loop (route gradient, start pin, night-map ink); its rules
+  and tokens are in [`design/route-loop/README.md`](design/route-loop/README.md).
 
 ## Analysis Docs
 

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  The app's privacy manifest. App Store Connect rejects an upload that calls a
+  "required reason" API without declaring why (ITMS-91053).
+
+  The only required-reason API the app calls is UserDefaults (settings, notification
+  and nudge state, heat-advisory dismissals, playlist links), all read and written by
+  the app itself: CA92.1. No UserDefaults suite is shared through the App Group — the
+  widgets and the watch read a file there instead (see WidgetSnapshot.swift) — so
+  1C8F.1 does not apply, and neither extension target needs a manifest of its own.
+
+  Nothing is collected in the App Store sense: workouts sync through the runner's own
+  private CloudKit database, which the developer cannot read, and there is no analytics,
+  advertising or tracking SDK. Add a declaration here if that ever changes, and keep it
+  in step with the App Privacy answers in App Store Connect.
+-->
+<plist version="1.0">
+<dict>
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array/>
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>CA92.1</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

@@ -307,7 +307,7 @@ struct StrengthActiveView: View {
                     .frame(width: 100, height: 100)
                 Circle()
                     .trim(from: 0, to: restProgress)
-                    .stroke(Color.brand, style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                    .stroke(.route, style: StrokeStyle(lineWidth: 6, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                     .frame(width: 100, height: 100)
                     .animation(.linear(duration: 1), value: restTimeRemaining)
@@ -427,7 +427,7 @@ struct StrengthActiveView: View {
                 .padding(.vertical, AppSpacing.lg)
         }
         .foregroundStyle(.onFill)
-        .background(Color.brand, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .background(.route, in: RoundedRectangle(cornerRadius: AppRadius.lg))
         .padding(.horizontal, AppSpacing.lg)
         .padding(.bottom, AppSpacing.xl)
         .padding(.top, AppSpacing.sm)

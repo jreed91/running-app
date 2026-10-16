@@ -22,8 +22,6 @@ struct RunShareCardView: View {
     static let routePanelSize = CGSize(width: size.width - 40, height: 150)
 
     private let accent = Color.brand
-    private let backgroundTop = Color(red: 0.07, green: 0.08, blue: 0.10)
-    private let backgroundBottom = Color(red: 0.11, green: 0.12, blue: 0.15)
     private let primaryText = Color.white
     private let secondaryText = Color.white.opacity(0.55)
 
@@ -48,9 +46,13 @@ struct RunShareCardView: View {
         }
         .padding(AppSpacing.xl)
         .frame(width: Self.size.width, height: Self.size.height)
-        .background(
-            LinearGradient(colors: [backgroundTop, backgroundBottom], startPoint: .top, endPoint: .bottom)
-        )
+        // The night map of the Route Loop icon, so a shared run is recognisably Stride's.
+        .background {
+            ZStack {
+                Rectangle().fill(.inkGround)
+                MapGridPattern(pitch: 30, onInk: true)
+            }
+        }
         .environment(\.colorScheme, .dark)
     }
 
@@ -58,9 +60,7 @@ struct RunShareCardView: View {
 
     private var wordmark: some View {
         HStack(spacing: 6) {
-            Image(systemName: "figure.run")
-                .font(.system(size: 16, weight: .bold))
-                .foregroundStyle(accent)
+            StrideAppMark(size: 22)
             Text("STRIDE")
                 .font(.system(size: 18, weight: .heavy, design: .rounded))
                 .tracking(3)
@@ -81,7 +81,7 @@ struct RunShareCardView: View {
                 // Snapshot unavailable (offline): fall back to the self-drawn polyline.
                 RoutePolylineShape(points: model.routePoints)
                     .stroke(
-                        accent,
+                        .route,
                         style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round)
                     )
                     .padding(18)

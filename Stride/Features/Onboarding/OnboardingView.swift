@@ -687,7 +687,7 @@ struct OnboardingView: View {
                     .opacity(permRowsVisible[0] ? 1 : 0)
                     .offset(y: permRowsVisible[0] ? 0 : 14)
 
-                OBPermissionRow(icon: .heart, label: "HealthKit",
+                OBPermissionRow(icon: .heart, label: "Apple Health",
                                 desc: "Heart rate, VO2 max, workouts.",
                                 tint: .destructive, isOn: healthEnabled,
                                 isActive: activePermission == 1)

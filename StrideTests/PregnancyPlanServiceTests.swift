@@ -340,7 +340,7 @@ struct PregnancyPlanServiceTests {
 
     @Test("Supine exercises disappear from 16 weeks")
     func noSupineWorkAfterSixteenWeeks() throws {
-        let profile = makeProfile(equipment: [.bodyweight, .barbell, .resistanceBands], dueDateWeeksFromStart: 34)
+        let profile = makeProfile(dueDateWeeksFromStart: 34, equipment: [.bodyweight, .barbell, .resistanceBands])
         profile.dueDate = start.adding(weeks: 34)
         let plan = try service.generatePlan(profile: profile, startDate: start)
 

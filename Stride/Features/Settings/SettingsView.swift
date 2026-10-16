@@ -111,10 +111,7 @@ struct SettingsView: View {
         HStack(spacing: 16) {
             ZStack {
                 Circle()
-                    .fill(LinearGradient(
-                        colors: [Color.brand, Color(red: 0.878, green: 0.263, blue: 0.102)],
-                        startPoint: .topLeading, endPoint: .bottomTrailing
-                    ))
+                    .fill(.route)
                     .frame(width: avatarSize, height: avatarSize)
                 if profile.name.isEmpty {
                     StrideIcon(name: .run, size: avatarSize * 0.47, color: .onFill, strokeWeight: 2.2)
@@ -138,17 +135,7 @@ struct SettingsView: View {
             Spacer()
         }
         .padding(18)
-        .background(
-            LinearGradient(
-                colors: [Color.brand.opacity(0.1), Color.brand.opacity(0.03)],
-                startPoint: .topLeading, endPoint: .bottomTrailing
-            ),
-            in: RoundedRectangle(cornerRadius: AppRadius.lg)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: AppRadius.lg)
-                .strokeBorder(Color.brand.opacity(0.15), lineWidth: 0.5)
-        )
+        .inkHero()
     }
 
     // MARK: - Account card

@@ -2,9 +2,10 @@ import SwiftUI
 
 // MARK: - Type Scale
 //
-// Mirrors the Stride design system tokens (running-app/project/tokens.jsx).
-// Metrics use `.monospaced` (tabular figures) so digits don't jitter during an
-// active run. UI copy uses SF Pro Text / SF Pro Display.
+// The Route Loop design system (design/route-loop/README.md). Display titles and
+// metrics are SF Pro Rounded — the round caps of the icon's route line — and metrics
+// keep tabular figures (`.monospacedDigit()`) so digits don't jitter during an active
+// run. Body copy stays SF Pro Text for reading.
 //
 // Two rules keep this file honest:
 //
@@ -24,13 +25,13 @@ extension Font {
     // MARK: Metrics (tabular mono, deliberately non-scaling)
 
     /// 96pt — full-bleed Active Run HUD hero.
-    static let metricXL     = Font.system(size: 96, weight: .semibold, design: .monospaced)
+    static let metricXL     = Font.system(size: 96, weight: .semibold, design: .rounded).monospacedDigit()
     /// 64pt — secondary hero (distance, split).
-    static let metricL      = Font.system(size: 64, weight: .semibold, design: .monospaced)
+    static let metricL      = Font.system(size: 64, weight: .semibold, design: .rounded).monospacedDigit()
     /// 40pt — card headline metric.
-    static let metricM      = Font.system(size: 40, weight: .semibold, design: .monospaced)
+    static let metricM      = Font.system(size: 40, weight: .semibold, design: .rounded).monospacedDigit()
     /// 24pt — inline metric row (HR, cadence).
-    static let metricS      = Font.system(size: 24, weight: .semibold, design: .monospaced)
+    static let metricS      = Font.system(size: 24, weight: .semibold, design: .rounded).monospacedDigit()
     /// 11pt bold — the caption under a HUD metric.
     ///
     /// Fixed like the rest of the `metric` scale (rule 2), but pinned to Apple's
@@ -41,9 +42,9 @@ extension Font {
     // MARK: Legacy metric aliases (kept for existing call sites)
 
     /// 120pt bold — Active Run HUD current-pace display, per design spec.
-    static let metricHero   = Font.system(size: 120, weight: .bold, design: .monospaced)
-    static let metricLarge  = Font.system(size: 56, weight: .bold,     design: .monospaced)
-    static let metricMedium = Font.system(size: 36, weight: .bold,     design: .monospaced)
+    static let metricHero   = Font.system(size: 120, weight: .bold, design: .rounded).monospacedDigit()
+    static let metricLarge  = Font.system(size: 56, weight: .bold, design: .rounded).monospacedDigit()
+    static let metricMedium = Font.system(size: 36, weight: .bold, design: .rounded).monospacedDigit()
     static let metricSmall  = Font.metricS
 
     // MARK: UI (SF Pro) — design-system scale
@@ -54,13 +55,13 @@ extension Font {
     // (Font.body, Font.largeTitle, Font.headline, …) — see rule 1 above.
 
     /// 34pt bold at default size.
-    static let dsLargeTitle = Font.system(.largeTitle, weight: .bold)
+    static let dsLargeTitle = Font.system(.largeTitle, design: .rounded, weight: .bold)
     /// 28pt bold at default size.
-    static let dsTitle1     = Font.system(.title, weight: .bold)
+    static let dsTitle1     = Font.system(.title, design: .rounded, weight: .bold)
     /// 22pt bold at default size.
-    static let dsTitle2     = Font.system(.title2, weight: .bold)
+    static let dsTitle2     = Font.system(.title2, design: .rounded, weight: .bold)
     /// 20pt semibold at default size.
-    static let dsTitle3     = Font.system(.title3, weight: .semibold)
+    static let dsTitle3     = Font.system(.title3, design: .rounded, weight: .semibold)
     /// 17pt semibold at default size.
     static let dsHeadline   = Font.system(.headline, weight: .semibold)
     /// 17pt regular at default size.
