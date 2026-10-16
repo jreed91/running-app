@@ -26,7 +26,8 @@ struct NextUpCardView: View {
             }
         }
         .padding(18)
-        .background(cardBackground)
+        // The screen's hero: the night map of the Route Loop identity.
+        .inkHero()
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityDescription)
         .accessibilityHint("Opens the workout's details")
@@ -120,20 +121,6 @@ struct NextUpCardView: View {
 
     private var tint: Color { workoutType.color }
 
-    private var cardBackground: some View {
-        RoundedRectangle(cornerRadius: AppRadius.lg)
-            .fill(
-                LinearGradient(
-                    colors: [tint.opacity(0.12), tint.opacity(0.04)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: AppRadius.lg)
-                    .strokeBorder(tint.opacity(0.2), lineWidth: 0.5)
-            )
-    }
 
     /// Spoken as one sentence. Combining the children alone reads the metric values and
     /// their labels as separate fragments in visual order — "8.0 km", "Distance" — which

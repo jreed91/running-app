@@ -338,7 +338,7 @@ private struct ProgressRing: View {
             Circle()
                 .trim(from: 0, to: max(0.001, fraction))
                 .stroke(
-                    isComplete ? Color.success : Color.brand,
+                    isComplete ? AnyShapeStyle(Color.success) : AnyShapeStyle(.route),
                     style: StrokeStyle(lineWidth: 8, lineCap: .round)
                 )
                 .rotationEffect(.degrees(-90))

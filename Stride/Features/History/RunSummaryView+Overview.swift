@@ -120,8 +120,17 @@ extension RunSummaryView {
                 ZStack(alignment: .topLeading) {
                     Map {
                         MapPolyline(coordinates: workout.routeCoordinates.map(\.clCoordinate))
-                            .stroke(.brand, lineWidth: 4)
+                            .stroke(.route, style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
+                        if let start = workout.routeCoordinates.first {
+                            Annotation("Start", coordinate: start.clCoordinate, anchor: .center) {
+                                StartPin(diameter: 18)
+                                    .appShadow(.e2)
+                            }
+                            .annotationTitles(.hidden)
+                        }
                     }
+                    // Muted, so the route reads first — the night map of the Route Loop.
+                    .mapStyle(.standard(emphasis: .muted))
                     Text(routeName)
                         .font(.dsCaption2.weight(.semibold))
                         .padding(.horizontal, 10)

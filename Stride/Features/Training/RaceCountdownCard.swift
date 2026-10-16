@@ -39,7 +39,8 @@ struct RaceCountdownCard: View {
                 .padding(.top, 4)
         }
         .padding(18)
-        .background(cardBackground)
+        // The screen's hero: the night map of the Route Loop identity.
+        .inkHero()
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
     }
@@ -105,20 +106,6 @@ struct RaceCountdownCard: View {
         racePlan.phase.isBeforeRace ? .brand : .success
     }
 
-    private var cardBackground: some View {
-        RoundedRectangle(cornerRadius: AppRadius.lg)
-            .fill(
-                LinearGradient(
-                    colors: [tint.opacity(0.10), tint.opacity(0.04)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: AppRadius.lg)
-                    .strokeBorder(tint.opacity(0.2), lineWidth: 0.5)
-            )
-    }
 }
 
 // MARK: - Preview

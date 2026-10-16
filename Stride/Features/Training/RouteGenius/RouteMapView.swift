@@ -19,22 +19,19 @@ struct RouteMapView: View {
             // Route polyline
             if coordinates.count > 1 {
                 MapPolyline(coordinates: coordinates)
-                    .stroke(.brand, style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
+                    .stroke(.route, style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
             }
 
             // Start / finish annotation
-            Annotation("Start", coordinate: startCoordinate, anchor: .bottom) {
-                ZStack {
-                    Circle()
-                        .fill(.brand)
-                        .frame(width: 36, height: 36)
-                    StrideIcon(name: .run, size: 18, color: .white, strokeWeight: 2.2)
-                }
+            // The Route Loop's start pin, where the loop begins and ends.
+            Annotation("Start", coordinate: startCoordinate, anchor: .center) {
+                StartPin(diameter: 26)
+                    .appShadow(.e2)
             }
         }
         .onAppear { fitCamera() }
         .onChange(of: routeBounds) { _, _ in fitCamera() }
-        .mapStyle(.standard(elevation: .realistic))
+        .mapStyle(.standard(elevation: .realistic, emphasis: .muted))
         .mapControls {
             MapCompass()
             MapScaleView()

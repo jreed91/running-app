@@ -63,6 +63,18 @@ extension ShapeStyle where Self == Color {
     static var strideZoneInterval: Color { Color("ZoneInterval") }
 }
 
+extension ShapeStyle where Self == LinearGradient {
+    /// The Route Loop gradient, amber start to orange end — the app's `LinearGradient.route`
+    /// rebuilt from this target's copy of the asset catalog.
+    static var strideRoute: LinearGradient {
+        LinearGradient(
+            colors: [Color("BrandGlow"), Color("Brand")],
+            startPoint: .bottomLeading,
+            endPoint: .topTrailing
+        )
+    }
+}
+
 extension WidgetSnapshot.Tint {
     /// The accent the app would use for the same thing. Mirrors `WorkoutType.color`,
     /// via the name the snapshot carries.
@@ -169,13 +181,19 @@ struct WidgetProgressRing<Label: View>: View {
                 .stroke(tint.opacity(0.18), lineWidth: lineWidth)
             Circle()
                 .trim(from: 0, to: min(max(fraction, 0), 1))
-                .stroke(tint, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                .stroke(progressStyle, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                 .rotationEffect(.degrees(-90))
             label
         }
         // The ring is decoration; the figures inside it are the content, and they are
         // already spoken. Without this VoiceOver reads two empty `Circle`s first.
         .accessibilityHidden(true)
+    }
+
+    /// A brand ring is the route, as in the app; any other tint (a met goal, a zone)
+    /// stays flat so it still reads as that state.
+    private var progressStyle: AnyShapeStyle {
+        tint == .strideBrand ? AnyShapeStyle(.strideRoute) : AnyShapeStyle(tint)
     }
 }
 

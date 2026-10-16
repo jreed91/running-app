@@ -354,7 +354,7 @@ struct RouteGeniusView: View {
                         .font(.bodyStrong)
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(.brand, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                        .background(.route, in: RoundedRectangle(cornerRadius: AppRadius.md))
                         .foregroundStyle(.onFill)
                         .padding(.horizontal)
                 }

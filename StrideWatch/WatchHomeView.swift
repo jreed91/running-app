@@ -140,7 +140,7 @@ private struct WatchWeekPage: View {
                     Circle()
                         .trim(from: 0, to: min(max(weekly.fraction, 0), 1))
                         .stroke(
-                            weekly.isMet ? Color.strideSuccess : Color.strideBrand,
+                            weekly.isMet ? AnyShapeStyle(Color.strideSuccess) : AnyShapeStyle(.strideRoute),
                             style: StrokeStyle(lineWidth: 8, lineCap: .round)
                         )
                         .rotationEffect(.degrees(-90))

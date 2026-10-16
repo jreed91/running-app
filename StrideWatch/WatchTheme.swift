@@ -13,6 +13,17 @@ extension Color {
     static let strideZoneInterval = Color("ZoneInterval")
 }
 
+extension ShapeStyle where Self == LinearGradient {
+    /// The Route Loop gradient, amber start to orange end, as the phone draws progress.
+    static var strideRoute: LinearGradient {
+        LinearGradient(
+            colors: [Color("BrandGlow"), Color("Brand")],
+            startPoint: .bottomLeading,
+            endPoint: .topTrailing
+        )
+    }
+}
+
 extension WidgetSnapshot.Tint {
     /// The accent for a card. The same mapping as the widgets' `WidgetTheme.swift`, which
     /// lives in the extension's target and so cannot be shared from here.

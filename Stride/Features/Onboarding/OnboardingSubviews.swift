@@ -35,21 +35,10 @@ struct OBWelcome: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            // `EllipticalGradient`'s radii are fractions of the frame, so the welcome glow
-            // needs no `GeometryReader` to size itself and adapts to any screen (U7). The
-            // circle it replaces was `max(width, height) * 0.85`, which on a phone meant
-            // 0.85 of the *height* in both directions; the ellipse keeps that vertically
-            // and narrows horizontally, which is the falloff this was reaching for anyway.
-            ZStack {
-                Color.surfacePrimary
-                EllipticalGradient(
-                    colors: [Color.brand.opacity(0.22), .clear],
-                    center: .top,
-                    startRadiusFraction: 0,
-                    endRadiusFraction: 0.85
-                )
-            }
-            .ignoresSafeArea()
+            // The night map, as on the icon. Its glow is an `EllipticalGradient`, whose
+            // radii are fractions of the frame, so it needs no `GeometryReader` (U7).
+            NightMapBackdrop()
+                .ignoresSafeArea()
 
             VStack(spacing: 0) {
                 Spacer().frame(height: 90)
@@ -102,7 +91,7 @@ struct OBWelcome: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, AppSpacing.lg)
-                    .background(Color.brand, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                    .background(.route, in: RoundedRectangle(cornerRadius: AppRadius.lg))
                     .appGlow(.strong, color: .brand)
                     .overlay(
                         RoundedRectangle(cornerRadius: AppRadius.lg)
@@ -124,7 +113,7 @@ struct OBWelcome: View {
                         Task { @MainActor in onSignIn(credential.user) }
                     }
                 }
-                .signInWithAppleButtonStyle(.black)
+                .signInWithAppleButtonStyle(.white)
                 .frame(height: 50)
                 .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
                 .padding(.top, AppSpacing.md)
@@ -136,6 +125,8 @@ struct OBWelcome: View {
             .padding(.horizontal, AppSpacing.xxl)
         }
         .onAppear { appeared = true }
+        // The welcome screens sit on the night map in both appearances, like the icon.
+        .environment(\.colorScheme, .dark)
     }
 }
 
@@ -166,17 +157,9 @@ struct OBWelcomeBack: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            // The same geometry-free glow as `OBWelcome` — see the note there.
-            ZStack {
-                Color.surfacePrimary
-                EllipticalGradient(
-                    colors: [Color.brand.opacity(0.22), .clear],
-                    center: .top,
-                    startRadiusFraction: 0,
-                    endRadiusFraction: 0.85
-                )
-            }
-            .ignoresSafeArea()
+            // The same night map as `OBWelcome`.
+            NightMapBackdrop()
+                .ignoresSafeArea()
 
             VStack(spacing: 0) {
                 Spacer().frame(height: 90)
@@ -229,7 +212,7 @@ struct OBWelcomeBack: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, AppSpacing.lg)
-                        .background(Color.brand, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                        .background(.route, in: RoundedRectangle(cornerRadius: AppRadius.lg))
                         .appGlow(.strong, color: .brand)
                         .overlay(
                             RoundedRectangle(cornerRadius: AppRadius.lg)
@@ -250,6 +233,7 @@ struct OBWelcomeBack: View {
             .padding(.horizontal, AppSpacing.xl)
             .padding(.bottom, 44)
         }
+        .environment(\.colorScheme, .dark)
         .task { await checkICloudStatus() }
         .task { await waitForInitialSync() }
         .onChange(of: initialSyncFinished) { _, finished in
@@ -450,7 +434,7 @@ struct OBShell<Content: View>: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, AppSpacing.lg)
-                    .background(Color.brand.opacity(ctaEnabled ? 1 : 0.5),
+                    .background(LinearGradient.route.opacity(ctaEnabled ? 1 : 0.5),
                                 in: RoundedRectangle(cornerRadius: AppRadius.md))
                     .appGlow(.strong, color: .brand, isActive: ctaEnabled)
                     .overlay(
@@ -1198,7 +1182,7 @@ struct OBReady: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, AppSpacing.lg)
-                .background(Color.brand, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                .background(.route, in: RoundedRectangle(cornerRadius: AppRadius.lg))
                 .appGlow(.strong, color: .brand)
                 .overlay(
                     RoundedRectangle(cornerRadius: AppRadius.lg)
