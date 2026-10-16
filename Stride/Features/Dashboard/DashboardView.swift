@@ -635,6 +635,7 @@ struct DashboardView: View {
                 .strideEyebrow()
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, AppSpacing.xs)
+                .accessibilityIdentifier("dashboard.thisWeekHeader")
             weekSummaryCardBody
         }
     }

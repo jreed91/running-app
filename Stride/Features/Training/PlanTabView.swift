@@ -394,8 +394,6 @@ private struct SmartAdaptPlanCard: View {
             .grayscale(isEnabled ? 0 : 1)
             .opacity(isEnabled ? 1 : 0.9)
 
-
-
             if isAdapting {
                 VStack(alignment: .leading, spacing: 8) {
                     if let value = progress.fractionCompleted {
