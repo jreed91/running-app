@@ -25,7 +25,7 @@ struct RouteMapView: View {
             // Start / finish annotation
             // The Route Loop's start pin, where the loop begins and ends.
             Annotation("Start", coordinate: startCoordinate, anchor: .center) {
-                StartPin(diameter: 26)
+                StartPin(diameter: 26, pulses: true)
                     .appShadow(.e2)
             }
         }

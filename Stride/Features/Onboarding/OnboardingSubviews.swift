@@ -43,7 +43,7 @@ struct OBWelcome: View {
             VStack(spacing: 0) {
                 Spacer().frame(height: 90)
 
-                StrideAppMark(size: 120)
+                StrideAppMark(size: 120, drawsOn: true)
                     .scaleEffect(appeared ? 1 : 0.55)
                     .opacity(appeared ? 1 : 0)
                     .adaptiveAnimation(AppAnimation.entrance, value: appeared)

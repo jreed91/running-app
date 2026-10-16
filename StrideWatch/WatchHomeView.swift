@@ -9,6 +9,7 @@ import SwiftUI
 /// against the timeline's date, the way the widgets resolve them against an entry's.
 struct WatchHomeView: View {
     @Environment(WatchGlanceModel.self) private var model
+    @State private var page = WatchDemo.initialPage
 
     var body: some View {
         // Once a minute is far more often than "Today" can change, but it is the cheapest
@@ -23,15 +24,18 @@ struct WatchHomeView: View {
         if let context = model.context, !context.snapshot.isStale(asOf: now) {
             let snapshot = context.snapshot
             NavigationStack {
-                TabView {
+                TabView(selection: $page) {
                     WatchNextWorkoutPage(
                         workout: snapshot.nextWorkout,
                         canStart: context.canStart(asOf: now),
                         now: now
                     )
+                    .tag(0)
                     WatchWeekPage(weekly: snapshot.weekly, streak: snapshot.streak)
+                        .tag(1)
                     if let race = snapshot.race, race.isUpcoming(asOf: now) {
                         WatchRacePage(race: race, now: now)
+                            .tag(2)
                     }
                 }
                 .tabViewStyle(.verticalPage)
@@ -185,7 +189,7 @@ private struct WatchWeekPage: View {
             }
         }
         .navigationTitle("This Week")
-        .containerBackground(Color.strideBrand.gradient, for: .tabView)
+        .containerBackground(Color.strideInk.gradient, for: .tabView)
     }
 }
 
@@ -221,7 +225,7 @@ private struct WatchRacePage: View {
             }
         }
         .navigationTitle("Race")
-        .containerBackground(Color.strideBrand.gradient, for: .tabView)
+        .containerBackground(Color.strideInk.gradient, for: .tabView)
     }
 }
 

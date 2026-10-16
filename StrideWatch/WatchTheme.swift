@@ -11,6 +11,9 @@ extension Color {
     static let strideZoneEasy = Color("ZoneEasy")
     static let strideZoneTempo = Color("ZoneTempo")
     static let strideZoneInterval = Color("ZoneInterval")
+    /// The Route Loop's night-map ground, behind the week and race pages, so the orange
+    /// ring and figures sit on it the way the loop sits on the icon.
+    static let strideInk = Color("Ink")
 }
 
 extension ShapeStyle where Self == LinearGradient {

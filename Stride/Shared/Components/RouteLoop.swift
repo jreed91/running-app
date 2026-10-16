@@ -42,11 +42,26 @@ struct RouteLoopShape: Shape {
 ///
 /// Marks the runner's own position on anything map-like — today on the plan, the
 /// current point on a chart, the start of a drawn route.
+///
+/// `pulses: true` adds a slow brand ripple around it, for a live position (the runner's
+/// start on Route Genius). The ripple is off under Reduce Motion.
 struct StartPin: View {
     var diameter: CGFloat = 16
+    var pulses = false
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var rippling = false
 
     var body: some View {
         ZStack {
+            if pulses && !reduceMotion {
+                Circle()
+                    .stroke(Color.brand, lineWidth: max(diameter * 0.08, 1.5))
+                    .scaleEffect(rippling ? 2.4 : 1)
+                    .opacity(rippling ? 0 : 0.7)
+                    .animation(AppAnimation.pinPulse, value: rippling)
+                    .onAppear { rippling = true }
+            }
             Circle().fill(Color.white)
             Circle()
                 .fill(Color.brand)

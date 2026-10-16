@@ -54,7 +54,25 @@ Every colour is an asset-catalog colour with light, dark and Increase Contrast v
 - `appShadow(.e1–.e3)` for height; `appGlow(_, color: .brand)` for emphasis. A primary
   action is the route gradient with a `.strong` brand glow.
 - Motion tokens live in `AppAnimations.swift`; every animation goes through
-  `adaptiveAnimation` so Reduce Motion is honoured.
+  `adaptiveAnimation` (or reads `accessibilityReduceMotion`) so Reduce Motion is honoured.
+
+## Motion
+
+The route draws itself, then the pin lands. `StrideAppMark(size:, drawsOn: true)` strokes
+the loop in with `AppAnimation.routeDraw` (1.1s ease-in-out) and drops the pin with
+`pinDrop` 0.85s later; `ProgressRingView` fills from zero with `gentle`;
+`StartPin(diameter:, pulses: true)` ripples with `pinPulse` for a live position.
+Everything else uses `entrance` (staggered 80ms), `bouncy`, `snappy` and `gentle`. Only
+the route and the pin get signature motion, a route draws once, one pulse per screen, and
+under Reduce Motion the mark appears whole and the pulse is off.
+
+## App Store screenshots
+
+`.github/workflows/app-store-screenshots.yml` captures them from the demo history (run it
+from the Actions tab, or label a PR `app-store-screenshots`). `AppStoreScreenshotTests`
+takes the iPhone screens at 9:41 on the largest iPhone; the Watch app's
+`--seed-demo-data --demo-page <n>` gives each Watch page; `design/appstore/compose.mjs`
+frames the iPhone ones with the captions in `design/appstore/captions.json`.
 
 ## Rules
 
