@@ -207,6 +207,7 @@ enum PregnancyRunningPolicy {
     /// criteria-based, and the criteria are a clinical screen this app cannot perform.
     static var postpartumHandoff: String {
         String(
+            // swiftlint:disable:next line_length
             localized: "After the birth, walking and pelvic floor work can restart as soon as your provider says so. Impact running is different: the postnatal guidance is no running before 12 weeks postpartum, and then only once you can walk 30 minutes and load your pelvic floor symptom-free — ideally after a pelvic health physiotherapy assessment. Stride will not schedule it for you.",
             comment: "Postpartum handoff shown at the end of a pregnancy plan"
         )

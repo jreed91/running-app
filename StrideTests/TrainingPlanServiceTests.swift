@@ -270,6 +270,7 @@ struct TrainingPlanServiceTests {
     func easyRunCountByDayCount() {
         // (runDays, numberOfWeeks, phaseFilter, expectedEasyRunsPerWeek)
         // base phase has 1 quality type; build phase has 2 quality types
+        // swiftlint:disable:next large_tuple
         let cases: [(runDays: Int, weeks: Int, phase: TrainingPhase, expectedEasy: Int)] = [
             (3, 4, .base,  1),  // quality + easy + long
             (3, 8, .build, 1),  // quality + easy + long (quality capped for sustainability)
