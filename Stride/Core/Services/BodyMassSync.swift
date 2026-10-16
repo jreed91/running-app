@@ -31,7 +31,9 @@ enum BodyMassSync {
     static func shouldAdopt(healthKit: Double?, stored: Double?) -> Bool {
         guard let candidate = CoachNutrition.validMass(healthKit) else { return false }
         guard let stored else { return true }
-        return abs(candidate - stored) >= significantChangeKilograms
+        // The tolerance absorbs binary rounding: 72.1 − 72.0 is a hair under 0.1, and a
+        // change exactly at the floor counts.
+        return abs(candidate - stored) >= significantChangeKilograms - 1e-9
     }
 
     /// Reads the latest body mass from Health and stores it on the profile if it is worth
