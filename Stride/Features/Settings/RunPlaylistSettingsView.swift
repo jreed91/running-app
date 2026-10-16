@@ -26,6 +26,7 @@ struct RunPlaylistSettingsView: View {
             }
             .padding(AppSpacing.lg)
         }
+        .background(Color.surfacePrimary)
         .navigationTitle("Run Playlists")
         .navigationBarTitleDisplayMode(.inline)
         .task {

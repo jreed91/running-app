@@ -84,6 +84,7 @@ struct WorkoutDetailView: View {
                     .padding(.vertical, AppSpacing.lg)
                     .frame(maxWidth: .infinity)
                 }
+                .background(Color.surfacePrimary)
                 .navigationTitle(workout.workoutType.localizedName)
                 .navigationBarTitleDisplayMode(.inline)
             }
