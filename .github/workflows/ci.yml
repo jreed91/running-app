@@ -52,12 +52,12 @@ env:
   # accept whatever Homebrew provides.
   #
   # SwiftLint is pinned to the version the lint job actually resolved on the
-  # macOS runner (Homebrew poured swiftlint 0.65.0 on `macos-26`). XcodeGen and
+  # macOS runner (Homebrew poured swiftlint 0.65.1 on `macos-26` on 2026-10-16). XcodeGen and
   # xcbeautify have no observed value yet: their install step lives in the test
   # job, which never got as far as running while the labels were wrong (see the
   # runner-label note above). Fill these two in from the first run that reaches
   # "Install XcodeGen and xcbeautify" (N31).
-  SWIFTLINT_VERSION: "0.65.0"
+  SWIFTLINT_VERSION: "0.65.1"
   XCODEGEN_VERSION: ""
   XCBEAUTIFY_VERSION: ""
 
