@@ -74,9 +74,9 @@ struct StrengthSummaryView: View {
     private func statCell(value: String, label: String) -> some View {
         VStack(spacing: 2) {
             Text(value)
-                .font(.dsTitle2.monospaced())
+                .font(.dsTitle2.monospacedDigit())
             Text(label)
-                .font(.sectionHeader)
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
@@ -93,7 +93,7 @@ struct StrengthSummaryView: View {
         let plan = workout.scheduledWorkout?.strengthPlan
         return VStack(alignment: .leading, spacing: 12) {
             Text("COMPLETED SETS")
-                .font(.sectionHeader)
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
 
             let grouped = Dictionary(grouping: workout.completedSets, by: \.exerciseIndex)
@@ -112,7 +112,7 @@ struct StrengthSummaryView: View {
                     ForEach(sets, id: \.setIndex) { set in
                         HStack {
                             Text("Set \(set.setIndex + 1)")
-                                .font(.dsFootnote.weight(.medium).monospaced())
+                                .font(.dsFootnote.weight(.medium).monospacedDigit())
                                 .foregroundStyle(.secondary)
                             Spacer()
                             if set.skipped {
@@ -121,7 +121,7 @@ struct StrengthSummaryView: View {
                                     .foregroundStyle(.tertiary)
                             } else {
                                 Text("\(set.completedReps) reps\(set.actualWeight.map { " · \($0)" } ?? "")")
-                                    .font(.dsFootnote.weight(.medium).monospaced())
+                                    .font(.dsFootnote.weight(.medium).monospacedDigit())
                             }
                         }
                     }
@@ -138,7 +138,7 @@ struct StrengthSummaryView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 6) {
                 Text("EXERCISES")
-                    .font(.sectionHeader)
+                    .strideEyebrow()
                     .foregroundStyle(.secondary)
                 Spacer()
                 HStack(spacing: 4) {

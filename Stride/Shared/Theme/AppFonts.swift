@@ -83,8 +83,10 @@ extension Font {
 
     // MARK: Section header
 
-    /// 11pt bold uppercase small caps — group headers inside cards.
-    static let sectionHeader = Font.system(.caption2, weight: .bold).uppercaseSmallCaps()
+    /// 11pt bold — the face of a section's eyebrow. Use `.strideEyebrow()`, which adds the
+    /// capitals and the tracking; small caps made title-case headers ("This Week") look
+    /// unlike typed capitals ("PACE INSIGHTS").
+    static let sectionHeader = Font.system(.caption2, weight: .bold)
 
     // MARK: Legacy body aliases (kept for existing call sites)
     //

@@ -164,7 +164,7 @@ struct RaceDayHubView: View {
     private func goalLadder(_ racePlan: RaceDayPlan) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("GOAL TIMES")
-                .font(.sectionHeader)
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
 
             VStack(spacing: 8) {
@@ -271,9 +271,9 @@ private struct RaceSplitsTable: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
                 Text("SPLITS")
-                    .font(.sectionHeader)
+                    .strideEyebrow()
                 Text(verbatim: goal.tier.localizedName)
-                    .font(.sectionHeader)
+                    .strideEyebrow()
                     .foregroundStyle(.brandText)
             }
             .foregroundStyle(.secondary)
@@ -340,7 +340,7 @@ private struct RaceTaperCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("THIS WEEK")
-                .font(.sectionHeader)
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
 
             HStack(alignment: .center, spacing: 12) {

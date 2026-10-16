@@ -40,7 +40,7 @@ struct RunPlaylistSettingsView: View {
     private var accessSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("APPLE MUSIC")
-                .font(.sectionHeader)
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
 
             VStack(alignment: .leading, spacing: 10) {
@@ -124,7 +124,7 @@ struct RunPlaylistSettingsView: View {
     private var tierSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("WHAT EACH PART SOUNDS LIKE")
-                .font(.sectionHeader)
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
 
             VStack(spacing: 0) {

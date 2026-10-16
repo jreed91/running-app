@@ -22,7 +22,7 @@ struct SmartCoachCardsSection: View {
             HStack(spacing: 6) {
                 StrideIcon(name: .bolt, size: 12, color: .brand, strokeWeight: 2.4)
                 Text("Coach Tips")
-                    .font(.sectionHeader)
+                    .strideEyebrow()
                     .foregroundStyle(.secondary)
             }
             .padding(.horizontal, AppSpacing.xs)
@@ -48,8 +48,7 @@ private struct PrimaryCoachCardView: View {
                 CoachCardIcon(card: card, size: 44, glyph: 20)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(verbatim: card.categoryLabel)
-                        .font(.dsCaption2.weight(.bold))
-                        .kerning(1.2)
+                        .strideEyebrow()
                         .foregroundStyle(.secondary)
                     Text(card.title)
                         .font(.dsHeadline)
@@ -67,8 +66,9 @@ private struct PrimaryCoachCardView: View {
                 derivationLine(derivation)
             }
         }
-        .padding(18)
-        .background(cardBackground)
+        .padding(AppSpacing.lg)
+        // A plain card like the rest of Home; the tone shows in the icon tile.
+        .strideCard()
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityDescription)
     }
@@ -85,21 +85,6 @@ private struct PrimaryCoachCardView: View {
             .monospacedDigit()
             .fixedSize(horizontal: false, vertical: true)
             .padding(.top, 2)
-    }
-
-    private var cardBackground: some View {
-        RoundedRectangle(cornerRadius: AppRadius.lg)
-            .fill(
-                LinearGradient(
-                    colors: [card.tint.opacity(0.14), card.tint.opacity(0.05)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: AppRadius.lg)
-                    .strokeBorder(card.tint.opacity(0.25), lineWidth: 0.5)
-            )
     }
 
     /// The derivation is read last and only after the advice: it is the reason to trust
@@ -124,14 +109,14 @@ private struct SupportingCoachCardView: View {
                     .font(.bodyStrong)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(card.message)
-                    .font(.caption)
+                    .font(.dsCaption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
         }
-        .padding(14)
-        .strideCard(cornerRadius: AppRadius.md)
+        .padding(AppSpacing.md)
+        .strideCard()
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(card.title). \(card.message)")
     }

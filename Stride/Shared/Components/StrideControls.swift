@@ -140,6 +140,8 @@ extension ButtonStyle where Self == StrideChipStyle {
 struct StrideSegmentedControl<Value: Hashable>: View {
     @Binding var selection: Value
     let options: [Value]
+    /// Kept for existing callers. Every segment now has tabular digits; this used to switch
+    /// to SF Mono, a typewriter face no other control uses.
     var monospaced = false
     let title: (Value) -> Text
 
@@ -165,7 +167,8 @@ struct StrideSegmentedControl<Value: Hashable>: View {
                     withAnimation(AppAnimation.bouncy) { selection = option }
                 } label: {
                     title(option)
-                        .font(monospaced ? .dsSubhead.weight(.semibold).monospaced() : .dsSubhead.weight(.semibold))
+                        .font(.dsSubhead.weight(.semibold))
+                        .monospacedDigit()
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                         .frame(maxWidth: .infinity)
@@ -285,6 +288,19 @@ extension View {
     func strideSheet() -> some View {
         presentationBackground(Color.surfacePrimary)
             .presentationCornerRadius(AppRadius.xl)
+    }
+}
+
+// MARK: Eyebrows
+
+extension View {
+    /// A section's eyebrow, the one header style in the app: 11pt bold capitals with
+    /// open tracking. The caller picks the colour (`.secondary` on the page or a card,
+    /// `brandText` on a hero) and where it sits; section headers go outside their card.
+    func strideEyebrow() -> some View {
+        font(.sectionHeader)
+            .textCase(.uppercase)
+            .tracking(1.4)
     }
 }
 

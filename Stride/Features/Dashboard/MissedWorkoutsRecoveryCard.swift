@@ -13,7 +13,7 @@ struct MissedWorkoutsRecoveryCard: View {
             Divider().opacity(0.5)
             actionButtons
         }
-        .padding(18)
+        .padding(AppSpacing.lg)
         .background(cardBackground)
         .overlay {
             if isLoading {
@@ -107,18 +107,14 @@ struct MissedWorkoutsRecoveryCard: View {
 
     // MARK: - Background
 
+    /// A plain card, like every other card on Home: the status colour is on the icon
+    /// tile and the action, not the card's ground.
     private var cardBackground: some View {
-        RoundedRectangle(cornerRadius: AppRadius.lg)
-            .fill(
-                LinearGradient(
-                    colors: [Color.warning.opacity(0.10), Color.warning.opacity(0.04)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
+        RoundedRectangle(cornerRadius: AppRadius.lg, style: .continuous)
+            .fill(Color.surfaceSecondary)
             .overlay(
-                RoundedRectangle(cornerRadius: AppRadius.lg)
-                    .strokeBorder(Color.warning.opacity(0.2), lineWidth: 0.5)
+                RoundedRectangle(cornerRadius: AppRadius.lg, style: .continuous)
+                    .strokeBorder(Color.cardStroke, lineWidth: 1)
             )
     }
 }

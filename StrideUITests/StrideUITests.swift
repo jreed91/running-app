@@ -27,8 +27,9 @@ final class StrideUITests: XCTestCase {
         completeOnboarding()
 
         XCTAssertTrue(tabBar.waitForExistence(timeout: 8))
-        XCTAssertTrue(app.navigationBars["Today"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["This Week"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Home"].waitForExistence(timeout: 5))
+        // By identifier: the eyebrow's `.textCase(.uppercase)` may change the label's case.
+        XCTAssertTrue(app.staticTexts["dashboard.thisWeekHeader"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["dashboard.startFreeRun"].waitForExistence(timeout: 5))
 
         tabBar.buttons["Plan"].tap()
@@ -42,7 +43,7 @@ final class StrideUITests: XCTestCase {
 
         XCTAssertTrue(tabBar.waitForExistence(timeout: 8))
 
-        assertTab("Home", showsNavigationTitle: "Today")
+        assertTab("Home", showsNavigationTitle: "Home")
         assertTab("Plan", showsNavigationTitle: "My Plan")
         assertTab("History", showsNavigationTitle: "History")
         assertTab("Progress", showsNavigationTitle: "Progress")
@@ -87,7 +88,7 @@ final class StrideUITests: XCTestCase {
         close.tap()
 
         XCTAssertTrue(startFreeRun.waitForExistence(timeout: 5))
-        XCTAssertTrue(app.navigationBars["Today"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Home"].waitForExistence(timeout: 5))
     }
 
     private func completeOnboarding() {

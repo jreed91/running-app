@@ -41,6 +41,8 @@ struct RouteGeniusView: View {
                 }
                 .padding()
             }
+            // The page's ground; without it the sheet drew system black in dark mode.
+            .background(Color.surfacePrimary)
             .navigationTitle("Route Genius")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
@@ -76,7 +78,7 @@ struct RouteGeniusView: View {
     private var distanceField: some View {
         VStack(alignment: .leading, spacing: 8) {
             Label("Distance", systemImage: "ruler")
-                .font(.sectionHeader)
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
 
             HStack {
@@ -101,7 +103,7 @@ struct RouteGeniusView: View {
     private var routeTypePicker: some View {
         VStack(alignment: .leading, spacing: 8) {
             Label("Route Type", systemImage: "arrow.triangle.2.circlepath")
-                .font(.sectionHeader)
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
 
             HStack(spacing: 10) {
@@ -120,7 +122,7 @@ struct RouteGeniusView: View {
     private var startPointPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
             Label("Starting Point", systemImage: "mappin.and.ellipse")
-                .font(.sectionHeader)
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
 
             StrideSegmentedControl(
@@ -194,7 +196,7 @@ struct RouteGeniusView: View {
                 HStack(spacing: 6) {
                     ZStack {
                         Circle().fill(Color.success).frame(width: 16, height: 16)
-                        StrideIcon(name: .check, size: 8, color: .white, strokeWeight: 2.5)
+                        StrideIcon(name: .check, size: 8, color: .onFill, strokeWeight: 2.5)
                     }
                     Text(selected.name ?? "Selected location")
                         .font(.caption).foregroundStyle(.secondary)
@@ -211,7 +213,7 @@ struct RouteGeniusView: View {
             if viewModel.currentCoordinate != nil {
                 ZStack {
                     Circle().fill(Color.success).frame(width: 16, height: 16)
-                    StrideIcon(name: .check, size: 8, color: .white, strokeWeight: 2.5)
+                    StrideIcon(name: .check, size: 8, color: .onFill, strokeWeight: 2.5)
                 }
                 Text("Location acquired").font(.caption).foregroundStyle(.secondary)
             } else {
@@ -231,17 +233,11 @@ struct RouteGeniusView: View {
                 viewModel.routeOptions.isEmpty ? "Generate Routes" : "Regenerate",
                 systemImage: viewModel.routeOptions.isEmpty ? "wand.and.stars" : "arrow.clockwise"
             )
-            .font(.bodyStrong)
-            .frame(maxWidth: .infinity)
-            .padding()
-            .background(
-                viewModel.canGenerate ? Color.brand : Color.secondary.opacity(0.3),
-                in: RoundedRectangle(cornerRadius: AppRadius.md)
-            )
-            .foregroundStyle(viewModel.canGenerate ? .white : .secondary)
         }
+        // The shared primary: the route with `onFill` text. It was flat brand with white
+        // text (2.8:1) and its own disabled grey.
+        .buttonStyle(.strideButton())
         .disabled(!viewModel.canGenerate)
-        .animation(.easeInOut(duration: 0.2), value: viewModel.canGenerate)
     }
 
     // MARK: Generating indicator
@@ -274,7 +270,7 @@ struct RouteGeniusView: View {
     private func routeOptionsSection(startCoord: CLLocationCoordinate2D) -> some View {
         VStack(spacing: 12) {
             Text("CHOOSE A ROUTE")
-                .font(.sectionHeader)
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -316,7 +312,8 @@ struct RouteGeniusView: View {
             } label: {
                 Label("Save This Route", systemImage: "bookmark")
             }
-            .buttonStyle(.strideButton())
+            // Secondary: Generate is the screen's one primary.
+            .buttonStyle(.strideButton(.secondary))
 
             if !route.steps.isEmpty {
                 TurnByTurnList(steps: route.steps, viewModel: viewModel)
@@ -388,7 +385,7 @@ private struct RouteOptionCard: View {
                     if isSelected {
                         ZStack {
                             Circle().fill(Color.brand).frame(width: 20, height: 20)
-                            StrideIcon(name: .check, size: 10, color: .white, strokeWeight: 2.5)
+                            StrideIcon(name: .check, size: 10, color: .onFill, strokeWeight: 2.5)
                         }
                         .transition(.scale.combined(with: .opacity))
                     }
@@ -488,7 +485,7 @@ private struct TurnByTurnList: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("TURN-BY-TURN")
-                .font(.sectionHeader)
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
                 .padding(.bottom, 10)
 
@@ -520,7 +517,7 @@ struct TurnByTurnRow: View {
                     .frame(width: 28, height: 28)
                 Text("\(index + 1)")
                     .font(.caption.bold())
-                    .foregroundStyle(index == 0 ? .white : .secondary)
+                    .foregroundStyle(index == 0 ? Color.onFill : Color.secondary)
             }
 
             VStack(alignment: .leading, spacing: 3) {

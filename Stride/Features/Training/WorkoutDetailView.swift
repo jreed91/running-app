@@ -112,7 +112,7 @@ struct WorkoutDetailView: View {
     private func structuredWorkoutSection(structure: WorkoutStructure) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("WORKOUT STRUCTURE")
-                .font(.sectionHeader)
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
 
             // Summary chips
@@ -153,7 +153,7 @@ struct WorkoutDetailView: View {
 
     private func summaryChip(label: String, systemImage: String) -> some View {
         Text(label)
-            .font(.dsCaption.weight(.semibold).monospaced())
+            .font(.dsCaption.weight(.semibold).monospacedDigit())
             .padding(.horizontal, AppSpacing.md)
             .padding(.vertical, 6)
             .background(.surfaceTertiary, in: Capsule())
@@ -197,7 +197,7 @@ struct WorkoutDetailView: View {
                                 Circle()
                                     .fill(Color.success)
                                     .frame(width: 20, height: 20)
-                                StrideIcon(name: .check, size: 11, color: .white, strokeWeight: 3)
+                                StrideIcon(name: .check, size: 11, color: .onFill, strokeWeight: 3)
                             }
                         }
                     }
@@ -280,7 +280,7 @@ struct WorkoutDetailView: View {
 
     private func paceSection(range: ClosedRange<Double>) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("TARGET PACE").font(.sectionHeader).foregroundStyle(.secondary)
+            Text("TARGET PACE").strideEyebrow().foregroundStyle(.secondary)
             Text(
                 "\(range.lowerBound.paceString(unit: appSettings.unitPreference))" +
                 " – " +
@@ -292,7 +292,7 @@ struct WorkoutDetailView: View {
 
     private var intervalsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("INTERVALS").font(.sectionHeader).foregroundStyle(.secondary)
+            Text("INTERVALS").strideEyebrow().foregroundStyle(.secondary)
             ForEach(Array(workout.intervals.enumerated()), id: \.offset) { _, interval in
                 HStack {
                     Text("\(interval.repetitions) ×")
@@ -314,14 +314,14 @@ struct WorkoutDetailView: View {
 
     private func distanceSection(dist: Double) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("DISTANCE").font(.sectionHeader).foregroundStyle(.secondary)
+            Text("DISTANCE").strideEyebrow().foregroundStyle(.secondary)
             Text(dist.distanceString(unit: appSettings.unitPreference)).font(.metricSmall)
         }
     }
 
     private func notesSection(notes: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("NOTES").font(.sectionHeader).foregroundStyle(.secondary)
+            Text("NOTES").strideEyebrow().foregroundStyle(.secondary)
             Text(notes)
                 .font(.bodyRegular)
                 .padding()
@@ -333,7 +333,7 @@ struct WorkoutDetailView: View {
 
     private func strengthSection(plan: StrengthWorkoutPlan) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("EXERCISES").font(.sectionHeader).foregroundStyle(.secondary)
+            Text("EXERCISES").strideEyebrow().foregroundStyle(.secondary)
             // Summary chip
             HStack(spacing: 6) {
                 Image(systemName: "clock")
@@ -365,7 +365,7 @@ struct ExerciseRow: View {
                     .font(.dsSubhead.weight(.semibold))
                 Spacer()
                 Text(repsLabel)
-                    .font(.dsFootnote.weight(.medium).monospaced())
+                    .font(.dsFootnote.weight(.medium).monospacedDigit())
                     .foregroundStyle(.secondary)
             }
             HStack(spacing: 6) {

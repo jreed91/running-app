@@ -82,6 +82,9 @@ Shared in `Stride/Shared/Components/StrideControls.swift`. Use these rather than
 | A free-standing text field | `.strideField()`; a field inside a card is a well on `surfacePrimary` with the hairline |
 | A `List` or `Form` | `.strideList()` on it and `.strideListRow()` on each `Section`, so dark mode is ink, not system black |
 | A sheet with its own scroll view | `.strideSheet()` |
+| A section header | `Text(...).strideEyebrow()` in `.secondary`, above its card (not inside it), with `.padding(.horizontal, AppSpacing.xs)`; `brandText` only on a hero |
+| An icon tile | A circle tinted at 12–15% with the glyph in the tint: 48pt leading a card, 32pt in a row. Settings rows keep their small square tiles |
+| A card | `.padding(AppSpacing.lg).strideCard()` at the default `lg` radius; status (heat, missed runs) shows in the icon and the action, not a tinted ground |
 | An empty screen | `StrideEmptyState(title, systemImage:, description:) { actions }`, not `ContentUnavailableView` |
 | A chart | Bars in `.routeBar`, a progress line in `.route` at 3pt with round caps, the selection rule dashed in brand, tooltips as cards; zone and data colours stay as they are |
 

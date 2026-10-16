@@ -239,14 +239,17 @@ struct ProgressDashboardView: View {
     // MARK: - Chart card wrapper
 
     private func chartCard<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        // The title sits above the card, as section headers do on every other screen.
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
             Text(title)
-                .font(.sectionHeader)
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
+                .padding(.horizontal, AppSpacing.xs)
             content()
+                .padding(AppSpacing.lg)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .strideCard()
         }
-        .padding(AppSpacing.lg)
-        .strideCard(cornerRadius: AppRadius.md)
     }
 
     // MARK: - Weekly volume chart
@@ -747,7 +750,7 @@ struct ProgressDashboardView: View {
     private func summaryCell(value: String, label: String) -> some View {
         VStack(spacing: 4) {
             Text(value)
-                .font(.dsCallout.weight(.bold).monospaced())
+                .font(.dsCallout.weight(.bold).monospacedDigit())
                 .minimumScaleFactor(0.7)
                 .lineLimit(1)
             Text(label)

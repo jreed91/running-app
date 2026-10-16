@@ -11,6 +11,8 @@ import SwiftUI
 struct NextUpCardView: View {
     let briefing: NextUpBriefing
     let workoutType: WorkoutType
+    /// False when the race countdown is on the screen: it is the hero then (rule 2).
+    var isHero = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -20,14 +22,15 @@ struct NextUpCardView: View {
             }
             if let note = briefing.note {
                 Text(note)
-                    .font(.caption)
+                    .font(.dsCaption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(18)
-        // The screen's hero: daylight paper in light, raised ink in dark.
-        .heroCard()
+        // The screen's hero (daylight paper in light, raised ink in dark), unless the race
+        // countdown is showing.
+        .strideSurface(isHero: isHero)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityDescription)
         .accessibilityHint("Opens the workout's details")

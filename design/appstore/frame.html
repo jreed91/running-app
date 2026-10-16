@@ -27,8 +27,11 @@
   .pin { width:34px; height:34px; border-radius:50%; background:#fff; display:grid; place-items:center; flex:none; }
   .pin i { width:45%; height:45%; border-radius:50%; background:var(--brand); }
   h1 { margin:34px 0 0; font-weight:800; font-size:118px; line-height:1.02; letter-spacing:-2px; }
+  /* The whole device fits on the canvas: the screen keeps its 1320x2868 aspect inside the
+     26px bezel (946x2056), so nothing at the bottom of a screen (Sign in with Apple, the
+     tab bar) is cropped. It used to run 140px off the bottom edge. */
   .device {
-    position:absolute; left:50%; top:760px; width:1040px; height:2250px; transform:translateX(-50%);
+    position:absolute; left:50%; top:700px; width:998px; height:2108px; transform:translateX(-50%);
     border-radius:150px; padding:26px; box-sizing:border-box; background:#05060a;
     box-shadow: 0 0 0 3px rgba(255,255,255,.10), 0 60px 120px rgba(0,0,0,.55), 0 0 140px rgba(255,90,26,.18);
   }

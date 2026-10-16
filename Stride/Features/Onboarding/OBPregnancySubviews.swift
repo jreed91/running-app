@@ -68,7 +68,7 @@ struct OBDueDateCard: View {
             HStack(spacing: 10) {
                 StrideIcon(name: .calendar, size: 18, color: .brand)
                 Text("DUE DATE")
-                    .font(.sectionHeader)
+                    .strideEyebrow()
                     .foregroundStyle(.secondary)
             }
 
@@ -82,7 +82,7 @@ struct OBDueDateCard: View {
 
             HStack(spacing: 8) {
                 Text(gestationalAgeAtStart.noteForm)
-                    .font(.dsSubhead.weight(.bold).monospaced())
+                    .font(.dsSubhead.weight(.bold).monospacedDigit())
                     .foregroundStyle(.brandText)
                 Text("weeks at plan start · \(gestationalAgeAtStart.trimester.localizedName)")
                     .font(.caption)
@@ -112,7 +112,7 @@ struct OBPregnancyHealthCheckCard: View {
             HStack(spacing: 10) {
                 StrideIcon(name: .heart, size: 18, color: .brand)
                 Text("HEALTH CHECK")
-                    .font(.sectionHeader)
+                    .strideEyebrow()
                     .foregroundStyle(.secondary)
             }
 
@@ -227,7 +227,7 @@ struct OBPrePregnancyRunningCard: View {
             HStack(spacing: 10) {
                 StrideIcon(name: .timer, size: 18, color: .brand)
                 Text("BEFORE PREGNANCY")
-                    .font(.sectionHeader)
+                    .strideEyebrow()
                     .foregroundStyle(.secondary)
             }
 
@@ -310,7 +310,7 @@ struct OBPregnancyReady: View {
                     StrideProgressBar(value: 1, height: 4)
                         .accessibilityHidden(true)
                     Text("\(progressTotal)/\(progressTotal)")
-                        .font(.dsCaption2.weight(.bold).monospaced())
+                        .font(.dsCaption2.weight(.bold).monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, AppSpacing.xl)
@@ -361,7 +361,7 @@ struct OBPregnancyReady: View {
 
                         VStack(alignment: .leading, spacing: 10) {
                             Text("STOP AND CALL YOUR PROVIDER")
-                                .font(.sectionHeader)
+                                .strideEyebrow()
                                 .foregroundStyle(.destructive)
                             ForEach(PregnancyRedFlag.allCases) { flag in
                                 HStack(alignment: .top, spacing: 8) {
@@ -435,7 +435,7 @@ private struct OBPregnancyStat: View {
                 .kerning(0.6)
                 .foregroundStyle(.secondary)
             Text(value)
-                .font(.dsTitle2.monospaced())
+                .font(.dsTitle2.monospacedDigit())
                 .kerning(-0.5)
                 .foregroundStyle(.primary)
         }

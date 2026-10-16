@@ -34,12 +34,12 @@ struct WeekCalendarView: View {
     private var headerRow: some View {
         HStack {
             Text(monthRangeLabel)
-                .font(.sectionHeader)
+                .strideEyebrow()
                 .foregroundStyle(.primary)
             Spacer()
             if let label = planWeekLabel {
                 Text(label)
-                    .font(.sectionHeader)
+                    .strideEyebrow()
                     .foregroundStyle(.secondary)
             }
         }
@@ -291,13 +291,15 @@ private struct WeeklyLoadBar: View {
                 // retires the `GeometryReader` this view existed inside (U7) and draws the
                 // same bar. The only casualty is the corner radius, which squashes with the
                 // bar — at `micro` on a chart bar that is a fraction of a point.
+                // The route, like Progress's weekly bars: distance is progress, and the
+                // workout type already shows on the calendar strip above.
                 RoundedRectangle(cornerRadius: AppRadius.micro)
-                    .fill(color.opacity(0.9))
+                    .fill(.routeBar)
                     .frame(maxHeight: .infinity)
                     .scaleEffect(y: fraction, anchor: .bottom)
             } else {
                 RoundedRectangle(cornerRadius: AppRadius.micro)
-                    .fill(Color.secondary.opacity(0.2))
+                    .fill(Color.surfaceTertiary)
                     .frame(height: 3)
             }
         }
@@ -409,14 +411,13 @@ struct DashboardView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                WeekCalendarView(activePlan: activePlan, selectedDate: $selectedDate)
-                    .background(.surfaceSecondary)
+            ScrollView {
+                // The week strip scrolls with the page, on the page's own ground, so the
+                // large title collapses over it like every other tab's content.
+                VStack(spacing: 0) {
+                    WeekCalendarView(activePlan: activePlan, selectedDate: $selectedDate)
 
-                Divider()
-
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: AppSpacing.lg) {
                         // Above the week summary, and deliberately so: this is the one
                         // card on the screen that is a question rather than a readout,
                         // and it goes stale at midnight. It is also the only card here
@@ -487,11 +488,12 @@ struct DashboardView: View {
                     .padding(.horizontal, AppSpacing.lg)
                     .padding(.vertical, AppSpacing.lg)
                 }
-                .task { dashboardAppeared = true }
             }
+            .task { dashboardAppeared = true }
             .background(Color.surfacePrimary)
-            .navigationTitle("Today")
-            .navigationBarTitleDisplayMode(.inline)
+            // A large title like Plan, History and Progress. "Home" rather than "Today":
+            // the selected day's section below already says "Today".
+            .navigationTitle("Home")
             // The active-run HUD is presented by `MainTabView`, not here: a run started
             // from this tab now outlives the screen that shows it, so it can be
             // minimised into the tab-bar accessory instead of only finished (U7).
@@ -627,11 +629,19 @@ struct DashboardView: View {
     // MARK: - Week Summary Card
 
     private var weekSummaryCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        // The header above the card, like "Today" and "Coach Tips" below it.
+        VStack(alignment: .leading, spacing: 10) {
             Text("This Week")
-                .font(.sectionHeader)
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
+                .padding(.horizontal, AppSpacing.xs)
+                .accessibilityIdentifier("dashboard.thisWeekHeader")
+            weekSummaryCardBody
+        }
+    }
 
+    private var weekSummaryCardBody: some View {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 0) {
                 statItem(value: weekDistanceString, label: "Distance")
                 Spacer()
@@ -643,7 +653,7 @@ struct DashboardView: View {
                     statItem(
                         value: String(format: "%.0f%%", pct * 100),
                         label: "Plan",
-                        color: .brand
+                        color: .brandText
                     )
                     Spacer()
                     // The ring draws the number the `statItem` beside it just spoke, so
@@ -660,7 +670,6 @@ struct DashboardView: View {
         }
         .padding(AppSpacing.lg)
         .strideCard(cornerRadius: AppRadius.lg)
-        .appShadow(.e1)
     }
 
     /// Distance in meters that fills a weekly-load bar to the top.
@@ -792,7 +801,7 @@ struct DashboardView: View {
     private var selectedDaySection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(selectedDayLabel)
-                .font(.sectionHeader)
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, AppSpacing.xs)
                 .adaptiveAnimation(AppAnimation.bouncy, value: selectedDate)
@@ -810,7 +819,13 @@ struct DashboardView: View {
                 case .beforePlanStart(let daysUntilStart):
                     planStartsSoonCard(daysUntilStart: daysUntilStart)
                 case .outsidePlan:      outsidePlanCard
-                case .noPlan:           noPlanCard
+                case .noPlan:
+                    VStack(spacing: AppSpacing.sm) {
+                        noPlanCard
+                        // The card used to point at the Plan tab with no way to get there.
+                        Button("Create a Plan") { container.appNavigation.select(.plan) }
+                            .buttonStyle(.strideButton(.secondary, compact: true))
+                    }
                 }
             } else {
                 ForEach(sessionsForSelectedDate) { workout in
@@ -889,7 +904,7 @@ struct DashboardView: View {
     private var restDayCard: some View {
         emptyDayCard(
             icon: .moon,
-            tint: .zoneEasy,
+            tint: .secondary,
             title: "Rest day",
             subtitle: "Recovery is part of training."
         )
@@ -973,7 +988,8 @@ struct DashboardView: View {
         } label: {
             NextUpCardView(
                 briefing: NextUpBriefing.make(for: workout, unit: appSettings.unitPreference),
-                workoutType: workout.workoutType
+                workoutType: workout.workoutType,
+                isHero: racePlan == nil
             )
         }
         .buttonStyle(.plain)
@@ -985,7 +1001,7 @@ struct DashboardView: View {
             icon: .calendar,
             tint: .brand,
             title: "No training plan yet",
-            subtitle: "Create a plan in the Plan tab, or start a free run below."
+            subtitle: "Build a plan around your race, or start a free run below."
         )
     }
 
@@ -1006,33 +1022,46 @@ struct DashboardView: View {
                 Text(title)
                     .font(.bodyStrong)
                 Text(subtitle)
-                    .font(.caption)
+                    .font(.dsCaption)
                     .foregroundStyle(.secondary)
             }
             Spacer()
         }
-        .padding(18)
-        .background(
-            RoundedRectangle(cornerRadius: AppRadius.lg)
-                .fill(
-                    LinearGradient(
-                        colors: [tint.opacity(0.12), tint.opacity(0.04)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppRadius.lg)
-                        .strokeBorder(tint.opacity(0.2), lineWidth: 0.5)
-                )
-        )
+        .padding(AppSpacing.lg)
+        // A plain card: the tint lives in the icon tile. A tinted ground made this one of
+        // three different card treatments stacked on Home.
+        .strideCard()
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(title). \(subtitle)")
     }
 
     // MARK: - Free Run Button
 
+    /// True when the selected day's own session has its start button on screen. The free
+    /// run then steps down to a secondary button, so the screen has one primary action.
+    private var scheduledStartIsShowing: Bool {
+        canStartSelectedDay && sessionsForSelectedDate.contains { !$0.isCompleted }
+    }
+
+    @ViewBuilder
     private var startRunButton: some View {
+        if scheduledStartIsShowing && !container.workoutTrackerService.isRecording {
+            Button {
+                startRun(fulfilling: nil)
+            } label: {
+                HStack(spacing: 10) {
+                    StrideIcon(name: .run, size: 20, color: .brandText, strokeWeight: 2.0)
+                    Text(freeRunButtonTitle)
+                }
+            }
+            .buttonStyle(.strideButton(.secondary))
+            .accessibilityIdentifier("dashboard.startFreeRun")
+        } else {
+            primaryFreeRunButton
+        }
+    }
+
+    private var primaryFreeRunButton: some View {
         Button {
             startRun(fulfilling: nil)
         } label: {
@@ -1149,8 +1178,11 @@ struct DashboardView: View {
         // run; the advisory reasons forwards, from tomorrow's forecast. Both are about the
         // heat, and stacking them puts two hydration tips on one screen — so when there is
         // a forecast on the page, the retrospective one stands down.
-        guard heatAdvisory != nil else { return cards }
-        return cards.filter { $0.kind != .heat }
+        // The day card above already says the plan starts soon, or that there is no plan;
+        // the coach repeating it put "Week 1 begins…" on the screen twice.
+        let fresh = cards.filter { $0.kind != .planStartsSoon && $0.kind != .noPlan }
+        guard heatAdvisory != nil else { return fresh }
+        return fresh.filter { $0.kind != .heat }
     }
 
     /// Asks Apple's model (the runner's AI Coach choice, Private Cloud Compute by

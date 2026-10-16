@@ -52,7 +52,7 @@ struct OBWelcome: View {
 
                 Spacer(minLength: 40)
 
-                Text("WELCOME TO STRIDE.")
+                Text("WELCOME TO STRIDE")
                     .font(.dsCaption2.weight(.bold))
                     .kerning(1.8)
                     .foregroundStyle(.brandText)
@@ -124,7 +124,9 @@ struct OBWelcome: View {
                 .opacity(appeared ? 1 : 0)
                 .adaptiveAnimation(AppAnimation.entrance.delay(0.34), value: appeared)
 
-                Spacer().frame(height: 34)
+                // The step ignores the safe area, so this has to clear the home indicator
+                // (34pt) itself. At exactly 34 the button sat on the indicator's line.
+                Spacer().frame(height: 34 + AppSpacing.lg)
             }
             .padding(.horizontal, AppSpacing.xxl)
         }
@@ -168,7 +170,7 @@ struct OBWelcomeBack: View {
                 StrideAppMark(size: 120)
                 Spacer(minLength: 40)
 
-                Text("WELCOME BACK.")
+                Text("WELCOME BACK")
                     .font(.dsCaption2.weight(.bold))
                     .kerning(1.8)
                     .foregroundStyle(.brandText)
@@ -388,7 +390,7 @@ struct OBShell<Content: View>: View {
                         // `stepIndex` directly rather than `stepIndex + 1`, which used to
                         // start at "2/total" and print the last number twice.
                         Text("\(stepIndex)/\(total)")
-                            .font(.dsCaption2.weight(.bold).monospaced())
+                            .font(.dsCaption2.weight(.bold).monospacedDigit())
                             .foregroundStyle(.secondary)
                     }
                     .padding(.horizontal, AppSpacing.xl)
@@ -532,7 +534,7 @@ struct OBRaceCard: View {
                         Text(race.localizedName).font(.bodyStrong)
                         Text(distanceLabel)
                             .font(distanceLabelIsMeasurement
-                                  ? .dsCaption.weight(.semibold).monospaced()
+                                  ? .dsCaption.weight(.semibold).monospacedDigit()
                                   : .dsCaption.weight(.semibold))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
@@ -588,11 +590,11 @@ struct OBCustomDistanceCard: View {
             HStack(spacing: 10) {
                 StrideIcon(name: .ruler, size: 18, color: .brand)
                 Text("RACE DISTANCE")
-                    .font(.sectionHeader)
+                    .strideEyebrow()
                     .foregroundStyle(.secondary)
                 Spacer()
                 Text(displayValue)
-                    .font(.dsHeadline.weight(.bold).monospaced())
+                    .font(.dsHeadline.weight(.bold).monospacedDigit())
                     .foregroundStyle(.brandText)
             }
 
@@ -641,7 +643,7 @@ struct OBRaceDetailsCard: View {
             HStack(spacing: 10) {
                 StrideIcon(name: .flag, size: 18, color: .brand)
                 Text("GOAL RACE")
-                    .font(.sectionHeader)
+                    .strideEyebrow()
                     .foregroundStyle(.secondary)
             }
 
@@ -700,7 +702,7 @@ struct OBStartDateCard: View {
             HStack(spacing: 10) {
                 StrideIcon(name: .calendar, size: 18, color: .brand)
                 Text("START DATE")
-                    .font(.sectionHeader)
+                    .strideEyebrow()
                     .foregroundStyle(.secondary)
             }
 
@@ -813,7 +815,7 @@ struct OBFitnessRow: View {
                     .padding(.leading, 38)
 
                 Text(planStartLabel)
-                    .font(.dsCaption.weight(.semibold).monospaced())
+                    .font(.dsCaption.weight(.semibold).monospacedDigit())
                     .foregroundStyle(.secondary.opacity(0.75))
                     .padding(.leading, 38)
             }
@@ -859,7 +861,7 @@ struct OBLevelRow: View {
                         }
                         return String(format: "%.0f km/wk base", km)
                     }())
-                        .font(.dsCaption.weight(.semibold).monospaced())
+                        .font(.dsCaption.weight(.semibold).monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -892,7 +894,7 @@ struct OBTimeWheelColumn: View {
             Picker(label, selection: $value) {
                 ForEach(range, id: \.self) { option in
                     Text(String(format: "%02d", option))
-                        .font(.dsTitle1.monospaced())
+                        .font(.dsTitle1.monospacedDigit())
                         .foregroundStyle(isMuted ? .secondary : .primary)
                         .tag(option)
                 }
@@ -958,7 +960,7 @@ struct OBPaceCell: View {
                     .kerning(0.8)
                     .foregroundStyle(color)
                 Text(pace)
-                    .font(.dsSubhead.weight(.semibold).monospaced())
+                    .font(.dsSubhead.weight(.semibold).monospacedDigit())
             }
             Spacer()
         }
@@ -1006,7 +1008,7 @@ struct OBPermissionRow: View {
                         ZStack {
                             Circle().fill(Color.success)
                                 .frame(width: 22, height: 22)
-                            StrideIcon(name: .check, size: 11, color: .white, strokeWeight: 3)
+                            StrideIcon(name: .check, size: 11, color: .onFill, strokeWeight: 3)
                         }
                         Text("Allowed")
                             .font(.dsCaption.weight(.semibold))
@@ -1110,7 +1112,7 @@ struct OBReady: View {
                     StrideProgressBar(value: 1, height: 4)
                         .accessibilityHidden(true)
                     Text("\(progressTotal)/\(progressTotal)")
-                        .font(.dsCaption2.weight(.bold).monospaced())
+                        .font(.dsCaption2.weight(.bold).monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, AppSpacing.xl)
@@ -1206,7 +1208,7 @@ private struct OBSummaryStat: View {
                 .kerning(0.6)
                 .foregroundStyle(.secondary)
             Text(value)
-                .font(.dsTitle2.monospaced())
+                .font(.dsTitle2.monospacedDigit())
                 .kerning(-0.5)
                 .foregroundStyle(.primary)
         }
@@ -1272,7 +1274,7 @@ private struct WeeklyMileageChart: View {
                 ForEach(Array(bars.enumerated()), id: \.element.n) { index, bar in
                     VStack(spacing: 4) {
                         Text("\(bar.mi)")
-                            .font(.dsCaption2.weight(.semibold).monospaced())
+                            .font(.dsCaption2.weight(.semibold).monospacedDigit())
                             .foregroundStyle(.secondary)
                             .opacity(barsVisible ? 1 : 0)
                         RoundedRectangle(cornerRadius: AppRadius.micro)
@@ -1280,7 +1282,7 @@ private struct WeeklyMileageChart: View {
                             .frame(height: barsVisible ? max(6, CGFloat(bar.mi) / CGFloat(peakMiles) * 72) : 2)
                             .animation(AppAnimation.bouncy.delay(Double(index) * 0.04), value: barsVisible)
                         Text("W\(bar.n)")
-                            .font(.dsCaption2.weight(.semibold).monospaced())
+                            .font(.dsCaption2.weight(.semibold).monospacedDigit())
                             .foregroundStyle(Color.secondary.opacity(0.6))
                     }
                     .frame(maxWidth: .infinity)

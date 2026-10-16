@@ -36,7 +36,7 @@ extension RunSummaryView {
         }
         .padding(AppSpacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .strideCard(cornerRadius: AppRadius.md)
+        .strideCard()
         .sensoryFeedback(.selection, trigger: workout.feelRaw)
     }
 

@@ -25,7 +25,7 @@ struct PlanDetailView: View {
                 PlanSummaryCard(plan: plan)
 
                 Text("TRAINING WEEKS")
-                    .font(.sectionHeader)
+                    .strideEyebrow()
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -88,7 +88,7 @@ struct PlanSummaryCard: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("SUMMARY")
-                        .font(.sectionHeader)
+                        .strideEyebrow()
                         .foregroundStyle(.secondary)
                     Text(dateRange)
                         .font(.caption)
@@ -102,7 +102,7 @@ struct PlanSummaryCard: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .lastTextBaseline) {
                     Text("\(Int((summary.adherence * 100).rounded()))%")
-                        .font(.dsTitle1.monospaced())
+                        .font(.dsTitle1.monospacedDigit())
                         .foregroundStyle(.brandText)
                     Text("\(summary.completedCount) of \(summary.scheduledCount) workouts completed")
                         .font(.caption)
@@ -158,7 +158,7 @@ struct PlanSummaryCard: View {
             }
         }
         .padding()
-        .strideCard(cornerRadius: AppRadius.md)
+        .strideCard()
     }
 }
 
@@ -207,7 +207,7 @@ private struct TypeBreakdownRow: View {
             Spacer()
 
             Text("\(stat.completed)/\(stat.scheduled)")
-                .font(.dsFootnote.weight(.medium).monospaced())
+                .font(.dsFootnote.weight(.medium).monospacedDigit())
                 .foregroundStyle(.secondary)
 
             StrideProgressBar(value: fraction, tint: stat.type.color, height: 6)
@@ -242,7 +242,7 @@ struct WeekCardView: View {
                     if week.isCompleted {
                         ZStack {
                             Circle().fill(Color.success).frame(width: 20, height: 20)
-                            StrideIcon(name: .check, size: 10, color: .white, strokeWeight: 3)
+                            StrideIcon(name: .check, size: 10, color: .onFill, strokeWeight: 3)
                         }
                     }
                     StrideIcon(name: .chevronDown, size: 12, color: .secondary, strokeWeight: 2)
@@ -266,7 +266,7 @@ struct WeekCardView: View {
                 }
             }
         }
-        .strideCard(cornerRadius: AppRadius.md)
+        .strideCard()
     }
 }
 

@@ -27,7 +27,7 @@ extension RunSummaryView {
                     }
                 }
                 .padding(14)
-                .strideCard(cornerRadius: AppRadius.md)
+                .strideCard()
 
                 if insights.recentTempoCount == 0 {
                     Text("This is your first tempo run — keep it up to track pace trends.")
@@ -47,7 +47,7 @@ extension RunSummaryView {
                     .kerning(0.8)
                     .foregroundStyle(.secondary)
                 Text(insights.achievedPaceSecondsPerKm.paceString(unit: appSettings.unitPreference))
-                    .font(.dsTitle2.weight(.semibold).monospaced())
+                    .font(.dsTitle2.weight(.semibold).monospacedDigit())
                     .kerning(-0.5)
 
                 if let prev = insights.previousBestTempoSecondsPerKm {
@@ -74,7 +74,7 @@ extension RunSummaryView {
                         .kerning(0.8)
                         .foregroundStyle(.secondary)
                     Text(target.paceString(unit: appSettings.unitPreference))
-                        .font(.dsCallout.weight(.semibold).monospaced())
+                        .font(.dsCallout.weight(.semibold).monospacedDigit())
                         .foregroundStyle(.secondary)
                     tempoTargetStatusChip(actual: insights.achievedPaceSecondsPerKm, target: target)
                 }
@@ -115,7 +115,7 @@ extension RunSummaryView {
                         .foregroundStyle(.secondary)
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
                         Text(String(format: "%.1f", vdot))
-                            .font(.dsTitle3.monospaced())
+                            .font(.dsTitle3.monospacedDigit())
                         if let prev = insights.previousVDOT {
                             let delta = vdot - prev
                             Text(delta >= 0
@@ -135,7 +135,7 @@ extension RunSummaryView {
                         .kerning(0.8)
                         .foregroundStyle(.secondary)
                     Text(String(format: "%.1f", prev))
-                        .font(.dsTitle3.monospaced())
+                        .font(.dsTitle3.monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .trailing)
@@ -152,7 +152,7 @@ extension RunSummaryView {
                     .foregroundStyle(.secondary)
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text(String(format: "±%.0fs/km", stdDevSeconds))
-                        .font(.dsHeadline.monospaced())
+                        .font(.dsHeadline.monospacedDigit())
                     Text("std dev")
                         .font(.dsCaption2)
                         .foregroundStyle(.secondary)

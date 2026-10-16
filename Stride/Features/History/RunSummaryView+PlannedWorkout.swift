@@ -78,7 +78,7 @@ extension RunSummaryView {
                     }
                 }
                 .padding(14)
-                .strideCard(cornerRadius: AppRadius.md)
+                .strideCard()
             }
         } else if let avg = workout.averageHeartRate, avg >= 155 {
             HStack(spacing: 10) {
@@ -131,14 +131,14 @@ extension RunSummaryView {
                 .foregroundStyle(.secondary)
                 .frame(minWidth: 64, alignment: .leading)
             Text(planned)
-                .font(.dsCaption.monospaced())
+                .font(.dsCaption.monospacedDigit())
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             Image(systemName: "arrow.right")
                 .font(.dsCaption2.weight(.semibold))
                 .foregroundStyle(.tertiary)
             Text(actual)
-                .font(.dsCaption.weight(.bold).monospaced())
+                .font(.dsCaption.weight(.bold).monospacedDigit())
                 .foregroundStyle(.primary)
                 .lineLimit(1)
             Spacer(minLength: 4)

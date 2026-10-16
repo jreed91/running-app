@@ -33,7 +33,7 @@ extension RunSummaryView {
                 }
             }
             .padding(AppSpacing.lg)
-            .strideCard(cornerRadius: AppRadius.md)
+            .strideCard()
         }
     }
 
@@ -45,11 +45,11 @@ extension RunSummaryView {
             Spacer()
             Text(lap.durationSeconds.durationString)
                 .frame(width: 72, alignment: .trailing)
-                .font(.dsCaption.monospaced())
+                .font(.dsCaption.monospacedDigit())
                 .foregroundStyle(.secondary)
             Text(String(format: "%.2f", lap.distanceMeters.distanceValue(unit: appSettings.unitPreference)))
                 .frame(width: 60, alignment: .trailing)
-                .font(.dsCaption.monospaced())
+                .font(.dsCaption.monospacedDigit())
                 .foregroundStyle(.secondary)
             Text(lap.paceSecondsPerKm.paceValueString(unit: appSettings.unitPreference))
                 .frame(width: 72, alignment: .trailing)

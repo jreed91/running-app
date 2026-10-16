@@ -26,7 +26,7 @@ struct RunPlaylistCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("RUN PLAYLIST")
-                .font(.sectionHeader)
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
 
             energyBar

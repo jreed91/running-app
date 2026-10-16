@@ -276,7 +276,7 @@ struct NewPlanOnboardingView: View {
         VStack(spacing: 18) {
             VStack(spacing: 12) {
                 Text("5K FINISH TIME")
-                    .font(.sectionHeader)
+                    .strideEyebrow()
                     .foregroundStyle(.secondary)
 
                 HStack(spacing: 0) {
@@ -289,7 +289,7 @@ struct NewPlanOnboardingView: View {
                     .frame(width: 80)
 
                     Text(":")
-                        .font(.dsLargeTitle.monospaced())
+                        .font(.dsLargeTitle.monospacedDigit())
                         .foregroundStyle(.brandText)
 
                     Picker("Seconds", selection: $fiveKSeconds) {
@@ -303,7 +303,7 @@ struct NewPlanOnboardingView: View {
 
                 HStack(spacing: 6) {
                     Text(String(format: "VDOT %.0f", vdotValue))
-                        .font(.dsFootnote.weight(.bold).monospaced())
+                        .font(.dsFootnote.weight(.bold).monospacedDigit())
                         .foregroundStyle(.brandText)
                     Text("·").foregroundStyle(.secondary)
                     Text(vdotLabel)
@@ -319,7 +319,7 @@ struct NewPlanOnboardingView: View {
 
             VStack(alignment: .leading, spacing: 10) {
                 Text("YOUR TRAINING PACES (\(appSettings.unitPreference.paceLabel.uppercased()))")
-                    .font(.sectionHeader)
+                    .strideEyebrow()
                     .foregroundStyle(.secondary)
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
                     OBPaceCell(zone: "Easy", color: .zoneEasy, pace: easyLabel)
@@ -435,7 +435,7 @@ struct NewPlanOnboardingView: View {
                                     .kerning(0.6)
                                     .opacity(isOn ? 0.85 : 0.6)
                                 Text("\(dayNumber)")
-                                    .font(.dsSubhead.weight(.bold).monospaced())
+                                    .font(.dsSubhead.weight(.bold).monospacedDigit())
                             }
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 52)
@@ -443,7 +443,7 @@ struct NewPlanOnboardingView: View {
                                     isOn ? Color.brand : Color.surfaceTertiary,
                                     in: RoundedRectangle(cornerRadius: AppRadius.md)
                                 )
-                                .foregroundStyle(isOn ? Color.white : Color.secondary)
+                                .foregroundStyle(isOn ? Color.onFill : Color.secondary)
                                 .appGlow(.subtle, color: .brand, isActive: isOn)
                         }
                         .buttonStyle(.plain)
@@ -452,7 +452,7 @@ struct NewPlanOnboardingView: View {
 
                 HStack(spacing: 10) {
                     Text("\(selectedDays.count)")
-                        .font(.dsTitle2.monospaced())
+                        .font(.dsTitle2.monospacedDigit())
                         .foregroundStyle(.brandText)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Days per week").font(.captionStrong)

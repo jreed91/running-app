@@ -54,7 +54,7 @@ struct RunPlaylistDetailView: View {
                     .fill(color(for: section.energy))
                     .frame(width: 8, height: 8)
                 Text(section.energy.localizedName.uppercased())
-                    .font(.sectionHeader)
+                    .strideEyebrow()
                     .foregroundStyle(.secondary)
                 Spacer()
                 Text(section.seconds.durationString)
