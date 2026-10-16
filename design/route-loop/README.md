@@ -89,16 +89,32 @@ Text on the route or on brand is always `onFill`, never white (2.8:1).
 
 ## App Store screenshots
 
-`.github/workflows/app-store-screenshots.yml` captures them from the demo history (run it
+Screenshots are taken in dark appearance, so the screen, the night-map frame and the
+icon are one picture. `.github/workflows/app-store-screenshots.yml` captures them from the demo history (run it
 from the Actions tab, or label a PR `app-store-screenshots`). `AppStoreScreenshotTests`
 takes the iPhone screens at 9:41 on the largest iPhone; the Watch app's
 `--seed-demo-data --demo-page <n>` gives each Watch page; `design/appstore/compose.mjs`
 frames the iPhone ones with the captions in `design/appstore/captions.json`.
 
+To take them on a Mac instead (the workflow's steps, by hand):
+
+```sh
+xcodegen generate
+UDID=<an iPhone 17 Pro Max simulator>   # xcrun simctl list devices available
+xcrun simctl boot "$UDID"; xcrun simctl ui "$UDID" appearance dark
+xcrun simctl status_bar "$UDID" override --time 9:41 --batteryState charged --batteryLevel 100
+TEST_RUNNER_APP_STORE_CAPTURE_DIR="$PWD/AppStore/iphone-raw" xcodebuild test -scheme Stride \
+  -destination "platform=iOS Simulator,id=$UDID" -only-testing:StrideUITests/AppStoreScreenshotTests
+cd design/appstore && npm install --no-save playwright@1.49.1 && npx playwright install webkit
+node compose.mjs ../../AppStore/iphone-raw ../../AppStore/iphone-6.9 webkit
+```
+
 ## Rules
 
 1. **One ground per appearance.** Light is daylight paper everywhere, dark is the night
-   map everywhere. No always-dark card on a light page, no forced-dark screen.
+   map everywhere. No always-dark card on a light page, no forced-dark screen. Three
+   exceptions, and only these: the share card (ink, it leaves the app), the Watch (ink,
+   watchOS is always dark), and the live run screen (below).
 2. **One hero per screen.** `.heroCard()` marks the card that matters most: today's
    session, the race, the profile. Every other card is `.strideCard()`.
 3. **The route gradient means progress or go.** Use it for progress rings and bars, primary
@@ -108,6 +124,15 @@ frames the iPhone ones with the captions in `design/appstore/captions.json`.
 5. **The grid is a texture, not a chart.** Only on heroes and full-screen backdrops (welcome, onboarding),
    at a 30–36pt pitch, never under data.
 6. **Zone colours stay data.** They mark training intensity and nothing else.
+
+### The live run screen
+
+`ActiveRunView` fills the screen with the current zone colour, darkened, with white
+figures, in both appearances. It is the one place a zone colour is a ground: mid-run the
+screen is read in a glance, often in sunlight, and a screen-wide zone colour is the
+fastest thing to read. It covers the live screen only, paused included (pausing is a state of
+that screen, not a screen of its own). The finished-run summary and the active strength
+screen sit on the normal Route Loop ground.
 
 ## Icon
 

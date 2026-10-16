@@ -44,7 +44,7 @@ jobs:
           mkdir -p Stride.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
           cp ci_scripts/Package.resolved Stride.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 
-      - name: Boot the iPhone simulator at 9:41
+      - name: Boot the iPhone simulator at 9:41, in dark appearance
         run: |
           UDID=$(xcrun simctl list devices available -j \
             | jq -r --arg name "$IPHONE" '[.devices | to_entries[] | select(.key | contains("iOS")) | .value[] | select(.name == $name)] | .[0].udid // empty')
@@ -57,6 +57,9 @@ jobs:
           echo "IPHONE_UDID=$UDID" >> "$GITHUB_ENV"
           xcrun simctl boot "$UDID" || true
           xcrun simctl bootstatus "$UDID" -b
+          # Dark, so the screen matches the night-map frame and the icon
+          # (design/route-loop/README.md, "App Store screenshots").
+          xcrun simctl ui "$UDID" appearance dark
           xcrun simctl status_bar "$UDID" override --time "9:41" --dataNetwork wifi --wifiMode active \
             --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
 

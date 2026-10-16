@@ -595,7 +595,7 @@ struct OnboardingView: View {
                             .frame(height: 52)
                             .background(isOn ? Color.brand : Color.surfaceTertiary,
                                         in: RoundedRectangle(cornerRadius: AppRadius.md))
-                            .foregroundStyle(isOn ? Color.white : Color.primary)
+                            .foregroundStyle(isOn ? Color.onFill : Color.primary)
                             .appGlow(.standard, color: .brand, isActive: isOn)
                         }
                         .buttonStyle(BouncyButtonStyle())
