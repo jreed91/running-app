@@ -44,7 +44,7 @@ struct OBSpecializedPlanCard: View {
                 OBRadio(isSelected: isSelected, color: .brand)
             }
             .padding(AppSpacing.lg)
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+            .strideCard(cornerRadius: AppRadius.lg)
             .overlay(RoundedRectangle(cornerRadius: AppRadius.lg)
                 .strokeBorder(isSelected ? Color.brand : Color.clear, lineWidth: 2))
         }
@@ -83,14 +83,14 @@ struct OBDueDateCard: View {
             HStack(spacing: 8) {
                 Text(gestationalAgeAtStart.noteForm)
                     .font(.dsSubhead.weight(.bold).monospaced())
-                    .foregroundStyle(.brand)
+                    .foregroundStyle(.brandText)
                 Text("weeks at plan start · \(gestationalAgeAtStart.trimester.localizedName)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
         .padding(AppSpacing.lg)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .strideCard(cornerRadius: AppRadius.lg)
     }
 }
 
@@ -160,7 +160,7 @@ struct OBPregnancyHealthCheckCard: View {
                 .foregroundStyle(.secondary)
         }
         .padding(AppSpacing.lg)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .strideCard(cornerRadius: AppRadius.lg)
     }
 
     private func disclosure(
@@ -258,7 +258,7 @@ struct OBPrePregnancyRunningCard: View {
                 .foregroundStyle(.secondary)
         }
         .padding(AppSpacing.lg)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .strideCard(cornerRadius: AppRadius.lg)
     }
 }
 
@@ -288,7 +288,7 @@ struct OBPregnancyReady: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            Color.surfacePrimary.ignoresSafeArea()
+            MapBackdrop().ignoresSafeArea()
 
             VStack(spacing: 0) {
                 Spacer().frame(height: 54)
@@ -325,7 +325,7 @@ struct OBPregnancyReady: View {
                             Text("YOUR PLAN")
                                 .font(.dsCaption2.weight(.bold))
                                 .kerning(1.6)
-                                .foregroundStyle(.brand)
+                                .foregroundStyle(.brandText)
                             Text("\(planWeeks)-week pregnancy plan\nthrough to your due date.")
                                 .font(.dsTitle1.weight(.heavy))
                                 .kerning(-0.7)
@@ -342,7 +342,7 @@ struct OBPregnancyReady: View {
                             OBPregnancyStat(label: "RUN DAYS", value: "\(runDaysPerWeek)")
                         }
                         .padding(AppSpacing.lg)
-                        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                        .strideCard(cornerRadius: AppRadius.lg)
                         .padding(.horizontal, AppSpacing.lg)
 
                         VStack(alignment: .leading, spacing: 12) {
@@ -358,7 +358,7 @@ struct OBPregnancyReady: View {
                             }
                         }
                         .padding(AppSpacing.lg)
-                        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                        .strideCard(cornerRadius: AppRadius.lg)
                         .padding(.horizontal, AppSpacing.lg)
 
                         VStack(alignment: .leading, spacing: 10) {

@@ -33,7 +33,7 @@ extension RunSummaryView {
                 }
             }
             .padding(AppSpacing.lg)
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .strideCard(cornerRadius: AppRadius.md)
         }
     }
 

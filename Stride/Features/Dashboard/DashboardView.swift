@@ -659,7 +659,7 @@ struct DashboardView: View {
             weeklyLoadChart
         }
         .padding(AppSpacing.lg)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .strideCard(cornerRadius: AppRadius.lg)
         .appShadow(.e1)
     }
 
@@ -1297,16 +1297,22 @@ private struct ProgressRingView: View {
     let size: CGFloat
     let lineWidth: CGFloat
 
+    /// False until the ring first appears, so the route fills in from zero rather than
+    /// showing up already drawn — the same entrance as the app mark's loop.
+    @State private var hasAppeared = false
+
     var body: some View {
         ZStack {
             Circle()
                 .stroke(Color.brand.opacity(0.15), lineWidth: lineWidth)
             Circle()
-                .trim(from: 0, to: progress)
+                .trim(from: 0, to: hasAppeared ? progress : 0)
                 .stroke(.route, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                 .rotationEffect(.degrees(-90))
                 .adaptiveAnimation(AppAnimation.gentle, value: progress)
+                .adaptiveAnimation(AppAnimation.gentle, value: hasAppeared)
         }
         .frame(width: size, height: size)
+        .onAppear { hasAppeared = true }
     }
 }

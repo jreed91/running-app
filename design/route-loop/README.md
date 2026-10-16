@@ -7,7 +7,7 @@ three things, and nothing else carries the brand:
 | --- | --- | --- |
 | **The route** | One stroke with round caps, amber where it starts and orange where it ends | `LinearGradient.route` (`.fill(.route)`, `.stroke(.route, …)`) |
 | **The start pin** | A white disc with an orange centre | `StartPin(diameter:)` |
-| **The night map** | Navy ink ground with a faint square grid | `.inkGround`, `MapGridPattern`, `.inkHero()`, `NightMapBackdrop` |
+| **The map** | A faint square grid on the page: daylight paper in light, night ink in dark | `MapGridPattern`, `MapBackdrop`, `.heroCard()` |
 
 The live reference, with every token, type style and component, is the Design System
 artifact *Stride Route Loop*. This file is the in-repo summary; the Swift sources under
@@ -23,9 +23,12 @@ Every colour is an asset-catalog colour with light, dark and Increase Contrast v
 | --- | --- | --- | --- |
 | `brand` | `#FF5A1A` | `#FF7438` | The route's orange end. Accent, tint, glows, active states. As text only at 24pt+ or bold 19pt+ on light (3.1:1 on white); anything smaller uses Increase Contrast's `#C2410C`. |
 | `brandGlow` | `#FFB36B` | `#FFBE7D` | The route's amber start. Only inside `LinearGradient.route` or as a highlight on `ink`; never text on a light surface. |
-| `ink` | `#1F2433` | `#1F2433` | The always-dark hero ground: up-next card, race card, profile card, share card, welcome screens. |
+| `ink` | `#1F2433` | `#1F2433` | The icon's navy: the app mark and the share card only. Never a card on a light page. |
 | `inkDeep` | `#0D1018` | `#0D1018` | Bottom of the ink gradient. |
-| `onInk` / `onInkMuted` | `#F5F6FA` / `#A9AFC2` | same | Text on ink: 14:1 and 7:1. `.inkHero()` sets the dark appearance, so `.primary` / `.secondary` also work there. |
+| `onInk` / `onInkMuted` | `#F5F6FA` / `#A9AFC2` | same | Text on ink (share card): 14:1 and 7:1. |
+| `brandText` | `#C2410C` | `#FF7438` | Orange *text*: eyebrows, links, inline figures. 4.7:1 on the page in light. |
+| `heroTop` → `heroBottom` | `#FFEDE1` → `#FFFFFF` | `#232A3C` → `#171B26` | The hero card's gradient (`LinearGradient.heroGround`): warm dawn paper in light, raised ink in dark. |
+| `cardStroke` | ink 8% | white 8% | The hairline on every card (`.strideCard()`) and hero. |
 | `onFill` | `#17120E` | `#17120E` | Text and glyphs on `brand`, `route` and the light zone fills: 6.0:1 on `brand`, 10.5:1 on `brandGlow`. Never white on orange (3.1:1). |
 | `mapGrid` | ink 6% | white 5% | Grid lines on page surfaces. On ink, `MapGridPattern(onInk: true)` draws white 5%. |
 | `surfacePrimary` | `#F3F4F8` | `#0D1018` | Page background. Cool, faintly blue: the map's paper. |
@@ -54,19 +57,39 @@ Every colour is an asset-catalog colour with light, dark and Increase Contrast v
 - `appShadow(.e1–.e3)` for height; `appGlow(_, color: .brand)` for emphasis. A primary
   action is the route gradient with a `.strong` brand glow.
 - Motion tokens live in `AppAnimations.swift`; every animation goes through
-  `adaptiveAnimation` so Reduce Motion is honoured.
+  `adaptiveAnimation` (or reads `accessibilityReduceMotion`) so Reduce Motion is honoured.
+
+## Motion
+
+The route draws itself, then the pin lands. `StrideAppMark(size:, drawsOn: true)` strokes
+the loop in with `AppAnimation.routeDraw` (1.1s ease-in-out) and drops the pin with
+`pinDrop` 0.85s later; `ProgressRingView` fills from zero with `gentle`;
+`StartPin(diameter:, pulses: true)` ripples with `pinPulse` for a live position.
+Everything else uses `entrance` (staggered 80ms), `bouncy`, `snappy` and `gentle`. Only
+the route and the pin get signature motion, a route draws once, one pulse per screen, and
+under Reduce Motion the mark appears whole and the pulse is off.
+
+## App Store screenshots
+
+`.github/workflows/app-store-screenshots.yml` captures them from the demo history (run it
+from the Actions tab, or label a PR `app-store-screenshots`). `AppStoreScreenshotTests`
+takes the iPhone screens at 9:41 on the largest iPhone; the Watch app's
+`--seed-demo-data --demo-page <n>` gives each Watch page; `design/appstore/compose.mjs`
+frames the iPhone ones with the captions in `design/appstore/captions.json`.
 
 ## Rules
 
-1. **One hero per screen.** `.inkHero()` marks the card that matters most: today's
-   session, the race, the profile. A screen of ink cards has no hero.
-2. **The route gradient means progress or go.** Use it for progress rings and bars, primary
+1. **One ground per appearance.** Light is daylight paper everywhere, dark is the night
+   map everywhere. No always-dark card on a light page, no forced-dark screen.
+2. **One hero per screen.** `.heroCard()` marks the card that matters most: today's
+   session, the race, the profile. Every other card is `.strideCard()`.
+3. **The route gradient means progress or go.** Use it for progress rings and bars, primary
    actions and drawn routes. Not for decoration or backgrounds.
-3. **The start pin means "you are here".** The start of a route, today on a plan, the
+4. **The start pin means "you are here".** The start of a route, today on a plan, the
    current point on a chart. One per view.
-4. **The grid is a texture, not a chart.** Only on ink grounds and full-screen backdrops,
+5. **The grid is a texture, not a chart.** Only on heroes and full-screen backdrops (welcome, onboarding),
    at a 30–36pt pitch, never under data.
-5. **Zone colours stay data.** They mark training intensity and nothing else.
+6. **Zone colours stay data.** They mark training intensity and nothing else.
 
 ## Icon
 

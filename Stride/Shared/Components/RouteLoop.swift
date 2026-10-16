@@ -8,7 +8,8 @@ import SwiftUI
 //
 // - the **route**: one stroke, round caps, the amber → orange `LinearGradient.route`;
 // - the **start pin**: a white disc with an orange centre, marking "you are here";
-// - the **map**: `ink` ground with a faint square grid.
+// - the **map**: a faint square grid on the page — daylight paper in light, night ink
+//   in dark. One ground per appearance; never a dark card on a light page.
 //
 // The loop's geometry is the icon's own path on its 1024-unit canvas
 // (`design/route-loop/icon-light.svg`), so the mark drawn here and the icon match.
@@ -42,11 +43,26 @@ struct RouteLoopShape: Shape {
 ///
 /// Marks the runner's own position on anything map-like — today on the plan, the
 /// current point on a chart, the start of a drawn route.
+///
+/// `pulses: true` adds a slow brand ripple around it, for a live position (the runner's
+/// start on Route Genius). The ripple is off under Reduce Motion.
 struct StartPin: View {
     var diameter: CGFloat = 16
+    var pulses = false
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var rippling = false
 
     var body: some View {
         ZStack {
+            if pulses && !reduceMotion {
+                Circle()
+                    .stroke(Color.brand, lineWidth: max(diameter * 0.08, 1.5))
+                    .scaleEffect(rippling ? 2.4 : 1)
+                    .opacity(rippling ? 0 : 0.7)
+                    .animation(AppAnimation.pinPulse, value: rippling)
+                    .onAppear { rippling = true }
+            }
             Circle().fill(Color.white)
             Circle()
                 .fill(Color.brand)
@@ -89,42 +105,67 @@ struct MapGridPattern: View {
     }
 }
 
-// MARK: - Ink hero surface
+// MARK: - Hero and card surfaces
 
-private struct InkHeroBackground: ViewModifier {
+private struct HeroCardBackground: ViewModifier {
     let cornerRadius: CGFloat
     let showsGrid: Bool
 
     func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         content
-            .foregroundStyle(Color.onInk)
-            .environment(\.colorScheme, .dark)
             .background {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(.inkGround)
+                shape
+                    .fill(.heroGround)
                     .overlay {
                         if showsGrid {
-                            MapGridPattern(onInk: true)
-                                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                            MapGridPattern()
+                                .clipShape(shape)
                         }
                     }
-                    .overlay(
-                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
-                    )
+                    .overlay {
+                        // The route's light falling on the card from the top corner.
+                        EllipticalGradient(
+                            colors: [Color.brand.opacity(0.16), .clear],
+                            center: .topTrailing,
+                            startRadiusFraction: 0,
+                            endRadiusFraction: 0.9
+                        )
+                        .clipShape(shape)
+                    }
+                    .overlay(shape.strokeBorder(Color.brand.opacity(0.22), lineWidth: 1))
             }
+            .appShadow(.e1)
+    }
+}
+
+private struct StrideCardBackground: ViewModifier {
+    let cornerRadius: CGFloat
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        content
+            .background(.surfaceSecondary, in: shape)
+            .overlay(shape.strokeBorder(Color.cardStroke, lineWidth: 1))
     }
 }
 
 extension View {
-    /// Puts the view on the Route Loop's night-map ground: an `ink` gradient card with
-    /// the map grid, in the dark appearance whatever the app's, so `.primary` and
-    /// `.secondary` text read on it in both.
+    /// The screen's hero: the card that matters most — the next session, the race, the
+    /// profile. Warm dawn paper with the map grid in light, raised ink in dark, with the
+    /// route's light in the corner and a brand hairline. It follows the appearance, so
+    /// it never puts a dark card on a light page.
     ///
-    /// For the one or two hero cards on a screen — the next session, the race — not
-    /// for every card: a screen of ink cards has no hero.
-    func inkHero(cornerRadius: CGFloat = AppRadius.lg, showsGrid: Bool = true) -> some View {
-        modifier(InkHeroBackground(cornerRadius: cornerRadius, showsGrid: showsGrid))
+    /// One per screen: a screen of heroes has no hero.
+    func heroCard(cornerRadius: CGFloat = AppRadius.lg, showsGrid: Bool = true) -> some View {
+        modifier(HeroCardBackground(cornerRadius: cornerRadius, showsGrid: showsGrid))
+    }
+
+    /// Every other card: `surfaceSecondary` with a `cardStroke` hairline. The hairline
+    /// does the separating a shadow used to, so cards sit on the page calmly in both
+    /// appearances.
+    func strideCard(cornerRadius: CGFloat = AppRadius.lg) -> some View {
+        modifier(StrideCardBackground(cornerRadius: cornerRadius))
     }
 }
 
@@ -143,27 +184,33 @@ extension View {
         }
         .frame(width: 160, height: 160)
         .padding()
-        .inkHero()
+        .heroCard()
 
         Text("Tempo · 8 km")
             .font(.dsHeadline)
             .padding()
-            .inkHero(cornerRadius: AppRadius.md)
+            .strideCard(cornerRadius: AppRadius.md)
     }
     .padding()
     .background(Color.surfacePrimary)
 }
 
-/// A full-screen night map: the `ink` ground, the grid, and a warm route glow from the
-/// top. For the welcome screens. Pair it with `.environment(\.colorScheme, .dark)` on
-/// the screen so its text reads on the ink in both appearances.
-struct NightMapBackdrop: View {
+/// The full-screen map: the page ground, the grid, and the route's warm glow from the
+/// top. Daylight paper in light, the night map in dark — the welcome screens and
+/// onboarding sit on it, so the first minute of the app is one continuous surface.
+struct MapBackdrop: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         ZStack {
-            Rectangle().fill(.inkGround)
-            MapGridPattern(pitch: 36, onInk: true)
+            if colorScheme == .dark {
+                Rectangle().fill(.inkGround)
+            } else {
+                Rectangle().fill(.surfacePrimary)
+            }
+            MapGridPattern(pitch: 36)
             EllipticalGradient(
-                colors: [Color.brand.opacity(0.28), .clear],
+                colors: [Color.brand.opacity(colorScheme == .dark ? 0.28 : 0.18), .clear],
                 center: .top,
                 startRadiusFraction: 0,
                 endRadiusFraction: 0.85

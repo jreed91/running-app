@@ -130,7 +130,7 @@ struct AchievementsView: View {
             Spacer()
         }
         .padding(AppSpacing.lg)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .strideCard(cornerRadius: AppRadius.lg)
     }
 
     private func streakSubtitle(_ streak: StreakGoalService.StreakSummary) -> String {
@@ -176,7 +176,7 @@ struct AchievementsView: View {
             .accessibilityLabel("Edit weekly goal")
         }
         .padding(AppSpacing.lg)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .strideCard(cornerRadius: AppRadius.lg)
     }
 
     private func weeklyGoalSubtitle(_ weekly: StreakGoalService.WeeklyGoalProgress) -> String {
@@ -236,7 +236,7 @@ struct AchievementsView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, AppSpacing.sm)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .strideCard(cornerRadius: AppRadius.md)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(badge.title). \(badge.detail). \(badge.isEarned ? "Earned" : "\(Int(badge.progress * 100)) percent complete")")
     }
@@ -320,7 +320,7 @@ struct AchievementsView: View {
             }
         }
         .padding(AppSpacing.lg)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .strideCard(cornerRadius: AppRadius.md)
     }
 }
 

@@ -78,7 +78,7 @@ extension RunSummaryView {
                     }
                 }
                 .padding(14)
-                .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                .strideCard(cornerRadius: AppRadius.md)
             }
         } else if let avg = workout.averageHeartRate, avg >= 155 {
             HStack(spacing: 10) {

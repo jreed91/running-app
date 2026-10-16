@@ -22,7 +22,7 @@ extension RunSummaryView {
                             Text("AI COACH")
                                 .font(.dsCaption2.weight(.bold))
                                 .kerning(1.4)
-                                .foregroundStyle(.brand)
+                                .foregroundStyle(.brandText)
                         }
                         Text("Today's analysis")
                             .font(.dsHeadline.weight(.bold))
@@ -88,7 +88,7 @@ extension RunSummaryView {
                 Text("COACHING READ")
                     .font(.dsCaption2.weight(.bold))
                     .kerning(1.4)
-                    .foregroundStyle(.brand)
+                    .foregroundStyle(.brandText)
                 Spacer()
                 confidenceChip(insight.confidence)
             }
@@ -137,7 +137,7 @@ extension RunSummaryView {
                         } label: {
                             Text(prompt)
                                 .font(.dsCaption.weight(.semibold))
-                                .foregroundStyle(.brand)
+                                .foregroundStyle(.brandText)
                                 .padding(.horizontal, AppSpacing.md)
                                 .padding(.vertical, AppSpacing.sm)
                                 .background(.surfaceSecondary, in: Capsule())
@@ -247,7 +247,7 @@ extension RunSummaryView {
             }
         }
         .padding(14)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .strideCard(cornerRadius: AppRadius.md)
     }
 
     private func aiReactionRow(_ insight: AICoachInsight) -> some View {
@@ -260,10 +260,10 @@ extension RunSummaryView {
                 } label: {
                     Text(showFullAIAnalysis ? "Hide full analysis" : "Read full analysis")
                         .font(.dsSubhead.weight(.semibold))
-                        .foregroundStyle(.brand)
+                        .foregroundStyle(.brandText)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
-                        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                        .strideCard(cornerRadius: AppRadius.md)
                 }
                 .buttonStyle(.plain)
 
@@ -292,7 +292,7 @@ extension RunSummaryView {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .strideCard(cornerRadius: AppRadius.md)
     }
 
 
@@ -313,7 +313,7 @@ extension RunSummaryView {
                 .font(.dsHeadline)
                 .foregroundStyle(isActive ? Color.brand : Color.secondary)
                 .frame(width: 48, height: 48)
-                .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                .strideCard(cornerRadius: AppRadius.md)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(reaction == .up ? "Helpful" : "Not helpful")
@@ -345,7 +345,7 @@ extension RunSummaryView {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(AppSpacing.lg)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .strideCard(cornerRadius: AppRadius.md)
     }
 
     private func aiUnavailableCard(_ insight: AICoachInsight) -> some View {
@@ -359,6 +359,6 @@ extension RunSummaryView {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(AppSpacing.lg)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .strideCard(cornerRadius: AppRadius.md)
     }
 }

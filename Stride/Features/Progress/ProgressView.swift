@@ -194,7 +194,7 @@ struct ProgressDashboardView: View {
             )
         }
         .padding(AppSpacing.lg)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .strideCard(cornerRadius: AppRadius.md)
     }
 
     private func summaryStatCell(value: String, label: String) -> some View {
@@ -240,7 +240,7 @@ struct ProgressDashboardView: View {
             }
         }
         .padding(AppSpacing.xs)
-        .background(Color.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .strideCard(cornerRadius: AppRadius.md)
     }
 
     // MARK: - Tab picker
@@ -269,7 +269,7 @@ struct ProgressDashboardView: View {
             }
         }
         .padding(AppSpacing.xs)
-        .background(Color.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .strideCard(cornerRadius: AppRadius.md)
         .padding(.horizontal, AppSpacing.lg)
         .padding(.top, AppSpacing.sm)
         .padding(.bottom, AppSpacing.xs)
@@ -285,7 +285,7 @@ struct ProgressDashboardView: View {
             content()
         }
         .padding(AppSpacing.lg)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .strideCard(cornerRadius: AppRadius.md)
     }
 
     // MARK: - Weekly volume chart

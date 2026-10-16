@@ -135,7 +135,7 @@ struct RaceDayHubView: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(verbatim: "\(days)")
                     .font(.dsLargeTitle)
-                    .foregroundStyle(.brand)
+                    .foregroundStyle(.brandText)
                 Text(days == 1 ? "day to go" : "days to go")
                     .font(.dsTitle3)
                     .foregroundStyle(.secondary)
@@ -274,7 +274,7 @@ private struct RaceSplitsTable: View {
                     .font(.sectionHeader)
                 Text(verbatim: goal.tier.localizedName)
                     .font(.sectionHeader)
-                    .foregroundStyle(.brand)
+                    .foregroundStyle(.brandText)
             }
             .foregroundStyle(.secondary)
 

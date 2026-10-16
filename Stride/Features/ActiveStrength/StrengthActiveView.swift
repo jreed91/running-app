@@ -165,7 +165,7 @@ struct StrengthActiveView: View {
                 if let exercise = currentExercise {
                     Text("Set \(currentSetIndex + 1) of \(exercise.sets)")
                         .font(.dsCaption.weight(.semibold))
-                        .foregroundStyle(Color.brand)
+                        .foregroundStyle(.brandText)
                 }
             }
         }
@@ -219,7 +219,7 @@ struct StrengthActiveView: View {
             }
         }
         .padding(AppSpacing.lg)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .strideCard(cornerRadius: AppRadius.lg)
     }
 
     // MARK: - Log Set Card
@@ -289,7 +289,7 @@ struct StrengthActiveView: View {
             }
         }
         .padding(AppSpacing.lg)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .strideCard(cornerRadius: AppRadius.lg)
     }
 
     // MARK: - Rest Timer Card
@@ -325,14 +325,14 @@ struct StrengthActiveView: View {
             } label: {
                 Text("Skip Rest")
                     .font(.dsSubhead.weight(.semibold))
-                    .foregroundStyle(Color.brand)
+                    .foregroundStyle(.brandText)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, AppSpacing.md)
                     .background(Color.brand.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.md))
             }
         }
         .padding(AppSpacing.lg)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .strideCard(cornerRadius: AppRadius.lg)
     }
 
     private var restProgress: Double {
@@ -372,7 +372,7 @@ struct StrengthActiveView: View {
                     }
                     .padding(.horizontal, AppSpacing.md)
                     .padding(.vertical, AppSpacing.sm)
-                    .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                    .strideCard(cornerRadius: AppRadius.sm)
                 }
             }
         }

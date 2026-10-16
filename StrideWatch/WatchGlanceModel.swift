@@ -32,6 +32,13 @@ final class WatchGlanceModel {
 
     /// Activates the session and loads whatever context the system already holds.
     func activate() {
+        // App Store screenshots: a watch simulator has no paired phone to send a context,
+        // so `--seed-demo-data` (the iPhone app's demo flag) shows the widget gallery's
+        // sample week instead. A user's launch never carries the flag.
+        if WatchDemo.isEnabled {
+            context = WatchContext(snapshot: .sample(), startableWorkout: Data())
+            return
+        }
         guard receiver == nil, WCSession.isSupported() else { return }
         let receiver = WatchSessionReceiver { [weak self] context in
             Task { @MainActor in self?.apply(context) }
@@ -64,6 +71,26 @@ final class WatchGlanceModel {
         } catch {
             startState = .failed
         }
+    }
+}
+
+// MARK: - WatchDemo
+
+/// Launch arguments for capturing App Store screenshots in a watch simulator, mirroring
+/// the iPhone app's `DemoDataSeed`: `--seed-demo-data` loads the sample snapshot, and
+/// `--demo-page <n>` opens on page `n` (0 today, 1 week, 2 race) so each page can be
+/// captured without a swipe.
+enum WatchDemo {
+    static var isEnabled: Bool {
+        ProcessInfo.processInfo.arguments.contains("--seed-demo-data")
+    }
+
+    static var initialPage: Int {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let flag = arguments.firstIndex(of: "--demo-page"),
+              arguments.indices.contains(flag + 1),
+              let page = Int(arguments[flag + 1]) else { return 0 }
+        return page
     }
 }
 

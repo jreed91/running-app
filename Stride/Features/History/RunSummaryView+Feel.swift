@@ -19,7 +19,7 @@ extension RunSummaryView {
                 if let feel = workout.feel {
                     Text(feel.localizedName)
                         .font(.dsCaption.weight(.semibold))
-                        .foregroundStyle(.brand)
+                        .foregroundStyle(.brandText)
                 }
             }
 
@@ -36,7 +36,7 @@ extension RunSummaryView {
         }
         .padding(AppSpacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .strideCard(cornerRadius: AppRadius.md)
         .sensoryFeedback(.selection, trigger: workout.feelRaw)
     }
 

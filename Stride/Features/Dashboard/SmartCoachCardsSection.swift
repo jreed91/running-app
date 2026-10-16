@@ -131,7 +131,7 @@ private struct SupportingCoachCardView: View {
             Spacer(minLength: 0)
         }
         .padding(14)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .strideCard(cornerRadius: AppRadius.md)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(card.title). \(card.message)")
     }

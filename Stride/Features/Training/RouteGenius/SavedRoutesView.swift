@@ -127,7 +127,7 @@ struct SavedRouteDetailView: View {
                     DetailStat(label: "Type", value: route.routeType.localizedName)
                 }
                 .padding()
-                .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                .strideCard(cornerRadius: AppRadius.md)
 
                 // Map
                 SavedRouteMapView(route: route)
@@ -160,7 +160,7 @@ struct SavedRouteDetailView: View {
                     }
                 }
             }
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .strideCard(cornerRadius: AppRadius.md)
         }
     }
 }

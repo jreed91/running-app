@@ -102,7 +102,7 @@ struct PlanSummaryCard: View {
                 HStack(alignment: .lastTextBaseline) {
                     Text("\(Int((summary.adherence * 100).rounded()))%")
                         .font(.dsTitle1.monospaced())
-                        .foregroundStyle(.brand)
+                        .foregroundStyle(.brandText)
                     Text("\(summary.completedCount) of \(summary.scheduledCount) workouts completed")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -158,7 +158,7 @@ struct PlanSummaryCard: View {
             }
         }
         .padding()
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .strideCard(cornerRadius: AppRadius.md)
     }
 }
 
@@ -267,7 +267,7 @@ struct WeekCardView: View {
                 }
             }
         }
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .strideCard(cornerRadius: AppRadius.md)
     }
 }
 

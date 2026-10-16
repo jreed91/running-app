@@ -20,7 +20,7 @@ extension RunSummaryView {
                     .foregroundStyle(.brand)
                 Text("Link to a planned workout")
                     .font(.dsSubhead.weight(.semibold))
-                    .foregroundStyle(.brand)
+                    .foregroundStyle(.brandText)
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.dsCaption2.weight(.semibold))
@@ -28,7 +28,7 @@ extension RunSummaryView {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, AppSpacing.md)
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .strideCard(cornerRadius: AppRadius.md)
         }
         .buttonStyle(.plain)
     }
@@ -205,7 +205,7 @@ extension RunSummaryView {
         .frame(maxWidth: .infinity)
         .padding(.horizontal, AppSpacing.lg)
         .padding(.vertical, 14)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .strideCard(cornerRadius: AppRadius.md)
         .gridCellColumns(colSpan ? 2 : 1)
         // One element per cell, or the grid reads as loose fragments with no pairing
         // between a number and the metric it belongs to (N18).
@@ -263,7 +263,7 @@ extension RunSummaryView {
                 }
                 .padding(.horizontal, AppSpacing.lg)
                 .padding(.vertical, 14)
-                .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                .strideCard(cornerRadius: AppRadius.md)
             }
         }
     }

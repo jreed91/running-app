@@ -61,7 +61,7 @@ struct RunShoeRow: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, AppSpacing.md)
-                .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                .strideCard(cornerRadius: AppRadius.md)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Shoes")

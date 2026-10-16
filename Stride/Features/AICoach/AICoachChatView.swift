@@ -131,7 +131,7 @@ struct AICoachChatView: View {
                     Text("AI COACH")
                         .font(.dsCaption2.weight(.bold))
                         .tracking(1.4)
-                        .foregroundStyle(.brand)
+                        .foregroundStyle(.brandText)
                     Text(contextSubtitle)
                         .font(.dsFootnote)
                         .foregroundStyle(.secondary)
@@ -147,7 +147,7 @@ struct AICoachChatView: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(AppSpacing.lg)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .strideCard(cornerRadius: AppRadius.lg)
     }
 
     private var readinessBadge: some View {
@@ -177,7 +177,7 @@ struct AICoachChatView: View {
                     } label: {
                         Text(prompt)
                             .font(.dsFootnote.weight(.semibold))
-                            .foregroundStyle(.brand)
+                            .foregroundStyle(.brandText)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 10)
                             .background(.surfaceSecondary, in: Capsule())

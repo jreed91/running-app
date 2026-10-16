@@ -290,7 +290,7 @@ struct NewPlanOnboardingView: View {
 
                     Text(":")
                         .font(.dsLargeTitle.monospaced())
-                        .foregroundStyle(.brand)
+                        .foregroundStyle(.brandText)
 
                     Picker("Seconds", selection: $fiveKSeconds) {
                         ForEach(stride(from: 0, through: 55, by: 5).map { $0 }, id: \.self) {
@@ -304,7 +304,7 @@ struct NewPlanOnboardingView: View {
                 HStack(spacing: 6) {
                     Text(String(format: "VDOT %.0f", vdotValue))
                         .font(.dsFootnote.weight(.bold).monospaced())
-                        .foregroundStyle(.brand)
+                        .foregroundStyle(.brandText)
                     Text("·").foregroundStyle(.secondary)
                     Text(vdotLabel)
                         .font(.captionStrong)
@@ -315,7 +315,7 @@ struct NewPlanOnboardingView: View {
                 .background(Color.brand.opacity(0.1), in: Capsule())
             }
             .padding(AppSpacing.xl)
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+            .strideCard(cornerRadius: AppRadius.lg)
 
             VStack(alignment: .leading, spacing: 10) {
                 Text("YOUR TRAINING PACES (\(appSettings.unitPreference.paceLabel.uppercased()))")
@@ -402,7 +402,7 @@ struct NewPlanOnboardingView: View {
                 }
             }
             .padding(AppSpacing.lg)
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+            .strideCard(cornerRadius: AppRadius.lg)
 
             HStack(spacing: 10) {
                 StrideIcon(name: .calendar, size: 16, color: .secondary)
@@ -455,7 +455,7 @@ struct NewPlanOnboardingView: View {
                 HStack(spacing: 10) {
                     Text("\(selectedDays.count)")
                         .font(.dsTitle2.monospaced())
-                        .foregroundStyle(.brand)
+                        .foregroundStyle(.brandText)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Days per week").font(.captionStrong)
                         Text(recommendedDaysLabel).font(.caption).foregroundStyle(.secondary)
@@ -467,7 +467,7 @@ struct NewPlanOnboardingView: View {
                 .background(Color.brand.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.md))
             }
             .padding(AppSpacing.lg)
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+            .strideCard(cornerRadius: AppRadius.lg)
 
             if selectedDays.isEmpty {
                 HStack(spacing: 10) {

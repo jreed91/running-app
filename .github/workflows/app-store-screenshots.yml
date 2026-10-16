@@ -1,0 +1,127 @@
+name: App Store screenshots
+
+# Captures the App Store screenshots from the demo history and frames the iPhone ones
+# in the Route Loop style (design/appstore/). Not part of CI: it runs when a pull
+# request carries the `app-store-screenshots` label, or by hand from the Actions tab.
+# Download the `app-store-screenshots` artifact from the run:
+#   iphone-6.9/  framed, 1320 x 2868, ready for App Store Connect
+#   iphone-raw/  the unframed captures
+#   watch/       raw Apple Watch captures (App Store Connect takes them unframed)
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [labeled, synchronize]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  screenshots:
+    name: App Store screenshots
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'app-store-screenshots')
+    runs-on: xcode-27
+    timeout-minutes: 60
+    env:
+      IPHONE: iPhone 17 Pro Max
+      RAW: ${{ github.workspace }}/AppStore/iphone-raw
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_27*.app 2>/dev/null | sort -V | tail -1)
+          [[ -n "$XCODE" ]] || { echo "::error::No Xcode 27 on this runner"; exit 1; }
+          sudo xcode-select -switch "$XCODE"
+
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen xcbeautify
+          xcodegen generate
+          mkdir -p Stride.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
+          cp ci_scripts/Package.resolved Stride.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+
+      - name: Boot the iPhone simulator at 9:41
+        run: |
+          UDID=$(xcrun simctl list devices available -j \
+            | jq -r --arg name "$IPHONE" '[.devices | to_entries[] | select(.key | contains("iOS")) | .value[] | select(.name == $name)] | .[0].udid // empty')
+          if [[ -z "$UDID" ]]; then
+            echo "::warning::No '$IPHONE' simulator; using the largest available iPhone."
+            UDID=$(xcrun simctl list devices available -j \
+              | jq -r '[.devices | to_entries[] | select(.key | contains("iOS")) | .value[] | select(.name | test("Pro Max"))] | .[0].udid // empty')
+          fi
+          [[ -n "$UDID" ]] || { echo "::error::No iPhone simulator found"; xcrun simctl list devices available; exit 1; }
+          echo "IPHONE_UDID=$UDID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl status_bar "$UDID" override --time "9:41" --dataNetwork wifi --wifiMode active \
+            --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
+
+      - name: Capture iPhone screens
+        run: |
+          set -o pipefail
+          mkdir -p "$RAW"
+          TEST_RUNNER_APP_STORE_CAPTURE_DIR="$RAW" xcodebuild test \
+            -scheme Stride \
+            -destination "platform=iOS Simulator,id=$IPHONE_UDID" \
+            -derivedDataPath DerivedData \
+            -only-testing:StrideUITests/AppStoreScreenshotTests \
+            -resultBundlePath AppStore/iphone.xcresult \
+            -skipMacroValidation -skipPackagePluginValidation \
+            COMPILER_INDEX_STORE_ENABLE=NO CODE_SIGNING_ALLOWED=NO \
+            | xcbeautify --renderer github-actions
+          ls -l "$RAW"
+
+      - name: Capture Apple Watch screens
+        # Best effort: a runner image without a watchOS runtime still produces the
+        # iPhone set, with a warning here.
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          WATCH=$(xcrun simctl list devices available -j \
+            | jq -r '[.devices | to_entries[] | select(.key | contains("watchOS")) | .value[] | select(.name | test("Ultra"))] | .[0].udid // empty')
+          [[ -n "$WATCH" ]] || WATCH=$(xcrun simctl list devices available -j \
+            | jq -r '[.devices | to_entries[] | select(.key | contains("watchOS")) | .value[]] | .[0].udid // empty')
+          [[ -n "$WATCH" ]] || { echo "::warning::No watchOS simulator on this runner; no Watch screenshots."; exit 1; }
+          xcrun simctl boot "$WATCH" || true
+          xcrun simctl bootstatus "$WATCH" -b
+          xcrun simctl status_bar "$WATCH" override --time "9:41" || true
+          xcodebuild build \
+            -scheme StrideWatch \
+            -destination "platform=watchOS Simulator,id=$WATCH" \
+            -derivedDataPath DerivedData \
+            -skipMacroValidation -skipPackagePluginValidation \
+            COMPILER_INDEX_STORE_ENABLE=NO CODE_SIGNING_ALLOWED=NO \
+            | xcbeautify --renderer github-actions
+          APP=$(find DerivedData/Build/Products -maxdepth 2 -path '*watchsimulator/StrideWatch.app' | head -1)
+          xcrun simctl install "$WATCH" "$APP"
+          mkdir -p AppStore/watch
+          for entry in "0 01-today" "1 02-week" "2 03-race"; do
+            set -- $entry
+            xcrun simctl terminate "$WATCH" com.running.stride.watchkitapp 2>/dev/null || true
+            xcrun simctl launch "$WATCH" com.running.stride.watchkitapp --seed-demo-data --demo-page "$1"
+            sleep 6
+            xcrun simctl io "$WATCH" screenshot "AppStore/watch/$2.png"
+          done
+          ls -l AppStore/watch
+
+      - name: Frame the iPhone screens
+        run: |
+          cd design/appstore
+          npm install --no-save --no-package-lock playwright@1.49.1
+          npx playwright install webkit
+          node compose.mjs "$RAW" "$GITHUB_WORKSPACE/AppStore/iphone-6.9" webkit
+
+      - name: Upload
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-store-screenshots
+          path: |
+            AppStore/iphone-6.9/
+            AppStore/iphone-raw/
+            AppStore/watch/
+          retention-days: 30

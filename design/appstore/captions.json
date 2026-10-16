@@ -1,0 +1,10 @@
+{
+  "iphone": [
+    { "file": "01-plan.png",     "eyebrow": "Training plans",  "title": "Your plan, built around your race" },
+    { "file": "02-home.png",     "eyebrow": "Every day",       "title": "Know exactly what to run today" },
+    { "file": "03-run.png",      "eyebrow": "On the run",      "title": "Every run, tracked to the step" },
+    { "file": "04-history.png",  "eyebrow": "History",         "title": "See what every run tells you" },
+    { "file": "05-progress.png", "eyebrow": "Progress",        "title": "Progress you can see" },
+    { "file": "06-welcome.png",  "eyebrow": "Stride",          "title": "Coaching that fits your week" }
+  ]
+}

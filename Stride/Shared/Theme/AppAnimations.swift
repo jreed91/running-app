@@ -11,6 +11,15 @@ enum AppAnimation {
     static let gentle   = Animation.spring(response: 0.45, dampingFraction: 0.82)
     /// Entrance spring — content appearing on screen.
     static let entrance = Animation.spring(response: 0.40, dampingFraction: 0.75)
+
+    // Route Loop motion: the route draws itself, then the start pin drops onto it.
+
+    /// The route stroking itself in, start to end — the app mark on the welcome screen.
+    static let routeDraw = Animation.easeInOut(duration: 1.1)
+    /// The start pin landing on the route: a short, springy overshoot.
+    static let pinDrop  = Animation.spring(response: 0.35, dampingFraction: 0.55)
+    /// The start pin's halo: one slow ripple outwards, repeated. Never under Reduce Motion.
+    static let pinPulse = Animation.easeOut(duration: 1.8).repeatForever(autoreverses: false)
 }
 
 // MARK: - adaptiveAnimation modifier

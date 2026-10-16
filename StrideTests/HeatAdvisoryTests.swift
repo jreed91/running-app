@@ -36,6 +36,7 @@ struct HeatAdvisoryTests {
 
     /// A day that ramps from a cool dawn to a punishing afternoon and back.
     private func forecastDay(_ day: Date) -> [ForecastHour] {
+        // swiftlint:disable:next large_tuple
         let shape: [(hour: Int, temperature: Double, feelsLike: Double, dewPoint: Double)] = [
             (5, 17, 17, 14),
             (6, 18, 18, 14),

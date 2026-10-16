@@ -70,7 +70,7 @@ extension RunSummaryView {
                 }
             }
             .padding(14)
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .strideCard(cornerRadius: AppRadius.md)
         }
 
         var body: some View {

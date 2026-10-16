@@ -174,6 +174,7 @@ struct PregnancyPlanService {
 
     // MARK: - Week builder
 
+    // swiftlint:disable:next function_parameter_count
     private func buildWeek(
         weekNumber: Int,
         weekStart: Date,

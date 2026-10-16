@@ -34,14 +34,14 @@ extension RunSummaryView {
                         Text("AI COACH")
                             .font(.dsCaption2.weight(.heavy))
                             .kerning(1.4)
-                            .foregroundStyle(.brand)
+                            .foregroundStyle(.brandText)
                         Circle()
                             .fill(Color.brand)
                             .frame(width: 5, height: 5)
                         Text(topCoachBadgeText)
                             .font(.dsCaption2.weight(.bold))
                             .kerning(0.6)
-                            .foregroundStyle(.brand)
+                            .foregroundStyle(.brandText)
                     }
 
                     Text(topCoachHeadline)
@@ -62,7 +62,7 @@ extension RunSummaryView {
                                 }
                             Text("\(confidence)% conf.")
                                 .font(.dsCaption2.weight(.bold).monospaced())
-                                .foregroundStyle(.brand)
+                                .foregroundStyle(.brandText)
                         }
                     }
                 }

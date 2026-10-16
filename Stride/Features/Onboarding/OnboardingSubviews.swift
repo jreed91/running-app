@@ -31,19 +31,21 @@ struct OBWelcome: View {
     let onStart: () -> Void
     let onSignIn: (String) -> Void
 
+    @Environment(\.colorScheme) private var colorScheme
     @State private var appeared = false
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            // The night map, as on the icon. Its glow is an `EllipticalGradient`, whose
-            // radii are fractions of the frame, so it needs no `GeometryReader` (U7).
-            NightMapBackdrop()
+            // The map, as on the icon: daylight paper in light, the night map in dark.
+            // Its glow is an `EllipticalGradient`, whose radii are fractions of the
+            // frame, so it needs no `GeometryReader` (U7).
+            MapBackdrop()
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
                 Spacer().frame(height: 90)
 
-                StrideAppMark(size: 120)
+                StrideAppMark(size: 120, drawsOn: true)
                     .scaleEffect(appeared ? 1 : 0.55)
                     .opacity(appeared ? 1 : 0)
                     .adaptiveAnimation(AppAnimation.entrance, value: appeared)
@@ -53,7 +55,7 @@ struct OBWelcome: View {
                 Text("WELCOME TO STRIDE.")
                     .font(.dsCaption2.weight(.bold))
                     .kerning(1.8)
-                    .foregroundStyle(.brand)
+                    .foregroundStyle(.brandText)
                     .opacity(appeared ? 1 : 0)
                     .offset(y: appeared ? 0 : 10)
                     .adaptiveAnimation(AppAnimation.entrance.delay(0.08), value: appeared)
@@ -113,7 +115,9 @@ struct OBWelcome: View {
                         Task { @MainActor in onSignIn(credential.user) }
                     }
                 }
-                .signInWithAppleButtonStyle(.white)
+                // Black on daylight paper, white on the night map, as Apple's guidelines
+                // pair them.
+                .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
                 .frame(height: 50)
                 .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
                 .padding(.top, AppSpacing.md)
@@ -125,8 +129,6 @@ struct OBWelcome: View {
             .padding(.horizontal, AppSpacing.xxl)
         }
         .onAppear { appeared = true }
-        // The welcome screens sit on the night map in both appearances, like the icon.
-        .environment(\.colorScheme, .dark)
     }
 }
 
@@ -157,8 +159,8 @@ struct OBWelcomeBack: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            // The same night map as `OBWelcome`.
-            NightMapBackdrop()
+            // The same map as `OBWelcome`.
+            MapBackdrop()
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
@@ -169,7 +171,7 @@ struct OBWelcomeBack: View {
                 Text("WELCOME BACK.")
                     .font(.dsCaption2.weight(.bold))
                     .kerning(1.8)
-                    .foregroundStyle(.brand)
+                    .foregroundStyle(.brandText)
                 Spacer().frame(height: 10)
                 Text(hasData ? "Your training plan\nis ready." : "Checking\niCloud…")
                     .font(.dsLargeTitle.weight(.heavy))
@@ -233,7 +235,6 @@ struct OBWelcomeBack: View {
             .padding(.horizontal, AppSpacing.xl)
             .padding(.bottom, 44)
         }
-        .environment(\.colorScheme, .dark)
         .task { await checkICloudStatus() }
         .task { await waitForInitialSync() }
         .onChange(of: initialSyncFinished) { _, finished in
@@ -357,7 +358,7 @@ struct OBShell<Content: View>: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            Color.surfacePrimary.ignoresSafeArea()
+            MapBackdrop().ignoresSafeArea()
 
             VStack(spacing: 0) {
                 // Progress chrome
@@ -407,7 +408,7 @@ struct OBShell<Content: View>: View {
                             Text(kicker.uppercased())
                                 .font(.dsCaption.weight(.bold))
                                 .kerning(1.6)
-                                .foregroundStyle(.brand)
+                                .foregroundStyle(.brandText)
                             Text(title)
                                 .font(.dsTitle1.weight(.heavy))
                                 .kerning(-0.8)
@@ -557,7 +558,7 @@ struct OBRaceCard: View {
                 OBRadio(isSelected: isSelected, color: .brand)
             }
             .padding(AppSpacing.lg)
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+            .strideCard(cornerRadius: AppRadius.lg)
             .overlay(RoundedRectangle(cornerRadius: AppRadius.lg)
                 .strokeBorder(isSelected ? Color.brand : Color.clear, lineWidth: 2))
         }
@@ -597,7 +598,7 @@ struct OBCustomDistanceCard: View {
                 Spacer()
                 Text(displayValue)
                     .font(.dsHeadline.weight(.bold).monospaced())
-                    .foregroundStyle(.brand)
+                    .foregroundStyle(.brandText)
             }
 
             Slider(value: $distanceKm, in: 1...80, step: 0.1)
@@ -623,7 +624,7 @@ struct OBCustomDistanceCard: View {
             }
         }
         .padding(AppSpacing.lg)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .strideCard(cornerRadius: AppRadius.lg)
     }
 }
 
@@ -675,7 +676,7 @@ struct OBRaceDetailsCard: View {
             .font(.bodyStrong)
         }
         .padding(AppSpacing.lg)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .strideCard(cornerRadius: AppRadius.lg)
     }
 }
 
@@ -721,7 +722,7 @@ struct OBStartDateCard: View {
                 .foregroundStyle(.secondary)
         }
         .padding(AppSpacing.lg)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .strideCard(cornerRadius: AppRadius.lg)
     }
 }
 
@@ -822,7 +823,7 @@ struct OBFitnessRow: View {
                     .padding(.leading, 38)
             }
             .padding(14)
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .strideCard(cornerRadius: AppRadius.md)
             .overlay(
                 RoundedRectangle(cornerRadius: AppRadius.md)
                     .strokeBorder(isSelected ? Color.brand : Color.clear, lineWidth: 2)
@@ -870,7 +871,7 @@ struct OBLevelRow: View {
                 OBRadio(isSelected: isSelected, color: .brand)
             }
             .padding(.horizontal, 18).padding(.vertical, AppSpacing.lg)
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .strideCard(cornerRadius: AppRadius.md)
             .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
                 .strokeBorder(isSelected ? Color.brand : Color.clear, lineWidth: 2))
         }
@@ -967,7 +968,7 @@ struct OBPaceCell: View {
             Spacer()
         }
         .padding(.horizontal, AppSpacing.md).padding(.vertical, 10)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .strideCard(cornerRadius: AppRadius.md)
     }
 }
 
@@ -1089,7 +1090,7 @@ struct OBReady: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            Color.surfacePrimary.ignoresSafeArea()
+            MapBackdrop().ignoresSafeArea()
 
             VStack(spacing: 0) {
                 // Chrome: progress bar at 100% with 7/7 counter
@@ -1130,7 +1131,7 @@ struct OBReady: View {
                             Text("YOUR PLAN")
                                 .font(.dsCaption2.weight(.bold))
                                 .kerning(1.6)
-                                .foregroundStyle(.brand)
+                                .foregroundStyle(.brandText)
                             Text("\(planWeeks)-week \(goalRace.localizedName) plan\nbuilt for you.")
                                 .font(.dsTitle1.weight(.heavy))
                                 .kerning(-0.7)
@@ -1155,7 +1156,7 @@ struct OBReady: View {
                             )
                         }
                         .padding(AppSpacing.lg)
-                        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                        .strideCard(cornerRadius: AppRadius.lg)
                         .padding(.horizontal, AppSpacing.lg)
 
                         // Weekly mileage chart
@@ -1313,7 +1314,7 @@ private struct WeeklyMileageChart: View {
             .padding(.top, AppSpacing.xs)
         }
         .padding(AppSpacing.lg)
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        .strideCard(cornerRadius: AppRadius.lg)
     }
 }
 

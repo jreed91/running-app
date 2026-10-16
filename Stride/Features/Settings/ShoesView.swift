@@ -148,7 +148,7 @@ private struct ShoeRow: View {
                 if shoe.isDefault {
                     Text("Default")
                         .font(.dsCaption2.weight(.bold))
-                        .foregroundStyle(.brand)
+                        .foregroundStyle(.brandText)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(Color.brand.opacity(0.12), in: Capsule())

@@ -161,7 +161,7 @@ struct RunPlaylistCard: View {
             }
         }
         .padding()
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.sm))
+        .strideCard(cornerRadius: AppRadius.sm)
     }
 
     private func builtState(link: RunPlaylistLink) -> some View {

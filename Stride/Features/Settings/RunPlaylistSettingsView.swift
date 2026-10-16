@@ -72,7 +72,7 @@ struct RunPlaylistSettingsView: View {
                 }
             }
             .padding()
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .strideCard(cornerRadius: AppRadius.md)
         }
     }
 
@@ -137,7 +137,7 @@ struct RunPlaylistSettingsView: View {
                     }
                 }
             }
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .strideCard(cornerRadius: AppRadius.md)
 
             Text("By default Stride picks by genre. Point a tier at one of your own playlists and it uses that instead.")
                 .font(.caption)

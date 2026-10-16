@@ -362,7 +362,7 @@ private struct SmartAdaptPlanCard: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(isAdapting ? "Adapting Plan" : "Smart Adapt")
                             .font(.dsHeadline.weight(.bold))
-                            .foregroundStyle(.brand)
+                            .foregroundStyle(.brandText)
 
                         Text(subtitle)
                             .font(.caption)
@@ -435,7 +435,7 @@ private struct SmartAdaptPlanCard: View {
                         }
                         .padding(10)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                        .strideCard(cornerRadius: AppRadius.sm)
                     }
 
                     ForEach(progress.updates) { update in
@@ -450,7 +450,7 @@ private struct SmartAdaptPlanCard: View {
                         }
                         .padding(10)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                        .strideCard(cornerRadius: AppRadius.sm)
                     }
                 }
                 .padding(.top, AppSpacing.xs)
@@ -493,7 +493,7 @@ private struct RouteGeniusCard: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Route Genius")
                         .font(.dsHeadline.weight(.bold))
-                        .foregroundStyle(.brand)
+                        .foregroundStyle(.brandText)
                     Text("AI-generated route matched to today's distance & elevation.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -596,7 +596,7 @@ private struct PlanOverviewCard: View {
                 Spacer()
                 Text("\(Int(plan.progress * 100))%")
                     .font(.dsTitle2.monospaced())
-                    .foregroundStyle(.brand)
+                    .foregroundStyle(.brandText)
             }
 
             // Phase progress bar with Base / Build / Peak / Taper labels
@@ -625,7 +625,7 @@ private struct PlanOverviewCard: View {
             }
         }
         .padding()
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .strideCard(cornerRadius: AppRadius.md)
     }
 }
 
@@ -897,7 +897,7 @@ private struct PaceInsightsCard: View {
             }
         }
         .padding()
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .strideCard(cornerRadius: AppRadius.md)
     }
 }
 
@@ -1083,7 +1083,7 @@ private struct PlanWeekSummaryRow: View {
         .reorderContainer(for: ScheduledWorkout.self, itemID: \.id, isEnabled: canReorder) { difference in
             reschedule(difference)
         }
-        .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .strideCard(cornerRadius: AppRadius.md)
         .opacity(isFutureWeek ? 0.65 : 1.0)
     }
 

@@ -1,0 +1,43 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+  /* Route Loop tokens (design/route-loop/README.md). */
+  :root { --brand:#ff5a1a; --brand-glow:#ffb36b; --ink:#1f2433; --ink-deep:#0d1018; --on-ink:#f5f6fa; --on-ink-muted:#a9afc2; }
+  html, body { margin:0; width:1320px; height:2868px; overflow:hidden; }
+  body {
+    position:relative;
+    background:
+      radial-gradient(ellipse 90% 40% at 50% 0%, rgba(255,90,26,.30), rgba(255,90,26,0) 100%),
+      linear-gradient(var(--ink), var(--ink-deep));
+    font-family: ui-rounded, "SF Pro Rounded", -apple-system, system-ui, sans-serif;
+    color: var(--on-ink);
+  }
+  /* The night-map grid, 96px pitch: the icon's 1/8 grid at this scale. */
+  body::before {
+    content:""; position:absolute; inset:0;
+    background-image:
+      linear-gradient(rgba(255,255,255,.05) 2px, transparent 2px),
+      linear-gradient(90deg, rgba(255,255,255,.05) 2px, transparent 2px);
+    background-size:96px 96px;
+  }
+  .copy { position:absolute; left:110px; right:110px; top:190px; }
+  .eyebrow { display:flex; align-items:center; gap:22px; font:700 40px/1 -apple-system, system-ui, sans-serif;
+    letter-spacing:6px; text-transform:uppercase; color:var(--brand); }
+  /* The start pin: "you are here". */
+  .pin { width:34px; height:34px; border-radius:50%; background:#fff; display:grid; place-items:center; flex:none; }
+  .pin i { width:45%; height:45%; border-radius:50%; background:var(--brand); }
+  h1 { margin:34px 0 0; font-weight:800; font-size:118px; line-height:1.02; letter-spacing:-2px; }
+  .device {
+    position:absolute; left:50%; top:760px; width:1040px; height:2250px; transform:translateX(-50%);
+    border-radius:150px; padding:26px; box-sizing:border-box; background:#05060a;
+    box-shadow: 0 0 0 3px rgba(255,255,255,.10), 0 60px 120px rgba(0,0,0,.55), 0 0 140px rgba(255,90,26,.18);
+  }
+  .device img { display:block; width:100%; height:100%; object-fit:cover; object-position:top; border-radius:124px; }
+</style></head>
+<body>
+  <div class="copy">
+    <div class="eyebrow"><span class="pin"><i></i></span>{{EYEBROW}}</div>
+    <h1>{{TITLE}}</h1>
+  </div>
+  <div class="device"><img src="{{SCREEN}}" alt=""></div>
+</body></html>

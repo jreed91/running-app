@@ -854,6 +854,7 @@ struct AICoachService: Sendable {
         // an imported walk in them reads as a run taken at half speed (N38).
         let recent = recentHistory.runsOnly.prefix(8).map { run in
             let avgHR = run.averageHeartRate.map { "\(Int($0)) bpm" } ?? "n/a"
+            // swiftlint:disable:next line_length
             return "\(run.date.formatted(date: .abbreviated, time: .omitted)) | \(run.workoutType.displayName) | \(run.distanceMeters.distanceString(unit: unitPreference)) | avg pace \(run.averagePaceSecondsPerKm.paceString(unit: unitPreference)) | duration \(run.durationSeconds.durationString) | avg HR \(avgHR)\(RunFeelSignal.historySuffix(for: run.feel))"
         }.joined(separator: "\n")
         let feelTrend = Self.feelTrendSection(recentHistory)
