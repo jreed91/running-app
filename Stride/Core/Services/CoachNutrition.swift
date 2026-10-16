@@ -313,7 +313,9 @@ enum CoachNutrition {
             let rounded = (value * 10).rounded() / 10
             number = rounded == rounded.rounded() ? String(Int(rounded)) : String(format: "%.1f", rounded)
         } else {
+            // "0.9 g/kg/h", not "0.90": two places only when the second one carries.
             number = String(format: "%.2f", value)
+                .replacingOccurrences(of: #"0$"#, with: "", options: .regularExpression)
         }
         return "\(number) \(unit)"
     }

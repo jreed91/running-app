@@ -51,7 +51,7 @@ struct NextUpBriefing: Equatable, Sendable {
             // Reuses the widget's note trimming rather than growing a second one: both
             // want the plan's first sentence and neither has room for the paragraph.
             note: WidgetSnapshotBuilder.note(for: workout),
-            isToday: calendar.isDateInToday(workout.scheduledDate)
+            isToday: calendar.isDate(workout.scheduledDate, inSameDayAs: now)
         )
     }
 
@@ -67,17 +67,19 @@ struct NextUpBriefing: Equatable, Sendable {
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> String {
-        if calendar.isDateInToday(date) {
-            return String(localized: "Today", comment: "How far away a scheduled session is")
-        }
-        if calendar.isDateInTomorrow(date) {
-            return String(localized: "Tomorrow", comment: "How far away a scheduled session is")
-        }
+        // Measured from `now`, not the wall clock, so a caller (or a test) that passes a
+        // fixed `now` gets the same answer whatever day it runs on.
         let days = calendar.dateComponents(
             [.day],
             from: calendar.startOfDay(for: now),
             to: calendar.startOfDay(for: date)
         ).day ?? 0
+        if days == 0 {
+            return String(localized: "Today", comment: "How far away a scheduled session is")
+        }
+        if days == 1 {
+            return String(localized: "Tomorrow", comment: "How far away a scheduled session is")
+        }
         if (0...6).contains(days) {
             return date.formatted(.dateTime.weekday(.wide))
         }
