@@ -612,7 +612,7 @@ struct OBCustomDistanceCard: View {
                                 isOn ? Color.brand : Color.surfaceTertiary,
                                 in: RoundedRectangle(cornerRadius: AppRadius.sm)
                             )
-                            .foregroundStyle(isOn ? Color.white : Color.primary)
+                            .foregroundStyle(isOn ? Color.onFill : Color.primary)
                     }
                     .buttonStyle(.plain)
                 }

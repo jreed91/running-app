@@ -27,7 +27,9 @@ extension View {
             if family.isAccessory {
                 Color.clear
             } else {
-                Rectangle().fill(.fill.tertiary)
+                // The app's card colour, so a widget reads as a Stride card in light and
+                // dark. In tinted and clear Home Screen modes the system removes it.
+                Rectangle().fill(Color("SurfaceSecondary"))
             }
         }
     }
