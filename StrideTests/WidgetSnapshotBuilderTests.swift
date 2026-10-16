@@ -213,6 +213,17 @@ struct WidgetSnapshotBuilderTests {
         #expect(WidgetSnapshotBuilder.note(for: workout) == "Hold marathon pace for the middle 5 km")
     }
 
+    @Test("A decimal distance does not end the first sentence")
+    func noteKeepsDecimalDistances() {
+        let workout = ScheduledWorkout(
+            scheduledDate: now,
+            workoutType: .tempo,
+            notes: "1.9 mi total: warm-up, 1.2 mi tempo @ 8:57/mi, cool-down. Hold comfortably hard effort throughout."
+        )
+
+        #expect(WidgetSnapshotBuilder.note(for: workout) == "1.9 mi total: warm-up, 1.2 mi tempo @ 8:57/mi, cool-down")
+    }
+
     @Test("A blank note is nil rather than an empty string")
     func blankNoteIsNil() {
         let blank = ScheduledWorkout(scheduledDate: now, workoutType: .tempo, notes: "   ")

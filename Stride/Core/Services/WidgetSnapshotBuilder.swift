@@ -244,9 +244,11 @@ enum WidgetSnapshotBuilder {
     static func note(for workout: ScheduledWorkout) -> String? {
         guard let raw = workout.notes?.trimmingCharacters(in: .whitespacesAndNewlines),
               !raw.isEmpty else { return nil }
-        let firstSentence = raw.split(separator: ".", maxSplits: 1, omittingEmptySubsequences: true)
-            .first
-            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) } ?? raw
+        // A sentence ends at a full stop followed by a space (or the end of the note), never
+        // at a decimal point: "1.9 mi total: warm-up…" must not come out as "1".
+        let sentenceEnd = raw.range(of: ". ")?.lowerBound
+            ?? (raw.hasSuffix(".") ? raw.index(before: raw.endIndex) : raw.endIndex)
+        let firstSentence = String(raw[..<sentenceEnd]).trimmingCharacters(in: .whitespacesAndNewlines)
         let candidate = firstSentence.isEmpty ? raw : firstSentence
         return candidate.count <= 80 ? candidate : String(candidate.prefix(79)) + "…"
     }
