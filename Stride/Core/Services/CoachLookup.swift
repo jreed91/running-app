@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import Synchronization
 
 /// A read-only copy of the runner's training log that the coach can search while it
 /// writes, through Foundation Models tool calling.
@@ -46,6 +47,31 @@ struct CoachLookup: Sendable, Equatable {
     /// the same one number behind the race hub's prediction and the plan's paces, so a
     /// race time the coach quotes matches the one the app shows. Nil when there is none.
     let fitnessVDOT: Double?
+    /// Which tools a session gets for this lookup. See ``ToolSet``.
+    let toolSet: ToolSet
+
+    /// Which tools a request gets.
+    ///
+    /// Every tool costs latency before the first word appears: its name, description and
+    /// schema lengthen the prompt, and each call the model makes is a full model turn
+    /// (a server round trip on Private Cloud Compute) before any text streams. The chat
+    /// is a question the runner asked, so it gets every tool. The run read starts on its
+    /// own when the page opens and its prompt already compares the run with the plan and
+    /// the runner's usual, so it gets only the two lookups that reach further back.
+    enum ToolSet: Sendable, Equatable {
+        case chat
+        case runRead
+
+        /// The most lookups one answer may make. A tool called past this answers that
+        /// there are no more lookups, so the model writes with what it has rather than
+        /// chaining calls while the runner waits.
+        var maximumCalls: Int {
+            switch self {
+            case .chat:    return 3
+            case .runRead: return 1
+            }
+        }
+    }
 
     /// The most rows any one answer carries. A tool's output lands in the context window
     /// — the on-device one is small — so an answer is a handful of lines, never a dump.
@@ -58,12 +84,20 @@ struct CoachLookup: Sendable, Equatable {
 
     private static let runTypes: Set<WorkoutType> = [.easy, .tempo, .interval, .longRun, .race]
 
-    init(runs: [Run], sessions: [Session], unit: UnitPreference, now: Date = Date(), fitnessVDOT: Double? = nil) {
+    init(
+        runs: [Run],
+        sessions: [Session],
+        unit: UnitPreference,
+        now: Date = Date(),
+        fitnessVDOT: Double? = nil,
+        toolSet: ToolSet = .chat
+    ) {
         self.runs = runs.sorted { $0.date > $1.date }
         self.sessions = sessions.sorted { $0.date < $1.date }
         self.unit = unit
         self.now = now
         self.fitnessVDOT = fitnessVDOT
+        self.toolSet = toolSet
     }
 
     /// Copies `runs` (walks and cross-training dropped) and the plan's run sessions out of
@@ -73,7 +107,8 @@ struct CoachLookup: Sendable, Equatable {
         scheduled: [ScheduledWorkout],
         unit: UnitPreference,
         now: Date = Date(),
-        fitnessVDOT: Double? = nil
+        fitnessVDOT: Double? = nil,
+        toolSet: ToolSet = .chat
     ) {
         let cutoff = now.addingTimeInterval(-Double(Self.historyDays) * 86_400)
         self.init(
@@ -98,7 +133,8 @@ struct CoachLookup: Sendable, Equatable {
             },
             unit: unit,
             now: now,
-            fitnessVDOT: fitnessVDOT
+            fitnessVDOT: fitnessVDOT,
+            toolSet: toolSet
         )
     }
 
@@ -116,7 +152,8 @@ struct CoachLookup: Sendable, Equatable {
         plan: TrainingPlan?,
         unit: UnitPreference,
         excluding: RunWorkout? = nil,
-        now: Date = Date()
+        now: Date = Date(),
+        toolSet: ToolSet = .chat
     ) -> CoachLookup {
         let cutoff = now.addingTimeInterval(-Double(historyDays) * 86_400)
         // Bounded rather than date-filtered in the fetch: runs are few, and a fixed cap
@@ -130,7 +167,9 @@ struct CoachLookup: Sendable, Equatable {
         // From every fetched run, the excluded one included: a race-time prediction on a
         // run's own detail page should count that run, as the race hub would.
         let vdot = RaceDayPlan.currentVDOT(runs: fetched, profile: profile, now: now)
-        return CoachLookup(runs: runs, scheduled: scheduled, unit: unit, now: now, fitnessVDOT: vdot)
+        return CoachLookup(
+            runs: runs, scheduled: scheduled, unit: unit, now: now, fitnessVDOT: vdot, toolSet: toolSet
+        )
     }
 
     // MARK: Queries
@@ -242,9 +281,11 @@ struct CoachLookup: Sendable, Equatable {
 
     /// Added to a request's instructions only when tools come with it.
     static let instructionsNote = """
-    You have tools that look things up in this runner's training log. Before you say \
-    something is missing, check whether a tool can find it, and treat what a tool \
-    returns as supplied data. Look up only what the answer needs. Never mention the tools.
+    You have tools that look things up in this runner's training log. Most answers need \
+    none: use one only when the answer needs history or plan details that are not \
+    already given, and look up as little as you can, because the runner is waiting. \
+    Treat what a tool returns as supplied data, and when a tool cannot find something, \
+    say so plainly. Never mention the tools.
     """
 
     /// The day the tools count "days back" from: today in the chat, the run's own day in
@@ -367,5 +408,36 @@ extension CoachLookup {
             parts.append("\(feltHard) felt hard")
         }
         return parts.joined(separator: ", ")
+    }
+}
+
+// MARK: - Call budget
+
+/// How many lookups one answer has left, shared by every tool in its session.
+///
+/// A class, so the tools of one session share one count; `Sendable` through its mutex,
+/// because Apple's `Tool` requires it and the framework may run calls in parallel.
+final class CoachToolBudget: Sendable {
+    private let remaining: Mutex<Int>
+
+    init(calls: Int) {
+        remaining = Mutex(max(calls, 0))
+    }
+
+    /// What a tool answers once the budget is spent.
+    static let spentAnswer = "No more lookups for this answer. Answer with what you already have."
+
+    /// Uses up one call. False when none are left.
+    func take() -> Bool {
+        remaining.withLock { count in
+            guard count > 0 else { return false }
+            count -= 1
+            return true
+        }
+    }
+
+    /// `answer()` when a call is left, else ``spentAnswer``.
+    func spend(_ answer: () -> String) -> String {
+        take() ? answer() : Self.spentAnswer
     }
 }

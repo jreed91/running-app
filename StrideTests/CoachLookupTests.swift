@@ -193,6 +193,21 @@ struct CoachLookupTests {
         ))
     }
 
+    // MARK: Call budget
+
+    @Test func theBudgetAnswersUntilItIsSpent() {
+        let budget = CoachToolBudget(calls: 2)
+        #expect(budget.spend { "first" } == "first")
+        #expect(budget.spend { "second" } == "second")
+        #expect(budget.spend { "third" } == CoachToolBudget.spentAnswer)
+        #expect(!CoachToolBudget(calls: 0).take())
+    }
+
+    @Test func theRunReadGetsFewerLookupsThanTheChat() {
+        #expect(CoachLookup.ToolSet.runRead.maximumCalls < CoachLookup.ToolSet.chat.maximumCalls)
+        #expect(lookup.toolSet == .chat)
+    }
+
     // MARK: Service
 
     @Test func chatPassesTheLookupAndTheToolsNote() async {
