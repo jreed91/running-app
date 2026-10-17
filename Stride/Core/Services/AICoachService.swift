@@ -1169,7 +1169,8 @@ extension AICoachService {
         unitPreference: UnitPreference
     ) -> String {
         guard let planned else {
-            return "Not a planned session. Judge it by what a \(workout.workoutType.displayName.lowercased()) run is for."
+            let type = workout.workoutType.displayName.lowercased()
+            return "Not a planned session. Judge it by what this kind of run (\(type)) is for."
         }
         var lines = ["Planned: " + plannedTargetsDescription(planned, unitPreference: unitPreference)]
         if let comparison = CoachRunComparison.planLine(
