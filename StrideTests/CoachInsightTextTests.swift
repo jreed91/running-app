@@ -160,4 +160,19 @@ struct CoachInsightTextTests {
 
         #expect(prompt.hasPrefix("AI Coach feedback from completed long run on "))
     }
+
+    // MARK: Evidence delta
+
+    @Test("A delta that repeats the value adds nothing")
+    func deltaRepeatingValue() {
+        #expect(!CoachInsightText.deltaAddsInformation(value: "76%", delta: "+76%"))
+        #expect(!CoachInsightText.deltaAddsInformation(value: "76%", delta: nil))
+        #expect(!CoachInsightText.deltaAddsInformation(value: "76%", delta: "  "))
+    }
+
+    @Test("A real comparison is kept")
+    func deltaComparing() {
+        #expect(CoachInsightText.deltaAddsInformation(value: "9:51/mi", delta: "-44s"))
+        #expect(CoachInsightText.deltaAddsInformation(value: "1.4 mi", delta: "-2.0 mi"))
+    }
 }
