@@ -462,6 +462,13 @@ struct AICoachChatView: View {
                 provider: appSettings.aiProvider,
                 context: coachContext,
                 messages: providerMessages,
+                // The eight runs in `coachContext` answer most questions; the lookup lets
+                // the coach fetch the rest ("my last five easy runs") when one needs it.
+                lookup: CoachLookup.make(
+                    context: modelContext,
+                    plan: activePlan,
+                    unit: appSettings.unitPreference
+                ),
                 onPartialText: { text in
                     // Assigned directly: the closure is `@MainActor` and the backend
                     // awaits it, so this is a step of the stream rather than a task

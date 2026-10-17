@@ -250,19 +250,22 @@ struct AICoachService: Sendable {
     /// - Parameter onPartialText: the reply as written so far, delivered repeatedly while
     ///   the coach writes. Each call supersedes the last (see `OnDeviceCoachGenerating`),
     ///   so the chat renders the value it is handed rather than appending it.
+    /// - Parameter lookup: the runner's log for the coach's read-only tools; nil for none.
     func chatWithProvider(
         provider: AIProvider,
         context: String,
         messages: [AIProviderChatMessage],
+        lookup: CoachLookup? = nil,
         onPartialText: @escaping @MainActor @Sendable (String) -> Void = { _ in }
     ) async throws -> String {
         guard let backend = onDeviceBackend, await backend.isAvailable() else {
             throw OnDeviceCoachError.unavailable
         }
         return try await backend.generateChatReply(
-            instructions: Self.chatInstructions,
+            instructions: CoachLookup.instructions(Self.chatInstructions, withToolsFor: lookup),
             context: context,
             messages: messages,
+            lookup: lookup,
             useServerModel: provider.usesPrivateCloudCompute,
             onPartialText: onPartialText
         )
@@ -315,6 +318,7 @@ struct AICoachService: Sendable {
         unitPreference: UnitPreference = .metric,
         plannedSession: ScheduledWorkout? = nil,
         nextPlannedSession: ScheduledWorkout? = nil,
+        lookup: CoachLookup? = nil,
         onPartialText: @escaping @MainActor @Sendable (String) -> Void = { _ in }
     ) async -> AICoachInsight {
         let context = makePromptContext(
@@ -343,8 +347,9 @@ struct AICoachService: Sendable {
                     details: details
                 )
                 let structured = try await backend.generateCoachInsight(
-                    instructions: Self.insightInstructions,
+                    instructions: CoachLookup.instructions(Self.insightInstructions, withToolsFor: lookup),
                     prompt: prompt,
+                    lookup: lookup,
                     useServerModel: provider.usesPrivateCloudCompute,
                     onPartialText: onPartialText
                 )

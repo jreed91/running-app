@@ -1,0 +1,107 @@
+#if canImport(FoundationModels)
+import Foundation
+import FoundationModels
+
+// MARK: - Coach tools
+//
+// Read-only Foundation Models tools over a `CoachLookup`, so the coach can search the
+// runner's log while it writes instead of answering from one fixed summary. Each tool is
+// a thin wrapper: the query and its formatting live in `CoachLookup`, where they are
+// tested without the framework. The tools are `Sendable` value types holding a plain copy
+// of the data, as Apple's `Tool` protocol requires, and none of them can write anything.
+
+/// The kinds of run a tool can filter by. A closed set so the model cannot ask for a
+/// type the app does not have.
+@available(iOS 26.0, *)
+@Generable
+enum CoachRunKind: String, Sendable {
+    case any
+    case easy
+    case tempo
+    case interval
+    case longRun
+    case race
+}
+
+@available(iOS 26.0, *)
+extension CoachRunKind {
+    var workoutType: WorkoutType? {
+        switch self {
+        case .any:      return nil
+        case .easy:     return .easy
+        case .tempo:    return .tempo
+        case .interval: return .interval
+        case .longRun:  return .longRun
+        case .race:     return .race
+        }
+    }
+}
+
+@available(iOS 26.0, *)
+struct FindRunsTool: Tool {
+    let lookup: CoachLookup
+
+    let name = "findRuns"
+    let description = "Finds the runner's past runs, newest first, with date, type, distance, time, pace, heart rate and how it felt."
+
+    @Generable
+    struct Arguments {
+        @Guide(description: "Which kind of run to find; any for every kind")
+        let kind: CoachRunKind
+        @Guide(description: "How many days back to look", .range(1...180))
+        let withinDays: Int
+        @Guide(description: "The most runs to return", .range(1...10))
+        let limit: Int
+    }
+
+    func call(arguments: Arguments) async throws -> String {
+        lookup.findRuns(type: arguments.kind.workoutType, withinDays: arguments.withinDays, limit: arguments.limit)
+    }
+}
+
+@available(iOS 26.0, *)
+struct WeeklyTotalsTool: Tool {
+    let lookup: CoachLookup
+
+    let name = "weeklyTotals"
+    let description = "Gives the runner's total distance and number of runs for each recent week, newest first."
+
+    @Generable
+    struct Arguments {
+        @Guide(description: "How many weeks to cover, including this one", .range(1...12))
+        let weeks: Int
+    }
+
+    func call(arguments: Arguments) async throws -> String {
+        lookup.weeklyTotals(weeks: arguments.weeks)
+    }
+}
+
+@available(iOS 26.0, *)
+struct PlanSessionsTool: Tool {
+    let lookup: CoachLookup
+
+    let name = "planSessions"
+    let description = "Lists the runner's planned runs around today, with type, distance and whether each was done, missed or is still to come."
+
+    @Generable
+    struct Arguments {
+        @Guide(description: "How many days before today to include", .range(0...28))
+        let daysBack: Int
+        @Guide(description: "How many days after today to include", .range(0...28))
+        let daysAhead: Int
+    }
+
+    func call(arguments: Arguments) async throws -> String {
+        lookup.planSessions(daysBack: arguments.daysBack, daysAhead: arguments.daysAhead)
+    }
+}
+
+@available(iOS 26.0, *)
+extension CoachLookup {
+    /// The tools a session gets for this lookup.
+    var tools: [any Tool] {
+        [FindRunsTool(lookup: self), WeeklyTotalsTool(lookup: self), PlanSessionsTool(lookup: self)]
+    }
+}
+#endif
