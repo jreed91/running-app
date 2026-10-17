@@ -164,6 +164,30 @@ jobs:
           done
           sips -g pixelWidth -g pixelHeight AppStore/iphone-6.3/*.png
 
+      - name: Flatten every screenshot to RGB, no alpha
+        # App Store Connect rejects PNGs with an alpha channel (INVALID_ASSET_FILE_FORMAT),
+        # and WebKit, sips and the simulator all write RGBA. Pillow drops the alpha onto
+        # the night-map colour (nothing is actually transparent) and checks the result.
+        if: always()
+        run: |
+          python3 -m venv "$RUNNER_TEMP/pil"
+          "$RUNNER_TEMP/pil/bin/pip" install --quiet pillow
+          "$RUNNER_TEMP/pil/bin/python" - <<'PY'
+          import glob
+          from PIL import Image
+          files = sorted(glob.glob("AppStore/*/*.png"))
+          for path in files:
+              im = Image.open(path)
+              if im.mode != "RGB":
+                  base = Image.new("RGB", im.size, (13, 16, 24))
+                  rgba = im.convert("RGBA")
+                  base.paste(rgba, mask=rgba.getchannel("A"))
+                  base.save(path, "PNG", optimize=True)
+              im = Image.open(path)
+              assert im.mode == "RGB", f"{path} is still {im.mode}"
+              print(f"{path}: {im.size[0]} x {im.size[1]} {im.mode}")
+          PY
+
       - name: Upload
         if: always()
         uses: actions/upload-artifact@v4
