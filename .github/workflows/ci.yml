@@ -282,6 +282,24 @@ jobs:
           echo "$status" > TestResults/ui.exit
           exit "$status"
 
+      # xcbeautify keeps only a failing UI test's message, which for a snapshot timeout
+      # does not say which step hung. Print each failing test's step trace so the log
+      # alone is enough to tell.
+      - name: Print failing UI test steps
+        if: always()
+        continue-on-error: true
+        run: |
+          [[ -d TestResults/ui.xcresult ]] || exit 0
+          [[ "$(cat TestResults/ui.exit 2>/dev/null)" == "0" ]] && exit 0
+          xcrun xcresulttool get test-results tests --path TestResults/ui.xcresult > /tmp/ui-tests.json
+          ids=$(jq -r '.. | objects | select(.nodeType? == "Test Case" and .result? == "Failed") | .nodeIdentifier' /tmp/ui-tests.json)
+          for id in $ids; do
+            echo "::group::Steps of $id"
+            xcrun xcresulttool get test-results activities --test-id "$id" --path TestResults/ui.xcresult \
+              | jq -r '.. | objects | select(has("title")) | "\(.startTime // "") \(.title)"'
+            echo "::endgroup::"
+          done
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
