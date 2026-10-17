@@ -30,7 +30,7 @@ struct OBSpecializedPlanCard: View {
                 }
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text("Pregnancy").font(.bodyStrong)
+                        Text("Pregnancy").font(.dsSubhead.weight(.semibold))
                         Text("No race target")
                             .font(.dsCaption.weight(.semibold))
                             .foregroundStyle(.secondary)
@@ -38,7 +38,7 @@ struct OBSpecializedPlanCard: View {
                             .minimumScaleFactor(0.85)
                     }
                     Text("Built from ACOG and Canadian guidelines · runs to your due date")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.dsCaption).foregroundStyle(.secondary)
                 }
                 Spacer()
                 OBRadio(isSelected: isSelected, color: .brand)
@@ -50,6 +50,7 @@ struct OBSpecializedPlanCard: View {
         }
         .buttonStyle(BouncyButtonStyle())
         .foregroundStyle(.primary)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityIdentifier("onboarding.plan.pregnancy")
     }
 }
@@ -78,14 +79,14 @@ struct OBDueDateCard: View {
                 in: minimumDate...minimumDate.adding(days: 300),
                 displayedComponents: .date
             )
-            .font(.bodyStrong)
+            .font(.dsSubhead.weight(.semibold))
 
             HStack(spacing: 8) {
                 Text(gestationalAgeAtStart.noteForm)
                     .font(.dsSubhead.weight(.bold).monospacedDigit())
                     .foregroundStyle(.brandText)
                 Text("weeks at plan start · \(gestationalAgeAtStart.trimester.localizedName)")
-                    .font(.caption)
+                    .font(.dsCaption)
                     .foregroundStyle(.secondary)
             }
         }
@@ -117,7 +118,7 @@ struct OBPregnancyHealthCheckCard: View {
             }
 
             Text("Some conditions mean no more activity than usual daily living. Others mean the decision is your provider's, not this app's.")
-                .font(.caption)
+                .font(.dsCaption)
                 .foregroundStyle(.secondary)
 
             disclosure(
@@ -153,6 +154,7 @@ struct OBPregnancyHealthCheckCard: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(.primary)
+            .accessibilityAddTraits(isConfirmed ? .isSelected : [])
             .accessibilityIdentifier("onboarding.pregnancy.confirm")
 
             Text(PregnancyRunningPolicy.medicalDisclaimer)
@@ -293,19 +295,11 @@ struct OBPregnancyReady: View {
             VStack(spacing: 0) {
                 Spacer().frame(height: 54)
                 HStack(spacing: 14) {
-                    Button(action: onBack) {
-                        ZStack {
-                            Circle()
-                                .fill(Color.secondary.opacity(0.1))
-                                .frame(width: 32, height: 32)
-                            StrideIcon(name: .chevronLeft, size: 14, color: .primary, strokeWeight: 2.4)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(isCreatingPlan)
-                    .opacity(isCreatingPlan ? 0.4 : 1)
-                    .accessibilityLabel("Back")
-                    .accessibilityIdentifier("onboarding.back.\(progressTotal)")
+                    OBBackButton(
+                        identifier: "onboarding.back.\(progressTotal)",
+                        isDisabled: isCreatingPlan,
+                        action: onBack
+                    )
 
                     StrideProgressBar(value: 1, height: 4)
                         .accessibilityHidden(true)
@@ -313,16 +307,15 @@ struct OBPregnancyReady: View {
                         .font(.dsCaption2.weight(.bold).monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
-                .padding(.horizontal, AppSpacing.xl)
+                .padding(.horizontal, AppSpacing.xxl)
                 .padding(.top, AppSpacing.sm)
                 .padding(.bottom, 22)
 
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 16) {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("YOUR PLAN")
-                                .font(.dsCaption2.weight(.bold))
-                                .kerning(1.6)
+                            Text("Your plan")
+                                .strideEyebrow()
                                 .foregroundStyle(.brandText)
                             Text("\(planWeeks)-week pregnancy plan\nthrough to your due date.")
                                 .font(.dsTitle1.weight(.heavy))
@@ -330,8 +323,8 @@ struct OBPregnancyReady: View {
                                 .foregroundStyle(.primary)
                                 .lineSpacing(-2)
                         }
-                        .padding(.horizontal, AppSpacing.xl)
 
+                        // The plan summary: the screen's one hero.
                         HStack(spacing: 0) {
                             OBPregnancyStat(label: "WEEKS", value: "\(planWeeks)")
                             Rectangle().fill(Color.secondary.opacity(0.2)).frame(width: 1, height: 36)
@@ -340,8 +333,7 @@ struct OBPregnancyReady: View {
                             OBPregnancyStat(label: "RUN DAYS", value: "\(runDaysPerWeek)")
                         }
                         .padding(AppSpacing.lg)
-                        .strideCard(cornerRadius: AppRadius.lg)
-                        .padding(.horizontal, AppSpacing.lg)
+                        .heroCard()
 
                         VStack(alignment: .leading, spacing: 12) {
                             ForEach(howItWorks, id: \.text) { row in
@@ -357,7 +349,6 @@ struct OBPregnancyReady: View {
                         }
                         .padding(AppSpacing.lg)
                         .strideCard(cornerRadius: AppRadius.lg)
-                        .padding(.horizontal, AppSpacing.lg)
 
                         VStack(alignment: .leading, spacing: 10) {
                             Text("STOP AND CALL YOUR PROVIDER")
@@ -379,46 +370,39 @@ struct OBPregnancyReady: View {
                         }
                         .padding(AppSpacing.lg)
                         .background(Color.destructive.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.lg))
-                        .padding(.horizontal, AppSpacing.lg)
 
                         Text(PregnancyRunningPolicy.medicalDisclaimer)
                             .font(.dsCaption2)
                             .foregroundStyle(.secondary)
-                            .padding(.horizontal, AppSpacing.xl)
-
-                        Spacer().frame(height: 120)
                     }
+                    .padding(.horizontal, AppSpacing.xxl)
                     .padding(.top, AppSpacing.sm)
+                    .padding(.bottom, AppSpacing.lg)
                 }
+                .safeAreaInset(edge: .bottom, spacing: 0) { cta }
             }
+        }
+    }
 
-            Button(action: onViewPlan) {
-                Group {
-                    if isCreatingPlan {
-                        ProgressView().tint(.onFill)
-                    } else {
-                        HStack(spacing: 10) {
-                            Text("Start my plan").font(.dsHeadline.weight(.bold))
-                            StrideIcon(name: .chevronRight, size: 15, color: .onFill, strokeWeight: 2.6)
-                        }
+    private var cta: some View {
+        Button(action: onViewPlan) {
+            Group {
+                if isCreatingPlan {
+                    ProgressView().tint(.onFill)
+                } else {
+                    HStack(spacing: 10) {
+                        Text("Start my plan")
+                        StrideIcon(name: .chevronRight, size: 15, color: .onFill, strokeWeight: 2.6)
                     }
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, AppSpacing.lg)
-                .background(.route, in: RoundedRectangle(cornerRadius: AppRadius.lg))
-                .appGlow(.strong, color: .brand)
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppRadius.lg)
-                        .strokeBorder(.white.opacity(0.2), lineWidth: 0.5)
-                )
             }
-            .foregroundStyle(.onFill)
-            .buttonStyle(.plain)
-            .disabled(isCreatingPlan)
-            .accessibilityIdentifier("onboarding.startTraining")
-            .padding(.horizontal, AppSpacing.xl)
-            .padding(.bottom, 44)
         }
+        .buttonStyle(.strideButton())
+        .disabled(isCreatingPlan)
+        .accessibilityIdentifier("onboarding.startTraining")
+        .padding(.horizontal, AppSpacing.xxl)
+        .padding(.top, AppSpacing.sm)
+        .padding(.bottom, 44)
     }
 }
 

@@ -34,6 +34,52 @@ struct OBWelcome: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var appeared = false
 
+    /// The mark and the welcome copy, above the buttons.
+    private var copy: some View {
+        VStack(spacing: 0) {
+            Spacer().frame(height: 90)
+
+            StrideAppMark(size: 120, drawsOn: true)
+                .scaleEffect(appeared ? 1 : 0.55)
+                .opacity(appeared ? 1 : 0)
+                .adaptiveAnimation(AppAnimation.entrance, value: appeared)
+
+            Spacer(minLength: 40)
+
+            Text("WELCOME TO STRIDE")
+                .font(.dsCaption2.weight(.bold))
+                .kerning(1.8)
+                .foregroundStyle(.brandText)
+                .opacity(appeared ? 1 : 0)
+                .offset(y: appeared ? 0 : 10)
+                .adaptiveAnimation(AppAnimation.entrance.delay(0.08), value: appeared)
+
+            Spacer().frame(height: 10)
+
+            Text("Training plans that\nadapt to your pace.")
+                .font(.dsLargeTitle.weight(.heavy))
+                .kerning(-0.95)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.primary)
+                .lineSpacing(-4)
+                .opacity(appeared ? 1 : 0)
+                .offset(y: appeared ? 0 : 16)
+                .adaptiveAnimation(AppAnimation.entrance.delay(0.14), value: appeared)
+
+            Spacer().frame(height: 14)
+
+            Text("VDOT-based pace zones. Adaptive weekly plans. Built for iPhone and Apple Watch.")
+                .font(.dsSubhead)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, AppSpacing.md)
+                .lineSpacing(2)
+                .opacity(appeared ? 1 : 0)
+                .offset(y: appeared ? 0 : 14)
+                .adaptiveAnimation(AppAnimation.entrance.delay(0.20), value: appeared)
+        }
+    }
+
     var body: some View {
         ZStack(alignment: .bottom) {
             // The map, as on the icon: daylight paper in light, the night map in dark.
@@ -43,65 +89,22 @@ struct OBWelcome: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                Spacer().frame(height: 90)
-
-                StrideAppMark(size: 120, drawsOn: true)
-                    .scaleEffect(appeared ? 1 : 0.55)
-                    .opacity(appeared ? 1 : 0)
-                    .adaptiveAnimation(AppAnimation.entrance, value: appeared)
-
-                Spacer(minLength: 40)
-
-                Text("WELCOME TO STRIDE")
-                    .font(.dsCaption2.weight(.bold))
-                    .kerning(1.8)
-                    .foregroundStyle(.brandText)
-                    .opacity(appeared ? 1 : 0)
-                    .offset(y: appeared ? 0 : 10)
-                    .adaptiveAnimation(AppAnimation.entrance.delay(0.08), value: appeared)
-
-                Spacer().frame(height: 10)
-
-                Text("Training plans that\nadapt to your pace.")
-                    .font(.dsLargeTitle.weight(.heavy))
-                    .kerning(-0.95)
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.primary)
-                    .lineSpacing(-4)
-                    .opacity(appeared ? 1 : 0)
-                    .offset(y: appeared ? 0 : 16)
-                    .adaptiveAnimation(AppAnimation.entrance.delay(0.14), value: appeared)
-
-                Spacer().frame(height: 14)
-
-                Text("VDOT-based pace zones. Adaptive weekly plans. Built for iPhone and Apple Watch.")
-                    .font(.bodyRegular)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, AppSpacing.md)
-                    .lineSpacing(2)
-                    .opacity(appeared ? 1 : 0)
-                    .offset(y: appeared ? 0 : 14)
-                    .adaptiveAnimation(AppAnimation.entrance.delay(0.20), value: appeared)
+                // At accessibility text sizes the copy outgrows the screen; it scrolls then,
+                // so the two buttons below stay pinned and reachable.
+                ViewThatFits(in: .vertical) {
+                    copy
+                    ScrollView(showsIndicators: false) { copy.frame(maxWidth: .infinity) }
+                }
 
                 Spacer(minLength: 30)
 
                 Button(action: onStart) {
                     HStack(spacing: 10) {
-                        Text("Get started").font(.dsHeadline.weight(.bold))
+                        Text("Get started")
                         StrideIcon(name: .chevronRight, size: 15, color: .onFill, strokeWeight: 2.6)
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, AppSpacing.lg)
-                    .background(.route, in: RoundedRectangle(cornerRadius: AppRadius.lg))
-                    .appGlow(.strong, color: .brand)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: AppRadius.lg)
-                            .strokeBorder(.white.opacity(0.2), lineWidth: 0.5)
-                    )
                 }
-                .foregroundStyle(.onFill)
-                .buttonStyle(BouncyButtonStyle())
+                .buttonStyle(.strideButton())
                 .accessibilityIdentifier("onboarding.getStarted")
                 .opacity(appeared ? 1 : 0)
                 .offset(y: appeared ? 0 : 18)
@@ -119,7 +122,8 @@ struct OBWelcome: View {
                 // pair them.
                 .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
                 .frame(height: 50)
-                .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
+                // The same radius as the strideButton above it.
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.lg))
                 .padding(.top, AppSpacing.md)
                 .opacity(appeared ? 1 : 0)
                 .adaptiveAnimation(AppAnimation.entrance.delay(0.34), value: appeared)
@@ -184,7 +188,7 @@ struct OBWelcomeBack: View {
                 Spacer().frame(height: 14)
                 if !hasData {
                     Text("Looking for your training data in iCloud.\nThis can take a few minutes on a new device.")
-                        .font(.bodyRegular)
+                        .font(.dsSubhead)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, AppSpacing.md)
@@ -192,7 +196,7 @@ struct OBWelcomeBack: View {
                     if let iCloudIssue {
                         Spacer().frame(height: 12)
                         Text(iCloudIssue)
-                            .font(.caption)
+                            .font(.dsCaption)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, AppSpacing.md)
@@ -211,30 +215,16 @@ struct OBWelcomeBack: View {
                         authService.welcomeBackPending = false
                     } label: {
                         HStack(spacing: 10) {
-                            Text("Continue to Dashboard").font(.dsHeadline.weight(.bold))
+                            Text("Continue to Dashboard")
                             StrideIcon(name: .chevronRight, size: 15, color: .onFill, strokeWeight: 2.6)
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, AppSpacing.lg)
-                        .background(.route, in: RoundedRectangle(cornerRadius: AppRadius.lg))
-                        .appGlow(.strong, color: .brand)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: AppRadius.lg)
-                                .strokeBorder(.white.opacity(0.2), lineWidth: 0.5)
-                        )
                     }
-                    .foregroundStyle(.onFill)
-                    .buttonStyle(.plain)
+                    .buttonStyle(.strideButton())
                 }
 
-                Button(action: onStartFresh) {
-                    Text("Start fresh instead")
-                        .font(.dsSubhead.weight(.medium))
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
+                OBTextLink("Start fresh instead", action: onStartFresh)
             }
-            .padding(.horizontal, AppSpacing.xl)
+            .padding(.horizontal, AppSpacing.xxl)
             .padding(.bottom, 44)
         }
         .task { await checkICloudStatus() }
@@ -367,17 +357,7 @@ struct OBShell<Content: View>: View {
                 VStack(spacing: 0) {
                     Spacer().frame(height: 54)
                     HStack(spacing: 14) {
-                        Button(action: onBack) {
-                            ZStack {
-                                Circle()
-                                    .fill(Color.secondary.opacity(0.1))
-                                    .frame(width: 32, height: 32)
-                                StrideIcon(name: .chevronLeft, size: 14, color: .primary, strokeWeight: 2.4)
-                            }
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Back")
-                        .accessibilityIdentifier("onboarding.back.\(stepIndex)")
+                        OBBackButton(identifier: "onboarding.back.\(stepIndex)", action: onBack)
 
                         // The app's route bar, filled to the step. Hidden from VoiceOver
                         // because the "3/8" counter beside it already says this — the same
@@ -393,7 +373,7 @@ struct OBShell<Content: View>: View {
                             .font(.dsCaption2.weight(.bold).monospacedDigit())
                             .foregroundStyle(.secondary)
                     }
-                    .padding(.horizontal, AppSpacing.xl)
+                    .padding(.horizontal, AppSpacing.xxl)
                     .padding(.top, AppSpacing.sm)
                     .padding(.bottom, 18)
                 }
@@ -402,16 +382,15 @@ struct OBShell<Content: View>: View {
                     VStack(alignment: .leading, spacing: 24) {
                         // Header
                         VStack(alignment: .leading, spacing: 8) {
-                            Text(kicker.uppercased())
-                                .font(.dsCaption.weight(.bold))
-                                .kerning(1.6)
+                            Text(kicker)
+                                .strideEyebrow()
                                 .foregroundStyle(.brandText)
                             Text(title)
                                 .font(.dsTitle1.weight(.heavy))
                                 .kerning(-0.8)
                                 .foregroundStyle(.primary)
                             Text(subtitle)
-                                .font(.bodyRegular)
+                                .font(.dsSubhead)
                                 .foregroundStyle(.secondary)
                                 .lineSpacing(2)
                         }
@@ -419,46 +398,98 @@ struct OBShell<Content: View>: View {
                         content()
                     }
                     .padding(.horizontal, AppSpacing.xxl)
-                    .padding(.bottom, 120)
+                    .padding(.bottom, AppSpacing.lg)
                 }
+                // The CTA sits in the scroll view's inset rather than over it, so the last
+                // card always scrolls clear of the button and the link under it.
+                .safeAreaInset(edge: .bottom, spacing: 0) { ctaStack }
             }
-
-            // CTA pinned at bottom
-            VStack(spacing: 10) {
-                Button(action: onCTA) {
-                    HStack(spacing: 10) {
-                        Text(ctaLabel).font(.dsHeadline.weight(.bold))
-                        StrideIcon(name: .chevronRight, size: 14, color: .onFill, strokeWeight: 2.6)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, AppSpacing.lg)
-                    .background(LinearGradient.route.opacity(ctaEnabled ? 1 : 0.5),
-                                in: RoundedRectangle(cornerRadius: AppRadius.md))
-                    .appGlow(.strong, color: .brand, isActive: ctaEnabled)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: AppRadius.md)
-                            .strokeBorder(.white.opacity(0.2), lineWidth: 0.5)
-                    )
-                }
-                .foregroundStyle(.onFill)
-                .buttonStyle(.plain)
-                .disabled(!ctaEnabled)
-                .accessibilityIdentifier("onboarding.primaryCTA.\(stepIndex)")
-
-                if let secondaryLabel, let onSecondary {
-                    Button(action: onSecondary) {
-                        Text(secondaryLabel)
-                            .font(.dsSubhead.weight(.medium))
-                            .foregroundStyle(.secondary)
-                            .padding(.vertical, 6)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("onboarding.secondaryCTA.\(stepIndex)")
-                }
-            }
-            .padding(.horizontal, AppSpacing.xl)
-            .padding(.bottom, 44)
         }
+    }
+
+    private var ctaStack: some View {
+        VStack(spacing: 10) {
+            Button(action: onCTA) {
+                HStack(spacing: 10) {
+                    Text(ctaLabel)
+                    StrideIcon(name: .chevronRight, size: 14, color: .onFill, strokeWeight: 2.6)
+                }
+            }
+            .buttonStyle(.strideButton())
+            .disabled(!ctaEnabled)
+            .accessibilityIdentifier("onboarding.primaryCTA.\(stepIndex)")
+
+            if let secondaryLabel, let onSecondary {
+                OBTextLink(
+                    secondaryLabel,
+                    identifier: "onboarding.secondaryCTA.\(stepIndex)",
+                    action: onSecondary
+                )
+            }
+        }
+        .padding(.horizontal, AppSpacing.xxl)
+        .padding(.top, AppSpacing.sm)
+        .padding(.bottom, 44)
+    }
+}
+
+// MARK: - OBBackButton
+
+/// The chevron that leads every step's progress chrome. A 32pt disc, as drawn, inside a
+/// 44pt tap target.
+struct OBBackButton: View {
+    let identifier: String
+    var isDisabled = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Circle()
+                    .fill(Color.secondary.opacity(0.1))
+                    .frame(width: 32, height: 32)
+                StrideIcon(name: .chevronLeft, size: 14, color: .primary, strokeWeight: 2.4)
+            }
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        // Pulls the disc back to the gutter, so the bigger target does not move it.
+        .padding(.leading, -6)
+        .disabled(isDisabled)
+        .opacity(isDisabled ? 0.4 : 1)
+        .accessibilityLabel("Back")
+        .accessibilityIdentifier(identifier)
+    }
+}
+
+// MARK: - OBTextLink
+
+/// A quiet alternative under a primary button: "Skip", "Start fresh instead". Plain text,
+/// not a second button shape, so the route button stays the one thing to tap, with the
+/// tap target still 44pt tall.
+struct OBTextLink: View {
+    let title: String
+    var identifier: String?
+    let action: () -> Void
+
+    init(_ title: String, identifier: String? = nil, action: @escaping () -> Void) {
+        self.title = title
+        self.identifier = identifier
+        self.action = action
+    }
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.dsSubhead.weight(.medium))
+                .foregroundStyle(.secondary)
+                .frame(minHeight: 44)
+                .padding(.horizontal, AppSpacing.md)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(identifier ?? "")
     }
 }
 
@@ -471,15 +502,6 @@ struct OBRaceCard: View {
 
     @Environment(AppSettings.self) private var appSettings
 
-    private var color: Color {
-        switch race {
-        case .maintainFitness: return .brand
-        case .fiveK: return .zoneInterval
-        case .halfMarathon: return .zoneTempo
-        case .marathon: return .zoneEasy
-        case .custom: return .zoneMarathon
-        }
-    }
     private var icon: StrideIconName {
         switch race {
         case .maintainFitness: return .heart
@@ -525,13 +547,14 @@ struct OBRaceCard: View {
     var body: some View {
         Button(action: onSelect) {
             HStack(spacing: 14) {
+                // Brand, not a per-race zone colour: zone colours are training-intensity data.
                 ZStack {
-                    Circle().fill(color.opacity(0.15)).frame(width: 48, height: 48)
-                    StrideIcon(name: icon, size: 22, color: color, strokeWeight: 2.2)
+                    Circle().fill(Color.brand.opacity(0.15)).frame(width: 48, height: 48)
+                    StrideIcon(name: icon, size: 22, color: .brand, strokeWeight: 2.2)
                 }
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(race.localizedName).font(.bodyStrong)
+                        Text(race.localizedName).font(.dsSubhead.weight(.semibold))
                         Text(distanceLabel)
                             .font(distanceLabelIsMeasurement
                                   ? .dsCaption.weight(.semibold).monospacedDigit()
@@ -541,17 +564,9 @@ struct OBRaceCard: View {
                             .minimumScaleFactor(0.85)
                     }
                     Text("\(desc) · \(race.typicalWeeks.lowerBound)–\(race.typicalWeeks.upperBound) wks")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.dsCaption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                // Selection is `Color.brand`, and the per-race tint stays on the icon.
-                //
-                // `color` comes from the pace-zone palette, which is a *data* scale — it
-                // encodes effort on charts and in the run HUD. Used as decoration here it put
-                // `zoneInterval`, i.e. red, on the default-selected 5K card, so the app's
-                // first interactive screen presented its pre-selected answer in the same
-                // colour it uses for errors — and step 3's selection is orange, so selection
-                // colour was not even internally consistent (S17).
                 OBRadio(isSelected: isSelected, color: .brand)
             }
             .padding(AppSpacing.lg)
@@ -560,6 +575,7 @@ struct OBRaceCard: View {
                 .strokeBorder(isSelected ? Color.brand : Color.clear, lineWidth: 2))
         }
         .buttonStyle(BouncyButtonStyle()).foregroundStyle(.primary)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
@@ -617,6 +633,7 @@ struct OBCustomDistanceCard: View {
                             .foregroundStyle(isOn ? Color.onFill : Color.primary)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityAddTraits(isOn ? .isSelected : [])
                 }
             }
         }
@@ -649,12 +666,12 @@ struct OBRaceDetailsCard: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 Text("Race name")
-                    .font(.captionStrong)
+                    .font(.dsCaption.weight(.semibold))
                     .foregroundStyle(.secondary)
                 TextField("Austin \(race.displayName)", text: $raceName)
                     .textInputAutocapitalization(.words)
                     .submitLabel(.done)
-                    .font(.bodyRegular)
+                    .font(.dsSubhead)
                     .padding(.horizontal, 14)
                     .padding(.vertical, AppSpacing.md)
                     .background(.surfaceTertiary, in: RoundedRectangle(cornerRadius: AppRadius.md))
@@ -670,7 +687,7 @@ struct OBRaceDetailsCard: View {
                 in: minimumDate...,
                 displayedComponents: .date
             )
-            .font(.bodyStrong)
+            .font(.dsSubhead.weight(.semibold))
         }
         .padding(AppSpacing.lg)
         .strideCard(cornerRadius: AppRadius.lg)
@@ -712,10 +729,10 @@ struct OBStartDateCard: View {
                 in: dateRange,
                 displayedComponents: .date
             )
-            .font(.bodyStrong)
+            .font(.dsSubhead.weight(.semibold))
 
             Text(weeksLabel)
-                .font(.caption)
+                .font(.dsCaption)
                 .foregroundStyle(.secondary)
         }
         .padding(AppSpacing.lg)
@@ -827,6 +844,7 @@ struct OBFitnessRow: View {
             )
         }
         .buttonStyle(BouncyButtonStyle())
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
@@ -851,9 +869,9 @@ struct OBLevelRow: View {
         Button(action: onSelect) {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(level.localizedName).font(.bodyStrong)
+                    Text(level.localizedName).font(.dsSubhead.weight(.semibold))
                     Text(desc)
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.dsCaption).foregroundStyle(.secondary)
                     Text({
                         let km = level.startingWeeklyKm(for: race)
                         if appSettings.unitPreference == .imperial {
@@ -873,6 +891,7 @@ struct OBLevelRow: View {
                 .strokeBorder(isSelected ? Color.brand : Color.clear, lineWidth: 2))
         }
         .buttonStyle(BouncyButtonStyle()).foregroundStyle(.primary)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
@@ -955,10 +974,11 @@ struct OBPaceCell: View {
         HStack(spacing: 10) {
             Circle().fill(color).frame(width: 8, height: 8)
             VStack(alignment: .leading, spacing: 2) {
+                // The zone colour stays on the dot; as small text it fails contrast.
                 Text(zone.uppercased())
                     .font(.dsCaption2.weight(.bold))
                     .kerning(0.8)
-                    .foregroundStyle(color)
+                    .foregroundStyle(.secondary)
                 Text(pace)
                     .font(.dsSubhead.weight(.semibold).monospacedDigit())
             }
@@ -988,9 +1008,9 @@ struct OBPermissionRow: View {
                 StrideIcon(name: icon, size: 20, color: tint, strokeWeight: 2.2)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(label).font(.bodyStrong)
+                Text(label).font(.dsSubhead.weight(.semibold))
                 Text(isActive ? "Requesting access…" : desc)
-                    .font(.caption).foregroundStyle(isActive ? tint : .secondary)
+                    .font(.dsCaption).foregroundStyle(isActive ? Color.brandText : Color.secondary)
                     .animation(.easeInOut(duration: 0.2), value: isActive)
             }
             Spacer()
@@ -1090,22 +1110,14 @@ struct OBReady: View {
             MapBackdrop().ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Chrome: progress bar at 100% with 7/7 counter
+                // Chrome: the progress bar full, with the counter at total/total
                 Spacer().frame(height: 54)
                 HStack(spacing: 14) {
-                    Button(action: onBack) {
-                        ZStack {
-                            Circle()
-                                .fill(Color.secondary.opacity(0.1))
-                                .frame(width: 32, height: 32)
-                            StrideIcon(name: .chevronLeft, size: 14, color: .primary, strokeWeight: 2.4)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(isCreatingPlan)
-                    .opacity(isCreatingPlan ? 0.4 : 1)
-                    .accessibilityLabel("Back")
-                    .accessibilityIdentifier("onboarding.back.\(progressTotal)")
+                    OBBackButton(
+                        identifier: "onboarding.back.\(progressTotal)",
+                        isDisabled: isCreatingPlan,
+                        action: onBack
+                    )
 
                     // The same bar as the step chrome, full (U7). The `GeometryReader` this
                     // replaces was measuring a width only to fill all of it.
@@ -1115,7 +1127,7 @@ struct OBReady: View {
                         .font(.dsCaption2.weight(.bold).monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
-                .padding(.horizontal, AppSpacing.xl)
+                .padding(.horizontal, AppSpacing.xxl)
                 .padding(.top, AppSpacing.sm)
                 .padding(.bottom, 22)
 
@@ -1123,9 +1135,8 @@ struct OBReady: View {
                     VStack(alignment: .leading, spacing: 16) {
                         // Header
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("YOUR PLAN")
-                                .font(.dsCaption2.weight(.bold))
-                                .kerning(1.6)
+                            Text("Your plan")
+                                .strideEyebrow()
                                 .foregroundStyle(.brandText)
                             Text("\(planWeeks)-week \(goalRace.localizedName) plan\nbuilt for you.")
                                 .font(.dsTitle1.weight(.heavy))
@@ -1133,9 +1144,8 @@ struct OBReady: View {
                                 .foregroundStyle(.primary)
                                 .lineSpacing(-2)
                         }
-                        .padding(.horizontal, AppSpacing.xl)
 
-                        // Summary card
+                        // Summary card: the screen's one hero.
                         HStack(spacing: 0) {
                             // "PROJECTED", not "GOAL": `goalTimeSeconds` is
                             // `predictedTime(vdot:)` for the runner's *current* VDOT, so
@@ -1151,47 +1161,44 @@ struct OBReady: View {
                             )
                         }
                         .padding(AppSpacing.lg)
-                        .strideCard(cornerRadius: AppRadius.lg)
-                        .padding(.horizontal, AppSpacing.lg)
+                        .heroCard()
 
                         // Weekly mileage chart
-                        WeeklyMileageChart(planWeeks: planWeeks, goalRace: goalRace, peakMiles: peakMiles, unit: appSettings.unitPreference)
-                            .padding(.horizontal, AppSpacing.lg)
-
-                        Spacer().frame(height: 120)
+                        WeeklyMileageChart(
+                            planWeeks: planWeeks,
+                            goalRace: goalRace,
+                            peakMiles: peakMiles,
+                            unit: appSettings.unitPreference
+                        )
                     }
+                    .padding(.horizontal, AppSpacing.xxl)
                     .padding(.top, AppSpacing.sm)
+                    .padding(.bottom, AppSpacing.lg)
                 }
+                .safeAreaInset(edge: .bottom, spacing: 0) { cta }
             }
+        }
+    }
 
-            // CTA
-            Button(action: onViewPlan) {
-                Group {
-                    if isCreatingPlan {
-                        ProgressView().tint(.onFill)
-                    } else {
-                        HStack(spacing: 10) {
-                            Text("Start training").font(.dsHeadline.weight(.bold))
-                            StrideIcon(name: .chevronRight, size: 15, color: .onFill, strokeWeight: 2.6)
-                        }
+    private var cta: some View {
+        Button(action: onViewPlan) {
+            Group {
+                if isCreatingPlan {
+                    ProgressView().tint(.onFill)
+                } else {
+                    HStack(spacing: 10) {
+                        Text("Start training")
+                        StrideIcon(name: .chevronRight, size: 15, color: .onFill, strokeWeight: 2.6)
                     }
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, AppSpacing.lg)
-                .background(.route, in: RoundedRectangle(cornerRadius: AppRadius.lg))
-                .appGlow(.strong, color: .brand)
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppRadius.lg)
-                        .strokeBorder(.white.opacity(0.2), lineWidth: 0.5)
-                )
             }
-            .foregroundStyle(.onFill)
-            .buttonStyle(.plain)
-            .disabled(isCreatingPlan)
-            .accessibilityIdentifier("onboarding.startTraining")
-            .padding(.horizontal, AppSpacing.xl)
-            .padding(.bottom, 44)
         }
+        .buttonStyle(.strideButton())
+        .disabled(isCreatingPlan)
+        .accessibilityIdentifier("onboarding.startTraining")
+        .padding(.horizontal, AppSpacing.xxl)
+        .padding(.top, AppSpacing.sm)
+        .padding(.bottom, 44)
     }
 }
 
@@ -1266,8 +1273,7 @@ private struct WeeklyMileageChart: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("WEEKLY \(unit == .imperial ? "MILEAGE" : "KILOMETRES")")
-                .font(.dsCaption2.weight(.bold))
-                .kerning(1.2)
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
 
             HStack(alignment: .bottom, spacing: 6) {
@@ -1346,26 +1352,25 @@ struct OBEquipmentCard: View {
     let onTap: () -> Void
 
     var body: some View {
+        // The same selection as every other onboarding card: a card, a brand stroke and
+        // `OBRadio`, rather than a brand-tinted fill and a system checkmark.
         Button(action: onTap) {
             HStack(spacing: 12) {
                 iconView
                 labelView
-                Spacer()
-                if isSelected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.dsCallout)
-                        .foregroundStyle(Color.brand)
-                }
+                Spacer(minLength: 0)
+                OBRadio(isSelected: isSelected, color: .brand)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, AppSpacing.md)
-            .background(cardBackground, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .strideCard(cornerRadius: AppRadius.md)
             .overlay(
                 RoundedRectangle(cornerRadius: AppRadius.md)
-                    .stroke(borderColor, lineWidth: 1.5)
+                    .strokeBorder(isSelected ? Color.brand : Color.clear, lineWidth: 2)
             )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(BouncyButtonStyle())
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private var iconView: some View {
@@ -1387,14 +1392,6 @@ struct OBEquipmentCard: View {
             .minimumScaleFactor(0.7)
             .fixedSize(horizontal: false, vertical: true)
     }
-
-    private var cardBackground: Color {
-        isSelected ? Color.brand.opacity(0.12) : Color.surfaceSecondary
-    }
-
-    private var borderColor: Color {
-        isSelected ? Color.brand.opacity(0.5) : Color.clear
-    }
 }
 
 // MARK: - OBStrengthFocusPicker
@@ -1404,8 +1401,8 @@ struct OBStrengthFocusPicker: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("TRAINING FOCUS")
-                .font(.dsCaption2.weight(.semibold))
+            Text("Training focus")
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, AppSpacing.xs)
 
@@ -1444,20 +1441,13 @@ private struct OBStrengthFocusRow: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, AppSpacing.md)
-            .background(rowBackground, in: RoundedRectangle(cornerRadius: AppRadius.md))
+            .strideCard(cornerRadius: AppRadius.md)
             .overlay(
                 RoundedRectangle(cornerRadius: AppRadius.md)
-                    .stroke(borderColor, lineWidth: 1.5)
+                    .strokeBorder(isSelected ? Color.brand : Color.clear, lineWidth: 2)
             )
         }
         .buttonStyle(.plain)
-    }
-
-    private var rowBackground: Color {
-        isSelected ? Color.brand.opacity(0.10) : Color.surfaceSecondary
-    }
-
-    private var borderColor: Color {
-        isSelected ? Color.brand.opacity(0.4) : Color.clear
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

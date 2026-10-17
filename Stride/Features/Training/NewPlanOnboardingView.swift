@@ -6,6 +6,7 @@ struct NewPlanOnboardingView: View {
     @Environment(AppContainer.self) private var container
     @Environment(\.dismiss) private var dismiss
     @Environment(AppSettings.self) private var appSettings
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @Query private var profiles: [UserProfile]
 
@@ -15,7 +16,9 @@ struct NewPlanOnboardingView: View {
 
     // Step 1 – Race
     @State private var goalRace: RaceType = .halfMarathon
-    @State private var raceName = ""
+    /// Pre-filled with the goal's name, as first-run onboarding does, so Continue is not
+    /// disabled until the runner types one.
+    @State private var raceName = RaceType.halfMarathon.displayName
     @State private var raceDate = Date().startOfWeek.adding(weeks: 12)
     /// Canonical custom goal distance in kilometres (used when `goalRace == .custom`).
     @State private var customDistanceKm: Double = 10.0
@@ -47,7 +50,8 @@ struct NewPlanOnboardingView: View {
     @State private var isCreatingPlan = false
     @State private var planErrorMessage: String?
 
-    private let totalSteps = 6
+    /// Six steps plus the summary, counted 1…7 like first-run onboarding counts 1…8.
+    private let totalSteps = 7
 
     private var profile: UserProfile? { profiles.first }
 
@@ -124,7 +128,7 @@ struct NewPlanOnboardingView: View {
                     removal: .move(edge: goingForward ? .leading : .trailing).combined(with: .opacity)
                 ))
         }
-        .animation(.easeInOut(duration: 0.3), value: step)
+        .adaptiveAnimation(AppAnimation.bouncy, value: step)
         .ignoresSafeArea()
         .onAppear { loadFromProfile() }
         .alert(
@@ -145,22 +149,21 @@ struct NewPlanOnboardingView: View {
         switch step {
         case 0:
             OBShell(
-                stepIndex: 0, total: totalSteps,
-                kicker: "Step 1 · Goal",
+                stepIndex: 1, total: totalSteps,
+                kicker: "Goal",
                 title: "Pick your goal.",
                 subtitle: "Choose a race or maintain fitness. You can change this anytime.",
                 ctaLabel: "Continue",
-                ctaEnabled: raceGoalReady,
                 onBack: { dismiss() },
                 onCTA: advance
             ) { raceContent }
 
         case 1:
             OBShell(
-                stepIndex: 1, total: totalSteps,
-                kicker: "Step 2 · Fitness",
+                stepIndex: 2, total: totalSteps,
+                kicker: "Fitness",
                 title: "Where are you now?",
-                subtitle: "Be honest — plans scale up from here. No ego lifts allowed.",
+                subtitle: "Be honest — your plan's volume scales up from here.",
                 ctaLabel: "Continue",
                 onBack: retreat,
                 onCTA: advance
@@ -168,8 +171,8 @@ struct NewPlanOnboardingView: View {
 
         case 2:
             OBShell(
-                stepIndex: 2, total: totalSteps,
-                kicker: "Step 3 · Pace",
+                stepIndex: 3, total: totalSteps,
+                kicker: "Pace",
                 title: "Your recent 5K time?",
                 subtitle: "Your VDOT — and every training pace — comes from this number.",
                 ctaLabel: "Continue",
@@ -179,30 +182,34 @@ struct NewPlanOnboardingView: View {
 
         case 3:
             OBShell(
-                stepIndex: 3, total: totalSteps,
-                kicker: goalRace.isGoalRace ? "Step 4 · Race Day" : "Step 4 · Duration",
+                stepIndex: 4, total: totalSteps,
+                kicker: goalRace.isGoalRace ? "Race day" : "Duration",
                 title: goalRace.isGoalRace ? "When is race day?" : "How long to train?",
-                subtitle: goalRace.isGoalRace ? "Your plan will finish on the goal race date." : "Choose a plan length that suits your schedule.",
+                subtitle: goalRace.isGoalRace
+                    ? "Your plan will finish on the goal race date."
+                    : "Choose a plan length that suits your schedule.",
                 ctaLabel: "Continue",
+                ctaEnabled: raceGoalReady,
                 onBack: retreat,
                 onCTA: advance
             ) { durationContent }
 
         case 4:
             OBShell(
-                stepIndex: 4, total: totalSteps,
-                kicker: "Step 5 · Schedule",
+                stepIndex: 5, total: totalSteps,
+                kicker: "Schedule",
                 title: "When can you run?",
                 subtitle: "Pick the days you'll train. We'll build your plan around them.",
                 ctaLabel: "Continue",
+                ctaEnabled: !selectedDays.isEmpty,
                 onBack: retreat,
-                onCTA: { guard !selectedDays.isEmpty else { return }; advance() }
+                onCTA: advance
             ) { scheduleContent }
 
         case 5:
             OBShell(
-                stepIndex: 5, total: totalSteps,
-                kicker: "Step 6 · Strength",
+                stepIndex: 6, total: totalSteps,
+                kicker: "Strength",
                 title: "What equipment do you have?",
                 subtitle: "We'll add strength sessions on your off days, tailored to your gear.",
                 ctaLabel: "Build My Plan",
@@ -216,7 +223,7 @@ struct NewPlanOnboardingView: View {
             OBReady(
                 goalRace: goalRace,
                 planWeeks: effectiveWeeks,
-                progressTotal: totalSteps + 1,
+                progressTotal: totalSteps,
                 goalTimeSeconds: goalFinishTimeSeconds,
                 estimatedWorkouts: estimatedWorkouts,
                 peakKm: peakKm,
@@ -233,8 +240,14 @@ struct NewPlanOnboardingView: View {
 
     // MARK: - Navigation
 
-    private func advance() { goingForward = true; withAnimation { step += 1 } }
-    private func retreat() { goingForward = false; withAnimation { step -= 1 } }
+    private func advance() {
+        goingForward = true
+        withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : AppAnimation.bouncy) { step += 1 }
+    }
+    private func retreat() {
+        goingForward = false
+        withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : AppAnimation.bouncy) { step -= 1 }
+    }
 
     // MARK: - Step content
 
@@ -251,14 +264,7 @@ struct NewPlanOnboardingView: View {
                 OBCustomDistanceCard(distanceKm: $customDistanceKm)
                     .onChange(of: customDistanceKm) { _, _ in recalibrateRaceName() }
             }
-            if goalRace.isGoalRace {
-                OBRaceDetailsCard(
-                    raceName: $raceName,
-                    raceDate: $raceDate,
-                    race: goalRace,
-                    minimumDate: minimumRaceDate
-                )
-            }
+            // The race's name and date are asked once, on the race-day step.
         }
     }
 
@@ -307,7 +313,7 @@ struct NewPlanOnboardingView: View {
                         .foregroundStyle(.brandText)
                     Text("·").foregroundStyle(.secondary)
                     Text(vdotLabel)
-                        .font(.captionStrong)
+                        .font(.dsCaption.weight(.semibold))
                         .foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, 14)
@@ -332,7 +338,7 @@ struct NewPlanOnboardingView: View {
             HStack(spacing: 10) {
                 StrideIcon(name: .timer, size: 16, color: .secondary)
                 Text("Don't know your 5K time? Estimate from a recent run or use your current fitness level as a guide.")
-                    .font(.caption)
+                    .font(.dsCaption)
                     .foregroundStyle(.secondary)
             }
             .padding(14)
@@ -342,16 +348,18 @@ struct NewPlanOnboardingView: View {
 
     private var durationContent: some View {
         VStack(spacing: 16) {
+            if goalRace.isGoalRace {
+                OBRaceDetailsCard(
+                    raceName: $raceName,
+                    raceDate: $raceDate,
+                    race: goalRace,
+                    minimumDate: minimumRaceDate
+                )
+                .onChange(of: raceDate) { _, _ in recalibrateDates() }
+            }
+
             VStack(spacing: 14) {
                 if goalRace.isGoalRace {
-                    DatePicker(
-                        "Race date",
-                        selection: $raceDate,
-                        in: minimumRaceDate...,
-                        displayedComponents: .date
-                    )
-                    .onChange(of: raceDate) { _, _ in recalibrateDates() }
-
                     LabeledContent("Duration") {
                         Text("\(effectiveWeeks) weeks")
                             .foregroundStyle(.secondary)
@@ -407,7 +415,7 @@ struct NewPlanOnboardingView: View {
                 Text(goalRace.isGoalRace
                      ? "Race plans can target any future date."
                      : "\(goalRace.typicalWeeks.lowerBound)–\(goalRace.typicalWeeks.upperBound) weeks recommended for \(goalRace.localizedName).")
-                    .font(.caption)
+                    .font(.dsCaption)
                     .foregroundStyle(.secondary)
             }
             .padding(14)
@@ -424,7 +432,8 @@ struct NewPlanOnboardingView: View {
                         let dayLabels = ["M", "T", "W", "T", "F", "S", "S"]
                         // Real day-of-month numbers for the current (Monday-first)
                         // week instead of hardcoded literals that read "20…26" forever.
-                        let dayNumber = Calendar.current.component(.day, from: weekStart.adding(days: i))
+                        let dayDate = weekStart.adding(days: i)
+                        let dayNumber = Calendar.current.component(.day, from: dayDate)
                         let isOn = selectedDays.contains(i)
                         Button {
                             if isOn { selectedDays.remove(i) } else { selectedDays.insert(i) }
@@ -447,6 +456,9 @@ struct NewPlanOnboardingView: View {
                                 .appGlow(.subtle, color: .brand, isActive: isOn)
                         }
                         .buttonStyle(.plain)
+                        // "Monday", not "M 20": the letter and date are a visual shorthand.
+                        .accessibilityLabel(Text(dayDate, format: .dateTime.weekday(.wide)))
+                        .accessibilityAddTraits(isOn ? .isSelected : [])
                     }
                 }
 
@@ -455,8 +467,8 @@ struct NewPlanOnboardingView: View {
                         .font(.dsTitle2.monospacedDigit())
                         .foregroundStyle(.brandText)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Days per week").font(.captionStrong)
-                        Text(recommendedDaysLabel).font(.caption).foregroundStyle(.secondary)
+                        Text("Days per week").font(.dsCaption.weight(.semibold))
+                        Text(recommendedDaysLabel).font(.dsCaption).foregroundStyle(.secondary)
                     }
                     Spacer()
                 }
@@ -471,7 +483,7 @@ struct NewPlanOnboardingView: View {
                 HStack(spacing: 10) {
                     StrideIcon(name: .flag, size: 16, color: .destructive)
                     Text("Select at least one run day to continue.")
-                        .font(.caption)
+                        .font(.dsCaption)
                         .foregroundStyle(.destructive)
                 }
                 .padding(14)
@@ -495,7 +507,7 @@ struct NewPlanOnboardingView: View {
         switch vdotValue {
         case ..<30: return "beginner"
         case 30..<40: return "base fitness"
-        case 40..<50: return "good intermediate"
+        case 40..<50: return "intermediate"
         case 50..<60: return "advanced"
         default: return "elite"
         }
@@ -511,19 +523,23 @@ struct NewPlanOnboardingView: View {
         }
     }
 
-    /// Auto-generated race name for a custom distance, so the field is never blank.
+    /// Auto-generated race name for the current goal, as first-run onboarding uses. Custom
+    /// distances use a unit-aware distance label so the field is never blank.
     private var defaultRaceName: String {
-        appSettings.unitPreference == .imperial
+        guard goalRace.usesCustomDistance else { return goalRace.displayName }
+        return appSettings.unitPreference == .imperial
             ? String(format: "%.1f mi Race", customDistanceKm * 0.621371)
             : String(format: "%.1f km Race", customDistanceKm)
     }
 
-    /// Keeps the race name in sync with the chosen custom distance while it still
-    /// looks auto-generated; a name the user typed is left untouched.
+    /// Keeps the race name in step with the chosen goal while it still looks
+    /// auto-generated; a name the user typed is left untouched.
     private func recalibrateRaceName() {
-        guard goalRace.usesCustomDistance else { return }
+        guard goalRace.isGoalRace else { return }
         let trimmed = raceName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let generatedRaceNames = Set(RaceType.allCases.map(\.displayName))
         let looksAutoGenerated = trimmed.isEmpty
+            || generatedRaceNames.contains(trimmed)
             || (trimmed.hasSuffix(" Race") && (trimmed.first?.isNumber ?? false))
         if looksAutoGenerated {
             raceName = defaultRaceName
@@ -563,6 +579,7 @@ struct NewPlanOnboardingView: View {
         selectedEquipment = Set(profile.selectedEquipment)
         strengthFocus = profile.strengthFocus
         clampWeeks()
+        recalibrateRaceName()
     }
 
     private func clampWeeks() {
