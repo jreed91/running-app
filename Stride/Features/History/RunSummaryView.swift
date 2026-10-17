@@ -13,7 +13,7 @@ import UIKit
 // The screen is a short summary (hero with the plan verdict, feel, map, one coach card,
 // a breakdown list, conditions and shoes). The long readings — splits, zones, laps, pace
 // insights, the planned workout and the full coach — each open as their own page from
-// the breakdown list, built eagerly in this view's body (see `breakdownRowButton`).
+// the breakdown list, shown in place of the summary (see `detailPageContent`).
 //
 // The screen used to be one 2,232-line file carrying a `swiftlint:disable file_length
 // type_body_length` banner, which is the last of D1. The logic came out first — the
@@ -73,6 +73,8 @@ struct RunSummaryView: View {
     @State var nextSessionUpdateMessage: String?
     @State var coachChatRequest: AICoachChatRequest?
     @State var zoneSlices: [HRZoneSlice] = []
+    /// The Breakdown page shown in place of the summary, if one is open.
+    @State var openPage: RunSummaryPage?
     /// Whether the feel rating changed after a coach read was requested — the cue for the
     /// feel card to point at Refresh, since that read was written without it.
     @State var feelChangedSinceInsight = false
@@ -359,43 +361,64 @@ struct RunSummaryView: View {
     }
 
 
+    /// The run screen itself: everything but an opened Breakdown page.
+    @ViewBuilder
+    private var summaryContent: some View {
+        // The answer first (what the run was and how it went against the plan),
+        // then the one thing the screen asks of the runner, then the route, the
+        // coach's headline, and a list of everything else. Each long reading opens
+        // as its own page so this scroll stays short.
+        titleBlock
+        // A walk is not training, so there is nothing for its rating to adjust. The
+        // rating is read against a *run's* intended type, so not a ride either (B8).
+        if workout.countsAsRunning {
+            feelSection
+        }
+        routeMap
+        // The coach and the pace read are both written against the runner's
+        // training paces, which say nothing about a walk. Absent rather than
+        // shown empty: an insight on a walk is not a smaller insight, it is one
+        // about the wrong thing. The same holds for a ride or a swim (B8).
+        if workout.countsAsRunning {
+            coachSummaryCard
+        }
+        breakdownSection
+            .id(Self.breakdownAnchor)
+        // A walk can never fulfil a planned session, so the screen does not offer
+        // to link one — the same rule the importer's linker applies (N38). The sheet
+        // lists run days only, so it is not offered for cross-training either (B8).
+        if workout.scheduledWorkout == nil, workout.countsAsRunning {
+            linkToPlannedWorkoutButton
+        }
+        weatherSection
+        // Shoes are for running; a ride or a swim has none to pick (B8).
+        if !workout.isCrossTraining {
+            RunShoeRow(workout: workout)
+        }
+    }
+
+    /// Scroll anchors: the top for an opened page, and the breakdown for coming back to it.
+    static let topAnchor = "runSummary.top"
+    static let breakdownAnchor = "runSummary.breakdown"
+
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: AppSpacing.md) {
-                // The answer first (what the run was and how it went against the plan),
-                // then the one thing the screen asks of the runner, then the route, the
-                // coach's headline, and a list of everything else. Each long reading opens
-                // as its own page so this scroll stays short.
-                titleBlock
-                // A walk is not training, so there is nothing for its rating to adjust. The
-                // rating is read against a *run's* intended type, so not a ride either (B8).
-                if workout.countsAsRunning {
-                    feelSection
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: AppSpacing.md) {
+                    if let openPage {
+                        detailPageContent(openPage)
+                    } else {
+                        summaryContent
+                    }
                 }
-                routeMap
-                // The coach and the pace read are both written against the runner's
-                // training paces, which say nothing about a walk. Absent rather than
-                // shown empty: an insight on a walk is not a smaller insight, it is one
-                // about the wrong thing. The same holds for a ride or a swim (B8).
-                if workout.countsAsRunning {
-                    coachSummaryCard
-                }
-                breakdownSection
-                // A walk can never fulfil a planned session, so the screen does not offer
-                // to link one — the same rule the importer's linker applies (N38). The sheet
-                // lists run days only, so it is not offered for cross-training either (B8).
-                if workout.scheduledWorkout == nil, workout.countsAsRunning {
-                    linkToPlannedWorkoutButton
-                }
-                weatherSection
-                // Shoes are for running; a ride or a swim has none to pick (B8).
-                if !workout.isCrossTraining {
-                    RunShoeRow(workout: workout)
-                }
+                .padding(.horizontal, AppSpacing.lg)
+                .padding(.bottom, AppSpacing.xxxl)
+                .frame(maxWidth: .infinity)
+                .id(Self.topAnchor)
             }
-            .padding(.horizontal, AppSpacing.lg)
-            .padding(.bottom, AppSpacing.xxxl)
-            .frame(maxWidth: .infinity)
+            .onChange(of: openPage) { _, page in
+                proxy.scrollTo(page == nil ? Self.breakdownAnchor : Self.topAnchor, anchor: .top)
+            }
         }
         .task(id: workout.id) {
             // Heart-rate zones are content on the screen, so they load first; the share
@@ -411,10 +434,22 @@ struct RunSummaryView: View {
             resolveSplitChartSeries()
         }
         .background(Color.surfacePrimary.ignoresSafeArea())
-        .navigationTitle(displayType.localizedName)
+        .navigationTitle(openPage?.title ?? displayType.localizedName)
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(openPage != nil)
         .toolbar {
-            if showsCloseButton {
+            if openPage != nil {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        openPage = nil
+                    } label: {
+                        Image(systemName: "chevron.backward")
+                    }
+                    .accessibilityLabel("Back")
+                }
+            }
+            // A page's only control is the way back; the run's own actions wait for it.
+            if showsCloseButton, openPage == nil {
                 ToolbarItem(placement: .cancellationAction) {
                     Button {
                         dismiss()
@@ -424,43 +459,45 @@ struct RunSummaryView: View {
                     .accessibilityLabel("Close")
                 }
             }
-            ToolbarItem(placement: .primaryAction) {
-                // Always present, rather than popping into the toolbar seconds after the
-                // screen appears once a pre-render finished (N21). A menu rather than a
-                // button since B6 gave the run a second thing to send: the picture of it
-                // and the data behind it are different asks, and neither is the default.
-                Menu {
-                    Button {
-                        Task { await renderShareCard() }
-                    } label: {
-                        Label("Share run card", systemImage: "photo")
-                    }
-                    // Only for runs that have a route — an indoor run has nothing to put in
-                    // a GPX, so the option is absent rather than disabled and unexplained.
-                    if !workout.routeCoordinates.isEmpty {
+            if openPage == nil {
+                ToolbarItem(placement: .primaryAction) {
+                    // Always present, rather than popping into the toolbar seconds after the
+                    // screen appears once a pre-render finished (N21). A menu rather than a
+                    // button since B6 gave the run a second thing to send: the picture of it
+                    // and the data behind it are different asks, and neither is the default.
+                    Menu {
                         Button {
-                            exportGPX()
+                            Task { await renderShareCard() }
                         } label: {
-                            Label("Export route as GPX", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
+                            Label("Share run card", systemImage: "photo")
+                        }
+                        // Only for runs that have a route — an indoor run has nothing to put in
+                        // a GPX, so the option is absent rather than disabled and unexplained.
+                        if !workout.routeCoordinates.isEmpty {
+                            Button {
+                                exportGPX()
+                            } label: {
+                                Label("Export route as GPX", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
+                            }
+                        }
+                    } label: {
+                        if isRenderingShareCard {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "square.and.arrow.up")
                         }
                     }
-                } label: {
-                    if isRenderingShareCard {
-                        ProgressView()
-                    } else {
-                        Image(systemName: "square.and.arrow.up")
+                    .disabled(isRenderingShareCard)
+                    .accessibilityLabel("Share run")
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button(role: .destructive) {
+                        showDeleteConfirmation = true
+                    } label: {
+                        Image(systemName: "trash")
                     }
+                    .accessibilityLabel("Delete workout")
                 }
-                .disabled(isRenderingShareCard)
-                .accessibilityLabel("Share run")
-            }
-            ToolbarItem(placement: .primaryAction) {
-                Button(role: .destructive) {
-                    showDeleteConfirmation = true
-                } label: {
-                    Image(systemName: "trash")
-                }
-                .accessibilityLabel("Delete workout")
             }
         }
         .sheet(isPresented: $showAssociateSheet) {
