@@ -93,6 +93,42 @@ final class StrideUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Home"].waitForExistence(timeout: 5))
     }
 
+    /// A run's Breakdown row opens its page. The rows first shipped with an item-driven
+    /// `navigationDestination` inside a screen that is itself pushed by a view link, and
+    /// tapping one did nothing and then crashed the app.
+    func testBreakdownRowOpensItsPage() throws {
+        app.terminate()
+        app.launchArguments = ["--uitesting", "--seed-demo-data"]
+        app.launch()
+        completeOnboarding()
+
+        XCTAssertTrue(tabBar.buttons["History"].waitForExistence(timeout: 5))
+        tabBar.buttons["History"].tap()
+        XCTAssertTrue(app.navigationBars["History"].waitForExistence(timeout: 5))
+
+        let firstRun = app.cells.firstMatch
+        XCTAssertTrue(firstRun.waitForExistence(timeout: 10), "The demo history has no rows")
+        firstRun.tap()
+
+        let row = app.buttons
+            .matching(NSPredicate(format: "identifier BEGINSWITH %@", "runSummary.breakdown."))
+            .firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "The run has no Breakdown rows")
+        for _ in 0..<5 where !row.isHittable {
+            app.swipeUp()
+        }
+        let titles = [
+            "plannedWorkout": "Planned workout", "splits": "Splits",
+            "heartRateZones": "Heart-rate zones", "laps": "Laps", "paceInsights": "Pace insights"
+        ]
+        let page = String(row.identifier.dropFirst("runSummary.breakdown.".count))
+        let title = try XCTUnwrap(titles[page], "Unknown Breakdown row \(row.identifier)")
+        row.tap()
+
+        XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 5), "\(title) did not open")
+        XCTAssertEqual(app.state, .runningForeground)
+    }
+
     private func completeOnboarding() {
         if tabBar.waitForExistence(timeout: 1) {
             return

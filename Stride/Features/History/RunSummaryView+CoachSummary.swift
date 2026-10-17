@@ -15,8 +15,8 @@ extension RunSummaryView {
     var coachSummaryCard: some View {
         if appSettings.aiInsightsEnabled {
             if aiInsight != nil || isLoadingAIInsight {
-                Button {
-                    openPage = .coach
+                NavigationLink {
+                    detailPage(.coach)
                 } label: {
                     coachSummaryContent(opensPage: true)
                 }
