@@ -105,6 +105,12 @@ struct ProgressDashboardView: View {
                                 .opacity(progressAppeared ? 1 : 0)
                                 .scaleEffect(progressAppeared ? 1 : 0.94, anchor: .top)
                                 .adaptiveAnimation(AppAnimation.entrance.delay(0.05), value: progressAppeared)
+                            // Above the range picker because it ignores it: the week is
+                            // the week, whatever period the charts below are showing.
+                            WeekReviewCard(runs: workouts)
+                                .opacity(progressAppeared ? 1 : 0)
+                                .offset(y: progressAppeared ? 0 : 10)
+                                .adaptiveAnimation(AppAnimation.entrance.delay(0.08), value: progressAppeared)
                             rangePicker
                                 .opacity(progressAppeared ? 1 : 0)
                                 .offset(y: progressAppeared ? 0 : 10)

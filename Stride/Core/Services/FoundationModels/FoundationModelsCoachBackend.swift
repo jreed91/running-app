@@ -238,6 +238,24 @@ struct FoundationModelsCoachBackend: OnDeviceCoachGenerating {
         return generated.toDrafts()
     }
 
+    func generateWeekReview(
+        instructions: String,
+        prompt: String,
+        useServerModel: Bool
+    ) async throws -> WeekReviewDraft {
+        let generated = try await generate(
+            instructions: instructions,
+            prompt: prompt,
+            generating: GeneratedWeekReview.self,
+            useServerModel: useServerModel,
+            // Apple's suggested starting point. A week review weighs a handful of facts
+            // against each other, which is more than rewording a tip and far less than
+            // re-planning a block; the card shows its own sentence while this runs.
+            reasoning: .moderate
+        )
+        return generated.toDraft()
+    }
+
     // MARK: - Session / model resolution
 
     /// Runs `work` against a session on the Private Cloud Compute model when the runner

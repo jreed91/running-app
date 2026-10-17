@@ -183,6 +183,17 @@ struct GeneratedCoachTips: Sendable {
     let tips: [GeneratedCoachTip]
 }
 
+@available(iOS 26.0, *)
+@Generable
+struct GeneratedWeekReview: Sendable {
+    @Guide(description: "A short heading said to the runner about their week, at most 6 words")
+    let headline: String
+    @Guide(description: "Two or three short, plain sentences addressed to \"you\" on how the week went. Copy any number exactly as written in the facts, and add no other numbers")
+    let summary: String
+    @Guide(description: "One short sentence addressed to \"you\" on what to focus on next. No numbers")
+    let nextFocus: String
+}
+
 // MARK: - Mapping to the existing structured value types
 
 @available(iOS 26.0, *)
@@ -278,6 +289,13 @@ extension GeneratedPlanAdaptation {
 extension GeneratedCoachTips {
     func toDrafts() -> [CoachTipDraft] {
         tips.map { CoachTipDraft(id: $0.id, title: $0.title, message: $0.message) }
+    }
+}
+
+@available(iOS 26.0, *)
+extension GeneratedWeekReview {
+    func toDraft() -> WeekReviewDraft {
+        WeekReviewDraft(headline: headline, summary: summary, nextFocus: nextFocus)
     }
 }
 #endif

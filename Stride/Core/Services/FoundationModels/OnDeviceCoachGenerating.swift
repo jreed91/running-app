@@ -91,6 +91,14 @@ protocol OnDeviceCoachGenerating: Sendable {
         prompt: String,
         useServerModel: Bool
     ) async throws -> [CoachTipDraft]
+
+    /// Writes the Progress tab's week in review from the facts in `prompt`, unchecked.
+    /// `WeekReview.validated(_:for:unit:)` decides whether it is safe to show.
+    func generateWeekReview(
+        instructions: String,
+        prompt: String,
+        useServerModel: Bool
+    ) async throws -> WeekReviewDraft
 }
 
 extension OnDeviceCoachGenerating {
@@ -108,6 +116,15 @@ extension OnDeviceCoachGenerating {
         prompt: String,
         useServerModel: Bool
     ) async throws -> [CoachTipDraft] {
+        throw OnDeviceCoachError.unavailable
+    }
+
+    /// Backends that do not write reviews leave the card on its own plain sentence.
+    func generateWeekReview(
+        instructions: String,
+        prompt: String,
+        useServerModel: Bool
+    ) async throws -> WeekReviewDraft {
         throw OnDeviceCoachError.unavailable
     }
 }
