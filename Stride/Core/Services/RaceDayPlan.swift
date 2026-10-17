@@ -323,17 +323,27 @@ extension RaceDayPlan {
         distanceMeters: Double,
         now: Date
     ) -> TimeInterval? {
-        guard distanceMeters > 0 else { return nil }
+        guard distanceMeters > 0,
+              let vdot = currentVDOT(runs: runs, profile: profile, now: now) else { return nil }
 
+        let predicted = PaceCalculatorService.predictedTime(vdot: vdot, distanceMeters: distanceMeters)
+        return predicted.isFinite && predicted > 0 ? predicted : nil
+    }
+
+    /// The runner's current fitness as a VDOT: the best quality effort of the last
+    /// ``fitnessLookbackWeeks`` weeks, else the profile's own estimate.
+    ///
+    /// The one VDOT behind the predicted finish and the training paces, so Plan's pace
+    /// insights, the race hub and Progress' insights cannot report different finishes
+    /// or paces for the same runner.
+    static func currentVDOT(runs: [RunWorkout], profile: UserProfile?, now: Date = Date()) -> Double? {
         let cutoff = now.adding(weeks: -fitnessLookbackWeeks)
         let sampled = runs.runsOnly
             .filter { $0.date >= cutoff && $0.date <= now }
             .compactMap { ProgressStatsService.estimatedVDOT(for: $0) }
 
         guard let vdot = sampled.max() ?? profile?.baselineVDOT, vdot > 20, vdot.isFinite else { return nil }
-
-        let predicted = PaceCalculatorService.predictedTime(vdot: vdot, distanceMeters: distanceMeters)
-        return predicted.isFinite && predicted > 0 ? predicted : nil
+        return vdot
     }
 
     /// Where this week sits against the plan's biggest one.

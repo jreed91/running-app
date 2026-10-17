@@ -91,6 +91,6 @@ struct PaceZoneIndicator: View {
         .padding(.horizontal, AppSpacing.xl)
         .padding(.vertical, 10)
         .background(zone.color.opacity(0.15), in: Capsule())
-        .animation(.easeInOut(duration: 0.3), value: zone.rawValue)
+        .adaptiveAnimation(AppAnimation.gentle, value: zone.rawValue)
     }
 }

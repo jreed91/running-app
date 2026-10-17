@@ -69,7 +69,7 @@ extension RunSummaryView {
                         .background(tone.opacity(0.14), in: RoundedRectangle(cornerRadius: AppRadius.xs))
                 }
             }
-            .padding(14)
+            .padding(AppSpacing.md)
             .strideCard(cornerRadius: AppRadius.md)
         }
 

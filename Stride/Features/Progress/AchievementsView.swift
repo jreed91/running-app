@@ -106,11 +106,11 @@ struct AchievementsView: View {
         HStack(spacing: AppSpacing.lg) {
             ZStack {
                 Circle()
-                    .fill(streak.current > 0 ? Color.warning.opacity(0.15) : Color.secondary.opacity(0.12))
+                    .fill(streak.current > 0 ? Color.brand.opacity(0.15) : Color.secondary.opacity(0.12))
                     .frame(width: streakBadgeSize, height: streakBadgeSize)
                 Image(systemName: "flame.fill")
                     .font(.system(size: streakBadgeSize * 0.47))
-                    .foregroundStyle(streak.current > 0 ? Color.warning : Color.secondary.opacity(0.35))
+                    .foregroundStyle(streak.current > 0 ? Color.brand : Color.secondary.opacity(0.35))
             }
 
             VStack(alignment: .leading, spacing: 2) {
@@ -123,7 +123,7 @@ struct AchievementsView: View {
                         .foregroundStyle(.secondary)
                 }
                 Text(streakSubtitle(streak))
-                    .font(.caption)
+                    .font(.dsCaption)
                     .foregroundStyle(.tertiary)
             }
 
@@ -158,7 +158,7 @@ struct AchievementsView: View {
                     .font(.metricS)
                     .monospacedDigit()
                 Text(weeklyGoalSubtitle(weekly))
-                    .font(.caption)
+                    .font(.dsCaption)
                     .foregroundStyle(.tertiary)
             }
 
@@ -225,11 +225,11 @@ struct AchievementsView: View {
 
             if badge.isEarned {
                 Text("Earned")
-                    .font(.caption)
+                    .font(.dsCaption)
                     .foregroundStyle(Color.success)
             } else {
                 Text("\(Int(badge.progress * 100))%")
-                    .font(.caption)
+                    .font(.dsCaption)
                     .foregroundStyle(.tertiary)
                     .monospacedDigit()
             }
@@ -288,7 +288,8 @@ struct AchievementsView: View {
         HStack(spacing: AppSpacing.lg) {
             Image(systemName: "medal.fill")
                 .font(.system(size: medalGlyphSize))
-                .foregroundStyle(bucket.bestRun != nil ? Color.warning : Color.secondary.opacity(0.25))
+                // Brand, not `warning`: a record is an achievement, not a caution.
+                .foregroundStyle(bucket.bestRun != nil ? Color.brand : Color.secondary.opacity(0.25))
                 .frame(width: medalGlyphSize * 1.3)
 
             VStack(alignment: .leading, spacing: 3) {
@@ -310,7 +311,7 @@ struct AchievementsView: View {
             if let run = bucket.bestRun {
                 VStack(alignment: .trailing, spacing: 3) {
                     Text(run.date, format: .dateTime.month(.abbreviated).day().year())
-                        .font(.caption)
+                        .font(.dsCaption)
                         .foregroundStyle(.secondary)
                     Text(run.averagePaceSecondsPerKm.paceString(unit: appSettings.unitPreference))
                         .font(.captionStrong)

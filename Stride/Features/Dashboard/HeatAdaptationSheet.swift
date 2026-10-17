@@ -3,7 +3,7 @@ import SwiftData
 
 // MARK: - HeatAdaptationSheet
 
-/// Shows exactly what accepting the heat adaptation would do to tomorrow's session, then
+/// Shows exactly what accepting the heat adaptation would do to the session, then
 /// does it.
 ///
 /// The change is listed line by line before it is applied, and the lines come from
@@ -78,7 +78,7 @@ struct HeatAdaptationSheet: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(AppSpacing.lg)
-        .background(sectionBackground)
+        .strideCard()
     }
 
     /// The headline claim, and the one number the whole feature turns on.
@@ -123,7 +123,7 @@ struct HeatAdaptationSheet: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(AppSpacing.lg)
-        .background(sectionBackground)
+        .strideCard()
     }
 
     // MARK: - Cooler hour
@@ -149,7 +149,7 @@ struct HeatAdaptationSheet: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(AppSpacing.lg)
-        .background(sectionBackground)
+        .strideCard()
     }
 
     // MARK: - Guidance
@@ -163,7 +163,7 @@ struct HeatAdaptationSheet: View {
             ForEach(Array(guidance.enumerated()), id: \.offset) { _, line in
                 HStack(alignment: .top, spacing: 8) {
                     Circle()
-                        .fill(Color.secondary.opacity(0.4))
+                        .fill(.tertiary)
                         .frame(width: 4, height: 4)
                         .padding(.top, 8)
                     Text(verbatim: line)
@@ -175,7 +175,7 @@ struct HeatAdaptationSheet: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(AppSpacing.lg)
-        .background(sectionBackground)
+        .strideCard()
     }
 
     private var guidance: [String] {
@@ -224,7 +224,7 @@ struct HeatAdaptationSheet: View {
             If you're used to training in this, you may need less of them. Stride isn't a \
             clinician — how you feel out there beats any of it.
             """)
-            .font(.caption)
+            .font(.dsCaption)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
     }
@@ -240,17 +240,9 @@ struct HeatAdaptationSheet: View {
                     onAnswered()
                     dismiss()
                 } label: {
-                    Text("Apply to tomorrow's workout")
-                        .font(.dsSubhead.weight(.semibold))
-                        .foregroundStyle(.onFill)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, AppSpacing.md)
-                        .background(
-                            RoundedRectangle(cornerRadius: AppRadius.md)
-                                .fill(Color.brand)
-                        )
+                    Text(applyTitle)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.strideButton())
             }
 
             Button {
@@ -258,19 +250,26 @@ struct HeatAdaptationSheet: View {
                 dismiss()
             } label: {
                 Text("Run it as planned")
-                    .font(.dsSubhead.weight(.medium))
-                    .foregroundStyle(.primary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, AppSpacing.md)
-                    .background(
-                        RoundedRectangle(cornerRadius: AppRadius.md)
-                            .fill(Color.surfaceSecondary)
-                    )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.strideButton(.quiet, compact: true))
         }
         .padding(AppSpacing.lg)
-        .background(.bar)
+        .background(Color.surfacePrimary)
+    }
+
+    /// Names the session's own day, which is "today" once the evening's window has closed.
+    private var applyTitle: String {
+        switch advisory.sessionDay() {
+        case .today:
+            return String(localized: "Apply to today's workout", comment: "Heat sheet action")
+        case .tomorrow:
+            return String(localized: "Apply to tomorrow's workout", comment: "Heat sheet action")
+        case .later(let weekday):
+            return String(
+                localized: "Apply to \(weekday)'s workout",
+                comment: "Heat sheet action; the value is a weekday"
+            )
+        }
     }
 
     // MARK: - Styling
@@ -280,15 +279,10 @@ struct HeatAdaptationSheet: View {
             Text(verbatim: value)
                 .font(.bodyStrong)
             Text(label)
-                .font(.caption)
+                .font(.dsCaption)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
-    }
-
-    private var sectionBackground: some View {
-        RoundedRectangle(cornerRadius: AppRadius.lg)
-            .fill(Color.surfaceSecondary)
     }
 }

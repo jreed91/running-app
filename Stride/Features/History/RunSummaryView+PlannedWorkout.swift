@@ -77,7 +77,7 @@ extension RunSummaryView {
                         }
                     }
                 }
-                .padding(14)
+                .padding(AppSpacing.md)
                 .strideCard()
             }
         } else if let avg = workout.averageHeartRate, avg >= 155 {
@@ -101,7 +101,7 @@ extension RunSummaryView {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 14)
+            .padding(.horizontal, AppSpacing.md)
             .padding(.vertical, AppSpacing.md)
             .background(Color.warning.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
             .overlay(

@@ -8,6 +8,8 @@ struct AICoachChatView: View {
     @Environment(AppSettings.self) private var appSettings
     @Environment(AppContainer.self) private var container
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// How many recent runs the coach prompt summarises. Also the fetch limit below —
     /// the prompt is the only consumer of more than the newest run.
@@ -131,7 +133,7 @@ struct AICoachChatView: View {
                     Text("AI COACH")
                         .font(.dsCaption2.weight(.bold))
                         .tracking(1.4)
-                        .foregroundStyle(.brandText)
+                        .foregroundStyle(.secondary)
                     Text(contextSubtitle)
                         .font(.dsFootnote)
                         .foregroundStyle(.secondary)
@@ -250,11 +252,17 @@ struct AICoachChatView: View {
                 CoachText(message.text)
                     .font(.dsSubhead)
                     .lineSpacing(3)
-                    // `onFill` on the route, never white: white on orange is 2.8:1.
-                    .foregroundStyle(message.sender == .coach ? Color.primary : Color.onFill)
+                    .foregroundStyle(.primary)
 
                 if !message.metrics.isEmpty {
                     metricGrid(message.metrics)
+                }
+
+                // The setup and fallback replies both send the runner to Settings; take
+                // them there rather than leaving them to find the tab.
+                if message.sender == .coach, message.status == .setupNeeded {
+                    Button("Open Settings") { openCoachSettings() }
+                        .buttonStyle(.strideButton(.secondary, compact: true, fullWidth: false))
                 }
             }
             .padding(14)
@@ -263,7 +271,10 @@ struct AICoachChatView: View {
                     bubbleShape(for: message).fill(.surfaceSecondary)
                         .overlay(bubbleShape(for: message).strokeBorder(.cardStroke, lineWidth: 1))
                 } else {
-                    bubbleShape(for: message).fill(.route)
+                    // A brand tint, not the route: the route means progress or go, and
+                    // the runner's own words are neither.
+                    bubbleShape(for: message).fill(Color.brand.opacity(0.14))
+                        .overlay(bubbleShape(for: message).strokeBorder(Color.brand.opacity(0.22), lineWidth: 1))
                 }
             }
             .frame(maxWidth: 310, alignment: message.sender == .coach ? .leading : .trailing)
@@ -302,10 +313,13 @@ struct AICoachChatView: View {
                         .fill(Color.secondary.opacity(0.55))
                         .frame(width: 6, height: 6)
                         .opacity(isWaitingForCoach ? 1 : 0.3)
+                        // A looping pulse is exactly what Reduce Motion asks to stop.
                         .animation(
-                            .easeInOut(duration: 0.7)
-                                .repeatForever()
-                                .delay(Double(index) * 0.12),
+                            reduceMotion
+                                ? nil
+                                : Animation.easeInOut(duration: 0.7)
+                                    .repeatForever()
+                                    .delay(Double(index) * 0.12),
                             value: isWaitingForCoach
                         )
                 }
@@ -371,26 +385,34 @@ struct AICoachChatView: View {
     }
 
     private func coachAvatar(size: CGFloat) -> some View {
+        // A brand-tinted disc, not the route: an avatar is decoration, and the route
+        // means progress or go.
         ZStack {
-            // The route, like every other "go" in the app; the red second stop read as
-            // an alert.
-            LinearGradient.route
+            Circle().fill(Color.brand.opacity(0.12))
             Image(systemName: "sparkles")
                 .font(.system(size: size * 0.38, weight: .bold))
-                .foregroundStyle(.onFill)
+                .foregroundStyle(.brandText)
         }
         .frame(width: size, height: size)
-        .clipShape(Circle())
-        .appGlow(.standard, color: .brand)
     }
 
     private func bubbleShape(for message: AICoachChatMessage) -> some InsettableShape {
         UnevenRoundedRectangle(
-            topLeadingRadius: message.sender == .coach ? 4 : 18,
+            topLeadingRadius: message.sender == .coach ? AppRadius.micro : AppRadius.lg,
             bottomLeadingRadius: AppRadius.lg,
-            bottomTrailingRadius: message.sender == .coach ? 18 : 4,
+            bottomTrailingRadius: message.sender == .coach ? AppRadius.lg : AppRadius.micro,
             topTrailingRadius: AppRadius.lg
         )
+    }
+
+    /// Closes the chat and switches to the Settings tab, where the AI Coach toggle and
+    /// model picker live.
+    private func openCoachSettings() {
+        container.appNavigation.select(.settings)
+        // The chat can sit on the post-run review sheet; close that too, or Settings opens
+        // underneath it.
+        container.pendingReviewWorkout = nil
+        dismiss()
     }
 
     @MainActor

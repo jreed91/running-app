@@ -28,7 +28,7 @@ struct RaceCountdownCard: View {
                 countdownLine
 
                 Text(verbatim: detailLine)
-                    .font(.caption)
+                    .font(.dsCaption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -38,7 +38,7 @@ struct RaceCountdownCard: View {
             StrideIcon(name: .chevronRight, size: 13, color: .secondary, strokeWeight: 2)
                 .padding(.top, 4)
         }
-        .padding(18)
+        .padding(AppSpacing.lg)
         // The screen's hero: daylight paper in light, raised ink in dark.
         .heroCard()
         .contentShape(Rectangle())
@@ -63,6 +63,7 @@ struct RaceCountdownCard: View {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(verbatim: "\(days)")
                     .font(.dsTitle2)
+                    .monospacedDigit()
                     .foregroundStyle(tint)
                 Text(days == 1 ? "day to go" : "days to go")
                     .font(.dsSubhead)

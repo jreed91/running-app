@@ -149,6 +149,10 @@ struct GuidedWorkoutBanner: View {
                     .padding(.vertical, 9)
                     .background(.white.opacity(0.18), in: Capsule())
                     .overlay(Capsule().strokeBorder(.white.opacity(0.3), lineWidth: 0.5))
+                    // The capsule is ~35pt tall; the tap target is the 44pt minimum,
+                    // which matters most mid-stride.
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Next step")

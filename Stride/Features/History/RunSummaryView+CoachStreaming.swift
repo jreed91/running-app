@@ -20,10 +20,9 @@ extension RunSummaryView {
                 SparkleShape()
                     .fill(Color.brand)
                     .frame(width: 14, height: 14)
-                Text("COACHING READ")
-                    .font(.dsCaption2.weight(.bold))
-                    .kerning(1.4)
-                    .foregroundStyle(.brandText)
+                Text("Coaching read")
+                    .strideEyebrow()
+                    .foregroundStyle(.secondary)
                 Spacer()
                 ProgressView().controlSize(.small)
             }
@@ -32,7 +31,7 @@ extension RunSummaryView {
                 .lineSpacing(3)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
+        .padding(AppSpacing.md)
         .strideCard(cornerRadius: AppRadius.md)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Coach analysis, still writing")

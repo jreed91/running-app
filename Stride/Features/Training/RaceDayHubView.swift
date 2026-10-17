@@ -125,6 +125,9 @@ struct RaceDayHubView: View {
                 .padding(.top, AppSpacing.sm)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AppSpacing.lg)
+        // The race is what this screen is about, so its countdown is the hero.
+        .heroCard()
         .accessibilityElement(children: .combine)
     }
 
@@ -135,6 +138,7 @@ struct RaceDayHubView: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(verbatim: "\(days)")
                     .font(.dsLargeTitle)
+                    .monospacedDigit()
                     .foregroundStyle(.brandText)
                 Text(days == 1 ? "day to go" : "days to go")
                     .font(.dsTitle3)
@@ -185,7 +189,7 @@ struct RaceDayHubView: View {
 
             if let predicted = racePlan.predictedFinishSeconds {
                 Text(verbatim: predictionText(predicted, racePlan: racePlan))
-                    .font(.caption)
+                    .font(.dsCaption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -227,7 +231,7 @@ private struct RaceGoalRow: View {
                     }
                 }
                 Text(verbatim: goal.tier.localizedSubtitle)
-                    .font(.caption)
+                    .font(.dsCaption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -239,19 +243,19 @@ private struct RaceGoalRow: View {
                     .font(.metricS)
                     .monospacedDigit()
                 Text(verbatim: goal.paceSecondsPerKm.paceString(unit: unit))
-                    .font(.caption)
+                    .font(.dsCaption)
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(AppSpacing.md)
-        .background(
-            RoundedRectangle(cornerRadius: AppRadius.md)
-                .fill(isSelected ? Color.brand.opacity(0.12) : Color.surfaceSecondary)
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppRadius.md)
-                        .strokeBorder(isSelected ? Color.brand.opacity(0.35) : .clear, lineWidth: 1)
-                )
-        )
+        .padding(AppSpacing.lg)
+        .strideCard()
+        // The chosen rung: the card's own ground, outlined in brand.
+        .overlay {
+            if isSelected {
+                RoundedRectangle(cornerRadius: AppRadius.lg, style: .continuous)
+                    .strokeBorder(Color.brand, lineWidth: 1.5)
+            }
+        }
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
@@ -280,7 +284,7 @@ private struct RaceSplitsTable: View {
 
             if splits.isEmpty {
                 Text("No splits to show for this distance.")
-                    .font(.caption)
+                    .font(.dsCaption)
                     .foregroundStyle(.secondary)
             } else {
                 LazyVStack(spacing: 0) {
@@ -291,10 +295,10 @@ private struct RaceSplitsTable: View {
                         }
                     }
                 }
-                .background(
-                    RoundedRectangle(cornerRadius: AppRadius.md)
-                        .fill(Color.surfaceSecondary)
-                )
+                // With the rows' own `md` inset, the table's edge matches every card's `lg`.
+                .padding(.horizontal, AppSpacing.xs)
+                .padding(.vertical, AppSpacing.sm)
+                .strideCard()
             }
         }
     }
@@ -339,6 +343,7 @@ private struct RaceTaperCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            // Above the card, as every other section header on the screen is.
             Text("THIS WEEK")
                 .strideEyebrow()
                 .foregroundStyle(.secondary)
@@ -355,19 +360,16 @@ private struct RaceTaperCard: View {
                     Text("Week \(status.weekNumber) of \(status.totalWeeks)")
                         .font(.bodyStrong)
                     Text(verbatim: volumeLine)
-                        .font(.caption)
+                        .font(.dsCaption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Spacer(minLength: 0)
             }
+            .padding(AppSpacing.lg)
+            .strideCard()
         }
-        .padding(18)
-        .background(
-            RoundedRectangle(cornerRadius: AppRadius.lg)
-                .fill(Color.surfaceSecondary)
-        )
         .accessibilityElement(children: .combine)
     }
 
@@ -407,7 +409,7 @@ private struct RaceResultCard: View {
                         .font(.metricM)
                         .foregroundStyle(.primary)
                     Text(verbatim: detail)
-                        .font(.caption)
+                        .font(.dsCaption)
                         .foregroundStyle(.secondary)
                 }
 
@@ -419,15 +421,9 @@ private struct RaceResultCard: View {
                 .foregroundStyle(.primary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(18)
-        .background(
-            RoundedRectangle(cornerRadius: AppRadius.lg)
-                .fill(tint.opacity(0.10))
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppRadius.lg)
-                        .strokeBorder(tint.opacity(0.2), lineWidth: 0.5)
-                )
-        )
+        // The outcome shows in the trophy's tint, not a tinted ground.
+        .padding(AppSpacing.lg)
+        .strideCard()
         .accessibilityElement(children: .combine)
     }
 

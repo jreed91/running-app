@@ -27,7 +27,7 @@ struct NextUpCardView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(18)
+        .padding(AppSpacing.lg)
         // The screen's hero (daylight paper in light, raised ink in dark), unless the race
         // countdown is showing.
         .strideSurface(isHero: isHero)
@@ -56,8 +56,8 @@ struct NextUpCardView: View {
                 // Verbatim: both halves are already localized, and a "%@ · %@" key in
                 // the catalog is a translation nobody can act on.
                 Text(verbatim: "\(briefing.dayPhrase) · \(briefing.dateText)")
-                    .font(.caption)
-                    .foregroundStyle(briefing.isToday ? Color.brand : Color.secondary)
+                    .font(.dsCaption)
+                    .foregroundStyle(briefing.isToday ? Color.brandText : Color.secondary)
             }
             Spacer(minLength: 0)
             StrideIcon(name: .chevronRight, size: 14, color: .secondary, strokeWeight: 2)

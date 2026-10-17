@@ -17,6 +17,7 @@ struct SavedRoutesView: View {
                     systemImage: "map",
                     description: Text("Generate and save a route to see it here.")
                 )
+                .background(Color.surfacePrimary)
             } else {
                 List {
                     ForEach(viewModel.savedRoutes) { route in
@@ -84,19 +85,19 @@ private struct SavedRouteRow: View {
 
                 HStack(spacing: 6) {
                     Text(viewModel.formattedDistance(route.actualDistanceMeters))
-                        .font(.caption)
+                        .font(.dsCaption)
                         .foregroundStyle(.secondary)
                     Text("·")
-                        .font(.caption)
+                        .font(.dsCaption)
                         .foregroundStyle(.tertiary)
                     Text(route.routeType.localizedName)
-                        .font(.caption)
+                        .font(.dsCaption)
                         .foregroundStyle(.secondary)
                     Text("·")
-                        .font(.caption)
+                        .font(.dsCaption)
                         .foregroundStyle(.tertiary)
                     Text(route.createdAt.formatted(.dateTime.month(.abbreviated).day().year()))
-                        .font(.caption)
+                        .font(.dsCaption)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -143,8 +144,10 @@ struct SavedRouteDetailView: View {
             }
             .padding()
         }
+        .background(Color.surfacePrimary)
         .navigationTitle(route.name)
-        .navigationBarTitleDisplayMode(.large)
+        // Inline: a runner-typed name can be long, and a large title would wrap it.
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     private var savedRouteTurnByTurn: some View {
@@ -180,7 +183,7 @@ private struct DetailStat: View {
                 .minimumScaleFactor(0.7)
                 .lineLimit(1)
             Text(label)
-                .font(.caption)
+                .font(.dsCaption)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)

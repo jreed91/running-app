@@ -11,33 +11,26 @@ extension RunSummaryView {
     /// still in the runner's legs. It stays on every later open too, so a skipped answer
     /// can be given (or changed) afterwards; a second tap on the active choice clears it.
     var feelSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("How did that feel?")
-                    .font(.dsSubhead.weight(.bold))
-                Spacer()
-                if let feel = workout.feel {
-                    Text(feel.localizedName)
-                        .font(.dsCaption.weight(.semibold))
-                        .foregroundStyle(.brandText)
+        VStack(alignment: .leading, spacing: 8) {
+            // The chosen answer shows on its own chip, so the header doesn't repeat it.
+            sectionHeader(title: "How did that feel?")
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 6) {
+                    ForEach(RunFeel.allCases) { feel in
+                        feelButton(feel)
+                    }
                 }
-            }
 
-            HStack(spacing: 6) {
-                ForEach(RunFeel.allCases) { feel in
-                    feelButton(feel)
-                }
+                Text(feelFootnote)
+                    .font(.dsCaption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-
-            Text(feelFootnote)
-                .font(.dsCaption2)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            .padding(AppSpacing.lg)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .strideCard()
+            .sensoryFeedback(.selection, trigger: workout.feelRaw)
         }
-        .padding(AppSpacing.lg)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .strideCard()
-        .sensoryFeedback(.selection, trigger: workout.feelRaw)
     }
 
     private var feelFootnote: String {
@@ -64,7 +57,7 @@ extension RunSummaryView {
             feelChangedSinceInsight = true
             context.saveOrLog("the run-feel rating")
         } label: {
-            VStack(spacing: 6) {
+            VStack(spacing: AppSpacing.xxs) {
                 Text("\(feel.rawValue)")
                     .font(.dsHeadline.weight(.bold).monospacedDigit())
                 Text(feel.localizedName)
@@ -73,15 +66,10 @@ extension RunSummaryView {
                     .multilineTextAlignment(.center)
                     .minimumScaleFactor(0.8)
             }
-            .foregroundStyle(isActive ? Color.onFill : Color.primary)
-            .frame(maxWidth: .infinity, minHeight: 60)
-            .padding(.vertical, AppSpacing.xs)
-            .background(
-                isActive ? Color.brand : Color.surfacePrimary,
-                in: RoundedRectangle(cornerRadius: AppRadius.sm)
-            )
+            .frame(maxWidth: .infinity, minHeight: 44)
         }
-        .buttonStyle(.plain)
+        // The chip sets the colours: the route when chosen, a card when not.
+        .buttonStyle(.strideChip(selected: isActive))
         .accessibilityLabel(feel.localizedName)
         .accessibilityValue(
             String(localized: "\(feel.rawValue) of 5", comment: "Position of a run-feel choice on its scale")

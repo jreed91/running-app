@@ -41,14 +41,14 @@ struct WorkoutCardView: View {
 
                 if let notes = workout.notes {
                     Text(notes)
-                        .font(.caption)
+                        .font(.dsCaption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
             }
 
             Spacer()
-            StrideIcon(name: .chevronRight, size: 12, color: Color.secondary.opacity(0.5), strokeWeight: 2)
+            StrideIcon(name: .chevronRight, size: 12, color: Color(uiColor: .tertiaryLabel), strokeWeight: 2)
         }
         .padding(AppSpacing.lg)
         .strideCard()
@@ -57,9 +57,14 @@ struct WorkoutCardView: View {
     private var typeIcon: some View {
         ZStack {
             Circle()
-                .fill(workout.workoutType.color.opacity(0.18))
+                .fill(workout.workoutType.color.opacity(0.15))
                 .frame(width: 44, height: 44)
-            StrideIcon(name: workout.workoutType.strideIcon, size: 22, color: workout.workoutType.color, strokeWeight: 2.0)
+            StrideIcon(
+                name: workout.workoutType.strideIcon,
+                size: 22,
+                color: workout.workoutType.color,
+                strokeWeight: 2.0
+            )
         }
     }
 }

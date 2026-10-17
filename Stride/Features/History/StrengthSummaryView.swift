@@ -46,9 +46,9 @@ struct StrengthSummaryView: View {
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     Text(workout.scheduledWorkout?.strengthPlan?.focus.localizedName ?? "Strength Workout")
-                        .font(.title3.bold())
+                        .font(.dsTitle3.weight(.bold))
                     Text(workout.date.formatted(.dateTime.weekday(.wide).month(.wide).day().year()))
-                        .font(.subheadline)
+                        .font(.dsSubhead)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -68,7 +68,8 @@ struct StrengthSummaryView: View {
             }
         }
         .padding(AppSpacing.lg)
-        .strideCard(cornerRadius: AppRadius.lg)
+        // The screen's one hero; the set cards below are ordinary cards.
+        .heroCard()
     }
 
     private func statCell(value: String, label: String) -> some View {
@@ -95,6 +96,7 @@ struct StrengthSummaryView: View {
             Text("COMPLETED SETS")
                 .strideEyebrow()
                 .foregroundStyle(.secondary)
+                .padding(.horizontal, AppSpacing.xs)
 
             let grouped = Dictionary(grouping: workout.completedSets, by: \.exerciseIndex)
             ForEach(grouped.keys.sorted(), id: \.self) { exerciseIndex in
@@ -152,6 +154,7 @@ struct StrengthSummaryView: View {
                 .background(.surfaceSecondary, in: Capsule())
                 .foregroundStyle(.secondary)
             }
+            .padding(.leading, AppSpacing.xs)
 
             ForEach(Array(plan.exercises.enumerated()), id: \.offset) { _, exercise in
                 ExerciseRow(exercise: exercise)
@@ -173,7 +176,7 @@ struct StrengthSummaryView: View {
                 Text("Logged in Stride")
             }
         }
-        .font(.caption)
+        .font(.dsCaption)
         .foregroundStyle(.secondary)
         .padding(AppSpacing.md)
         .frame(maxWidth: .infinity)

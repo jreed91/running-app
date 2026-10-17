@@ -91,19 +91,19 @@ struct HealthKitImportView: View {
 
                     if skipped > 0 {
                         Text("\(skipped) already in app, skipped")
-                            .font(.caption)
+                            .font(.dsCaption)
                             .foregroundStyle(.secondary)
                     }
                 }
                 Button("Import Again") { importState = .idle }
-                    .foregroundStyle(.secondary)
+                    .buttonStyle(.strideButton(.secondary))
 
             case .failed(let message):
                 VStack(alignment: .leading, spacing: 6) {
                     Label("Import failed", systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(Color.destructive)
                     Text(message)
-                        .font(.caption)
+                        .font(.dsCaption)
                         .foregroundStyle(.secondary)
                 }
                 Button("Try Again") { importState = .idle }

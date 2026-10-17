@@ -47,7 +47,10 @@ struct OnboardingView: View {
     /// lets the plan derive VDOT from fitness level/gender instead.
     @State private var didEnter5KTime = false
     @State private var selectedDays: Set<Int> = [0, 2, 4, 5]
-    @State private var longRunOnSaturday = true
+    /// A preference shown on the schedule step. Not stored on the profile yet: the plan
+    /// generators place the long run themselves, so "Flexible" is a real third answer
+    /// here rather than another way of saying Sunday.
+    @State private var longRunDay: LongRunDay = .saturday
 
     // HR-zone calibration (shown on the Calibrate step). Age drives the Tanaka max-HR
     // estimate; an explicit override decouples it. Both are optional — untouched values
@@ -76,6 +79,20 @@ struct OnboardingView: View {
 
     private let locationManager = CLLocationManager()
     private let totalSteps = 8
+
+    private enum LongRunDay: String, CaseIterable {
+        case saturday = "Sat"
+        case sunday = "Sun"
+        case flexible = "Flexible"
+
+        var accessibilityName: String {
+            switch self {
+            case .saturday: return String(localized: "Saturday")
+            case .sunday: return String(localized: "Sunday")
+            case .flexible: return String(localized: "Flexible")
+            }
+        }
+    }
 
     // MARK: - Computed
 
@@ -579,7 +596,7 @@ struct OnboardingView: View {
                         let dayNumber = Calendar.current.component(.day, from: dayDate)
                         let isOn = selectedDays.contains(i)
                         Button {
-                            withAnimation(AppAnimation.snappy) {
+                            withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : AppAnimation.snappy) {
                                 if isOn { selectedDays.remove(i) } else { selectedDays.insert(i) }
                             }
                         } label: {
@@ -599,6 +616,9 @@ struct OnboardingView: View {
                             .appGlow(.standard, color: .brand, isActive: isOn)
                         }
                         .buttonStyle(BouncyButtonStyle())
+                        // "Monday", not "M 20": the letter and date are a visual shorthand.
+                        .accessibilityLabel(Text(dayDate, format: .dateTime.weekday(.wide)))
+                        .accessibilityAddTraits(isOn ? .isSelected : [])
                     }
                 }
             }
@@ -610,12 +630,10 @@ struct OnboardingView: View {
                     .font(.dsFootnote)
                     .foregroundStyle(.secondary)
                 HStack(spacing: 6) {
-                    ForEach([("Sat", true), ("Sun", false), ("Flexible", false)], id: \.0) { name, isSat in
-                        // "Sun" and "Flexible" both carry `isSat == false`, so only the
-                        // named day can read as chosen — "Flexible" is the unselected rest.
-                        let isChosen = longRunOnSaturday == isSat && name != "Flexible"
-                        Button { longRunOnSaturday = isSat } label: {
-                            Text(name)
+                    ForEach(LongRunDay.allCases, id: \.self) { option in
+                        let isChosen = longRunDay == option
+                        Button { longRunDay = option } label: {
+                            Text(option.rawValue)
                                 .font(.dsFootnote.weight(.semibold))
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, AppSpacing.sm)
@@ -627,10 +645,12 @@ struct OnboardingView: View {
                         }
                         .buttonStyle(.plain)
                         .foregroundStyle(.primary)
+                        .accessibilityLabel(option.accessibilityName)
+                        .accessibilityAddTraits(isChosen ? .isSelected : [])
                     }
                 }
                 .padding(AppSpacing.xxs)
-                .background(Color.secondary.opacity(0.14), in: RoundedRectangle(cornerRadius: AppRadius.sm))
+                .background(Color.surfaceTertiary, in: RoundedRectangle(cornerRadius: AppRadius.sm))
 
                 HStack {
                     Text("Runs per week")
@@ -665,7 +685,7 @@ struct OnboardingView: View {
                 // unlock condition directly beneath it. So does this now.
                 if selectedEquipment.isEmpty {
                     Text("Pick your equipment above to choose a focus.")
-                        .font(.caption)
+                        .font(.dsCaption)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, AppSpacing.xs)
                         .transition(.opacity)
@@ -682,21 +702,21 @@ struct OnboardingView: View {
             VStack(spacing: 10) {
                 OBPermissionRow(icon: .location, label: "Location",
                                 desc: "Record GPS routes during runs.",
-                                tint: .zoneEasy, isOn: locationEnabled,
+                                tint: .brand, isOn: locationEnabled,
                                 isActive: activePermission == 0)
                     .opacity(permRowsVisible[0] ? 1 : 0)
                     .offset(y: permRowsVisible[0] ? 0 : 14)
 
                 OBPermissionRow(icon: .heart, label: "Apple Health",
                                 desc: "Heart rate, VO2 max, workouts.",
-                                tint: .destructive, isOn: healthEnabled,
+                                tint: .brand, isOn: healthEnabled,
                                 isActive: activePermission == 1)
                     .opacity(permRowsVisible[1] ? 1 : 0)
                     .offset(y: permRowsVisible[1] ? 0 : 14)
 
                 OBPermissionRow(icon: .bell, label: "Notifications",
                                 desc: "Plan reminders, daily workout ping.",
-                                tint: .zoneTempo, isOn: notificationsEnabled,
+                                tint: .brand, isOn: notificationsEnabled,
                                 isActive: activePermission == 2)
                     .opacity(permRowsVisible[2] ? 1 : 0)
                     .offset(y: permRowsVisible[2] ? 0 : 14)
@@ -715,8 +735,9 @@ struct OnboardingView: View {
         .task {
             await refreshPermissionStates()
 
-            // All permissions already granted — skip this step automatically
-            if healthEnabled && locationEnabled && notificationsEnabled {
+            // All permissions already granted — skip this step, but only on the way forward.
+            // Coming Back from the summary would otherwise bounce straight forward again.
+            if goingForward && healthEnabled && locationEnabled && notificationsEnabled {
                 advance()
                 return
             }
@@ -751,19 +772,9 @@ struct OnboardingView: View {
         switch vdotValue {
         case ..<30: return "beginner"
         case 30..<40: return "base fitness"
-        case 40..<50: return "Intermediate"
+        case 40..<50: return "intermediate"
         case 50..<60: return "advanced"
         default: return "elite"
-        }
-    }
-
-    private var recommendedDaysLabel: String {
-        switch goalRace {
-        case .maintainFitness: return "Recommended for Maintain Fitness"
-        case .fiveK: return "Recommended for 5K"
-        case .halfMarathon: return "Recommended for Half Marathon"
-        case .marathon: return "Recommended for Marathon"
-        case .custom: return "Recommended for your distance"
         }
     }
 
@@ -837,7 +848,8 @@ struct OnboardingView: View {
         if !locationEnabled {
             activePermission = 0
             locationManager.requestWhenInUseAuthorization()
-            try? await Task.sleep(nanoseconds: 1_800_000_000)   // time for system dialog
+            // Wait for the answer, so the Health sheet never stacks on the location prompt.
+            await awaitLocationAnswer()
             // Reflect the user's actual choice instead of assuming a grant.
             await refreshPermissionStates()
             try? await Task.sleep(nanoseconds: 600_000_000)
@@ -868,6 +880,21 @@ struct OnboardingView: View {
         activePermission = nil
         isRequestingPermissions = false
         advance()
+    }
+
+    /// Returns once the location prompt has been answered: the status only leaves
+    /// `.notDetermined` when the runner taps. Polled rather than delegate-driven so it needs
+    /// no nonisolated callback; capped so a prompt that never appears cannot stall the flow.
+    private func awaitLocationAnswer(timeout: Duration = .seconds(60)) async {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+        while locationManager.authorizationStatus == .notDetermined, clock.now < deadline {
+            do {
+                try await Task.sleep(for: .milliseconds(250))
+            } catch {
+                return
+            }
+        }
     }
 
     // MARK: - Sign in with Apple

@@ -31,7 +31,7 @@ struct PregnancyPlanGuidanceCard: View {
                 header(guidance)
 
                 Text(guidance.headline)
-                    .font(.callout)
+                    .font(.dsCallout)
 
                 Divider()
 
@@ -47,26 +47,28 @@ struct PregnancyPlanGuidanceCard: View {
                 Button {
                     showRedFlags = true
                 } label: {
-                    Label("When to stop and call your provider", systemImage: "exclamationmark.triangle.fill")
-                        .font(.footnote.weight(.semibold))
+                    // The warning stays in the icon; the button is the app's own.
+                    Label {
+                        Text("When to stop and call your provider")
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.destructive)
+                    }
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(.destructive)
+                .buttonStyle(.strideButton(.quiet, compact: true, fullWidth: false))
 
                 Text(PregnancyRunningPolicy.medicalDisclaimer)
-                    .font(.caption2)
+                    .font(.dsCaption2)
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(AppSpacing.lg)
-            .background(
-                RoundedRectangle(cornerRadius: AppRadius.lg)
-                    .fill(Color.brand.opacity(0.08))
-            )
+            .strideCard()
             .sheet(isPresented: $showRedFlags) {
                 NavigationStack {
                     PregnancyRedFlagListView()
                 }
+                .strideSheet()
             }
         }
     }
@@ -74,13 +76,13 @@ struct PregnancyPlanGuidanceCard: View {
     private func header(_ guidance: PregnancyPlanService.WeekGuidance) -> some View {
         HStack(spacing: 12) {
             Image(systemName: "heart.text.square")
-                .font(.title2)
-                .foregroundStyle(.brand)
+                .font(.dsTitle2)
+                .foregroundStyle(.brandText)
             VStack(alignment: .leading, spacing: 2) {
                 Text(guidance.trimester.localizedName)
                     .font(.dsHeadline.weight(.bold))
                 Text("\(guidance.gestationalAge.noteForm) weeks")
-                    .font(.caption)
+                    .font(.dsCaption)
                     .foregroundStyle(.secondary)
             }
             Spacer()
@@ -90,11 +92,11 @@ struct PregnancyPlanGuidanceCard: View {
     private func guidanceRow(icon: String, text: String) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: icon)
-                .font(.footnote)
-                .foregroundStyle(.brand)
+                .font(.dsFootnote)
+                .foregroundStyle(.brandText)
                 .frame(width: 18)
             Text(text)
-                .font(.footnote)
+                .font(.dsFootnote)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }

@@ -112,9 +112,12 @@ struct StrengthActiveView: View {
                 Image(systemName: "xmark")
                     .font(.dsCallout.weight(.semibold))
                     .foregroundStyle(.secondary)
+                    // 44pt: the minimum tap target, on a screen used mid-set.
+                    .frame(width: 44, height: 44)
+                    .background(.surfaceSecondary, in: Circle())
+                    .contentShape(Circle())
             }
-            .padding(10)
-            .background(.surfaceSecondary, in: Circle())
+            .buttonStyle(.plain)
             .accessibilityLabel("End session")
             .accessibilityHint("Asks whether to save or discard this strength session.")
 
@@ -135,7 +138,7 @@ struct StrengthActiveView: View {
             Spacer()
 
             // Placeholder to balance the X button
-            Color.clear.frame(width: 36, height: 36)
+            Color.clear.frame(width: 44, height: 44)
         }
         .padding(.horizontal, AppSpacing.lg)
         .padding(.top, AppSpacing.sm)
@@ -149,10 +152,7 @@ struct StrengthActiveView: View {
         VStack(spacing: 8) {
             HStack(spacing: 4) {
                 ForEach(Array(exercises.enumerated()), id: \.offset) { idx, _ in
-                    Capsule()
-                        .fill(idx < currentExerciseIndex
-                              ? Color.brand
-                              : (idx == currentExerciseIndex ? Color.brand.opacity(0.6) : Color.surfaceSecondary))
+                    progressSegment(idx)
                         .frame(height: 4)
                 }
             }
@@ -171,6 +171,19 @@ struct StrengthActiveView: View {
         }
     }
 
+    /// The route means progress: done exercises take it, the current one a faded route,
+    /// and the rest sit on the track colour.
+    @ViewBuilder
+    private func progressSegment(_ idx: Int) -> some View {
+        if idx < currentExerciseIndex {
+            Capsule().fill(.route)
+        } else if idx == currentExerciseIndex {
+            Capsule().fill(.route).opacity(0.45)
+        } else {
+            Capsule().fill(.surfaceTertiary)
+        }
+    }
+
     // MARK: - Exercise Card
 
     private func exerciseCard(exercise: StrengthExercise) -> some View {
@@ -186,7 +199,8 @@ struct StrengthActiveView: View {
                                 .padding(.horizontal, 7)
                                 .padding(.vertical, 3)
                                 .background(Color.brand.opacity(0.12), in: Capsule())
-                                .foregroundStyle(Color.brand)
+                                // Small text: `brandText`, not `brand` (3.1:1 on white).
+                                .foregroundStyle(.brandText)
                         }
                     }
                 }
@@ -227,7 +241,7 @@ struct StrengthActiveView: View {
     private func logSetCard(exercise: StrengthExercise) -> some View {
         VStack(spacing: 16) {
             Text("LOG SET \(currentSetIndex + 1)")
-                .font(.dsCaption2.weight(.semibold))
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -280,9 +294,8 @@ struct StrengthActiveView: View {
                 skipSet()
             } label: {
                 Text("Skip")
-                    .font(.dsSubhead)
-                    .foregroundStyle(.secondary)
             }
+            .buttonStyle(.strideButton(.quiet, compact: true))
         }
         .padding(AppSpacing.lg)
         .strideCard(cornerRadius: AppRadius.lg)
@@ -293,13 +306,13 @@ struct StrengthActiveView: View {
     private var restTimerCard: some View {
         VStack(spacing: 16) {
             Text("REST")
-                .font(.dsCaption2.weight(.semibold))
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             ZStack {
                 Circle()
-                    .stroke(Color.surfacePrimary, lineWidth: 6)
+                    .stroke(Color.surfaceTertiary, lineWidth: 6)
                     .frame(width: 100, height: 100)
                 Circle()
                     .trim(from: 0, to: restProgress)
@@ -320,12 +333,8 @@ struct StrengthActiveView: View {
                 endRestTimer()
             } label: {
                 Text("Skip Rest")
-                    .font(.dsSubhead.weight(.semibold))
-                    .foregroundStyle(.brandText)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, AppSpacing.md)
-                    .background(Color.brand.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.md))
             }
+            .buttonStyle(.strideButton(.secondary))
         }
         .padding(AppSpacing.lg)
         .strideCard(cornerRadius: AppRadius.lg)
@@ -345,7 +354,7 @@ struct StrengthActiveView: View {
         if !setsForCurrentExercise.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 Text("COMPLETED SETS")
-                    .font(.dsCaption2.weight(.semibold))
+                    .strideEyebrow()
                     .foregroundStyle(.secondary)
                 ForEach(Array(setsForCurrentExercise.enumerated()), id: \.offset) { _, set in
                     HStack {
@@ -418,12 +427,10 @@ struct StrengthActiveView: View {
             showFinishConfirmation = true
         } label: {
             Text("Finish Workout")
-                .font(.dsHeadline.weight(.bold))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, AppSpacing.lg)
         }
-        .foregroundStyle(.onFill)
-        .background(.route, in: RoundedRectangle(cornerRadius: AppRadius.lg))
+        // Quiet while "Log Set" is on screen, so that stays the one route-gradient
+        // primary; once every exercise is done, finishing is the only thing left to do.
+        .buttonStyle(.strideButton(currentExercise == nil && hasLoggedWork ? .primary : .quiet))
         .padding(.horizontal, AppSpacing.lg)
         .padding(.bottom, AppSpacing.xl)
         .padding(.top, AppSpacing.sm)

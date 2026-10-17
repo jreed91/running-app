@@ -3,9 +3,8 @@ import UIKit
 
 /// A fixed-size, deterministic run card rendered to an image for sharing (B5).
 ///
-/// It intentionally uses an explicit dark palette for its background and text rather than
-/// theme-dependent asset colors, so the exported PNG looks identical no matter the device's
-/// light/dark setting; only the brand accent comes from the app's asset catalog. The design
+/// It sits on `ink` with the `onInk` text colours, which have the same value in light and
+/// dark, so the exported PNG looks identical no matter the device's appearance. The design
 /// size is small (points) and the caller renders it at ×3 scale to export a ~1080×1350 image.
 struct RunShareCardView: View {
     let model: ShareCardModel
@@ -22,19 +21,19 @@ struct RunShareCardView: View {
     static let routePanelSize = CGSize(width: size.width - 40, height: 150)
 
     private let accent = Color.brand
-    private let primaryText = Color.white
-    private let secondaryText = Color.white.opacity(0.55)
+    private let primaryText = Color.onInk
+    private let secondaryText = Color.onInkMuted
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             wordmark
             routePanel
                 .frame(height: Self.routePanelSize.height)
-                .padding(.top, 14)
+                .padding(.top, AppSpacing.md)
             distanceHeadline
-                .padding(.top, 18)
+                .padding(.top, AppSpacing.lg)
             primaryStats
-                .padding(.top, 14)
+                .padding(.top, AppSpacing.md)
             secondaryChips
                 .padding(.top, 10)
             if !model.splitBars.isEmpty {
@@ -71,7 +70,7 @@ struct RunShareCardView: View {
     private var routePanel: some View {
         ZStack {
             RoundedRectangle(cornerRadius: AppRadius.md, style: .continuous)
-                .fill(Color.white.opacity(0.05))
+                .fill(Color.onInk.opacity(0.05))
             if let routeMapImage {
                 // Map tiles + route already baked into the snapshot; just present it.
                 Image(uiImage: routeMapImage)
@@ -84,7 +83,7 @@ struct RunShareCardView: View {
                         .route,
                         style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round)
                     )
-                    .padding(18)
+                    .padding(AppSpacing.lg)
             } else {
                 VStack(spacing: 8) {
                     Image(systemName: "figure.run.treadmill")
@@ -154,7 +153,7 @@ struct RunShareCardView: View {
             HStack(alignment: .bottom, spacing: 3) {
                 ForEach(model.splitBars) { bar in
                     RoundedRectangle(cornerRadius: AppRadius.micro, style: .continuous)
-                        .fill(bar.isFastest ? accent : Color.white.opacity(0.28))
+                        .fill(bar.isFastest ? accent : Color.onInk.opacity(0.28))
                         .frame(maxWidth: .infinity)
                         .frame(height: max(3, CGFloat(bar.height) * 44))
                 }
@@ -198,7 +197,7 @@ struct RunShareCardView: View {
         }
         .padding(.horizontal, 11)
         .padding(.vertical, 7)
-        .background(Color.white.opacity(0.08), in: Capsule())
+        .background(Color.onInk.opacity(0.08), in: Capsule())
     }
 }
 

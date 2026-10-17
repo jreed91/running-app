@@ -7,10 +7,10 @@ extension RunSummaryView {
 
     /// The laps card, shown only for runs that were actually lapped.
     ///
-    /// It sits above the splits rather than below them because a lapped run was lapped
-    /// *deliberately* — those boundaries are the ones the runner chose, and the automatic
-    /// per-kilometre buckets underneath are the fallback reading. Runs with no laps (most
-    /// of them) show nothing here at all rather than a card explaining its own absence.
+    /// It follows the splits and heart-rate zones, which every run with data has; laps are
+    /// the boundaries a runner chose by hand on the few runs that were lapped. Runs with no
+    /// laps (most of them) show nothing here at all rather than a card explaining its own
+    /// absence.
     var lapsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             sectionHeader(title: "Laps")
@@ -24,7 +24,7 @@ extension RunSummaryView {
                         .frame(width: 60, alignment: .trailing)
                     Text("PACE").frame(width: 72, alignment: .trailing)
                 }
-                .font(.caption)
+                .font(.dsCaption)
                 .foregroundStyle(.secondary)
                 Divider()
                 ForEach(workout.laps, id: \.number) { lap in

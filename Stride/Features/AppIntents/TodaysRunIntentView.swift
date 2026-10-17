@@ -11,20 +11,20 @@ struct TodaysRunIntentView: View {
                         .fill(data.workoutType.color.opacity(0.15))
                         .frame(width: 52, height: 52)
                     Image(systemName: data.workoutType.icon)
-                        .font(.title2)
+                        .font(.dsTitle2)
                         .foregroundStyle(data.workoutType.color)
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     Text(data.workoutType.localizedName)
-                        .font(.headline)
+                        .font(.dsHeadline)
                     if let meters = data.distanceMeters {
                         Text(meters.distanceString(unit: AppSettings.syncedUnitPreference()))
-                            .font(.subheadline)
+                            .font(.dsSubhead)
                             .foregroundStyle(.secondary)
                     }
                     if let notes = data.notes, !notes.isEmpty {
                         Text(notes)
-                            .font(.caption)
+                            .font(.dsCaption)
                             .foregroundStyle(.secondary)
                             .lineLimit(2)
                     }
@@ -35,10 +35,10 @@ struct TodaysRunIntentView: View {
         } else {
             HStack(spacing: 12) {
                 Image(systemName: "figure.run")
-                    .font(.title2)
+                    .font(.dsTitle2)
                     .foregroundStyle(.secondary)
                 Text("Rest day — no run scheduled")
-                    .font(.subheadline)
+                    .font(.dsSubhead)
                     .foregroundStyle(.secondary)
             }
             .padding()

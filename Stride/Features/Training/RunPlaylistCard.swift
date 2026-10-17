@@ -24,31 +24,38 @@ struct RunPlaylistCard: View {
     private var isBuilding: Bool { service.isBuilding }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            // The header sits above the card, as the detail screen's other sections do.
             Text("RUN PLAYLIST")
                 .strideEyebrow()
                 .foregroundStyle(.secondary)
+                .padding(.horizontal, AppSpacing.xs)
 
-            energyBar
-            energyLegend
+            VStack(alignment: .leading, spacing: 12) {
+                energyBar
+                energyLegend
 
-            if let link {
-                builtState(link: link)
-            } else {
-                buildButton
+                if let link {
+                    builtState(link: link)
+                } else {
+                    buildButton
+                }
+
+                if service.authorizationStatus == .denied {
+                    Text("Apple Music access is off for Stride. Turn it on in iOS Settings → Privacy & Security → Media & Apple Music.")
+                        .font(.dsFootnote)
+                        .foregroundStyle(.secondary)
+                }
+
+                if let errorMessage {
+                    Text(errorMessage)
+                        .font(.dsFootnote)
+                        .foregroundStyle(.destructive)
+                }
             }
-
-            if service.authorizationStatus == .denied {
-                Text("Apple Music access is off for Stride. Turn it on in iOS Settings → Privacy & Security → Media & Apple Music.")
-                    .font(.dsFootnote)
-                    .foregroundStyle(.secondary)
-            }
-
-            if let errorMessage {
-                Text(errorMessage)
-                    .font(.dsFootnote)
-                    .foregroundStyle(.destructive)
-            }
+            .padding(AppSpacing.lg)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .strideCard()
         }
         .task {
             link = service.link(for: workout)
@@ -212,10 +219,8 @@ struct RunPlaylistCard: View {
                 if let url = RunPlaylistService.musicAppURL { openURL(url) }
             } label: {
                 Text("Open Apple Music")
-                    .font(.dsFootnote.weight(.semibold))
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(.tint)
+            .buttonStyle(.strideButton(.secondary, compact: true))
         }
     }
 

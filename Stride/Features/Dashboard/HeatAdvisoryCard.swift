@@ -2,7 +2,7 @@ import SwiftUI
 
 // MARK: - HeatAdvisoryCard
 
-/// The dashboard's "tomorrow is going to be hot" prompt.
+/// The dashboard's "your next session is going to be hot" prompt.
 ///
 /// Deliberately the same shape as ``MissedWorkoutsRecoveryCard``: a coloured header, the
 /// facts, then two actions and a way out. Both cards interrupt the screen to ask the
@@ -20,7 +20,7 @@ struct HeatAdvisoryCard: View {
     let onKeepAsPlanned: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: AppSpacing.md) {
             header
             conditionsRow
             if let cooler = advisory.cooler {
@@ -45,11 +45,11 @@ struct HeatAdvisoryCard: View {
                 StrideIcon(name: .flame, size: 20, color: tint, strokeWeight: 2.2)
             }
             VStack(alignment: .leading, spacing: 3) {
-                Text("Tomorrow's \(advisory.workoutType.localizedName) falls in the heat")
+                Text(headline)
                     .font(.bodyStrong)
                     .fixedSize(horizontal: false, vertical: true)
                 Text("\(advisory.tier.localizedName) at \(startTimeText)")
-                    .font(.caption)
+                    .font(.dsCaption)
                     .foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)
@@ -83,7 +83,7 @@ struct HeatAdvisoryCard: View {
                 .font(.bodyStrong)
                 .foregroundStyle(.primary)
             Text(label)
-                .font(.caption)
+                .font(.dsCaption)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -95,7 +95,7 @@ struct HeatAdvisoryCard: View {
         HStack(spacing: 8) {
             StrideIcon(name: .timer, size: 14, color: .success, strokeWeight: 2)
             Text("It's \(cooler.conditions.feelsLikeString(unit: unit)) at \(cooler.start.formatted(.dateTime.hour().minute())) — the coolest hour worth running in.")
-                .font(.caption)
+                .font(.dsCaption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -107,26 +107,12 @@ struct HeatAdvisoryCard: View {
     private var actionButtons: some View {
         VStack(spacing: 8) {
             Button(action: onAdapt) {
-                Text("Adapt tomorrow's workout")
-                    .font(.dsSubhead.weight(.semibold))
-                    .foregroundStyle(.onFill)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, AppSpacing.md)
-                    .background(
-                        RoundedRectangle(cornerRadius: AppRadius.md)
-                            .fill(tint)
-                    )
+                Text(adaptTitle)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.strideButton(.secondary, compact: true)) // Start is the screen's one primary
 
-            Button(action: onKeepAsPlanned) {
-                Text("Run it as planned")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 6)
-            }
-            .buttonStyle(.plain)
+            Button("Run it as planned", action: onKeepAsPlanned)
+                .buttonStyle(.strideButton(.quiet, compact: true))
         }
     }
 
@@ -137,6 +123,37 @@ struct HeatAdvisoryCard: View {
     /// who never opens the sheet still sees the distinction.
     private var tint: Color {
         HeatAdaptationPolicy.convertsQualityToEasy(advisory.tier) ? .destructive : .warning
+    }
+
+    /// Named from the session's own day: an advisory still up on the morning of the run
+    /// used to call it "tomorrow's".
+    private var headline: String {
+        let type = advisory.workoutType.localizedName
+        switch advisory.sessionDay() {
+        case .today:
+            return String(localized: "Today's \(type) falls in the heat", comment: "Heat advisory card title")
+        case .tomorrow:
+            return String(localized: "Tomorrow's \(type) falls in the heat", comment: "Heat advisory card title")
+        case .later(let weekday):
+            return String(
+                localized: "\(weekday)'s \(type) falls in the heat",
+                comment: "Heat advisory card title; the first value is a weekday"
+            )
+        }
+    }
+
+    private var adaptTitle: String {
+        switch advisory.sessionDay() {
+        case .today:
+            return String(localized: "Adapt today's workout", comment: "Heat advisory card action")
+        case .tomorrow:
+            return String(localized: "Adapt tomorrow's workout", comment: "Heat advisory card action")
+        case .later(let weekday):
+            return String(
+                localized: "Adapt \(weekday)'s workout",
+                comment: "Heat advisory card action; the value is a weekday"
+            )
+        }
     }
 
     private var startTimeText: String {
@@ -152,6 +169,26 @@ struct HeatAdvisoryCard: View {
                 RoundedRectangle(cornerRadius: AppRadius.lg, style: .continuous)
                     .strokeBorder(Color.cardStroke, lineWidth: 1)
             )
+    }
+}
+
+// MARK: - Session day
+
+extension HeatAdvisory {
+    /// Where the session falls relative to today, for copy that names its day.
+    enum SessionDay: Equatable {
+        case today
+        case tomorrow
+        /// Any other day, by its wide weekday name.
+        case later(weekday: String)
+    }
+
+    /// Read from `scheduledDate`, the plan's day: the advisory is raised the evening
+    /// before but stays up through the session's own day.
+    func sessionDay(calendar: Calendar = .current) -> SessionDay {
+        if calendar.isDateInToday(scheduledDate) { return .today }
+        if calendar.isDateInTomorrow(scheduledDate) { return .tomorrow }
+        return .later(weekday: scheduledDate.formatted(.dateTime.weekday(.wide)))
     }
 }
 

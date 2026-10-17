@@ -11,7 +11,7 @@ struct UnitPreferencePicker: View {
     @Binding var selection: UnitPreference
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: AppSpacing.xs) {
             ForEach(UnitPreference.allCases, id: \.self) { unit in
                 Button { selection = unit } label: {
                     VStack(spacing: 3) {
@@ -31,15 +31,16 @@ struct UnitPreferencePicker: View {
                     // the 3.0 large-text bar, which is why `onFill` exists (U3a). The
                     // Settings copy of this control was still using white.
                     .foregroundStyle(selection == unit ? Color.onFill : Color.secondary)
-                    .animation(.easeInOut(duration: 0.15), value: selection)
+                    .adaptiveAnimation(AppAnimation.snappy, value: selection)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(unit.localizedName)
                 .accessibilityAddTraits(selection == unit ? [.isSelected] : [])
             }
         }
+        // The same card track as `StrideSegmentedControl`, so the two read as one control.
         .padding(AppSpacing.xs)
-        .background(Color.surfaceTertiary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .strideCard(cornerRadius: AppRadius.md)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Distance and pace units")
     }

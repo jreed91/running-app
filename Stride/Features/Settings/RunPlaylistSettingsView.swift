@@ -67,6 +67,14 @@ struct RunPlaylistSettingsView: View {
                         Text("Allow Apple Music")
                     }
                     .buttonStyle(.strideButton(compact: true))
+                } else if service.authorizationStatus == .denied {
+                    // Denied can only be undone in iOS Settings; take the runner there.
+                    Button("Open Settings") {
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            UIApplication.shared.open(url)
+                        }
+                    }
+                    .buttonStyle(.strideButton(.secondary, compact: true))
                 }
             }
             .padding()
@@ -138,7 +146,7 @@ struct RunPlaylistSettingsView: View {
             .strideCard(cornerRadius: AppRadius.md)
 
             Text("By default Stride picks by genre. Point a tier at one of your own playlists and it uses that instead.")
-                .font(.caption)
+                .font(.dsCaption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, AppSpacing.xs)
 
@@ -146,7 +154,7 @@ struct RunPlaylistSettingsView: View {
             // section is not at their cadence. Apple publishes no tempo for a song, so
             // nothing in Stride can match one.
             Text("Apple Music doesn't publish a tempo for its songs, so Stride matches the feel of each part of a run rather than its beats per minute.")
-                .font(.caption)
+                .font(.dsCaption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, AppSpacing.xs)
         }
@@ -159,7 +167,7 @@ struct RunPlaylistSettingsView: View {
                     Text(energy.localizedName)
                         .font(.bodyStrong)
                     Text(energy.localizedDescription)
-                        .font(.caption)
+                        .font(.dsCaption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()

@@ -7,8 +7,8 @@ import UIKit
 // The run detail screen. This file holds the screen's state, the values derived from
 // the run, the three on-demand loads (heart-rate zones, split backfill, share card),
 // and `body`; each section it composes lives in a `RunSummaryView+*.swift` extension
-// alongside it — Overview, Feel, TempoInsights, CoachCard, CoachSection, CoachStreaming,
-// CoachComponents, Splits, HeartRateZones, PlannedWorkout, Chrome.
+// alongside it — Overview, Feel, TempoInsights, CoachSection, CoachStreaming,
+// CoachComponents, Splits, HeartRateZones, Laps, PlannedWorkout, Chrome.
 //
 // The screen used to be one 2,232-line file carrying a `swiftlint:disable file_length
 // type_body_length` banner, which is the last of D1. The logic came out first — the
@@ -18,6 +18,9 @@ import UIKit
 // Members are `internal` rather than `private` only where a sibling file reads them.
 struct RunSummaryView: View {
     let workout: RunWorkout
+    /// Only the modal presentation (the post-run review sheet) gets a Close button; pushed
+    /// from History or a plan day, the navigation bar's back button already does that job.
+    let showsCloseButton: Bool
 
     @Environment(AppSettings.self) var appSettings
     @Environment(\.modelContext) var context
@@ -79,14 +82,17 @@ struct RunSummaryView: View {
     /// Shown when the export could not be written — a full disk or a sandbox refusal is
     /// rare, but silently doing nothing when the runner taps Export is worse.
     @State private var exportErrorMessage: String?
+    /// Shown when deleting the run failed, so the screen doesn't just stay put unexplained.
+    @State private var deleteErrorMessage: String?
 
     /// Runs the coach's per-run insight summarises.
     static let insightHistoryRunCount = 8
     /// Runs the coach's plan-adaptation request summarises.
     static let adaptationHistoryRunCount = 50
 
-    init(workout: RunWorkout) {
+    init(workout: RunWorkout, showsCloseButton: Bool = false) {
         self.workout = workout
+        self.showsCloseButton = showsCloseButton
 
         // Every linker writes the scalar id alongside the relationship
         // (`WorkoutSyncService`, `AssociateWorkoutSheet`, the run-finish path) and
@@ -355,8 +361,12 @@ struct RunSummaryView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: AppSpacing.md) {
+                // What the run was first, then the evidence, then what to make of it.
                 titleBlock
+                statsGrid
+                routeMap
+                plannedWorkoutSection
                 // A walk can never fulfil a planned session, so the screen does not offer
                 // to link one — the same rule the importer's linker applies (N38). The sheet
                 // lists run days only, so it is not offered for cross-training either (B8).
@@ -368,45 +378,27 @@ struct RunSummaryView: View {
                 if workout.countsAsRunning {
                     feelSection
                 }
-                routeMap
+                // Splits, zones and laps come before the coaching read: they are the
+                // evidence the insight is written from, and the insight cites them.
+                splitsCard
+                if !zoneSlices.isEmpty, zoneSlices.contains(where: { $0.seconds > 0 }) {
+                    heartRateZoneSection
+                }
+                if !workout.laps.isEmpty {
+                    lapsSection
+                }
                 // The coach and the pace read are both written against the runner's
                 // training paces, which say nothing about a walk. Absent rather than
                 // shown empty: an insight on a walk is not a smaller insight, it is one
                 // about the wrong thing. The same holds for a ride or a swim (B8).
                 if workout.countsAsRunning {
-                    aiCoachAccessCard
+                    paceInsightsSection
+                    aiCoachSection
                 }
-                statsGrid
+                weatherSection
                 // Shoes are for running; a ride or a swim has none to pick (B8).
                 if !workout.isCrossTraining {
                     RunShoeRow(workout: workout)
-                }
-                if workout.countsAsRunning {
-                    paceInsightsSection
-                }
-                weatherSection
-                plannedWorkoutSection
-                // Splits and heart-rate zones come before the coaching read: they are the
-                // evidence the insight is written from, and the insight now cites them.
-                // Laps lead that block when there are any — they are the boundaries the
-                // runner chose, and the per-unit splits below are the automatic reading (A2).
-                if !workout.laps.isEmpty {
-                    lapsSection
-                }
-                // The card can outlive the table: a run under one whole unit has no stored
-                // splits to tabulate, but its recorded readings still bucket into a chart
-                // worth showing (N34).
-                if !chartedSplits.splits.isEmpty {
-                    splitsSection
-                }
-                if !workout.splits.isEmpty {
-                    splitsTable
-                }
-                if !zoneSlices.isEmpty, zoneSlices.contains(where: { $0.seconds > 0 }) {
-                    heartRateZoneSection
-                }
-                if workout.countsAsRunning {
-                    aiCoachSection
                 }
             }
             .padding(.horizontal, AppSpacing.lg)
@@ -430,13 +422,15 @@ struct RunSummaryView: View {
         .navigationTitle(displayType.localizedName)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button {
-                    dismiss()
-                } label: {
-                    Image(systemName: "xmark")
+            if showsCloseButton {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                    }
+                    .accessibilityLabel("Close")
                 }
-                .accessibilityLabel("Close")
             }
             ToolbarItem(placement: .primaryAction) {
                 // Always present, rather than popping into the toolbar seconds after the
@@ -479,6 +473,7 @@ struct RunSummaryView: View {
         }
         .sheet(isPresented: $showAssociateSheet) {
             AssociateWorkoutSheet(workout: workout)
+                .strideSheet()
         }
         .sheet(item: $shareCard) { card in
             ShareSheet(image: card.image)
@@ -496,16 +491,35 @@ struct RunSummaryView: View {
         }
         .sheet(item: $coachChatRequest) { request in
             AICoachChatView(workout: workout, initialPrompt: request.prompt)
+                .strideSheet()
         }
         .confirmationDialog("Delete this workout?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
             Button("Delete", role: .destructive) {
                 // Repository owns tombstone creation + scheduled-day reset (isCompleted).
-                try? container.workoutRepository.delete(workout)
-                dismiss()
+                // Only leave the screen once the run is actually gone.
+                do {
+                    try container.workoutRepository.delete(workout)
+                    dismiss()
+                } catch {
+                    AppLogger.log(
+                        "Failed to delete a run: \(error.localizedDescription)",
+                        label: "History",
+                        level: .error
+                    )
+                    deleteErrorMessage = error.localizedDescription
+                }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This workout will be permanently removed.")
+        }
+        .alert("Couldn't delete that workout", isPresented: Binding(
+            get: { deleteErrorMessage != nil },
+            set: { if !$0 { deleteErrorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) { deleteErrorMessage = nil }
+        } message: {
+            Text(deleteErrorMessage ?? "")
         }
         .onAppear {
             if aiInsight == nil {

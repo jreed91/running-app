@@ -2,11 +2,11 @@ import SwiftUI
 import Charts
 
 // Part of `RunSummaryView` (D1).
-// Section headers, tabs, and chips shared by more than one section of the screen.
+// Section headers and chips shared by more than one section of the screen.
 
 extension RunSummaryView {
 
-    func sectionHeader(title: String) -> some View {
+    func sectionHeader(title: LocalizedStringKey) -> some View {
         HStack {
             Text(title)
                 .strideEyebrow()
@@ -17,34 +17,12 @@ extension RunSummaryView {
         .padding(.top, 10)
     }
 
-    func splitTab(_ metric: SplitChartMetric, active: Bool) -> some View {
-        Button {
-            selectedSplitMetric = metric
-        } label: {
-            Text(metric.tabTitle)
-                .font(.dsCaption2.weight(.bold))
-                .foregroundStyle(active ? Color.brand : Color.secondary)
-                .padding(.horizontal, 10)
-                .padding(.vertical, AppSpacing.xs)
-                .background(
-                    active ? Color.brand.opacity(0.12) : Color.clear,
-                    in: RoundedRectangle(cornerRadius: AppRadius.xs)
-                )
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(active ? [.isButton, .isSelected] : .isButton)
-    }
-
     func confidenceChip(_ value: Int) -> some View {
         HStack(spacing: 6) {
-            Capsule()
-                .fill(Color.secondary.opacity(0.12))
-                .frame(width: 36, height: 4)
-                .overlay(alignment: .leading) {
-                    Capsule()
-                        .fill(Color.brand)
-                        .frame(width: 36 * CGFloat(value) / 100, height: 4)
-                }
+            // The percentage beside it is what VoiceOver reads.
+            StrideProgressBar(value: Double(value) / 100, height: 4)
+                .frame(width: 36)
+                .accessibilityHidden(true)
             Text("\(value)%")
                 .font(.dsCaption2.weight(.bold).monospacedDigit())
                 .foregroundStyle(.secondary)
@@ -67,14 +45,16 @@ extension RunSummaryView {
         .background(.surfaceTertiary, in: RoundedRectangle(cornerRadius: AppRadius.xs))
     }
 
+    /// The coach's tone words as status colours. Zone colours stay data (Route Loop rule 6),
+    /// so "easy" and "interval" read as good and bad news rather than as training zones.
     func aiTone(_ raw: String) -> Color {
         switch raw.lowercased() {
         case "easy":
-            return .zoneEasy
+            return .success
         case "brand", "medium":
             return .brand
         case "interval", "high":
-            return .zoneInterval
+            return .destructive
         case "warning":
             return .warning
         case "success", "low":

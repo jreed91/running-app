@@ -77,6 +77,7 @@ struct CloudKitDebugView: View {
             } footer: {
                 Text("This screen shows local SwiftData records mirrored by CloudKit plus iCloud key-value settings. Each table is capped at \(Self.recordLimit) records.")
             }
+            .strideListRow()
 
             eventSection
 
@@ -87,7 +88,9 @@ struct CloudKitDebugView: View {
             recordSection(title: "Run Workouts", records: runWorkouts.map(runWorkoutPayload))
             recordSection(title: "Saved Routes", records: savedRoutes.map(savedRoutePayload))
         }
+        .strideList()
         .navigationTitle("CloudKit Debug")
+        .navigationBarTitleDisplayMode(.inline)
         .task {
             accountStatus = try? await CKContainer(
                 identifier: StrideSchema.cloudKitContainerID
@@ -145,6 +148,7 @@ struct CloudKitDebugView: View {
         } footer: {
             Text("Newest first, capped at \(CloudKitDiagnostics.eventHistoryLimit). A healthy launch shows `setup finished`, then `export`/`import` pairs.")
         }
+        .strideListRow()
     }
 
     private func statusColor(for status: CloudKitEventSummary.Status) -> Color {
@@ -180,6 +184,7 @@ struct CloudKitDebugView: View {
                 Text("Capped at \(Self.recordLimit) records.")
             }
         }
+        .strideListRow()
     }
 
     private func labeled(_ name: String, value: String) -> some View {

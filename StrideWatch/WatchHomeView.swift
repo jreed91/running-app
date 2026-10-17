@@ -70,7 +70,8 @@ private struct WatchNextWorkoutPage: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .navigationTitle("Stride")
-        .containerBackground((workout?.tint.color ?? .strideBrand).gradient, for: .tabView)
+        // Ink, like the Watch's other pages: the zone colour is data, not a ground.
+        .containerBackground(Color.strideInk.gradient, for: .tabView)
     }
 
     @ViewBuilder

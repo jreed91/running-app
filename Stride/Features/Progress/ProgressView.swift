@@ -275,9 +275,9 @@ struct ProgressDashboardView: View {
                             tooltipContainer {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(bucket.weekStart, format: .dateTime.month(.abbreviated).day())
-                                        .font(.caption2).foregroundStyle(.secondary)
+                                        .font(.dsCaption2).foregroundStyle(.secondary)
                                     Text(String(format: "%.1f %@", distanceValue(bucket.meters), appSettings.unitPreference.distanceLabel))
-                                        .font(.caption).bold()
+                                        .font(.dsCaption).bold()
                                 }
                             }
                         }
@@ -365,8 +365,8 @@ struct ProgressDashboardView: View {
     private var vo2Series: ChartAccessibility.Series {
         ChartAccessibility.Series(
             points: vo2Points.map { ChartAccessibility.Point(label: pointLabel($0.date), value: $0.vdot) },
-            valueAxisLabel: String(localized: "VO₂ max", comment: "Chart value axis")
-        ) { String(format: "%.1f", $0) }
+            valueAxisLabel: String(localized: "VDOT", comment: "Chart value axis")
+        ) { String(format: "%.0f", $0) }
     }
 
     // MARK: - Pace trend chart
@@ -401,19 +401,24 @@ struct ProgressDashboardView: View {
                             tooltipContainer {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(workout.date, format: .dateTime.month(.abbreviated).day())
-                                        .font(.caption2).foregroundStyle(.secondary)
+                                        .font(.dsCaption2).foregroundStyle(.secondary)
                                     Text(workout.averagePaceSecondsPerKm.paceString(unit: appSettings.unitPreference))
-                                        .font(.caption).bold()
+                                        .font(.dsCaption).bold()
                                 }
                             }
                         }
                     }
                 }
                 .frame(height: 140)
-                // Pace never approaches zero, so the default zero-anchored domain pushed
-                // every point into the top quarter of the plot and flattened the trend
-                // the card exists to show. Bracket the data instead.
-                .chartYScale(domain: paceDomain(paceWorkouts))
+                // Pace never approaches zero, so a zero-anchored domain pushed every point
+                // into one band and flattened the trend; bracket the data instead. Reversed
+                // so a faster pace sits higher and the line climbs as the runner improves.
+                .chartYScale(domain: .automatic(includesZero: false, reversed: true))
+                .chartXAxis {
+                    AxisMarks(values: .stride(by: .month)) {
+                        AxisValueLabel(format: .dateTime.month(.abbreviated))
+                    }
+                }
                 .chartYAxis {
                     AxisMarks { value in
                         AxisValueLabel {
@@ -429,25 +434,8 @@ struct ProgressDashboardView: View {
                 }
                 .chartXSelection(value: $selectedPaceDate)
                 .chartAccessibility("Average pace chart", paceSeries(paceWorkouts))
-                Text("Lower is faster")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
         }
-    }
-
-    /// A y-domain that brackets the paces actually run, with a little air above and
-    /// below so the fastest and slowest points are not drawn on the frame.
-    ///
-    /// Padding is a share of the spread rather than a fixed number of seconds, so a
-    /// tight month and a varied year both fill the plot. A single run — or a set that
-    /// happens to share one pace — has no spread to scale, so it falls back to a
-    /// half-minute either side rather than collapsing to a zero-height domain.
-    private func paceDomain(_ workouts: [RunWorkout]) -> ClosedRange<Double> {
-        let paces = workouts.map(\.averagePaceSecondsPerKm)
-        guard let fastest = paces.min(), let slowest = paces.max() else { return 0...1 }
-        let padding = max((slowest - fastest) * 0.15, 30)
-        return max(0, fastest - padding)...(slowest + padding)
     }
 
     // MARK: - Heart rate trend chart
@@ -464,13 +452,14 @@ struct ProgressDashboardView: View {
                             x: .value("Date", workout.date),
                             y: .value("bpm", workout.averageHeartRate ?? 0)
                         )
-                        .foregroundStyle(Color.zoneInterval)
+                        // A trend line, not a zone: zone colours mark training intensity only.
+                        .foregroundStyle(Color.brand)
                         .interpolationMethod(.catmullRom)
                         PointMark(
                             x: .value("Date", workout.date),
                             y: .value("bpm", workout.averageHeartRate ?? 0)
                         )
-                        .foregroundStyle(Color.zoneInterval)
+                        .foregroundStyle(Color.brand)
                         .symbolSize(
                             selectedHRDate.flatMap { closestWorkout(to: $0, in: withHR) }?.id == workout.id ? 80 : 36
                         )
@@ -482,9 +471,9 @@ struct ProgressDashboardView: View {
                             tooltipContainer {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(workout.date, format: .dateTime.month(.abbreviated).day())
-                                        .font(.caption2).foregroundStyle(.secondary)
+                                        .font(.dsCaption2).foregroundStyle(.secondary)
                                     Text("\(Int(hr)) bpm")
-                                        .font(.caption).bold()
+                                        .font(.dsCaption).bold()
                                 }
                             }
                         }
@@ -564,7 +553,7 @@ struct ProgressDashboardView: View {
                     HStack(spacing: 8) {
                         ProgressView().controlSize(.small)
                         Text("Loading heart-rate data…")
-                            .font(.caption)
+                            .font(.dsCaption)
                             .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity)
@@ -590,11 +579,11 @@ struct ProgressDashboardView: View {
                         let pct = total > 0 ? slice.seconds / total : 0
                         HStack(spacing: 10) {
                             Circle().fill(slice.zone.color).frame(width: 9, height: 9)
-                            Text(slice.zone.displayTitle).font(.caption)
+                            Text(slice.zone.displayTitle).font(.dsCaption)
                             Spacer()
-                            Text(slice.seconds.durationString).font(.caption).monospacedDigit()
+                            Text(slice.seconds.durationString).font(.dsCaption).monospacedDigit()
                             Text("\(Int((pct * 100).rounded()))%")
-                                .font(.caption2).foregroundStyle(.secondary)
+                                .font(.dsCaption2).foregroundStyle(.secondary)
                                 .frame(width: 38, alignment: .trailing)
                         }
                     }
@@ -618,7 +607,8 @@ struct ProgressDashboardView: View {
                             y: .value(appSettings.unitPreference.elevationLabel,
                                       (workout.elevationGainMeters ?? 0).elevationValue(unit: appSettings.unitPreference))
                         )
-                        .foregroundStyle(Color.success.gradient)
+                        // `success` is a status colour, not a series colour.
+                        .foregroundStyle(Color.brandGlow)
                         .cornerRadius(AppRadius.xs)
                     }
                     if let selected = selectedElevationDate,
@@ -628,9 +618,9 @@ struct ProgressDashboardView: View {
                             tooltipContainer {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(workout.date, format: .dateTime.month(.abbreviated).day())
-                                        .font(.caption2).foregroundStyle(.secondary)
+                                        .font(.dsCaption2).foregroundStyle(.secondary)
                                     Text(String(format: "+%.0f %@", gain.elevationValue(unit: appSettings.unitPreference), appSettings.unitPreference.elevationLabel))
-                                        .font(.caption).bold()
+                                        .font(.dsCaption).bold()
                                 }
                             }
                         }
@@ -649,10 +639,11 @@ struct ProgressDashboardView: View {
         }
     }
 
-    // MARK: - VO₂ max trend chart
+    // MARK: - VDOT trend chart
 
     private var vo2MaxTrendChart: some View {
-        chartCard("ESTIMATED VO₂ MAX") {
+        // Named VDOT, as the hero above names the same number.
+        chartCard("VDOT") {
             if vo2Points.isEmpty {
                 emptyDataPlaceholder("Not enough run data in this period")
             } else {
@@ -662,13 +653,15 @@ struct ProgressDashboardView: View {
                             x: .value("Date", point.date),
                             y: .value("VDOT", point.vdot)
                         )
-                        .foregroundStyle(Color.brandSecondary)
+                        // Fitness over time is progress, so it is the route.
+                        .foregroundStyle(.route)
+                        .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
                         .interpolationMethod(.catmullRom)
                         PointMark(
                             x: .value("Date", point.date),
                             y: .value("VDOT", point.vdot)
                         )
-                        .foregroundStyle(Color.brandSecondary)
+                        .foregroundStyle(Color.brand)
                         .symbolSize(
                             selectedVO2Date.flatMap { closestVO2Point(to: $0) } == point ? 80 : 36
                         )
@@ -679,9 +672,9 @@ struct ProgressDashboardView: View {
                             tooltipContainer {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(point.date, format: .dateTime.month(.abbreviated).day())
-                                        .font(.caption2).foregroundStyle(.secondary)
-                                    Text(String(format: "%.1f VDOT", point.vdot))
-                                        .font(.caption).bold()
+                                        .font(.dsCaption2).foregroundStyle(.secondary)
+                                    Text(String(format: "%.0f VDOT", point.vdot))
+                                        .font(.dsCaption).bold()
                                 }
                             }
                         }
@@ -698,15 +691,15 @@ struct ProgressDashboardView: View {
                     }
                 }
                 .chartXSelection(value: $selectedVO2Date)
-                .chartAccessibility("Estimated VO₂ max chart", vo2Series)
+                .chartAccessibility("VDOT chart", vo2Series)
                 Text("Higher is better fitness")
-                    .font(.caption)
+                    .font(.dsCaption)
                     .foregroundStyle(.secondary)
             }
         }
     }
 
-    /// Brackets the recorded VDOT values, padded like ``paceDomain(_:)`` and clamped so
+    /// Brackets the recorded VDOT values, padded by a share of their spread and clamped so
     /// the axis never runs below zero on a very low estimate.
     private var vo2Domain: ClosedRange<Double> {
         let values = vo2Points.map(\.vdot)
@@ -721,12 +714,8 @@ struct ProgressDashboardView: View {
         let summary = periodSummary
 
         return chartCard("PERIOD SUMMARY") {
-            LazyVGrid(columns: [.init(.flexible()), .init(.flexible())], spacing: 10) {
-                summaryCell(value: "\(summary.runCount)", label: "Runs")
-                summaryCell(
-                    value: summary.totalDistanceMeters.distanceString(unit: appSettings.unitPreference),
-                    label: "Total Distance"
-                )
+            // Runs and distance are in the hero above; this card carries the averages.
+            LazyVGrid(columns: [.init(.flexible()), .init(.flexible())], spacing: AppSpacing.md) {
                 summaryCell(
                     value: summary.averagePaceSecondsPerKm.map { $0.paceString(unit: appSettings.unitPreference) } ?? "--",
                     label: "Avg Pace"
@@ -740,8 +729,8 @@ struct ProgressDashboardView: View {
                     label: "Avg Elevation"
                 )
                 summaryCell(
-                    value: summary.averageVDOT.map { String(format: "%.1f", $0) } ?? "--",
-                    label: "Avg VO₂ Max"
+                    value: summary.averageVDOT.map { String(format: "%.0f", $0) } ?? "--",
+                    label: "Avg VDOT"
                 )
             }
         }
@@ -754,7 +743,7 @@ struct ProgressDashboardView: View {
                 .minimumScaleFactor(0.7)
                 .lineLimit(1)
             Text(label)
-                .font(.caption)
+                .font(.dsCaption)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)

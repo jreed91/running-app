@@ -64,7 +64,7 @@ struct RunPlaylistDetailView: View {
             }
 
             Text(section.energy.localizedDescription)
-                .font(.caption)
+                .font(.dsCaption)
                 .foregroundStyle(.secondary)
 
             VStack(spacing: 0) {
@@ -86,7 +86,7 @@ struct RunPlaylistDetailView: View {
                     .font(.dsBody)
                     .lineLimit(1)
                 Text(track.artist)
-                    .font(.caption)
+                    .font(.dsCaption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -110,7 +110,7 @@ struct RunPlaylistDetailView: View {
     /// a freshness it does not have.
     private var provenanceNote: some View {
         Text("This is the playlist as Stride built it. Changes you make in Apple Music won't show here.")
-            .font(.caption)
+            .font(.dsCaption)
             .foregroundStyle(.secondary)
     }
 
