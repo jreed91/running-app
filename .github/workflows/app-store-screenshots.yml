@@ -80,8 +80,10 @@ jobs:
 
       - name: Capture Apple Watch screens
         # Best effort: a runner image without a watchOS runtime still produces the
-        # iPhone set, with a warning here.
+        # iPhone set, with a warning here. The timeout keeps a hung build or launch
+        # from eating the job, so the iPhone set is still framed and uploaded.
         continue-on-error: true
+        timeout-minutes: 20
         run: |
           set -o pipefail
           WATCH=$(xcrun simctl list devices available -j \
@@ -91,7 +93,9 @@ jobs:
           [[ -n "$WATCH" ]] || { echo "::warning::No watchOS simulator on this runner; no Watch screenshots."; exit 1; }
           xcrun simctl boot "$WATCH" || true
           xcrun simctl bootstatus "$WATCH" -b
-          xcrun simctl status_bar "$WATCH" override --time "9:41" || true
+          # No status bar override here: watchOS simulators reject it ("Status bar
+          # overrides not supported on this platform"), and the watch face shows the
+          # simulator's own clock.
           xcodebuild build \
             -scheme StrideWatch \
             -destination "platform=watchOS Simulator,id=$WATCH" \
