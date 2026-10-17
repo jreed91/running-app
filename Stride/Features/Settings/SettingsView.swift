@@ -271,15 +271,7 @@ struct SettingsView: View {
             }
             if appSettings.morningReminderEnabled {
                 rowDivider
-                settingsRow(icon: .timer, iconColor: .brand, title: "Reminder Time") {
-                    DatePicker(
-                        "Reminder Time",
-                        selection: morningReminderTimeBinding,
-                        displayedComponents: .hourAndMinute
-                    )
-                    .labelsHidden()
-                    .accessibilityIdentifier("settings.morningReminderTime")
-                }
+                morningReminderTimeRow
             }
             rowDivider
             settingsRow(icon: .trophy, iconColor: .brand, title: "Training Nudges") {
@@ -365,6 +357,18 @@ struct SettingsView: View {
         .padding(.vertical, AppSpacing.md)
     }
 
+    private var morningReminderTimeRow: some View {
+        settingsRow(icon: .timer, iconColor: .brand, title: "Reminder Time") {
+            DatePicker(
+                "Reminder Time",
+                selection: morningReminderTimeBinding,
+                displayedComponents: .hourAndMinute
+            )
+            .labelsHidden()
+            .accessibilityIdentifier("settings.morningReminderTime")
+        }
+    }
+
     /// The reminder time as a `Date` for `DatePicker`, stored as minutes after midnight.
     /// Setting it reschedules the reminders straight away, the same as the toggle does.
     private var morningReminderTimeBinding: Binding<Date> {
@@ -380,7 +384,10 @@ struct SettingsView: View {
             },
             set: { newValue in
                 let parts = Calendar.current.dateComponents([.hour, .minute], from: newValue)
-                let minutes = (parts.hour ?? 8) * 60 + (parts.minute ?? 0)
+                // Split up: `(a ?? x) * 60 + (b ?? y)` alone timed out the Release type-checker.
+                let hour: Int = parts.hour ?? 8
+                let minute: Int = parts.minute ?? 0
+                let minutes: Int = hour * 60 + minute
                 guard minutes != appSettings.morningReminderMinuteOfDay else { return }
                 appSettings.morningReminderMinuteOfDay = minutes
                 guard let plan = activePlans.first else { return }
