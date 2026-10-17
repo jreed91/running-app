@@ -18,7 +18,6 @@ struct PlanTabView: View {
 
     @State private var showNewPlanSheet = false
     @State private var showPregnancyPlanSheet = false
-    @State private var showRouteGenius = false
     @State private var isAdaptingPlan = false
     @State private var smartAdaptProgress = SmartAdaptProgress.idle
     @State private var adaptTask: Task<Void, Never>?
@@ -30,6 +29,24 @@ struct PlanTabView: View {
 
     private func raceDayPlan(for plan: TrainingPlan) -> RaceDayPlan? {
         RaceDayPlan.resolve(profile: profiles.first, plan: plan, runs: recentWorkouts)
+    }
+
+    private func sectionEyebrow(_ title: LocalizedStringKey) -> some View {
+        Text(title)
+            .strideEyebrow()
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func paceInsightsPage(plan: TrainingPlan) -> some View {
+        ScrollView {
+            PaceInsightsCard(plan: plan, runs: recentWorkouts, profile: profiles.first)
+                .padding()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.surfacePrimary)
+        .navigationTitle("Pace Insights")
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     var body: some View {
@@ -61,6 +78,22 @@ struct PlanTabView: View {
                             // then only says what the plan is.
                             PlanOverviewCard(plan: plan, isHero: racePlan == nil)
 
+                            // This week comes straight after the overview, opened up: it is
+                            // what the runner acts on. The rest of the season sits below it,
+                            // collapsed, rather than leading with a list of every week.
+                            let sortedWeeks = (plan.weeks ?? []).sorted { $0.weekNumber < $1.weekNumber }
+                            let currentWeekID = plan.currentWeek?.id
+                            if let thisWeek = sortedWeeks.first(where: { $0.id == currentWeekID }) {
+                                sectionEyebrow("THIS WEEK")
+                                PlanWeekSummaryRow(
+                                    week: thisWeek,
+                                    currentWeekID: currentWeekID,
+                                    startsExpanded: true
+                                ) { workout in
+                                    selectedWorkout = workout
+                                }
+                            }
+
                             // Smart Adapt and Pace Insights are both VDOT machinery, and a
                             // pregnancy plan has no pace targets to insight about and is not
                             // the coach's to rewrite (`AdaptableWorkoutSelector` already
@@ -79,33 +112,38 @@ struct PlanTabView: View {
                                     adaptTask?.cancel()
                                     adaptTask = Task { await adaptRemainingWorkouts(in: plan) }
                                 }
+
+                                // The finish estimate and training paces used to fill a card
+                                // here on every visit; they are a reference, so one row opens
+                                // them on their own page.
+                                NavigationLink {
+                                    paceInsightsPage(plan: plan)
+                                } label: {
+                                    PaceInsightsRow()
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("plan.paceInsightsRow")
                             }
 
-                            RouteGeniusCard {
-                                showRouteGenius = true
-                            }
+                            // Route Genius moved to Home, beside the run button, where a
+                            // route is wanted.
 
-                            if !plan.isPregnancyPlan {
-                                Text("PACE INSIGHTS")
-                                    .strideEyebrow()
-                                    .foregroundStyle(.secondary)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            let otherWeeks = sortedWeeks.filter { $0.id != currentWeekID }
+                            if !otherWeeks.isEmpty {
+                                // "All weeks" once this week is pulled out above; a plan that
+                                // has not started has no current week, so it is every week.
+                                let weeksTitle: LocalizedStringKey = currentWeekID == nil ? "TRAINING WEEKS" : "ALL WEEKS"
+                                sectionEyebrow(weeksTitle)
+                                    .accessibilityIdentifier("plan.weeksHeader")
 
-                                PaceInsightsCard(plan: plan, runs: recentWorkouts, profile: profiles.first)
-                            }
-
-                            Text("TRAINING WEEKS")
-                                .strideEyebrow()
-                                .foregroundStyle(.secondary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-
-                            LazyVStack(spacing: AppSpacing.md) {
-                                ForEach((plan.weeks ?? []).sorted { $0.weekNumber < $1.weekNumber }) { week in
-                                    PlanWeekSummaryRow(
-                                        week: week,
-                                        currentWeekID: plan.currentWeek?.id
-                                    ) { workout in
-                                        selectedWorkout = workout
+                                LazyVStack(spacing: AppSpacing.md) {
+                                    ForEach(otherWeeks) { week in
+                                        PlanWeekSummaryRow(
+                                            week: week,
+                                            currentWeekID: currentWeekID
+                                        ) { workout in
+                                            selectedWorkout = workout
+                                        }
                                     }
                                 }
                             }
@@ -146,12 +184,6 @@ struct PlanTabView: View {
                 }
             }
             .newPlanSheets(training: $showNewPlanSheet, pregnancy: $showPregnancyPlanSheet)
-            .sheet(isPresented: $showRouteGenius) {
-                RouteGeniusView(
-                    viewModel: container.makeRouteGeniusViewModel(appSettings: appSettings)
-                )
-                .strideSheet()
-            }
         }
         .onDisappear {
             // Stop adapting if the user leaves the tab so the fire-and-forget task
@@ -501,43 +533,6 @@ private struct SmartAdaptPlanCard: View {
     }
 }
 
-// MARK: - Route Genius Card
-
-private struct RouteGeniusCard: View {
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 14) {
-                ZStack {
-                    // A tinted circle like every other card's icon on Plan, Home and History;
-                    // the route is for progress and "go", not a card's decoration.
-                    Circle()
-                        .fill(Color.brand.opacity(0.12))
-                        .frame(width: 48, height: 48)
-                    StrideIcon(name: .bolt, size: 22, color: .brand, strokeWeight: 2.2)
-                }
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Route Genius")
-                        .font(.dsHeadline)
-                    Text("AI-generated route matched to today's distance & elevation.")
-                        .font(.dsCaption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-
-                Spacer(minLength: 8)
-
-                StrideIcon(name: .chevronRight, size: 12, color: .brand, strokeWeight: 2.4)
-            }
-            .padding(AppSpacing.lg)
-            .strideCard()
-        }
-        .buttonStyle(.plain)
-    }
-}
-
 // MARK: - Plan Overview Card
 
 private struct PlanOverviewCard: View {
@@ -782,6 +777,34 @@ private struct OverviewStat: View {
 
 // MARK: - Pace Insights Card
 
+/// The row on Plan that opens the pace insights page.
+private struct PaceInsightsRow: View {
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "speedometer")
+                .font(.dsFootnote.weight(.semibold))
+                .foregroundStyle(.brand)
+                .frame(width: 32, height: 32)
+                .background(Color.brand.opacity(0.13), in: Circle())
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Pace Insights")
+                    .font(.dsSubhead.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Text("Estimated finish and training paces")
+                    .font(.dsCaption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 8)
+            StrideIcon(name: .chevronRight, size: 12, color: .secondary, strokeWeight: 2.4)
+        }
+        .padding(.horizontal, AppSpacing.lg)
+        .padding(.vertical, AppSpacing.md)
+        .strideCard()
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+    }
+}
+
 private struct PaceInsightsCard: View {
     let plan: TrainingPlan
     /// Recent runs and the profile, read through `RaceDayPlan.currentVDOT` — the same
@@ -974,7 +997,19 @@ private struct PlanWeekSummaryRow: View {
     @Environment(AppSettings.self) private var appSettings
     @Environment(AppContainer.self) private var container
     @Environment(\.modelContext) private var context
-    @State private var isExpanded = false
+    @State private var isExpanded: Bool
+
+    init(
+        week: TrainingWeek,
+        currentWeekID: UUID?,
+        startsExpanded: Bool = false,
+        onSelectWorkout: @escaping (ScheduledWorkout) -> Void
+    ) {
+        self.week = week
+        self.currentWeekID = currentWeekID
+        self.onSelectWorkout = onSelectWorkout
+        _isExpanded = State(initialValue: startsExpanded)
+    }
 
     private var isCurrentWeek: Bool { week.id == currentWeekID }
     private var isFutureWeek: Bool { week.startDate > Date() && !week.isCompleted }
