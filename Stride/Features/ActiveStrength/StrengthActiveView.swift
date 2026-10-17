@@ -567,6 +567,7 @@ struct StrengthActiveView: View {
             scheduled.completedStrengthWorkout = strengthWorkout
             scheduled.isCompleted = true
             scheduled.linkedStrengthWorkoutID = strengthWorkout.id
+            container.notificationService.cancelMorningReminder(for: scheduled)
         }
         context.saveOrLog("the finished strength session")
         exportToHealthKit(strengthWorkout)

@@ -34,6 +34,18 @@ struct StrideApp: App {
         // Before the first view reads the store, so a seeded screen never renders its
         // empty state first and animates the data in. No-op without --seed-demo-data.
         DemoDataSeed.populateIfNeeded(appContainer.modelContainer)
+        // HealthKit background delivery relaunches the app *without connecting a scene*,
+        // so the `.task` below never runs on that launch and the observer query it
+        // registers is never set up. HealthKit then has nothing to hand the update to,
+        // the run is not imported, its "Run Synced" banner never fires, and after a few
+        // unanswered wakes HealthKit backs off. Apple's rule is to register observer
+        // queries at launch; `init` is the SwiftUI equivalent. `startObserving` is
+        // idempotent, so the `.task` call still covers a launch HealthKit refused here.
+        if !UITestingSupport.isEnabled, !UITestingSupport.isHostingUnitTests {
+            Task { @MainActor in
+                await appContainer.workoutSyncService.startObserving()
+            }
+        }
         _container = State(initialValue: appContainer)
         _appSettings = State(initialValue: AppSettings())
         _authService = State(initialValue: AuthService())
@@ -412,12 +424,9 @@ struct ContentView: View {
     /// Every decision is `TrainingNudgePolicy`'s; this reads the three things it needs —
     /// the runner's recent runs, the active plan, the weekly goal — and hands them over.
     ///
-    /// The run fetch is bounded at `nudgeRunSampleSize`. The streak walks backwards a day
-    /// at a time, so the sample has to be at least as long as the longest streak it could
-    /// ever need to count, and a runner logging one run a day would need 200 days of
-    /// running in a row to reach the end of this one. Bounded through `runsOnlyDescriptor`
-    /// rather than filtered afterwards so a runner who walks does not get a shorter
-    /// sample than one who doesn't (N38).
+    /// The run fetch is bounded at `TrainingNudgePolicy.streakRunSampleSize`, through
+    /// `runsOnlyDescriptor` rather than filtered afterwards so a runner who walks does
+    /// not get a shorter sample than one who doesn't (N38).
     @MainActor
     private func refreshTrainingNudges() async {
         guard !UITestingSupport.isEnabled, !UITestingSupport.isHostingUnitTests else { return }
@@ -432,7 +441,7 @@ struct ContentView: View {
         let runs = (try? context.fetch(
             RunWorkout.runsOnlyDescriptor(
                 sortBy: [SortDescriptor(\RunWorkout.date, order: .reverse)],
-                fetchLimit: Self.nudgeRunSampleSize
+                fetchLimit: TrainingNudgePolicy.streakRunSampleSize
             )
         )) ?? []
 
@@ -455,6 +464,13 @@ struct ContentView: View {
             service.cancelTrainingNudge(.missedWorkouts)
         }
 
+        // Today's run is in, so tonight has nothing to say about the streak — but
+        // tomorrow will, and the runner who skips tomorrow is likely not to open the
+        // app tomorrow either. Re-armed on every foreground, so it moves with the runs.
+        if let tomorrow = TrainingNudgePolicy.tomorrowStreakNudge(for: streak) {
+            await service.scheduleTomorrowStreakNudge(tomorrow)
+        }
+
         if let recap = TrainingNudgePolicy.weeklyRecap(
             for: runs,
             goalMeters: appSettings.weeklyGoalMeters
@@ -462,9 +478,6 @@ struct ContentView: View {
             await service.scheduleWeeklyRecap(recap, unit: appSettings.unitPreference)
         }
     }
-
-    /// See `refreshTrainingNudges`.
-    private static let nudgeRunSampleSize = 200
 
     private func requestMissingPermissionsAfterRestoreIfNeeded() async {
         guard needsWorkoutKitSync, !profiles.isEmpty else { return }

@@ -989,6 +989,8 @@ struct ActiveRunView: View {
                 scheduled.completedWorkout = workout
                 scheduled.linkedRunWorkoutID = workout.id
                 scheduled.isCompleted = true
+                // The day is done; an 08:00 "Workout today" banner after a dawn run is not.
+                container.notificationService.cancelMorningReminder(for: scheduled)
             } else {
                 AppLogger.log(
                     "Run \(workout.id) is below the effort floor "

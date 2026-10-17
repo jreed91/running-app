@@ -501,6 +501,35 @@ final class NotificationService: NSObject {
         )
     }
 
+    /// Arms tomorrow evening's streak nudge (see `TrainingNudgePolicy.tomorrowStreakNudge`).
+    ///
+    /// Shares the streak's identifier, so it replaces tonight's pending one — which is
+    /// right, because it is only armed once today's run is in. Marks tomorrow's period
+    /// as handled so opening the app tomorrow after 18:00 does not deliver it a second
+    /// time through the immediate path.
+    func scheduleTomorrowStreakNudge(
+        _ nudge: StreakNudge,
+        now: Date = Date(),
+        calendar: Calendar = .current,
+        defaults: UserDefaults = .standard
+    ) async {
+        guard await isAuthorized,
+              let slot = TrainingNudgePolicy.tomorrowEveningSlot(now: now, calendar: calendar)
+        else { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = Self.trainingNudgeTitle(.streak)
+        content.body = Self.streakNudgeBody(nudge)
+        await deliver(
+            content,
+            as: .streak,
+            delivery: .scheduled(slot),
+            now: slot,
+            calendar: calendar,
+            defaults: defaults
+        )
+    }
+
     /// Arms Sunday evening's recap of the week just finished.
     func scheduleWeeklyRecap(
         _ recap: WeeklyRecap,

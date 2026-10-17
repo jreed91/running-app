@@ -142,6 +142,26 @@ enum TrainingNudgePolicy {
         return nil
     }
 
+    /// Tomorrow evening's streak nudge, armed today once today's run is in.
+    ///
+    /// `eveningNudge` only covers *tonight*, so a runner who skips tomorrow and never
+    /// opens the app tomorrow — the person the nudge is for — got nothing: the app has
+    /// no background wake of its own to arm tomorrow's slot. Arming it a day ahead
+    /// closes that. The pending request is taken back down when tomorrow's run
+    /// arrives, in the foreground or through a background HealthKit sync.
+    ///
+    /// The streak as it stands today is the streak tomorrow's midnight would end, so
+    /// the number is `current`, not `current + 1`.
+    static func tomorrowStreakNudge(for streak: StreakGoalService.StreakSummary) -> StreakNudge? {
+        guard streak.isActiveToday, streak.current >= minimumStreakToProtect else { return nil }
+        return StreakNudge(days: streak.current)
+    }
+
+    /// Runs to fetch when computing a streak for a nudge. The streak walks backwards a
+    /// day at a time, so the sample has to be at least as long as the longest streak it
+    /// could need to count: 200 days of running in a row with one run a day.
+    static let streakRunSampleSize = 200
+
     /// A streak worth protecting that today has not yet extended.
     ///
     /// `StreakSummary.current` already anchors at yesterday when today has no run, so the
@@ -213,6 +233,16 @@ enum TrainingNudgePolicy {
         calendar: Calendar = .current
     ) -> TrainingNudgeDelivery {
         delivery(hour: eveningNudgeHour, cutoffHour: eveningNudgeCutoffHour, now: now, calendar: calendar)
+    }
+
+    /// Tomorrow's evening slot, for the streak nudge armed a day ahead.
+    static func tomorrowEveningSlot(
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> Date? {
+        guard let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now))
+        else { return nil }
+        return time(hour: eveningNudgeHour, on: tomorrow, calendar: calendar)
     }
 
     /// When this week's recap should land. `.skip` on any day but Sunday.
