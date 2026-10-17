@@ -302,6 +302,41 @@ struct AICoachService: Sendable {
         }
     }
 
+    /// The model's review of the week in `facts`, checked against them; nil when there is
+    /// no model, the request fails, or the draft carries a number the facts do not, which
+    /// leaves the Progress card on its own plain sentence. See `WeekReview`.
+    ///
+    /// Follows the runner's model choice and retries on-device once the daily Private
+    /// Cloud Compute allowance is used up, as the Coach Tips do and for the same reason:
+    /// nobody pressed a button for this, so there is no one waiting to be told.
+    func writeWeekReview(
+        for facts: WeekReviewFacts,
+        unit: UnitPreference,
+        provider: AIProvider
+    ) async -> WeekReviewWording? {
+        guard let backend = onDeviceBackend, await backend.isAvailable() else { return nil }
+        let prompt = WeekReview.prompt(for: facts, unit: unit)
+        do {
+            let draft: WeekReviewDraft
+            do {
+                draft = try await backend.generateWeekReview(
+                    instructions: WeekReview.instructions,
+                    prompt: prompt,
+                    useServerModel: provider.usesPrivateCloudCompute
+                )
+            } catch OnDeviceCoachError.serverQuotaExceeded(_) {
+                draft = try await backend.generateWeekReview(
+                    instructions: WeekReview.instructions,
+                    prompt: prompt,
+                    useServerModel: false
+                )
+            }
+            return WeekReview.validated(draft, for: facts, unit: unit)
+        } catch {
+            return nil
+        }
+    }
+
     /// - Parameter heartRateZones: this run's time-in-zone breakdown, as shown on the run
     ///   summary. Passed in rather than derived here because computing it needs the runner's
     ///   max HR and, for older imported runs, a HealthKit backfill the view already owns.
