@@ -299,9 +299,7 @@ final class AppSettings {
         self.unitPreference = UnitPreference(rawValue: raw) ?? .localeDefault
         self.orsAPIKey = Self.loadORSAPIKey(defaults: defaults, ubiquitous: ubiquitous)
 
-        self.aiInsightsEnabled = aiInsightsStored
-            ? Self.readBool(forKey: Self.aiInsightsEnabledKey, defaults: defaults, ubiquitous: ubiquitous)
-            : false
+        self.aiInsightsEnabled = aiInsightsStored ? Self.readBool(forKey: Self.aiInsightsEnabledKey, defaults: defaults, ubiquitous: ubiquitous) : false
 
         let providerRaw = Self.readString(forKey: Self.aiProviderKey, defaults: defaults, ubiquitous: ubiquitous) ?? ""
         // Default to Apple's Private Cloud Compute model: still keyless, still free, still
@@ -316,43 +314,27 @@ final class AppSettings {
         self.aiProvider = AIProvider(rawValue: providerRaw) ?? .applePrivateCloud
 
         // Default to true (sync on) when the key has never been set.
-        self.iCloudSyncEnabled = syncStored
-            ? Self.readBool(forKey: Self.iCloudSyncKey, defaults: defaults, ubiquitous: ubiquitous)
-            : true
+        self.iCloudSyncEnabled = syncStored ? Self.readBool(forKey: Self.iCloudSyncKey, defaults: defaults, ubiquitous: ubiquitous) : true
 
         // Default to true (reminders on) when the key has never been set.
-        self.morningReminderEnabled = reminderStored
-            ? Self.readBool(forKey: Self.morningReminderKey, defaults: defaults, ubiquitous: ubiquitous)
-            : true
+        self.morningReminderEnabled = reminderStored ? Self.readBool(forKey: Self.morningReminderKey, defaults: defaults, ubiquitous: ubiquitous) : true
 
-        self.morningReminderMinuteOfDay = Self.minuteOfDay(
-            Self.readDouble(forKey: Self.morningReminderTimeKey, defaults: defaults, ubiquitous: ubiquitous)
-        )
+        self.morningReminderMinuteOfDay = Self.minuteOfDay(Self.readDouble(forKey: Self.morningReminderTimeKey, defaults: defaults, ubiquitous: ubiquitous))
 
         // Default to false (silent) when the key has never been set — see the property.
-        self.spokenSplitsEnabled = spokenSplitsStored
-            ? Self.readBool(forKey: Self.spokenSplitsKey, defaults: defaults, ubiquitous: ubiquitous)
-            : false
+        self.spokenSplitsEnabled = spokenSplitsStored ? Self.readBool(forKey: Self.spokenSplitsKey, defaults: defaults, ubiquitous: ubiquitous) : false
 
         // Default to false (silent) when the key has never been set — see the property.
-        self.spokenWorkoutStepsEnabled = spokenStepsStored
-            ? Self.readBool(forKey: Self.spokenWorkoutStepsKey, defaults: defaults, ubiquitous: ubiquitous)
-            : false
+        self.spokenWorkoutStepsEnabled = spokenStepsStored ? Self.readBool(forKey: Self.spokenWorkoutStepsKey, defaults: defaults, ubiquitous: ubiquitous) : false
 
         // Default to true (walks imported) when the key has never been set — see the property.
-        self.walkImportEnabled = walkImportStored
-            ? Self.readBool(forKey: Self.walkImportKey, defaults: defaults, ubiquitous: ubiquitous)
-            : true
+        self.walkImportEnabled = walkImportStored ? Self.readBool(forKey: Self.walkImportKey, defaults: defaults, ubiquitous: ubiquitous) : true
 
         // Default to true (heat advisories on) when the key has never been set — see the property.
-        self.heatAdaptationEnabled = heatAdaptationStored
-            ? Self.readBool(forKey: Self.heatAdaptationKey, defaults: defaults, ubiquitous: ubiquitous)
-            : true
+        self.heatAdaptationEnabled = heatAdaptationStored ? Self.readBool(forKey: Self.heatAdaptationKey, defaults: defaults, ubiquitous: ubiquitous) : true
 
         // Default to true (nudges on) when the key has never been set — see the property.
-        self.trainingNudgesEnabled = trainingNudgesStored
-            ? Self.readBool(forKey: Self.trainingNudgesKey, defaults: defaults, ubiquitous: ubiquitous)
-            : true
+        self.trainingNudgesEnabled = trainingNudgesStored ? Self.readBool(forKey: Self.trainingNudgesKey, defaults: defaults, ubiquitous: ubiquitous) : true
 
         // Empty means "use MusicEnergyPolicy's genre table", which is the default every
         // runner starts on — the feature is meant to work with no setup at all.
