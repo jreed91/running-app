@@ -37,47 +37,29 @@ extension RunSummaryView {
         .accessibilityLabel("Coach analysis, still writing")
     }
 
+    /// Placeholder in the shape of the page: the verdict card, then the flat sections.
     var aiCoachSkeletonSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Headline capsule skeleton
-            AIInsightSkeletonShape()
-                .frame(width: 180, height: 32)
-                .clipShape(Capsule())
-
-            // Key Takeaway skeleton
-            VStack(alignment: .leading, spacing: 8) {
-                AIInsightSkeletonShape().frame(width: 110, height: 11)
+        VStack(alignment: .leading, spacing: AppSpacing.xl) {
+            VStack(alignment: .leading, spacing: 10) {
+                AIInsightSkeletonShape().frame(maxWidth: 240, minHeight: 24, maxHeight: 24)
                 AIInsightSkeletonShape().frame(maxWidth: .infinity, minHeight: 14, maxHeight: 14)
-                AIInsightSkeletonShape().frame(maxWidth: 260, minHeight: 14, maxHeight: 14)
+                AIInsightSkeletonShape().frame(maxWidth: 220, minHeight: 14, maxHeight: 14)
             }
-            .padding()
-            .strideCard(cornerRadius: AppRadius.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(AppSpacing.lg)
+            .strideCard()
 
-            // Action Plan skeleton
-            VStack(alignment: .leading, spacing: 8) {
-                AIInsightSkeletonShape().frame(width: 90, height: 11)
-                ForEach(0..<3, id: \.self) { _ in
-                    HStack(alignment: .top, spacing: 10) {
-                        AIInsightSkeletonShape().frame(width: 14, height: 14).clipShape(Circle())
-                        VStack(alignment: .leading, spacing: 6) {
-                            AIInsightSkeletonShape().frame(width: 140, height: 12)
-                            AIInsightSkeletonShape().frame(maxWidth: .infinity, minHeight: 11, maxHeight: 11)
-                        }
-                    }
-                    .padding(10)
-                    .background(.surfaceTertiary, in: RoundedRectangle(cornerRadius: AppRadius.sm))
+            ForEach(0..<2, id: \.self) { _ in
+                VStack(alignment: .leading, spacing: 8) {
+                    AIInsightSkeletonShape().frame(width: 90, height: 11)
+                    AIInsightSkeletonShape().frame(maxWidth: 260, minHeight: 14, maxHeight: 14)
+                    AIInsightSkeletonShape().frame(maxWidth: .infinity, minHeight: 11, maxHeight: 11)
                 }
+                .padding(.horizontal, AppSpacing.xs)
             }
-
-            // Next Session skeleton
-            VStack(alignment: .leading, spacing: 6) {
-                AIInsightSkeletonShape().frame(width: 90, height: 11)
-                AIInsightSkeletonShape().frame(maxWidth: .infinity, minHeight: 14, maxHeight: 14)
-                AIInsightSkeletonShape().frame(maxWidth: 200, minHeight: 11, maxHeight: 11)
-            }
-            .padding()
-            .strideCard(cornerRadius: AppRadius.md)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Coach analysis, starting")
     }
 
     private struct AIInsightSkeletonShape: View {
@@ -149,6 +131,21 @@ extension RunSummaryView {
         }
     }
 
+    /// Starts the coach's read the first time a run without one is opened, so the
+    /// runner never has to ask for it. Once a read succeeds it is cached on the run,
+    /// and this does nothing on later opens.
+    ///
+    /// An unstructured task on purpose: opening the coach page replaces the summary in
+    /// place, and a `.task` on the summary would cancel the read mid-stream.
+    func startCoachReadIfNeeded() {
+        guard appSettings.aiInsightsEnabled,
+              hasAIKey,
+              aiInsight == nil,
+              workout.cachedAIInsight == nil,
+              !isLoadingAIInsight else { return }
+        Task { await loadAIInsight() }
+    }
+
     var canApplyNextSessionFeedback: Bool {
         hasAIKey && profiles.first != nil && nextWorkoutForFeedback() != nil
     }
@@ -209,7 +206,7 @@ extension RunSummaryView {
     /// Bounded below by the session this run fulfilled, so feedback on Tuesday's tempo
     /// never rewrites Tuesday's tempo. Everything else — run types only, never the race,
     /// nothing completed, nothing in the past — is the shared rule (D1).
-    private func nextWorkoutForFeedback() -> ScheduledWorkout? {
+    func nextWorkoutForFeedback() -> ScheduledWorkout? {
         let completedDate = matchedScheduled?.scheduledDate
             ?? workout.scheduledWorkout?.scheduledDate
             ?? workout.date
@@ -221,7 +218,7 @@ extension RunSummaryView {
     }
 
 
-    private func workoutLabel(_ workout: ScheduledWorkout) -> String {
+    func workoutLabel(_ workout: ScheduledWorkout) -> String {
         let date = workout.scheduledDate.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
         return "\(date) \(workout.workoutType.localizedName)"
     }
@@ -235,8 +232,7 @@ extension RunSummaryView {
         [
             "Why was my HR so high?",
             "Should I rest tomorrow?",
-            "How does this compare to last week?",
-            "Adjust this week"
+            "How does this compare to last week?"
         ]
     }
 }

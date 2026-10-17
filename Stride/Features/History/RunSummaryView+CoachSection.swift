@@ -2,9 +2,9 @@ import SwiftUI
 import SwiftData
 
 // Part of `RunSummaryView` (D1).
-// The coach page, opened from the run screen's coach card (`+CoachSummary`) — the
-// coaching read, the ask-the-coach card, the action plan, the next-session
-// suggestion, the reaction row, and the empty/unavailable states.
+// The coach page, opened from the run screen's coach card (`+CoachSummary`). It reads as
+// a verdict: one card with what the run meant, then the one thing to do next, the next
+// session, and asking the coach, on the page itself rather than a stack of cards.
 
 extension RunSummaryView {
 
@@ -13,40 +13,7 @@ extension RunSummaryView {
     @ViewBuilder
     var aiCoachSection: some View {
         if appSettings.aiInsightsEnabled {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .bottom, spacing: 10) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 5) {
-                            SparkleShape()
-                                .fill(Color.brand)
-                                .frame(width: 11, height: 11)
-                            Text("AI coach")
-                                .strideEyebrow()
-                                .foregroundStyle(.secondary)
-                        }
-                        Text("Today's analysis")
-                            .font(.dsHeadline.weight(.bold))
-                            .kerning(-0.3)
-                    }
-                    Spacer()
-                    Button {
-                        Task {
-                            await loadAIInsight()
-                        }
-                    } label: {
-                        HStack(spacing: 5) {
-                            SparkleShape()
-                                .fill(Color.brand)
-                                .frame(width: 11, height: 11)
-                            Text(aiInsight == nil ? "Load" : "Refresh")
-                        }
-                    }
-                    .buttonStyle(.strideButton(.secondary, compact: true, fullWidth: false))
-                    .disabled(isLoadingAIInsight || !hasAIKey)
-                    .accessibilityHint(coachLoadDisabledHint)
-                }
-                .padding(.horizontal, AppSpacing.xs)
-
+            VStack(alignment: .leading, spacing: AppSpacing.xl) {
                 if isLoadingAIInsight {
                     // Show the coach's text the moment it arrives instead of a skeleton
                     // over an already-populated buffer (N22).
@@ -57,12 +24,12 @@ extension RunSummaryView {
                     }
                 } else if let aiInsight {
                     if aiInsight.apiReady {
-                        aiCoachingReadCard(aiInsight)
-                        aiAskCoachCard
+                        aiVerdictCard(aiInsight)
                         aiActionPlan(aiInsight)
-                        aiNextSessionCard(aiInsight)
-                        aiReactionRow(aiInsight)
-                        aiAttribution(aiInsight)
+                        aiNextSession(aiInsight)
+                        aiAskCoach
+                        aiFullAnalysis(aiInsight)
+                        aiFooter
                     } else {
                         aiUnavailableCard(aiInsight)
                     }
@@ -74,62 +41,159 @@ extension RunSummaryView {
         }
     }
 
-    /// Why Load/Refresh is greyed out, for VoiceOver; empty while it can be tapped.
-    private var coachLoadDisabledHint: String {
-        if !hasAIKey {
-            return String(
-                localized: "Turn on AI Coach in Settings to load an analysis.",
-                comment: "Accessibility hint on the disabled coach Load button"
-            )
-        }
-        if isLoadingAIInsight {
-            return String(
-                localized: "The analysis is already loading.",
-                comment: "Accessibility hint on the coach Load button while it loads"
-            )
-        }
-        return ""
+    /// A section label on the page ground, aligned with the text inside the cards above.
+    private func coachSectionLabel(_ title: LocalizedStringKey) -> some View {
+        Text(title)
+            .strideEyebrow()
+            .foregroundStyle(.secondary)
     }
 
-    private func aiCoachingReadCard(_ insight: AICoachInsight) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.md) {
-            HStack(spacing: 8) {
-                SparkleShape()
-                    .fill(Color.brand)
-                    .frame(width: 14, height: 14)
-                Text("Coaching read")
-                    .strideEyebrow()
-                    .foregroundStyle(.secondary)
-                Spacer()
-                confidenceChip(insight.confidence)
-            }
+    // MARK: Verdict
 
+    /// The only card on the page: the headline, the coach's summary sentence, and at most
+    /// three facts behind it. The model's confidence score is not shown; it is the model
+    /// grading itself, and a runner cannot act on it.
+    private func aiVerdictCard(_ insight: AICoachInsight) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.md) {
             Text(markdownText(insight.headline))
                 .font(.dsTitle2.weight(.heavy))
                 .kerning(-0.55)
                 .lineSpacing(1)
                 .fixedSize(horizontal: false, vertical: true)
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 6)], alignment: .leading, spacing: 6) {
-                ForEach(insight.evidence, id: \.self) { item in
-                    evidenceChip(
-                        label: "\(normalizedMarkdownText(item.label)) \(normalizedMarkdownText(item.value))",
-                        sub: item.delta.map(normalizedMarkdownText),
-                        tone: aiTone(item.tone)
-                    )
+            let summary = insight.summary.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !summary.isEmpty {
+                Text(markdownText(summary))
+                    .font(.dsSubhead)
+                    .foregroundStyle(.secondary)
+                    .lineSpacing(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            let evidence = Array(insight.evidence.prefix(Self.coachEvidenceLimit))
+            if !evidence.isEmpty {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 6)], alignment: .leading, spacing: 6) {
+                    ForEach(evidence, id: \.self) { item in
+                        evidenceChip(
+                            label: "\(normalizedMarkdownText(item.label)) \(normalizedMarkdownText(item.value))",
+                            sub: item.delta.map(normalizedMarkdownText),
+                            tone: aiTone(item.tone)
+                        )
+                    }
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(AppSpacing.lg)
-        // A card, not a warning: the amber ground read as an alert on every summary.
         .strideCard()
     }
 
-    private var aiAskCoachCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Ask coach")
-                .strideEyebrow()
-                .foregroundStyle(.secondary)
+    /// How many evidence facts the verdict shows; more read as a wall of chips.
+    static let coachEvidenceLimit = 3
+
+    // MARK: Do this next
+
+    /// The coach's first action leads; the rest are plain lines under it.
+    @ViewBuilder
+    private func aiActionPlan(_ insight: AICoachInsight) -> some View {
+        let actions = Array(insight.actionItems.prefix(3))
+        if let lead = actions.first {
+            VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                coachSectionLabel("Do this next")
+
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(markdownText(lead.title))
+                            .font(.dsHeadline.weight(.bold))
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 6)
+                        if let metric = lead.metric.map(normalizedMarkdownText), !metric.isEmpty {
+                            Text(metric)
+                                .font(.dsCaption.weight(.bold).monospacedDigit())
+                                .foregroundStyle(Color.brandText)
+                                .lineLimit(1)
+                        }
+                    }
+                    Text(markdownText(lead.detail))
+                        .font(.dsFootnote)
+                        .foregroundStyle(.secondary)
+                        .lineSpacing(1)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                ForEach(Array(actions.dropFirst().enumerated()), id: \.offset) { _, action in
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Circle()
+                            .fill(Color.secondary)
+                            .frame(width: 4, height: 4)
+                            .alignmentGuide(.firstTextBaseline) { $0[.bottom] + 4 }
+                            .accessibilityHidden(true)
+                        Text(markdownText(action.title))
+                            .font(.dsFootnote)
+                            .foregroundStyle(.primary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            .padding(.horizontal, AppSpacing.xs)
+        }
+    }
+
+    // MARK: Next session
+
+    /// The coach's suggestion, and a button that names the planned workout it rewrites.
+    /// Tapping the whole card used to rewrite the plan with nothing on it saying so.
+    private func aiNextSession(_ insight: AICoachInsight) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            coachSectionLabel("Next session")
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(markdownText(insight.nextWorkoutSuggestion))
+                    .font(.dsSubhead.weight(.bold))
+                    .fixedSize(horizontal: false, vertical: true)
+                if let rationale = insight.nextWorkoutRationale?.trimmingCharacters(in: .whitespacesAndNewlines), !rationale.isEmpty {
+                    Text(markdownText(rationale))
+                        .font(.dsFootnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            if hasAIKey, profiles.first != nil, let target = nextWorkoutForFeedback() {
+                Button {
+                    Task { await applyNextSessionFeedback(insight) }
+                } label: {
+                    HStack(spacing: 6) {
+                        if isApplyingNextSessionFeedback {
+                            ProgressView().controlSize(.small)
+                        }
+                        Text("Update \(workoutLabel(target))")
+                    }
+                }
+                .buttonStyle(.strideButton(.secondary, compact: true, fullWidth: false))
+                .disabled(isApplyingNextSessionFeedback)
+                .accessibilityHint(
+                    String(
+                        localized: "Rewrites that planned run using this analysis",
+                        comment: "Hint on the coach's update-next-session button"
+                    )
+                )
+            }
+
+            if let nextSessionUpdateMessage {
+                Text(nextSessionUpdateMessage)
+                    .font(.dsCaption.weight(.medium))
+                    .foregroundStyle(nextSessionUpdateMessage.hasPrefix("Updated") ? Color.success : Color.secondary)
+            }
+        }
+        .padding(.horizontal, AppSpacing.xs)
+    }
+
+    // MARK: Ask the coach
+
+    private var aiAskCoach: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            coachSectionLabel("Ask your coach")
                 .padding(.horizontal, AppSpacing.xs)
 
             ScrollView(.horizontal, showsIndicators: false) {
@@ -153,7 +217,7 @@ extension RunSummaryView {
                     SparkleShape()
                         .fill(Color.brand)
                         .frame(width: 13, height: 13)
-                    Text("Ask your coach...")
+                    Text("Ask about this run…")
                         .font(.dsFootnote)
                         .foregroundStyle(.tertiary)
                     Spacer()
@@ -171,118 +235,71 @@ extension RunSummaryView {
             }
             .buttonStyle(.plain)
         }
-        .padding(.top, AppSpacing.xxs)
     }
 
-    private func aiActionPlan(_ insight: AICoachInsight) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Do this next")
-                .strideEyebrow()
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, AppSpacing.xs)
+    // MARK: Full analysis
 
-            let actions = Array(insight.actionItems.prefix(3))
-            ForEach(Array(actions.enumerated()), id: \.offset) { index, action in
-                AIActionCard(
-                    number: String(format: "%02d", index + 1),
-                    title: normalizedMarkdownText(action.title),
-                    detail: normalizedMarkdownText(action.detail),
-                    metric: action.metric.map(normalizedMarkdownText),
-                    tone: aiTone(action.tone ?? action.priority)
-                )
-            }
-        }
-        .padding(.top, 6)
-    }
-
-    private func aiNextSessionCard(_ insight: AICoachInsight) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+    private func aiFullAnalysis(_ insight: AICoachInsight) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
             Button {
-                Task { await applyNextSessionFeedback(insight) }
-            } label: {
-                HStack(spacing: 12) {
-                    ZStack {
-                        Circle()
-                            .fill(Color.success.opacity(0.14))
-                            .frame(width: 40, height: 40)
-                        if isApplyingNextSessionFeedback {
-                            ProgressView()
-                                .controlSize(.small)
-                                .tint(.success)
-                        } else {
-                            StrideIcon(name: .run, size: 20, color: .success, strokeWeight: 2)
-                        }
-                    }
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Next session")
-                            .strideEyebrow()
-                            .foregroundStyle(.secondary)
-                        Text(markdownText(insight.nextWorkoutSuggestion))
-                            .font(.dsSubhead.weight(.bold))
-                            .foregroundStyle(.primary)
-                            .lineLimit(2)
-                        if let rationale = insight.nextWorkoutRationale?.trimmingCharacters(in: .whitespacesAndNewlines), !rationale.isEmpty {
-                            Text(markdownText(rationale))
-                                .font(.dsCaption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(2)
-                        }
-                    }
-                    Spacer()
-                    StrideIcon(name: .chevronRight, size: 14, color: .secondary, strokeWeight: 2.4)
+                withAnimation(AppAnimation.snappy) {
+                    showFullAIAnalysis.toggle()
                 }
+            } label: {
+                HStack {
+                    Text(showFullAIAnalysis ? "Hide the full analysis" : "Read the full analysis")
+                        .font(.dsFootnote.weight(.semibold))
+                        .foregroundStyle(Color.brandText)
+                    Spacer()
+                    StrideIcon(name: .chevronRight, size: 12, color: .secondary, strokeWeight: 2.4)
+                        .rotationEffect(.degrees(showFullAIAnalysis ? 90 : 0))
+                }
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .disabled(isApplyingNextSessionFeedback || !canApplyNextSessionFeedback)
-
-            if let nextSessionUpdateMessage {
-                Text(nextSessionUpdateMessage)
-                    .font(.dsCaption.weight(.medium))
-                    .foregroundStyle(nextSessionUpdateMessage.hasPrefix("Updated") ? Color.success : Color.secondary)
-                    .padding(.horizontal, AppSpacing.xxs)
-            }
-        }
-        .padding(AppSpacing.md)
-        .strideCard(cornerRadius: AppRadius.md)
-    }
-
-    private func aiReactionRow(_ insight: AICoachInsight) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Button {
-                    withAnimation(AppAnimation.snappy) {
-                        showFullAIAnalysis.toggle()
-                    }
-                } label: {
-                    Text(showFullAIAnalysis ? "Hide full analysis" : "Read full analysis")
-                }
-                .buttonStyle(.strideButton(.quiet))
-
-                reactionButton(.up)
-                reactionButton(.down)
-            }
 
             if showFullAIAnalysis {
-                fullAnalysisCard(insight)
+                CoachText(CoachInsightText.fullAnalysis(for: insight))
+                    .font(.dsFootnote)
+                    .foregroundStyle(.secondary)
+                    .lineSpacing(3)
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
+        .padding(.horizontal, AppSpacing.xs)
     }
 
-    private func fullAnalysisCard(_ insight: AICoachInsight) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Full analysis")
-                .strideEyebrow()
-                .foregroundStyle(.secondary)
+    // MARK: Footer
 
-            CoachText(CoachInsightText.fullAnalysis(for: insight))
-                .font(.dsFootnote)
-                .foregroundStyle(.secondary)
-                .lineSpacing(3)
+    /// Who wrote the read, whether it helped, and a quiet way to write it again.
+    private var aiFooter: some View {
+        HStack(spacing: 4) {
+            SparkleShape()
+                .fill(Color.secondary)
+                .frame(width: 10, height: 10)
+                .accessibilityHidden(true)
+            Text("Written by Apple Intelligence")
+                .font(.dsCaption2)
+                .foregroundStyle(.tertiary)
+            Spacer(minLength: 4)
+            reactionButton(.up)
+            reactionButton(.down)
+            rewriteButton
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(AppSpacing.md)
-        .strideCard(cornerRadius: AppRadius.md)
+        .padding(.horizontal, AppSpacing.xs)
+    }
+
+    private var rewriteButton: some View {
+        Button {
+            Task { await loadAIInsight() }
+        } label: {
+            Text("Rewrite")
+        }
+        .buttonStyle(.strideButton(.quiet, compact: true, fullWidth: false))
+        .disabled(isLoadingAIInsight || !hasAIKey)
+        .accessibilityHint(
+            String(localized: "Writes a new analysis of this run", comment: "Hint on the coach's Rewrite button")
+        )
     }
 
     /// Thumbs-up/down on the coach insight, stored on the run (N22).
@@ -298,56 +315,58 @@ extension RunSummaryView {
             }
             context.saveOrLog("the coach-insight reaction")
         } label: {
-            Image(systemName: reaction == .up ? "hand.thumbsup" : "hand.thumbsdown")
-                .font(.dsHeadline)
+            Image(systemName: reaction == .up
+                  ? (isActive ? "hand.thumbsup.fill" : "hand.thumbsup")
+                  : (isActive ? "hand.thumbsdown.fill" : "hand.thumbsdown"))
+                .font(.dsSubhead)
                 .foregroundStyle(isActive ? Color.brand : Color.secondary)
-                .frame(width: 48, height: 48)
-                .strideCard(cornerRadius: AppRadius.md)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(reaction == .up ? "Helpful" : "Not helpful")
         .accessibilityAddTraits(isActive ? [.isButton, .isSelected] : .isButton)
     }
 
-    private func aiAttribution(_ insight: AICoachInsight) -> some View {
-        HStack(spacing: 5) {
-            SparkleShape()
-                .fill(Color.success)
-                .frame(width: 11, height: 11)
-            Text("Generated by \(appSettings.aiProvider.localizedName) · \(workout.date.formatted(.dateTime.month(.abbreviated).day().hour().minute()))")
-                .font(.dsCaption2)
-                .foregroundStyle(.tertiary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.top, AppSpacing.xxs)
-    }
+    // MARK: Empty and unavailable
 
+    /// No read yet. The read starts by itself when the run opens (`startCoachReadIfNeeded`),
+    /// so this mostly shows when AI Coach is off.
     private var aiEmptyState: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(hasAIKey ? "Ready for analysis" : "AI Coach is off")
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            Text(hasAIKey ? "No analysis yet" : "AI Coach is off")
                 .font(.dsSubhead.weight(.bold))
             Text(hasAIKey
-                 ? "Tap Load to fetch on-device AI coaching feedback for this workout."
-                 : "Turn on AI Coach in Settings to load on-device workout analysis.")
+                 ? "Get a coaching read of this run."
+                 : "Turn on AI Coach in Settings to get a coaching read of this run.")
                 .font(.dsFootnote)
                 .foregroundStyle(.secondary)
+            if hasAIKey {
+                Button {
+                    Task { await loadAIInsight() }
+                } label: {
+                    Text("Write analysis")
+                }
+                .buttonStyle(.strideButton(.secondary, compact: true, fullWidth: false))
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(AppSpacing.lg)
-        .strideCard(cornerRadius: AppRadius.md)
+        .strideCard()
     }
 
     private func aiUnavailableCard(_ insight: AICoachInsight) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
             Text(markdownText(insight.headline))
                 .font(.dsSubhead.weight(.bold))
             Text(markdownText(insight.summary))
                 .font(.dsFootnote)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+            rewriteButton
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(AppSpacing.lg)
-        .strideCard(cornerRadius: AppRadius.md)
+        .strideCard()
     }
 }

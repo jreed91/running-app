@@ -554,6 +554,7 @@ struct RunSummaryView: View {
             if aiInsight == nil {
                 aiInsight = workout.cachedAIInsight
             }
+            startCoachReadIfNeeded()
         }
         .task {
             guard workout.weather == nil, let coord = workout.routeCoordinates.first else { return }

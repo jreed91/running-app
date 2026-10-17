@@ -24,7 +24,7 @@ extension RunSummaryView {
                 // Only when there is something to do about it. What the rating is for is
                 // the buttons' hint, rather than a standing line under them on every open.
                 if feelChangedSinceInsight, aiInsight != nil {
-                    Text("Open the coach and tap Refresh to include this.")
+                    Text("Open the coach and tap Rewrite to include this.")
                         .font(.dsCaption2)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
