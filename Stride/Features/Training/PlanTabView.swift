@@ -116,9 +116,10 @@ struct PlanTabView: View {
                                 // The finish estimate and training paces used to fill a card
                                 // here on every visit; they are a reference, so one row opens
                                 // them on their own page.
-                                NavigationLink {
-                                    paceInsightsPage(plan: plan)
-                                } label: {
+                                // A value destination, built in this body: the page reads this
+                                // view's `@Query` results, which a closure destination would
+                                // read later, outside the body.
+                                NavigationLink(destination: paceInsightsPage(plan: plan)) {
                                     PaceInsightsRow()
                                 }
                                 .buttonStyle(.plain)

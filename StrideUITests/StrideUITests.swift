@@ -38,6 +38,16 @@ final class StrideUITests: XCTestCase {
         // header reads "All weeks" once the current week is shown above it.
         XCTAssertTrue(app.buttons["plan.paceInsightsRow"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["plan.weeksHeader"].waitForExistence(timeout: 5))
+
+        // The row's page reads Plan's queries, so open it: a lazily built page would read
+        // them outside the view's body.
+        let paceRow = app.buttons["plan.paceInsightsRow"]
+        for _ in 0..<5 where !paceRow.isHittable {
+            app.swipeUp()
+        }
+        paceRow.tap()
+        XCTAssertTrue(app.navigationBars["Pace Insights"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.state, .runningForeground)
     }
 
     func testE2ETabNavigationShowsPrimaryScreens() throws {
@@ -93,9 +103,9 @@ final class StrideUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Home"].waitForExistence(timeout: 5))
     }
 
-    /// A run's Breakdown row opens its page. The rows first shipped with an item-driven
-    /// `navigationDestination` inside a screen that is itself pushed by a view link, and
-    /// tapping one did nothing and then crashed the app.
+    /// Each of a run's Breakdown rows opens its page. The pages read the run screen's
+    /// environment and state, and building them in a lazy destination (outside the screen's
+    /// body) crashed the app on device.
     func testBreakdownRowOpensItsPage() throws {
         app.terminate()
         app.launchArguments = ["--uitesting", "--seed-demo-data"]
@@ -106,26 +116,43 @@ final class StrideUITests: XCTestCase {
         tabBar.buttons["History"].tap()
         XCTAssertTrue(app.navigationBars["History"].waitForExistence(timeout: 5))
 
-        let firstRun = app.cells.firstMatch
-        XCTAssertTrue(firstRun.waitForExistence(timeout: 10), "The demo history has no rows")
+        // Not `app.cells.firstMatch`: the list opens with the month hero, which is a cell
+        // too. The newest demo run is an outdoor long run, so it has splits at least.
+        let firstRun = app.buttons["history.run"].firstMatch
+        XCTAssertTrue(firstRun.waitForExistence(timeout: 10), "The demo history has no runs")
         firstRun.tap()
 
-        let row = app.buttons
-            .matching(NSPredicate(format: "identifier BEGINSWITH %@", "runSummary.breakdown."))
-            .firstMatch
-        XCTAssertTrue(row.waitForExistence(timeout: 10), "The run has no Breakdown rows")
-        for _ in 0..<5 where !row.isHittable {
-            app.swipeUp()
-        }
-        let titles = [
-            "plannedWorkout": "Planned workout", "splits": "Splits",
-            "heartRateZones": "Heart-rate zones", "laps": "Laps", "paceInsights": "Pace insights"
+        // Splits and heart-rate zones last: they are the pages reported broken on device,
+        // so a hang there should not hide whether the others open.
+        let pages = [
+            ("laps", "Laps"), ("paceInsights", "Pace insights"), ("plannedWorkout", "Planned workout"),
+            ("heartRateZones", "Heart-rate zones"), ("splits", "Splits")
         ]
-        let page = String(row.identifier.dropFirst("runSummary.breakdown.".count))
-        let title = try XCTUnwrap(titles[page], "Unknown Breakdown row \(row.identifier)")
-        row.tap()
+        // Every row, not just the first: each page reads different state, and the first
+        // fix only made the first one open.
+        // The summary is a plain (not lazy) stack, so every row exists before it is
+        // scrolled to. Splits is on every outdoor run, so wait on that one.
+        XCTAssertTrue(
+            app.buttons["runSummary.breakdown.splits"].waitForExistence(timeout: 10),
+            "The run has no Breakdown rows"
+        )
+        var opened = 0
+        for (page, title) in pages {
+            let row = app.buttons["runSummary.breakdown.\(page)"]
+            guard row.exists else { continue }
+            for _ in 0..<4 where !row.isHittable {
+                app.swipeUp()
+            }
+            row.tap()
 
-        XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 5), "\(title) did not open")
+            let bar = app.navigationBars[title]
+            XCTAssertTrue(bar.waitForExistence(timeout: 5), "\(title) did not open")
+            XCTAssertEqual(app.state, .runningForeground, "\(title) crashed the app")
+            bar.buttons.element(boundBy: 0).tap()
+            XCTAssertTrue(row.waitForExistence(timeout: 5), "Did not come back from \(title)")
+            opened += 1
+        }
+        XCTAssertGreaterThan(opened, 0, "No Breakdown row opened")
         XCTAssertEqual(app.state, .runningForeground)
     }
 

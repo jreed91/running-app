@@ -2,7 +2,7 @@ import SwiftUI
 
 // Part of `RunSummaryView` (D1).
 // The coach's one card on the run screen. The full read lives on the coach page
-// (`+CoachSection`), pushed from here.
+// (`+CoachSection`), opened from here.
 
 extension RunSummaryView {
 
@@ -15,8 +15,8 @@ extension RunSummaryView {
     var coachSummaryCard: some View {
         if appSettings.aiInsightsEnabled {
             if aiInsight != nil || isLoadingAIInsight {
-                NavigationLink {
-                    detailPage(.coach)
+                Button {
+                    openPage = .coach
                 } label: {
                     coachSummaryContent(opensPage: true)
                 }

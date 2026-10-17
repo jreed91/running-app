@@ -6,7 +6,7 @@ import SwiftUI
 // cards), which made the screen hard to take in. Each of those now sits behind one row
 // here, with a one-line preview, and opens as its own page.
 
-/// A page pushed from the run summary.
+/// A page opened from the run summary's breakdown list.
 enum RunSummaryPage: Hashable {
     case plannedWorkout
     case splits
@@ -135,12 +135,10 @@ extension RunSummaryView {
         }
     }
 
-    /// A view-destination link, not `navigationDestination(item:)` on this screen: this
-    /// screen is itself pushed by view-destination links (History's list, a plan day), and
-    /// an item-driven destination declared inside it did nothing on tap and then crashed.
+    /// Opens the page in place (see `detailPageContent`).
     private func breakdownRowButton(_ row: BreakdownRow) -> some View {
-        NavigationLink {
-            detailPage(row.page)
+        Button {
+            openPage = row.page
         } label: {
             HStack(spacing: 12) {
                 // A 32pt icon tile, as a row takes it (Route Loop controls table).
@@ -176,23 +174,15 @@ extension RunSummaryView {
 
     // MARK: Detail pages
 
-    func detailPage(_ page: RunSummaryPage) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: AppSpacing.md) {
-                detailPageContent(page)
-            }
-            .padding(.horizontal, AppSpacing.lg)
-            .padding(.top, AppSpacing.sm)
-            .padding(.bottom, AppSpacing.xxxl)
-            .frame(maxWidth: .infinity)
-        }
-        .background(Color.surfacePrimary.ignoresSafeArea())
-        .navigationTitle(page.title)
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
+    /// A page's content, which the run screen shows in place of the summary.
+    ///
+    /// In place rather than pushed: a pushed page is a second view showing this view's
+    /// charts and state, and every write it made (a chart's selection, the metric control)
+    /// re-ran this view's body, which rebuilt the page, which wrote again. The app froze
+    /// on Splits until iOS killed it, which read as a crash. Shown here, the page is part
+    /// of this view's own body, as these sections were before the breakdown existed.
     @ViewBuilder
-    private func detailPageContent(_ page: RunSummaryPage) -> some View {
+    func detailPageContent(_ page: RunSummaryPage) -> some View {
         switch page {
         case .plannedWorkout:
             plannedWorkoutSection
