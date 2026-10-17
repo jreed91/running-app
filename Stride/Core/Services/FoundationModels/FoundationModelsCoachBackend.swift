@@ -346,6 +346,7 @@ struct FoundationModelsCoachBackend: OnDeviceCoachGenerating {
         tools: [any Tool] = [],
         _ work: (LanguageModelSession, ContextOptions.ReasoningLevel?, String) async throws -> T
     ) async throws -> T {
+        let toolReserve = CoachPromptBudget.toolReserve(toolTexts: tools.map { "\($0.name) \($0.description)" })
         if useServerModel {
             let model = PrivateCloudComputeLanguageModel()
             if model.availability == .available {
@@ -355,7 +356,9 @@ struct FoundationModelsCoachBackend: OnDeviceCoachGenerating {
                     // asynchronous one of the two. `try` and `await` on an expression that
                     // turns out to need neither are warnings, not errors.
                     let contextSize = try? await model.contextSize
-                    let fitted = fittedPrompt(prompt, instructions: instructions, contextSize: contextSize)
+                    let fitted = fittedPrompt(
+                        prompt, instructions: instructions, reserving: toolReserve, contextSize: contextSize
+                    )
                     return try await work(session, reasoning, fitted)
                 } catch let error as PrivateCloudComputeLanguageModel.Error {
                     switch error {
@@ -379,7 +382,9 @@ struct FoundationModelsCoachBackend: OnDeviceCoachGenerating {
         // `SystemLanguageModel.contextSize` is a plain `Int` getter — no `await`, no
         // `try`. The two models genuinely differ here, which is half of why this cannot
         // be written once against `some LanguageModel`.
-        let fitted = fittedPrompt(prompt, instructions: instructions, contextSize: model.contextSize)
+        let fitted = fittedPrompt(
+            prompt, instructions: instructions, reserving: toolReserve, contextSize: model.contextSize
+        )
         return try await work(session, nil, fitted)
     }
 
@@ -497,7 +502,8 @@ struct FoundationModelsCoachBackend: OnDeviceCoachGenerating {
     private static let responseHeadroomFraction = 4
 
     /// `prompt`, shortened until it fits `contextSize`, or unchanged when it already fits
-    /// or when the model did not report a window.
+    /// or when the model did not report a window. `reserved` is held back on top of the
+    /// response headroom: the tools' share, from `CoachPromptBudget.toolReserve`.
     ///
     /// `contextSize` is read by the caller, where the model's concrete type is still in
     /// hand. It has to be: `contextSize` is a plain `Int` on `SystemLanguageModel` and
@@ -519,12 +525,14 @@ struct FoundationModelsCoachBackend: OnDeviceCoachGenerating {
     private func fittedPrompt(
         _ prompt: String,
         instructions: String,
+        reserving reserved: Int = 0,
         contextSize: Int?
     ) -> String {
         guard let contextSize, contextSize > 0 else { return prompt }
         let budget = contextSize
             - contextSize / Self.responseHeadroomFraction
             - CoachPromptBudget.estimatedTokenCount(of: instructions)
+            - reserved
         guard budget > 0 else { return prompt }
 
         var fitted = prompt
