@@ -63,12 +63,15 @@ extension RunSummaryView {
     }
 
     private struct AIInsightSkeletonShape: View {
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
         @State private var opacity: Double = 0.12
 
         var body: some View {
             RoundedRectangle(cornerRadius: AppRadius.micro)
-                .fill(Color.secondary.opacity(opacity))
+                .fill(Color.secondary.opacity(reduceMotion ? 0.2 : opacity))
                 .onAppear {
+                    // A steady placeholder under Reduce Motion; the pulse is motion.
+                    guard !reduceMotion else { return }
                     withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
                         opacity = 0.28
                     }

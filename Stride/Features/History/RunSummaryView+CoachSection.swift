@@ -242,9 +242,7 @@ extension RunSummaryView {
     private func aiFullAnalysis(_ insight: AICoachInsight) -> some View {
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
             Button {
-                withAnimation(AppAnimation.snappy) {
-                    showFullAIAnalysis.toggle()
-                }
+                showFullAIAnalysis.toggle()
             } label: {
                 HStack {
                     Text(showFullAIAnalysis ? "Hide the full analysis" : "Read the full analysis")
@@ -267,6 +265,7 @@ extension RunSummaryView {
             }
         }
         .padding(.horizontal, AppSpacing.xs)
+        .adaptiveAnimation(AppAnimation.snappy, value: showFullAIAnalysis)
     }
 
     // MARK: Footer
@@ -310,9 +309,7 @@ extension RunSummaryView {
     private func reactionButton(_ reaction: AICoachReaction) -> some View {
         let isActive = workout.aiCoachReaction == reaction
         return Button {
-            withAnimation(AppAnimation.snappy) {
-                workout.aiCoachReaction = isActive ? nil : reaction
-            }
+            workout.aiCoachReaction = isActive ? nil : reaction
             context.saveOrLog("the coach-insight reaction")
         } label: {
             Image(systemName: reaction == .up
@@ -320,6 +317,7 @@ extension RunSummaryView {
                   : (isActive ? "hand.thumbsdown.fill" : "hand.thumbsdown"))
                 .font(.dsSubhead)
                 .foregroundStyle(isActive ? Color.brand : Color.secondary)
+                .adaptiveAnimation(AppAnimation.snappy, value: isActive)
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
