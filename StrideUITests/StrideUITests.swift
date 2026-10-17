@@ -129,7 +129,7 @@ final class StrideUITests: XCTestCase {
         ]
         // Every row, not just the first: each page reads different state, and the first
         // fix only made the first one open.
-        let identifiers = rows.allElementsBoundByIndex.map(\.identifier)
+        let identifiers = rows.allElementsBoundByIndex.map { $0.identifier }
         for identifier in identifiers {
             let row = app.buttons[identifier]
             for _ in 0..<5 where !row.isHittable {
