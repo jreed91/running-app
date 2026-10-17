@@ -99,6 +99,14 @@ protocol OnDeviceCoachGenerating: Sendable {
         prompt: String,
         useServerModel: Bool
     ) async throws -> WeekReviewDraft
+
+    /// Writes the race hub's race plan from the facts in `prompt`, unchecked.
+    /// `RaceBriefing.validated(_:for:unit:)` decides whether it is safe to show.
+    func generateRaceBriefing(
+        instructions: String,
+        prompt: String,
+        useServerModel: Bool
+    ) async throws -> RaceBriefingDraft
 }
 
 extension OnDeviceCoachGenerating {
@@ -125,6 +133,15 @@ extension OnDeviceCoachGenerating {
         prompt: String,
         useServerModel: Bool
     ) async throws -> WeekReviewDraft {
+        throw OnDeviceCoachError.unavailable
+    }
+
+    /// Backends that do not write briefings leave the race hub without the card.
+    func generateRaceBriefing(
+        instructions: String,
+        prompt: String,
+        useServerModel: Bool
+    ) async throws -> RaceBriefingDraft {
         throw OnDeviceCoachError.unavailable
     }
 }
