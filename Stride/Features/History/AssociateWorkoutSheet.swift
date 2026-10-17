@@ -80,7 +80,7 @@ private struct ScheduledWorkoutPickerRow: View {
                 Text(scheduled.workoutType.localizedName)
                     .font(.bodyStrong)
                 Text(scheduled.scheduledDate.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
-                    .font(.caption)
+                    .font(.dsCaption)
                     .foregroundStyle(.secondary)
                 if let plan = scheduled.week?.plan {
                     let planTitle: String = {
@@ -90,7 +90,7 @@ private struct ScheduledWorkoutPickerRow: View {
                         return plan.targetRace.localizedName
                     }()
                     Text(planTitle)
-                        .font(.caption2)
+                        .font(.dsCaption2)
                         .foregroundStyle(.tertiary)
                 }
             }
@@ -103,9 +103,9 @@ private struct ScheduledWorkoutPickerRow: View {
                         .font(.dsSubhead.weight(.semibold).monospacedDigit())
                 }
                 if let paceRange = scheduled.targetPaceRange {
-                    Text(paceRange.lowerBound.paceString(unit: appSettings.unitPreference)
-                        .replacingOccurrences(of: " min/km", with: "")
-                        .replacingOccurrences(of: " min/mi", with: ""))
+                    // The unit-less form, as the History rows use: stripping " min/km" off
+                    // the full string stops matching once the label is localized.
+                    Text(paceRange.lowerBound.paceValueString(unit: appSettings.unitPreference))
                         .font(.dsCaption.weight(.medium).monospacedDigit())
                         .foregroundStyle(.secondary)
                 }

@@ -26,7 +26,7 @@ extension RunSummaryView {
                         tempoInsightConsistencyRow(consistency)
                     }
                 }
-                .padding(14)
+                .padding(AppSpacing.md)
                 .strideCard()
 
                 if insights.recentTempoCount == 0 {

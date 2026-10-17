@@ -19,10 +19,9 @@ extension RunSummaryView {
                             SparkleShape()
                                 .fill(Color.brand)
                                 .frame(width: 11, height: 11)
-                            Text("AI COACH")
-                                .font(.dsCaption2.weight(.bold))
-                                .kerning(1.4)
-                                .foregroundStyle(.brandText)
+                            Text("AI coach")
+                                .strideEyebrow()
+                                .foregroundStyle(.secondary)
                         }
                         Text("Today's analysis")
                             .font(.dsHeadline.weight(.bold))
@@ -36,19 +35,14 @@ extension RunSummaryView {
                     } label: {
                         HStack(spacing: 5) {
                             SparkleShape()
-                                .fill(.onFill)
+                                .fill(Color.brand)
                                 .frame(width: 11, height: 11)
                             Text(aiInsight == nil ? "Load" : "Refresh")
-                                .font(.dsCaption.weight(.bold))
                         }
-                        .foregroundStyle(.onFill)
-                        .padding(.horizontal, AppSpacing.md)
-                        .padding(.vertical, AppSpacing.sm)
-                        .background(.route, in: Capsule())
-                        .appGlow(.standard, color: .brand)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.strideButton(.secondary, compact: true, fullWidth: false))
                     .disabled(isLoadingAIInsight || !hasAIKey)
+                    .accessibilityHint(coachLoadDisabledHint)
                 }
                 .padding(.horizontal, AppSpacing.xs)
 
@@ -79,16 +73,32 @@ extension RunSummaryView {
         }
     }
 
+    /// Why Load/Refresh is greyed out, for VoiceOver; empty while it can be tapped.
+    private var coachLoadDisabledHint: String {
+        if !hasAIKey {
+            return String(
+                localized: "Turn on AI Coach in Settings to load an analysis.",
+                comment: "Accessibility hint on the disabled coach Load button"
+            )
+        }
+        if isLoadingAIInsight {
+            return String(
+                localized: "The analysis is already loading.",
+                comment: "Accessibility hint on the coach Load button while it loads"
+            )
+        }
+        return ""
+    }
+
     private func aiCoachingReadCard(_ insight: AICoachInsight) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: AppSpacing.md) {
             HStack(spacing: 8) {
                 SparkleShape()
                     .fill(Color.brand)
                     .frame(width: 14, height: 14)
-                Text("COACHING READ")
-                    .font(.dsCaption2.weight(.bold))
-                    .kerning(1.4)
-                    .foregroundStyle(.brandText)
+                Text("Coaching read")
+                    .strideEyebrow()
+                    .foregroundStyle(.secondary)
                 Spacer()
                 confidenceChip(insight.confidence)
             }
@@ -116,9 +126,8 @@ extension RunSummaryView {
 
     private var aiAskCoachCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("ASK COACH")
-                .font(.dsCaption2.weight(.bold))
-                .kerning(1.4)
+            Text("Ask coach")
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, AppSpacing.xs)
 
@@ -129,14 +138,8 @@ extension RunSummaryView {
                             coachChatRequest = AICoachChatRequest(prompt: prompt)
                         } label: {
                             Text(prompt)
-                                .font(.dsCaption.weight(.semibold))
-                                .foregroundStyle(.brandText)
-                                .padding(.horizontal, AppSpacing.md)
-                                .padding(.vertical, AppSpacing.sm)
-                                .background(.surfaceSecondary, in: Capsule())
-                                .overlay(Capsule().strokeBorder(Color.brand.opacity(0.22), lineWidth: 0.5))
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.strideChip())
                     }
                 }
             }
@@ -159,7 +162,7 @@ extension RunSummaryView {
                         .frame(width: 30, height: 30)
                         .background(.route, in: Circle())
                 }
-                .padding(.leading, 14)
+                .padding(.leading, AppSpacing.md)
                 .padding(.trailing, AppSpacing.sm)
                 .padding(.vertical, AppSpacing.sm)
                 .background(.surfaceSecondary, in: Capsule())
@@ -172,9 +175,8 @@ extension RunSummaryView {
 
     private func aiActionPlan(_ insight: AICoachInsight) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("DO THIS NEXT")
-                .font(.dsCaption2.weight(.bold))
-                .kerning(1.4)
+            Text("Do this next")
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, AppSpacing.xs)
 
@@ -199,7 +201,7 @@ extension RunSummaryView {
             } label: {
                 HStack(spacing: 12) {
                     ZStack {
-                        RoundedRectangle(cornerRadius: AppRadius.md)
+                        Circle()
                             .fill(Color.success.opacity(0.14))
                             .frame(width: 40, height: 40)
                         if isApplyingNextSessionFeedback {
@@ -211,9 +213,8 @@ extension RunSummaryView {
                         }
                     }
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("NEXT SESSION")
-                            .font(.dsCaption2.weight(.bold))
-                            .kerning(0.8)
+                        Text("Next session")
+                            .strideEyebrow()
                             .foregroundStyle(.secondary)
                         Text(markdownText(insight.nextWorkoutSuggestion))
                             .font(.dsSubhead.weight(.bold))
@@ -240,7 +241,7 @@ extension RunSummaryView {
                     .padding(.horizontal, AppSpacing.xxs)
             }
         }
-        .padding(14)
+        .padding(AppSpacing.md)
         .strideCard(cornerRadius: AppRadius.md)
     }
 
@@ -253,13 +254,8 @@ extension RunSummaryView {
                     }
                 } label: {
                     Text(showFullAIAnalysis ? "Hide full analysis" : "Read full analysis")
-                        .font(.dsSubhead.weight(.semibold))
-                        .foregroundStyle(.brandText)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .strideCard(cornerRadius: AppRadius.md)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.strideButton(.quiet))
 
                 reactionButton(.up)
                 reactionButton(.down)
@@ -274,9 +270,8 @@ extension RunSummaryView {
 
     private func fullAnalysisCard(_ insight: AICoachInsight) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("FULL ANALYSIS")
-                .font(.dsCaption2.weight(.bold))
-                .kerning(1.1)
+            Text("Full analysis")
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
 
             CoachText(CoachInsightText.fullAnalysis(for: insight))
@@ -285,10 +280,9 @@ extension RunSummaryView {
                 .lineSpacing(3)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
+        .padding(AppSpacing.md)
         .strideCard(cornerRadius: AppRadius.md)
     }
-
 
     /// Thumbs-up/down on the coach insight, stored on the run (N22).
     ///

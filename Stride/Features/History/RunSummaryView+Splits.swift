@@ -2,8 +2,8 @@ import SwiftUI
 import Charts
 
 // Part of `RunSummaryView` (D1).
-// The splits card: the tab row, the pace/heart-rate/elevation charts behind it, their
-// spoken summaries (N18), and the splits table.
+// The splits card: the metric control, the pace/heart-rate/elevation charts behind it,
+// their spoken summaries (N18), and the splits table under them.
 
 extension RunSummaryView {
 
@@ -52,37 +52,70 @@ extension RunSummaryView {
         return "Above the dashed line ran faster than this run's \(pace) average"
     }
 
-    /// The splits card: a tab row that actually switches the chart under it.
+    /// The splits card: the chart and, under it, the table, so the two readings of the same
+    /// splits sit in one card rather than two back to back.
+    ///
+    /// The card can outlive the table: a run under one whole unit has no stored splits to
+    /// tabulate, but its recorded readings still bucket into a chart worth showing (N34).
+    @ViewBuilder
+    var splitsCard: some View {
+        if !chartedSplits.splits.isEmpty || !workout.splits.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                sectionHeader(title: "Splits")
+                VStack(alignment: .leading, spacing: 12) {
+                    if !chartedSplits.splits.isEmpty {
+                        splitsChart
+                    }
+                    if !chartedSplits.splits.isEmpty, !workout.splits.isEmpty {
+                        Divider()
+                    }
+                    if !workout.splits.isEmpty {
+                        splitsTable
+                    }
+                }
+                .padding(AppSpacing.lg)
+                .strideCard()
+            }
+        }
+    }
+
+    /// The metric control and the chart it switches.
     ///
     /// The three tabs were previously a static picture with all three charts stacked
     /// below regardless of which one appeared selected (N22).
-    var splitsSection: some View {
+    private var splitsChart: some View {
         let metric = SplitChartMetric.resolved(selection: selectedSplitMetric, in: availableSplitMetrics)
-        return VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: "Splits")
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 10) {
-                    // "Pace per 0.1 mi" on a subdivided run: the heading names what a bar
-                    // covers, which is no longer always the runner's whole unit (N34).
-                    Text(metric.heading(bucket: chartedSplits.bucketLabel))
-                        .font(.dsFootnote.weight(.bold))
-                    Spacer()
-                    if availableSplitMetrics.count > 1 {
-                        ForEach(availableSplitMetrics, id: \.self) { option in
-                            splitTab(option, active: option == metric)
-                        }
-                    }
+        return VStack(alignment: .leading, spacing: 12) {
+            if availableSplitMetrics.count > 1 {
+                // Bound to the resolved metric, so the highlighted segment is always the
+                // chart on screen even when the stored choice isn't available on this run.
+                StrideSegmentedControl(
+                    selection: Binding(
+                        get: { metric },
+                        set: { selectedSplitMetric = $0 }
+                    ),
+                    options: availableSplitMetrics
+                ) { option in
+                    Text(option.tabTitle)
                 }
-                switch metric {
-                case .pace:      splitPaceChart
-                case .heartRate: splitHRChart
-                case .elevation: splitElevationChart
-                }
-                Text(splitFootnote(metric)).font(.caption).foregroundStyle(.secondary)
             }
-            .padding(AppSpacing.lg)
-            .strideCard()
+            // "Pace per 0.1 mi" on a subdivided run: the heading names what a bar
+            // covers, which is no longer always the runner's whole unit (N34).
+            Text(metric.heading(bucket: chartedSplits.bucketLabel))
+                .font(.dsFootnote.weight(.bold))
+            switch metric {
+            case .pace:      splitPaceChart
+            case .heartRate: splitHRChart
+            case .elevation: splitElevationChart
+            }
+            Text(splitFootnote(metric)).font(.dsCaption).foregroundStyle(.secondary)
         }
+    }
+
+    /// The chart's selection rule: dashed brand, the same as the Progress charts.
+    private var selectionRuleColor: Color { Color.brand.opacity(0.55) }
+    private var selectionRuleStyle: StrokeStyle {
+        StrokeStyle(lineWidth: 1.5, lineCap: .round, dash: [4, 4])
     }
 
     // MARK: Chart axis
@@ -214,8 +247,8 @@ extension RunSummaryView {
 
             if let bucket = selectedSplitPaceKm, let split = chartedSplit(forBucket: bucket) {
                 RuleMark(x: .value(splitLabelUpper, bucket))
-                    .foregroundStyle(.secondary.opacity(0.4))
-                    .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
+                    .foregroundStyle(selectionRuleColor)
+                    .lineStyle(selectionRuleStyle)
                     .annotation(
                         position: .top,
                         overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
@@ -247,9 +280,9 @@ extension RunSummaryView {
     private func splitPaceTooltip(_ split: Split, average: Double?) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(splitTooltipTitle(split))
-                .font(.caption2).foregroundStyle(.secondary)
+                .font(.dsCaption2).foregroundStyle(.secondary)
             Text(split.paceSecondsPerKm.paceString(unit: appSettings.unitPreference))
-                .font(.caption).bold()
+                .font(.dsCaption.weight(.bold))
             if let average {
                 Text(
                     SplitPaceStats.deltaLabel(
@@ -258,7 +291,7 @@ extension RunSummaryView {
                         unit: appSettings.unitPreference
                     )
                 )
-                .font(.caption2)
+                .font(.dsCaption2)
                 .foregroundStyle(splitPaceTone(split.paceSecondsPerKm, average: average))
             }
         }
@@ -348,27 +381,29 @@ extension RunSummaryView {
                     x: .value(splitLabelUpper, split.kilometer),
                     y: .value("bpm", split.heartRate ?? 0)
                 )
-                .foregroundStyle(.zoneInterval)
+                // Brand, not a zone colour: this line is every split's heart rate, not
+                // time in one zone.
+                .foregroundStyle(.brand)
                 PointMark(
                     x: .value(splitLabelUpper, split.kilometer),
                     y: .value("bpm", split.heartRate ?? 0)
                 )
-                .foregroundStyle(.zoneInterval)
+                .foregroundStyle(.brand)
                 .symbolSize(selected?.kilometer == split.kilometer ? 80 : 36)
             }
             if let split = selected, let hr = split.heartRate {
                 RuleMark(x: .value(splitLabelUpper, split.kilometer))
-                    .foregroundStyle(.secondary.opacity(0.4))
-                    .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
+                    .foregroundStyle(selectionRuleColor)
+                    .lineStyle(selectionRuleStyle)
                     .annotation(
                         position: .top,
                         overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
                     ) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(splitTooltipTitle(split))
-                                .font(.caption2).foregroundStyle(.secondary)
+                                .font(.dsCaption2).foregroundStyle(.secondary)
                             Text("\(Int(hr)) bpm")
-                                .font(.caption).bold()
+                                .font(.dsCaption.weight(.bold))
                         }
                         .padding(.horizontal, AppSpacing.sm).padding(.vertical, 5)
                         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: AppRadius.xs))
@@ -406,17 +441,17 @@ extension RunSummaryView {
             if let bucket = selectedSplitElevKm, let split = chartedSplit(forBucket: bucket) {
                 let gain = split.elevationGainMeters.elevationValue(unit: appSettings.unitPreference)
                 RuleMark(x: .value(splitLabelUpper, bucket))
-                    .foregroundStyle(.secondary.opacity(0.4))
-                    .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
+                    .foregroundStyle(selectionRuleColor)
+                    .lineStyle(selectionRuleStyle)
                     .annotation(
                         position: .top,
                         overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
                     ) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(splitTooltipTitle(split))
-                                .font(.caption2).foregroundStyle(.secondary)
+                                .font(.dsCaption2).foregroundStyle(.secondary)
                             Text("\(gain >= 0 ? "+" : "")\(Int(gain)) \(appSettings.unitPreference.elevationLabel)")
-                                .font(.caption).bold()
+                                .font(.dsCaption.weight(.bold))
                         }
                         .padding(.horizontal, AppSpacing.sm).padding(.vertical, 5)
                         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: AppRadius.xs))
@@ -435,7 +470,9 @@ extension RunSummaryView {
     /// The table stays on the run's stored whole-unit splits even when the charts above it
     /// are drawn on fractions: "4:12 for mile 3" is the number a runner reads off a table,
     /// and forty rows of tenth-mile paces is not a table anyone reads.
-    var splitsTable: some View {
+    ///
+    /// No card of its own: it sits under the chart in `splitsCard`.
+    private var splitsTable: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(splitLabelUpper)
@@ -447,7 +484,7 @@ extension RunSummaryView {
                 }
                 Text("ELEV").frame(width: 60, alignment: .trailing)
             }
-            .font(.caption)
+            .font(.dsCaption)
             .foregroundStyle(.secondary)
             Divider()
             ForEach(workout.splits, id: \.kilometer) { split in
@@ -455,8 +492,6 @@ extension RunSummaryView {
                 Divider()
             }
         }
-        .padding(AppSpacing.lg)
-        .strideCard()
     }
 
     @ViewBuilder
@@ -471,17 +506,17 @@ extension RunSummaryView {
             if hasSplitHR {
                 Group {
                     if let hr = split.heartRate {
-                        Text("\(Int(hr))").foregroundStyle(.zoneInterval)
+                        Text("\(Int(hr))").foregroundStyle(.primary)
                     } else {
                         Text("—").foregroundStyle(.secondary)
                     }
                 }
                 .frame(width: 60, alignment: .trailing)
-                .font(.caption)
+                .font(.dsCaption)
             }
             elevationCell(split.elevationGainMeters)
                 .frame(width: 60, alignment: .trailing)
-                .font(.caption)
+                .font(.dsCaption)
         }
     }
 

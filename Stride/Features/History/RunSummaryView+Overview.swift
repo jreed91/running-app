@@ -26,7 +26,7 @@ extension RunSummaryView {
                     .font(.dsCaption2.weight(.semibold))
                     .foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, AppSpacing.md)
             .padding(.vertical, AppSpacing.md)
             .strideCard()
         }
@@ -35,6 +35,8 @@ extension RunSummaryView {
 
     // MARK: Title block
 
+    /// The screen's hero: what the run was, its distance (or time), and its time and pace.
+    /// The stats grid below carries only what this block does not.
     var titleBlock: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
@@ -45,13 +47,13 @@ extension RunSummaryView {
                     // offset, so it drew the shape exactly behind itself and rendered
                     // nothing. The stroke below is what actually halos the dot (U1).
                     .overlay(Circle().stroke(workoutTone.opacity(0.25), lineWidth: 6))
+                // The dot carries the workout type's colour; the words stay neutral, since
+                // zone colours are data, not text decoration.
                 Text(kickerTitle)
-                    .font(.dsCaption2.weight(.bold))
-                    .kerning(1.4)
-                    .textCase(.uppercase)
-                    .foregroundStyle(workoutTone)
+                    .strideEyebrow()
+                    .foregroundStyle(.secondary)
                 Circle()
-                    .fill(Color.secondary.opacity(0.45))
+                    .fill(.tertiary)
                     .frame(width: 3, height: 3)
                 Text(workout.date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute()))
                     .font(.dsCaption2.weight(.semibold))
@@ -80,16 +82,17 @@ extension RunSummaryView {
                     if showsPace {
                         Text("·").foregroundStyle(.tertiary)
                         metricInline(
-                            value: workout.averagePaceSecondsPerKm.paceString(unit: appSettings.unitPreference).replacingOccurrences(of: " \(appSettings.unitPreference.paceLabel)", with: ""),
+                            value: workout.averagePaceSecondsPerKm.paceValueString(unit: appSettings.unitPreference),
                             label: appSettings.unitPreference.paceLabel
                         )
                     }
                 }
             }
         }
-        .padding(.top, 18)
-        .padding(.horizontal, AppSpacing.xs)
+        .padding(AppSpacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .heroCard()
+        .padding(.top, AppSpacing.sm)
     }
 
     private func metricInline(value: String, label: String) -> some View {
@@ -113,7 +116,7 @@ extension RunSummaryView {
                     .frame(height: 180)
                     .overlay {
                         Label("No route data", systemImage: "map")
-                            .font(.caption.weight(.semibold))
+                            .font(.dsCaption.weight(.semibold))
                             .foregroundStyle(.secondary)
                     }
             } else {
@@ -146,19 +149,10 @@ extension RunSummaryView {
 
     // MARK: Stats grid
 
+    /// The run's other figures. Distance, time and pace are in the title block above and
+    /// are not repeated here.
     var statsGrid: some View {
         LazyVGrid(columns: [.init(.flexible()), .init(.flexible())], spacing: 10) {
-            if !leadsWithDuration {
-                statCell(value: titleMetric.value, unit: titleMetric.unit, label: "Distance")
-            }
-            statCell(value: workout.durationSeconds.durationString, label: "Duration")
-            if showsPace {
-                statCell(
-                    value: workout.averagePaceSecondsPerKm.paceString(unit: appSettings.unitPreference).replacingOccurrences(of: " \(appSettings.unitPreference.paceLabel)", with: ""),
-                    unit: appSettings.unitPreference.paceLabel,
-                    label: "Avg Pace"
-                )
-            }
             if let hr = workout.averageHeartRate {
                 statCell(value: "\(Int(hr))", unit: "bpm", label: "Avg HR", tone: hrTone(hr))
             }
@@ -204,7 +198,7 @@ extension RunSummaryView {
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, AppSpacing.lg)
-        .padding(.vertical, 14)
+        .padding(.vertical, AppSpacing.md)
         .strideCard()
         .gridCellColumns(colSpan ? 2 : 1)
         // One element per cell, or the grid reads as loose fragments with no pairing
@@ -233,7 +227,7 @@ extension RunSummaryView {
                             .font(.system(size: weatherGlyphSize))
                             .symbolRenderingMode(.multicolor)
                         Text(w.conditionDescription)
-                            .font(.caption)
+                            .font(.dsCaption)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
                     }
@@ -246,7 +240,7 @@ extension RunSummaryView {
                         Text(w.temperatureString(unit: appSettings.unitPreference))
                             .font(.metricSmall)
                         Text("Feels \(w.feelsLikeString(unit: appSettings.unitPreference))")
-                            .font(.caption)
+                            .font(.dsCaption)
                             .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity)
@@ -258,11 +252,11 @@ extension RunSummaryView {
                         Label("\(Int(w.humidityPercent))%", systemImage: "humidity")
                         Label(w.windString(unit: appSettings.unitPreference), systemImage: "wind")
                     }
-                    .font(.caption)
+                    .font(.dsCaption)
                     .frame(maxWidth: .infinity)
                 }
                 .padding(.horizontal, AppSpacing.lg)
-                .padding(.vertical, 14)
+                .padding(.vertical, AppSpacing.md)
                 .strideCard()
             }
         }

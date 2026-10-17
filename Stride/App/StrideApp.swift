@@ -123,7 +123,7 @@ private struct PendingReviewSheet: ViewModifier {
         content.sheet(isPresented: isPresented) {
             if let workout = container.pendingReviewWorkout {
                 NavigationStack {
-                    RunSummaryView(workout: workout)
+                    RunSummaryView(workout: workout, showsCloseButton: true)
                 }
                 .environment(container)
                 .environment(appSettings)

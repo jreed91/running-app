@@ -10,9 +10,14 @@ extension RunSummaryView {
 
     var heartRateZoneSection: some View {
         let total = zoneSlices.reduce(0) { $0 + $1.seconds }
-        return VStack(alignment: .leading, spacing: 12) {
-            Text("TIME IN HEART-RATE ZONES")
-                .strideEyebrow().foregroundStyle(.secondary).padding(.horizontal, AppSpacing.xs)
+        return VStack(alignment: .leading, spacing: 8) {
+            sectionHeader(title: "Time in heart-rate zones")
+            zoneCard(total: total)
+        }
+    }
+
+    private func zoneCard(total: Double) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
             // Stacked proportion bar. `GeometryReader` stays here deliberately (U7): five
             // segments each need a *width* from the container, and none of the modern
             // replacements set a frame — `visualEffect` only applies effects, and
@@ -47,16 +52,16 @@ extension RunSummaryView {
         return HStack(spacing: 10) {
             Circle().fill(slice.zone.color).frame(width: 10, height: 10)
             VStack(alignment: .leading, spacing: 1) {
-                Text(slice.zone.displayTitle).font(.caption).bold()
+                Text(slice.zone.displayTitle).font(.dsCaption.weight(.bold))
                 if let bounds {
                     Text("\(bounds.lower)–\(bounds.upper) bpm")
-                        .font(.caption2).foregroundStyle(.secondary)
+                        .font(.dsCaption2).foregroundStyle(.secondary)
                 }
             }
             Spacer()
-            Text(slice.seconds.durationString).font(.caption).monospacedDigit()
+            Text(slice.seconds.durationString).font(.dsCaption).monospacedDigit()
             Text("\(Int((pct * 100).rounded()))%")
-                .font(.caption2).foregroundStyle(.secondary)
+                .font(.dsCaption2).foregroundStyle(.secondary)
                 .frame(width: 38, alignment: .trailing)
         }
         .accessibilityElement(children: .combine)

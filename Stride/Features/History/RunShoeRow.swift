@@ -59,7 +59,7 @@ struct RunShoeRow: View {
                         .font(.dsCaption2.weight(.semibold))
                         .foregroundStyle(.secondary)
                 }
-                .padding(.horizontal, 14)
+                .padding(.horizontal, AppSpacing.md)
                 .padding(.vertical, AppSpacing.md)
                 .strideCard(cornerRadius: AppRadius.md)
             }
