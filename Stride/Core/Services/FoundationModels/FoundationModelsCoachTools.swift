@@ -97,11 +97,129 @@ struct PlanSessionsTool: Tool {
     }
 }
 
+/// What `rankRuns` can order by.
+@available(iOS 26.0, *)
+@Generable
+enum CoachRunRanking: String, Sendable {
+    case fastest
+    case longest
+    case highestHeartRate
+}
+
+@available(iOS 26.0, *)
+extension CoachRunRanking {
+    var ranking: CoachLookup.Ranking {
+        switch self {
+        case .fastest:          return .fastest
+        case .longest:          return .longest
+        case .highestHeartRate: return .highestHeartRate
+        }
+    }
+}
+
+/// The race distances `racePredictions` answers for.
+@available(iOS 26.0, *)
+@Generable
+enum CoachRaceDistance: String, Sendable {
+    case all
+    case fiveK
+    case tenK
+    case halfMarathon
+    case marathon
+}
+
+@available(iOS 26.0, *)
+extension CoachRaceDistance {
+    var meters: Double? {
+        switch self {
+        case .all:          return nil
+        case .fiveK:        return 5_000
+        case .tenK:         return 10_000
+        case .halfMarathon: return 21_097.5
+        case .marathon:     return 42_195
+        }
+    }
+}
+
+@available(iOS 26.0, *)
+struct RankRunsTool: Tool {
+    let lookup: CoachLookup
+
+    let name = "rankRuns"
+    let description = "Finds the runner's fastest, longest or highest heart rate runs in a recent window, best first."
+
+    @Generable
+    struct Arguments {
+        @Guide(description: "Which kind of run to rank; any for every kind")
+        let kind: CoachRunKind
+        @Guide(description: "What to rank by")
+        let by: CoachRunRanking
+        @Guide(description: "How many days back to look", .range(1...180))
+        let withinDays: Int
+        @Guide(description: "The most runs to return", .range(1...10))
+        let limit: Int
+    }
+
+    func call(arguments: Arguments) async throws -> String {
+        lookup.rankRuns(
+            type: arguments.kind.workoutType,
+            withinDays: arguments.withinDays,
+            by: arguments.by.ranking,
+            limit: arguments.limit
+        )
+    }
+}
+
+@available(iOS 26.0, *)
+struct CompareRunsTool: Tool {
+    let lookup: CoachLookup
+
+    let name = "compareRuns"
+    let description = "Compares the runner's recent days with the same number of days before them: runs, distance, average pace, heart rate and how many felt hard."
+
+    @Generable
+    struct Arguments {
+        @Guide(description: "Which kind of run to compare; any for every kind")
+        let kind: CoachRunKind
+        @Guide(description: "How many days each window covers", .range(7...90))
+        let days: Int
+    }
+
+    func call(arguments: Arguments) async throws -> String {
+        lookup.compareRuns(type: arguments.kind.workoutType, days: arguments.days)
+    }
+}
+
+@available(iOS 26.0, *)
+struct RacePredictionsTool: Tool {
+    let lookup: CoachLookup
+
+    let name = "racePredictions"
+    let description = "Gives the race times and paces the runner's current fitness predicts for 5K, 10K, half marathon and marathon."
+
+    @Generable
+    struct Arguments {
+        @Guide(description: "Which race distance to predict; all for every one")
+        let distance: CoachRaceDistance
+    }
+
+    func call(arguments: Arguments) async throws -> String {
+        lookup.racePredictions(for: arguments.distance.meters)
+    }
+}
+
 @available(iOS 26.0, *)
 extension CoachLookup {
     /// The tools a session gets for this lookup.
     var tools: [any Tool] {
-        [FindRunsTool(lookup: self), WeeklyTotalsTool(lookup: self), PlanSessionsTool(lookup: self)]
+        [
+            FindRunsTool(lookup: self),
+            RankRunsTool(lookup: self),
+            WeeklyTotalsTool(lookup: self),
+            CompareRunsTool(lookup: self),
+            PlanSessionsTool(lookup: self),
+            RacePredictionsTool(lookup: self),
+        ]
     }
 }
 #endif

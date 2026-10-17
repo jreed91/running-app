@@ -42,6 +42,10 @@ struct CoachLookup: Sendable, Equatable {
     let sessions: [Session]
     let unit: UnitPreference
     let now: Date
+    /// The runner's current fitness, from ``RaceDayPlan/currentVDOT(runs:profile:now:)``:
+    /// the same one number behind the race hub's prediction and the plan's paces, so a
+    /// race time the coach quotes matches the one the app shows. Nil when there is none.
+    let fitnessVDOT: Double?
 
     /// The most rows any one answer carries. A tool's output lands in the context window
     /// — the on-device one is small — so an answer is a handful of lines, never a dump.
@@ -54,16 +58,23 @@ struct CoachLookup: Sendable, Equatable {
 
     private static let runTypes: Set<WorkoutType> = [.easy, .tempo, .interval, .longRun, .race]
 
-    init(runs: [Run], sessions: [Session], unit: UnitPreference, now: Date = Date()) {
+    init(runs: [Run], sessions: [Session], unit: UnitPreference, now: Date = Date(), fitnessVDOT: Double? = nil) {
         self.runs = runs.sorted { $0.date > $1.date }
         self.sessions = sessions.sorted { $0.date < $1.date }
         self.unit = unit
         self.now = now
+        self.fitnessVDOT = fitnessVDOT
     }
 
     /// Copies `runs` (walks and cross-training dropped) and the plan's run sessions out of
     /// SwiftData. Call it on the main actor, where those models live.
-    init(runs: [RunWorkout], scheduled: [ScheduledWorkout], unit: UnitPreference, now: Date = Date()) {
+    init(
+        runs: [RunWorkout],
+        scheduled: [ScheduledWorkout],
+        unit: UnitPreference,
+        now: Date = Date(),
+        fitnessVDOT: Double? = nil
+    ) {
         let cutoff = now.addingTimeInterval(-Double(Self.historyDays) * 86_400)
         self.init(
             runs: runs.runsOnly.filter { $0.date >= cutoff }.map {
@@ -86,7 +97,8 @@ struct CoachLookup: Sendable, Equatable {
                 )
             },
             unit: unit,
-            now: now
+            now: now,
+            fitnessVDOT: fitnessVDOT
         )
     }
 
@@ -112,7 +124,13 @@ struct CoachLookup: Sendable, Equatable {
         let fetched = (try? context.fetch(RunWorkout.runsOnlyDescriptor(fetchLimit: 400))) ?? []
         let runs = fetched.filter { $0.date >= cutoff && $0.date <= now && $0.id != excluding?.id }
         let scheduled = (plan?.weeks ?? []).flatMap { $0.workouts ?? [] }
-        return CoachLookup(runs: runs, scheduled: scheduled, unit: unit, now: now)
+        var profileFetch = FetchDescriptor<UserProfile>(sortBy: [SortDescriptor(\.updatedAt, order: .reverse)])
+        profileFetch.fetchLimit = 1
+        let profile = (try? context.fetch(profileFetch))?.first
+        // From every fetched run, the excluded one included: a race-time prediction on a
+        // run's own detail page should count that run, as the race hub would.
+        let vdot = RaceDayPlan.currentVDOT(runs: fetched, profile: profile, now: now)
+        return CoachLookup(runs: runs, scheduled: scheduled, unit: unit, now: now, fitnessVDOT: vdot)
     }
 
     // MARK: Queries
@@ -216,8 +234,122 @@ struct CoachLookup: Sendable, Equatable {
     /// Added to a request's instructions only when tools come with it.
     static let instructionsNote = """
     You can look up this runner's training log with tools: findRuns for past runs by kind \
-    and how many days back, weeklyTotals for distance per week, and planSessions for the \
-    planned runs around today. Use a tool when the answer needs history or plan details \
-    that are not already given, and use only what it returns. Never mention the tools.
+    and how many days back, rankRuns for their fastest, longest or highest heart rate runs, \
+    weeklyTotals for distance per week, compareRuns to set recent weeks against the weeks \
+    before, planSessions for the planned runs around today, and racePredictions for what \
+    current fitness says they could race. Use a tool when the answer needs history or plan \
+    details that are not already given, and use only what it returns. Never mention the tools.
     """
+}
+
+// MARK: - Rankings, comparisons and predictions
+
+extension CoachLookup {
+
+    /// What ``rankRuns(type:withinDays:by:limit:)`` orders by.
+    enum Ranking: Sendable {
+        case fastest
+        case longest
+        case highestHeartRate
+    }
+
+    /// The race distances ``racePredictions(for:)`` answers for, in the order it lists them.
+    static let predictionDistances: [(name: String, meters: Double)] = [
+        ("5K", 5_000), ("10K", 10_000), ("Half marathon", 21_097.5), ("Marathon", 42_195),
+    ]
+
+    /// The shortest run that counts for "fastest": a 400 m jog to the shop is not a pace.
+    static let minimumRankedMeters = 1_000.0
+
+    /// The `limit` best runs of `type` (any type when nil) within `withinDays`, best first.
+    func rankRuns(type: WorkoutType?, withinDays: Int, by ranking: Ranking, limit: Int) -> String {
+        let days = min(max(withinDays, 1), Self.historyDays)
+        let cutoff = now.addingTimeInterval(-Double(days) * 86_400)
+        let candidates = runs.filter { $0.date >= cutoff && (type == nil || $0.type == type) }
+        let ranked: [Run]
+        switch ranking {
+        case .fastest:
+            ranked = candidates
+                .filter { $0.distanceMeters >= Self.minimumRankedMeters && $0.paceSecondsPerKm != nil }
+                .sorted { ($0.paceSecondsPerKm ?? .infinity) < ($1.paceSecondsPerKm ?? .infinity) }
+        case .longest:
+            ranked = candidates.sorted { $0.distanceMeters > $1.distanceMeters }
+        case .highestHeartRate:
+            ranked = candidates
+                .filter { ($0.averageHeartRate ?? 0) > 0 }
+                .sorted { ($0.averageHeartRate ?? 0) > ($1.averageHeartRate ?? 0) }
+        }
+        let top = ranked.prefix(min(max(limit, 1), Self.maximumRows))
+        let kind = type.map { "\($0.displayName.lowercased()) runs" } ?? "runs"
+        guard !top.isEmpty else {
+            return ranking == .highestHeartRate
+                ? "No \(kind) with heart rate in the last \(days) days."
+                : "No \(kind) in the last \(days) days."
+        }
+        return top.map(line(for:)).joined(separator: "\n")
+    }
+
+    /// The last `days` days of `type` runs set against the same number of days before
+    /// them: run count, distance, average pace and heart rate, and how many felt hard.
+    /// Capped at half of ``historyDays`` so the earlier window is inside the copy.
+    func compareRuns(type: WorkoutType?, days: Int) -> String {
+        let span = min(max(days, 7), Self.historyDays / 2)
+        let recentStart = now.addingTimeInterval(-Double(span) * 86_400)
+        let earlierStart = recentStart.addingTimeInterval(-Double(span) * 86_400)
+        let matching = runs.filter { type == nil || $0.type == type }
+        let recent = matching.filter { $0.date >= recentStart && $0.date <= now }
+        let earlier = matching.filter { $0.date >= earlierStart && $0.date < recentStart }
+        let kind = type.map { "\($0.displayName.lowercased()) runs" } ?? "runs"
+        guard !recent.isEmpty || !earlier.isEmpty else {
+            return "No \(kind) in the last \(span * 2) days."
+        }
+        return [
+            "Last \(span) days: \(periodSummary(recent, kind: kind))",
+            "The \(span) days before: \(periodSummary(earlier, kind: kind))",
+        ]
+        .joined(separator: "\n")
+    }
+
+    /// Race times the runner's current fitness predicts, with the pace for each. `meters`
+    /// limits it to one distance; nil lists all of ``predictionDistances``.
+    func racePredictions(for meters: Double?) -> String {
+        guard let vdot = fitnessVDOT else {
+            return "Not enough recent hard runs to predict race times."
+        }
+        let distances = Self.predictionDistances.filter { meters == nil || $0.meters == meters }
+        let lines = distances.compactMap { distance -> String? in
+            let seconds = PaceCalculatorService.predictedTime(vdot: vdot, distanceMeters: distance.meters)
+            guard seconds.isFinite, seconds > 0 else { return nil }
+            let pace = seconds / (distance.meters / 1_000)
+            return "\(distance.name): \(seconds.durationString), \(pace.paceString(unit: unit))"
+        }
+        guard !lines.isEmpty else { return "Not enough recent hard runs to predict race times." }
+        return (["Predicted from current fitness:"] + lines).joined(separator: "\n")
+    }
+
+    /// "4 runs, 32.0 km, 5:10 min/km average, avg HR 150, 1 felt hard", or "no runs".
+    private func periodSummary(_ period: [Run], kind: String) -> String {
+        guard !period.isEmpty else { return "no \(kind)" }
+        let meters = period.reduce(0) { $0 + $1.distanceMeters }
+        let seconds = period.reduce(0) { $0 + $1.durationSeconds }
+        var parts = [
+            "\(period.count) \(period.count == 1 ? "run" : "runs")",
+            meters.distanceString(unit: unit),
+        ]
+        if meters > 0, seconds > 0 {
+            parts.append("\((seconds / (meters / 1_000)).paceString(unit: unit)) average")
+        }
+        // Weighted by time, so a long run counts for more than a short shakeout.
+        let withHeartRate = period.filter { ($0.averageHeartRate ?? 0) > 0 && $0.durationSeconds > 0 }
+        let heartRateSeconds = withHeartRate.reduce(0) { $0 + $1.durationSeconds }
+        if heartRateSeconds > 0 {
+            let weighted = withHeartRate.reduce(0) { $0 + ($1.averageHeartRate ?? 0) * $1.durationSeconds }
+            parts.append("avg HR \(Int((weighted / heartRateSeconds).rounded()))")
+        }
+        let feltHard = period.filter { ($0.feel?.rawValue ?? 0) >= RunFeel.hard.rawValue }.count
+        if feltHard > 0 {
+            parts.append("\(feltHard) felt hard")
+        }
+        return parts.joined(separator: ", ")
+    }
 }
