@@ -219,35 +219,22 @@ jobs:
             xcrun simctl list devices available
             exit 1
           fi
+          # The image's preinstalled iPhones are paired with Watch simulators, and the
+          # parallel unit tests clone the iPhone. Cloning a paired iPhone fails with "The
+          # watchOS 27.0 simulator runtime is not available" on images whose watchOS
+          # runtime files are missing, before any test runs. A fresh iPhone of the same
+          # type and runtime has no pair, so there is nothing watchOS to clone.
+          read -r TYPE RUNTIME < <(xcrun simctl list devices -j \
+            | jq -r --arg udid "$UDID" \
+              '.devices | to_entries[] | .key as $rt | .value[] | select(.udid == $udid) | "\(.deviceTypeIdentifier) \($rt)"') || true
+          if [[ -n "$TYPE" && -n "$RUNTIME" ]] && FRESH=$(xcrun simctl create "$SIMULATOR (CI)" "$TYPE" "$RUNTIME"); then
+            UDID="$FRESH"
+          else
+            echo "::warning::Could not create an unpaired '$SIMULATOR'; using the preinstalled one."
+          fi
           echo "SIMULATOR_UDID=$UDID" >> "$GITHUB_ENV"
           # Boot is best-effort: the simulator may already be in Booted state.
           xcrun simctl boot "$UDID" || true
-
-      - name: Make sure the watchOS runtime is installed
-        # Same runner-image fault the App Store screenshots workflow works around: the
-        # watchOS 27.0 runtime is listed as available but its files are missing. The
-        # unit tests run in parallel, which clones the iPhone, and the clone fails with
-        # "The watchOS 27.0 simulator runtime is not available". Booting a Watch is the
-        # only real check; if it fails, download the runtime (about 7 minutes).
-        continue-on-error: true
-        timeout-minutes: 30
-        run: |
-          boot_watch() {
-            RUNTIME=$(xcrun simctl list runtimes -j \
-              | jq -r '[.runtimes[] | select(.platform == "watchOS" and .isAvailable)] | last | .identifier // empty')
-            [[ -n "$RUNTIME" ]] || return 1
-            WATCH=$(xcrun simctl list devices available -j \
-              | jq -r --arg rt "$RUNTIME" '(.devices[$rt] // [])[0].udid // empty')
-            [[ -n "$WATCH" ]] || return 1
-            xcrun simctl boot "$WATCH" || true   # fails harmlessly when already booted
-            xcrun simctl bootstatus "$WATCH" -b || return 1
-            xcrun simctl shutdown "$WATCH" || true
-          }
-          if ! boot_watch; then
-            echo "The Watch simulator didn't boot; downloading the watchOS runtime."
-            xcodebuild -downloadPlatform watchOS && boot_watch \
-              || echo "::warning::Still no bootable watchOS simulator; unit tests may fail to clone the iPhone."
-          fi
 
       - name: Build for testing
         # `-skipMacroValidation` / `-skipPackagePluginValidation`: both are interactive
