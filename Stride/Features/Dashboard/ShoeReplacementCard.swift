@@ -15,6 +15,8 @@ struct ShoeReplacementCard: View {
     @Query(RunWorkout.shoeMileageDescriptor) private var shoeRuns: [RunWorkout]
 
     @State private var dismissed = ShoeNudgeDismissals.load()
+    /// The pair whose "Retire them" was tapped, held until the runner confirms.
+    @State private var retireCandidate: Shoe?
 
     private var nudge: (shoe: Shoe, totalMeters: Double, wear: ShoeWearPolicy.Wear)? {
         ShoeWearPolicy.shoesToNudge(
@@ -41,8 +43,11 @@ struct ShoeReplacementCard: View {
                     Circle()
                         .fill(tone.opacity(0.15))
                         .frame(width: 48, height: 48)
+                    // No shoe in `StrideIconName`, so the SF Symbol, sized like the other tiles' glyphs.
                     Image(systemName: "shoeprints.fill")
-                        .font(.dsHeadline)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 20, height: 20)
                         .foregroundStyle(tone)
                 }
                 VStack(alignment: .leading, spacing: 3) {
@@ -55,7 +60,7 @@ struct ShoeReplacementCard: View {
                     }
                     .font(.bodyStrong)
                     Text("\(shoe.name) has covered \(total) of \(limit).")
-                        .font(.caption)
+                        .font(.dsCaption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
@@ -64,13 +69,30 @@ struct ShoeReplacementCard: View {
 
             HStack(spacing: 8) {
                 Button {
-                    ShoeAssignment.retire(shoe)
-                    context.saveOrLog("retiring a shoe from the dashboard")
+                    retireCandidate = shoe
                 } label: {
                     Text("Retire them")
                 }
                 // Secondary, not the route: retiring a pair isn't the screen's "go" action.
                 .buttonStyle(.strideButton(.secondary, compact: true))
+                // Retiring takes the pair out of rotation with no undo here, so ask first.
+                .confirmationDialog(
+                    "Retire these shoes?",
+                    isPresented: Binding(
+                        get: { retireCandidate != nil },
+                        set: { if !$0 { retireCandidate = nil } }
+                    ),
+                    titleVisibility: .visible
+                ) {
+                    Button("Retire", role: .destructive) {
+                        if let candidate = retireCandidate {
+                            ShoeAssignment.retire(candidate)
+                            context.saveOrLog("retiring a shoe from the dashboard")
+                        }
+                        retireCandidate = nil
+                    }
+                    Button("Cancel", role: .cancel) { retireCandidate = nil }
+                }
 
                 Button {
                     ShoeNudgeDismissals.dismiss(shoe.id, at: wear)

@@ -108,8 +108,8 @@ struct WeekCalendarView: View {
         if cal.component(.month, from: weekStart) == cal.component(.month, from: end) {
             return weekStart.formatted(.dateTime.month(.wide).year())
         }
-        return "\(weekStart.formatted(.dateTime.month(.abbreviated))) / "
-             + end.formatted(.dateTime.month(.abbreviated).year())
+        // The system's own interval format: "Oct – Nov 2026", or both years across December.
+        return (weekStart..<end).formatted(.interval.month(.abbreviated).year())
     }
 
     private var planWeekLabel: String? {
@@ -193,14 +193,14 @@ private struct DayCell: View {
     @ViewBuilder
     private func indicator(for workout: ScheduledWorkout) -> some View {
         if workout.isCompleted {
-            StrideIcon(name: .check, size: 8, color: dotColor(for: workout.workoutType), strokeWeight: 2.5)
+            StrideIcon(name: .check, size: 8, color: workout.workoutType.color, strokeWeight: 2.5)
         } else if differentiateWithoutColor {
             // Each type's own glyph, so the day is identifiable without reading the
             // colour. Sized to the strip's 10pt indicator row.
             StrideIcon(
                 name: workout.workoutType.strideIcon,
                 size: 9,
-                color: dotColor(for: workout.workoutType),
+                color: workout.workoutType.color,
                 strokeWeight: 2.2
             )
         } else {
@@ -208,7 +208,7 @@ private struct DayCell: View {
             // two full-width pills wouldn't fit under a 32pt date circle.
             let isLong = workout.workoutType == .longRun && sessions.count == 1
             RoundedRectangle(cornerRadius: AppRadius.micro)
-                .fill(dotColor(for: workout.workoutType))
+                .fill(workout.workoutType.color)
                 .frame(width: isLong ? 12 : 6, height: 6)
         }
     }
@@ -240,17 +240,6 @@ private struct DayCell: View {
         // about 2.8:1, so the number stays `.primary` (bold) like any other day.
         if isToday { return .onFill }
         return .primary
-    }
-
-    private func dotColor(for type: WorkoutType) -> Color {
-        switch type {
-        case .easy, .longRun:       return .zoneEasy
-        case .tempo:                return .zoneTempo
-        case .interval, .race:      return .zoneInterval
-        case .rest, .crossTraining: return Color.secondary
-        case .strength:             return .brand
-        case .walk:                 return .zoneRecovery
-        }
     }
 }
 
@@ -513,6 +502,7 @@ struct DashboardView: View {
                 // the sheet has no Close button and no drag-to-dismiss — the only exits
                 // are its two buttons, and both of them count as an answer.
                 .interactiveDismissDisabled(true)
+                .strideSheet()
             }
             .task(id: scenePhase) {
                 guard scenePhase == .active else { return }
@@ -873,27 +863,16 @@ struct DashboardView: View {
             }
         } label: {
             HStack(spacing: 10) {
+                // `onFill`, the style's text colour on the route: white on orange is 2.8:1 (U3a).
                 StrideIcon(name: .play, size: 18, color: .onFill, strokeWeight: 2.2)
                 Text(startButtonTitle(for: workout))
-                    .font(.dsHeadline.weight(.bold))
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, AppSpacing.lg)
-            // White on `Color.brand` is 2.84:1 — below even the 3.0 large-text bar,
-            // on the app's most-tapped control (U3a).
-            .foregroundStyle(.onFill)
-            // Inside the label so the press bounce scales the pill, not just its text.
-            .background(
-                RoundedRectangle(cornerRadius: AppRadius.lg)
-                    .fill(.route)
-                    .appGlow(.strong, color: .brand)
-            )
         }
-        .buttonStyle(BouncyButtonStyle())
+        .buttonStyle(.strideButton())
         .accessibilityIdentifier("dashboard.startScheduledWorkout.\(workout.workoutType.sessionKind.rawValue)")
     }
 
-    private func startButtonTitle(for workout: ScheduledWorkout) -> String {
+    private func startButtonTitle(for workout: ScheduledWorkout) -> LocalizedStringKey {
         let isStrength = workout.workoutType == .strength
         if Calendar.current.isDateInToday(selectedDate) {
             return isStrength ? "Start Strength Workout" : "Start This Workout"
@@ -955,15 +934,20 @@ struct DashboardView: View {
     /// runner's very first Home screen used to be this grey card — the same dead end shown
     /// for scrolling into December, on the one day they most need to be told things work.
     private var outsidePlanCard: some View {
-        emptyDayCard(
-            icon: .calendar,
-            tint: .secondary,
-            title: "Outside your plan",
-            subtitle: activePlan.map { plan in
-                "Your plan ran \(plan.startDate.formatted(.dateTime.month().day())) – "
-                    + "\(plan.endDate.formatted(.dateTime.month().day()))."
-            } ?? "This day isn't part of your training plan."
-        )
+        VStack(spacing: AppSpacing.sm) {
+            emptyDayCard(
+                icon: .calendar,
+                tint: .secondary,
+                title: "Outside your plan",
+                subtitle: activePlan.map { plan in
+                    "Your plan ran \(plan.startDate.formatted(.dateTime.month().day())) – "
+                        + "\(plan.endDate.formatted(.dateTime.month().day()))."
+                } ?? "This day isn't part of your training plan."
+            )
+            // A way on from the dead end, like the no-plan card's "Create a Plan".
+            Button("View Plan") { container.appNavigation.select(.plan) }
+                .buttonStyle(.strideButton(.secondary, compact: true))
+        }
     }
 
     // MARK: - Up Next
@@ -1068,24 +1052,10 @@ struct DashboardView: View {
             HStack(spacing: 10) {
                 StrideIcon(name: .run, size: 20, color: .onFill, strokeWeight: 2.0)
                 Text(freeRunButtonTitle)
-                    .font(.dsHeadline.weight(.bold))
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, AppSpacing.lg)
-            .foregroundStyle(.onFill)
-            // Inside the label, not on the `Button`: `BouncyButtonStyle` scales
-            // `configuration.label`, so a background applied outside it would stay put
-            // while the text shrank inside a stationary pill.
-            .background(
-                RoundedRectangle(cornerRadius: AppRadius.lg)
-                    .fill(.route)
-                    .appGlow(.strong, color: .brand)
-            )
         }
+        .buttonStyle(.strideButton())
         .accessibilityIdentifier("dashboard.startFreeRun")
-        // `.plain` gave the app's two most-tapped controls no press response at all,
-        // while `BouncyButtonStyle` sat on seven onboarding buttons (U10).
-        .buttonStyle(BouncyButtonStyle())
     }
 
     /// The app's most-tapped control has a second job since U7: a run can be minimised
@@ -1186,7 +1156,8 @@ struct DashboardView: View {
     }
 
     /// Asks Apple's model (the runner's AI Coach choice, Private Cloud Compute by
-    /// default) to reword whichever Coach Tips have no wording for their current text yet. The hard-coded copy stays on screen until an answer passes
+    /// default) to reword whichever Coach Tips have no wording for their current text yet.
+    /// The hard-coded copy stays on screen until an answer passes
     /// `CoachTipRewriter`'s checks, and stays for good on a card whose rewrite does not.
     ///
     /// Held back in UI tests and unit-test hosting, where the copy has to be the
@@ -1242,7 +1213,10 @@ struct DashboardView: View {
 
     private func handlePickUp(info: MissedWorkoutInfo) {
         guard let plan = activePlan, !isHandlingRecovery else { return }
-        runRecovery(failureMessage: "We couldn't move your missed workouts forward.") {
+        runRecovery(failureMessage: String(
+            localized: "We couldn't move your missed workouts forward.",
+            comment: "Alert message when shifting missed workouts fails"
+        )) {
             let outcome = try container.planLifecycle.shiftMissedWorkoutsForward(
                 plan: plan,
                 by: info.daysToShift,
@@ -1259,22 +1233,32 @@ struct DashboardView: View {
     private func pickUpNotice(for outcome: MissedWorkoutShift.Outcome) -> String? {
         guard outcome.wasClampedByRace else { return nil }
         guard !outcome.wasBlockedByRace else {
-            return """
-            Your remaining sessions are already as close to race day as they can go, \
-            so nothing moved. Rebuild My Plan will fit a fresh block into the time you \
-            have left.
-            """
+            return String(
+                localized: """
+                    Your remaining sessions are already as close to race day as they can go, \
+                    so nothing moved. Rebuild My Plan will fit a fresh block into the time you \
+                    have left.
+                    """,
+                comment: "Alert message when race day blocked the missed-workout shift entirely"
+            )
         }
-        let dayWord = outcome.appliedDays == 1 ? "day" : "days"
-        return """
-        Moved your remaining sessions forward by \(outcome.appliedDays) \(dayWord) — \
-        any further and they'd land on or after race day.
-        """
+        // Inflection only happens in an `AttributedString`, so build one and take its text.
+        let message = AttributedString(
+            localized: """
+                Moved your remaining sessions forward by ^[\(outcome.appliedDays) day](inflect: true) — \
+                any further and they'd land on or after race day.
+                """,
+            comment: "Alert message when race day limited the missed-workout shift"
+        )
+        return String(message.characters)
     }
 
     private func handleRebuild() {
         guard let plan = activePlan, let profile = profiles.first, !isHandlingRecovery else { return }
-        runRecovery(failureMessage: "We couldn't rebuild your plan.") {
+        runRecovery(failureMessage: String(
+            localized: "We couldn't rebuild your plan.",
+            comment: "Alert message when rebuilding the plan fails"
+        )) {
             try container.planLifecycle.rebuildPlan(
                 replacing: plan,
                 profile: profile,
@@ -1308,11 +1292,14 @@ struct DashboardView: View {
                     flagMissedWorkoutPrompt()
                 }
                 recoveryAlert = result.notice.map {
-                    RecoveryAlert(title: "Race day is in the way", message: $0)
+                    RecoveryAlert(
+                        title: String(localized: "Race day is in the way", comment: "Plan recovery alert title"),
+                        message: $0
+                    )
                 }
             } catch {
                 recoveryAlert = RecoveryAlert(
-                    title: "Couldn't update your plan",
+                    title: String(localized: "Couldn't update your plan", comment: "Plan recovery alert title"),
                     message: "\(failureMessage)\n\n\(error.localizedDescription)"
                 )
                 AppLogger.log("Plan recovery failed: \(error)", label: "Dashboard", level: .error)
@@ -1336,7 +1323,7 @@ private struct ProgressRingView: View {
     var body: some View {
         ZStack {
             Circle()
-                .stroke(Color.brand.opacity(0.15), lineWidth: lineWidth)
+                .stroke(Color.surfaceTertiary, lineWidth: lineWidth)
             Circle()
                 .trim(from: 0, to: hasAppeared ? progress : 0)
                 .stroke(.route, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))

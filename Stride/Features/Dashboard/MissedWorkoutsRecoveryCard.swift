@@ -17,9 +17,12 @@ struct MissedWorkoutsRecoveryCard: View {
         .background(cardBackground)
         .overlay {
             if isLoading {
-                RoundedRectangle(cornerRadius: AppRadius.lg)
-                    .fill(.regularMaterial)
-                    .overlay { ProgressView() }
+                RoundedRectangle(cornerRadius: AppRadius.lg, style: .continuous)
+                    .fill(Color.surfaceSecondary.opacity(0.85))
+                    .overlay {
+                        ProgressView()
+                            .accessibilityLabel(Text("Updating your plan"))
+                    }
             }
         }
         .allowsHitTesting(!isLoading)
@@ -36,73 +39,32 @@ struct MissedWorkoutsRecoveryCard: View {
                 StrideIcon(name: .flag, size: 20, color: .warning, strokeWeight: 2.2)
             }
             VStack(alignment: .leading, spacing: 3) {
-                Text("You've missed \(info.count) workout\(info.count == 1 ? "" : "s")")
+                // `inflect` lets each language pick its own plural, rather than a hand-added "s".
+                Text("You've missed ^[\(info.count) workout](inflect: true)")
                     .font(.bodyStrong)
                 Text(subtitleText)
-                    .font(.caption)
+                    .font(.dsCaption)
                     .foregroundStyle(.secondary)
             }
             Spacer()
         }
     }
 
-    private var subtitleText: String {
-        info.daysToShift == 1
-            ? "Your plan is 1 day behind schedule."
-            : "Your plan is \(info.daysToShift) days behind schedule."
+    private var subtitleText: LocalizedStringKey {
+        "Your plan is ^[\(info.daysToShift) day](inflect: true) behind schedule."
     }
 
     // MARK: - Actions
 
     private var actionButtons: some View {
         VStack(spacing: 8) {
-            primaryButton(
-                title: "Pick up where I left off",
-                action: onPickUpWhereLeftOff
-            )
-            secondaryButton(
-                title: "Rebuild from today",
-                action: onRebuild
-            )
-            Button(action: onDismiss) {
-                Text("Skip missed workouts")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 6)
-            }
-            .buttonStyle(.plain)
+            Button("Pick up where I left off", action: onPickUpWhereLeftOff)
+                .buttonStyle(.strideButton(.secondary)) // Start is Home's one primary
+            Button("Rebuild from today", action: onRebuild)
+                .buttonStyle(.strideButton(.quiet, compact: true))
+            Button("Skip missed workouts", action: onDismiss)
+                .buttonStyle(.strideButton(.quiet, compact: true))
         }
-    }
-
-    private func primaryButton(title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.dsSubhead.weight(.semibold))
-                .foregroundStyle(.onFill)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, AppSpacing.md)
-                .background(
-                    RoundedRectangle(cornerRadius: AppRadius.md)
-                        .fill(Color.brand)
-                )
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func secondaryButton(title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.dsSubhead.weight(.medium))
-                .foregroundStyle(.primary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, AppSpacing.md)
-                .background(
-                    RoundedRectangle(cornerRadius: AppRadius.md)
-                        .fill(Color.surfaceSecondary)
-                )
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: - Background
