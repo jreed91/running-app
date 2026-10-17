@@ -152,4 +152,17 @@ struct CoachPromptBudgetTests {
         #expect(!trimmed.contains("Sep 19, 2026"))
         #expect(trimmed.contains("Sep 18, 2026"))
     }
+
+    @Test("No tools reserve nothing; each tool adds its text, schema and a share of calls")
+    func toolReserve() {
+        #expect(CoachPromptBudget.toolReserve(toolTexts: []) == 0)
+        let text = "findRuns Finds the runner's past runs."
+        let one = CoachPromptBudget.toolReserve(toolTexts: [text])
+        let expectedOne = CoachPromptBudget.estimatedTokenCount(of: text)
+            + CoachPromptBudget.schemaTokensPerTool
+            + CoachPromptBudget.expectedToolCalls * CoachPromptBudget.tokensPerToolCall
+        #expect(one == expectedOne)
+        let two = CoachPromptBudget.toolReserve(toolTexts: [text, text])
+        #expect(two - one == CoachPromptBudget.estimatedTokenCount(of: text) + CoachPromptBudget.schemaTokensPerTool)
+    }
 }

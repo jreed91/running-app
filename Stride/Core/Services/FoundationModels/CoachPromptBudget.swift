@@ -41,6 +41,30 @@ enum CoachPromptBudget {
     /// is estimated.
     static let charactersPerToken = 3
 
+    /// Tokens a session with tools holds back before the prompt is sized.
+    ///
+    /// Tools cost context twice. Each tool's name, description and argument schema go
+    /// into the prompt verbatim, and every call the model makes adds its arguments and
+    /// the tool's answer to the transcript before the reply is written. Neither is in
+    /// the prompt string `estimatedTokenCount(of:)` measures, so without this a prompt
+    /// that fits on its own can overflow the on-device window once tools are attached.
+    ///
+    /// - Parameter toolTexts: each tool's name and description.
+    static func toolReserve(toolTexts: [String]) -> Int {
+        guard !toolTexts.isEmpty else { return 0 }
+        return toolTexts.reduce(0) { $0 + estimatedTokenCount(of: $1) + schemaTokensPerTool }
+            + expectedToolCalls * tokensPerToolCall
+    }
+
+    /// A generous estimate of one tool's argument schema in the prompt: two or three
+    /// fields, each with a short guide and a range or an enum's cases.
+    static let schemaTokensPerTool = 60
+    /// Lookups a typical answer makes. More are allowed; this sizes the reserve.
+    static let expectedToolCalls = 2
+    /// One call's arguments and answer: up to `CoachLookup.maximumRows` lines of about a
+    /// hundred characters each.
+    static let tokensPerToolCall = 350
+
     /// Roughly how many tokens `text` will cost, rounded up.
     static func estimatedTokenCount(of text: String) -> Int {
         (text.count + charactersPerToken - 1) / charactersPerToken

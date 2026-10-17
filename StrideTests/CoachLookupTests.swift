@@ -175,11 +175,22 @@ struct CoachLookupTests {
 
     @Test func toolsNoteIsAddedOnlyWithALookup() {
         #expect(CoachLookup.instructions("Base.", withToolsFor: nil) == "Base.")
-        let withTools = CoachLookup.instructions("Base.", withToolsFor: lookup)
-        #expect(withTools.hasPrefix("Base.\n\n"))
-        for tool in ["findRuns", "rankRuns", "weeklyTotals", "compareRuns", "planSessions", "racePredictions"] {
-            #expect(withTools.contains(tool))
-        }
+        let withTools = CoachLookup.instructions("Base.", withToolsFor: lookup, today: now)
+        #expect(withTools.hasPrefix("Base.\n\n" + CoachLookup.instructionsNote))
+        // Tool names live in the tools' own descriptions, which the framework already
+        // puts in the prompt; the note does not repeat them.
+        #expect(!withTools.contains("findRuns"))
+    }
+
+    @Test func toolsNoteSaysWhichDayTheToolsCountFrom() {
+        let chat = CoachLookup.instructions("Base.", withToolsFor: lookup, today: now)
+        #expect(chat.hasSuffix("Today is Thu 15 Oct 2026. The tools count days back from today."))
+
+        let later = now.addingTimeInterval(3 * 86_400)
+        let runRead = CoachLookup.instructions("Base.", withToolsFor: lookup, today: later)
+        #expect(runRead.hasSuffix(
+            "This run was on Thu 15 Oct 2026. The tools count days back from that day and leave this run out."
+        ))
     }
 
     // MARK: Service

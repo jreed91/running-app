@@ -9,6 +9,10 @@ import FoundationModels
 // a thin wrapper: the query and its formatting live in `CoachLookup`, where they are
 // tested without the framework. The tools are `Sendable` value types holding a plain copy
 // of the data, as Apple's `Tool` protocol requires, and none of them can write anything.
+//
+// Names and descriptions follow Apple's guidance for tools: a short verb-led name in
+// plain English, and a one-sentence description of what the tool gives back, with no
+// implementation detail. Both go into the prompt verbatim, so every word costs tokens.
 
 /// The kinds of run a tool can filter by. A closed set so the model cannot ask for a
 /// type the app does not have.
@@ -63,7 +67,7 @@ struct FindRunsTool: Tool {
 struct WeeklyTotalsTool: Tool {
     let lookup: CoachLookup
 
-    let name = "weeklyTotals"
+    let name = "getWeeklyTotals"
     let description = "Gives the runner's total distance and number of runs for each recent week, newest first."
 
     @Generable
@@ -81,7 +85,7 @@ struct WeeklyTotalsTool: Tool {
 struct PlanSessionsTool: Tool {
     let lookup: CoachLookup
 
-    let name = "planSessions"
+    let name = "getPlanSessions"
     let description = "Lists the runner's planned runs around today, with type, distance and whether each was done, missed or is still to come."
 
     @Generable
@@ -117,7 +121,7 @@ extension CoachRunRanking {
     }
 }
 
-/// The race distances `racePredictions` answers for.
+/// The race distances `predictRaceTimes` answers for.
 @available(iOS 26.0, *)
 @Generable
 enum CoachRaceDistance: String, Sendable {
@@ -194,7 +198,7 @@ struct CompareRunsTool: Tool {
 struct RacePredictionsTool: Tool {
     let lookup: CoachLookup
 
-    let name = "racePredictions"
+    let name = "predictRaceTimes"
     let description = "Gives the race times and paces the runner's current fitness predicts for 5K, 10K, half marathon and marathon."
 
     @Generable

@@ -212,34 +212,50 @@ struct CoachLookup: Sendable, Equatable {
         return parts.joined(separator: ", ")
     }
 
-    /// "Tue 14 Oct", in English like every coach prompt whatever the device language.
-    /// A formatter per call, as `GPXExport` does: a shared static one is not `Sendable`.
-    static func dayLabel(_ date: Date) -> String {
+    /// "Tue 14 Oct" ("Tue 14 Oct 2026" `withYear`), in English like every coach prompt
+    /// whatever the device language. A formatter per call, as `GPXExport` does: a shared
+    /// static one is not `Sendable`.
+    static func dayLabel(_ date: Date, withYear: Bool = false) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = .current
-        formatter.dateFormat = "EEE d MMM"
+        formatter.dateFormat = withYear ? "EEE d MMM yyyy" : "EEE d MMM"
         return formatter.string(from: date)
     }
 
     // MARK: Instructions
 
-    /// `base`, with ``instructionsNote`` appended when `lookup` brings tools. Without
-    /// one the instructions are exactly what they were before tools existed.
-    static func instructions(_ base: String, withToolsFor lookup: CoachLookup?) -> String {
-        guard lookup != nil else { return base }
-        return base + "\n\n" + instructionsNote
+    /// `base`, with ``instructionsNote`` and the day the tools count from appended when
+    /// `lookup` brings tools. Without one the instructions are exactly what they were
+    /// before tools existed.
+    ///
+    /// The tool names and descriptions are not repeated here: Foundation Models already
+    /// puts each one in the prompt verbatim, so listing them again only costs tokens.
+    /// What the note adds is what the descriptions cannot say: that a tool's answer
+    /// counts as supplied data (both base instructions say to use only what is given, and
+    /// the chat one says to ask when something is missing), and the date the model needs
+    /// to turn "this month" or "since September" into a number of days.
+    static func instructions(_ base: String, withToolsFor lookup: CoachLookup?, today: Date = Date()) -> String {
+        guard let lookup else { return base }
+        return base + "\n\n" + instructionsNote + "\n" + anchorLine(for: lookup, today: today)
     }
 
     /// Added to a request's instructions only when tools come with it.
     static let instructionsNote = """
-    You can look up this runner's training log with tools: findRuns for past runs by kind \
-    and how many days back, rankRuns for their fastest, longest or highest heart rate runs, \
-    weeklyTotals for distance per week, compareRuns to set recent weeks against the weeks \
-    before, planSessions for the planned runs around today, and racePredictions for what \
-    current fitness says they could race. Use a tool when the answer needs history or plan \
-    details that are not already given, and use only what it returns. Never mention the tools.
+    You have tools that look things up in this runner's training log. Before you say \
+    something is missing, check whether a tool can find it, and treat what a tool \
+    returns as supplied data. Look up only what the answer needs. Never mention the tools.
     """
+
+    /// The day the tools count "days back" from: today in the chat, the run's own day in
+    /// a run read (see ``make(context:plan:unit:excluding:now:)``).
+    static func anchorLine(for lookup: CoachLookup, today: Date) -> String {
+        let day = dayLabel(lookup.now, withYear: true)
+        if Calendar.current.isDate(lookup.now, inSameDayAs: today) {
+            return "Today is \(day). The tools count days back from today."
+        }
+        return "This run was on \(day). The tools count days back from that day and leave this run out."
+    }
 }
 
 // MARK: - Rankings, comparisons and predictions
