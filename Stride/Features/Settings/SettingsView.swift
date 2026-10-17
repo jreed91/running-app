@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import AuthenticationServices
+import UserNotifications
 #if canImport(PulseUI)
 import PulseUI
 #endif
@@ -30,6 +31,11 @@ struct SettingsView: View {
     /// Shown when the archive could not be written, rather than the tap doing nothing.
     @State private var dataExportErrorMessage: String?
     @State private var notificationTestStatus: String?
+    /// Whether iOS has notifications switched off for Stride. Re-read on every return to
+    /// the foreground, since the place the runner fixes it is the Settings app.
+    @State private var notificationsDeniedBySystem = false
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.openURL) private var openURL
     /// Private Cloud Compute availability + daily quota, refreshed whenever the model
     /// picker changes. `nil` until read, and on devices with no server model at all.
     ///
@@ -235,6 +241,10 @@ struct SettingsView: View {
 
     private var notificationsCard: some View {
         settingsSection("Notifications") {
+            if notificationsDeniedBySystem {
+                notificationsDeniedRow
+                rowDivider
+            }
             settingsRow(icon: .bell, iconColor: .brand, title: "Morning Reminder") {
                 Toggle("Morning Reminder", isOn: Bindable(appSettings).morningReminderEnabled)
                     .labelsHidden()
@@ -258,6 +268,18 @@ struct SettingsView: View {
                             await container.notificationService.scheduleMorningReminders(for: plan)
                         }
                     }
+            }
+            if appSettings.morningReminderEnabled {
+                rowDivider
+                settingsRow(icon: .timer, iconColor: .brand, title: "Reminder Time") {
+                    DatePicker(
+                        "Reminder Time",
+                        selection: morningReminderTimeBinding,
+                        displayedComponents: .hourAndMinute
+                    )
+                    .labelsHidden()
+                    .accessibilityIdentifier("settings.morningReminderTime")
+                }
             }
             rowDivider
             settingsRow(icon: .trophy, iconColor: .brand, title: "Training Nudges") {
@@ -316,6 +338,55 @@ struct SettingsView: View {
                 .padding(.trailing, AppSpacing.lg)
                 .padding(.bottom, 10)
         }
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+            notificationsDeniedBySystem = status == .denied
+        }
+    }
+
+    /// Shown only when iOS has notifications off for Stride. Every toggle below reads "on"
+    /// in that state and none of them can deliver, so the card says so and links to the
+    /// one switch that matters, rather than leaving the runner wondering why nothing comes.
+    private var notificationsDeniedRow: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            Text("Notifications are off for Stride in iOS Settings, so none of these reminders can reach you.")
+                .font(.dsCaption)
+                .foregroundStyle(.secondary)
+            Button("Open Notification Settings") {
+                guard let url = URL(string: UIApplication.openNotificationSettingsURLString) else { return }
+                openURL(url)
+            }
+            .font(.dsCaption)
+            .accessibilityIdentifier("settings.openNotificationSettings")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, AppSpacing.lg)
+        .padding(.vertical, AppSpacing.md)
+    }
+
+    /// The reminder time as a `Date` for `DatePicker`, stored as minutes after midnight.
+    /// Setting it reschedules the reminders straight away, the same as the toggle does.
+    private var morningReminderTimeBinding: Binding<Date> {
+        Binding(
+            get: {
+                let minutes = appSettings.morningReminderMinuteOfDay
+                return Calendar.current.date(
+                    bySettingHour: minutes / 60,
+                    minute: minutes % 60,
+                    second: 0,
+                    of: Date()
+                ) ?? Date()
+            },
+            set: { newValue in
+                let parts = Calendar.current.dateComponents([.hour, .minute], from: newValue)
+                let minutes = (parts.hour ?? 8) * 60 + (parts.minute ?? 0)
+                guard minutes != appSettings.morningReminderMinuteOfDay else { return }
+                appSettings.morningReminderMinuteOfDay = minutes
+                guard let plan = activePlans.first else { return }
+                Task { await container.notificationService.scheduleMorningReminders(for: plan) }
+            }
+        )
     }
 
     // MARK: - During a Run card
@@ -645,7 +716,7 @@ struct SettingsView: View {
                             try await container.notificationService.requestAuthorization()
                         }
                         try await container.notificationService.triggerAllTestNotifications(in: context)
-                        notificationTestStatus = "Sent workout, morning, and synced-run test notifications."
+                        notificationTestStatus = "Sent morning, synced-run and training-nudge test notifications."
                     } catch {
                         notificationTestStatus = "Failed to send test notifications: \(error.localizedDescription)"
                     }

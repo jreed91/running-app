@@ -33,6 +33,11 @@ final class WorkoutSyncService {
     /// Called on MainActor after each batch of new workouts is imported and auto-linked.
     var onWorkoutsSynced: (([RunWorkout]) -> Void)?
 
+    /// Called after any pass that imported at least one run, large batches included, so
+    /// the notifications that depend on the runs (the streak nudge, the weekly recap) are
+    /// re-armed even when the import happened in the background with no scene.
+    var onRunsImported: (@MainActor () async -> Void)?
+
     // MARK: Init
 
     init(
@@ -211,13 +216,13 @@ final class WorkoutSyncService {
                 )
             }
 
-            // The evening streak nudge is otherwise only taken down by
-            // `ContentView.refreshTrainingNudges`, which needs a scene. A run recorded on
-            // the Watch or in another app arrives here with the app in the background and
-            // no scene connected, and the 18:00 banner would tell the runner they have
-            // not run today straight after they did.
-            if newWorkouts.runsOnly.contains(where: { Calendar.current.isDateInToday($0.date) }) {
-                await rearmStreakNudgeAfterTodaysRun()
+            // The evening streak nudge is otherwise only re-armed by the foreground
+            // refresh, which needs a scene. A run recorded on the Watch or in another app
+            // arrives here with the app in the background and no scene connected, and the
+            // 18:00 banner would tell the runner they have not run today straight after
+            // they did.
+            if !newWorkouts.runsOnly.isEmpty {
+                await onRunsImported?()
             }
 
             for workout in newWorkouts {
@@ -255,21 +260,6 @@ final class WorkoutSyncService {
         await syncWalkingWorkouts(source: source, lookbackCutoff: cutoff, existingIDs: existingIDs)
         await syncCrossTrainingWorkouts(source: source, lookbackCutoff: cutoff, existingIDs: existingIDs)
         await syncStrengthWorkouts(source: source, lookbackCutoff: cutoff)
-    }
-
-    /// Takes tonight's streak nudge down and arms tomorrow's in its place — what
-    /// `ContentView.refreshTrainingNudges` does on a foreground, for a run that arrived
-    /// with no scene to run that.
-    private func rearmStreakNudgeAfterTodaysRun() async {
-        notificationService.cancelTrainingNudge(.streak)
-        guard AppSettings.syncedTrainingNudgesEnabled() else { return }
-        let runs = (try? context.fetch(
-            RunWorkout.runsOnlyDescriptor(fetchLimit: TrainingNudgePolicy.streakRunSampleSize)
-        )) ?? []
-        let streak = StreakGoalService.streak(for: runs)
-        if let tomorrow = TrainingNudgePolicy.tomorrowStreakNudge(for: streak) {
-            await notificationService.scheduleTomorrowStreakNudge(tomorrow)
-        }
     }
 
     // MARK: - Walking workout sync

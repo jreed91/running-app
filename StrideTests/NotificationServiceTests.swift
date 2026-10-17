@@ -107,6 +107,62 @@ struct NotificationServiceTests {
         #expect(afterEight.isEmpty)
     }
 
+    @Test("The morning reminder fires at the runner's chosen time, not a fixed 8 AM")
+    func morningReminderHonoursChosenTime() {
+        let workout = ScheduledWorkout(scheduledDate: date(2026, 7, 15, 14, 0), workoutType: .easy)
+
+        let fire = NotificationService.morningFireDate(for: workout, calendar: calendar, minuteOfDay: 6 * 60 + 45)
+
+        #expect(fire == date(2026, 7, 15, 6, 45))
+        // And the candidate filter uses the same time: at 07:00 a 06:45 reminder has gone.
+        let plan = makePlan(start: date(2026, 7, 15), workouts: [workout])
+        #expect(NotificationService.morningReminderCandidates(
+            for: plan, now: date(2026, 7, 15, 7, 0), calendar: calendar, minuteOfDay: 6 * 60 + 45
+        ).isEmpty)
+    }
+
+    @Test("The morning reminder names the session's distance when it has one")
+    func morningReminderBodyCarriesDistance() {
+        let withDistance = ScheduledWorkout(scheduledDate: date(2026, 7, 15), workoutType: .tempo)
+        withDistance.targetDistanceMeters = 8_000
+        let withoutDistance = ScheduledWorkout(scheduledDate: date(2026, 7, 15), workoutType: .strength)
+
+        let body = NotificationService.morningReminderBody(for: withDistance, unit: .metric)
+        let fallback = NotificationService.morningReminderBody(for: withoutDistance, unit: .metric)
+
+        #expect(body.contains(WorkoutType.tempo.localizedName))
+        #expect(body.contains(8_000.0.distanceString(unit: .metric)))
+        #expect(fallback.contains(WorkoutType.strength.localizedName))
+    }
+
+    @Test("A snooze lands an hour later, and is dropped when that would be tomorrow")
+    func snoozeStaysWithinTheDay() {
+        let evening = date(2026, 7, 15, 18, 0)
+        #expect(NotificationService.snoozedFireDate(now: evening, calendar: calendar) == date(2026, 7, 15, 19, 0))
+
+        let lateNight = date(2026, 7, 15, 23, 30)
+        #expect(NotificationService.snoozedFireDate(now: lateNight, calendar: calendar) == nil)
+    }
+
+    @Test("The background refresh asks for the next 16:00, today's if it is still ahead")
+    func backgroundRefreshAsksForTheNextAfternoon() {
+        let morning = date(2026, 7, 15, 9, 0)
+        let evening = date(2026, 7, 15, 20, 0)
+
+        #expect(NotificationRefreshService.nextBackgroundRefreshDate(now: morning, calendar: calendar)
+            == date(2026, 7, 15, NotificationRefreshService.backgroundRefreshHour, 0))
+        #expect(NotificationRefreshService.nextBackgroundRefreshDate(now: evening, calendar: calendar)
+            == date(2026, 7, 16, NotificationRefreshService.backgroundRefreshHour, 0))
+    }
+
+    @Test("A stored reminder time is clamped into one day, and missing means 8 AM")
+    func reminderTimeIsClamped() {
+        #expect(AppSettings.minuteOfDay(nil) == 8 * 60)
+        #expect(AppSettings.minuteOfDay(-5) == 0)
+        #expect(AppSettings.minuteOfDay(5_000) == 24 * 60 - 1)
+        #expect(AppSettings.minuteOfDay(405) == 405)
+    }
+
     // MARK: Review-snapshot pruning (S3)
 
     /// Stale review snapshots (full run copies in UserDefaults) for runs that have

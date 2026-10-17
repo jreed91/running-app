@@ -106,8 +106,31 @@ final class NotificationService: NSObject {
     /// A training-nudge tap that woke the app before any listener existed.
     private var bufferedTrainingNudgeKind: TrainingNudgeKind?
 
+    /// Taps on a morning reminder. Carries nothing but the fact of the tap: the reminder
+    /// is about today's session, and the Plan tab is where today's session is. Same shape
+    /// as the streams above (D4).
+    var workoutReminderTaps: AsyncStream<Void> {
+        AsyncStream(bufferingPolicy: .unbounded) { continuation in
+            let id = UUID()
+            workoutReminderTapListeners[id] = continuation
+            if hasBufferedWorkoutReminderTap {
+                hasBufferedWorkoutReminderTap = false
+                continuation.yield(())
+            }
+            continuation.onTermination = { [weak self] _ in
+                Task { @MainActor in self?.workoutReminderTapListeners[id] = nil }
+            }
+        }
+    }
+
+    private var workoutReminderTapListeners: [UUID: AsyncStream<Void>.Continuation] = [:]
+
+    /// A morning-reminder tap that woke the app before any listener existed.
+    private var hasBufferedWorkoutReminderTap = false
+
     func installAsDelegate() {
         center.delegate = self
+        center.setNotificationCategories(Self.categories)
     }
 
     // Notification category identifiers
@@ -115,7 +138,52 @@ final class NotificationService: NSObject {
         static let workoutReminder = "WORKOUT_REMINDER"
         static let syncedRun       = "SYNCED_RUN"
         static let heatAdvisory    = "HEAT_ADVISORY"
+        /// The streak nudge and the missed-workout push: the two that offer a snooze.
         static let trainingNudge   = "TRAINING_NUDGE"
+        /// The Sunday recap. A category of its own only so it does not show the snooze
+        /// button — "remind me in an hour" about a summary of the week is meaningless.
+        static let weeklyRecap     = "WEEKLY_RECAP"
+    }
+
+    /// Action identifiers. The only action is a snooze: every other thing a banner could
+    /// offer (move the session, shift the plan) needs the screen it opens onto anyway.
+    private enum Action {
+        static let snooze = "SNOOZE_ONE_HOUR"
+    }
+
+    /// How far a snooze pushes the banner back.
+    nonisolated static let snoozeInterval: TimeInterval = 3_600
+
+    /// Registered on every launch, as Apple asks: the set is replaced, not merged.
+    private static var categories: Set<UNNotificationCategory> {
+        let snooze = UNNotificationAction(
+            identifier: Action.snooze,
+            title: String(
+                localized: "Remind Me in an Hour",
+                comment: "Notification action that snoozes a reminder for an hour"
+            ),
+            options: [],
+            icon: UNNotificationActionIcon(systemImageName: "clock")
+        )
+        return [
+            UNNotificationCategory(identifier: Category.workoutReminder, actions: [snooze], intentIdentifiers: []),
+            UNNotificationCategory(identifier: Category.trainingNudge, actions: [snooze], intentIdentifiers: [])
+        ]
+    }
+
+    /// `threadIdentifier`, `interruptionLevel` and `relevanceScore` for one kind of banner,
+    /// in one place. Threads stack each kind on its own in Notification Center; the score
+    /// decides which one leads a notification summary. The recap and "Run Synced" are
+    /// `.passive` — useful to find later, not worth lighting the screen for.
+    private static func style(
+        _ content: UNMutableNotificationContent,
+        thread: String,
+        relevance: Double,
+        level: UNNotificationInterruptionLevel = .active
+    ) {
+        content.threadIdentifier = thread
+        content.relevanceScore = relevance
+        content.interruptionLevel = level
     }
 
     /// `userInfo` key carrying a ``TrainingNudgeKind``'s raw value on a nudge.
@@ -152,7 +220,9 @@ final class NotificationService: NSObject {
     // MARK: Authorization
 
     func requestAuthorization() async throws {
-        try await center.requestAuthorization(options: [.alert, .sound, .badge])
+        // No `.badge`: Stride never sets a badge count, and asking for a permission the
+        // app does not use is one more line on the prompt for nothing.
+        try await center.requestAuthorization(options: [.alert, .sound])
     }
 
     var isAuthorized: Bool {
@@ -169,21 +239,18 @@ final class NotificationService: NSObject {
 
     // MARK: Scheduling
 
-    /// Schedules an 8 AM morning reminder on the day of a planned workout.
+    /// Schedules the morning reminder (08:00 unless the runner picked another time) on
+    /// the day of a planned workout.
     func scheduleMorningReminder(for workout: ScheduledWorkout) async throws {
         guard workout.workoutType != .rest else { return }
 
-        let content = UNMutableNotificationContent()
-        content.title = String(localized: "Workout today", comment: "Morning reminder notification title")
-        content.body = String(
-            localized: "You have a \(workout.workoutType.localizedName) workout scheduled today. Lace up!",
-            comment: "Morning reminder notification body"
-        )
-        content.sound = .default
-        content.categoryIdentifier = Category.workoutReminder
+        let content = Self.morningReminderContent(for: workout, unit: AppSettings.syncedUnitPreference())
 
         guard
-            let fireDate = Self.morningFireDate(for: workout),
+            let fireDate = Self.morningFireDate(
+                for: workout,
+                minuteOfDay: AppSettings.syncedMorningReminderMinuteOfDay()
+            ),
             fireDate > Date()
         else { return }
 
@@ -244,13 +311,14 @@ final class NotificationService: NSObject {
         for plan: TrainingPlan,
         now: Date = Date(),
         calendar: Calendar = .current,
+        minuteOfDay: Int = AppSettings.syncedMorningReminderMinuteOfDay(),
         limit: Int = maxScheduledMorningReminders
     ) -> [ScheduledWorkout] {
         let upcoming = (plan.weeks ?? [])
             .flatMap { $0.workouts ?? [] }
             .filter { workout in
                 guard !workout.isCompleted, workout.workoutType != .rest,
-                      let fireDate = morningFireDate(for: workout, calendar: calendar)
+                      let fireDate = morningFireDate(for: workout, calendar: calendar, minuteOfDay: minuteOfDay)
                 else { return false }
                 return fireDate > now
             }
@@ -258,17 +326,58 @@ final class NotificationService: NSObject {
         return Array(upcoming.prefix(limit))
     }
 
-    /// 8 AM on the workout's scheduled day.
+    /// The reminder time (`minuteOfDay` after midnight, 08:00 by default) on the
+    /// workout's scheduled day.
     static func morningFireDate(
         for workout: ScheduledWorkout,
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        minuteOfDay: Int = AppSettings.defaultMorningReminderMinuteOfDay
     ) -> Date? {
         var components = calendar.dateComponents([.year, .month, .day], from: workout.scheduledDate)
-        components.hour = 8
-        components.minute = 0
+        components.hour = minuteOfDay / 60
+        components.minute = minuteOfDay % 60
         components.second = 0
         return calendar.date(from: components)
     }
+
+    /// The morning reminder's content. Shared by the real schedule and the QA trigger so
+    /// the copy has one spelling.
+    static func morningReminderContent(
+        for workout: ScheduledWorkout,
+        unit: UnitPreference
+    ) -> UNMutableNotificationContent {
+        let content = UNMutableNotificationContent()
+        content.title = String(localized: "Workout today", comment: "Morning reminder notification title")
+        content.body = morningReminderBody(for: workout, unit: unit)
+        content.sound = .default
+        content.categoryIdentifier = Category.workoutReminder
+        content.userInfo = [workoutReminderIDKey: workout.id.uuidString]
+        style(content, thread: Category.workoutReminder, relevance: 0.6)
+        return content
+    }
+
+    /// "Tempo, 8 km today. Lace up!" — the session and its distance, so the banner says
+    /// what today is without opening the app. A session with no distance target (a
+    /// strength day, a time-based run) keeps the type alone.
+    ///
+    /// Internal rather than private so `NotificationServiceTests` can assert the distance
+    /// reaches the body.
+    static func morningReminderBody(for workout: ScheduledWorkout, unit: UnitPreference) -> String {
+        let type = workout.workoutType.localizedName
+        if let meters = workout.targetDistanceMeters, meters > 0 {
+            return String(
+                localized: "\(type), \(meters.distanceString(unit: unit)) today. Lace up!",
+                comment: "Morning reminder notification body naming the session and its distance"
+            )
+        }
+        return String(
+            localized: "You have a \(type) workout scheduled today. Lace up!",
+            comment: "Morning reminder notification body"
+        )
+    }
+
+    /// `userInfo` key carrying the scheduled workout's id on a morning reminder.
+    private nonisolated static let workoutReminderIDKey = "scheduledWorkoutID"
 
     func cancelMorningReminder(for workout: ScheduledWorkout) {
         center.removePendingNotificationRequests(withIdentifiers: [NotificationID.morning(workout)])
@@ -297,6 +406,7 @@ final class NotificationService: NSObject {
             "workoutID": workout.id.uuidString,
             "opensReviewOnTap": opensReviewOnTap
         ]
+        Self.style(content, thread: Category.syncedRun, relevance: 0.4, level: .passive)
         if opensReviewOnTap {
             storeReviewSnapshot(for: workout)
         }
@@ -324,6 +434,7 @@ final class NotificationService: NSObject {
         content.sound = .default
         content.categoryIdentifier = Category.syncedRun
         content.userInfo = ["opensReviewOnTap": false]
+        Self.style(content, thread: Category.syncedRun, relevance: 0.4, level: .passive)
         let request = UNNotificationRequest(
             identifier: "synced-run-batch-\(UUID().uuidString)",
             content: content,
@@ -397,6 +508,7 @@ final class NotificationService: NSObject {
         content.sound = .default
         content.categoryIdentifier = Category.heatAdvisory
         content.userInfo = ["heatAdvisoryWorkoutID": advisory.workoutID.uuidString]
+        Self.style(content, thread: Category.heatAdvisory, relevance: 0.7)
 
         let trigger: UNCalendarNotificationTrigger?
         switch delivery {
@@ -587,9 +699,7 @@ final class NotificationService: NSObject {
             return
         }
 
-        content.sound = .default
-        content.categoryIdentifier = Category.trainingNudge
-        content.userInfo = [Self.trainingNudgeKindKey: kind.rawValue]
+        Self.applyTrainingNudgeStyle(to: content, kind: kind)
 
         let request = UNNotificationRequest(
             identifier: NotificationID.trainingNudge(kind),
@@ -628,6 +738,24 @@ final class NotificationService: NSObject {
         }
         if includingLog {
             TrainingNudgeLog.clearAll(in: defaults)
+        }
+    }
+
+    /// Category, payload and presentation for a nudge, shared by the real schedule and the
+    /// QA trigger. The recap gets its own category (no snooze) and is `.passive`.
+    private static func applyTrainingNudgeStyle(to content: UNMutableNotificationContent, kind: TrainingNudgeKind) {
+        content.sound = .default
+        content.userInfo = [trainingNudgeKindKey: kind.rawValue]
+        switch kind {
+        case .streak:
+            content.categoryIdentifier = Category.trainingNudge
+            style(content, thread: Category.trainingNudge, relevance: 0.8)
+        case .missedWorkouts:
+            content.categoryIdentifier = Category.trainingNudge
+            style(content, thread: Category.trainingNudge, relevance: 0.5)
+        case .weeklyRecap:
+            content.categoryIdentifier = Category.weeklyRecap
+            style(content, thread: Category.weeklyRecap, relevance: 0.3, level: .passive)
         }
     }
 
@@ -739,7 +867,6 @@ final class NotificationService: NSObject {
     /// Triggers all local notification types immediately for TestFlight QA.
     /// Safe to call in other environments, but intended for internal builds only.
     func triggerAllTestNotifications(in context: ModelContext? = nil) async throws {
-        try await triggerWorkoutReminderTestNotification()
         try await triggerMorningReminderTestNotification()
         try await triggerSyncedRunTestNotification(in: context)
         try await triggerTrainingNudgeTestNotifications()
@@ -781,9 +908,7 @@ final class NotificationService: NSObject {
             let content = UNMutableNotificationContent()
             content.title = Self.trainingNudgeTitle(kind)
             content.body = body
-            content.sound = .default
-            content.categoryIdentifier = Category.trainingNudge
-            content.userInfo = [Self.trainingNudgeKindKey: kind.rawValue]
+            Self.applyTrainingNudgeStyle(to: content, kind: kind)
             let request = UNNotificationRequest(
                 identifier: "test-training-nudge-\(kind.rawValue)-\(UUID().uuidString)",
                 content: content,
@@ -793,39 +918,14 @@ final class NotificationService: NSObject {
         }
     }
 
-    func triggerWorkoutReminderTestNotification() async throws {
-        guard await isAuthorized else { return }
-        let workout = ScheduledWorkout(
-            scheduledDate: Date(),
-            workoutType: .tempo
-        )
-        let content = UNMutableNotificationContent()
-        content.title = String(localized: "Time to run!", comment: "Notification title at the scheduled workout time")
-        content.body = reminderBody(for: workout, minutesBefore: 0)
-        content.sound = .default
-        content.categoryIdentifier = Category.workoutReminder
-        let request = UNNotificationRequest(
-            identifier: "test-workout-reminder-\(UUID().uuidString)",
-            content: content,
-            trigger: nil
-        )
-        try await center.add(request)
-    }
-
     func triggerMorningReminderTestNotification() async throws {
         guard await isAuthorized else { return }
         let workout = ScheduledWorkout(
             scheduledDate: Date(),
             workoutType: .easy
         )
-        let content = UNMutableNotificationContent()
-        content.title = String(localized: "Workout today", comment: "Morning reminder notification title")
-        content.body = String(
-            localized: "You have a \(workout.workoutType.localizedName) workout scheduled today. Lace up!",
-            comment: "Morning reminder notification body"
-        )
-        content.sound = .default
-        content.categoryIdentifier = Category.workoutReminder
+        workout.targetDistanceMeters = 8_000
+        let content = Self.morningReminderContent(for: workout, unit: AppSettings.syncedUnitPreference())
         let request = UNNotificationRequest(
             identifier: "test-morning-reminder-\(UUID().uuidString)",
             content: content,
@@ -922,15 +1022,14 @@ final class NotificationService: NSObject {
         "\(reviewSnapshotKeyPrefix)\(idString)"
     }
 
-    private func reminderBody(for workout: ScheduledWorkout, minutesBefore: Int) -> String {
-        let type = workout.workoutType.localizedName
-        if minutesBefore == 0 {
-            return String(localized: "Your \(type) workout starts now. Lace up!", comment: "Reminder body, workout starting now")
+    private func handleWorkoutReminderTap() {
+        guard !workoutReminderTapListeners.isEmpty else {
+            hasBufferedWorkoutReminderTap = true
+            return
         }
-        return String(
-            localized: "Your \(type) workout is in \(minutesBefore) min. Get ready!",
-            comment: "Reminder body, workout starting soon"
-        )
+        for listener in workoutReminderTapListeners.values {
+            listener.yield(())
+        }
     }
 
     private func handleTrainingNudgeTap(kind: TrainingNudgeKind) {
@@ -1039,7 +1138,7 @@ extension NotificationService: UNUserNotificationCenterDelegate {
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
-        completionHandler([.banner, .list, .sound, .badge])
+        completionHandler([.banner, .list, .sound])
     }
 
     // Called when the user taps a delivered notification.
@@ -1050,7 +1149,21 @@ extension NotificationService: UNUserNotificationCenterDelegate {
     ) {
         let content = response.notification.request.content
 
-        if content.categoryIdentifier == Category.trainingNudge,
+        if response.actionIdentifier == Action.snooze {
+            Self.snooze(response.notification.request, in: center)
+            completionHandler()
+            return
+        }
+
+        if content.categoryIdentifier == Category.workoutReminder {
+            Task { @MainActor in
+                self.handleWorkoutReminderTap()
+            }
+            completionHandler()
+            return
+        }
+
+        if content.categoryIdentifier == Category.trainingNudge || content.categoryIdentifier == Category.weeklyRecap,
            let raw = content.userInfo[Self.trainingNudgeKindKey] as? String,
            let kind = TrainingNudgeKind(rawValue: raw) {
             Task { @MainActor in
@@ -1086,6 +1199,37 @@ extension NotificationService: UNUserNotificationCenterDelegate {
             self.handleSyncedRunTap(workoutID: workoutID)
         }
         completionHandler()
+    }
+
+    /// Re-delivers `request`'s content an hour from now under the **same identifier**, so
+    /// everything that cancels the original — today's run arriving, the setting going off
+    /// — cancels the snooze too.
+    ///
+    /// Dropped rather than rescheduled when the hour would cross midnight: the streak
+    /// nudge and the morning reminder are both about today, and neither means anything
+    /// tomorrow. Added without awaiting, so the delegate can return straight away; a
+    /// snooze that fails to add is a banner that does not come back, nothing worse.
+    nonisolated static func snooze(
+        _ request: UNNotificationRequest,
+        in center: UNUserNotificationCenter,
+        now: Date = Date()
+    ) {
+        guard let fireDate = snoozedFireDate(now: now) else { return }
+        guard let content = request.content.mutableCopy() as? UNMutableNotificationContent else { return }
+        let trigger = UNTimeIntervalNotificationTrigger(
+            timeInterval: fireDate.timeIntervalSince(now),
+            repeats: false
+        )
+        center.add(
+            UNNotificationRequest(identifier: request.identifier, content: content, trigger: trigger),
+            withCompletionHandler: nil
+        )
+    }
+
+    /// When a snooze from `now` lands, or `nil` when that is tomorrow. Pure so it is testable.
+    nonisolated static func snoozedFireDate(now: Date, calendar: Calendar = .current) -> Date? {
+        let fireDate = now.addingTimeInterval(snoozeInterval)
+        return calendar.isDate(fireDate, inSameDayAs: now) ? fireDate : nil
     }
 
     private nonisolated static func boolValue(_ value: Any?) -> Bool? {

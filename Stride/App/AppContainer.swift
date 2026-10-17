@@ -166,6 +166,9 @@ final class AppContainer {
     /// (N39). Every number it acts on lives in `HeatAdaptationPolicy`; see
     /// `docs/HEAT_ADAPTATION_EVIDENCE.md`.
     let heatAdvisoryService: HeatAdvisoryService
+    /// Re-arms every scheduled notification. Shared by the scene root's foreground
+    /// refresh, the HealthKit import and the background app refresh.
+    let notificationRefreshService: NotificationRefreshService
     let aiCoachService: AICoachService
 
     /// Speaks split announcements during a run (U4). Owned here rather than by the run
@@ -208,6 +211,10 @@ final class AppContainer {
     /// cancelled in `deinit` — `deinit` is nonisolated and this is main-actor state — but
     /// the loop holds the container weakly and returns on the first tap after it is gone.
     @ObservationIgnored private var syncedRunTapTask: Task<Void, Never>?
+
+    /// Listens to `NotificationService.workoutReminderTaps` and opens the Plan tab, where
+    /// today's session is. Same lifetime rules as `syncedRunTapTask`.
+    @ObservationIgnored private var workoutReminderTapTask: Task<Void, Never>?
 
     /// Set when a workout is synced from HealthKit (background or foreground) or when the user
     /// taps a "Run Synced" notification. Presenting a RunSummaryView sheet on this value lets
@@ -381,10 +388,11 @@ final class AppContainer {
         )
         let weather = WeatherService()
         self.weatherService = weather
-        self.heatAdvisoryService = HeatAdvisoryService(
+        let heatAdvisory = HeatAdvisoryService(
             weatherService: weather,
             notificationService: notifications
         )
+        self.heatAdvisoryService = heatAdvisory
         self.aiCoachService = AICoachService()
         let voiceCoach = RunVoiceCoach()
         self.runVoiceCoach = voiceCoach
@@ -399,6 +407,12 @@ final class AppContainer {
             weatherService: weather,
             context: context
         )
+        let notificationRefresh = NotificationRefreshService(
+            notificationService: notifications,
+            heatAdvisoryService: heatAdvisory,
+            context: context
+        )
+        self.notificationRefreshService = notificationRefresh
         self.planLifecycle = PlanLifecycleService(
             trainingPlanService: planService,
             planRepository: planRepo,
@@ -416,6 +430,18 @@ final class AppContainer {
             self.pendingReviewWorkout = first
         }
 
+        // A run recorded on the Watch is imported with the app in the background and no
+        // scene to run the foreground refresh, so the import asks for it directly:
+        // tonight's streak nudge comes down, tomorrow's goes up, and a Sunday run makes
+        // it into the 19:00 recap. Settings are re-read each time for the same reason.
+        workoutSyncService.onRunsImported = { [weak notificationRefresh] in
+            guard let notificationRefresh else { return }
+            await notificationRefresh.refreshTrainingNudges(
+                plan: notificationRefresh.activePlan(),
+                preferences: AppSettings.syncedNotificationPreferences()
+            )
+        }
+
         // Notification taps arrive as a stream rather than a stored callback on the
         // notification singleton, which whichever container was built last used to own
         // (D4). `self` is re-checked on every element — the shape
@@ -427,6 +453,27 @@ final class AppContainer {
                 self.surfacePendingReviewWorkout(idString: idString)
             }
         }
+        workoutReminderTapTask = Task { @MainActor [weak self] in
+            for await _ in notifications.workoutReminderTaps {
+                guard let self else { return }
+                self.appNavigation.select(.plan)
+            }
+        }
+    }
+
+    // MARK: - Background app refresh
+
+    /// The daily `BGAppRefreshTask` (`NotificationRefreshService.backgroundRefreshIdentifier`).
+    ///
+    /// Asks for tomorrow's refresh first, so an expired or failed pass never leaves the app
+    /// without one. Then catches up on HealthKit — a missed observer wake is otherwise only
+    /// recovered on the next launch — and re-arms every notification against the result.
+    func runBackgroundRefresh() async {
+        NotificationRefreshService.scheduleBackgroundRefresh()
+        guard !UITestingSupport.isEnabled, !UITestingSupport.isHostingUnitTests else { return }
+        await workoutSyncService.syncNow(source: "app-refresh")
+        guard !Task.isCancelled else { return }
+        await notificationRefreshService.refreshAll(preferences: AppSettings.syncedNotificationPreferences())
     }
 
     // MARK: - Store configuration
