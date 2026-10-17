@@ -795,8 +795,9 @@ private struct PaceInsightsCard: View {
         RaceDayPlan.currentVDOT(runs: runs, profile: profile)
     }
 
-    /// Whether there is any fitness to project from yet, rather than the goal itself.
-    private var hasMeasuredFitness: Bool { measuredVDOT != nil }
+    /// Whether a logged run gives a fitness figure yet. Passes no profile, so the runner's own
+    /// 5K estimate (`currentVDOT`'s fallback) doesn't count as measured.
+    private var hasMeasuredFitness: Bool { RaceDayPlan.currentVDOT(runs: runs, profile: nil) != nil }
 
     private var currentVDOT: Double {
         if let measuredVDOT { return measuredVDOT }

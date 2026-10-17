@@ -421,7 +421,7 @@ struct OBShell<Content: View>: View {
 
             if let secondaryLabel, let onSecondary {
                 OBTextLink(
-                    secondaryLabel,
+                    LocalizedStringKey(secondaryLabel),
                     identifier: "onboarding.secondaryCTA.\(stepIndex)",
                     action: onSecondary
                 )
@@ -469,11 +469,11 @@ struct OBBackButton: View {
 /// not a second button shape, so the route button stays the one thing to tap, with the
 /// tap target still 44pt tall.
 struct OBTextLink: View {
-    let title: String
+    let title: LocalizedStringKey
     var identifier: String?
     let action: () -> Void
 
-    init(_ title: String, identifier: String? = nil, action: @escaping () -> Void) {
+    init(_ title: LocalizedStringKey, identifier: String? = nil, action: @escaping () -> Void) {
         self.title = title
         self.identifier = identifier
         self.action = action

@@ -168,7 +168,10 @@ struct RaceInsightsView: View {
             }
             tips.append(String(
                 format: "Your weekly volume averages %.0f %@. Gradually building to %d+ %@ (10%% per week) will improve your aerobic base.",
-                average, unit.distanceLabel, target, unit.distanceLabel
+                average,
+                unit.distanceLabel,
+                target,
+                unit.distanceLabel
             ))
         }
 
@@ -453,7 +456,7 @@ struct RaceInsightsView: View {
                             label: "Interval Fatigue",
                             valueColor: fatigue > 1.15 ? .destructive : .success,
                             // The colour alone is not the verdict.
-                            note: fatigue > 1.15 ? "High" : "Normal"
+                            note: fatigue > 1.15 ? String(localized: "High") : String(localized: "Normal")
                         )
                     }
                     if let ratio = snap.lastIntervalPaceRatio {
@@ -461,7 +464,8 @@ struct RaceInsightsView: View {
                             value: String(format: "%.0f%%", ratio * 100),
                             label: "vs Interval Target",
                             valueColor: ratio < 1.0 ? .success : (ratio > 1.07 ? .destructive : .primary),
-                            note: ratio < 1.0 ? "Faster" : (ratio > 1.07 ? "Slower" : "On target")
+                            note: ratio < 1.0 ? String(localized: "Faster")
+                                : (ratio > 1.07 ? String(localized: "Slower") : String(localized: "On target"))
                         )
                     }
                 }

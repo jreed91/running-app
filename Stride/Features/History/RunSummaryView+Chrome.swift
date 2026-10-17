@@ -6,7 +6,7 @@ import Charts
 
 extension RunSummaryView {
 
-    func sectionHeader(title: String) -> some View {
+    func sectionHeader(title: LocalizedStringKey) -> some View {
         HStack {
             Text(title)
                 .strideEyebrow()

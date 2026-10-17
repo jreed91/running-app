@@ -409,6 +409,9 @@ struct AICoachChatView: View {
     /// model picker live.
     private func openCoachSettings() {
         container.appNavigation.select(.settings)
+        // The chat can sit on the post-run review sheet; close that too, or Settings opens
+        // underneath it.
+        container.pendingReviewWorkout = nil
         dismiss()
     }
 

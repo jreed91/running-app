@@ -87,9 +87,9 @@ struct OnboardingView: View {
 
         var accessibilityName: String {
             switch self {
-            case .saturday: return "Saturday"
-            case .sunday: return "Sunday"
-            case .flexible: return "Flexible"
+            case .saturday: return String(localized: "Saturday")
+            case .sunday: return String(localized: "Sunday")
+            case .flexible: return String(localized: "Flexible")
             }
         }
     }
