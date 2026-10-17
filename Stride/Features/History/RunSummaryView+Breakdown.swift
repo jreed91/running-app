@@ -135,9 +135,12 @@ extension RunSummaryView {
         }
     }
 
+    /// A view-destination link, not `navigationDestination(item:)` on this screen: this
+    /// screen is itself pushed by view-destination links (History's list, a plan day), and
+    /// an item-driven destination declared inside it did nothing on tap and then crashed.
     private func breakdownRowButton(_ row: BreakdownRow) -> some View {
-        Button {
-            openPage = row.page
+        NavigationLink {
+            detailPage(row.page)
         } label: {
             HStack(spacing: 12) {
                 // A 32pt icon tile, as a row takes it (Route Loop controls table).
@@ -167,6 +170,8 @@ extension RunSummaryView {
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
+        // `StrideUITests.testBreakdownRowOpensItsPage` taps these.
+        .accessibilityIdentifier("runSummary.breakdown.\(row.page)")
     }
 
     // MARK: Detail pages

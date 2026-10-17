@@ -13,7 +13,7 @@ import UIKit
 // The screen is a short summary (hero with the plan verdict, feel, map, one coach card,
 // a breakdown list, conditions and shoes). The long readings — splits, zones, laps, pace
 // insights, the planned workout and the full coach — each open as their own page from
-// the breakdown list, through `openPage`.
+// the breakdown list as a plain `NavigationLink(destination:)`.
 //
 // The screen used to be one 2,232-line file carrying a `swiftlint:disable file_length
 // type_body_length` banner, which is the last of D1. The logic came out first — the
@@ -58,8 +58,6 @@ struct RunSummaryView: View {
     /// The bucketed series behind the split charts, resolved once per run (N34). `nil` until
     /// the first resolve, which `chartedSplits` covers with the run's stored splits.
     @State var resolvedSplitSeries: SplitChartSeries.Resolved?
-    /// The detail page pushed from the breakdown list or the coach card, if any.
-    @State var openPage: RunSummaryPage?
     @State private var showDeleteConfirmation = false
 
     // Sizes that have to track the text beside them rather than staying pinned (U2).
@@ -413,12 +411,6 @@ struct RunSummaryView: View {
             resolveSplitChartSeries()
         }
         .background(Color.surfacePrimary.ignoresSafeArea())
-        // Attached here rather than as `NavigationLink(destination:)` in the rows, so the
-        // pushed page is rebuilt from this view's state: dragging a split chart or a coach
-        // read streaming in updates the page that is showing it.
-        .navigationDestination(item: $openPage) { page in
-            detailPage(page)
-        }
         .navigationTitle(displayType.localizedName)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
