@@ -118,27 +118,31 @@ final class StrideUITests: XCTestCase {
 
         // Not `app.cells.firstMatch`: the list opens with the month hero, which is a cell
         // too. The newest demo run is an outdoor long run, so it has splits at least.
-        let firstRun = app.descendants(matching: .any).matching(identifier: "history.run").firstMatch
+        // Plain identifier lookups throughout: broad predicate and `.any` queries over a
+        // screen with a map and charts timed out building their snapshot in CI.
+        let firstRun = app.buttons["history.run"].firstMatch
         XCTAssertTrue(firstRun.waitForExistence(timeout: 10), "The demo history has no runs")
         firstRun.tap()
 
-        let rows = app.buttons
-            .matching(NSPredicate(format: "identifier BEGINSWITH %@", "runSummary.breakdown."))
-        XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 10), "The run has no Breakdown rows")
-        let titles = [
-            "plannedWorkout": "Planned workout", "splits": "Splits",
-            "heartRateZones": "Heart-rate zones", "laps": "Laps", "paceInsights": "Pace insights"
+        let pages = [
+            ("plannedWorkout", "Planned workout"), ("splits", "Splits"),
+            ("heartRateZones", "Heart-rate zones"), ("laps", "Laps"), ("paceInsights", "Pace insights")
         ]
         // Every row, not just the first: each page reads different state, and the first
         // fix only made the first one open.
-        let identifiers = rows.allElementsBoundByIndex.map { $0.identifier }
-        for identifier in identifiers {
-            let row = app.buttons[identifier]
-            for _ in 0..<5 where !row.isHittable {
+        // The summary is a plain (not lazy) stack, so every row exists before it is
+        // scrolled to. Splits is on every outdoor run, so wait on that one.
+        XCTAssertTrue(
+            app.buttons["runSummary.breakdown.splits"].waitForExistence(timeout: 10),
+            "The run has no Breakdown rows"
+        )
+        var opened = 0
+        for (page, title) in pages {
+            let row = app.buttons["runSummary.breakdown.\(page)"]
+            guard row.exists else { continue }
+            for _ in 0..<4 where !row.isHittable {
                 app.swipeUp()
             }
-            let page = String(identifier.dropFirst("runSummary.breakdown.".count))
-            let title = try XCTUnwrap(titles[page], "Unknown Breakdown row \(identifier)")
             row.tap()
 
             let bar = app.navigationBars[title]
@@ -146,7 +150,9 @@ final class StrideUITests: XCTestCase {
             XCTAssertEqual(app.state, .runningForeground, "\(title) crashed the app")
             bar.buttons.element(boundBy: 0).tap()
             XCTAssertTrue(row.waitForExistence(timeout: 5), "Did not come back from \(title)")
+            opened += 1
         }
+        XCTAssertGreaterThan(opened, 0, "No Breakdown row opened")
         XCTAssertEqual(app.state, .runningForeground)
     }
 
