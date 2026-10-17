@@ -407,12 +407,11 @@ final class AppContainer {
             weatherService: weather,
             context: context
         )
-        let notificationRefresh = NotificationRefreshService(
+        self.notificationRefreshService = NotificationRefreshService(
             notificationService: notifications,
             heatAdvisoryService: heatAdvisory,
             context: context
         )
-        self.notificationRefreshService = notificationRefresh
         self.planLifecycle = PlanLifecycleService(
             trainingPlanService: planService,
             planRepository: planRepo,
@@ -422,6 +421,12 @@ final class AppContainer {
 
         self.configureCloudKitDiagnostics(cloudKitEnabled: cloudKitEnabled)
 
+        self.wireSyncAndNotificationCallbacks(notifications: notifications)
+    }
+
+    /// Hooks the sync service's callbacks and the notification tap streams up to this
+    /// container. Called once, at the end of `init`.
+    private func wireSyncAndNotificationCallbacks(notifications: NotificationService) {
         // Wire background-sync callback: surface the review sheet immediately if the app is
         // in the foreground when the sync fires. UserDefaults is written by WorkoutSyncService
         // so a cold launch also surfaces the workout via checkForPendingReviewWorkout().
@@ -434,10 +439,10 @@ final class AppContainer {
         // scene to run the foreground refresh, so the import asks for it directly:
         // tonight's streak nudge comes down, tomorrow's goes up, and a Sunday run makes
         // it into the 19:00 recap. Settings are re-read each time for the same reason.
-        workoutSyncService.onRunsImported = { [weak notificationRefresh] in
-            guard let notificationRefresh else { return }
-            await notificationRefresh.refreshTrainingNudges(
-                plan: notificationRefresh.activePlan(),
+        workoutSyncService.onRunsImported = { [weak refresh = notificationRefreshService] in
+            guard let refresh else { return }
+            await refresh.refreshTrainingNudges(
+                plan: refresh.activePlan(),
                 preferences: AppSettings.syncedNotificationPreferences()
             )
         }
