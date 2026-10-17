@@ -355,6 +355,9 @@ struct DashboardView: View {
     /// advisory so that answering it can take the card down immediately without pulling
     /// the sheet out from under itself mid-dismissal.
     @State private var heatSheetAdvisory: HeatAdvisory?
+    /// Route Genius, opened from beside the free-run button. It used to be a card on the
+    /// Plan tab, a long way from the moment a route is wanted: just before heading out.
+    @State private var showRouteGenius = false
 
     /// The live heat advisory, published by the service rather than read here: the
     /// refresh that produces it runs from the scene root, so a copy cached in `@State` on
@@ -407,25 +410,13 @@ struct DashboardView: View {
                     WeekCalendarView(activePlan: activePlan, selectedDate: $selectedDate)
 
                     VStack(alignment: .leading, spacing: AppSpacing.lg) {
-                        // Above the week summary, and deliberately so: this is the one
-                        // card on the screen that is a question rather than a readout,
-                        // and it goes stale at midnight. It is also the only card here
-                        // with no way to put it away except by answering it.
-                        if let advisory = heatAdvisory {
-                            HeatAdvisoryCard(
-                                advisory: advisory,
-                                unit: appSettings.unitPreference,
-                                onAdapt: { heatSheetAdvisory = advisory },
-                                onKeepAsPlanned: { answerHeatAdvisory(advisory) }
-                            )
-                            .opacity(dashboardAppeared ? 1 : 0)
-                            .offset(y: dashboardAppeared ? 0 : 20)
-                            .adaptiveAnimation(AppAnimation.entrance.delay(0.03), value: dashboardAppeared)
-                        }
-                        weekSummaryCard
-                            .opacity(dashboardAppeared ? 1 : 0)
-                            .offset(y: dashboardAppeared ? 0 : 20)
-                            .adaptiveAnimation(AppAnimation.entrance.delay(0.05), value: dashboardAppeared)
+                        // Today first: the screen used to open on a week readout and up to
+                        // three alert cards before it got to the run. The selected day's
+                        // session, with its Start button, is now what Home leads with.
+                        selectedDaySection
+                            .dashboardEntrance(appeared: dashboardAppeared, delay: 0.03)
+                        alertSlot
+                            .dashboardEntrance(appeared: dashboardAppeared, delay: 0.05)
                         if let racePlan = racePlan {
                             NavigationLink {
                                 RaceDayHubView()
@@ -433,46 +424,23 @@ struct DashboardView: View {
                                 RaceCountdownCard(racePlan: racePlan, unit: appSettings.unitPreference)
                             }
                             .buttonStyle(.plain)
-                            .opacity(dashboardAppeared ? 1 : 0)
-                            .offset(y: dashboardAppeared ? 0 : 20)
-                            .adaptiveAnimation(AppAnimation.entrance.delay(0.07), value: dashboardAppeared)
+                            .dashboardEntrance(appeared: dashboardAppeared, delay: 0.07)
                         }
-                        if let info = missedWorkoutInfo {
-                            MissedWorkoutsRecoveryCard(
-                                info: info,
-                                isLoading: isHandlingRecovery,
-                                onPickUpWhereLeftOff: { handlePickUp(info: info) },
-                                onRebuild: { handleRebuild() },
-                                onDismiss: { flagMissedWorkoutPrompt() }
-                            )
-                            .opacity(dashboardAppeared ? 1 : 0)
-                            .offset(y: dashboardAppeared ? 0 : 20)
-                            .adaptiveAnimation(AppAnimation.entrance.delay(0.08), value: dashboardAppeared)
-                        }
-                        ShoeReplacementCard()
-                            .opacity(dashboardAppeared ? 1 : 0)
-                            .offset(y: dashboardAppeared ? 0 : 20)
-                            .adaptiveAnimation(AppAnimation.entrance.delay(0.1), value: dashboardAppeared)
-                        selectedDaySection
-                            .opacity(dashboardAppeared ? 1 : 0)
-                            .offset(y: dashboardAppeared ? 0 : 20)
-                            .adaptiveAnimation(AppAnimation.entrance.delay(0.12), value: dashboardAppeared)
                         if let session = nextUpSession {
                             nextUpSection(session)
-                                .opacity(dashboardAppeared ? 1 : 0)
-                                .offset(y: dashboardAppeared ? 0 : 20)
-                                .adaptiveAnimation(AppAnimation.entrance.delay(0.15), value: dashboardAppeared)
+                                .dashboardEntrance(appeared: dashboardAppeared, delay: 0.1)
                         }
+                        weekSummaryCard
+                            .dashboardEntrance(appeared: dashboardAppeared, delay: 0.12)
                         if !coachCards.isEmpty {
                             SmartCoachCardsSection(cards: CoachTipRewriter.apply(coachTipWording, to: coachCards))
-                                .opacity(dashboardAppeared ? 1 : 0)
-                                .offset(y: dashboardAppeared ? 0 : 20)
-                                .adaptiveAnimation(AppAnimation.entrance.delay(0.18), value: dashboardAppeared)
+                                .dashboardEntrance(appeared: dashboardAppeared, delay: 0.15)
                         }
-                        startRunButton
-                            .opacity(dashboardAppeared ? 1 : 0)
-                            .offset(y: dashboardAppeared ? 0 : 16)
-                            .adaptiveAnimation(AppAnimation.entrance.delay(0.22), value: dashboardAppeared)
+                        VStack(spacing: AppSpacing.sm) {
+                            startRunButton
+                            planRouteButton
+                        }
+                        .dashboardEntrance(appeared: dashboardAppeared, delay: 0.18, offset: 16)
                     }
                     .padding(.horizontal, AppSpacing.lg)
                     .padding(.vertical, AppSpacing.lg)
@@ -489,6 +457,12 @@ struct DashboardView: View {
             // Strength stays local — it has no minimised form.
             .fullScreenCover(item: $strengthWorkout) { workout in
                 StrengthActiveView(scheduledWorkout: workout)
+            }
+            .sheet(isPresented: $showRouteGenius) {
+                RouteGeniusView(
+                    viewModel: container.makeRouteGeniusViewModel(appSettings: appSettings)
+                )
+                .strideSheet()
             }
             .sheet(item: $heatSheetAdvisory) { advisory in
                 HeatAdaptationSheet(
@@ -616,6 +590,36 @@ struct DashboardView: View {
         return (try? context.fetch(descriptor))?.first
     }
 
+    // MARK: - Alert slot
+
+    /// The one card on Home that asks something of the runner, when anything does. Heat,
+    /// missed sessions and worn shoes used to stack as three cards above today's run; only
+    /// the most urgent shows now. Heat first, because it goes stale at midnight; then the
+    /// missed sessions, which hold up the plan; then the shoes, which can wait a run.
+    /// The others surface in turn once the one above them is answered.
+    @ViewBuilder
+    private var alertSlot: some View {
+        if let advisory = heatAdvisory {
+            HeatAdvisoryCard(
+                advisory: advisory,
+                unit: appSettings.unitPreference,
+                onAdapt: { heatSheetAdvisory = advisory },
+                onKeepAsPlanned: { answerHeatAdvisory(advisory) }
+            )
+        } else if let info = missedWorkoutInfo {
+            MissedWorkoutsRecoveryCard(
+                info: info,
+                isLoading: isHandlingRecovery,
+                onPickUpWhereLeftOff: { handlePickUp(info: info) },
+                onRebuild: { handleRebuild() },
+                onDismiss: { flagMissedWorkoutPrompt() }
+            )
+        } else {
+            // Draws nothing unless a pair is due for replacement.
+            ShoeReplacementCard()
+        }
+    }
+
     // MARK: - Week Summary Card
 
     private var weekSummaryCard: some View {
@@ -654,136 +658,9 @@ struct DashboardView: View {
                         .accessibilityHidden(true)
                 }
             }
-
-            // Weekly load mini bar chart
-            weeklyLoadChart
         }
         .padding(AppSpacing.lg)
         .strideCard(cornerRadius: AppRadius.lg)
-    }
-
-    /// Distance in meters that fills a weekly-load bar to the top.
-    ///
-    /// Derived from the runner's own week rather than a fixed 15 km: the longest
-    /// day actually logged, and the plan's average target per run day, whichever
-    /// is bigger. The 3 km floor keeps a very light week from making a short
-    /// shakeout look like a peak effort.
-    private var weeklyLoadScaleMeters: Double {
-        let cal = Calendar.current
-        let monday = Date().startOfWeek
-
-        let longestLoggedDay = (0..<7).reduce(0.0) { longest, offset in
-            let day = monday.adding(days: offset)
-            let dayTotal = recentWorkouts
-                .filter { cal.isDate($0.date, inSameDayAs: day) }
-                .reduce(0.0) { $0 + $1.distanceMeters }
-            return max(longest, dayTotal)
-        }
-
-        var plannedPerRunDay = 0.0
-        if let week = activePlan?.currentWeek, week.targetDistanceKm > 0 {
-            let runDays = (week.workouts ?? []).filter { $0.workoutType != .rest }.count
-            plannedPerRunDay = week.targetDistanceKm * 1_000 / Double(max(runDays, 1))
-        }
-
-        return max(longestLoggedDay, plannedPerRunDay, 3_000)
-    }
-
-    private var weeklyLoadChart: some View {
-        let today = Date()
-        let cal = Calendar.current
-        let monday = today.startOfWeek
-        let scale = weeklyLoadScaleMeters
-
-        // Build 7-day bars based on actual run data this week
-        let bars: [WeeklyLoadDay] = (0..<7).map { offset in
-            let day = monday.adding(days: offset)
-            let isToday = cal.isDateInToday(day)
-            let isFuture = day > today && !isToday
-            let label = day.formatted(.dateTime.weekday(.wide))
-            // `.narrow` is the calendar's own one-letter initial, so it localises with the
-            // device rather than being sliced off the English name.
-            let letter = day.formatted(.dateTime.weekday(.narrow))
-
-            if isFuture {
-                return WeeklyLoadDay(
-                    label: label,
-                    letter: letter,
-                    distanceMeters: 0,
-                    fraction: 0,
-                    color: .clear,
-                    isActive: false,
-                    isFuture: true
-                )
-            }
-
-            let runsOnDay = recentWorkouts.filter { cal.isDate($0.date, inSameDayAs: day) }
-            let dist = runsOnDay.reduce(0.0) { $0 + $1.distanceMeters }
-
-            // Colour by the type of the run that was actually *run*, falling back to what
-            // was scheduled only on a day with no run yet. The bar's height already comes
-            // from `recentWorkouts`; reading its colour from `workoutOnDay` alone meant
-            // the two disagreed — a completed tempo run on a day the plan does not cover
-            // fell through to `.zoneEasy` and drew blue.
-            let dominantType = runsOnDay
-                .max { $0.distanceMeters < $1.distanceMeters }?
-                .workoutType ?? workoutOnDay(day)?.workoutType
-            let color: Color
-            switch dominantType {
-            case .tempo:                color = .zoneTempo
-            case .interval, .race:      color = .zoneInterval
-            default:                    color = .zoneEasy
-            }
-
-            return WeeklyLoadDay(
-                label: label,
-                letter: letter,
-                distanceMeters: dist,
-                fraction: CGFloat(min(dist / scale, 1.0)),
-                color: color,
-                isActive: isToday && dist == 0,
-                isFuture: false
-            )
-        }
-
-        return HStack(alignment: .bottom, spacing: 6) {
-            ForEach(Array(bars.enumerated()), id: \.offset) { _, bar in
-                WeeklyLoadBar(
-                    fraction: bar.fraction,
-                    color: bar.color,
-                    isActive: bar.isActive,
-                    dayLetter: bar.letter
-                )
-            }
-        }
-        .frame(height: 42)
-        .padding(.top, AppSpacing.xs)
-        // Seven bars with no label at all. `chartAccessibility` was built for exactly
-        // this and is on all six Progress-tab charts — this one was missed (U10).
-        // Days still to come are left out rather than spoken as zero.
-        .chartAccessibility("Weekly load chart", weeklyLoadSummary(bars))
-    }
-
-    private func weeklyLoadSummary(_ bars: [WeeklyLoadDay]) -> String {
-        let points = bars
-            .filter { !$0.isFuture }
-            .map { ChartAccessibility.Point(label: $0.label, value: $0.distanceMeters) }
-        return ChartAccessibility.summary(points) { meters in
-            meters.distanceString(unit: appSettings.unitPreference)
-        }
-    }
-
-    /// One day of the weekly-load strip: what it draws, and what it says.
-    private struct WeeklyLoadDay {
-        let label: String
-        /// One-letter weekday initial, drawn under the bar (S22). `label` stays the full
-        /// name because it is what the accessibility summary speaks.
-        let letter: String
-        let distanceMeters: Double
-        let fraction: CGFloat
-        let color: Color
-        let isActive: Bool
-        let isFuture: Bool
     }
 
     // MARK: - Selected Day Section
@@ -973,7 +850,8 @@ struct DashboardView: View {
             NextUpCardView(
                 briefing: NextUpBriefing.make(for: workout, unit: appSettings.unitPreference),
                 workoutType: workout.workoutType,
-                isHero: racePlan == nil
+                // Today's session leads the screen now, so this is a plain card under it.
+                isHero: false
             )
         }
         .buttonStyle(.plain)
@@ -1043,6 +921,25 @@ struct DashboardView: View {
         } else {
             primaryFreeRunButton
         }
+    }
+
+    /// Route Genius, as a quiet button under the run button.
+    private var planRouteButton: some View {
+        Button {
+            showRouteGenius = true
+        } label: {
+            HStack(spacing: 8) {
+                StrideIcon(name: .bolt, size: 16, color: .brandText, strokeWeight: 2.2)
+                Text("Plan a Route")
+            }
+        }
+        .buttonStyle(.strideButton(.quiet))
+        .accessibilityHint(
+            String(
+                localized: "Builds a route matched to today's distance and elevation",
+                comment: "Hint on Home's route button"
+            )
+        )
     }
 
     private var primaryFreeRunButton: some View {
@@ -1150,9 +1047,14 @@ struct DashboardView: View {
         // a forecast on the page, the retrospective one stands down.
         // The day card above already says the plan starts soon, or that there is no plan;
         // the coach repeating it put "Week 1 begins…" on the screen twice.
-        let fresh = cards.filter { $0.kind != .planStartsSoon && $0.kind != .noPlan }
-        guard heatAdvisory != nil else { return fresh }
-        return fresh.filter { $0.kind != .heat }
+        var fresh = cards.filter { $0.kind != .planStartsSoon && $0.kind != .noPlan }
+        if heatAdvisory != nil {
+            fresh = fresh.filter { $0.kind != .heat }
+        }
+        // One tip, the top-ranked one. Home used to show a primary card and two supporting
+        // ones; the ranking already says which matters, so the others are not drawn (and not
+        // sent to the model for rewording either).
+        return Array(fresh.prefix(1))
     }
 
     /// Asks Apple's model (the runner's AI Coach choice, Private Cloud Compute by
@@ -1333,5 +1235,16 @@ private struct ProgressRingView: View {
         }
         .frame(width: size, height: size)
         .onAppear { hasAppeared = true }
+    }
+}
+
+// MARK: - Entrance
+
+private extension View {
+    /// The fade-and-rise each Home section enters with, staggered by `delay`.
+    func dashboardEntrance(appeared: Bool, delay: Double, offset: CGFloat = 20) -> some View {
+        opacity(appeared ? 1 : 0)
+            .offset(y: appeared ? 0 : offset)
+            .adaptiveAnimation(AppAnimation.entrance.delay(delay), value: appeared)
     }
 }
