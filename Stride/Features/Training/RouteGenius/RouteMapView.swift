@@ -11,7 +11,10 @@ struct RouteMapView: View {
 
     let coordinates: [CLLocationCoordinate2D]
     let startCoordinate: CLLocationCoordinate2D
+    /// Whether the start pin ripples. One pulse per screen: thumbnails pass `false`.
+    var pulses = true
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var cameraPosition: MapCameraPosition = .automatic
 
     var body: some View {
@@ -25,7 +28,7 @@ struct RouteMapView: View {
             // Start / finish annotation
             // The Route Loop's start pin, where the loop begins and ends.
             Annotation("Start", coordinate: startCoordinate, anchor: .center) {
-                StartPin(diameter: 26, pulses: true)
+                StartPin(diameter: 26, pulses: pulses)
                     .appShadow(.e2)
             }
         }
@@ -52,7 +55,7 @@ struct RouteMapView: View {
 
     private func fitCamera() {
         guard let region = routeBounds?.region else { return }
-        withAnimation(.easeInOut(duration: 0.6)) {
+        withAnimation(reduceMotion ? nil : AppAnimation.gentle) {
             cameraPosition = .region(region)
         }
     }

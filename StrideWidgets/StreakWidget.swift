@@ -30,12 +30,13 @@ struct StreakWidgetView: View {
         entry.source == .unavailable ? nil : entry.snapshot.streak
     }
 
-    /// Amber while today is still outstanding, brand once it is done. The one bit of
+    /// Neutral while today is still outstanding, brand once it is done. The one bit of
     /// state worth encoding in colour here — but never *only* in colour: the glyph and
-    /// the caption both change with it (U3d).
+    /// the caption both change with it (U3d). Not the tempo zone's amber: zone colours
+    /// are training data, and the route's amber fails as text on a light widget.
     private var tint: Color {
         guard let streak, streak.current > 0 else { return .secondary }
-        return streak.isActiveToday ? .strideBrand : .strideZoneTempo
+        return streak.isActiveToday ? .strideBrand : .primary
     }
 
     private var symbolName: String {

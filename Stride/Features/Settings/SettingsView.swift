@@ -22,6 +22,7 @@ struct SettingsView: View {
     @ScaledMetric(relativeTo: .title) private var avatarSize: CGFloat = 60
 
     @State private var showResetConfirmation = false
+    @State private var showSignOutConfirmation = false
     @State private var showPulseConsole = false
     /// The full-history archive (B6), non-nil only while its share sheet is up.
     @State private var dataExportFile: ExportedFile?
@@ -56,18 +57,15 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 20) {
+                VStack(spacing: AppSpacing.xl) {
                     if let profile { profileHeaderCard(profile) }
-                    accountCard
+                    if let profile { profileCard(profile) }
                     unitsCard
-                    if let profile { trainingCard(profile) }
-                    if let profile { heartRateCard(profile) }
-                    appCard
-                    dataCard
-                    shoesCard
-                    routeGeniusCard
-                    runPlaylistsCard
+                    notificationsCard
+                    duringRunCard
+                    musicRoutesGearCard
                     aiCoachCard
+                    dataSyncCard
                     if BuildEnvironment.showsTestFlightDiagnostics {
                         notificationTestingCard
                     }
@@ -91,6 +89,16 @@ struct SettingsView: View {
             } message: {
                 Text("This removes your profile, all workouts, training plans, and saved routes.")
             }
+            .confirmationDialog(
+                "Sign out of your Apple Account?",
+                isPresented: $showSignOutConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Sign out", role: .destructive) { authService.signOut() }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Your runs, plan and settings stay on this iPhone.")
+            }
             .sheet(item: $dataExportFile) { file in
                 ShareSheet(items: [file.url])
             }
@@ -108,17 +116,19 @@ struct SettingsView: View {
     // MARK: - Profile header
 
     private func profileHeaderCard(_ profile: UserProfile) -> some View {
-        HStack(spacing: 16) {
+        HStack(spacing: AppSpacing.lg) {
+            // A brand tint, not the route: the route means progress or go, and an
+            // avatar is neither.
             ZStack {
                 Circle()
-                    .fill(.route)
+                    .fill(Color.brand.opacity(0.12))
                     .frame(width: avatarSize, height: avatarSize)
                 if profile.name.isEmpty {
-                    StrideIcon(name: .run, size: avatarSize * 0.47, color: .onFill, strokeWeight: 2.2)
+                    StrideIcon(name: .run, size: avatarSize * 0.47, color: .brandText, strokeWeight: 2.2)
                 } else {
                     Text(String(profile.name.prefix(1)).uppercased())
                         .font(.system(size: avatarSize * 0.47, weight: .bold))
-                        .foregroundStyle(.onFill)
+                        .foregroundStyle(.brandText)
                 }
             }
             VStack(alignment: .leading, spacing: 4) {
@@ -129,64 +139,19 @@ struct SettingsView: View {
                     Text("·")
                     Text(profile.fitnessLevel.localizedName)
                 }
-                .font(.caption)
+                .font(.dsCaption)
                 .foregroundStyle(.secondary)
             }
             Spacer()
         }
-        .padding(18)
+        .padding(AppSpacing.lg)
         .heroCard()
     }
 
-    // MARK: - Account card
+    // MARK: - Profile card
 
-    private var accountCard: some View {
-        settingsSection("Account") {
-            if authService.isSignedIn {
-                settingsRow(icon: .check, iconColor: .success, title: "Signed in with Apple") {
-                    Button("Sign out") { authService.signOut() }
-                        .font(.dsFootnote.weight(.medium))
-                        .foregroundStyle(.secondary)
-                        .buttonStyle(.plain)
-                }
-            } else {
-                VStack(alignment: .leading, spacing: 10) {
-                    settingsRow(icon: .lock, iconColor: .secondary, title: "Apple Account") {
-                        EmptyView()
-                    }
-                    SignInWithAppleButton(.signIn) { request in
-                        request.requestedScopes = []
-                    } onCompletion: { result in
-                        if case .success(let auth) = result,
-                           let credential = auth.credential as? ASAuthorizationAppleIDCredential {
-                            Task { @MainActor in
-                                authService.handleSignIn(userID: credential.user)
-                            }
-                        }
-                    }
-                    .signInWithAppleButtonStyle(.black)
-                    .frame(height: 44)
-                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
-                    .padding(.horizontal, AppSpacing.lg)
-                    .padding(.bottom, AppSpacing.md)
-                }
-            }
-        }
-    }
-
-    // MARK: - Units card
-
-    private var unitsCard: some View {
-        settingsSection("Units") {
-            UnitPreferencePicker(selection: Bindable(appSettings).unitPreference)
-                .padding(AppSpacing.lg)
-        }
-    }
-
-    // MARK: - Training card
-
-    private func trainingCard(_ profile: UserProfile) -> some View {
-        settingsSection("Runner Profile") {
+    private func profileCard(_ profile: UserProfile) -> some View {
+        settingsSection("Profile") {
             settingsRow(icon: .run, iconColor: .brand, title: "Name") {
                 TextField("Your name", text: profileNameBinding(for: profile))
                     .multilineTextAlignment(.trailing)
@@ -208,26 +173,21 @@ struct SettingsView: View {
                 )
             }
             Text(bodyMassFootnote)
-                .font(.caption)
+                .font(.dsCaption)
                 .foregroundStyle(.secondary)
-                .padding(.leading, 62)
+                .padding(.leading, Self.footnoteIndent)
+                .padding(.trailing, AppSpacing.lg)
                 .padding(.bottom, 10)
             rowDivider
-            settingsRow(icon: .heart, iconColor: .destructive, title: "Gender") {
+            settingsRow(icon: .walk, iconColor: .brand, title: "Gender") {
                 Picker("Gender", selection: profileGenderBinding(for: profile)) {
                     ForEach(Gender.allCases, id: \.self) { Text($0.localizedName).tag($0) }
                 }
                 .labelsHidden()
             }
-        }
-    }
-
-    // MARK: - Heart Rate card
-
-    private func heartRateCard(_ profile: UserProfile) -> some View {
-        settingsSection("Heart Rate Zones") {
+            rowDivider
             // Typable as well as steppable, and the same control onboarding uses (S25).
-            settingsRow(icon: .heart, iconColor: .brand, title: "Age") {
+            settingsRow(icon: .calendar, iconColor: .brand, title: "Age") {
                 NumericStepperField(
                     title: "Age",
                     value: ageBinding(for: profile),
@@ -236,7 +196,7 @@ struct SettingsView: View {
                 )
             }
             rowDivider
-            settingsRow(icon: .bolt, iconColor: .brand, title: "Max HR") {
+            settingsRow(icon: .heart, iconColor: .destructive, title: "Max HR") {
                 NumericStepperField(
                     title: "Max HR",
                     value: maxHRBinding(for: profile),
@@ -253,7 +213,7 @@ struct SettingsView: View {
                 } label: {
                     HStack {
                         Text("Reset to age estimate (\(UserProfile.estimatedMaxHeartRate(forAge: profile.age ?? UserProfile.assumedAge)) bpm)")
-                            .font(.caption).foregroundStyle(.brandText)
+                            .font(.dsCaption).foregroundStyle(.brandText)
                         Spacer()
                     }
                     .padding(.horizontal, AppSpacing.lg).padding(.vertical, AppSpacing.md)
@@ -262,36 +222,19 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - App card
+    // MARK: - Units card
 
-    private var appCard: some View {
-        settingsSection("App") {
-            settingsRow(icon: .gear, iconColor: .secondary, title: "iCloud Sync") {
-                Toggle("iCloud Sync", isOn: Bindable(appSettings).iCloudSyncEnabled)
-                    .labelsHidden()
-                    .tint(.brand)
-            }
-            if syncRestartPending {
-                Text("Restart the app for this change to take effect.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.leading, 62)
-                    .padding(.bottom, 10)
-            }
-            rowDivider
-            settingsRow(icon: .check, iconColor: .brand, title: "Active Store") {
-                Text(persistenceStatusText)
-                    .font(.bodyRegular)
-                    .foregroundStyle(.secondary)
-            }
-            if appSettings.iCloudSyncEnabled {
-                Text("Verify CloudKit on-device in Pulse Console: look for `CloudKit` `setup`, `export`, and `import` events.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.leading, 62)
-                    .padding(.bottom, 10)
-            }
-            rowDivider
+    private var unitsCard: some View {
+        settingsSection("Units") {
+            UnitPreferencePicker(selection: Bindable(appSettings).unitPreference)
+                .padding(AppSpacing.lg)
+        }
+    }
+
+    // MARK: - Notifications card
+
+    private var notificationsCard: some View {
+        settingsSection("Notifications") {
             settingsRow(icon: .bell, iconColor: .brand, title: "Morning Reminder") {
                 Toggle("Morning Reminder", isOn: Bindable(appSettings).morningReminderEnabled)
                     .labelsHidden()
@@ -317,7 +260,7 @@ struct SettingsView: View {
                     }
             }
             rowDivider
-            settingsRow(icon: .bell, iconColor: .brand, title: "Training Nudges") {
+            settingsRow(icon: .trophy, iconColor: .brand, title: "Training Nudges") {
                 Toggle("Training Nudges", isOn: Bindable(appSettings).trainingNudgesEnabled)
                     .labelsHidden()
                     .tint(.brand)
@@ -340,9 +283,10 @@ struct SettingsView: View {
                     }
             }
             Text("An evening reminder when a run streak is about to end or the plan has slipped behind, and a recap of your week on Sunday evening. At most one a day.")
-                .font(.caption)
+                .font(.dsCaption)
                 .foregroundStyle(.secondary)
-                .padding(.leading, 62)
+                .padding(.leading, Self.footnoteIndent)
+                .padding(.trailing, AppSpacing.lg)
             rowDivider
             settingsRow(icon: .flame, iconColor: .warning, title: "Heat Adaptation") {
                 Toggle("Heat Adaptation", isOn: Bindable(appSettings).heatAdaptationEnabled)
@@ -366,47 +310,56 @@ struct SettingsView: View {
                     }
             }
             Text("Checks tomorrow's forecast where you usually run. When a session lands in heat or humidity that would change what it's worth doing, Stride asks the evening before whether to ease it.")
-                .font(.caption)
+                .font(.dsCaption)
                 .foregroundStyle(.secondary)
-                .padding(.leading, 62)
+                .padding(.leading, Self.footnoteIndent)
+                .padding(.trailing, AppSpacing.lg)
                 .padding(.bottom, 10)
-            rowDivider
+        }
+    }
+
+    // MARK: - During a Run card
+
+    private var duringRunCard: some View {
+        settingsSection("During a Run") {
             // The one setting that makes the app talk over the runner's music, so it
             // says what it will say and stays off until asked (U4).
-            settingsRow(icon: .ruler, iconColor: .brand, title: "Spoken Splits") {
+            settingsRow(icon: .flag, iconColor: .brand, title: "Spoken Splits") {
                 Toggle("Spoken Splits", isOn: Bindable(appSettings).spokenSplitsEnabled)
                     .labelsHidden()
                     .tint(.brand)
             }
             Text("Announces each \(appSettings.unitPreference.distanceLabel) and its pace out loud during a run. Music ducks for the announcement.")
-                .font(.caption)
+                .font(.dsCaption)
                 .foregroundStyle(.secondary)
-                .padding(.leading, 62)
+                .padding(.leading, Self.footnoteIndent)
+                .padding(.trailing, AppSpacing.lg)
                 .padding(.bottom, 10)
             rowDivider
             // Off until asked, like Spoken Splits above: it talks over the runner's music.
-            settingsRow(icon: .bolt, iconColor: .brand, title: "Spoken Workout Steps") {
+            settingsRow(icon: .tempo, iconColor: .brand, title: "Spoken Workout Steps") {
                 Toggle("Spoken Workout Steps", isOn: Bindable(appSettings).spokenWorkoutStepsEnabled)
                     .labelsHidden()
                     .tint(.brand)
                     .accessibilityIdentifier("settings.spokenWorkoutSteps")
             }
             Text("Talks you through interval and tempo sessions: each rep, recovery and cool-down as it starts, with a heads-up just before a rep or recovery ends.")
-                .font(.caption)
+                .font(.dsCaption)
                 .foregroundStyle(.secondary)
-                .padding(.leading, 62)
+                .padding(.leading, Self.footnoteIndent)
+                .padding(.trailing, AppSpacing.lg)
                 .padding(.bottom, 10)
         }
     }
 
-    // MARK: - Data card
+    // MARK: - Music, Routes & Gear card
 
-    private var dataCard: some View {
-        settingsSection("Data") {
+    private var musicRoutesGearCard: some View {
+        settingsSection("Music, Routes & Gear") {
             NavigationLink {
-                HealthKitImportView()
+                RunPlaylistSettingsView()
             } label: {
-                settingsRow(icon: .heart, iconColor: .destructive, title: "Import from Apple Health") {
+                settingsRow(icon: .music, iconColor: .brand, title: "Run Playlists") {
                     StrideIcon(name: .chevronRight, size: 12,
                                color: Color.secondary.opacity(0.5), strokeWeight: 2)
                 }
@@ -414,62 +367,32 @@ struct SettingsView: View {
             .buttonStyle(.plain)
             .foregroundStyle(.primary)
 
-            rowDivider
-            settingsRow(icon: .tortoise, iconColor: .brand, title: "Import Walks") {
-                Toggle("Import Walks", isOn: Bindable(appSettings).walkImportEnabled)
-                    .labelsHidden()
-                    .tint(.brand)
-                    .accessibilityIdentifier("settings.importWalks")
-            }
-            Text("Brings walking workouts from Apple Health into your history. They're kept out of your training stats — mileage, pace, records, and streaks stay running-only.")
-                .font(.caption)
+            Text("Builds a playlist shaped like the session — calmer through the warm-up and cool-down, harder through the work — and saves it to your Apple Music library. Start one from any run in your plan.")
+                .font(.dsCaption)
                 .foregroundStyle(.secondary)
-                .padding(.leading, 62)
+                .padding(.leading, Self.footnoteIndent)
+                .padding(.trailing, AppSpacing.lg)
                 .padding(.bottom, 10)
 
             rowDivider
-            Button {
-                exportAllData()
-            } label: {
-                settingsRow(icon: .history, iconColor: .brand, title: "Export All Data") {
-                    if isExportingData {
-                        ProgressView()
-                    } else {
-                        StrideIcon(name: .chevronRight, size: 12,
-                                   color: Color.secondary.opacity(0.5), strokeWeight: 2)
-                    }
-                }
+            settingsRow(icon: .location, iconColor: .brand, title: "Custom routing key (optional)") {
+                EmptyView()
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(.primary)
-            .disabled(isExportingData)
-            .accessibilityIdentifier("settings.exportAllData")
-            Text("Saves every workout, strength session and pair of shoes as spreadsheet files, with each GPS route as a GPX file, in one ZIP you can keep or send anywhere.")
-                .font(.caption)
+            SecureField("Leave empty to use Apple Maps", text: Bindable(appSettings).orsAPIKey)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .font(.dsFootnote.monospaced())
                 .foregroundStyle(.secondary)
-                .padding(.leading, 62)
-                .padding(.bottom, 10)
+                .padding(.horizontal, AppSpacing.lg)
+                .padding(.bottom, 6)
+            Text("Route Genius plans loops with Apple Maps and needs no key. To shape loops with openrouteservice instead, paste a free key from openrouteservice.org. Stored on this iPhone only.")
+                .font(.dsCaption)
+                .foregroundStyle(.secondary)
+                .padding(.leading, Self.footnoteIndent)
+                .padding(.trailing, AppSpacing.lg)
+                .padding(.bottom, 14)
 
-            if BuildEnvironment.showsTestFlightDiagnostics {
-                rowDivider
-                NavigationLink {
-                    CloudKitDebugView()
-                } label: {
-                    settingsRow(icon: .history, iconColor: .brand, title: "CloudKit Debug Data") {
-                        StrideIcon(name: .chevronRight, size: 12,
-                                   color: Color.secondary.opacity(0.5), strokeWeight: 2)
-                    }
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.primary)
-            }
-        }
-    }
-
-    // MARK: - Shoes card
-
-    private var shoesCard: some View {
-        settingsSection("Shoes") {
+            rowDivider
             NavigationLink {
                 ShoesView()
             } label: {
@@ -482,70 +405,27 @@ struct SettingsView: View {
             .foregroundStyle(.primary)
 
             Text("Tracks how far each pair has gone and tells you when one is nearly worn out. New runs go on your default pair; change it on any run.")
-                .font(.caption)
+                .font(.dsCaption)
                 .foregroundStyle(.secondary)
-                .padding(.leading, 62)
+                .padding(.leading, Self.footnoteIndent)
+                .padding(.trailing, AppSpacing.lg)
                 .padding(.bottom, 10)
         }
     }
-
-    // MARK: - Run Playlists card
-
-    private var runPlaylistsCard: some View {
-        settingsSection("Run Playlists") {
-            NavigationLink {
-                RunPlaylistSettingsView()
-            } label: {
-                settingsRow(icon: .music, iconColor: .brand, title: "Apple Music") {
-                    StrideIcon(name: .chevronRight, size: 12,
-                               color: Color.secondary.opacity(0.5), strokeWeight: 2)
-                }
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.primary)
-
-            Text("Builds a playlist shaped like the session — calmer through the warm-up and cool-down, harder through the work — and saves it to your Apple Music library. Start one from any run in your plan.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.leading, 62)
-                .padding(.bottom, 10)
-        }
-    }
-
-    // MARK: - Route Genius card
-
-    private var routeGeniusCard: some View {
-        settingsSection("Route Genius") {
-            settingsRow(icon: .location, iconColor: .brand, title: "ORS API Key (optional)") {
-                EmptyView()
-            }
-            SecureField("Leave empty to use Apple Maps", text: Bindable(appSettings).orsAPIKey)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-                .font(.dsFootnote.monospaced())
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, AppSpacing.lg)
-                .padding(.bottom, 6)
-            Text("Routes use Apple Maps and need no key. Paste a free openrouteservice.org key to use its loop shaping instead · stored on-device only.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, AppSpacing.lg)
-                .padding(.bottom, 14)
-        }
-    }
-
 
     // MARK: - AI Coach card
 
     private var aiCoachCard: some View {
         settingsSection("AI Coach") {
-            settingsRow(icon: .bolt, iconColor: .brand, title: "AI Insights") {
-                Toggle("AI Insights", isOn: Bindable(appSettings).aiInsightsEnabled)
+            // Named "AI Coach", the same words the coach chat uses when it sends the
+            // runner here to switch it on.
+            settingsRow(icon: .bolt, iconColor: .brand, title: "AI Coach") {
+                Toggle("AI Coach", isOn: Bindable(appSettings).aiInsightsEnabled)
                     .labelsHidden()
                     .tint(.brand)
             }
             rowDivider
-            settingsRow(icon: .gear, iconColor: .brand, title: "Model") {
+            settingsRow(icon: .tempo, iconColor: .brand, title: "Model") {
                 Picker("Model", selection: Bindable(appSettings).aiProvider) {
                     ForEach(AIProvider.allCases, id: \.self) { provider in
                         Text(provider.localizedName).tag(provider)
@@ -558,9 +438,10 @@ struct SettingsView: View {
                 privateCloudComputeStatusRow(status)
             }
             Text(Self.aiProviderFootnote(for: appSettings.aiProvider, status: pccStatus))
-                .font(.caption)
+                .font(.dsCaption)
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, AppSpacing.lg)
+                .padding(.leading, Self.footnoteIndent)
+                .padding(.trailing, AppSpacing.lg)
                 .padding(.bottom, 14)
         }
         .task(id: appSettings.aiProvider) {
@@ -582,18 +463,19 @@ struct SettingsView: View {
                 Button("Show options") {
                     container.aiCoachService.presentServerLimitIncrease()
                 }
-                .font(.caption)
+                .font(.dsCaption)
             } else {
                 Text(status.isAvailable ? "Ready" : "Unavailable")
-                    .font(.caption)
+                    .font(.dsCaption)
                     .foregroundStyle(.secondary)
             }
         }
         if let message = status.quotaMessage {
             Text(message)
-                .font(.caption)
+                .font(.dsCaption)
                 .foregroundStyle(status.isLimitReached ? Color.destructive : Color.warning)
-                .padding(.horizontal, AppSpacing.lg)
+                .padding(.leading, Self.footnoteIndent)
+                .padding(.trailing, AppSpacing.lg)
                 .padding(.bottom, 6)
         }
     }
@@ -624,7 +506,135 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - About card
+    // MARK: - Data & Sync card
+
+    private var dataSyncCard: some View {
+        settingsSection("Data & Sync") {
+            if authService.isSignedIn {
+                settingsRow(icon: .check, iconColor: .success, title: "Signed in with Apple") {
+                    Button("Sign out") { showSignOutConfirmation = true }
+                        .buttonStyle(.strideButton(.quiet, compact: true, fullWidth: false))
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 10) {
+                    settingsRow(icon: .lock, iconColor: .secondary, title: "Apple Account") {
+                        EmptyView()
+                    }
+                    SignInWithAppleButton(.signIn) { request in
+                        request.requestedScopes = []
+                    } onCompletion: { result in
+                        if case .success(let auth) = result,
+                           let credential = auth.credential as? ASAuthorizationAppleIDCredential {
+                            Task { @MainActor in
+                                authService.handleSignIn(userID: credential.user)
+                            }
+                        }
+                    }
+                    .signInWithAppleButtonStyle(.black)
+                    .frame(height: 44)
+                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
+                    .padding(.horizontal, AppSpacing.lg)
+                    .padding(.bottom, AppSpacing.md)
+                }
+            }
+            rowDivider
+            settingsRow(icon: .history, iconColor: .secondary, title: "iCloud Sync") {
+                Toggle("iCloud Sync", isOn: Bindable(appSettings).iCloudSyncEnabled)
+                    .labelsHidden()
+                    .tint(.brand)
+            }
+            if syncRestartPending {
+                Text("Restart the app for this change to take effect.")
+                    .font(.dsCaption)
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, Self.footnoteIndent)
+                    .padding(.trailing, AppSpacing.lg)
+                    .padding(.bottom, 10)
+            }
+            // Store and Pulse details are for testers verifying sync, not for runners.
+            if BuildEnvironment.showsTestFlightDiagnostics {
+                rowDivider
+                settingsRow(icon: .check, iconColor: .brand, title: "Active Store") {
+                    Text(persistenceStatusText)
+                        .font(.bodyRegular)
+                        .foregroundStyle(.secondary)
+                }
+                if appSettings.iCloudSyncEnabled {
+                    Text("Verify CloudKit on-device in Pulse Console: look for `CloudKit` `setup`, `export`, and `import` events.")
+                        .font(.dsCaption)
+                        .foregroundStyle(.secondary)
+                        .padding(.leading, Self.footnoteIndent)
+                        .padding(.trailing, AppSpacing.lg)
+                        .padding(.bottom, 10)
+                }
+            }
+            rowDivider
+            NavigationLink {
+                HealthKitImportView()
+            } label: {
+                settingsRow(icon: .heart, iconColor: .destructive, title: "Import from Apple Health") {
+                    StrideIcon(name: .chevronRight, size: 12,
+                               color: Color.secondary.opacity(0.5), strokeWeight: 2)
+                }
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.primary)
+
+            rowDivider
+            settingsRow(icon: .tortoise, iconColor: .brand, title: "Import Walks") {
+                Toggle("Import Walks", isOn: Bindable(appSettings).walkImportEnabled)
+                    .labelsHidden()
+                    .tint(.brand)
+                    .accessibilityIdentifier("settings.importWalks")
+            }
+            Text("Brings walking workouts from Apple Health into your history. They're kept out of your training stats — mileage, pace, records, and streaks stay running-only.")
+                .font(.dsCaption)
+                .foregroundStyle(.secondary)
+                .padding(.leading, Self.footnoteIndent)
+                .padding(.trailing, AppSpacing.lg)
+                .padding(.bottom, 10)
+
+            rowDivider
+            Button {
+                exportAllData()
+            } label: {
+                settingsRow(icon: .chart, iconColor: .brand, title: "Export All Data") {
+                    if isExportingData {
+                        ProgressView()
+                    } else {
+                        StrideIcon(name: .chevronRight, size: 12,
+                                   color: Color.secondary.opacity(0.5), strokeWeight: 2)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.primary)
+            .disabled(isExportingData)
+            .accessibilityIdentifier("settings.exportAllData")
+            Text("Saves every workout, strength session and pair of shoes as spreadsheet files, with each GPS route as a GPX file, in one ZIP you can keep or send anywhere.")
+                .font(.dsCaption)
+                .foregroundStyle(.secondary)
+                .padding(.leading, Self.footnoteIndent)
+                .padding(.trailing, AppSpacing.lg)
+                .padding(.bottom, 10)
+
+            if BuildEnvironment.showsTestFlightDiagnostics {
+                rowDivider
+                NavigationLink {
+                    CloudKitDebugView()
+                } label: {
+                    settingsRow(icon: .timer, iconColor: .brand, title: "CloudKit Debug Data") {
+                        StrideIcon(name: .chevronRight, size: 12,
+                                   color: Color.secondary.opacity(0.5), strokeWeight: 2)
+                    }
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.primary)
+            }
+        }
+    }
+
+    // MARK: - TestFlight notifications card
 
     private var notificationTestingCard: some View {
         settingsSection("TestFlight · Notifications") {
@@ -680,20 +690,24 @@ struct SettingsView: View {
             if let notificationTestStatus {
                 rowDivider
                 Text(notificationTestStatus)
-                    .font(.caption)
+                    .font(.dsCaption)
                     .foregroundStyle(.secondary)
-                    .padding(.horizontal, AppSpacing.lg)
+                    .padding(.leading, Self.footnoteIndent)
+                    .padding(.trailing, AppSpacing.lg)
                     .padding(.bottom, 14)
             } else {
                 rowDivider
                 Text("Sends each local notification type immediately so QA can verify copy, sounds, and tap behavior.")
-                    .font(.caption)
+                    .font(.dsCaption)
                     .foregroundStyle(.secondary)
-                    .padding(.horizontal, AppSpacing.lg)
+                    .padding(.leading, Self.footnoteIndent)
+                    .padding(.trailing, AppSpacing.lg)
                     .padding(.bottom, 14)
             }
         }
     }
+
+    // MARK: - About card
 
     private var aboutCard: some View {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
@@ -709,7 +723,7 @@ struct SettingsView: View {
                 Button {
                     showPulseConsole = true
                 } label: {
-                    settingsRow(icon: .history, iconColor: .brand, title: "Pulse Console") {
+                    settingsRow(icon: .chart, iconColor: .brand, title: "Pulse Console") {
                         StrideIcon(name: .chevronRight, size: 12,
                                    color: Color.secondary.opacity(0.5), strokeWeight: 2)
                     }
@@ -730,21 +744,12 @@ struct SettingsView: View {
         Button(role: .destructive) {
             showResetConfirmation = true
         } label: {
-            HStack(spacing: 10) {
+            HStack(spacing: AppSpacing.sm) {
                 StrideIcon(name: .close, size: 16, color: .destructive, strokeWeight: 2.2)
                 Text("Reset All Data")
-                    .font(.bodyStrong)
-                    .foregroundStyle(.destructive)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, AppSpacing.lg)
-            .background(Color.destructive.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
-            .overlay(
-                RoundedRectangle(cornerRadius: AppRadius.md)
-                    .strokeBorder(Color.destructive.opacity(0.2), lineWidth: 0.5)
-            )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.strideButton(.destructive))
     }
 
     // MARK: - Developer card (DEBUG)
@@ -829,9 +834,9 @@ struct SettingsView: View {
 
                     if let workoutKitResendStatus {
                         Text(workoutKitResendStatus)
-                            .font(.caption)
+                            .font(.dsCaption)
                             .foregroundStyle(.secondary)
-                            .padding(.leading, 62)
+                            .padding(.leading, Self.footnoteIndent)
                             .padding(.trailing, AppSpacing.lg)
                             .padding(.bottom, AppSpacing.md)
                     }
@@ -885,8 +890,12 @@ struct SettingsView: View {
         .padding(.vertical, AppSpacing.md)
     }
 
+    /// Where a row's title starts (16 padding + 32 icon tile + 14 gap): footnotes and
+    /// dividers line up with it.
+    private static let footnoteIndent: CGFloat = 62
+
     private var rowDivider: some View {
-        Divider().padding(.leading, 62)
+        Divider().padding(.leading, Self.footnoteIndent)
     }
 
     // MARK: - Actions

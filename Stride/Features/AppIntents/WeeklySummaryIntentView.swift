@@ -9,18 +9,18 @@ struct WeeklySummaryIntentView: View {
         HStack(spacing: 16) {
             ZStack {
                 Circle()
-                    .fill(Color.zoneEasy.opacity(0.15))
+                    .fill(Color.brand.opacity(0.12))
                     .frame(width: 52, height: 52)
                 Image(systemName: "chart.bar.fill")
-                    .font(.title2)
-                    .foregroundStyle(Color.zoneEasy)
+                    .font(.dsTitle2)
+                    .foregroundStyle(Color.brandText)
             }
             VStack(alignment: .leading, spacing: 4) {
                 Text("This Week")
-                    .font(.subheadline)
+                    .font(.dsSubhead)
                     .foregroundStyle(.secondary)
                 Text(data.totalMeters.distanceString(unit: unit))
-                    .font(.title2.bold())
+                    .font(.dsTitle2.monospacedDigit())
             }
             Spacer()
         }

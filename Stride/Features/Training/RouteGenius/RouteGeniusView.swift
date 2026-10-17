@@ -15,6 +15,7 @@ struct RouteGeniusView: View {
 
     @State var viewModel: RouteGeniusViewModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var showSaveSheet = false
     @State private var routeNameInput = ""
@@ -89,7 +90,7 @@ struct RouteGeniusView: View {
                     .frame(maxWidth: .infinity)
 
                 Text(viewModel.unitLabel)
-                    .font(.title3)
+                    .font(.dsTitle3)
                     .foregroundStyle(.secondary)
             }
             .padding()
@@ -175,7 +176,7 @@ struct RouteGeniusView: View {
                                     .foregroundStyle(.primary)
                                 if let title = item.placemark.title {
                                     Text(title)
-                                        .font(.caption)
+                                        .font(.dsCaption)
                                         .foregroundStyle(.secondary)
                                 }
                             }
@@ -199,7 +200,7 @@ struct RouteGeniusView: View {
                         StrideIcon(name: .check, size: 8, color: .onFill, strokeWeight: 2.5)
                     }
                     Text(selected.name ?? "Selected location")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.dsCaption).foregroundStyle(.secondary)
                 }
             }
         }
@@ -215,10 +216,10 @@ struct RouteGeniusView: View {
                     Circle().fill(Color.success).frame(width: 16, height: 16)
                     StrideIcon(name: .check, size: 8, color: .onFill, strokeWeight: 2.5)
                 }
-                Text("Location acquired").font(.caption).foregroundStyle(.secondary)
+                Text("Location acquired").font(.dsCaption).foregroundStyle(.secondary)
             } else {
                 ProgressView().scaleEffect(0.7)
-                Text("Acquiring location…").font(.caption).foregroundStyle(.secondary)
+                Text("Acquiring location…").font(.dsCaption).foregroundStyle(.secondary)
             }
         }
     }
@@ -255,13 +256,17 @@ struct RouteGeniusView: View {
     // MARK: Error card
 
     private func errorCard(_ message: String) -> some View {
+        // Status shows in the icon, not a tinted ground: a card like every other one.
         HStack(alignment: .top, spacing: 10) {
-            StrideIcon(name: .flag, size: 16, color: .warning, strokeWeight: 2)
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.dsSubhead)
+                .foregroundStyle(.warning)
+                .accessibilityHidden(true)
             Text(message).font(.bodyRegular).foregroundStyle(.secondary)
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.warning.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
+        .strideCard(cornerRadius: AppRadius.md)
     }
 
     // MARK: Route options
@@ -281,7 +286,7 @@ struct RouteGeniusView: View {
                     isSelected: viewModel.selectedRouteIndex == index,
                     viewModel: viewModel
                 ) {
-                    withAnimation(.easeInOut(duration: 0.2)) {
+                    withAnimation(reduceMotion ? nil : AppAnimation.snappy) {
                         viewModel.selectedRouteIndex = index
                     }
                 }
@@ -319,7 +324,7 @@ struct RouteGeniusView: View {
                 TurnByTurnList(steps: route.steps, viewModel: viewModel)
             }
         }
-        .animation(.easeInOut(duration: 0.25), value: viewModel.selectedRouteIndex)
+        .adaptiveAnimation(AppAnimation.gentle, value: viewModel.selectedRouteIndex)
     }
 
     // MARK: Save route sheet
@@ -378,7 +383,7 @@ private struct RouteOptionCard: View {
                 HStack {
                     Text(route.label)
                         .font(.bodyStrong)
-                        .foregroundStyle(isSelected ? .brand : .primary)
+                        .foregroundStyle(isSelected ? .brandText : .primary)
 
                     Spacer()
 
@@ -392,9 +397,12 @@ private struct RouteOptionCard: View {
                 }
 
                 // Mini map thumbnail
+                // Thumbnails keep the pin still: the selected route's map below is the
+                // screen's one pulse.
                 RouteMapView(
                     coordinates: route.coordinates.map(\.clCoordinate),
-                    startCoordinate: startCoord
+                    startCoordinate: startCoord,
+                    pulses: false
                 )
                 .frame(height: 120)
                 .clipShape(RoundedRectangle(cornerRadius: AppRadius.sm))
@@ -405,21 +413,25 @@ private struct RouteOptionCard: View {
                     Label(viewModel.formattedDistance(route.distanceMeters), systemImage: "arrow.triangle.swap")
                     Label(viewModel.formattedDuration(route.durationSeconds), systemImage: "clock")
                 }
-                .font(.caption)
+                .font(.dsCaption)
                 .foregroundStyle(.secondary)
             }
             .padding(AppSpacing.md)
-            .background(
-                isSelected
-                    ? Color.brand.opacity(0.08)
-                    : Color.surfaceSecondary,
-                in: RoundedRectangle(cornerRadius: AppRadius.md)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: AppRadius.md)
-                    .stroke(isSelected ? Color.brand : Color.clear, lineWidth: 2)
-            )
-            .animation(.easeInOut(duration: 0.2), value: isSelected)
+            // A card with its hairline; the chosen one adds a brand tint and outline.
+            .background {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: AppRadius.md, style: .continuous)
+                        .fill(Color.brand.opacity(0.08))
+                }
+            }
+            .overlay {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: AppRadius.md, style: .continuous)
+                        .strokeBorder(Color.brand, lineWidth: 2)
+                }
+            }
+            .strideCard(cornerRadius: AppRadius.md)
+            .adaptiveAnimation(AppAnimation.snappy, value: isSelected)
         }
         .buttonStyle(.plain)
     }
@@ -456,23 +468,6 @@ private struct RouteTypeButton: View {
         }
         .buttonStyle(BouncyButtonStyle())
         .accessibilityAddTraits(isSelected ? .isSelected : [])
-    }
-}
-
-// MARK: - RouteStatPill
-
-private struct RouteStatPill: View {
-    let icon: StrideIconName
-    let value: String
-    let label: String
-
-    var body: some View {
-        VStack(spacing: 4) {
-            StrideIcon(name: icon, size: 14, color: .brand, strokeWeight: 2.0)
-            Text(value).font(.bodyStrong).minimumScaleFactor(0.7).lineLimit(1)
-            Text(label).font(.caption2).foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
     }
 }
 
@@ -516,7 +511,7 @@ struct TurnByTurnRow: View {
                     .fill(index == 0 ? Color.brand : Color.secondary.opacity(0.15))
                     .frame(width: 28, height: 28)
                 Text("\(index + 1)")
-                    .font(.caption.bold())
+                    .font(.dsCaption.weight(.bold))
                     .foregroundStyle(index == 0 ? Color.onFill : Color.secondary)
             }
 
@@ -524,14 +519,14 @@ struct TurnByTurnRow: View {
                 Text(step.instruction).font(.bodyRegular)
                 // Apple Maps steps carry no separate street name; only ORS fills it.
                 if !step.name.isEmpty {
-                    Text(step.name).font(.caption).foregroundStyle(.secondary)
+                    Text(step.name).font(.dsCaption).foregroundStyle(.secondary)
                 }
             }
 
             Spacer()
 
             Text(viewModel.formattedDistance(step.distanceMeters))
-                .font(.caption)
+                .font(.dsCaption)
                 .foregroundStyle(.tertiary)
         }
         .padding(.horizontal, 14)

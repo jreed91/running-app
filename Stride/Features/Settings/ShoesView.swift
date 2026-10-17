@@ -57,6 +57,7 @@ struct ShoesView: View {
         }
         .sheet(item: $editing) { target in
             ShoeEditorView(target: target, allShoes: shoes)
+                .strideSheet()
         }
         .confirmationDialog(
             "Delete \(pendingDeletion?.name ?? "this pair")?",
@@ -210,6 +211,7 @@ struct ShoeEditorView: View {
     @State private var isDefault = false
     @State private var isRetired = false
     @State private var loaded = false
+    @State private var confirmingDeletion = false
 
     private var unit: UnitPreference { appSettings.unitPreference }
     private var unitLabel: String { unit == .metric ? "km" : "mi" }
@@ -247,6 +249,18 @@ struct ShoeEditorView: View {
                     Text("New runs from the day this pair went into use are put on it. You can change the shoe on any run.")
                 }
                 .strideListRow()
+                // The list's swipe actions are hidden from anyone who doesn't know to
+                // swipe; the editor is where every action on a pair can be found.
+                if existing != nil {
+                    Section {
+                        Button("Delete Pair", role: .destructive) { confirmingDeletion = true }
+                            .buttonStyle(.strideButton(.destructive))
+                            .listRowInsets(EdgeInsets())
+                            .listRowBackground(Color.clear)
+                    } footer: {
+                        Text("To keep its mileage in your history, retire it instead.")
+                    }
+                }
             }
             .strideList()
             .navigationTitle(existing == nil ? "New Pair" : "Edit Pair")
@@ -264,7 +278,23 @@ struct ShoeEditorView: View {
             .onChange(of: isRetired) { _, retired in
                 if retired { isDefault = false }
             }
+            .confirmationDialog(
+                "Delete \(trimmedName.isEmpty ? String(localized: "this pair") : trimmedName)?",
+                isPresented: $confirmingDeletion,
+                titleVisibility: .visible
+            ) {
+                Button("Delete", role: .destructive) { deleteExisting() }
+            } message: {
+                Text("Its runs stay in your history without a shoe. To keep its mileage, retire it instead.")
+            }
         }
+    }
+
+    private func deleteExisting() {
+        guard let existing else { return }
+        ShoeAssignment.delete(existing, in: context)
+        context.saveOrLog("the deletion of a shoe")
+        dismiss()
     }
 
     private var defaultReplacementText: String {
