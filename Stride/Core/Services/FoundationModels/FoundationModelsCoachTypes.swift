@@ -65,7 +65,7 @@ struct GeneratedEvidence: Sendable {
     let label: String
     @Guide(description: "The value with its unit, as a watch shows it, at most 12 characters (for example \"5:20/km\")")
     let value: String
-    @Guide(description: "Optional change against the runner's usual, at most 8 characters (for example \"+15s\")")
+    @Guide(description: "Optional change against the plan or the runner's usual, at most 8 characters (for example \"-12s\" or \"+4 bpm\")")
     let delta: String?
     let tone: CoachTone
 }
@@ -86,7 +86,7 @@ struct GeneratedActionItem: Sendable {
 @available(iOS 26.0, *)
 @Generable
 struct GeneratedNextWorkout: Sendable {
-    @Guide(description: "The next run to do, named the way a coach would say it (for example \"Easy 5 km at 6:10 per km\")")
+    @Guide(description: "The next run to do, named the way a coach would say it (for example \"Easy 5 km at 6:10 per km\"). If a next run is planned, this is that run, changed only if this run gives a reason")
     let title: String
     @Guide(description: "One plain sentence, addressed to \"you\", saying why this comes next")
     let rationale: String
@@ -95,17 +95,17 @@ struct GeneratedNextWorkout: Sendable {
 @available(iOS 26.0, *)
 @Generable
 struct GeneratedCoachInsight: Sendable {
-    @Guide(description: "The one thing to know about this run, in plain words, at most 8 words")
+    @Guide(description: "The verdict: did this run do its job, in plain words, at most 8 words (for example \"Tempo on target, last 2 km faded\")")
     let headline: String
-    @Guide(description: "The main takeaway in one plain sentence, addressed to \"you\", with no jargon")
+    @Guide(description: "Why, in one plain sentence addressed to \"you\", naming the one number that shows it, with no jargon")
     let summary: String
     @Guide(description: "2-3 short, plain sentences addressed to \"you\": what happened, the number that shows it, and what to do about it. Write paces as minutes and seconds, and explain any training term you use")
     let fullAnalysis: String
     @Guide(description: "Confidence score", .range(0...100))
     let confidence: Int
-    @Guide(description: "Exactly four short numbers that back up the read", .count(4))
+    @Guide(description: "Exactly three numbers that prove the verdict, each compared with the plan or the runner's usual where the data allows", .count(3))
     let evidence: [GeneratedEvidence]
-    @Guide(description: "Exactly three things to do next, most important first", .count(3))
+    @Guide(description: "Exactly three things to do next, most important first, each different from the others", .count(3))
     let actionItems: [GeneratedActionItem]
     let nextWorkout: GeneratedNextWorkout
 }
