@@ -123,15 +123,6 @@ extension RunSummaryView {
             unitPreference: appSettings.unitPreference,
             plannedSession: matchedScheduled,
             nextPlannedSession: nextWorkoutForFeedback(),
-            // Lets the read look further back than `historySlice` — "your last three
-            // tempos", "your biggest week this block" — counted from this run, not today.
-            lookup: CoachLookup.make(
-                context: context,
-                plan: planForNextSessionUpdate,
-                unit: appSettings.unitPreference,
-                excluding: workout,
-                now: workout.date
-            ),
             onPartialText: { text in
                 // Direct assignment on the main actor; see `OnDeviceCoachGenerating` for
                 // why this is not wrapped in a `Task`.

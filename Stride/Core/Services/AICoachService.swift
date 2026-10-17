@@ -261,14 +261,31 @@ struct AICoachService: Sendable {
         guard let backend = onDeviceBackend, await backend.isAvailable() else {
             throw OnDeviceCoachError.unavailable
         }
-        return try await backend.generateChatReply(
-            instructions: CoachLookup.instructions(Self.chatInstructions, withToolsFor: lookup),
-            context: context,
-            messages: messages,
-            lookup: lookup,
-            useServerModel: provider.usesPrivateCloudCompute,
-            onPartialText: onPartialText
-        )
+        do {
+            return try await backend.generateChatReply(
+                instructions: CoachLookup.instructions(Self.chatInstructions, withToolsFor: lookup),
+                context: context,
+                messages: messages,
+                lookup: lookup,
+                useServerModel: provider.usesPrivateCloudCompute,
+                onPartialText: onPartialText
+            )
+        } catch OnDeviceCoachError.serverQuotaExceeded(let resetDate) {
+            throw OnDeviceCoachError.serverQuotaExceeded(resetDate: resetDate)
+        } catch where lookup != nil && !(error is CancellationError) {
+            // A request with tools that fails for any other reason is asked once more
+            // without them: the eight runs in `context` still answer most questions, and
+            // a plain answer beats an error bubble.
+            AppLogger.log("Coach chat with tools failed, retrying without: \(error)", label: "ai-coach", level: .error)
+            return try await backend.generateChatReply(
+                instructions: Self.chatInstructions,
+                context: context,
+                messages: messages,
+                lookup: nil,
+                useServerModel: provider.usesPrivateCloudCompute,
+                onPartialText: onPartialText
+            )
+        }
     }
 
     /// The model's own wording for the dashboard's Coach Tips, checked against the cards
@@ -355,6 +372,9 @@ struct AICoachService: Sendable {
                 )
                 return makeInsight(from: structured, provider: provider)
             } catch {
+                // Every failure lands on the local summary, so without this line a broken
+                // read and an unavailable model look the same from the outside.
+                AppLogger.log("Coach read failed: \(error)", label: "ai-coach", level: .error)
                 return localHeuristicInsight(context: context, provider: provider)
             }
         }

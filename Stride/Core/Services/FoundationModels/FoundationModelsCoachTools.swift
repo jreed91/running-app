@@ -44,6 +44,7 @@ extension CoachRunKind {
 @available(iOS 26.0, *)
 struct FindRunsTool: Tool {
     let lookup: CoachLookup
+    let budget: CoachToolBudget
 
     let name = "findRuns"
     let description = "Finds the runner's past runs, newest first, with date, type, distance, time, pace, heart rate and how it felt."
@@ -59,13 +60,16 @@ struct FindRunsTool: Tool {
     }
 
     func call(arguments: Arguments) async throws -> String {
-        lookup.findRuns(type: arguments.kind.workoutType, withinDays: arguments.withinDays, limit: arguments.limit)
+        budget.spend {
+            lookup.findRuns(type: arguments.kind.workoutType, withinDays: arguments.withinDays, limit: arguments.limit)
+        }
     }
 }
 
 @available(iOS 26.0, *)
 struct WeeklyTotalsTool: Tool {
     let lookup: CoachLookup
+    let budget: CoachToolBudget
 
     let name = "getWeeklyTotals"
     let description = "Gives the runner's total distance and number of runs for each recent week, newest first."
@@ -77,13 +81,16 @@ struct WeeklyTotalsTool: Tool {
     }
 
     func call(arguments: Arguments) async throws -> String {
-        lookup.weeklyTotals(weeks: arguments.weeks)
+        budget.spend {
+            lookup.weeklyTotals(weeks: arguments.weeks)
+        }
     }
 }
 
 @available(iOS 26.0, *)
 struct PlanSessionsTool: Tool {
     let lookup: CoachLookup
+    let budget: CoachToolBudget
 
     let name = "getPlanSessions"
     let description = "Lists the runner's planned runs around today, with type, distance and whether each was done, missed or is still to come."
@@ -97,7 +104,9 @@ struct PlanSessionsTool: Tool {
     }
 
     func call(arguments: Arguments) async throws -> String {
-        lookup.planSessions(daysBack: arguments.daysBack, daysAhead: arguments.daysAhead)
+        budget.spend {
+            lookup.planSessions(daysBack: arguments.daysBack, daysAhead: arguments.daysAhead)
+        }
     }
 }
 
@@ -148,6 +157,7 @@ extension CoachRaceDistance {
 @available(iOS 26.0, *)
 struct RankRunsTool: Tool {
     let lookup: CoachLookup
+    let budget: CoachToolBudget
 
     let name = "rankRuns"
     let description = "Finds the runner's fastest, longest or highest heart rate runs in a recent window, best first."
@@ -165,18 +175,21 @@ struct RankRunsTool: Tool {
     }
 
     func call(arguments: Arguments) async throws -> String {
-        lookup.rankRuns(
-            type: arguments.kind.workoutType,
-            withinDays: arguments.withinDays,
-            by: arguments.by.ranking,
-            limit: arguments.limit
-        )
+        budget.spend {
+            lookup.rankRuns(
+                type: arguments.kind.workoutType,
+                withinDays: arguments.withinDays,
+                by: arguments.by.ranking,
+                limit: arguments.limit
+            )
+        }
     }
 }
 
 @available(iOS 26.0, *)
 struct CompareRunsTool: Tool {
     let lookup: CoachLookup
+    let budget: CoachToolBudget
 
     let name = "compareRuns"
     let description = "Compares the runner's recent days with the same number of days before them: runs, distance, average pace, heart rate and how many felt hard."
@@ -190,13 +203,16 @@ struct CompareRunsTool: Tool {
     }
 
     func call(arguments: Arguments) async throws -> String {
-        lookup.compareRuns(type: arguments.kind.workoutType, days: arguments.days)
+        budget.spend {
+            lookup.compareRuns(type: arguments.kind.workoutType, days: arguments.days)
+        }
     }
 }
 
 @available(iOS 26.0, *)
 struct RacePredictionsTool: Tool {
     let lookup: CoachLookup
+    let budget: CoachToolBudget
 
     let name = "predictRaceTimes"
     let description = "Gives the race times and paces the runner's current fitness predicts for 5K, 10K, half marathon and marathon."
@@ -208,21 +224,25 @@ struct RacePredictionsTool: Tool {
     }
 
     func call(arguments: Arguments) async throws -> String {
-        lookup.racePredictions(for: arguments.distance.meters)
+        budget.spend {
+            lookup.racePredictions(for: arguments.distance.meters)
+        }
     }
 }
 
 @available(iOS 26.0, *)
 extension CoachLookup {
-    /// The tools a session gets for this lookup.
+    /// The tools a session gets for this lookup. Built once per request, so the tools of
+    /// one answer share one ``CoachToolBudget``.
     var tools: [any Tool] {
-        [
-            FindRunsTool(lookup: self),
-            RankRunsTool(lookup: self),
-            WeeklyTotalsTool(lookup: self),
-            CompareRunsTool(lookup: self),
-            PlanSessionsTool(lookup: self),
-            RacePredictionsTool(lookup: self),
+        let budget = CoachToolBudget(calls: Self.maximumToolCalls)
+        return [
+            FindRunsTool(lookup: self, budget: budget),
+            RankRunsTool(lookup: self, budget: budget),
+            WeeklyTotalsTool(lookup: self, budget: budget),
+            CompareRunsTool(lookup: self, budget: budget),
+            PlanSessionsTool(lookup: self, budget: budget),
+            RacePredictionsTool(lookup: self, budget: budget),
         ]
     }
 }

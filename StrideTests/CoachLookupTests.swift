@@ -193,6 +193,16 @@ struct CoachLookupTests {
         ))
     }
 
+    // MARK: Call budget
+
+    @Test func theBudgetAnswersUntilItIsSpent() {
+        let budget = CoachToolBudget(calls: 2)
+        #expect(budget.spend { "first" } == "first")
+        #expect(budget.spend { "second" } == "second")
+        #expect(budget.spend { "third" } == CoachToolBudget.spentAnswer)
+        #expect(!CoachToolBudget(calls: 0).take())
+    }
+
     // MARK: Service
 
     @Test func chatPassesTheLookupAndTheToolsNote() async {
@@ -207,6 +217,22 @@ struct CoachLookupTests {
         let requests = await recorder.requests
         #expect(requests.map(\.hadLookup) == [true, false])
         #expect(requests.first?.instructions.contains(CoachLookup.instructionsNote) == true)
+        #expect(requests.last?.instructions == AICoachService.chatInstructions)
+    }
+
+    @Test func aChatThatFailsWithToolsIsAskedAgainWithout() async throws {
+        let recorder = LookupRecorder()
+        let service = AICoachService(
+            onDeviceBackend: LookupRecordingCoach(recorder: recorder, failsWithTools: true)
+        )
+
+        let reply = try await service.chatWithProvider(
+            provider: .applePrivateCloud, context: "ctx", messages: [], lookup: lookup
+        )
+
+        let requests = await recorder.requests
+        #expect(reply == "ok")
+        #expect(requests.map(\.hadLookup) == [true, false])
         #expect(requests.last?.instructions == AICoachService.chatInstructions)
     }
 }
@@ -230,6 +256,7 @@ private actor LookupRecorder {
 /// variant directly, as the real backend does.
 private struct LookupRecordingCoach: OnDeviceCoachGenerating {
     let recorder: LookupRecorder
+    var failsWithTools = false
 
     func isAvailable() async -> Bool { true }
     func unavailableReason() async -> String? { nil }
@@ -243,6 +270,7 @@ private struct LookupRecordingCoach: OnDeviceCoachGenerating {
         onPartialText: @escaping @MainActor @Sendable (String) -> Void
     ) async throws -> String {
         await recorder.record(.init(instructions: instructions, hadLookup: lookup != nil))
+        if failsWithTools, lookup != nil { throw OnDeviceCoachError.malformedResponse }
         return "ok"
     }
 
