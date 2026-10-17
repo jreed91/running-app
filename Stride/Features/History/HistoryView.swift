@@ -442,6 +442,8 @@ private struct HistoryEntryList: View {
             NavigationLink { RunSummaryView(workout: workout) } label: {
                 WorkoutRowView(workout: workout)
             }
+            // `StrideUITests.testBreakdownRowOpensItsPage` opens the newest run by this.
+            .accessibilityIdentifier("history.run")
             .onAppear { loadMoreIfNeeded(index: index) }
         case .strength(let workout):
             NavigationLink { StrengthSummaryView(workout: workout) } label: {

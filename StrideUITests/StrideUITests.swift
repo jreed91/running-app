@@ -116,8 +116,10 @@ final class StrideUITests: XCTestCase {
         tabBar.buttons["History"].tap()
         XCTAssertTrue(app.navigationBars["History"].waitForExistence(timeout: 5))
 
-        let firstRun = app.cells.firstMatch
-        XCTAssertTrue(firstRun.waitForExistence(timeout: 10), "The demo history has no rows")
+        // Not `app.cells.firstMatch`: the list opens with the month hero, which is a cell
+        // too. The newest demo run is an outdoor long run, so it has splits at least.
+        let firstRun = app.descendants(matching: .any).matching(identifier: "history.run").firstMatch
+        XCTAssertTrue(firstRun.waitForExistence(timeout: 10), "The demo history has no runs")
         firstRun.tap()
 
         let rows = app.buttons
