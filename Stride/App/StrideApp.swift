@@ -96,6 +96,12 @@ struct StrideApp: App {
                     handleDeepLink(url)
                 }
         }
+        // The daily refresh that keeps the evening nudges, the Sunday recap and the heat
+        // advisory current on a day the app is never opened. Declared on the scene so
+        // SwiftUI registers the handler at launch, background launches included.
+        .backgroundTask(.appRefresh(NotificationRefreshService.backgroundRefreshIdentifier)) { [container] in
+            await container.runBackgroundRefresh()
+        }
     }
 
     /// Handles `stride://` links: the run's Live Activity (U5b/U7) and the Home Screen /
@@ -210,11 +216,6 @@ struct ContentView: View {
     @State private var recoveryNotice: AppContainer.StoreRecoveryNotice?
 
     @Environment(\.scenePhase) private var scenePhase
-
-    /// The dashboard recovery card's once-a-week dismissal, read here so the evening
-    /// missed-workout push honours it too (A9). Same key, same meaning — see
-    /// `MissedWorkoutDetector.promptFlaggedDateKey`.
-    @AppStorage(MissedWorkoutDetector.promptFlaggedDateKey) private var missedWorkoutPromptFlaggedInterval: Double = 0
 
     private let restoreLocationManager = CLLocationManager()
 
@@ -331,9 +332,18 @@ struct ContentView: View {
         // runner who goes out at 17:00 and doesn't reopen the app gets an 18:00 banner
         // telling them they haven't run. Cheap either way — a bounded fetch and pure
         // arithmetic, no network.
+        //
+        // Leaving the app is also the moment to ask for tomorrow's background refresh,
+        // which re-arms all of the above on a day the runner never opens the app.
+        // Re-submitting replaces the pending request, so this cannot pile them up. Kept
+        // in this modifier rather than its own: one more link in this chain was enough to
+        // time out the Release type-checker.
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active || phase == .background else { return }
             Task { await refreshTrainingNudges() }
+            if phase == .background {
+                scheduleBackgroundRefresh()
+            }
         }
         // The widgets' catch-all (B1). `.background` is the one that matters — it is the
         // last chance to publish whatever the runner just did before they go and look at
@@ -393,90 +403,32 @@ struct ContentView: View {
         }
     }
 
-    /// Re-reads tomorrow's forecast and re-arms the evening heat banner.
-    ///
-    /// Runs the same fetch the advisory's location and start-hour heuristics need — the
-    /// newest twenty runs, walks excluded, because "when and where does this person run"
-    /// is a training question. Bounded through `runsOnlyDescriptor` rather than filtered
-    /// afterwards, so a runner who walks does not get a shorter sample than one who
-    /// doesn't (N38).
+    /// Re-reads tomorrow's forecast and re-arms the evening heat banner. The work is
+    /// `NotificationRefreshService`'s, shared with the background refresh.
     @MainActor
     private func refreshHeatAdvisory() async {
         guard !UITestingSupport.isEnabled, !UITestingSupport.isHostingUnitTests else { return }
-
-        let recentRuns = (try? context.fetch(
-            RunWorkout.runsOnlyDescriptor(
-                sortBy: [SortDescriptor(\RunWorkout.date, order: .reverse)],
-                fetchLimit: 20
-            )
-        )) ?? []
-
-        await container.heatAdvisoryService.refresh(
+        await container.notificationRefreshService.refreshHeatAdvisory(
             plan: activePlans.first,
-            recentRuns: recentRuns,
-            isEnabled: appSettings.heatAdaptationEnabled,
-            unit: appSettings.unitPreference
+            preferences: appSettings.notificationPreferences
         )
     }
 
-    /// Recomputes tonight's nudge and, on a Sunday, the week's recap (A9).
-    ///
-    /// Every decision is `TrainingNudgePolicy`'s; this reads the three things it needs —
-    /// the runner's recent runs, the active plan, the weekly goal — and hands them over.
-    ///
-    /// The run fetch is bounded at `TrainingNudgePolicy.streakRunSampleSize`, through
-    /// `runsOnlyDescriptor` rather than filtered afterwards so a runner who walks does
-    /// not get a shorter sample than one who doesn't (N38).
+    /// Recomputes tonight's nudge, tomorrow's streak nudge and the Sunday recap (A9). The
+    /// work is `NotificationRefreshService`'s, shared with the HealthKit import and the
+    /// background refresh.
     @MainActor
     private func refreshTrainingNudges() async {
         guard !UITestingSupport.isEnabled, !UITestingSupport.isHostingUnitTests else { return }
-
-        let service = container.notificationService
-
-        guard appSettings.trainingNudgesEnabled else {
-            await service.cancelTrainingNudges(includingLog: true)
-            return
-        }
-
-        let runs = (try? context.fetch(
-            RunWorkout.runsOnlyDescriptor(
-                sortBy: [SortDescriptor(\RunWorkout.date, order: .reverse)],
-                fetchLimit: TrainingNudgePolicy.streakRunSampleSize
-            )
-        )) ?? []
-
-        let streak = StreakGoalService.streak(for: runs)
-        let flaggedAt = missedWorkoutPromptFlaggedInterval == 0
-            ? nil
-            : Date(timeIntervalSince1970: missedWorkoutPromptFlaggedInterval)
-
-        if let nudge = TrainingNudgePolicy.eveningNudge(
-            streak: streak,
+        await container.notificationRefreshService.refreshTrainingNudges(
             plan: activePlans.first,
-            missedPromptFlaggedAt: flaggedAt
-        ) {
-            await service.scheduleEveningNudge(nudge)
-        } else {
-            // Nothing to say tonight — and something queued from this morning may now be
-            // wrong, which is the case this branch exists for: the run that ended the
-            // streak nudge was logged at lunchtime.
-            service.cancelTrainingNudge(.streak)
-            service.cancelTrainingNudge(.missedWorkouts)
-        }
+            preferences: appSettings.notificationPreferences
+        )
+    }
 
-        // Today's run is in, so tonight has nothing to say about the streak — but
-        // tomorrow will, and the runner who skips tomorrow is likely not to open the
-        // app tomorrow either. Re-armed on every foreground, so it moves with the runs.
-        if let tomorrow = TrainingNudgePolicy.tomorrowStreakNudge(for: streak) {
-            await service.scheduleTomorrowStreakNudge(tomorrow)
-        }
-
-        if let recap = TrainingNudgePolicy.weeklyRecap(
-            for: runs,
-            goalMeters: appSettings.weeklyGoalMeters
-        ) {
-            await service.scheduleWeeklyRecap(recap, unit: appSettings.unitPreference)
-        }
+    private func scheduleBackgroundRefresh() {
+        guard !UITestingSupport.isEnabled, !UITestingSupport.isHostingUnitTests else { return }
+        NotificationRefreshService.scheduleBackgroundRefresh()
     }
 
     private func requestMissingPermissionsAfterRestoreIfNeeded() async {
