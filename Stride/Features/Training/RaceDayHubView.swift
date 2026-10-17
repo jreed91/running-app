@@ -16,6 +16,7 @@ import SwiftData
 struct RaceDayHubView: View {
 
     @Environment(AppSettings.self) private var appSettings
+    @Environment(AppContainer.self) private var container
 
     @Query(filter: #Predicate<TrainingPlan> { $0.isActive == true })
     private var activePlans: [TrainingPlan]
@@ -30,6 +31,11 @@ struct RaceDayHubView: View {
 
     /// Which rung the split table is being drawn for. Starts on the goal the runner set.
     @State private var selectedTier: RaceGoal.Tier = .a
+
+    /// Apple Intelligence's race plan, seeded from the last one saved so reopening the hub
+    /// on an unchanged day shows it at once. Only drawn once it matches today's facts.
+    @State private var briefing: RaceBriefingWording? = RaceBriefingStore.load()
+    @State private var isWritingBriefing = false
 
     private var unit: UnitPreference { appSettings.unitPreference }
 
@@ -73,6 +79,10 @@ struct RaceDayHubView: View {
                     goalLadder(racePlan)
                 }
 
+                if showsBriefing(racePlan) {
+                    RaceBriefingCard(wording: currentBriefing(racePlan))
+                }
+
                 if let taper = racePlan.taper, racePlan.result == nil {
                     RaceTaperCard(status: taper, unit: unit)
                 }
@@ -87,6 +97,54 @@ struct RaceDayHubView: View {
             }
             .padding()
         }
+        .task(id: briefingRequestKey(racePlan)) { await refreshBriefing(racePlan) }
+    }
+
+    // MARK: - Race plan (Apple Intelligence)
+
+    /// Whether the hub asks for a race plan at all: a race still to come with a goal
+    /// time, AI Coach on, and not in UI tests or unit-test hosting.
+    private func briefingEnabled(_ racePlan: RaceDayPlan) -> Bool {
+        appSettings.aiInsightsEnabled
+            && RaceBriefing.applies(to: racePlan)
+            && !UITestingSupport.isEnabled
+            && !UITestingSupport.isHostingUnitTests
+    }
+
+    /// Drawn while writing and once written; a failed or rejected draft draws nothing.
+    private func showsBriefing(_ racePlan: RaceDayPlan) -> Bool {
+        briefingEnabled(racePlan) && (currentBriefing(racePlan) != nil || isWritingBriefing)
+    }
+
+    /// The saved briefing, when it was written from exactly these facts in this unit.
+    private func currentBriefing(_ racePlan: RaceDayPlan) -> RaceBriefingWording? {
+        guard let briefing, briefing.source == RaceBriefing.prompt(for: racePlan, unit: unit) else { return nil }
+        return briefing
+    }
+
+    /// Moves with the facts, the unit, the AI Coach switch and the model choice only.
+    private func briefingRequestKey(_ racePlan: RaceDayPlan) -> String {
+        [
+            RaceBriefing.prompt(for: racePlan, unit: unit),
+            briefingEnabled(racePlan) ? "on" : "off",
+            appSettings.aiProvider.rawValue,
+        ].joined(separator: "\n")
+    }
+
+    private func refreshBriefing(_ racePlan: RaceDayPlan) async {
+        guard briefingEnabled(racePlan), currentBriefing(racePlan) == nil else { return }
+        isWritingBriefing = true
+        let fresh = await container.aiCoachService.writeRaceBriefing(
+            for: racePlan,
+            unit: unit,
+            provider: appSettings.aiProvider
+        )
+        // A newer set of facts (or setting) has already started its own request.
+        guard !Task.isCancelled else { return }
+        isWritingBriefing = false
+        guard let fresh else { return }
+        briefing = fresh
+        RaceBriefingStore.save(fresh)
     }
 
     /// The split table is a plan for a race that has not been run. Once the result is in

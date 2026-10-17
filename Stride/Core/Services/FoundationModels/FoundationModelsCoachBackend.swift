@@ -256,6 +256,23 @@ struct FoundationModelsCoachBackend: OnDeviceCoachGenerating {
         return generated.toDraft()
     }
 
+    func generateRaceBriefing(
+        instructions: String,
+        prompt: String,
+        useServerModel: Bool
+    ) async throws -> RaceBriefingDraft {
+        let generated = try await generate(
+            instructions: instructions,
+            prompt: prompt,
+            generating: GeneratedRaceBriefing.self,
+            useServerModel: useServerModel,
+            // Choosing a goal against a prediction and a taper is a judgement, not a
+            // rewording, but a short one: Apple's suggested starting level.
+            reasoning: .moderate
+        )
+        return generated.toDraft()
+    }
+
     // MARK: - Session / model resolution
 
     /// Runs `work` against a session on the Private Cloud Compute model when the runner

@@ -194,6 +194,17 @@ struct GeneratedWeekReview: Sendable {
     let nextFocus: String
 }
 
+@available(iOS 26.0, *)
+@Generable
+struct GeneratedRaceBriefing: Sendable {
+    @Guide(description: "A short heading said to the runner about how to run this race, at most 6 words")
+    let headline: String
+    @Guide(description: "Two or three short, plain sentences addressed to \"you\": which goal to aim for and how to pace the start, middle and finish. Copy any time or pace exactly as written in the facts, and add no other numbers")
+    let pacing: String
+    @Guide(description: "One short sentence addressed to \"you\" on what to do between now and the race. No numbers")
+    let beforeTheRace: String
+}
+
 // MARK: - Mapping to the existing structured value types
 
 @available(iOS 26.0, *)
@@ -296,6 +307,13 @@ extension GeneratedCoachTips {
 extension GeneratedWeekReview {
     func toDraft() -> WeekReviewDraft {
         WeekReviewDraft(headline: headline, summary: summary, nextFocus: nextFocus)
+    }
+}
+
+@available(iOS 26.0, *)
+extension GeneratedRaceBriefing {
+    func toDraft() -> RaceBriefingDraft {
+        RaceBriefingDraft(headline: headline, pacing: pacing, beforeTheRace: beforeTheRace)
     }
 }
 #endif
