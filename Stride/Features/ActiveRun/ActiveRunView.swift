@@ -237,8 +237,8 @@ struct ActiveRunView: View {
                 topBar
                 zoneLabel
                 heroPace
-                if let paces = trainingPaces, tracker.trackingState == .active {
-                    paceMeter(paces: paces)
+                if let target = paceTargetRange, tracker.trackingState == .active {
+                    paceMeter(target: target)
                         .padding(.horizontal, 22)
                         .padding(.top, 22)
                 }
@@ -510,10 +510,32 @@ struct ActiveRunView: View {
 
     // MARK: - Pace meter
 
-    private func paceMeter(paces: TrainingPaces) -> some View {
+    /// The band the meter measures against: the guided step's pace when it prescribes one,
+    /// otherwise the scheduled workout's range on an unguided run, otherwise easy. A guided
+    /// step without a pace (warm-up, recovery) is run easy, so it falls back to easy rather
+    /// than to the scheduled range, which describes the work reps.
+    private var paceTargetRange: ClosedRange<Double>? {
+        if let guided {
+            if let pace = guided.currentStep.targetPaceSecondsPerKm, pace > 0 {
+                // A single prescribed pace, widened by the same band the Watch's pace
+                // alert uses (`WorkoutPaceAlert`), so "on target" is reachable.
+                let tolerance = Self.stepPaceToleranceSecondsPerKm
+                return max(1, pace - tolerance)...(pace + tolerance)
+            }
+        } else if let range = scheduledWorkout?.targetPaceRange, range.lowerBound > 0 {
+            return range
+        }
+        return trainingPaces?.easyRange
+    }
+
+    private static let stepPaceToleranceSecondsPerKm: Double = 8
+
+    /// `target` is in seconds/km, so its lower bound is the *faster* edge: the meter runs
+    /// fastest on the left to slowest on the right, and the labels follow.
+    private func paceMeter(target: ClosedRange<Double>) -> some View {
         let current = tracker.currentPaceSecondsPerKm
-        let low = paces.easyRange.lowerBound
-        let high = paces.easyRange.upperBound
+        let low = target.lowerBound
+        let high = target.upperBound
         let rangeMin = low - 60.0
         let rangeMax = high + 60.0
         let pct = rangeMax > rangeMin
@@ -524,11 +546,11 @@ struct ActiveRunView: View {
 
         return VStack(spacing: 8) {
             HStack {
-                Text("slower")
+                Text("faster")
                 Spacer()
                 Text("target")
                 Spacer()
-                Text("faster")
+                Text("slower")
             }
             .font(.system(size: 11, weight: .bold))
             .kerning(1.2)
@@ -570,7 +592,20 @@ struct ActiveRunView: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Pace against your target range")
-        .accessibilityValue("\(currentZone.rawValue) zone")
+        .accessibilityValue(paceMeterAccessibilityValue(current: current, target: target))
+    }
+
+    private func paceMeterAccessibilityValue(current: Double, target: ClosedRange<Double>) -> String {
+        if current <= 0 {
+            return String(localized: "No pace yet", comment: "Run HUD pace meter, before a pace is measured")
+        }
+        if current > target.upperBound {
+            return String(localized: "Slower than target", comment: "Run HUD pace meter, below the target band")
+        }
+        if current < target.lowerBound {
+            return String(localized: "Faster than target", comment: "Run HUD pace meter, above the target band")
+        }
+        return String(localized: "On target", comment: "Run HUD pace meter, inside the target band")
     }
 
     // MARK: - Metrics grid
