@@ -1,10 +1,72 @@
 import SwiftUI
 
 // Part of `RunSummaryView` (D1).
-// The planned-workout section: what the plan asked for, what the run delivered, and how
-// far apart the two were.
+// The planned-workout page: what the plan asked for, what the run delivered, and how
+// far apart the two were. The hero carries the short form of the same comparison
+// (`planVerdict`), so the answer is on the summary and the detail is one tap away.
 
 extension RunSummaryView {
+
+    // MARK: Plan verdict (in the hero)
+
+    /// The hero's one-line answer to "how did it go against what it was meant to be?":
+    /// the distance and pace statuses from the planned-workout page, or, for a run with no
+    /// plan day, the high-effort note that used to sit where the plan card would.
+    @ViewBuilder
+    var planVerdict: some View {
+        if let scheduled = matchedScheduled,
+           scheduled.targetDistanceMeters != nil || scheduled.targetPaceRange != nil {
+            let chips = HStack(spacing: 6) {
+                if let target = scheduled.targetDistanceMeters {
+                    verdictChip(
+                        label: String(localized: "Distance", comment: "Plan verdict chip label"),
+                        status: distanceStatus(actual: workout.distanceMeters, target: target)
+                    )
+                }
+                if let range = scheduled.targetPaceRange {
+                    verdictChip(
+                        label: String(localized: "Pace", comment: "Plan verdict chip label"),
+                        status: paceStatus(actual: workout.averagePaceSecondsPerKm, target: range)
+                    )
+                }
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Against the plan")
+                    .font(.dsCaption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                // Two chips side by side, stacked when large text will not fit them.
+                ViewThatFits(in: .horizontal) {
+                    chips
+                    VStack(alignment: .leading, spacing: 6) {
+                        chips
+                    }
+                }
+            }
+        } else if matchedScheduled == nil, let avg = workout.averageHeartRate, avg >= 155 {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Image(systemName: "exclamationmark.circle.fill")
+                    .font(.dsCaption.weight(.bold))
+                    .foregroundStyle(.warning)
+                Text("Effort higher than expected: heart rate averaged \(Int(avg)) bpm.")
+                    .font(.dsCaption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func verdictChip(label: String, status: PaceStatus) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: status.icon)
+                .font(.dsCaption2.weight(.bold))
+            Text("\(label): \(status.label)")
+                .font(.dsCaption.weight(.bold))
+        }
+        .foregroundStyle(status.color)
+        .padding(.horizontal, AppSpacing.sm)
+        .padding(.vertical, AppSpacing.xs)
+        .background(status.color.opacity(0.1), in: Capsule())
+    }
 
     // MARK: Planned Workout Section
 
@@ -12,8 +74,6 @@ extension RunSummaryView {
     var plannedWorkoutSection: some View {
         if let scheduled = matchedScheduled {
             VStack(alignment: .leading, spacing: 12) {
-                sectionHeader(title: "Planned Workout")
-
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 8) {
                         Circle()
@@ -80,34 +140,6 @@ extension RunSummaryView {
                 .padding(AppSpacing.md)
                 .strideCard()
             }
-        } else if let avg = workout.averageHeartRate, avg >= 155 {
-            HStack(spacing: 10) {
-                ZStack {
-                    Circle()
-                        .fill(Color.warning)
-                        .frame(width: 24, height: 24)
-                    Image(systemName: "exclamationmark")
-                        .font(.dsCaption.weight(.bold))
-                        .foregroundStyle(.onFill)
-                }
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Effort higher than expected")
-                        .font(.dsFootnote.weight(.bold))
-                        .foregroundStyle(.warning)
-                    Text("HR averaged \(Int(avg)) bpm for this \(workout.workoutType.localizedName.lowercased()) effort.")
-                        .font(.dsCaption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, AppSpacing.md)
-            .padding(.vertical, AppSpacing.md)
-            .background(Color.warning.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.md))
-            .overlay(
-                RoundedRectangle(cornerRadius: AppRadius.md)
-                    .strokeBorder(Color.warning.opacity(0.22), lineWidth: 0.5)
-            )
         }
     }
 
@@ -155,7 +187,7 @@ extension RunSummaryView {
         }
     }
 
-    private func distanceStatus(actual: Double, target: Double) -> PaceStatus {
+    func distanceStatus(actual: Double, target: Double) -> PaceStatus {
         let ratio = actual / target
         if ratio > 1.05 {
             return PaceStatus(label: "Exceeded", icon: "arrow.up.circle.fill", color: .brand)
@@ -168,13 +200,13 @@ extension RunSummaryView {
         }
     }
 
-    private struct PaceStatus {
+    struct PaceStatus {
         let label: String
         let icon: String
         let color: Color
     }
 
-    private func paceStatus(actual: Double, target: ClosedRange<Double>) -> PaceStatus {
+    func paceStatus(actual: Double, target: ClosedRange<Double>) -> PaceStatus {
         if target.contains(actual) {
             return PaceStatus(label: "On target", icon: "checkmark.circle.fill", color: .success)
         }

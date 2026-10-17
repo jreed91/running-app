@@ -10,10 +10,8 @@ extension RunSummaryView {
 
     var heartRateZoneSection: some View {
         let total = zoneSlices.reduce(0) { $0 + $1.seconds }
-        return VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: "Time in heart-rate zones")
-            zoneCard(total: total)
-        }
+        // The page title says what this is, so the card needs no header of its own.
+        return zoneCard(total: total)
     }
 
     private func zoneCard(total: Double) -> some View {
