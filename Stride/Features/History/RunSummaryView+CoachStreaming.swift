@@ -242,11 +242,34 @@ extension RunSummaryView {
         appSettings.hasAICredentials
     }
 
+    /// The "Ask your coach" questions, picked from what stood out in this run.
     var postRunCoachPrompts: [String] {
-        [
-            "Why was my HR so high?",
-            "Should I rest tomorrow?",
-            "How does this compare to last week?"
-        ]
+        let unit = appSettings.unitPreference
+        let planned = matchedScheduled
+        var paceOffset: Double?
+        if let range = planned?.targetPaceRange, workout.averagePaceSecondsPerKm > 0 {
+            let actual = workout.averagePaceSecondsPerKm.paceSecondsValue(unit: unit)
+            let lower = range.lowerBound.paceSecondsValue(unit: unit)
+            let upper = range.upperBound.paceSecondsValue(unit: unit)
+            paceOffset = actual < lower ? actual - lower : (actual > upper ? actual - upper : 0)
+        }
+        let distanceRatio = planned?.targetDistanceMeters
+            .flatMap { $0 > 0 ? workout.distanceMeters / $0 : nil }
+        let nextLabel = nextWorkoutForFeedback().map {
+            "\($0.scheduledDate.formatted(.dateTime.weekday(.abbreviated))) "
+                + $0.workoutType.localizedName.lowercased()
+        }
+
+        return CoachQuestionSuggestions.questions(for: .init(
+            workoutType: displayType,
+            hardEffortShare: CoachRunBreakdown.hardEffortShare(zoneSlices),
+            secondHalfDeltaSeconds: CoachRunBreakdown
+                .splitTrend(splits: workout.splits, unit: unit)?
+                .secondHalfDeltaSeconds,
+            planDistanceRatio: distanceRatio,
+            planPaceOffsetSeconds: paceOffset,
+            feel: workout.feel,
+            nextPlannedLabel: nextLabel
+        ))
     }
 }
