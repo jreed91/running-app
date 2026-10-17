@@ -24,7 +24,8 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       contains(github.event.pull_request.labels.*.name, 'app-store-screenshots')
     runs-on: xcode-27
-    timeout-minutes: 60
+    # Room for the iPhone capture plus a watchOS runtime download.
+    timeout-minutes: 100
     env:
       IPHONE: iPhone 17 Pro Max
       RAW: ${{ github.workspace }}/AppStore/iphone-raw
@@ -78,19 +79,45 @@ jobs:
             | xcbeautify --renderer github-actions
           ls -l "$RAW"
 
+      - name: Install the watchOS simulator runtime
+        # The runner image lists Apple Watch simulators whose watchOS runtime isn't
+        # installed ("The watchOS 27.0 simulator runtime is not available"), so fetch
+        # the one that matches the selected Xcode. Best effort, like the step below.
+        id: watch-runtime
+        continue-on-error: true
+        timeout-minutes: 25
+        run: |
+          RUNTIME=$(xcrun simctl list runtimes -j \
+            | jq -r '[.runtimes[] | select(.platform == "watchOS" and .isAvailable)] | last | .identifier // empty')
+          if [[ -z "$RUNTIME" ]]; then
+            echo "No watchOS simulator runtime installed; downloading it."
+            xcodebuild -downloadPlatform watchOS
+            RUNTIME=$(xcrun simctl list runtimes -j \
+              | jq -r '[.runtimes[] | select(.platform == "watchOS" and .isAvailable)] | last | .identifier // empty')
+          fi
+          [[ -n "$RUNTIME" ]] || { echo "::warning::No watchOS simulator runtime; no Watch screenshots."; exit 1; }
+          echo "WATCH_RUNTIME=$RUNTIME" >> "$GITHUB_ENV"
+
       - name: Capture Apple Watch screens
-        # Best effort: a runner image without a watchOS runtime still produces the
-        # iPhone set, with a warning here. The timeout keeps a hung build or launch
-        # from eating the job, so the iPhone set is still framed and uploaded.
+        # Best effort: a runner without a watchOS runtime still produces the iPhone
+        # set, with a warning here. The timeout keeps a hung build or launch from
+        # eating the job, so the iPhone set is still framed and uploaded.
+        if: steps.watch-runtime.outcome == 'success'
         continue-on-error: true
         timeout-minutes: 20
         run: |
           set -o pipefail
-          WATCH=$(xcrun simctl list devices available -j \
-            | jq -r '[.devices | to_entries[] | select(.key | contains("watchOS")) | .value[] | select(.name | test("Ultra"))] | .[0].udid // empty')
-          [[ -n "$WATCH" ]] || WATCH=$(xcrun simctl list devices available -j \
-            | jq -r '[.devices | to_entries[] | select(.key | contains("watchOS")) | .value[]] | .[0].udid // empty')
-          [[ -n "$WATCH" ]] || { echo "::warning::No watchOS simulator on this runner; no Watch screenshots."; exit 1; }
+          # Only devices on the installed runtime: the image also lists Watch devices
+          # for runtimes it doesn't have, and those fail to boot.
+          DEVICES=$(xcrun simctl list devices available -j | jq --arg rt "$WATCH_RUNTIME" '.devices[$rt] // []')
+          WATCH=$(jq -r '[.[] | select(.name | test("Ultra"))] | .[0].udid // empty' <<<"$DEVICES")
+          [[ -n "$WATCH" ]] || WATCH=$(jq -r '.[0].udid // empty' <<<"$DEVICES")
+          if [[ -z "$WATCH" ]]; then
+            TYPE=$(xcrun simctl list devicetypes -j \
+              | jq -r '[.devicetypes[] | select(.productFamily == "Apple Watch" and (.name | test("Ultra")))] | last | .identifier // empty')
+            [[ -n "$TYPE" ]] || { echo "::warning::No Apple Watch Ultra device type; no Watch screenshots."; exit 1; }
+            WATCH=$(xcrun simctl create "Apple Watch Ultra (screenshots)" "$TYPE" "$WATCH_RUNTIME")
+          fi
           xcrun simctl boot "$WATCH" || true
           xcrun simctl bootstatus "$WATCH" -b
           # No status bar override here: watchOS simulators reject it ("Status bar
