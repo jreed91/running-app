@@ -116,7 +116,7 @@ struct PregnancyPlanSetupView: View {
             }
             Toggle(isOn: $hasConfirmedScreening) {
                 Text("None of those apply to me, and I've talked to my maternity provider about running.")
-                    .font(.callout)
+                    .font(.dsCallout)
             }
         } header: {
             Text("Before You Start")
@@ -193,7 +193,7 @@ struct PregnancyPlanSetupView: View {
             ForEach(PregnancyRedFlag.allCases) { flag in
                 Label {
                     Text(flag.localizedText)
-                        .font(.callout)
+                        .font(.dsCallout)
                 } icon: {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(.destructive)
@@ -210,7 +210,7 @@ struct PregnancyPlanSetupView: View {
     private var disclaimerSection: some View {
         Section {
             Text(PregnancyRunningPolicy.medicalDisclaimer)
-                .font(.footnote)
+                .font(.dsFootnote)
                 .foregroundStyle(.secondary)
         }
         .strideListRow()
@@ -331,7 +331,7 @@ struct PregnancyScreeningDetailView: View {
 
             Section {
                 Text(PregnancyRunningPolicy.medicalDisclaimer)
-                    .font(.footnote)
+                    .font(.dsFootnote)
                     .foregroundStyle(.secondary)
             }
             .strideListRow()

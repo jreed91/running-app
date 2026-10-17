@@ -91,7 +91,7 @@ struct PlanSummaryCard: View {
                         .strideEyebrow()
                         .foregroundStyle(.secondary)
                     Text(dateRange)
-                        .font(.caption)
+                        .font(.dsCaption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -105,7 +105,7 @@ struct PlanSummaryCard: View {
                         .font(.dsTitle1.monospacedDigit())
                         .foregroundStyle(.brandText)
                     Text("\(summary.completedCount) of \(summary.scheduledCount) workouts completed")
-                        .font(.caption)
+                        .font(.dsCaption)
                         .foregroundStyle(.secondary)
                     Spacer()
                 }
@@ -175,7 +175,7 @@ private struct SummaryStat: View {
                 .minimumScaleFactor(0.7)
                 .lineLimit(1)
             Text(label)
-                .font(.caption)
+                .font(.dsCaption)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
@@ -235,7 +235,7 @@ struct WeekCardView: View {
                         Text("Week \(week.weekNumber) · \(week.phase.localizedName)")
                             .font(.bodyStrong)
                         Text(week.targetDistanceKm.distanceStringFromKm(unit: appSettings.unitPreference) + " target")
-                            .font(.caption)
+                            .font(.dsCaption)
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
@@ -252,6 +252,7 @@ struct WeekCardView: View {
                 .padding()
             }
             .buttonStyle(.plain)
+            .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
 
             if isExpanded {
                 Divider()
@@ -286,7 +287,7 @@ struct ScheduledWorkoutRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(workout.workoutType.localizedName).font(.bodyRegular)
                 Text(workout.scheduledDate, style: .date)
-                    .font(.caption)
+                    .font(.dsCaption)
                     .foregroundStyle(.secondary)
             }
 
@@ -294,7 +295,7 @@ struct ScheduledWorkoutRow: View {
 
             if let dist = workout.targetDistanceMeters {
                 Text(dist.distanceString(unit: appSettings.unitPreference))
-                    .font(.caption)
+                    .font(.dsCaption)
                     .foregroundStyle(.secondary)
             }
             StrideIcon(name: .chevronRight, size: 10, color: Color.secondary.opacity(0.5), strokeWeight: 2)

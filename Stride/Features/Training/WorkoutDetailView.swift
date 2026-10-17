@@ -60,6 +60,8 @@ struct WorkoutDetailView: View {
                             )
                         }
                         headerSection
+                            // The celebration is the hero once the goal race is run.
+                            .strideSurface(isHero: !isCompletedGoalRace)
                         if let range = workout.targetPaceRange {
                             paceSection(range: range)
                         }
@@ -175,16 +177,17 @@ struct WorkoutDetailView: View {
 
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Zone-color hero band
+            // The session's hero. The type keeps its colour in the icon tile only: zone
+            // colours are data, not a card's ground.
             HStack(alignment: .center, spacing: 14) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: AppRadius.md)
-                        .fill(workout.workoutType.color.opacity(0.22))
-                        .frame(width: 52, height: 52)
+                    Circle()
+                        .fill(workout.workoutType.color.opacity(0.15))
+                        .frame(width: 48, height: 48)
                     StrideIcon(name: workout.workoutType.strideIcon, size: 28,
                                color: workout.workoutType.color, strokeWeight: 2.0)
                 }
-                .frame(width: 52, height: 52)
+                .frame(width: 48, height: 48)
 
                 VStack(alignment: .leading, spacing: 5) {
                     HStack(spacing: 8) {
@@ -202,7 +205,7 @@ struct WorkoutDetailView: View {
                         }
                     }
                     Text(workout.scheduledDate.formatted(.dateTime.weekday(.wide).month(.wide).day()))
-                        .font(.caption)
+                        .font(.dsCaption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
@@ -219,63 +222,23 @@ struct WorkoutDetailView: View {
                     .padding(.bottom, AppSpacing.lg)
             }
         }
-        .background(
-            LinearGradient(
-                colors: [workout.workoutType.color.opacity(0.12), workout.workoutType.color.opacity(0.03)],
-                startPoint: .topLeading, endPoint: .bottomTrailing
-            ),
-            in: RoundedRectangle(cornerRadius: AppRadius.lg)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: AppRadius.lg)
-                .strokeBorder(workout.workoutType.color.opacity(0.18), lineWidth: 0.5)
-        )
     }
 
     private var locationPicker: some View {
-        HStack(spacing: 0) {
-            ForEach(WorkoutLocation.allCases, id: \.self) { location in
-                Button {
+        StrideSegmentedControl(
+            selection: Binding(
+                get: { workout.workoutLocation },
+                set: { location in
                     guard workout.workoutLocation != location else { return }
                     Task { await changeLocation(to: location) }
-                } label: {
-                    HStack(spacing: 6) {
-                        if isSyncingLocation && workout.workoutLocation == location {
-                            ProgressView().controlSize(.mini)
-                        } else {
-                            Image(systemName: location.systemImage)
-                                .font(.dsCaption.weight(.semibold))
-                        }
-                        Text(location.localizedName)
-                            .font(.dsFootnote.weight(.semibold))
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, AppSpacing.sm)
-                    .frame(maxWidth: .infinity)
-                    .background(
-                        workout.workoutLocation == location
-                            ? workout.workoutType.color.opacity(0.18)
-                            : Color.clear
-                    )
-                    .foregroundStyle(
-                        workout.workoutLocation == location
-                            ? workout.workoutType.color
-                            : Color.secondary
-                    )
                 }
-                .buttonStyle(.plain)
-                .animation(.easeInOut(duration: 0.18), value: workout.workoutLocation)
-
-                if location != WorkoutLocation.allCases.last {
-                    Divider().frame(height: 24)
-                }
-            }
+            ),
+            options: WorkoutLocation.allCases
+        ) { location in
+            Text("\(Image(systemName: location.systemImage)) \(location.localizedName)")
         }
-        .strideCard(cornerRadius: AppRadius.sm)
-        .overlay(
-            RoundedRectangle(cornerRadius: AppRadius.sm)
-                .strokeBorder(workout.workoutType.color.opacity(0.15), lineWidth: 0.5)
-        )
+        // One change at a time: each one re-syncs the plan to the watch.
+        .disabled(isSyncingLocation)
     }
 
     private func paceSection(range: ClosedRange<Double>) -> some View {
@@ -375,7 +338,7 @@ struct ExerciseRow: View {
                         .padding(.horizontal, 7)
                         .padding(.vertical, 3)
                         .background(Color.brand.opacity(0.12), in: Capsule())
-                        .foregroundStyle(Color.brand)
+                        .foregroundStyle(Color.brandText)
                 }
                 if let weight = exercise.targetWeight {
                     Text(weight)
@@ -434,26 +397,17 @@ private struct GoalRaceCelebrationCard: View {
                     .font(.bodyStrong)
                     .foregroundStyle(.secondary)
                 Text(raceDate.formatted(.dateTime.weekday(.wide).month(.wide).day()))
-                    .font(.caption)
+                    .font(.dsCaption)
                     .foregroundStyle(.secondary)
             }
-            .padding(.vertical, 28)
-            .padding(.horizontal, 18)
+            .padding(.vertical, AppSpacing.xxl)
+            .padding(.horizontal, AppSpacing.lg)
         }
         .frame(maxWidth: .infinity)
-        .background(
-            LinearGradient(
-                colors: [Color.brand.opacity(0.14), Color.success.opacity(0.10)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            ),
-            in: RoundedRectangle(cornerRadius: AppRadius.lg)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: AppRadius.lg)
-                .strokeBorder(Color.brand.opacity(0.22), lineWidth: 0.75)
-        )
-        .clipped()
+        // The confetti stays inside the card's shape.
+        .clipShape(RoundedRectangle(cornerRadius: AppRadius.lg, style: .continuous))
+        // The screen's one hero in this state; the session header steps down to a card.
+        .heroCard()
         .onAppear {
             guard !reduceMotion else { return }
             withAnimation(.spring(response: 0.9, dampingFraction: 0.82).delay(0.1)) {
@@ -521,12 +475,11 @@ private struct ConfettiParticle: Identifiable, Sendable {
     let staticY: Double
 
     var color: Color {
-        switch colorIndex % 5 {
+        // The brand's two ends and a win. Zone colours are training data, not decoration.
+        switch colorIndex % 3 {
         case 0: return .brand
-        case 1: return .success
-        case 2: return .zoneTempo
-        case 3: return .zoneInterval
-        default: return .zoneEasy
+        case 1: return .brandGlow
+        default: return .success
         }
     }
 
@@ -584,12 +537,12 @@ private struct SegmentRow: View {
     private var subtitleText: some View {
         if let dist = segment.distanceMeters {
             Text(dist.distanceString(unit: appSettings.unitPreference))
-                .font(.caption)
+                .font(.dsCaption)
                 .foregroundStyle(.secondary)
         }
         if let pace = segment.targetPaceSecondsPerKm {
             Text("@ \(pace.paceString(unit: appSettings.unitPreference))")
-                .font(.caption)
+                .font(.dsCaption)
                 .foregroundStyle(.secondary)
         }
     }
@@ -609,7 +562,7 @@ private struct WorkoutSetRow: View {
                     .fill(color.opacity(0.12))
                     .frame(width: 34, height: 34)
                 Text("\(workoutSet.repetitions)×")
-                    .font(.system(.caption, design: .rounded, weight: .bold))
+                    .font(.dsCaption.weight(.bold))
                     .foregroundStyle(color)
             }
 
@@ -635,13 +588,13 @@ private struct WorkoutSetRow: View {
                     Text("@ \(pace.paceString(unit: appSettings.unitPreference))")
                 }
             }
-            .font(.caption)
+            .font(.dsCaption)
             .foregroundStyle(.secondary)
         }
 
         if let recDur = rec.durationSeconds, recDur > 0 {
             Text(String(format: "%.0f s recovery jog", recDur))
-                .font(.caption)
+                .font(.dsCaption)
                 .foregroundStyle(.secondary)
         }
     }

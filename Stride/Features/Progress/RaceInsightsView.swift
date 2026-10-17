@@ -13,6 +13,9 @@ struct RaceInsightsView: View {
     @Query private var profiles: [UserProfile]
     private var profile: UserProfile? { profiles.first }
 
+    @Query(filter: #Predicate<TrainingPlan> { $0.isActive == true })
+    private var activePlans: [TrainingPlan]
+
     @Environment(AppSettings.self) private var appSettings
 
     @State private var selectedPredictionDate: Date? = nil
@@ -41,6 +44,44 @@ struct RaceInsightsView: View {
         return WorkoutAnalyticsService().snapshot(from: workouts, profile: prof)
     }
 
+    // MARK: - Race and fitness
+
+    /// The race being predicted: the active plan's when it has one, as the race hub and
+    /// Plan read it, so all three predict the same race against the same goal.
+    private var racePlan: TrainingPlan? {
+        guard let plan = activePlans.first, !plan.isPregnancyPlan, plan.targetRace.isGoalRace,
+              plan.effectiveRaceDistanceMeters > 0 else { return nil }
+        return plan
+    }
+
+    private var raceDistanceMeters: Double? {
+        racePlan?.effectiveRaceDistanceMeters ?? profile?.effectiveRaceDistanceMeters
+    }
+
+    private var goalFinishSeconds: TimeInterval {
+        racePlan?.goalTimeSeconds ?? profile?.goalFinishTime ?? 0
+    }
+
+    private var raceDisplayName: String {
+        racePlan?.targetRace.localizedName ?? profile?.goalRace.localizedName ?? "Race"
+    }
+
+    /// The fitness every figure here predicts from; see `RaceDayPlan.currentVDOT`.
+    private var currentVDOT: Double? {
+        RaceDayPlan.currentVDOT(runs: workouts, profile: profile)
+    }
+
+    /// The same prediction Plan's pace insights and the race hub show.
+    private var predictedFinishSeconds: TimeInterval? {
+        guard let distance = raceDistanceMeters else { return nil }
+        return RaceDayPlan.predictedFinishSeconds(
+            runs: workouts,
+            profile: profile,
+            distanceMeters: distance,
+            now: Date()
+        )
+    }
+
     // MARK: - Prediction points
 
     private struct PacePredictionPoint: Identifiable {
@@ -50,7 +91,7 @@ struct RaceInsightsView: View {
     }
 
     private var pacePredictionPoints: [PacePredictionPoint] {
-        guard let raceDistance = profile?.effectiveRaceDistanceMeters else { return [] }
+        guard let raceDistance = raceDistanceMeters else { return [] }
         return workouts.compactMap { workout in
             guard let pace = PaceCalculatorService.predictedRacePaceSecondsPerKm(
                 workoutDistanceMeters: workout.distanceMeters,
@@ -76,20 +117,12 @@ struct RaceInsightsView: View {
         switch slopePerWeek {
         case ..<(-1.0): return ("Improving", Color.success)
         case 1.0...:    return ("Declining", Color.destructive)
-        default:        return ("Stable", Color.warning)
+        default:        return ("Stable", .secondary)
         }
     }
 
     private var currentPredictedFinishTime: String {
-        guard let raceDistance = profile?.effectiveRaceDistanceMeters,
-              let mostRecent = workouts.last(where: { $0.distanceMeters >= 1_500 }),
-              let pace = PaceCalculatorService.predictedRacePaceSecondsPerKm(
-                  workoutDistanceMeters: mostRecent.distanceMeters,
-                  workoutDurationSeconds: mostRecent.durationSeconds,
-                  raceDistanceMeters: raceDistance
-              )
-        else { return "--:--" }
-        return (pace * (raceDistance / 1_000)).durationString
+        predictedFinishSeconds?.durationString ?? "--:--"
     }
 
     /// Seconds the predicted finish is behind (+) or ahead (−) of the goal, or
@@ -97,21 +130,13 @@ struct RaceInsightsView: View {
     /// `nil` (rather than 0) keeps the "On goal pace" state from showing when the
     /// gap is simply unknown.
     private var goalGapSeconds: Double? {
-        guard let prof = profile, prof.goalFinishTime > 0 else { return nil }
-        let raceDistance = prof.effectiveRaceDistanceMeters
-        guard let mostRecent = workouts.last(where: { $0.distanceMeters >= 1_500 }),
-              let pace = PaceCalculatorService.predictedRacePaceSecondsPerKm(
-                  workoutDistanceMeters: mostRecent.distanceMeters,
-                  workoutDurationSeconds: mostRecent.durationSeconds,
-                  raceDistanceMeters: raceDistance
-              )
-        else { return nil }
-        return pace * (raceDistance / 1_000) - prof.goalFinishTime
+        guard goalFinishSeconds > 0, let predicted = predictedFinishSeconds else { return nil }
+        return predicted - goalFinishSeconds
     }
 
+    /// The same paces as Plan's pace insights, from the same VDOT.
     private var trainingPacesForVDOT: TrainingPaces? {
-        guard let vdot = snapshot?.currentVDOT else { return nil }
-        return PaceCalculatorService.trainingPaces(forVDOT: vdot)
+        currentVDOT.map { PaceCalculatorService.trainingPaces(forVDOT: $0) }
     }
 
     private var improvementTips: [String] {
@@ -133,7 +158,18 @@ struct RaceInsightsView: View {
 
         let weeklyKm = snap.averageWeeklyDistanceMeters / 1_000
         if tips.count < 3, weeklyKm < 25 {
-            tips.append(String(format: "Your weekly volume averages %.0f km. Gradually building to 30+ km (10%% per week) will improve your aerobic base.", weeklyKm))
+            // In the runner's own unit; 20 mi is the round figure nearest 30 km.
+            let unit = appSettings.unitPreference
+            let average: Double
+            let target: Int
+            switch unit {
+            case .metric:   average = weeklyKm;              target = 30
+            case .imperial: average = weeklyKm / 1.609_344;  target = 20
+            }
+            tips.append(String(
+                format: "Your weekly volume averages %.0f %@. Gradually building to %d+ %@ (10%% per week) will improve your aerobic base.",
+                average, unit.distanceLabel, target, unit.distanceLabel
+            ))
         }
 
         if tips.count < 3, snap.recentQualityPaceSecondsPerKm == nil {
@@ -189,8 +225,8 @@ struct RaceInsightsView: View {
 
     private var raceFitnessHeroCard: some View {
         let trend = paceTrend
-        let raceName = profile?.goalRace.localizedName ?? "Race"
-        let hasGoal = (profile?.goalFinishTime ?? 0) > 0
+        let raceName = raceDisplayName
+        let goalTime = goalFinishSeconds
         let gap = goalGapSeconds
 
         return VStack(alignment: .leading, spacing: 12) {
@@ -201,12 +237,12 @@ struct RaceInsightsView: View {
             HStack(alignment: .top, spacing: 0) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Predicted \(raceName)")
-                        .font(.caption)
+                        .font(.dsCaption)
                         .foregroundStyle(.secondary)
                     Text(currentPredictedFinishTime)
                         .font(.metricSmall)
 
-                    if hasGoal, let goalTime = profile?.goalFinishTime {
+                    if goalTime > 0 {
                         HStack(spacing: 4) {
                             Text("Goal:")
                                 .font(.captionStrong)
@@ -238,7 +274,7 @@ struct RaceInsightsView: View {
 
                 VStack(alignment: .trailing, spacing: 4) {
                     Text("Trend")
-                        .font(.caption)
+                        .font(.dsCaption)
                         .foregroundStyle(.secondary)
                     HStack(spacing: 4) {
                         Circle()
@@ -286,16 +322,17 @@ struct RaceInsightsView: View {
                             tooltipContainer {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(point.date, format: .dateTime.month(.abbreviated).day())
-                                        .font(.caption2).foregroundStyle(.secondary)
+                                        .font(.dsCaption2).foregroundStyle(.secondary)
                                     Text(point.predictedPaceSecondsPerKm.paceString(unit: appSettings.unitPreference))
-                                        .font(.caption).bold()
+                                        .font(.dsCaption).bold()
                                 }
                             }
                         }
                     }
                 }
                 .frame(height: 140)
-                .chartYScale(domain: .automatic(includesZero: false))
+                // Reversed so a faster pace sits higher and the line climbs as fitness grows.
+                .chartYScale(domain: .automatic(includesZero: false, reversed: true))
                 .chartYAxis {
                     AxisMarks { value in
                         AxisValueLabel {
@@ -313,9 +350,6 @@ struct RaceInsightsView: View {
                 }
                 .chartXSelection(value: $selectedPredictionDate)
                 .chartAccessibility("Predicted race pace chart", predictedPaceSeries)
-                Text("Lower is faster")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -395,7 +429,7 @@ struct RaceInsightsView: View {
                 .font(.dsFootnote.weight(.semibold).monospacedDigit())
                 .foregroundStyle(color)
         }
-        .padding(.vertical, 10)
+        .padding(.vertical, AppSpacing.md)
     }
 
     // MARK: - Card 4: Performance Metrics
@@ -403,9 +437,10 @@ struct RaceInsightsView: View {
     private var performanceMetricsCard: some View {
         chartCard("PERFORMANCE METRICS") {
             if let snap = snapshot {
-                LazyVGrid(columns: [.init(.flexible()), .init(.flexible())], spacing: 10) {
+                LazyVGrid(columns: [.init(.flexible()), .init(.flexible())], spacing: AppSpacing.md) {
+                    // The VDOT the zones and prediction above use, whole like Progress' hero.
                     metricsCell(
-                        value: snap.currentVDOT.map { String(format: "%.1f", $0) } ?? "--",
+                        value: currentVDOT.map { String(format: "%.0f", $0) } ?? "--",
                         label: "VDOT"
                     )
                     metricsCell(
@@ -416,14 +451,17 @@ struct RaceInsightsView: View {
                         metricsCell(
                             value: String(format: "%.2f", fatigue),
                             label: "Interval Fatigue",
-                            valueColor: fatigue > 1.15 ? .destructive : .success
+                            valueColor: fatigue > 1.15 ? .destructive : .success,
+                            // The colour alone is not the verdict.
+                            note: fatigue > 1.15 ? "High" : "Normal"
                         )
                     }
                     if let ratio = snap.lastIntervalPaceRatio {
                         metricsCell(
                             value: String(format: "%.0f%%", ratio * 100),
                             label: "vs Interval Target",
-                            valueColor: ratio < 1.0 ? .success : (ratio > 1.07 ? .destructive : .primary)
+                            valueColor: ratio < 1.0 ? .success : (ratio > 1.07 ? .destructive : .primary),
+                            note: ratio < 1.0 ? "Faster" : (ratio > 1.07 ? "Slower" : "On target")
                         )
                     }
                 }
@@ -440,15 +478,25 @@ struct RaceInsightsView: View {
         }
     }
 
-    private func metricsCell(value: String, label: String, valueColor: Color = .primary) -> some View {
+    private func metricsCell(
+        value: String,
+        label: String,
+        valueColor: Color = .primary,
+        note: String? = nil
+    ) -> some View {
         VStack(spacing: 4) {
             Text(value)
                 .font(.dsCallout.weight(.bold).monospacedDigit())
                 .foregroundStyle(valueColor)
                 .minimumScaleFactor(0.7)
                 .lineLimit(1)
+            if let note {
+                Text(note)
+                    .font(.dsCaption2.weight(.semibold))
+                    .foregroundStyle(valueColor)
+            }
             Text(label)
-                .font(.caption)
+                .font(.dsCaption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }

@@ -13,6 +13,7 @@ struct TrainingPlanListView: View {
     @Query private var profiles: [UserProfile]
 
     @State private var showNewPlanSheet = false
+    @State private var showPregnancyPlanSheet = false
     /// Plans the runner has swiped away, held until the confirmation is answered (U6).
     @State private var pendingDeletion: [TrainingPlan] = []
 
@@ -39,15 +40,15 @@ struct TrainingPlanListView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button { showNewPlanSheet = true } label: {
-                    Label("New Plan", systemImage: "plus")
-                }
+                // The Plan tab's own "+", so a plan started here is built the same way.
+                NewPlanMenu(
+                    showsTrainingPlan: $showNewPlanSheet,
+                    showsPregnancyPlan: $showPregnancyPlanSheet
+                )
                 .disabled(profiles.isEmpty)
             }
         }
-        .sheet(isPresented: $showNewPlanSheet) {
-            PlanSetupView()
-        }
+        .newPlanSheets(training: $showNewPlanSheet, pregnancy: $showPregnancyPlanSheet)
         // Deleting a plan from its detail screen asks first; deleting the same plan by
         // swiping here did not, even though the swipe cascades to every scheduled
         // workout, Watch entry and reminder the plan owns (U6).
@@ -130,7 +131,7 @@ struct PlanRowView: View {
             }
 
             Text("\(plan.totalWeeks) weeks · \(dateRange)")
-                .font(.caption)
+                .font(.dsCaption)
                 .foregroundStyle(.secondary)
 
             HStack(spacing: 4) {
@@ -138,7 +139,7 @@ struct PlanRowView: View {
                 Text("·").foregroundStyle(.tertiary)
                 Text(summary.completedDistanceMeters.distanceString(unit: appSettings.unitPreference))
             }
-            .font(.caption)
+            .font(.dsCaption)
             .foregroundStyle(.secondary)
 
             StrideProgressBar(value: summary.adherence, tint: summary.status == .active ? nil : .success)
@@ -154,7 +155,8 @@ struct PlanStatusBadge: View {
 
     private var color: Color {
         switch status {
-        case .active:   return .brand
+        // brandText, not brand: this is small text, and brand is too light for it.
+        case .active:   return .brandText
         case .finished: return .success
         case .ended:    return .secondary
         }
@@ -162,7 +164,7 @@ struct PlanStatusBadge: View {
 
     var body: some View {
         Text(status.displayName.uppercased())
-            .font(.caption)
+            .font(.dsCaption)
             .padding(.horizontal, 6)
             .padding(.vertical, AppSpacing.xxs)
             .background(color.opacity(0.15), in: Capsule())

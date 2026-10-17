@@ -53,11 +53,8 @@ struct RaceWeatherCard: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(18)
-        .background(
-            RoundedRectangle(cornerRadius: AppRadius.lg)
-                .fill(Color.surfaceSecondary)
-        )
+        .padding(AppSpacing.lg)
+        .strideCard()
         .task(id: start) { await loadForecast() }
         .sheet(isPresented: $editingStartTime) {
             RaceStartTimeEditor(raceDate: racePlan.raceDate, initialStart: start)
@@ -71,7 +68,7 @@ struct RaceWeatherCard: View {
                 .font(.bodyStrong)
             Spacer()
             Button("Edit") { editingStartTime = true }
-                .font(.dsSubhead)
+                .buttonStyle(.strideButton(.quiet, compact: true, fullWidth: false))
         }
     }
 
@@ -79,7 +76,7 @@ struct RaceWeatherCard: View {
     private func forecastContent(_ start: Date) -> some View {
         if !RaceDayForecast.isWithinHorizon(start: start, now: Date()) {
             Text("The forecast for your start arrives about \(RaceDayForecast.horizonDays) days before the race.")
-                .font(.caption)
+                .font(.dsCaption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         } else if isLoading {
@@ -94,12 +91,12 @@ struct RaceWeatherCard: View {
             }
             heatLine(forecast.heatTier)
             Text("Forecast for where you last ran. Check the race's own forecast if you're travelling.")
-                .font(.caption)
+                .font(.dsCaption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         } else {
             Text("No forecast is available right now. It needs a recent outdoor run for a location, and a connection.")
-                .font(.caption)
+                .font(.dsCaption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -114,13 +111,13 @@ struct RaceWeatherCard: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text("\(label) · \(hour.date.formatted(date: .omitted, time: .shortened))")
-                    .font(.caption)
+                    .font(.dsCaption)
                     .foregroundStyle(.secondary)
                 Text(verbatim: hour.conditions.temperatureString(unit: unit)
                      + " · " + hour.conditions.conditionDescription)
                     .font(.bodyStrong)
                 Text("Feels like \(hour.conditions.feelsLikeString(unit: unit))")
-                    .font(.caption)
+                    .font(.dsCaption)
                     .foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)
@@ -230,5 +227,6 @@ private struct RaceStartTimeEditor: View {
             }
         }
         .presentationDetents([.medium])
+        .strideSheet()
     }
 }

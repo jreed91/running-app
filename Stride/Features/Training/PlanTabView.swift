@@ -22,6 +22,9 @@ struct PlanTabView: View {
     @State private var isAdaptingPlan = false
     @State private var smartAdaptProgress = SmartAdaptProgress.idle
     @State private var adaptTask: Task<Void, Never>?
+    /// The session a week row's tap opens. One destination for the whole tab rather than a
+    /// `NavigationLink` per row: a link inside the reorder container would claim the drag.
+    @State private var selectedWorkout: ScheduledWorkout?
 
     private var activePlan: TrainingPlan? { activePlans.first }
 
@@ -39,7 +42,8 @@ struct PlanTabView: View {
                             // said anything else about it. This is the whole season's
                             // countdown, so it sits here rather than on the dashboard,
                             // which only carries it once the race is close (A10).
-                            if let racePlan = raceDayPlan(for: plan) {
+                            let racePlan = raceDayPlan(for: plan)
+                            if let racePlan {
                                 NavigationLink {
                                     RaceDayHubView()
                                 } label: {
@@ -53,7 +57,9 @@ struct PlanTabView: View {
 
                             // Below the race: when there is one, the countdown is the
                             // screen's hero and leads it, and this card is the progress.
-                            PlanOverviewCard(plan: plan, isHero: raceDayPlan(for: plan) == nil)
+                            // The countdown already names the race and its goal, so the overview
+                            // then only says what the plan is.
+                            PlanOverviewCard(plan: plan, isHero: racePlan == nil)
 
                             // Smart Adapt and Pace Insights are both VDOT machinery, and a
                             // pregnancy plan has no pace targets to insight about and is not
@@ -85,7 +91,7 @@ struct PlanTabView: View {
                                     .foregroundStyle(.secondary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                                PaceInsightsCard(plan: plan)
+                                PaceInsightsCard(plan: plan, runs: recentWorkouts, profile: profiles.first)
                             }
 
                             Text("TRAINING WEEKS")
@@ -93,12 +99,14 @@ struct PlanTabView: View {
                                 .foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                            LazyVStack(spacing: 10) {
+                            LazyVStack(spacing: AppSpacing.md) {
                                 ForEach((plan.weeks ?? []).sorted { $0.weekNumber < $1.weekNumber }) { week in
                                     PlanWeekSummaryRow(
                                         week: week,
                                         currentWeekID: plan.currentWeek?.id
-                                    )
+                                    ) { workout in
+                                        selectedWorkout = workout
+                                    }
                                 }
                             }
                         }
@@ -117,6 +125,9 @@ struct PlanTabView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color.surfacePrimary)
             .navigationTitle("My Plan")
+            .navigationDestination(item: $selectedWorkout) { workout in
+                WorkoutDetailView(workout: workout)
+            }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     NavigationLink {
@@ -127,29 +138,14 @@ struct PlanTabView: View {
                     }
                 }
                 ToolbarItem(placement: .primaryAction) {
-                    Menu {
-                        Button {
-                            showNewPlanSheet = true
-                        } label: {
-                            Label("Training Plan", systemImage: "figure.run")
-                        }
-                        Button {
-                            showPregnancyPlanSheet = true
-                        } label: {
-                            Label("Pregnancy Plan", systemImage: "heart.text.square")
-                        }
-                    } label: {
-                        Label("New Plan", systemImage: "plus")
-                    }
+                    NewPlanMenu(
+                        showsTrainingPlan: $showNewPlanSheet,
+                        showsPregnancyPlan: $showPregnancyPlanSheet
+                    )
                     .disabled(profiles.isEmpty)
                 }
             }
-            .sheet(isPresented: $showNewPlanSheet) {
-                NewPlanOnboardingView()
-            }
-            .sheet(isPresented: $showPregnancyPlanSheet) {
-                PregnancyPlanSetupView()
-            }
+            .newPlanSheets(training: $showNewPlanSheet, pregnancy: $showPregnancyPlanSheet)
             .sheet(isPresented: $showRouteGenius) {
                 RouteGeniusView(
                     viewModel: container.makeRouteGeniusViewModel(appSettings: appSettings)
@@ -304,6 +300,45 @@ struct PlanTabView: View {
     }
 }
 
+// MARK: - New Plan Menu
+
+/// The "+" that starts a plan, on the Plan tab and in Plan History alike, so both build
+/// a plan through the same flow. The sheets stay with the screen (`newPlanSheets`) rather
+/// than inside the toolbar item, which can be rebuilt while a sheet is up.
+struct NewPlanMenu: View {
+    @Binding var showsTrainingPlan: Bool
+    @Binding var showsPregnancyPlan: Bool
+
+    var body: some View {
+        Menu {
+            Button {
+                showsTrainingPlan = true
+            } label: {
+                Label("Training Plan", systemImage: "figure.run")
+            }
+            Button {
+                showsPregnancyPlan = true
+            } label: {
+                Label("Pregnancy Plan", systemImage: "heart.text.square")
+            }
+        } label: {
+            Label("New Plan", systemImage: "plus")
+        }
+    }
+}
+
+extension View {
+    /// The two flows `NewPlanMenu` opens.
+    func newPlanSheets(training: Binding<Bool>, pregnancy: Binding<Bool>) -> some View {
+        sheet(isPresented: training) {
+            NewPlanOnboardingView()
+        }
+        .sheet(isPresented: pregnancy) {
+            PregnancyPlanSetupView()
+        }
+    }
+}
+
 // MARK: - Smart Adapt Card
 
 private struct SmartAdaptProgress: Equatable {
@@ -404,7 +439,7 @@ private struct SmartAdaptPlanCard: View {
                     }
 
                     Text(progress.currentMessage)
-                        .font(.caption)
+                        .font(.dsCaption)
                         .foregroundStyle(.secondary)
 
                     if !progress.streamingSummaries.isEmpty {
@@ -420,13 +455,13 @@ private struct SmartAdaptPlanCard: View {
                                         .frame(width: 5, height: 5)
                                         .padding(.top, 6)
                                     Text(summary)
-                                        .font(.caption)
+                                        .font(.dsCaption)
                                         .foregroundStyle(.secondary)
                                         .lineLimit(3)
                                 }
                             }
                         }
-                        .padding(10)
+                        .padding(AppSpacing.md)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .strideCard(cornerRadius: AppRadius.sm)
                     }
@@ -437,11 +472,11 @@ private struct SmartAdaptPlanCard: View {
                                 .font(.captionStrong)
                                 .foregroundStyle(.primary)
                             Text(update.message)
-                                .font(.caption)
+                                .font(.dsCaption)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(3)
                         }
-                        .padding(10)
+                        .padding(AppSpacing.md)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .strideCard(cornerRadius: AppRadius.sm)
                     }
@@ -537,6 +572,14 @@ private struct PlanOverviewCard: View {
 
     private var planTitle: String {
         if plan.isPregnancyPlan { return PlanKind.pregnancy.localizedName }
+        // Not the hero means the race countdown leads the screen with the race's name,
+        // date and goal; repeating them here made three cards say the same thing.
+        if !isHero {
+            return String(
+                localized: "\(plan.totalWeeks)-week plan",
+                comment: "Plan overview title under the race countdown: the plan's length"
+            )
+        }
         if let name = plan.raceName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
             return name
         }
@@ -545,13 +588,14 @@ private struct PlanOverviewCard: View {
 
     /// A pregnancy plan has no goal time, so the line that would read "Goal 0:00" reports
     /// where the pregnancy is instead — the number that actually indexes the plan.
-    private var planSubtitle: String {
+    private var planSubtitle: String? {
         if plan.isPregnancyPlan, let age = plan.gestationalAge() {
             return String(
                 localized: "\(age.noteForm) weeks  ·  \(plan.totalWeeks) weeks planned",
                 comment: "Pregnancy plan subtitle: gestational age and plan length"
             )
         }
+        if !isHero { return nil }
         return String(
             localized: "Goal \(plan.goalTimeSeconds.durationString)  ·  \(plan.totalWeeks) weeks",
             comment: "Race plan subtitle: goal time and plan length"
@@ -571,14 +615,18 @@ private struct PlanOverviewCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(planTitle)
                         .font(.dsTitle3.weight(.bold))
-                    Text(planSubtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    if let planSubtitle {
+                        Text(planSubtitle)
+                            .font(.dsCaption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 Spacer()
                 Text("\(Int(plan.progress * 100))%")
                     .font(.dsTitle2.monospacedDigit())
                     .foregroundStyle(.brandText)
+                    .accessibilityLabel("Plan progress")
+                    .accessibilityValue("\(Int(plan.progress * 100)) percent")
             }
 
             // Phase progress bar with Base / Build / Peak / Taper labels
@@ -699,11 +747,16 @@ private struct PhaseProgressBar: View {
                     Text(phase.localizedName.uppercased())
                         .font(.dsCaption2.weight(phase == currentPhase ? .bold : .semibold))
                         .kerning(0.8)
-                        .foregroundStyle(phase == currentPhase ? Color.brand : Color.secondary.opacity(0.55))
+                        .foregroundStyle(phase == currentPhase ? Color.brandText : Color.secondary.opacity(0.55))
                     if phase != .taper { Spacer() }
                 }
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Training phases")
+        .accessibilityValue(
+            "\(currentPhase.localizedName), \(Int(plan.progress * 100)) percent of the plan done"
+        )
     }
 }
 
@@ -720,7 +773,7 @@ private struct OverviewStat: View {
                 .minimumScaleFactor(0.8)
                 .lineLimit(1)
             Text(label)
-                .font(.caption)
+                .font(.dsCaption)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
@@ -731,27 +784,22 @@ private struct OverviewStat: View {
 
 private struct PaceInsightsCard: View {
     let plan: TrainingPlan
+    /// Recent runs and the profile, read through `RaceDayPlan.currentVDOT` — the same
+    /// fitness the race countdown and Progress' insights predict from, so the three
+    /// screens give one finish time and one set of paces.
+    let runs: [RunWorkout]
+    let profile: UserProfile?
     @Environment(AppSettings.self) private var appSettings
 
-    private var completedRuns: [RunWorkout] {
-        (plan.weeks ?? [])
-            .flatMap { $0.workouts ?? [] }
-            .compactMap(\.completedWorkout)
-            // A ride that completed a cross-training day (B8) is not a VDOT sample.
-            .runsOnly
-            .filter { $0.distanceMeters >= 3_000 }
+    private var measuredVDOT: Double? {
+        RaceDayPlan.currentVDOT(runs: runs, profile: profile)
     }
 
+    /// Whether there is any fitness to project from yet, rather than the goal itself.
+    private var hasMeasuredFitness: Bool { measuredVDOT != nil }
+
     private var currentVDOT: Double {
-        if let best = completedRuns.max(by: {
-            PaceCalculatorService.vdot(distanceMeters: $0.distanceMeters, timeSeconds: $0.durationSeconds) <
-            PaceCalculatorService.vdot(distanceMeters: $1.distanceMeters, timeSeconds: $1.durationSeconds)
-        }) {
-            return PaceCalculatorService.vdot(
-                distanceMeters: best.distanceMeters,
-                timeSeconds: best.durationSeconds
-            )
-        }
+        if let measuredVDOT { return measuredVDOT }
         return PaceCalculatorService.vdot(
             distanceMeters: plan.effectiveRaceDistanceMeters,
             timeSeconds: plan.goalTimeSeconds
@@ -778,7 +826,7 @@ private struct PaceInsightsCard: View {
     /// goal" off that is a tautology dressed as a verdict (S12) — say where the number comes
     /// from instead, and only compare once there is something to compare against.
     private var statusText: String {
-        if completedRuns.isEmpty { return "Starting projection" }
+        if !hasMeasuredFitness { return "Starting projection" }
         if abs(timeDiff) < 30 { return "On track for goal" }
         let formatted = abs(timeDiff).durationString
         return timeDiff > 0 ? "\(formatted) behind goal" : "\(formatted) ahead of goal"
@@ -822,7 +870,7 @@ private struct PaceInsightsCard: View {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Estimated Finish")
-                        .font(.caption)
+                        .font(.dsCaption)
                         .foregroundStyle(.secondary)
                     Text(isVDOTReliable ? estimatedTime.durationString : "--:--")
                         .font(.metricSmall)
@@ -830,7 +878,7 @@ private struct PaceInsightsCard: View {
                 Spacer()
                 VStack(alignment: .trailing, spacing: 4) {
                     Text("Goal")
-                        .font(.caption)
+                        .font(.dsCaption)
                         .foregroundStyle(.secondary)
                     Text(plan.goalTimeSeconds.durationString)
                         .font(.bodyStrong)
@@ -841,17 +889,17 @@ private struct PaceInsightsCard: View {
                 if isVDOTReliable {
                     statusIconView
                     Text(statusText)
-                        .font(.caption)
+                        .font(.dsCaption)
                         .foregroundStyle(statusColor)
-                    if completedRuns.isEmpty {
-                        Text("· Log a run to track against it")
-                            .font(.caption)
+                    if !hasMeasuredFitness {
+                        Text("· Log a quality run to track against it")
+                            .font(.dsCaption)
                             .foregroundStyle(Color.secondary.opacity(0.6))
                     }
                 } else {
                     StrideIcon(name: .chart, size: 14, color: .secondary, strokeWeight: 1.8)
-                    Text(completedRuns.isEmpty ? "Log a run to calibrate paces" : "Analyzing current pace…")
-                        .font(.caption)
+                    Text(hasMeasuredFitness ? "Analyzing current pace…" : "Log a quality run to calibrate paces")
+                        .font(.dsCaption)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -907,7 +955,7 @@ private struct PaceRow: View {
                 Text(value)
                     .font(.dsSubhead.weight(.semibold).monospacedDigit())
                 Text(appSettings.unitPreference.paceLabel)
-                    .font(.caption)
+                    .font(.dsCaption)
                     .foregroundStyle(.secondary)
             }
         }
@@ -919,6 +967,9 @@ private struct PaceRow: View {
 private struct PlanWeekSummaryRow: View {
     let week: TrainingWeek
     let currentWeekID: UUID?
+    /// Opens a session's detail. A tap rather than a `NavigationLink`, which would take the
+    /// touch the reorder container's lift gesture needs.
+    let onSelectWorkout: (ScheduledWorkout) -> Void
     @Environment(AppSettings.self) private var appSettings
     @Environment(AppContainer.self) private var container
     @Environment(\.modelContext) private var context
@@ -983,14 +1034,14 @@ private struct PlanWeekSummaryRow: View {
                                 .foregroundStyle(.secondary)
                             if isCurrentWeek {
                                 Text("CURRENT")
-                                    .font(.caption)
+                                    .font(.dsCaption)
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, AppSpacing.xxs)
                                     .background(.brand.opacity(0.15), in: Capsule())
-                                    .foregroundStyle(.brand)
+                                    .foregroundStyle(.brandText)
                             } else if week.isCompleted {
                                 Text("DONE")
-                                    .font(.caption)
+                                    .font(.dsCaption)
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, AppSpacing.xxs)
                                     .background(.success.opacity(0.15), in: Capsule())
@@ -1005,16 +1056,16 @@ private struct PlanWeekSummaryRow: View {
                             // plan that has not started, no "CURRENT" badge to anchor to
                             // either (S21).
                             Text(weekDateRange)
-                                .font(.caption)
+                                .font(.dsCaption)
                                 .foregroundStyle(.secondary)
                             Text("·")
-                                .font(.caption)
+                                .font(.dsCaption)
                                 .foregroundStyle(.tertiary)
                             Text("\(completedWorkouts)/\(totalWorkouts) workouts")
-                                .font(.caption)
+                                .font(.dsCaption)
                                 .foregroundStyle(.secondary)
                             Text("·")
-                                .font(.caption)
+                                .font(.dsCaption)
                                 .foregroundStyle(.tertiary)
                             distanceLabel
                         }
@@ -1031,6 +1082,7 @@ private struct PlanWeekSummaryRow: View {
                 .padding()
             }
             .buttonStyle(.plain)
+            .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
 
             if isExpanded {
                 Divider()
@@ -1051,6 +1103,8 @@ private struct PlanWeekSummaryRow: View {
                         // session up. A `List` gives its rows this for free; a stack does
                         // not.
                         .contentShape(Rectangle())
+                        .onTapGesture { onSelectWorkout(workout) }
+                        .accessibilityAddTraits(.isButton)
                 }
                 .reorderable()
             }
@@ -1172,7 +1226,7 @@ private struct PlanWeekSummaryRow: View {
     private var distanceLabel: some View {
         if week.isCompleted {
             Text(week.completedDistanceKm.distanceStringFromKm(unit: appSettings.unitPreference))
-                .font(.caption)
+                .font(.dsCaption)
                 .foregroundStyle(.secondary)
         } else if isCurrentWeek {
             HStack(spacing: 2) {
@@ -1181,10 +1235,10 @@ private struct PlanWeekSummaryRow: View {
                 Text("/ \(week.targetDistanceKm.distanceStringFromKm(unit: appSettings.unitPreference))")
                     .foregroundStyle(.tertiary)
             }
-            .font(.caption)
+            .font(.dsCaption)
         } else {
             Text("\(week.targetDistanceKm.distanceStringFromKm(unit: appSettings.unitPreference)) target")
-                .font(.caption)
+                .font(.dsCaption)
                 .foregroundStyle(.tertiary)
         }
     }
@@ -1211,7 +1265,7 @@ private struct PlanWorkoutSummaryRow: View {
                 Text(workout.workoutType.localizedName)
                     .font(.bodyRegular)
                 Text(workout.scheduledDate.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
-                    .font(.caption)
+                    .font(.dsCaption)
                     .foregroundStyle(.secondary)
             }
 
@@ -1231,6 +1285,9 @@ private struct PlanWorkoutSummaryRow: View {
                     StrideIcon(name: .check, size: 9, color: .onFill, strokeWeight: 3)
                 }
             }
+
+            // The row opens the session's detail.
+            StrideIcon(name: .chevronRight, size: 11, color: .secondary, strokeWeight: 2)
         }
         .padding(.vertical, AppSpacing.sm)
         .padding(.trailing)
