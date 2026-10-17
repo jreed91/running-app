@@ -332,18 +332,18 @@ struct ContentView: View {
         // runner who goes out at 17:00 and doesn't reopen the app gets an 18:00 banner
         // telling them they haven't run. Cheap either way — a bounded fetch and pure
         // arithmetic, no network.
+        //
+        // Leaving the app is also the moment to ask for tomorrow's background refresh,
+        // which re-arms all of the above on a day the runner never opens the app.
+        // Re-submitting replaces the pending request, so this cannot pile them up. Kept
+        // in this modifier rather than its own: one more link in this chain was enough to
+        // time out the Release type-checker.
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active || phase == .background else { return }
             Task { await refreshTrainingNudges() }
-        }
-        // Leaving the app is the moment to ask for tomorrow's background refresh, which
-        // re-arms all of the above on a day the runner never opens the app. Re-submitting
-        // replaces the pending request, so this cannot pile them up.
-        .onChange(of: scenePhase) { _, phase in
-            guard phase == .background,
-                  !UITestingSupport.isEnabled,
-                  !UITestingSupport.isHostingUnitTests else { return }
-            NotificationRefreshService.scheduleBackgroundRefresh()
+            if phase == .background {
+                scheduleBackgroundRefresh()
+            }
         }
         // The widgets' catch-all (B1). `.background` is the one that matters — it is the
         // last chance to publish whatever the runner just did before they go and look at
@@ -424,6 +424,11 @@ struct ContentView: View {
             plan: activePlans.first,
             preferences: appSettings.notificationPreferences
         )
+    }
+
+    private func scheduleBackgroundRefresh() {
+        guard !UITestingSupport.isEnabled, !UITestingSupport.isHostingUnitTests else { return }
+        NotificationRefreshService.scheduleBackgroundRefresh()
     }
 
     private func requestMissingPermissionsAfterRestoreIfNeeded() async {
