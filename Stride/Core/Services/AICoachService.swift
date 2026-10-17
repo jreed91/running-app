@@ -313,6 +313,8 @@ struct AICoachService: Sendable {
         provider: AIProvider,
         heartRateZones: [HRZoneSlice] = [],
         unitPreference: UnitPreference = .metric,
+        plannedSession: ScheduledWorkout? = nil,
+        nextPlannedSession: ScheduledWorkout? = nil,
         onPartialText: @escaping @MainActor @Sendable (String) -> Void = { _ in }
     ) async -> AICoachInsight {
         let context = makePromptContext(
@@ -327,7 +329,9 @@ struct AICoachService: Sendable {
             recentHistory: recentHistory,
             profile: profile,
             heartRateZones: heartRateZones,
-            unitPreference: unitPreference
+            unitPreference: unitPreference,
+            plannedSession: plannedSession,
+            nextPlannedSession: nextPlannedSession
         )
 
         // Apple's on-device / Private Cloud Compute model: no key required.
@@ -359,7 +363,7 @@ struct AICoachService: Sendable {
             summary: structured.summary,
             fullAnalysis: structured.fullAnalysis,
             confidence: min(max(structured.confidence, 0), 100),
-            evidence: Array(structured.evidence.prefix(4)),
+            evidence: Array(structured.evidence.prefix(3)),
             actionItems: Array(structured.actionItems.prefix(3)),
             focusAreas: structured.actionItems.map(\.title),
             nextWorkoutSuggestion: structured.nextWorkout.title,
@@ -1048,7 +1052,9 @@ struct AICoachService: Sendable {
         recentHistory: [RunWorkout],
         profile: UserProfile?,
         heartRateZones: [HRZoneSlice],
-        unitPreference: UnitPreference
+        unitPreference: UnitPreference,
+        plannedSession: ScheduledWorkout?,
+        nextPlannedSession: ScheduledWorkout?
     ) -> String {
         let date = workout.date.formatted(date: .abbreviated, time: .shortened)
         let avgPace = workout.averagePaceSecondsPerKm.paceString(unit: unitPreference)
@@ -1087,8 +1093,34 @@ struct AICoachService: Sendable {
 
         let recent = recentHistory.runsOnly.prefix(5).map { run in
             "\(run.date.formatted(date: .abbreviated, time: .omitted)) • \(run.workoutType.displayName) • \(run.distanceMeters.distanceString(unit: unitPreference)) • \(run.averagePaceSecondsPerKm.paceString(unit: unitPreference))"
+                + (run.averageHeartRate.map { " • \(Int($0.rounded())) bpm" } ?? "")
                 + (run.feel.map { " • felt \($0.promptName)" } ?? "")
         }.joined(separator: "\n")
+
+        // The references a verdict needs: what this run was meant to be, what is usual for
+        // this kind of run, and what comes next. Without them the coach can only restate
+        // the totals and fall back on general advice.
+        let planSection = plannedSessionSection(plannedSession, workout: workout, unitPreference: unitPreference)
+        let sameType = recentHistory.runsOnly
+            .filter { $0.id != workout.id && $0.workoutType == workout.workoutType }
+            .map {
+                CoachRunComparison.Sample(
+                    paceSecondsPerKm: $0.averagePaceSecondsPerKm,
+                    heartRate: $0.averageHeartRate,
+                    distanceMeters: $0.distanceMeters
+                )
+            }
+        let usualSection = CoachRunComparison.baselineLine(
+            typeName: workout.workoutType.displayName,
+            currentPaceSecondsPerKm: workout.averagePaceSecondsPerKm,
+            currentHeartRate: workout.averageHeartRate,
+            baseline: CoachRunComparison.baseline(from: sameType),
+            unit: unitPreference
+        )
+        let nextSection = nextPlannedSession.map {
+            "\($0.scheduledDate.formatted(.dateTime.weekday(.wide))): "
+                + plannedTargetsDescription($0, unitPreference: unitPreference)
+        } ?? "Nothing planned yet."
         let recentSection = recent.isEmpty ? "No recent runs." : recent
 
         return """
@@ -1105,6 +1137,15 @@ struct AICoachService: Sendable {
         How it felt to the runner: \(feel)
         \(profileContext)
 
+        What this run was meant to be:
+        \(planSection)
+
+        Compared with your usual:
+        \(usualSection)
+
+        Next planned run:
+        \(nextSection)
+
         Splits (one per \(splitLabel)):
         \(splitSection)
 
@@ -1116,6 +1157,56 @@ struct AICoachService: Sendable {
         Recent history:
         \(recentSection)
         """
+    }
+}
+
+extension AICoachService {
+
+    /// The planned session this run fulfilled, with how the run compared to its targets.
+    func plannedSessionSection(
+        _ planned: ScheduledWorkout?,
+        workout: RunWorkout,
+        unitPreference: UnitPreference
+    ) -> String {
+        guard let planned else {
+            let type = workout.workoutType.displayName.lowercased()
+            return "Not a planned session. Judge it by what this kind of run (\(type)) is for."
+        }
+        var lines = ["Planned: " + plannedTargetsDescription(planned, unitPreference: unitPreference)]
+        if let comparison = CoachRunComparison.planLine(
+            actualPaceSecondsPerKm: workout.averagePaceSecondsPerKm,
+            actualDistanceMeters: workout.distanceMeters,
+            targetPaceLower: planned.targetPaceLowerBound,
+            targetPaceUpper: planned.targetPaceUpperBound,
+            targetDistanceMeters: planned.targetDistanceMeters,
+            unit: unitPreference
+        ) {
+            lines.append("Result: " + comparison)
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    /// A planned session as one line: its type, distance, pace range and main set.
+    func plannedTargetsDescription(_ planned: ScheduledWorkout, unitPreference: UnitPreference) -> String {
+        var parts = [planned.workoutType.displayName]
+        if let distance = planned.targetDistanceMeters, distance > 0 {
+            parts.append(distance.distanceString(unit: unitPreference))
+        }
+        if let range = planned.targetPaceRange {
+            parts.append(
+                "at \(range.lowerBound.paceValueString(unit: unitPreference))–"
+                    + range.upperBound.paceString(unit: unitPreference)
+            )
+        }
+        if let set = planned.workoutStructure?.mainSets.first {
+            let work = set.workSegment
+            let size = work.distanceMeters?.distanceString(unit: unitPreference)
+                ?? work.durationSeconds?.durationString
+            if let size {
+                parts.append("main set \(set.repetitions) x \(size)")
+            }
+        }
+        return parts.joined(separator: ", ")
     }
 }
 
@@ -1149,6 +1240,28 @@ extension AICoachService {
 
     static let insightInstructions = """
     You are a running coach reading back one finished run to the runner who just did it.
+
+    The read fills one screen, in this order: a verdict, one sentence on why, three \
+    numbers that prove it, what to do next, and the next run. Build it in that order.
+
+    Decide the verdict first: did this run do the job it was meant to do? If it was a \
+    planned session, judge it against the plan's pace and distance. If not, judge it by \
+    what that kind of run is for: easy runs easy, long runs steady, quality runs on \
+    target. Then check it against the runner's usual for this kind of run: faster at the \
+    same heart rate, or the same pace at a lower one, is fitness; faster at a much \
+    higher heart rate is just a harder day.
+
+    Choose the three numbers that prove the verdict. Prefer comparisons with the plan or \
+    the usual over totals the runner already sees at the top of the screen; a bare \
+    distance, time or average pace is not evidence.
+
+    The first thing to do is the single most useful change; the other two must be \
+    different from it. If the run went well, say so and keep the advice short. Do not \
+    invent a problem to have something to fix.
+
+    For the next run, if one is planned, say whether to do it as planned or how to \
+    change it, and why. Do not swap it for a different kind of session unless this run \
+    gives you a reason to.
 
     Write the way a coach talks out loud: say "you", use everyday words, and keep each \
     sentence to one idea. A runner should understand every line on first read without \
@@ -1189,7 +1302,7 @@ extension AICoachService {
         Workout details:
         \(details)
 
-        Focus areas:
+        What the app's own checks flagged (use one only if it matters for this run):
         \(bullets)
         """
     }

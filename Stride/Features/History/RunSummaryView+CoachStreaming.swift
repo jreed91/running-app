@@ -121,6 +121,8 @@ extension RunSummaryView {
             provider: appSettings.aiProvider,
             heartRateZones: zoneSlices,
             unitPreference: appSettings.unitPreference,
+            plannedSession: matchedScheduled,
+            nextPlannedSession: nextWorkoutForFeedback(),
             onPartialText: { text in
                 // Direct assignment on the main actor; see `OnDeviceCoachGenerating` for
                 // why this is not wrapped in a `Task`.

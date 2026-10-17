@@ -269,6 +269,74 @@ struct FoundationModelsCoachServiceTests {
         #expect(prompt.contains("Heart rate sat mostly in"))
     }
 
+    @Test("The insight prompt carries the plan, the runner's usual and the next planned run")
+    func promptIncludesReferences() async {
+        let recorder = PromptRecorder()
+        let backend = RecordingOnDeviceCoach(recorder: recorder, insight: sampleStructured())
+        let service = AICoachService(onDeviceBackend: backend)
+
+        // 8 km in 2,500 s is 5:12 per km.
+        let workout = RunWorkout(date: Date(), distanceMeters: 8_000, durationSeconds: 2_500, workoutType: .easy)
+        let planned = ScheduledWorkout(
+            scheduledDate: Date(),
+            workoutType: .easy,
+            targetDistanceMeters: 8_000,
+            targetPaceLowerBound: 330,
+            targetPaceUpperBound: 350
+        )
+        let next = ScheduledWorkout(
+            scheduledDate: Date().addingTimeInterval(86_400 * 2),
+            workoutType: .tempo,
+            targetDistanceMeters: 6_000
+        )
+        let history = (1...3).map { day in
+            RunWorkout(
+                date: Date().addingTimeInterval(-86_400 * Double(day)),
+                distanceMeters: 8_000,
+                durationSeconds: 2_800,
+                workoutType: .easy
+            )
+        }
+
+        _ = await service.evaluateWithProvider(
+            workout: workout,
+            recentHistory: history,
+            profile: nil,
+            provider: .appleOnDevice,
+            plannedSession: planned,
+            nextPlannedSession: next
+        )
+
+        let prompt = await recorder.prompt
+        #expect(prompt.contains("What this run was meant to be:"))
+        #expect(prompt.contains("Planned: Easy, 8.0 km, at 5:30–5:50 min/km"))
+        #expect(prompt.contains("seconds faster than the planned 5:30–5:50 min/km"))
+        #expect(prompt.contains("Your last 3 easy runs averaged 5:50 min/km"))
+        #expect(prompt.contains("seconds faster per km"))
+        #expect(prompt.contains("Next planned run:"))
+        #expect(prompt.contains("Tempo, 6.0 km"))
+    }
+
+    @Test("Without a plan the prompt says the run was not a planned session")
+    func promptWithoutPlan() async {
+        let recorder = PromptRecorder()
+        let backend = RecordingOnDeviceCoach(recorder: recorder, insight: sampleStructured())
+        let service = AICoachService(onDeviceBackend: backend)
+        let workout = RunWorkout(date: Date(), distanceMeters: 8_000, durationSeconds: 2_500, workoutType: .easy)
+
+        _ = await service.evaluateWithProvider(
+            workout: workout,
+            recentHistory: [],
+            profile: nil,
+            provider: .appleOnDevice
+        )
+
+        let prompt = await recorder.prompt
+        #expect(prompt.contains("Not a planned session."))
+        #expect(prompt.contains("Fewer than 3 recent easy runs"))
+        #expect(prompt.contains("Nothing planned yet."))
+    }
+
     @Test("Without zone data the prompt says so rather than dropping the section")
     func promptWithoutZoneData() async {
         let recorder = PromptRecorder()
