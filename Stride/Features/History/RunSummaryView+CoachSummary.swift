@@ -15,9 +15,9 @@ extension RunSummaryView {
     var coachSummaryCard: some View {
         if appSettings.aiInsightsEnabled {
             if aiInsight != nil || isLoadingAIInsight {
-                NavigationLink {
-                    detailPage(.coach)
-                } label: {
+                // Built eagerly for the same reason as the breakdown rows: the coach page
+                // reads this view's environment and state (see `breakdownRowButton`).
+                NavigationLink(destination: detailPage(.coach)) {
                     coachSummaryContent(opensPage: true)
                 }
                 .buttonStyle(.plain)

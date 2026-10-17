@@ -13,7 +13,7 @@ import UIKit
 // The screen is a short summary (hero with the plan verdict, feel, map, one coach card,
 // a breakdown list, conditions and shoes). The long readings — splits, zones, laps, pace
 // insights, the planned workout and the full coach — each open as their own page from
-// the breakdown list as a plain `NavigationLink(destination:)`.
+// the breakdown list, built eagerly in this view's body (see `breakdownRowButton`).
 //
 // The screen used to be one 2,232-line file carrying a `swiftlint:disable file_length
 // type_body_length` banner, which is the last of D1. The logic came out first — the

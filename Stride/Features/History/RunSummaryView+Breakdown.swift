@@ -135,13 +135,14 @@ extension RunSummaryView {
         }
     }
 
-    /// A view-destination link, not `navigationDestination(item:)` on this screen: this
-    /// screen is itself pushed by view-destination links (History's list, a plan day), and
-    /// an item-driven destination declared inside it did nothing on tap and then crashed.
+    /// The page is built here, eagerly, by `NavigationLink(destination:)` taking a value
+    /// rather than a closure. `detailPage` reads this view's `@Environment`, `@State` and
+    /// `@Query` properties, and those can only be read while this view's `body` is running.
+    /// A closure destination (or `navigationDestination`) runs later, outside the body, so
+    /// it read `@Environment(AppSettings.self)` with no installed view, which is the likely
+    /// cause of the Splits and heart-rate zone pages crashing on device.
     private func breakdownRowButton(_ row: BreakdownRow) -> some View {
-        NavigationLink {
-            detailPage(row.page)
-        } label: {
+        NavigationLink(destination: detailPage(row.page)) {
             HStack(spacing: 12) {
                 // A 32pt icon tile, as a row takes it (Route Loop controls table).
                 Image(systemName: row.page.systemImage)
