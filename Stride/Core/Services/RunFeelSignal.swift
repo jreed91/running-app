@@ -44,7 +44,10 @@ enum RunFeelSignal {
 
     /// A sentence for the coach's summary of a single rated run.
     static func runSentence(feel: RunFeel, type: WorkoutType) -> String {
-        let session = type.displayName.lowercased()
+        // "this easy run", not "this easy": the bare type name ran into the rating
+        // ("You rated this easy easy").
+        let name = type.displayName.lowercased()
+        let session = name.hasSuffix("run") || type == .race ? name : "\(name) run"
         switch mismatch(feel: feel, type: type) {
         case .harderThanIntended:
             return "You rated this \(session) \(feel.promptName), harder than it was meant to feel."

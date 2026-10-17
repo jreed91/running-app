@@ -5,10 +5,14 @@ import Synchronization
 /// A read-only copy of the runner's training log that the coach can search while it
 /// writes, through Foundation Models tool calling.
 ///
-/// The chat and the run detail read used to get one fixed summary — the newest eight runs
-/// — and had to answer from that. "Show my last five easy runs" or "how did my tempos go
-/// this month?" needed history the summary did not carry. With this, the model asks for
-/// what the question needs and gets the answer as plain lines, in the runner's unit.
+/// The chat used to get one fixed summary — the newest eight runs — and had to answer
+/// from that. "Show my last five easy runs" or "how did my tempos go this month?" needed
+/// history the summary did not carry. With this, the model asks for what the question
+/// needs and gets the answer as plain lines, in the runner's unit.
+///
+/// The run detail read does not get tools. It opens with the page, its prompt already
+/// compares the run with the plan and the runner's usual, and a lookup there only made
+/// the runner wait (and, on a device in October 2026, ended on the local summary).
 ///
 /// Plain values copied out of SwiftData on the main actor before the request, so the
 /// tools that read it can be `Sendable` (Apple's `Tool` requires it) and can never write
@@ -47,31 +51,11 @@ struct CoachLookup: Sendable, Equatable {
     /// the same one number behind the race hub's prediction and the plan's paces, so a
     /// race time the coach quotes matches the one the app shows. Nil when there is none.
     let fitnessVDOT: Double?
-    /// Which tools a session gets for this lookup. See ``ToolSet``.
-    let toolSet: ToolSet
-
-    /// Which tools a request gets.
-    ///
-    /// Every tool costs latency before the first word appears: its name, description and
-    /// schema lengthen the prompt, and each call the model makes is a full model turn
-    /// (a server round trip on Private Cloud Compute) before any text streams. The chat
-    /// is a question the runner asked, so it gets every tool. The run read starts on its
-    /// own when the page opens and its prompt already compares the run with the plan and
-    /// the runner's usual, so it gets only the two lookups that reach further back.
-    enum ToolSet: Sendable, Equatable {
-        case chat
-        case runRead
-
-        /// The most lookups one answer may make. A tool called past this answers that
-        /// there are no more lookups, so the model writes with what it has rather than
-        /// chaining calls while the runner waits.
-        var maximumCalls: Int {
-            switch self {
-            case .chat:    return 3
-            case .runRead: return 1
-            }
-        }
-    }
+    /// The most lookups one answer may make. A tool called past this answers that there
+    /// are no more lookups, so the model writes with what it has rather than chaining
+    /// calls while the runner waits: each call is a full model turn, a server round trip
+    /// on Private Cloud Compute, before any text streams.
+    static let maximumToolCalls = 3
 
     /// The most rows any one answer carries. A tool's output lands in the context window
     /// — the on-device one is small — so an answer is a handful of lines, never a dump.
@@ -89,15 +73,13 @@ struct CoachLookup: Sendable, Equatable {
         sessions: [Session],
         unit: UnitPreference,
         now: Date = Date(),
-        fitnessVDOT: Double? = nil,
-        toolSet: ToolSet = .chat
+        fitnessVDOT: Double? = nil
     ) {
         self.runs = runs.sorted { $0.date > $1.date }
         self.sessions = sessions.sorted { $0.date < $1.date }
         self.unit = unit
         self.now = now
         self.fitnessVDOT = fitnessVDOT
-        self.toolSet = toolSet
     }
 
     /// Copies `runs` (walks and cross-training dropped) and the plan's run sessions out of
@@ -107,8 +89,7 @@ struct CoachLookup: Sendable, Equatable {
         scheduled: [ScheduledWorkout],
         unit: UnitPreference,
         now: Date = Date(),
-        fitnessVDOT: Double? = nil,
-        toolSet: ToolSet = .chat
+        fitnessVDOT: Double? = nil
     ) {
         let cutoff = now.addingTimeInterval(-Double(Self.historyDays) * 86_400)
         self.init(
@@ -133,27 +114,25 @@ struct CoachLookup: Sendable, Equatable {
             },
             unit: unit,
             now: now,
-            fitnessVDOT: fitnessVDOT,
-            toolSet: toolSet
+            fitnessVDOT: fitnessVDOT
         )
     }
 
     /// Fetches the last ``historyDays`` of runs from `context` and the sessions of `plan`.
     ///
     /// - Parameters:
-    ///   - excluding: a run to leave out — the run detail's own run, which its prompt
-    ///     already describes in full.
-    ///   - now: the moment "how many days back" and "around today" count from. The run
-    ///     detail passes the run's own date, so the coach compares a run with what came
-    ///     before it, not with weeks the runner had not run yet.
+    ///   - excluding: a run to leave out, for a request whose prompt already describes
+    ///     that run in full.
+    ///   - now: the moment "how many days back" and "around today" count from. A request
+    ///     about one past run passes that run's date, so the coach compares it with what
+    ///     came before it, not with weeks the runner had not run yet.
     @MainActor
     static func make(
         context: ModelContext,
         plan: TrainingPlan?,
         unit: UnitPreference,
         excluding: RunWorkout? = nil,
-        now: Date = Date(),
-        toolSet: ToolSet = .chat
+        now: Date = Date()
     ) -> CoachLookup {
         let cutoff = now.addingTimeInterval(-Double(historyDays) * 86_400)
         // Bounded rather than date-filtered in the fetch: runs are few, and a fixed cap
@@ -167,9 +146,7 @@ struct CoachLookup: Sendable, Equatable {
         // From every fetched run, the excluded one included: a race-time prediction on a
         // run's own detail page should count that run, as the race hub would.
         let vdot = RaceDayPlan.currentVDOT(runs: fetched, profile: profile, now: now)
-        return CoachLookup(
-            runs: runs, scheduled: scheduled, unit: unit, now: now, fitnessVDOT: vdot, toolSet: toolSet
-        )
+        return CoachLookup(runs: runs, scheduled: scheduled, unit: unit, now: now, fitnessVDOT: vdot)
     }
 
     // MARK: Queries

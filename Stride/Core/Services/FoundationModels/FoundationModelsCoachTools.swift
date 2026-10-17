@@ -232,24 +232,18 @@ struct RacePredictionsTool: Tool {
 
 @available(iOS 26.0, *)
 extension CoachLookup {
-    /// The tools a session gets for this lookup: all six for the chat, the two that reach
-    /// back past the prompt for the run read (see ``CoachLookup/ToolSet``). Built once per
-    /// request, so the tools of one answer share one ``CoachToolBudget``.
+    /// The tools a session gets for this lookup. Built once per request, so the tools of
+    /// one answer share one ``CoachToolBudget``.
     var tools: [any Tool] {
-        let budget = CoachToolBudget(calls: toolSet.maximumCalls)
-        switch toolSet {
-        case .runRead:
-            return [FindRunsTool(lookup: self, budget: budget), CompareRunsTool(lookup: self, budget: budget)]
-        case .chat:
-            return [
-                FindRunsTool(lookup: self, budget: budget),
-                RankRunsTool(lookup: self, budget: budget),
-                WeeklyTotalsTool(lookup: self, budget: budget),
-                CompareRunsTool(lookup: self, budget: budget),
-                PlanSessionsTool(lookup: self, budget: budget),
-                RacePredictionsTool(lookup: self, budget: budget),
-            ]
-        }
+        let budget = CoachToolBudget(calls: Self.maximumToolCalls)
+        return [
+            FindRunsTool(lookup: self, budget: budget),
+            RankRunsTool(lookup: self, budget: budget),
+            WeeklyTotalsTool(lookup: self, budget: budget),
+            CompareRunsTool(lookup: self, budget: budget),
+            PlanSessionsTool(lookup: self, budget: budget),
+            RacePredictionsTool(lookup: self, budget: budget),
+        ]
     }
 }
 #endif

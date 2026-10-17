@@ -79,6 +79,14 @@ struct RunFeelSignalTests {
         }
     }
 
+    @Test("The run sentence names the run, so the type and the rating never run together")
+    func runSentenceNamesTheRun() {
+        #expect(RunFeelSignal.runSentence(feel: .easy, type: .easy)
+            == "You rated this easy run easy, about what it was meant to feel like.")
+        #expect(RunFeelSignal.runSentence(feel: .hard, type: .longRun).hasPrefix("You rated this long run hard"))
+        #expect(RunFeelSignal.runSentence(feel: .hard, type: .race).hasPrefix("You rated this race hard"))
+    }
+
     @Test("Only a mismatched rating adds a focus item")
     func focusOnlyOnMismatch() {
         #expect(RunFeelSignal.runFocus(feel: .hard, type: .easy) != nil)
