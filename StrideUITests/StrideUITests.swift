@@ -34,8 +34,10 @@ final class StrideUITests: XCTestCase {
 
         tabBar.buttons["Plan"].tap()
         XCTAssertTrue(app.navigationBars["My Plan"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["PACE INSIGHTS"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["TRAINING WEEKS"].waitForExistence(timeout: 5))
+        // By identifier: pace insights is a row that opens its own page, and the weeks
+        // header reads "All weeks" once the current week is shown above it.
+        XCTAssertTrue(app.buttons["plan.paceInsightsRow"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["plan.weeksHeader"].waitForExistence(timeout: 5))
     }
 
     func testE2ETabNavigationShowsPrimaryScreens() throws {
