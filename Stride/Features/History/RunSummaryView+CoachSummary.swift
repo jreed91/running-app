@@ -82,7 +82,7 @@ extension RunSummaryView {
                     Button {
                         Task { await loadAIInsight() }
                     } label: {
-                        Text("Load analysis")
+                        Text("Write analysis")
                     }
                     .buttonStyle(.strideButton(.secondary, compact: true, fullWidth: false))
                 }

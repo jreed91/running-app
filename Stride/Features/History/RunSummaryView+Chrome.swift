@@ -17,18 +17,6 @@ extension RunSummaryView {
         .padding(.top, 10)
     }
 
-    func confidenceChip(_ value: Int) -> some View {
-        HStack(spacing: 6) {
-            // The percentage beside it is what VoiceOver reads.
-            StrideProgressBar(value: Double(value) / 100, height: 4)
-                .frame(width: 36)
-                .accessibilityHidden(true)
-            Text("\(value)%")
-                .font(.dsCaption2.weight(.bold).monospacedDigit())
-                .foregroundStyle(.secondary)
-        }
-    }
-
     func evidenceChip(label: String, sub: String?, tone: Color) -> some View {
         HStack(spacing: 6) {
             Text(label)
