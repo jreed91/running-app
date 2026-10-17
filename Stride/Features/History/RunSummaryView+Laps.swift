@@ -7,13 +7,10 @@ extension RunSummaryView {
 
     /// The laps card, shown only for runs that were actually lapped.
     ///
-    /// It follows the splits and heart-rate zones, which every run with data has; laps are
-    /// the boundaries a runner chose by hand on the few runs that were lapped. Runs with no
-    /// laps (most of them) show nothing here at all rather than a card explaining its own
-    /// absence.
+    /// Laps are the boundaries a runner chose by hand on the few runs that were lapped, so
+    /// the breakdown list offers this page only for runs that have them.
     var lapsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: "Laps")
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text("LAP")

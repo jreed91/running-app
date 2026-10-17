@@ -2,8 +2,9 @@ import SwiftUI
 import SwiftData
 
 // Part of `RunSummaryView` (D1).
-// The AI coach section proper — the coaching read, the ask-the-coach card, the action
-// plan, the next-session suggestion, the reaction row, and the empty/unavailable states.
+// The coach page, opened from the run screen's coach card (`+CoachSummary`) — the
+// coaching read, the ask-the-coach card, the action plan, the next-session
+// suggestion, the reaction row, and the empty/unavailable states.
 
 extension RunSummaryView {
 

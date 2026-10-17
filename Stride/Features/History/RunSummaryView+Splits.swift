@@ -61,7 +61,6 @@ extension RunSummaryView {
     var splitsCard: some View {
         if !chartedSplits.splits.isEmpty || !workout.splits.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                sectionHeader(title: "Splits")
                 VStack(alignment: .leading, spacing: 12) {
                     if !chartedSplits.splits.isEmpty {
                         splitsChart

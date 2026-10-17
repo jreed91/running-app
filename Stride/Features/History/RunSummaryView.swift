@@ -7,8 +7,13 @@ import UIKit
 // The run detail screen. This file holds the screen's state, the values derived from
 // the run, the three on-demand loads (heart-rate zones, split backfill, share card),
 // and `body`; each section it composes lives in a `RunSummaryView+*.swift` extension
-// alongside it — Overview, Feel, TempoInsights, CoachSection, CoachStreaming,
+// alongside it — Overview, Feel, Breakdown, TempoInsights, CoachSection, CoachStreaming,
 // CoachComponents, Splits, HeartRateZones, Laps, PlannedWorkout, Chrome.
+//
+// The screen is a short summary (hero with the plan verdict, feel, map, one coach card,
+// a breakdown list, conditions and shoes). The long readings — splits, zones, laps, pace
+// insights, the planned workout and the full coach — each open as their own page from
+// the breakdown list, through `openPage`.
 //
 // The screen used to be one 2,232-line file carrying a `swiftlint:disable file_length
 // type_body_length` banner, which is the last of D1. The logic came out first — the
@@ -53,13 +58,14 @@ struct RunSummaryView: View {
     /// The bucketed series behind the split charts, resolved once per run (N34). `nil` until
     /// the first resolve, which `chartedSplits` covers with the run's stored splits.
     @State var resolvedSplitSeries: SplitChartSeries.Resolved?
+    /// The detail page pushed from the breakdown list or the coach card, if any.
+    @State var openPage: RunSummaryPage?
     @State private var showDeleteConfirmation = false
 
     // Sizes that have to track the text beside them rather than staying pinned (U2).
     // Declared here rather than in `RunSummaryView+Overview` because a Swift
     // extension can't carry stored properties.
     @ScaledMetric(relativeTo: .largeTitle) var heroMetricSize: CGFloat = 56
-    @ScaledMetric(relativeTo: .title) var weatherGlyphSize: CGFloat = 32
     @State var showAssociateSheet = false
     @State var aiInsight: AICoachInsight?
     @State var isLoadingAIInsight = false
@@ -134,10 +140,6 @@ struct RunSummaryView: View {
         matchedScheduled?.week?.plan
             ?? workout.scheduledWorkout?.week?.plan
             ?? activePlans.first
-    }
-
-    var estimatedVO2Max: Double? {
-        ProgressStatsService.estimatedVDOT(for: workout)
     }
 
     /// Whether the splits table shows an HR column. Asked of `SplitChartMetric` rather than
@@ -362,38 +364,30 @@ struct RunSummaryView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: AppSpacing.md) {
-                // What the run was first, then the evidence, then what to make of it.
+                // The answer first (what the run was and how it went against the plan),
+                // then the one thing the screen asks of the runner, then the route, the
+                // coach's headline, and a list of everything else. Each long reading opens
+                // as its own page so this scroll stays short.
                 titleBlock
-                statsGrid
-                routeMap
-                plannedWorkoutSection
-                // A walk can never fulfil a planned session, so the screen does not offer
-                // to link one — the same rule the importer's linker applies (N38). The sheet
-                // lists run days only, so it is not offered for cross-training either (B8).
-                if workout.scheduledWorkout == nil, workout.countsAsRunning {
-                    linkToPlannedWorkoutButton
-                }
                 // A walk is not training, so there is nothing for its rating to adjust. The
                 // rating is read against a *run's* intended type, so not a ride either (B8).
                 if workout.countsAsRunning {
                     feelSection
                 }
-                // Splits, zones and laps come before the coaching read: they are the
-                // evidence the insight is written from, and the insight cites them.
-                splitsCard
-                if !zoneSlices.isEmpty, zoneSlices.contains(where: { $0.seconds > 0 }) {
-                    heartRateZoneSection
-                }
-                if !workout.laps.isEmpty {
-                    lapsSection
-                }
+                routeMap
                 // The coach and the pace read are both written against the runner's
                 // training paces, which say nothing about a walk. Absent rather than
                 // shown empty: an insight on a walk is not a smaller insight, it is one
                 // about the wrong thing. The same holds for a ride or a swim (B8).
                 if workout.countsAsRunning {
-                    paceInsightsSection
-                    aiCoachSection
+                    coachSummaryCard
+                }
+                breakdownSection
+                // A walk can never fulfil a planned session, so the screen does not offer
+                // to link one — the same rule the importer's linker applies (N38). The sheet
+                // lists run days only, so it is not offered for cross-training either (B8).
+                if workout.scheduledWorkout == nil, workout.countsAsRunning {
+                    linkToPlannedWorkoutButton
                 }
                 weatherSection
                 // Shoes are for running; a ride or a swim has none to pick (B8).
@@ -419,6 +413,12 @@ struct RunSummaryView: View {
             resolveSplitChartSeries()
         }
         .background(Color.surfacePrimary.ignoresSafeArea())
+        // Attached here rather than as `NavigationLink(destination:)` in the rows, so the
+        // pushed page is rebuilt from this view's state: dragging a split chart or a coach
+        // read streaming in updates the page that is showing it.
+        .navigationDestination(item: $openPage) { page in
+            detailPage(page)
+        }
         .navigationTitle(displayType.localizedName)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

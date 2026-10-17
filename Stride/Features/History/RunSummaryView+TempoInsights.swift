@@ -13,8 +13,6 @@ extension RunSummaryView {
     var paceInsightsSection: some View {
         if let insights = tempoInsights {
             VStack(alignment: .leading, spacing: 12) {
-                sectionHeader(title: "Pace Insights")
-
                 VStack(spacing: 10) {
                     tempoInsightPaceRow(insights)
                     if insights.derivedVDOT != nil || insights.previousVDOT != nil {

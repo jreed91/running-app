@@ -2,9 +2,9 @@ import SwiftUI
 import MapKit
 
 // Part of `RunSummaryView` (D1).
-// The run's own summary: the plan link, the title block, the route map, the stats
-// grid, and the weather strip — the parts of the screen that describe the run itself
-// rather than reading it back to the runner.
+// The run's own summary: the plan link, the hero (numbers, vitals and the plan
+// verdict), the route map, and the conditions row — the parts of the screen that
+// describe the run itself rather than reading it back to the runner.
 
 extension RunSummaryView {
 
@@ -35,8 +35,8 @@ extension RunSummaryView {
 
     // MARK: Title block
 
-    /// The screen's hero: what the run was, its distance (or time), and its time and pace.
-    /// The stats grid below carries only what this block does not.
+    /// The screen's hero: what the run was, its distance (or time), its time and pace, the
+    /// vitals that used to fill a separate stats grid, and how it went against the plan.
     var titleBlock: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
@@ -88,6 +88,22 @@ extension RunSummaryView {
                     }
                 }
             }
+
+            let vitals = heroVitals
+            if !vitals.isEmpty {
+                Divider()
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: 68), spacing: AppSpacing.sm, alignment: .leading)],
+                    alignment: .leading,
+                    spacing: AppSpacing.sm
+                ) {
+                    ForEach(vitals) { vital in
+                        vitalCell(vital)
+                    }
+                }
+            }
+
+            planVerdict
         }
         .padding(AppSpacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -147,118 +163,109 @@ extension RunSummaryView {
         }
     }
 
-    // MARK: Stats grid
+    // MARK: Vitals
 
-    /// The run's other figures. Distance, time and pace are in the title block above and
-    /// are not repeated here.
-    var statsGrid: some View {
-        LazyVGrid(columns: [.init(.flexible()), .init(.flexible())], spacing: 10) {
-            if let hr = workout.averageHeartRate {
-                statCell(value: "\(Int(hr))", unit: "bpm", label: "Avg HR", tone: hrTone(hr))
-            }
-            if let maxHR = workout.maxHeartRate {
-                statCell(value: "\(Int(maxHR))", unit: "bpm", label: "Max HR", tone: hrTone(maxHR))
-            }
-            // Cadence was live-only until A5 — the HUD showed it mid-run and nothing kept
-            // it, so the run you had just finished could not tell you what it was.
-            if let cadence = workout.averageCadenceStepsPerMinute, cadence > 0 {
-                statCell(value: "\(Int(cadence.rounded()))", unit: "spm", label: "Avg Cadence")
-            }
-            if let gain = workout.elevationGainMeters {
-                statCell(
-                    value: "\(Int(gain.elevationValue(unit: appSettings.unitPreference)))",
-                    unit: appSettings.unitPreference.elevationLabel,
-                    label: "Elevation"
-                )
-            }
-            if let vo2 = estimatedVO2Max {
-                statCell(value: String(format: "%.1f", vo2), label: "Est. VO₂ Max", colSpan: true)
-            }
-        }
+    /// One of the run's secondary figures in the hero.
+    struct RunVital: Identifiable {
+        let label: String
+        let value: String
+        let unit: String?
+        var tone: Color?
+        var id: String { label }
     }
 
-    private func statCell(value: String, unit: String? = nil, label: String, tone: Color? = nil, colSpan: Bool = false) -> some View {
+    /// Heart rate, cadence and climb. Distance, time and pace are the hero's own lines and
+    /// are not repeated. The estimated VO₂ max cell is gone from this screen: Progress
+    /// carries fitness, and a tempo run's pace insights page still shows this run's VDOT.
+    var heroVitals: [RunVital] {
+        var vitals: [RunVital] = []
+        if let hr = workout.averageHeartRate {
+            vitals.append(RunVital(
+                label: String(localized: "Avg HR"), value: "\(Int(hr))", unit: "bpm", tone: hrTone(hr)
+            ))
+        }
+        if let maxHR = workout.maxHeartRate {
+            vitals.append(RunVital(
+                label: String(localized: "Max HR"), value: "\(Int(maxHR))", unit: "bpm", tone: hrTone(maxHR)
+            ))
+        }
+        // Cadence was live-only until A5 — the HUD showed it mid-run and nothing kept
+        // it, so the run you had just finished could not tell you what it was.
+        if let cadence = workout.averageCadenceStepsPerMinute, cadence > 0 {
+            vitals.append(RunVital(
+                label: String(localized: "Cadence"), value: "\(Int(cadence.rounded()))", unit: "spm"
+            ))
+        }
+        if let gain = workout.elevationGainMeters {
+            vitals.append(RunVital(
+                label: String(localized: "Elevation"),
+                value: "\(Int(gain.elevationValue(unit: appSettings.unitPreference)))",
+                unit: appSettings.unitPreference.elevationLabel
+            ))
+        }
+        return vitals
+    }
+
+    private func vitalCell(_ vital: RunVital) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text(value)
-                    .font(.dsTitle2.weight(.semibold).monospacedDigit())
-                    .kerning(-0.5)
-                    .foregroundStyle(tone ?? .primary)
+            HStack(alignment: .firstTextBaseline, spacing: 3) {
+                Text(vital.value)
+                    .font(.dsHeadline.weight(.semibold).monospacedDigit())
+                    .foregroundStyle(vital.tone ?? .primary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
-                if let unit {
+                if let unit = vital.unit {
                     Text(unit)
-                        .font(.dsCaption.weight(.medium))
+                        .font(.dsCaption2.weight(.medium))
                         .foregroundStyle(.secondary)
                 }
             }
-            Text(label)
+            Text(vital.label)
                 .font(.dsCaption2.weight(.semibold))
                 .foregroundStyle(.secondary)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, AppSpacing.lg)
-        .padding(.vertical, AppSpacing.md)
-        .strideCard()
-        .gridCellColumns(colSpan ? 2 : 1)
-        // One element per cell, or the grid reads as loose fragments with no pairing
-        // between a number and the metric it belongs to (N18).
+        // One element per figure, or VoiceOver reads a number with no hint which metric
+        // it belongs to (N18).
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(label)
-        .accessibilityValue(SpokenMetric.spoken(value: value, unit: unit))
+        .accessibilityLabel(vital.label)
+        .accessibilityValue(SpokenMetric.spoken(value: vital.value, unit: vital.unit))
     }
 
     private func hrTone(_ value: Double) -> Color? {
         value >= 155 ? .warning : nil
     }
 
-    // MARK: Weather section
+    // MARK: Conditions
 
+    /// The weather as one row rather than a headed three-column card: it is context for
+    /// the run, not a reading of it.
     @ViewBuilder
     var weatherSection: some View {
         if let w = workout.weather {
-            VStack(alignment: .leading, spacing: 12) {
-                sectionHeader(title: "Conditions")
-
-                HStack(spacing: 0) {
-                    // Icon + condition description
-                    VStack(spacing: 6) {
-                        Image(systemName: w.conditionSymbol)
-                            .font(.system(size: weatherGlyphSize))
-                            .symbolRenderingMode(.multicolor)
-                        Text(w.conditionDescription)
-                            .font(.dsCaption)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity)
-
-                    Divider().frame(height: 56)
-
-                    // Temperature
-                    VStack(spacing: 4) {
-                        Text(w.temperatureString(unit: appSettings.unitPreference))
-                            .font(.metricSmall)
-                        Text("Feels \(w.feelsLikeString(unit: appSettings.unitPreference))")
-                            .font(.dsCaption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity)
-
-                    Divider().frame(height: 56)
-
-                    // Humidity + wind
-                    VStack(alignment: .leading, spacing: 8) {
-                        Label("\(Int(w.humidityPercent))%", systemImage: "humidity")
-                        Label(w.windString(unit: appSettings.unitPreference), systemImage: "wind")
-                    }
-                    .font(.dsCaption)
-                    .frame(maxWidth: .infinity)
+            let unit = appSettings.unitPreference
+            HStack(spacing: 12) {
+                Image(systemName: w.conditionSymbol)
+                    .font(.dsTitle3)
+                    .symbolRenderingMode(.multicolor)
+                    .frame(width: 32)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(w.temperatureString(unit: unit)) · \(w.conditionDescription)")
+                        .font(.dsSubhead.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    let feels = w.feelsLikeString(unit: unit)
+                    let wind = w.windString(unit: unit)
+                    Text("Feels \(feels) · \(Int(w.humidityPercent))% humidity · \(wind) wind")
+                        .font(.dsCaption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(.horizontal, AppSpacing.lg)
-                .padding(.vertical, AppSpacing.md)
-                .strideCard()
+                Spacer(minLength: 0)
             }
+            .padding(.horizontal, AppSpacing.md)
+            .padding(.vertical, AppSpacing.md)
+            .strideCard(cornerRadius: AppRadius.md)
+            .accessibilityElement(children: .combine)
         }
     }
 }
