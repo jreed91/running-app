@@ -534,6 +534,17 @@ final class AppSettings {
             : true
     }
 
+    /// Whether training nudges are on, read without an `AppSettings`, for the same reason
+    /// as `syncedWalkImportEnabled`: a background HealthKit sync re-arms the streak nudge.
+    /// Defaults to `true` when the runner has never chosen, matching the property.
+    static func syncedTrainingNudgesEnabled() -> Bool {
+        let defaults = UserDefaults.standard
+        let ubiquitous = NSUbiquitousKeyValueStore.default
+        return hasStoredValue(forKey: trainingNudgesKey, defaults: defaults, ubiquitous: ubiquitous)
+            ? readBool(forKey: trainingNudgesKey, defaults: defaults, ubiquitous: ubiquitous)
+            : true
+    }
+
     static func syncedICloudEnabled() -> Bool {
         // The sync toggle is device-local (M16), so this resolves from UserDefaults only.
         let defaults = UserDefaults.standard

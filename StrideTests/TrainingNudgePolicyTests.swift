@@ -75,6 +75,29 @@ struct TrainingNudgePolicyTests {
         ) != nil)
     }
 
+    /// The runner who skips tomorrow is the one least likely to open the app tomorrow,
+    /// so tomorrow's nudge has to be armed today, once today's run is in.
+    @Test("A streak extended today arms tomorrow's nudge with today's length")
+    func tomorrowStreakNudgeArmsOnceTodayIsRun() {
+        #expect(TrainingNudgePolicy.tomorrowStreakNudge(for: summary(current: 12, isActiveToday: true))
+            == StreakNudge(days: 12))
+    }
+
+    @Test("Tomorrow's nudge waits until today's run is in, and needs a real streak")
+    func tomorrowStreakNudgeSilentWithoutTodaysRunOrStreak() {
+        #expect(TrainingNudgePolicy.tomorrowStreakNudge(for: summary(current: 12, isActiveToday: false)) == nil)
+        let justUnder = TrainingNudgePolicy.minimumStreakToProtect - 1
+        #expect(TrainingNudgePolicy.tomorrowStreakNudge(for: summary(current: justUnder, isActiveToday: true)) == nil)
+    }
+
+    @Test("Tomorrow's slot is the evening hour on the next calendar day")
+    func tomorrowEveningSlotIsTheNextDay() {
+        let lateTonight = date(2026, 9, 16, 23, 30)
+        let slot = TrainingNudgePolicy.tomorrowEveningSlot(now: lateTonight, calendar: calendar)
+
+        #expect(slot == date(2026, 9, 17, TrainingNudgePolicy.eveningNudgeHour, 0))
+    }
+
     @Test("The nudge body carries the streak length, not just a warning")
     func streakBodyNamesTheNumber() {
         let body = NotificationService.streakNudgeBody(StreakNudge(days: 12))

@@ -9,7 +9,8 @@ import SwiftData
 ///
 /// Lifecycle:
 ///   1. Created by `AppContainer` at launch.
-///   2. `startObserving()` is called once from `StrideApp` via `.task`.
+///   2. `startObserving()` is called from `StrideApp.init`, so the observer query is
+///      registered on a background launch too, and again (idempotently) from `.task`.
 ///   3. iOS then wakes the app (even in the background) whenever new running
 ///      workouts arrive in HealthKit, triggering an import + notification.
 @MainActor
@@ -210,6 +211,15 @@ final class WorkoutSyncService {
                 )
             }
 
+            // The evening streak nudge is otherwise only taken down by
+            // `ContentView.refreshTrainingNudges`, which needs a scene. A run recorded on
+            // the Watch or in another app arrives here with the app in the background and
+            // no scene connected, and the 18:00 banner would tell the runner they have
+            // not run today straight after they did.
+            if newWorkouts.runsOnly.contains(where: { Calendar.current.isDateInToday($0.date) }) {
+                await rearmStreakNudgeAfterTodaysRun()
+            }
+
             for workout in newWorkouts {
                 if let coordinate = workout.routeCoordinates.first {
                     await attachWeather(to: workout, coordinate: coordinate)
@@ -245,6 +255,21 @@ final class WorkoutSyncService {
         await syncWalkingWorkouts(source: source, lookbackCutoff: cutoff, existingIDs: existingIDs)
         await syncCrossTrainingWorkouts(source: source, lookbackCutoff: cutoff, existingIDs: existingIDs)
         await syncStrengthWorkouts(source: source, lookbackCutoff: cutoff)
+    }
+
+    /// Takes tonight's streak nudge down and arms tomorrow's in its place — what
+    /// `ContentView.refreshTrainingNudges` does on a foreground, for a run that arrived
+    /// with no scene to run that.
+    private func rearmStreakNudgeAfterTodaysRun() async {
+        notificationService.cancelTrainingNudge(.streak)
+        guard AppSettings.syncedTrainingNudgesEnabled() else { return }
+        let runs = (try? context.fetch(
+            RunWorkout.runsOnlyDescriptor(fetchLimit: TrainingNudgePolicy.streakRunSampleSize)
+        )) ?? []
+        let streak = StreakGoalService.streak(for: runs)
+        if let tomorrow = TrainingNudgePolicy.tomorrowStreakNudge(for: streak) {
+            await notificationService.scheduleTomorrowStreakNudge(tomorrow)
+        }
     }
 
     // MARK: - Walking workout sync
@@ -383,6 +408,7 @@ final class WorkoutSyncService {
             match.isCompleted = true
             match.linkedRunWorkoutID = session.id
             session.linkedScheduledWorkoutID = match.id
+            notificationService.cancelMorningReminder(for: match)
             available.removeAll { $0.id == match.id }
         }
     }
@@ -481,6 +507,10 @@ final class WorkoutSyncService {
                 match.isCompleted = true
                 match.linkedRunWorkoutID = run.id
                 run.linkedScheduledWorkoutID = match.id
+                // A Watch run at 06:30 completes the day before the 08:00 "Workout
+                // today" reminder fires, and nothing else takes that reminder down
+                // while the app stays in the background.
+                notificationService.cancelMorningReminder(for: match)
                 // Remove from available pool so it can't be matched twice.
                 available.removeAll { $0.id == match.id }
             }
@@ -602,6 +632,7 @@ final class WorkoutSyncService {
                 match.isCompleted = true
                 match.linkedStrengthWorkoutID = workout.id
                 workout.linkedScheduledWorkoutID = match.id
+                notificationService.cancelMorningReminder(for: match)
                 available.removeAll { $0.id == match.id }
                 dirty = true
             }
