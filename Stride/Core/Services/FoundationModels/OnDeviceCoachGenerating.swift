@@ -83,6 +83,27 @@ protocol OnDeviceCoachGenerating: Sendable {
         onPartialText: @escaping @MainActor @Sendable (String) -> Void
     ) async throws -> String
 
+    /// `generateCoachInsight` with read-only tools over `lookup`, so the read can compare
+    /// this run with older ones the prompt does not carry. Nil `lookup` means no tools.
+    func generateCoachInsight(
+        instructions: String,
+        prompt: String,
+        lookup: CoachLookup?,
+        useServerModel: Bool,
+        onPartialText: @escaping @MainActor @Sendable (String) -> Void
+    ) async throws -> AICoachStructuredResponse
+
+    /// `generateChatReply` with read-only tools over `lookup`, so the coach can look up
+    /// runs, weekly totals and plan sessions a question needs. Nil `lookup` means no tools.
+    func generateChatReply(
+        instructions: String,
+        context: String,
+        messages: [AIProviderChatMessage],
+        lookup: CoachLookup?,
+        useServerModel: Bool,
+        onPartialText: @escaping @MainActor @Sendable (String) -> Void
+    ) async throws -> String
+
     /// Rewrites the dashboard's Coach Tips in the model's own words — one draft per tip
     /// in `prompt`, unchecked. `CoachTipRewriter.validated(_:for:)` decides which of them
     /// are safe to show.
@@ -110,6 +131,39 @@ protocol OnDeviceCoachGenerating: Sendable {
 }
 
 extension OnDeviceCoachGenerating {
+    /// Backends without tool calling (test fakes) answer from the prompt alone.
+    func generateCoachInsight(
+        instructions: String,
+        prompt: String,
+        lookup: CoachLookup?,
+        useServerModel: Bool,
+        onPartialText: @escaping @MainActor @Sendable (String) -> Void
+    ) async throws -> AICoachStructuredResponse {
+        try await generateCoachInsight(
+            instructions: instructions,
+            prompt: prompt,
+            useServerModel: useServerModel,
+            onPartialText: onPartialText
+        )
+    }
+
+    func generateChatReply(
+        instructions: String,
+        context: String,
+        messages: [AIProviderChatMessage],
+        lookup: CoachLookup?,
+        useServerModel: Bool,
+        onPartialText: @escaping @MainActor @Sendable (String) -> Void
+    ) async throws -> String {
+        try await generateChatReply(
+            instructions: instructions,
+            context: context,
+            messages: messages,
+            useServerModel: useServerModel,
+            onPartialText: onPartialText
+        )
+    }
+
     /// Backends without a server model (older OSes, test fakes) report no status, which
     /// the UI reads as "nothing to say about Private Cloud Compute".
     func serverModelStatus() async -> ServerModelStatus? { nil }

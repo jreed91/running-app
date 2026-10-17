@@ -103,12 +103,29 @@ struct FoundationModelsCoachBackend: OnDeviceCoachGenerating {
         useServerModel: Bool,
         onPartialText: @escaping @MainActor @Sendable (String) -> Void
     ) async throws -> AICoachStructuredResponse {
+        try await generateCoachInsight(
+            instructions: instructions,
+            prompt: prompt,
+            lookup: nil,
+            useServerModel: useServerModel,
+            onPartialText: onPartialText
+        )
+    }
+
+    func generateCoachInsight(
+        instructions: String,
+        prompt: String,
+        lookup: CoachLookup?,
+        useServerModel: Bool,
+        onPartialText: @escaping @MainActor @Sendable (String) -> Void
+    ) async throws -> AICoachStructuredResponse {
         let generated = try await streamGenerate(
             instructions: instructions,
             prompt: prompt,
             generating: GeneratedCoachInsight.self,
             useServerModel: useServerModel,
             reasoning: .moderate,
+            tools: lookup?.tools ?? [],
             // `summary` is the field the run-summary preview card renders, and guided
             // generation fills the fields in declaration order, so it lands early —
             // `headline` is the only thing ahead of it.
@@ -171,6 +188,24 @@ struct FoundationModelsCoachBackend: OnDeviceCoachGenerating {
         useServerModel: Bool,
         onPartialText: @escaping @MainActor @Sendable (String) -> Void
     ) async throws -> String {
+        try await generateChatReply(
+            instructions: instructions,
+            context: context,
+            messages: messages,
+            lookup: nil,
+            useServerModel: useServerModel,
+            onPartialText: onPartialText
+        )
+    }
+
+    func generateChatReply(
+        instructions: String,
+        context: String,
+        messages: [AIProviderChatMessage],
+        lookup: CoachLookup?,
+        useServerModel: Bool,
+        onPartialText: @escaping @MainActor @Sendable (String) -> Void
+    ) async throws -> String {
         // Replays the conversation as a single prompt to mirror the stateless cloud
         // contract (callers pass the full transcript each turn).
         let transcript = messages
@@ -191,7 +226,10 @@ struct FoundationModelsCoachBackend: OnDeviceCoachGenerating {
             prompt: prompt,
             useServerModel: useServerModel,
             // Chat is a back-and-forth a runner is waiting on, so buy latency over depth.
-            reasoning: .light
+            reasoning: .light,
+            // The framework runs any tool calls inside the stream and keeps streaming
+            // the reply once they return, so nothing below changes with tools on.
+            tools: lookup?.tools ?? []
         ) { session, reasoning, prompt in
             // A plain-text stream yields the reply aggregated so far, which is what the
             // chat bubble wants, so there is nothing to accumulate here.
@@ -305,13 +343,14 @@ struct FoundationModelsCoachBackend: OnDeviceCoachGenerating {
         prompt: String,
         useServerModel: Bool,
         reasoning: ContextOptions.ReasoningLevel,
+        tools: [any Tool] = [],
         _ work: (LanguageModelSession, ContextOptions.ReasoningLevel?, String) async throws -> T
     ) async throws -> T {
         if useServerModel {
             let model = PrivateCloudComputeLanguageModel()
             if model.availability == .available {
                 do {
-                    let session = LanguageModelSession(model: model, instructions: instructions)
+                    let session = LanguageModelSession(model: model, tools: tools, instructions: instructions)
                     // `try? await` rather than a plain read: PCC's `contextSize` is the
                     // asynchronous one of the two. `try` and `await` on an expression that
                     // turns out to need neither are warnings, not errors.
@@ -336,7 +375,7 @@ struct FoundationModelsCoachBackend: OnDeviceCoachGenerating {
         }
         guard onDeviceAvailability == .available else { throw OnDeviceCoachError.unavailable }
         let model = SystemLanguageModel.default
-        let session = LanguageModelSession(model: model, instructions: instructions)
+        let session = LanguageModelSession(model: model, tools: tools, instructions: instructions)
         // `SystemLanguageModel.contextSize` is a plain `Int` getter — no `await`, no
         // `try`. The two models genuinely differ here, which is half of why this cannot
         // be written once against `some LanguageModel`.
@@ -360,6 +399,7 @@ struct FoundationModelsCoachBackend: OnDeviceCoachGenerating {
         generating type: Content.Type,
         useServerModel: Bool,
         reasoning: ContextOptions.ReasoningLevel,
+        tools: [any Tool] = [],
         partialText: @escaping @Sendable (Content.PartiallyGenerated) -> String,
         onPartialText: @escaping @MainActor @Sendable (String) -> Void
     ) async throws -> Content where Content: Generable {
@@ -367,7 +407,8 @@ struct FoundationModelsCoachBackend: OnDeviceCoachGenerating {
             instructions: instructions,
             prompt: prompt,
             useServerModel: useServerModel,
-            reasoning: reasoning
+            reasoning: reasoning,
+            tools: tools
         ) { session, reasoning, prompt in
             let stream: LanguageModelSession.ResponseStream<Content>
             if let reasoning {
