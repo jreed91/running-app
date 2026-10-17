@@ -111,13 +111,75 @@ struct CoachLookupTests {
         #expect(imperial.findRuns(type: nil, withinDays: 7, limit: 1).contains("5.0 mi"))
     }
 
+    // MARK: rankRuns
+
+    @Test func ranksTheFastestRunsFirst() {
+        let lines = lookup.rankRuns(type: nil, withinDays: 60, by: .fastest, limit: 2).split(separator: "\n")
+        #expect(lines.count == 2)
+        let tempo = CoachLookup.Run(
+            date: daysAgo(4), type: .tempo, distanceMeters: 8_000, durationSeconds: 2_160,
+            averageHeartRate: nil, elevationGainMeters: nil, feel: nil
+        )
+        let quick = CoachLookup(runs: [run(2, km: 6), tempo], sessions: [], unit: .metric, now: now)
+        let first = quick.rankRuns(type: nil, withinDays: 30, by: .fastest, limit: 1)
+        #expect(first.contains("Tempo, 8.0 km in 36:00, 4:30 min/km"))
+    }
+
+    @Test func ranksTheLongestAndSkipsRunsWithoutHeartRate() {
+        let longest = lookup.rankRuns(type: nil, withinDays: 60, by: .longest, limit: 1)
+        #expect(longest.contains("Long Run, 12.0 km"))
+        let byHeartRate = lookup.rankRuns(type: nil, withinDays: 60, by: .highestHeartRate, limit: 5)
+        #expect(byHeartRate.split(separator: "\n").count == 1)
+        #expect(lookup.rankRuns(type: .easy, withinDays: 60, by: .highestHeartRate, limit: 5)
+            == "No easy runs with heart rate in the last 60 days.")
+    }
+
+    @Test func fastestIgnoresTinyRuns() {
+        let tiny = CoachLookup(runs: [run(1, km: 0.4)], sessions: [], unit: .metric, now: now)
+        #expect(tiny.rankRuns(type: nil, withinDays: 7, by: .fastest, limit: 3) == "No runs in the last 7 days.")
+    }
+
+    // MARK: compareRuns
+
+    @Test func comparesRecentDaysWithTheDaysBefore() {
+        let lines = lookup.compareRuns(type: nil, days: 14).split(separator: "\n").map(String.init)
+        #expect(lines.count == 2)
+        // 1, 3 and 5 days ago in the recent fortnight; nothing 14 to 28 days ago.
+        #expect(lines[0] == "Last 14 days: 3 runs, 21.0 km, 5:00 min/km average, avg HR 162, 1 felt hard")
+        #expect(lines[1] == "The 14 days before: no runs")
+    }
+
+    @Test func compareRunsClampsTheWindowAndSaysWhenEmpty() {
+        #expect(lookup.compareRuns(type: nil, days: 1).hasPrefix("Last 7 days: "))
+        #expect(lookup.compareRuns(type: nil, days: 500).hasPrefix("Last 90 days: "))
+        #expect(lookup.compareRuns(type: .interval, days: 30) == "No interval runs in the last 60 days.")
+    }
+
+    // MARK: racePredictions
+
+    @Test func predictsRaceTimesFromTheFitnessNumber() {
+        let fit = CoachLookup(runs: [], sessions: [], unit: .metric, now: now, fitnessVDOT: 50)
+        let lines = fit.racePredictions(for: nil).split(separator: "\n").map(String.init)
+        #expect(lines.count == 5)
+        let fiveK = PaceCalculatorService.predictedTime(vdot: 50, distanceMeters: 5_000)
+        #expect(lines[1].hasPrefix("5K: \(fiveK.durationString), "))
+        #expect(lines[4].hasPrefix("Marathon: "))
+        #expect(fit.racePredictions(for: 10_000).split(separator: "\n").count == 2)
+    }
+
+    @Test func saysSoWhenThereIsNoFitnessNumber() {
+        #expect(lookup.racePredictions(for: nil) == "Not enough recent hard runs to predict race times.")
+    }
+
     // MARK: Instructions
 
     @Test func toolsNoteIsAddedOnlyWithALookup() {
         #expect(CoachLookup.instructions("Base.", withToolsFor: nil) == "Base.")
         let withTools = CoachLookup.instructions("Base.", withToolsFor: lookup)
         #expect(withTools.hasPrefix("Base.\n\n"))
-        #expect(withTools.contains("findRuns"))
+        for tool in ["findRuns", "rankRuns", "weeklyTotals", "compareRuns", "planSessions", "racePredictions"] {
+            #expect(withTools.contains(tool))
+        }
     }
 
     // MARK: Service
