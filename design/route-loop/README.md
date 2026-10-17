@@ -110,6 +110,9 @@ TEST_RUNNER_APP_STORE_CAPTURE_DIR="$PWD/AppStore/iphone-raw" xcodebuild test -sc
   -destination "platform=iOS Simulator,id=$UDID" -only-testing:StrideUITests/AppStoreScreenshotTests
 cd design/appstore && npm install --no-save playwright@1.49.1 && npx playwright install webkit
 node compose.mjs ../../AppStore/iphone-raw ../../AppStore/iphone-6.9 webkit
+# 6.1" / 6.3" slot (1206 x 2622):
+mkdir -p ../../AppStore/iphone-6.3
+for f in ../../AppStore/iphone-6.9/*.png; do sips -z 2622 1206 "$f" --out ../../AppStore/iphone-6.3/; done
 ```
 
 ## Rules
