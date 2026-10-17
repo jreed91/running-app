@@ -159,11 +159,6 @@ extension RunSummaryView {
                 }
                 .frame(height: 180)
                 .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
-                // One element: MapKit otherwise exposes every street and place label, which
-                // VoiceOver has to step through and which is the likely reason UI-test
-                // snapshots of this screen timed out in CI.
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(Text("Route map, \(routeName)"))
             }
         }
     }

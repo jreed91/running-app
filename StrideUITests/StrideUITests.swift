@@ -118,15 +118,15 @@ final class StrideUITests: XCTestCase {
 
         // Not `app.cells.firstMatch`: the list opens with the month hero, which is a cell
         // too. The newest demo run is an outdoor long run, so it has splits at least.
-        // Plain identifier lookups throughout: broad predicate and `.any` queries over a
-        // screen with a map and charts timed out building their snapshot in CI.
         let firstRun = app.buttons["history.run"].firstMatch
         XCTAssertTrue(firstRun.waitForExistence(timeout: 10), "The demo history has no runs")
         firstRun.tap()
 
+        // Splits and heart-rate zones last: they are the pages reported broken on device,
+        // so a hang there should not hide whether the others open.
         let pages = [
-            ("plannedWorkout", "Planned workout"), ("splits", "Splits"),
-            ("heartRateZones", "Heart-rate zones"), ("laps", "Laps"), ("paceInsights", "Pace insights")
+            ("laps", "Laps"), ("paceInsights", "Pace insights"), ("plannedWorkout", "Planned workout"),
+            ("heartRateZones", "Heart-rate zones"), ("splits", "Splits")
         ]
         // Every row, not just the first: each page reads different state, and the first
         // fix only made the first one open.

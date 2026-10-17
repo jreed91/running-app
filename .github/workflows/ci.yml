@@ -299,6 +299,17 @@ jobs:
               | jq -r '.. | objects | select(has("title")) | "\(.startTime // "") \(.title)"'
             echo "::endgroup::"
           done
+          # A hang leaves a spindump on the test. Print the app's main thread from each,
+          # which is what says where the app was stuck.
+          mkdir -p /tmp/ui-attachments
+          xcrun xcresulttool export attachments --path TestResults/ui.xcresult \
+            --output-path /tmp/ui-attachments > /dev/null || exit 0
+          for f in $(grep -rl "com.apple.main-thread" /tmp/ui-attachments 2>/dev/null); do
+            echo "::group::Main thread in $(basename "$f")"
+            out=$(awk '/^Process: +Stride /{p=1} p && /com.apple.main-thread/{m=1} m{print; if (++n > 160) exit}' "$f")
+            [[ -n "$out" ]] && echo "$out" || grep -m1 -A160 "com.apple.main-thread" "$f"
+            echo "::endgroup::"
+          done
 
       - name: Upload test results
         if: always()
