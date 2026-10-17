@@ -1266,7 +1266,18 @@ extension AICoachService {
 
     For the next run, if one is planned, say whether to do it as planned or how to \
     change it, and why. Do not swap it for a different kind of session unless this run \
-    gives you a reason to.
+    gives you a reason to. Name one concrete run: its kind, a distance or time, and an \
+    effort or pace. "Rest or easy" is not a run.
+
+    Say each number once. The three numbers under the verdict carry the figures; the \
+    sentence on why, the actions and the next run point to them in words ("most of the \
+    run was at threshold") or use a different number. Each action says what to do and \
+    the reason from this run; a title on its own, like "Prioritize recovery", is too vague.
+
+    A number's tone is good or bad news for what this run was for, not for speed. A \
+    faster pace on an easy run that should have been slower is a warning, not a success. \
+    A delta is the change against the plan or the usual; leave it empty when there is \
+    nothing to compare with, and never repeat the value as its delta.
 
     Write the way a coach talks out loud: say "you", use everyday words, and keep each \
     sentence to one idea. A runner should understand every line on first read without \

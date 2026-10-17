@@ -65,7 +65,7 @@ struct GeneratedEvidence: Sendable {
     let label: String
     @Guide(description: "The value with its unit, as a watch shows it, at most 12 characters (for example \"5:20/km\")")
     let value: String
-    @Guide(description: "Optional change against the plan or the runner's usual, at most 8 characters (for example \"-12s\" or \"+4 bpm\")")
+    @Guide(description: "Optional change against the plan or the runner's usual, at most 8 characters (for example \"-12s\" or \"+4 bpm\"). Empty when there is nothing to compare with; never the value again")
     let delta: String?
     let tone: CoachTone
 }
@@ -86,7 +86,7 @@ struct GeneratedActionItem: Sendable {
 @available(iOS 26.0, *)
 @Generable
 struct GeneratedNextWorkout: Sendable {
-    @Guide(description: "The next run to do, named the way a coach would say it (for example \"Easy 5 km at 6:10 per km\"). If a next run is planned, this is that run, changed only if this run gives a reason")
+    @Guide(description: "The next run to do, named the way a coach would say it (for example \"Easy 5 km at 6:10 per km\"): one run with its kind, a distance or time, and an effort or pace. If a next run is planned, this is that run, changed only if this run gives a reason")
     let title: String
     @Guide(description: "One plain sentence, addressed to \"you\", saying why this comes next")
     let rationale: String

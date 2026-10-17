@@ -17,22 +17,6 @@ extension RunSummaryView {
         .padding(.top, 10)
     }
 
-    func evidenceChip(label: String, sub: String?, tone: Color) -> some View {
-        HStack(spacing: 6) {
-            Text(label)
-                .font(.dsCaption.weight(.bold).monospacedDigit())
-                .foregroundStyle(.primary)
-            if let sub {
-                Text(sub)
-                    .font(.dsCaption2.weight(.bold))
-                    .foregroundStyle(tone)
-            }
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(.surfaceTertiary, in: RoundedRectangle(cornerRadius: AppRadius.xs))
-    }
-
     /// The coach's tone words as status colours. Zone colours stay data (Route Loop rule 6),
     /// so "easy" and "interval" read as good and bad news rather than as training zones.
     func aiTone(_ raw: String) -> Color {

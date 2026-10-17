@@ -72,13 +72,9 @@ extension RunSummaryView {
 
             let evidence = Array(insight.evidence.prefix(Self.coachEvidenceLimit))
             if !evidence.isEmpty {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 6)], alignment: .leading, spacing: 6) {
+                HStack(alignment: .top, spacing: 6) {
                     ForEach(evidence, id: \.self) { item in
-                        evidenceChip(
-                            label: "\(normalizedMarkdownText(item.label)) \(normalizedMarkdownText(item.value))",
-                            sub: item.delta.map(normalizedMarkdownText),
-                            tone: aiTone(item.tone)
-                        )
+                        evidenceStat(item)
                     }
                 }
             }
@@ -90,6 +86,37 @@ extension RunSummaryView {
 
     /// How many evidence facts the verdict shows; more read as a wall of chips.
     static let coachEvidenceLimit = 3
+
+    /// One fact behind the verdict: the value large, what it is under it, and the change
+    /// against the plan or the usual when there is one. Equal-width cells, one line each,
+    /// so a long label shrinks instead of breaking mid-word ("Dis-tance").
+    private func evidenceStat(_ item: AICoachEvidenceItem) -> some View {
+        let value = normalizedMarkdownText(item.value)
+        let delta = item.delta.map(normalizedMarkdownText)
+        return VStack(alignment: .leading, spacing: 2) {
+            Text(value)
+                .font(.dsHeadline.weight(.bold).monospacedDigit())
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(normalizedMarkdownText(item.label))
+                .font(.dsCaption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            if CoachInsightText.deltaAddsInformation(value: value, delta: delta), let delta {
+                Text(delta)
+                    .font(.dsCaption2.weight(.bold).monospacedDigit())
+                    .foregroundStyle(aiTone(item.tone))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 10)
+        .padding(.vertical, AppSpacing.sm)
+        .background(.surfaceTertiary, in: RoundedRectangle(cornerRadius: AppRadius.sm))
+        .accessibilityElement(children: .combine)
+    }
 
     // MARK: Do this next
 
@@ -128,10 +155,17 @@ extension RunSummaryView {
                             .frame(width: 4, height: 4)
                             .alignmentGuide(.firstTextBaseline) { $0[.bottom] + 4 }
                             .accessibilityHidden(true)
-                        Text(markdownText(action.title))
-                            .font(.dsFootnote)
-                            .foregroundStyle(.primary)
-                            .fixedSize(horizontal: false, vertical: true)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(markdownText(action.title))
+                                .font(.dsFootnote.weight(.semibold))
+                                .foregroundStyle(.primary)
+                            // The title alone ("Prioritize recovery") gave no reason.
+                            Text(markdownText(action.detail))
+                                .font(.dsFootnote)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                        }
+                        .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }

@@ -79,6 +79,20 @@ enum CoachInsightText {
         ])
     }
 
+    // MARK: Evidence
+
+    /// Whether an evidence item's delta says anything its value does not.
+    ///
+    /// The model sometimes fills the delta with the value again ("76%" over "+76%"),
+    /// which reads as a comparison that isn't one. Signs, spaces and case are ignored.
+    static func deltaAddsInformation(value: String, delta: String?) -> Bool {
+        guard let delta = delta?.nonEmptyTrimmed else { return false }
+        func core(_ text: String) -> String {
+            text.lowercased().filter { !"+-−– ".contains($0) }
+        }
+        return core(delta) != core(value)
+    }
+
     // MARK: Composition
 
     /// Trims each part, drops the empty ones, and joins the rest with a single space.
