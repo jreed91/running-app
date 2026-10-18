@@ -186,6 +186,15 @@ struct CoachRunBreakdownTests {
         #expect(section.contains("(60%)"))
     }
 
+    @Test("Zone section says the zones are approximate when max HR is age-estimated")
+    func zoneSectionWithEstimatedMaxHR() {
+        let section = CoachRunBreakdown.zoneSection(sampleZones, maxHR: 186, maxHRIsEstimated: true)
+        let header = section.components(separatedBy: "\n").first
+
+        #expect(header?.hasPrefix("Zones derived from max HR 186 bpm, estimated from age") == true)
+        #expect(header?.contains("approximate") == true)
+    }
+
     @Test("Zone section omits bpm bounds when max HR is unknown")
     func zoneSectionWithoutMaxHR() {
         let section = CoachRunBreakdown.zoneSection(sampleZones, maxHR: nil)

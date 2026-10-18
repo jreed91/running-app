@@ -21,6 +21,19 @@ enum CoachRunComparison {
     /// A pace this close to a target, in display-unit seconds, counts as on target.
     static let onTargetToleranceSeconds = 3.0
 
+    /// A pace outside the target by no more than this, in seconds per km, is close to plan:
+    /// worth naming, not worth changing the next run for. About 10 seconds per mile.
+    ///
+    /// Without it the plan line said "7 seconds faster than the planned 8:55–9:11" with
+    /// the same weight as a minute too fast, and the coach told a runner who was nearly on
+    /// target to slow down.
+    static let closeToPlanSecondsPerKm = 6.0
+
+    /// Added to the usual line when the plan set a pace, so the coach does not judge the
+    /// pace twice and let the usual overrule the plan.
+    static let planSetsPaceNote = "The plan set this run's pace, so use the usual to read "
+        + "heart rate and fitness, not to judge whether the pace was right."
+
     // MARK: Plan
 
     /// How the run compared with its planned session, e.g.
@@ -42,15 +55,18 @@ enum CoachRunComparison {
             let actual = actualPaceSecondsPerKm.paceString(unit: unit)
             let range = "\(lower.paceValueString(unit: unit))–\(upper.paceString(unit: unit))"
             let tolerance = onTargetToleranceSeconds
+            let close = closeToPlanSecondsPerKm.paceSecondsValue(unit: unit)
             let actualValue = actualPaceSecondsPerKm.paceSecondsValue(unit: unit)
             let lowerValue = lower.paceSecondsValue(unit: unit)
             let upperValue = upper.paceSecondsValue(unit: unit)
             if actualValue < lowerValue - tolerance {
                 let gap = Int((lowerValue - actualValue).rounded())
-                parts.append("Pace \(actual), \(gap) seconds faster than the planned \(range).")
+                let closeNote = lowerValue - actualValue <= close ? ", close enough to count as on plan" : ""
+                parts.append("Pace \(actual), \(gap) seconds faster than the planned \(range)\(closeNote).")
             } else if actualValue > upperValue + tolerance {
                 let gap = Int((actualValue - upperValue).rounded())
-                parts.append("Pace \(actual), \(gap) seconds slower than the planned \(range).")
+                let closeNote = actualValue - upperValue <= close ? ", close enough to count as on plan" : ""
+                parts.append("Pace \(actual), \(gap) seconds slower than the planned \(range)\(closeNote).")
             } else {
                 parts.append("Pace \(actual), inside the planned \(range).")
             }

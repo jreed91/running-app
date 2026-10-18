@@ -129,7 +129,11 @@ enum CoachRunBreakdown {
 
     /// The time-in-zone table as prompt lines, hardest zone first — the order the zone rows
     /// use on screen. Zones the runner never entered are left out.
-    static func zoneSection(_ slices: [HRZoneSlice], maxHR: Double?) -> String {
+    ///
+    /// - Parameter maxHRIsEstimated: the max HR came from the runner's age, not a value they
+    ///   entered. The header then says the zones are approximate: an age formula can sit well
+    ///   under a runner's real max, which puts a tempo in zone 5 for most of the run.
+    static func zoneSection(_ slices: [HRZoneSlice], maxHR: Double?, maxHRIsEstimated: Bool = false) -> String {
         let active = slices.filter { $0.seconds > 0 }
         let total = active.reduce(0) { $0 + $1.seconds }
         guard total > 0 else { return "No heart-rate zone data." }
@@ -144,7 +148,12 @@ enum CoachRunBreakdown {
                 } ?? ""
                 return "\(slice.zone.shortName) \(slice.zone.label)\(bounds): \(slice.seconds.durationString) (\(percent)%)"
             }
-        let header = maxHR.map { "Zones derived from max HR \(Int($0.rounded())) bpm." }
+        let header = maxHR.map { maxHR -> String in
+            let bpm = Int(maxHR.rounded())
+            guard maxHRIsEstimated else { return "Zones derived from max HR \(bpm) bpm." }
+            return "Zones derived from max HR \(bpm) bpm, estimated from age rather than measured, "
+                + "so they are approximate and may read high."
+        }
         return ([header].compactMap { $0 } + rows).joined(separator: "\n")
     }
 
