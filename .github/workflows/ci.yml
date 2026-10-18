@@ -219,6 +219,19 @@ jobs:
             xcrun simctl list devices available
             exit 1
           fi
+          # The image's preinstalled iPhones are paired with Watch simulators, and the
+          # parallel unit tests clone the iPhone. Cloning a paired iPhone fails with "The
+          # watchOS 27.0 simulator runtime is not available" on images whose watchOS
+          # runtime files are missing, before any test runs. A fresh iPhone of the same
+          # type and runtime has no pair, so there is nothing watchOS to clone.
+          read -r TYPE RUNTIME < <(xcrun simctl list devices -j \
+            | jq -r --arg udid "$UDID" \
+              '.devices | to_entries[] | .key as $rt | .value[] | select(.udid == $udid) | "\(.deviceTypeIdentifier) \($rt)"') || true
+          if [[ -n "$TYPE" && -n "$RUNTIME" ]] && FRESH=$(xcrun simctl create "$SIMULATOR (CI)" "$TYPE" "$RUNTIME"); then
+            UDID="$FRESH"
+          else
+            echo "::warning::Could not create an unpaired '$SIMULATOR'; using the preinstalled one."
+          fi
           echo "SIMULATOR_UDID=$UDID" >> "$GITHUB_ENV"
           # Boot is best-effort: the simulator may already be in Booted state.
           xcrun simctl boot "$UDID" || true

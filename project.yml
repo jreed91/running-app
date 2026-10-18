@@ -220,6 +220,12 @@ targets:
           # this the audio session cannot be activated there and the announcement is
           # simply lost, which is exactly the case it exists for.
           - audio
+          # The daily notification refresh (`NotificationRefreshService`). The evening nudges,
+          # the Sunday recap and the heat advisory are decided against the day so far, and
+          # without a background wake they were only re-armed when the app was opened.
+          - fetch
+        BGTaskSchedulerPermittedIdentifiers:
+          - com.running.stride.notification-refresh
         NSLocationWhenInUseUsageDescription: "Stride uses your location to track your route during a run."
         NSLocationAlwaysAndWhenInUseUsageDescription: "Stride uses your location in the background to continue tracking your route."
         NSHealthShareUsageDescription: "Stride reads your workout, heart-rate and sleep history to show training insights and how recovered you are."

@@ -81,6 +81,15 @@ final class AppSettings {
         }
     }
 
+    /// When the morning reminder fires, as minutes after local midnight. 08:00 until the
+    /// runner picks a time — the fixed hour every reminder used before it was a setting.
+    /// Stored as a `Double` because that is the numeric type the settings stores share.
+    var morningReminderMinuteOfDay: Int {
+        didSet {
+            persist(Double(morningReminderMinuteOfDay), forKey: Self.morningReminderTimeKey)
+        }
+    }
+
     /// Whether each completed kilometre/mile is announced out loud during a run (U4).
     ///
     /// Opt-in, and deliberately so: this is the one setting in the app that makes the
@@ -232,6 +241,9 @@ final class AppSettings {
     // Internal so AppContainer can read the same key before AppSettings is created.
     static let iCloudSyncKey = "iCloudSyncEnabled"
     static let morningReminderKey = "morningReminderEnabled"
+    static let morningReminderTimeKey = "morningReminderMinuteOfDay"
+    /// 08:00.
+    static let defaultMorningReminderMinuteOfDay = 8 * 60
     static let spokenSplitsKey = "spokenSplitsEnabled"
     static let spokenWorkoutStepsKey = "spokenWorkoutStepsEnabled"
     static let weeklyGoalMetersKey = "weeklyGoalMeters"
@@ -268,6 +280,7 @@ final class AppSettings {
         let aiProviderStored = Self.hasStoredValue(forKey: Self.aiProviderKey, defaults: defaults, ubiquitous: ubiquitous)
         let syncStored = Self.hasStoredValue(forKey: Self.iCloudSyncKey, defaults: defaults, ubiquitous: ubiquitous)
         let reminderStored = Self.hasStoredValue(forKey: Self.morningReminderKey, defaults: defaults, ubiquitous: ubiquitous)
+        let reminderTimeStored = Self.hasStoredValue(forKey: Self.morningReminderTimeKey, defaults: defaults, ubiquitous: ubiquitous)
         let spokenSplitsStored = Self.hasStoredValue(forKey: Self.spokenSplitsKey, defaults: defaults, ubiquitous: ubiquitous)
         let spokenStepsStored = Self.hasStoredValue(forKey: Self.spokenWorkoutStepsKey, defaults: defaults, ubiquitous: ubiquitous)
         let weeklyGoalStored = Self.hasStoredValue(forKey: Self.weeklyGoalMetersKey, defaults: defaults, ubiquitous: ubiquitous)
@@ -286,9 +299,7 @@ final class AppSettings {
         self.unitPreference = UnitPreference(rawValue: raw) ?? .localeDefault
         self.orsAPIKey = Self.loadORSAPIKey(defaults: defaults, ubiquitous: ubiquitous)
 
-        self.aiInsightsEnabled = aiInsightsStored
-            ? Self.readBool(forKey: Self.aiInsightsEnabledKey, defaults: defaults, ubiquitous: ubiquitous)
-            : false
+        self.aiInsightsEnabled = aiInsightsStored ? Self.readBool(forKey: Self.aiInsightsEnabledKey, defaults: defaults, ubiquitous: ubiquitous) : false
 
         let providerRaw = Self.readString(forKey: Self.aiProviderKey, defaults: defaults, ubiquitous: ubiquitous) ?? ""
         // Default to Apple's Private Cloud Compute model: still keyless, still free, still
@@ -303,39 +314,27 @@ final class AppSettings {
         self.aiProvider = AIProvider(rawValue: providerRaw) ?? .applePrivateCloud
 
         // Default to true (sync on) when the key has never been set.
-        self.iCloudSyncEnabled = syncStored
-            ? Self.readBool(forKey: Self.iCloudSyncKey, defaults: defaults, ubiquitous: ubiquitous)
-            : true
+        self.iCloudSyncEnabled = syncStored ? Self.readBool(forKey: Self.iCloudSyncKey, defaults: defaults, ubiquitous: ubiquitous) : true
 
         // Default to true (reminders on) when the key has never been set.
-        self.morningReminderEnabled = reminderStored
-            ? Self.readBool(forKey: Self.morningReminderKey, defaults: defaults, ubiquitous: ubiquitous)
-            : true
+        self.morningReminderEnabled = reminderStored ? Self.readBool(forKey: Self.morningReminderKey, defaults: defaults, ubiquitous: ubiquitous) : true
+
+        self.morningReminderMinuteOfDay = Self.minuteOfDay(Self.readDouble(forKey: Self.morningReminderTimeKey, defaults: defaults, ubiquitous: ubiquitous))
 
         // Default to false (silent) when the key has never been set — see the property.
-        self.spokenSplitsEnabled = spokenSplitsStored
-            ? Self.readBool(forKey: Self.spokenSplitsKey, defaults: defaults, ubiquitous: ubiquitous)
-            : false
+        self.spokenSplitsEnabled = spokenSplitsStored ? Self.readBool(forKey: Self.spokenSplitsKey, defaults: defaults, ubiquitous: ubiquitous) : false
 
         // Default to false (silent) when the key has never been set — see the property.
-        self.spokenWorkoutStepsEnabled = spokenStepsStored
-            ? Self.readBool(forKey: Self.spokenWorkoutStepsKey, defaults: defaults, ubiquitous: ubiquitous)
-            : false
+        self.spokenWorkoutStepsEnabled = spokenStepsStored ? Self.readBool(forKey: Self.spokenWorkoutStepsKey, defaults: defaults, ubiquitous: ubiquitous) : false
 
         // Default to true (walks imported) when the key has never been set — see the property.
-        self.walkImportEnabled = walkImportStored
-            ? Self.readBool(forKey: Self.walkImportKey, defaults: defaults, ubiquitous: ubiquitous)
-            : true
+        self.walkImportEnabled = walkImportStored ? Self.readBool(forKey: Self.walkImportKey, defaults: defaults, ubiquitous: ubiquitous) : true
 
         // Default to true (heat advisories on) when the key has never been set — see the property.
-        self.heatAdaptationEnabled = heatAdaptationStored
-            ? Self.readBool(forKey: Self.heatAdaptationKey, defaults: defaults, ubiquitous: ubiquitous)
-            : true
+        self.heatAdaptationEnabled = heatAdaptationStored ? Self.readBool(forKey: Self.heatAdaptationKey, defaults: defaults, ubiquitous: ubiquitous) : true
 
         // Default to true (nudges on) when the key has never been set — see the property.
-        self.trainingNudgesEnabled = trainingNudgesStored
-            ? Self.readBool(forKey: Self.trainingNudgesKey, defaults: defaults, ubiquitous: ubiquitous)
-            : true
+        self.trainingNudgesEnabled = trainingNudgesStored ? Self.readBool(forKey: Self.trainingNudgesKey, defaults: defaults, ubiquitous: ubiquitous) : true
 
         // Empty means "use MusicEnergyPolicy's genre table", which is the default every
         // runner starts on — the feature is meant to work with no setup at all.
@@ -358,6 +357,7 @@ final class AppSettings {
         if aiProviderStored { persist(aiProvider.rawValue, forKey: Self.aiProviderKey) }
         if syncStored { persist(iCloudSyncEnabled, forKey: Self.iCloudSyncKey) }
         if reminderStored { persist(morningReminderEnabled, forKey: Self.morningReminderKey) }
+        if reminderTimeStored { persist(Double(morningReminderMinuteOfDay), forKey: Self.morningReminderTimeKey) }
         if spokenSplitsStored { persist(spokenSplitsEnabled, forKey: Self.spokenSplitsKey) }
         if spokenStepsStored { persist(spokenWorkoutStepsEnabled, forKey: Self.spokenWorkoutStepsKey) }
         if weeklyGoalStored { persist(weeklyGoalMeters, forKey: Self.weeklyGoalMetersKey) }
@@ -421,6 +421,11 @@ final class AppSettings {
         if Self.hasStoredValue(forKey: Self.morningReminderKey, defaults: defaults, ubiquitous: ubiquitous) {
             let value = Self.readBool(forKey: Self.morningReminderKey, defaults: defaults, ubiquitous: ubiquitous)
             if value != morningReminderEnabled { morningReminderEnabled = value }
+        }
+
+        if let stored = Self.readDouble(forKey: Self.morningReminderTimeKey, defaults: defaults, ubiquitous: ubiquitous) {
+            let value = Self.minuteOfDay(stored)
+            if value != morningReminderMinuteOfDay { morningReminderMinuteOfDay = value }
         }
 
         if Self.hasStoredValue(forKey: Self.spokenSplitsKey, defaults: defaults, ubiquitous: ubiquitous) {
@@ -534,15 +539,53 @@ final class AppSettings {
             : true
     }
 
-    /// Whether training nudges are on, read without an `AppSettings`, for the same reason
-    /// as `syncedWalkImportEnabled`: a background HealthKit sync re-arms the streak nudge.
-    /// Defaults to `true` when the runner has never chosen, matching the property.
-    static func syncedTrainingNudgesEnabled() -> Bool {
+    /// The notification settings, read without an `AppSettings`, for the same reason as
+    /// `syncedWalkImportEnabled`: a background HealthKit sync or app refresh re-arms the
+    /// notifications before any view has built the observable settings object. Each
+    /// value falls back to the same default the property uses.
+    static func syncedNotificationPreferences() -> NotificationPreferences {
         let defaults = UserDefaults.standard
         let ubiquitous = NSUbiquitousKeyValueStore.default
-        return hasStoredValue(forKey: trainingNudgesKey, defaults: defaults, ubiquitous: ubiquitous)
-            ? readBool(forKey: trainingNudgesKey, defaults: defaults, ubiquitous: ubiquitous)
-            : true
+        func bool(_ key: String) -> Bool {
+            hasStoredValue(forKey: key, defaults: defaults, ubiquitous: ubiquitous)
+                ? readBool(forKey: key, defaults: defaults, ubiquitous: ubiquitous)
+                : true
+        }
+        return NotificationPreferences(
+            morningReminderEnabled: bool(morningReminderKey),
+            trainingNudgesEnabled: bool(trainingNudgesKey),
+            heatAdaptationEnabled: bool(heatAdaptationKey),
+            unit: syncedUnitPreference(),
+            weeklyGoalMeters: readDouble(forKey: weeklyGoalMetersKey, defaults: defaults, ubiquitous: ubiquitous)
+                ?? defaultWeeklyGoalMeters
+        )
+    }
+
+    /// The same five values off this instance, for callers that have one.
+    var notificationPreferences: NotificationPreferences {
+        NotificationPreferences(
+            morningReminderEnabled: morningReminderEnabled,
+            trainingNudgesEnabled: trainingNudgesEnabled,
+            heatAdaptationEnabled: heatAdaptationEnabled,
+            unit: unitPreference,
+            weeklyGoalMeters: weeklyGoalMeters
+        )
+    }
+
+    /// The morning reminder's time, read without an `AppSettings` — `NotificationService`
+    /// schedules from several places that have none.
+    static func syncedMorningReminderMinuteOfDay() -> Int {
+        minuteOfDay(readDouble(
+            forKey: morningReminderTimeKey,
+            defaults: UserDefaults.standard,
+            ubiquitous: NSUbiquitousKeyValueStore.default
+        ))
+    }
+
+    /// A stored minute-of-day, clamped into one day, or 08:00 when nothing is stored.
+    static func minuteOfDay(_ stored: Double?) -> Int {
+        guard let stored, stored.isFinite else { return defaultMorningReminderMinuteOfDay }
+        return min(max(Int(stored), 0), 24 * 60 - 1)
     }
 
     static func syncedICloudEnabled() -> Bool {
