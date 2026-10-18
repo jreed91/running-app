@@ -1113,7 +1113,8 @@ struct AICoachService: Sendable {
             ?? "Not enough splits to derive a trend."
         let zoneSection = CoachRunBreakdown.zoneSection(
             heartRateZones,
-            maxHR: profile?.effectiveMaxHeartRate.map(Double.init)
+            maxHR: profile?.effectiveMaxHeartRate.map(Double.init),
+            maxHRIsEstimated: (profile?.maxHeartRateBPM ?? 0) <= 0
         )
 
         let recent = recentHistory.runsOnly.prefix(5).map { run in
@@ -1141,7 +1142,7 @@ struct AICoachService: Sendable {
             currentHeartRate: workout.averageHeartRate,
             baseline: CoachRunComparison.baseline(from: sameType),
             unit: unitPreference
-        )
+        ) + (plannedSession?.targetPaceRange == nil ? "" : " " + CoachRunComparison.planSetsPaceNote)
         let nextSection = nextPlannedSession.map {
             "\($0.scheduledDate.formatted(.dateTime.weekday(.wide))): "
                 + plannedTargetsDescription($0, unitPreference: unitPreference)
@@ -1275,6 +1276,13 @@ extension AICoachService {
     target. Then check it against the runner's usual for this kind of run: faster at the \
     same heart rate, or the same pace at a lower one, is fitness; faster at a much \
     higher heart rate is just a harder day.
+
+    When the plan sets a pace, the plan decides whether the pace was right, not the \
+    usual. A run inside the plan's range, or close enough to count as on plan, hit its \
+    pace: do not tell the runner to slow down or speed up, and never give the gap to \
+    their usual as the reason to change pace. If the zones come from a max heart rate \
+    estimated from age, they are approximate: do not call a run too hard on the zones \
+    alone.
 
     Choose the three numbers that prove the verdict. Prefer comparisons with the plan or \
     the usual over totals the runner already sees at the top of the screen; a bare \

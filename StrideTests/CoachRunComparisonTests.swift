@@ -32,6 +32,37 @@ struct CoachRunComparisonTests {
         )
 
         #expect(line == "Pace 4:50 min/km, 15 seconds faster than the planned 5:05–5:20 min/km.")
+        #expect(line?.contains("close enough") == false)
+    }
+
+    @Test("A small miss of the range counts as close to plan")
+    func planCloseToRange() {
+        let line = CoachRunComparison.planLine(
+            actualPaceSecondsPerKm: 300,
+            actualDistanceMeters: 0,
+            targetPaceLower: 305,
+            targetPaceUpper: 320,
+            targetDistanceMeters: nil,
+            unit: .metric
+        )
+
+        #expect(line == "Pace 5:00 min/km, 5 seconds faster than the planned 5:05–5:20 min/km, close enough to count as on plan.")
+    }
+
+    @Test("Seven seconds per mile quicker than a tempo range is close to plan")
+    func planCloseToRangeImperial() {
+        // The run from the bug report: 8:48 per mile against 8:55–9:11.
+        let line = CoachRunComparison.planLine(
+            actualPaceSecondsPerKm: 528 / 1.60934,
+            actualDistanceMeters: 0,
+            targetPaceLower: 535 / 1.60934,
+            targetPaceUpper: 551 / 1.60934,
+            targetDistanceMeters: nil,
+            unit: .imperial
+        )
+
+        #expect(line?.contains("7 seconds faster than the planned") == true)
+        #expect(line?.hasSuffix(", close enough to count as on plan.") == true)
     }
 
     @Test("A pace slower than the range names the gap to the slow end")
