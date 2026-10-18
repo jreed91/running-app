@@ -198,4 +198,90 @@ struct ProgressPeriodStatsTests {
     func noRunsMeansNoBuckets() {
         #expect(ProgressPeriodStats.weeklyDistances(for: []).isEmpty)
     }
+
+    // MARK: Easy pace trend
+
+    /// Paces come from `duration / distance * 1000`, which isn't exact in binary.
+    private func approx(_ value: Double?, _ expected: Double) -> Bool {
+        guard let value else { return false }
+        return abs(value - expected) < 0.001
+    }
+
+    @Test("Only easy and long runs feed the pace trend")
+    func easyPaceTrendSkipsQualitySessions() {
+        let trend = ProgressPeriodStats.easyPaceTrend(for: [
+            run(daysAgo: 1, seconds: 3_300, type: .easy),
+            run(daysAgo: 2, seconds: 2_400, type: .interval),
+            run(daysAgo: 3, seconds: 2_500, type: .tempo),
+            run(daysAgo: 4, seconds: 2_300, type: .race),
+            run(daysAgo: 5, seconds: 3_600, type: .longRun),
+            run(daysAgo: 6, seconds: 3_000, type: .walk)
+        ])
+
+        #expect(trend.runs.map(\.workoutType) == [.longRun, .easy])
+        // Oldest first, so the chart and the halves read left to right.
+        #expect(approx(trend.runs.first?.paceSecondsPerKm, 360))
+    }
+
+    @Test("Each week's point is the median, so one slow run doesn't drag it")
+    func easyPaceWeekIsMedian() {
+        let monday = Calendar.current.date(from: DateComponents(year: 2027, month: 3, day: 15, hour: 9)) ?? .now
+        let runs = [300.0, 310, 420].enumerated().map { offset, secondsPerKm in
+            RunWorkout(
+                date: monday.addingTimeInterval(Double(offset) * 86_400),
+                distanceMeters: 10_000,
+                durationSeconds: secondsPerKm * 10
+            )
+        }
+
+        let trend = ProgressPeriodStats.easyPaceTrend(for: runs)
+
+        #expect(trend.weeks.count == 1)
+        #expect(approx(trend.weeks.first?.paceSecondsPerKm, 310))
+        #expect(approx(trend.latestWeekPaceSecondsPerKm, 310))
+    }
+
+    @Test("The change compares the later half of the runs with the earlier half; negative is faster")
+    func easyPaceChangeIsLaterMinusEarlier() {
+        // Four weeks, one run each, getting 10 s/km faster every week.
+        let trend = ProgressPeriodStats.easyPaceTrend(for: [
+            run(daysAgo: 21, seconds: 3_300),
+            run(daysAgo: 14, seconds: 3_200),
+            run(daysAgo: 7, seconds: 3_100),
+            run(daysAgo: 0, seconds: 3_000)
+        ])
+
+        // Earlier median (330 + 320) / 2 = 325, later (310 + 300) / 2 = 305.
+        #expect(trend.weeks.count == 4)
+        #expect(approx(trend.changeSecondsPerKm, -20))
+    }
+
+    @Test("No change is claimed off too few runs or too few weeks")
+    func easyPaceChangeNeedsEnoughData() {
+        let threeRuns = ProgressPeriodStats.easyPaceTrend(for: [
+            run(daysAgo: 21, seconds: 3_300),
+            run(daysAgo: 14, seconds: 3_200),
+            run(daysAgo: 0, seconds: 3_000)
+        ])
+        #expect(threeRuns.changeSecondsPerKm == nil)
+
+        let monday = Calendar.current.date(from: DateComponents(year: 2027, month: 3, day: 15, hour: 9)) ?? .now
+        let oneWeek = ProgressPeriodStats.easyPaceTrend(for: (0..<5).map {
+            RunWorkout(
+                date: monday.addingTimeInterval(Double($0) * 86_400),
+                distanceMeters: 10_000,
+                durationSeconds: 3_000
+            )
+        })
+        #expect(oneWeek.changeSecondsPerKm == nil)
+    }
+
+    @Test("A period with no easy runs has an empty trend")
+    func easyPaceTrendEmpty() {
+        let trend = ProgressPeriodStats.easyPaceTrend(for: [run(daysAgo: 1, type: .tempo)])
+
+        #expect(trend.runs.isEmpty)
+        #expect(trend.weeks.isEmpty)
+        #expect(trend.latestWeekPaceSecondsPerKm == nil)
+    }
 }

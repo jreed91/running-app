@@ -327,13 +327,18 @@ struct ProgressDashboardView: View {
         }
     }
 
-    private func paceSeries(_ runs: [RunWorkout]) -> ChartAccessibility.Series {
+    /// Spoken as the weekly line, which is the reading the card leads with; a run-by-run
+    /// list of easy paces is the noise the line exists to smooth.
+    private func easyPaceSeries(_ trend: ProgressPeriodStats.EasyPaceTrend) -> ChartAccessibility.Series {
         let unit = appSettings.unitPreference
+        let points = trend.weeks.count > 1
+            ? trend.weeks.map {
+                ChartAccessibility.Point(label: "week of \(pointLabel($0.weekStart))", value: $0.paceSecondsPerKm)
+            }
+            : trend.runs.map { ChartAccessibility.Point(label: pointLabel($0.date), value: $0.paceSecondsPerKm) }
         return ChartAccessibility.Series(
-            points: runs.map {
-                ChartAccessibility.Point(label: pointLabel($0.date), value: $0.averagePaceSecondsPerKm)
-            },
-            valueAxisLabel: String(localized: "Pace", comment: "Chart value axis")
+            points: points,
+            valueAxisLabel: String(localized: "Easy pace", comment: "Chart value axis")
         ) { SpokenMetric.spoken(measurement: $0.paceString(unit: unit)) }
     }
 
@@ -377,71 +382,138 @@ struct ProgressDashboardView: View {
 
     // MARK: - Pace trend chart
 
+    private var easyPaceTrend: ProgressPeriodStats.EasyPaceTrend {
+        ProgressPeriodStats.easyPaceTrend(for: filteredWorkouts)
+    }
+
+    /// Easy and long runs as dots, with each week's typical easy pace as the line.
+    ///
+    /// This was every run's average pace joined into one smoothed line, which moved with
+    /// the week's mix of sessions (a tempo, intervals with their recoveries, a long run)
+    /// rather than with fitness, and gave no reading of whether the runner was getting
+    /// faster. `ProgressPeriodStats.easyPaceTrend` explains the filter; the card now leads
+    /// with that answer and the chart shows the evidence for it.
     private var paceProgressChart: some View {
-        let paceWorkouts = filteredWorkouts.filter { $0.averagePaceSecondsPerKm > 0 }
-        return chartCard("AVERAGE PACE") {
-            if paceWorkouts.isEmpty {
-                emptyDataPlaceholder("No pace data in this period")
+        let trend = easyPaceTrend
+        return chartCard("EASY PACE") {
+            if trend.runs.isEmpty {
+                emptyDataPlaceholder("No easy or long runs in this period")
             } else {
-                Chart {
-                    ForEach(paceWorkouts) { workout in
-                        LineMark(
-                            x: .value("Date", workout.date),
-                            y: .value("sec/km", workout.averagePaceSecondsPerKm)
-                        )
-                        .foregroundStyle(.route)
-                        .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
-                        .interpolationMethod(.catmullRom)
-                        PointMark(
-                            x: .value("Date", workout.date),
-                            y: .value("sec/km", workout.averagePaceSecondsPerKm)
-                        )
-                        .foregroundStyle(Color.brand)
-                        .symbolSize(
-                            selectedPaceDate.flatMap { closestWorkout(to: $0, in: paceWorkouts) }?.id == workout.id ? 80 : 36
-                        )
-                    }
-                    if let selected = selectedPaceDate,
-                       let workout = closestWorkout(to: selected, in: paceWorkouts) {
-                        selectionRule(x: .value("Date", workout.date)) {
-                            tooltipContainer {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(workout.date, format: .dateTime.month(.abbreviated).day())
-                                        .font(.dsCaption2).foregroundStyle(.secondary)
-                                    Text(workout.averagePaceSecondsPerKm.paceString(unit: appSettings.unitPreference))
-                                        .font(.dsCaption).bold()
-                                }
-                            }
-                        }
-                    }
+                VStack(alignment: .leading, spacing: AppSpacing.md) {
+                    easyPaceHeadline(trend)
+                    easyPaceChart(trend)
+                    Text("Easy and long runs only, so the effort is alike. The line is each week's typical pace.")
+                        .font(.dsCaption)
+                        .foregroundStyle(.secondary)
                 }
-                .frame(height: 140)
-                // Pace never approaches zero, so a zero-anchored domain pushed every point
-                // into one band and flattened the trend; bracket the data instead. Reversed
-                // so a faster pace sits higher and the line climbs as the runner improves.
-                .chartYScale(domain: .automatic(includesZero: false, reversed: true))
-                .chartXAxis {
-                    AxisMarks(values: .stride(by: .month)) {
-                        AxisValueLabel(format: .dateTime.month(.abbreviated))
-                    }
-                }
-                .chartYAxis {
-                    AxisMarks { value in
-                        AxisValueLabel {
-                            // `paceValueString` is the bare "M:SS" form — the axis has no
-                            // room for a unit, and the card's own footnote carries it.
-                            // Guarded because a tick at or below zero formats as the
-                            // "--:--" placeholder, which rendered as a literal axis label.
-                            if let secs = value.as(Double.self), secs > 0 {
-                                Text(secs.paceValueString(unit: appSettings.unitPreference))
-                            }
-                        }
-                    }
-                }
-                .chartXSelection(value: $selectedPaceDate)
-                .chartAccessibility("Average pace chart", paceSeries(paceWorkouts))
             }
         }
+    }
+
+    /// The card's answer: the latest week's easy pace, and how it moved over the period.
+    private func easyPaceHeadline(_ trend: ProgressPeriodStats.EasyPaceTrend) -> some View {
+        let unit = appSettings.unitPreference
+        return VStack(alignment: .leading, spacing: 2) {
+            if let latest = trend.latestWeekPaceSecondsPerKm {
+                HStack(alignment: .firstTextBaseline, spacing: AppSpacing.sm) {
+                    Text(latest.paceString(unit: unit))
+                        .font(.dsTitle3.weight(.bold))
+                        .monospacedDigit()
+                    Text("latest week")
+                        .font(.dsFootnote).foregroundStyle(.secondary)
+                }
+            }
+            if let change = trend.changeSecondsPerKm {
+                let seconds = Int(abs(change.paceSecondsValue(unit: unit)).rounded())
+                if seconds < Int(SplitPaceStats.onPaceToleranceSeconds) {
+                    Text("About the same as earlier in this period")
+                        .font(.dsFootnote).foregroundStyle(.secondary)
+                } else if change < 0 {
+                    Text("\(seconds)s per \(unit.distanceLabel) faster than earlier in this period")
+                        .font(.dsFootnote.weight(.semibold)).foregroundStyle(Color.success)
+                } else {
+                    // Slower easy runs are not a warning: they're often the right call in a
+                    // hot spell or a heavy week, so this stays neutral.
+                    Text("\(seconds)s per \(unit.distanceLabel) slower than earlier in this period")
+                        .font(.dsFootnote).foregroundStyle(.secondary)
+                }
+            } else {
+                Text("Log easy runs across a few weeks to see a trend")
+                    .font(.dsFootnote).foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private func easyPaceChart(_ trend: ProgressPeriodStats.EasyPaceTrend) -> some View {
+        let selectedRun = selectedPaceDate.flatMap { closestEasyRun(to: $0, in: trend.runs) }
+        return Chart {
+            ForEach(trend.runs) { run in
+                PointMark(
+                    x: .value("Date", run.date),
+                    y: .value("sec/km", run.paceSecondsPerKm)
+                )
+                .foregroundStyle(Color.secondary.opacity(selectedRun?.id == run.id ? 0.9 : 0.35))
+                .symbolSize(selectedRun?.id == run.id ? 70 : 30)
+            }
+            // A line needs two weeks to say anything; one week shows only its dots.
+            if trend.weeks.count > 1 {
+                ForEach(trend.weeks, id: \.weekStart) { week in
+                    LineMark(
+                        x: .value("Date", week.plotDate),
+                        y: .value("sec/km", week.paceSecondsPerKm),
+                        series: .value("Series", "Weekly")
+                    )
+                    // The runner's progress, so it is the route.
+                    .foregroundStyle(.route)
+                    .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+                }
+            }
+            if let run = selectedRun {
+                selectionRule(x: .value("Date", run.date)) {
+                    tooltipContainer {
+                        VStack(alignment: .leading, spacing: 2) {
+                            let day = run.date.formatted(.dateTime.month(.abbreviated).day())
+                            Text("\(day) · \(run.workoutType.localizedName)")
+                                .font(.dsCaption2).foregroundStyle(.secondary)
+                            Text(run.paceSecondsPerKm.paceString(unit: appSettings.unitPreference))
+                                .font(.dsCaption).bold()
+                        }
+                    }
+                }
+            }
+        }
+        .frame(height: 140)
+        // Pace never approaches zero, so a zero-anchored domain pushed every point into one
+        // band and flattened the trend; bracket the data instead. Reversed so a faster pace
+        // sits higher and the line climbs as the runner improves.
+        .chartYScale(domain: .automatic(includesZero: false, reversed: true))
+        .chartXAxis {
+            AxisMarks(values: .stride(by: .month)) {
+                AxisValueLabel(format: .dateTime.month(.abbreviated))
+            }
+        }
+        .chartYAxis {
+            AxisMarks(values: .automatic(desiredCount: 4)) { value in
+                AxisGridLine()
+                AxisValueLabel {
+                    // `paceValueString` is the bare "M:SS" form; the headline carries the
+                    // unit. Guarded because a tick at or below zero formats as "--:--".
+                    if let secs = value.as(Double.self), secs > 0 {
+                        Text(secs.paceValueString(unit: appSettings.unitPreference))
+                    }
+                }
+            }
+        }
+        .chartXSelection(value: $selectedPaceDate)
+        .chartAccessibility("Easy pace chart", easyPaceSeries(trend))
+    }
+
+    private func closestEasyRun(
+        to date: Date,
+        in runs: [ProgressPeriodStats.EasyPaceTrend.Run]
+    ) -> ProgressPeriodStats.EasyPaceTrend.Run? {
+        runs.min(by: { abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date)) })
     }
 
     // MARK: - Heart rate trend chart

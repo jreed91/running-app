@@ -85,6 +85,104 @@ enum ProgressPeriodStats {
             .sorted { $0.weekStart < $1.weekStart }
     }
 
+    // MARK: Easy pace trend
+
+    /// What the pace card plots: easy-run paces and the typical one each week.
+    ///
+    /// The card used to join every run's average pace into one line. A tempo, an interval
+    /// session (recoveries included), a long run and a race each sit at a different pace by
+    /// design, so the line zigzagged with the week's mix of sessions and never answered
+    /// "am I getting faster?". Holding the effort steady is what makes pace comparable, so
+    /// only easy and long runs count here; quality sessions already feed the VDOT card.
+    struct EasyPaceTrend: Equatable, Sendable {
+        struct Run: Equatable, Sendable, Identifiable {
+            let id: UUID
+            let date: Date
+            let paceSecondsPerKm: Double
+            let workoutType: WorkoutType
+        }
+
+        struct Week: Equatable, Sendable {
+            let weekStart: Date
+            /// The mean time of that week's runs: where the chart places the point, so it
+            /// sits among the runs it summarises and never past today.
+            let plotDate: Date
+            /// The median easy pace that week, so one hilly or windy run doesn't drag it.
+            let paceSecondsPerKm: Double
+        }
+
+        /// Every easy or long run with a pace, oldest first.
+        let runs: [Run]
+        /// One point per week that had one, oldest first.
+        let weeks: [Week]
+        /// Median easy pace in the later half of the runs minus the earlier half, in
+        /// seconds per km: negative is faster. `nil` until there are at least
+        /// `minimumRunsForChange` runs across at least `minimumWeeksForChange` weeks, since
+        /// a change read off a couple of runs is noise.
+        let changeSecondsPerKm: Double?
+
+        static let minimumRunsForChange = 4
+        static let minimumWeeksForChange = 3
+
+        /// The latest week's typical easy pace, which the card leads with.
+        var latestWeekPaceSecondsPerKm: Double? { weeks.last?.paceSecondsPerKm }
+    }
+
+    /// Workout types whose pace is comparable from one run to the next.
+    static func countsAsEasyPace(_ type: WorkoutType) -> Bool {
+        type == .easy || type == .longRun
+    }
+
+    static func easyPaceTrend(for runs: [RunWorkout]) -> EasyPaceTrend {
+        let easy = runs.runsOnly
+            .filter { run in
+                let pace = run.averagePaceSecondsPerKm
+                return countsAsEasyPace(run.workoutType) && pace > 0 && pace.isFinite
+            }
+            .sorted { $0.date < $1.date }
+            .map { run in
+                EasyPaceTrend.Run(
+                    id: run.id,
+                    date: run.date,
+                    paceSecondsPerKm: run.averagePaceSecondsPerKm,
+                    workoutType: run.workoutType
+                )
+            }
+
+        let weeks = Dictionary(grouping: easy) { $0.date.startOfWeek }
+            .compactMap { weekStart, weekRuns -> EasyPaceTrend.Week? in
+                guard let pace = median(of: weekRuns.map(\.paceSecondsPerKm)) else { return nil }
+                let meanTime = weekRuns.reduce(0) { $0 + $1.date.timeIntervalSinceReferenceDate }
+                    / Double(weekRuns.count)
+                return EasyPaceTrend.Week(
+                    weekStart: weekStart,
+                    plotDate: Date(timeIntervalSinceReferenceDate: meanTime),
+                    paceSecondsPerKm: pace
+                )
+            }
+            .sorted { $0.weekStart < $1.weekStart }
+
+        var change: Double?
+        if easy.count >= EasyPaceTrend.minimumRunsForChange,
+           weeks.count >= EasyPaceTrend.minimumWeeksForChange {
+            let half = easy.count / 2
+            let earlier = easy.prefix(half).map(\.paceSecondsPerKm)
+            let later = easy.suffix(half).map(\.paceSecondsPerKm)
+            if let before = median(of: earlier), let after = median(of: later) {
+                change = after - before
+            }
+        }
+        return EasyPaceTrend(runs: easy, weeks: weeks, changeSecondsPerKm: change)
+    }
+
+    /// Middle value, or the mean of the middle two; `nil` for an empty sample.
+    private static func median(of values: [Double]) -> Double? {
+        guard !values.isEmpty else { return nil }
+        let sorted = values.sorted()
+        let middle = sorted.count / 2
+        return sorted.count.isMultiple(of: 2) ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle]
+    }
+
     // MARK: Period summary
 
     /// What the period summary card and the header show.
