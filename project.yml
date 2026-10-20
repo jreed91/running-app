@@ -215,10 +215,12 @@ targets:
         UIBackgroundModes:
           - location
           - remote-notification
-          # Spoken split announcements (U4). A runner locks the phone and puts it in a
-          # pocket, so by the time a split closes the app is in the background — without
-          # this the audio session cannot be activated there and the announcement is
-          # simply lost, which is exactly the case it exists for.
+          # Spoken run cues: the off-route warning (A7, spoken from the tracker's fix hook,
+          # so it fires with the screen off), split announcements (U4) and guided step
+          # cues. A runner locks the phone and puts it in a pocket, so the app is in the
+          # background when they are due — without this the audio session cannot be
+          # activated there and the cue is simply lost, which is exactly the case it
+          # exists for. App Review (2.5.4) asks for a device recording of it in use.
           - audio
           # The daily notification refresh (`NotificationRefreshService`). The evening nudges,
           # the Sunday recap and the heat advisory are decided against the day so far, and

@@ -312,6 +312,10 @@ WeatherKit  →  WeatherService.hourlyForecast  →  [ForecastHour]
                                   →  NotificationService.scheduleHeatAdvisory (18:00, day before)
 ```
 
+- **Weather on screen needs the Apple Weather credit.** Any view that shows WeatherKit
+  data (a recorded run's conditions included) carries `AppleWeatherAttribution`: the
+   Weather mark plus the legal-sources link. App Review rejected 1.0 under guideline
+  5.2.5 without it. Lists credit once at the foot, not per row.
 - **Every number carries its source.** `HeatAdaptationPolicy` is a wall of constants with
   citations attached, and [`docs/HEAT_ADAPTATION_EVIDENCE.md`](docs/HEAT_ADAPTATION_EVIDENCE.md)
   is the file to read *before* touching any of them — the same arrangement, and the same

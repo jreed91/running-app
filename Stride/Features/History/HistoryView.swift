@@ -341,6 +341,15 @@ private struct HistoryEntryList: View {
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)
             }
+
+            // The rows' temperatures are WeatherKit data, so the list credits it once
+            // at the foot rather than on every row (guideline 5.2.5).
+            if runs.contains(where: { $0.weather != nil }) {
+                AppleWeatherAttribution()
+                    .frame(maxWidth: .infinity)
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+            }
         }
         .strideList()
         .overlay { emptyStateOverlay }

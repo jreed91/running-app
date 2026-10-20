@@ -26,6 +26,7 @@ struct HeatAdvisoryCard: View {
             if let cooler = advisory.cooler {
                 coolerHourRow(cooler)
             }
+            AppleWeatherAttribution()
             Divider().opacity(0.5)
             actionButtons
         }

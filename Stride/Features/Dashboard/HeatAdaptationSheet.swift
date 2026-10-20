@@ -76,6 +76,8 @@ struct HeatAdaptationSheet: View {
                 .font(.bodyRegular)
                 .foregroundStyle(.primary)
                 .fixedSize(horizontal: false, vertical: true)
+
+            AppleWeatherAttribution()
         }
         .padding(AppSpacing.lg)
         .strideCard()
