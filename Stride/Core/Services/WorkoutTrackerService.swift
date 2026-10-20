@@ -478,7 +478,12 @@ final class WorkoutTrackerService {
             || (providesDistance && CMPedometer.isDistanceAvailable()) else { return }
         pedometerActive = true
         let baseline = indoorDistanceBaselineMeters
-        pedometer.startUpdates(from: segmentStart) { [weak self] data, error in
+        // `@Sendable` is load-bearing. CoreMotion calls this on its own queue, and a bare
+        // closure written inside this main-actor class is inferred main-actor isolated,
+        // so Swift 6 asserts the executor on entry and traps (EXC_BREAKPOINT in
+        // libdispatch) on the first pedometer update of every run. The heart-rate
+        // handler below is typed `@Sendable` for the same reason.
+        let handler: @Sendable (CMPedometerData?, (any Error)?) -> Void = { [weak self] data, error in
             guard let data, error == nil else { return }
             // `distance` is cumulative since `segmentStart`; add the distance banked
             // before this segment so a pause/resume never replays or drops meters (M24).
@@ -507,6 +512,7 @@ final class WorkoutTrackerService {
                 self.updateSplitsForIndoor()
             }
         }
+        pedometer.startUpdates(from: segmentStart, withHandler: handler)
     }
 
     private func stopPedometerUpdates() {
