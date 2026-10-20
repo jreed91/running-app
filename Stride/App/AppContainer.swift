@@ -176,6 +176,8 @@ final class AppContainer {
     /// can leave the runner's music ducked, and it survives the HUD being dismissed
     /// mid-sentence.
     let runVoiceCoach: RunVoiceCoach
+    /// Speaks splits and guided steps from the tracker's pulse; see ``RunSpokenCues``.
+    let runSpokenCues: RunSpokenCues
 
     /// The saved route a run is following, and the off-route warning (A7). Wired into
     /// `workoutTrackerService` below so it hears every fix, screen on or off.
@@ -400,7 +402,11 @@ final class AppContainer {
         self.runRouteGuide = routeGuide
         tracker.onAcceptedFix = { [weak routeGuide] fix in routeGuide?.handle(fix: fix) }
         self.runPlaylistService = RunPlaylistService()
-        self.activeRunPresentation = ActiveRunPresentation()
+        let presentation = ActiveRunPresentation()
+        self.activeRunPresentation = presentation
+        let spokenCues = RunSpokenCues(tracker: tracker, presentation: presentation, voiceCoach: voiceCoach)
+        self.runSpokenCues = spokenCues
+        tracker.onPulse = { [weak spokenCues] pulse in spokenCues?.handle(pulse) }
         self.workoutSyncService = WorkoutSyncService(
             healthKitRepository: hkRepository,
             notificationService: notifications,

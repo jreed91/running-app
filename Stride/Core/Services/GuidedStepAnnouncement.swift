@@ -112,8 +112,7 @@ enum GuidedStepAnnouncement {
     /// Fires on the *crossing*: the tick whose remaining amount first drops to or below
     /// the threshold, given the one before it was still above. Deciding on the crossing
     /// rather than on "is it under the threshold now" is what lets the caller hold no
-    /// "already said it" flag — a flag the two copies of the run feedback (HUD and
-    /// minimised, see ``RunSplitFeedback``) would otherwise have to share.
+    /// "already said it" flag; ``RunSpokenCues`` only keeps the previous tick's reading.
     ///
     /// - Parameters:
     ///   - step: the step both progress readings belong to. The caller must not pass

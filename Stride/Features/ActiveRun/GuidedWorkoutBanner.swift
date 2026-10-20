@@ -8,8 +8,8 @@ import SwiftUI
 /// subscription. All stepping logic lives in the pure ``GuidedWorkoutState`` (passed as
 /// a binding); this view only renders it and forwards the runner's manual "Next".
 ///
-/// Auto-advance is not here: it is ``GuidedWorkoutFeedback``'s, which keeps stepping
-/// while the run is minimised and this banner is gone.
+/// Auto-advance is not here: it is ``RunSpokenCues``'s, which keeps stepping from the
+/// tracker's tick while the run is minimised or the phone is locked.
 struct GuidedWorkoutBanner: View {
     let tracker: WorkoutTrackerService
     @Binding var guided: GuidedWorkoutState

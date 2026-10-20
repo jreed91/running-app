@@ -184,6 +184,19 @@ final class WorkoutTrackerService {
     /// on a locked phone, where no view updates.
     @ObservationIgnored var onAcceptedFix: (@MainActor (Coordinate) -> Void)?
 
+    /// What `onPulse` reports.
+    enum Pulse: Equatable, Sendable {
+        /// A run has just started recording.
+        case started
+        /// The per-second timer, while recording. Distance and splits are current.
+        case tick
+    }
+
+    /// Called when a run starts and on every timer tick while it records — what
+    /// `RunSpokenCues` speaks splits and guided steps from. A hook for the same reason as
+    /// `onAcceptedFix`: those cues matter most on a locked phone, where no view updates.
+    @ObservationIgnored var onPulse: (@MainActor (Pulse) -> Void)?
+
     /// This run as the Live Activity needs it. Assembled here because the tracker is the
     /// only holder of all of it, and handed over as a value so ActivityKit stays out of
     /// this file.
@@ -272,6 +285,7 @@ final class WorkoutTrackerService {
         // outdoors it is read for cadence only (N20).
         startPedometerUpdates(from: startDate)
         activityPresenter?.runDidStart(activitySnapshot)
+        onPulse?(.started)
     }
 
     func pauseWorkout() {
@@ -574,6 +588,7 @@ final class WorkoutTrackerService {
                 // second, the Lock Screen refreshes every five, and the elapsed clock is
                 // counted by the widget rather than pushed at all (U5b).
                 self.activityPresenter?.runDidUpdate(self.activitySnapshot)
+                self.onPulse?(.tick)
             }
         }
     }
