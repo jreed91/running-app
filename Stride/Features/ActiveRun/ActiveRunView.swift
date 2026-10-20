@@ -108,13 +108,10 @@ struct ActiveRunView: View {
                 }
             }
             .sensoryFeedback(.error, trigger: saveErrorMessage != nil) { _, isShowing in isShowing }
-            // Each closed kilometre/mile, felt and (opt-in) spoken. Shared with
-            // `MainTabView`, which owns the same feedback while the run is minimised and
-            // this screen is gone — see `RunSplitFeedback`.
+            // Each closed kilometre/mile, felt. Shared with `MainTabView`, which owns the
+            // same haptic while the run is minimised and this screen is gone — see
+            // `RunSplitFeedback`. Speaking splits and steps is `RunSpokenCues`'s.
             .runSplitFeedback(isActive: true)
-            // Steps a structured workout on as each target is met and (opt-in) calls
-            // each step out loud; shared with `MainTabView` the same way.
-            .guidedWorkoutFeedback(isActive: true)
             // A lap is marked by feel, mid-stride, without looking — so the confirmation
             // that it registered has to be felt too (A2). Distinct from the split haptic
             // above (`.light`) so the two can be told apart in a pocket.

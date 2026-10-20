@@ -47,7 +47,9 @@ struct StrideApp: App {
             }
         }
         _container = State(initialValue: appContainer)
-        _appSettings = State(initialValue: AppSettings())
+        let settings = AppSettings()
+        appContainer.runSpokenCues.appSettings = settings
+        _appSettings = State(initialValue: settings)
         _authService = State(initialValue: AuthService())
         AppChrome.apply()
     }
