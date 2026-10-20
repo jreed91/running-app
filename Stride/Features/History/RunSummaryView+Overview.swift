@@ -243,29 +243,33 @@ extension RunSummaryView {
     var weatherSection: some View {
         if let w = workout.weather {
             let unit = appSettings.unitPreference
-            HStack(spacing: 12) {
-                Image(systemName: w.conditionSymbol)
-                    .font(.dsTitle3)
-                    .symbolRenderingMode(.multicolor)
-                    .frame(width: 32)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("\(w.temperatureString(unit: unit)) · \(w.conditionDescription)")
-                        .font(.dsSubhead.weight(.semibold))
-                        .foregroundStyle(.primary)
-                    let feels = w.feelsLikeString(unit: unit)
-                    let wind = w.windString(unit: unit)
-                    Text("Feels \(feels) · \(Int(w.humidityPercent))% humidity · \(wind) wind")
-                        .font(.dsCaption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                HStack(spacing: 12) {
+                    Image(systemName: w.conditionSymbol)
+                        .font(.dsTitle3)
+                        .symbolRenderingMode(.multicolor)
+                        .frame(width: 32)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(w.temperatureString(unit: unit)) · \(w.conditionDescription)")
+                            .font(.dsSubhead.weight(.semibold))
+                            .foregroundStyle(.primary)
+                        let feels = w.feelsLikeString(unit: unit)
+                        let wind = w.windString(unit: unit)
+                        Text("Feels \(feels) · \(Int(w.humidityPercent))% humidity · \(wind) wind")
+                            .font(.dsCaption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
                 }
-                Spacer(minLength: 0)
+                .accessibilityElement(children: .combine)
+                AppleWeatherAttribution()
+                    .padding(.leading, 44) // under the text, past the 32 pt symbol and its 12 pt gap
             }
             .padding(.horizontal, AppSpacing.md)
             .padding(.vertical, AppSpacing.md)
             .strideCard(cornerRadius: AppRadius.md)
-            .accessibilityElement(children: .combine)
         }
     }
 }

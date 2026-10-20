@@ -94,6 +94,7 @@ struct RaceWeatherCard: View {
                 .font(.dsCaption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+            AppleWeatherAttribution()
         } else {
             Text("No forecast is available right now. It needs a recent outdoor run for a location, and a connection.")
                 .font(.dsCaption)
