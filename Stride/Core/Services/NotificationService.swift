@@ -106,16 +106,18 @@ final class NotificationService: NSObject {
     /// A training-nudge tap that woke the app before any listener existed.
     private var bufferedTrainingNudgeKind: TrainingNudgeKind?
 
-    /// Taps on a morning reminder. Carries nothing but the fact of the tap: the reminder
-    /// is about today's session, and the Plan tab is where today's session is. Same shape
-    /// as the streams above (D4).
-    var workoutReminderTaps: AsyncStream<Void> {
+    /// Taps on a morning reminder, as the scheduled workout's id. The banner names today's
+    /// session, so a tap opens that session rather than leaving the runner to find it.
+    /// `nil` when the reminder carried no readable id, which still lands on the Plan tab.
+    /// Same shape as the streams above (D4).
+    var workoutReminderTaps: AsyncStream<UUID?> {
         AsyncStream(bufferingPolicy: .unbounded) { continuation in
             let id = UUID()
             workoutReminderTapListeners[id] = continuation
             if hasBufferedWorkoutReminderTap {
                 hasBufferedWorkoutReminderTap = false
-                continuation.yield(())
+                continuation.yield(bufferedWorkoutReminderID)
+                bufferedWorkoutReminderID = nil
             }
             continuation.onTermination = { [weak self] _ in
                 Task { @MainActor in self?.workoutReminderTapListeners[id] = nil }
@@ -123,10 +125,12 @@ final class NotificationService: NSObject {
         }
     }
 
-    private var workoutReminderTapListeners: [UUID: AsyncStream<Void>.Continuation] = [:]
+    private var workoutReminderTapListeners: [UUID: AsyncStream<UUID?>.Continuation] = [:]
 
-    /// A morning-reminder tap that woke the app before any listener existed.
+    /// A morning-reminder tap that woke the app before any listener existed, and the
+    /// workout it named. Two fields because the id itself may be `nil`.
     private var hasBufferedWorkoutReminderTap = false
+    private var bufferedWorkoutReminderID: UUID?
 
     func installAsDelegate() {
         center.delegate = self
@@ -1022,13 +1026,14 @@ final class NotificationService: NSObject {
         "\(reviewSnapshotKeyPrefix)\(idString)"
     }
 
-    private func handleWorkoutReminderTap() {
+    private func handleWorkoutReminderTap(workoutID: UUID?) {
         guard !workoutReminderTapListeners.isEmpty else {
             hasBufferedWorkoutReminderTap = true
+            bufferedWorkoutReminderID = workoutID
             return
         }
         for listener in workoutReminderTapListeners.values {
-            listener.yield(())
+            listener.yield(workoutID)
         }
     }
 
@@ -1156,8 +1161,9 @@ extension NotificationService: UNUserNotificationCenterDelegate {
         }
 
         if content.categoryIdentifier == Category.workoutReminder {
+            let workoutID = (content.userInfo[Self.workoutReminderIDKey] as? String).flatMap(UUID.init(uuidString:))
             Task { @MainActor in
-                self.handleWorkoutReminderTap()
+                self.handleWorkoutReminderTap(workoutID: workoutID)
             }
             completionHandler()
             return

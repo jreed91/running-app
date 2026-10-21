@@ -214,8 +214,8 @@ final class AppContainer {
     /// the loop holds the container weakly and returns on the first tap after it is gone.
     @ObservationIgnored private var syncedRunTapTask: Task<Void, Never>?
 
-    /// Listens to `NotificationService.workoutReminderTaps` and opens the Plan tab, where
-    /// today's session is. Same lifetime rules as `syncedRunTapTask`.
+    /// Listens to `NotificationService.workoutReminderTaps` and opens the reminded session's
+    /// detail on the Plan tab. Same lifetime rules as `syncedRunTapTask`.
     @ObservationIgnored private var workoutReminderTapTask: Task<Void, Never>?
 
     /// Set when a workout is synced from HealthKit (background or foreground) or when the user
@@ -465,9 +465,13 @@ final class AppContainer {
             }
         }
         workoutReminderTapTask = Task { @MainActor [weak self] in
-            for await _ in notifications.workoutReminderTaps {
+            for await workoutID in notifications.workoutReminderTaps {
                 guard let self else { return }
-                self.appNavigation.select(.plan)
+                if let workoutID {
+                    self.appNavigation.openScheduledWorkout(workoutID)
+                } else {
+                    self.appNavigation.select(.plan)
+                }
             }
         }
     }

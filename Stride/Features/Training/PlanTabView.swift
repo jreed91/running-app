@@ -167,6 +167,15 @@ struct PlanTabView: View {
             .navigationDestination(item: $selectedWorkout) { workout in
                 WorkoutDetailView(workout: workout)
             }
+            // A morning-reminder tap names the session the banner was about. `initial` covers
+            // the cold launch, where this tab is built after the request was made.
+            .onChange(of: container.appNavigation.requestedScheduledWorkoutID, initial: true) { _, id in
+                guard let id else { return }
+                container.appNavigation.requestedScheduledWorkoutID = nil
+                if let workout = scheduledWorkout(id: id) {
+                    selectedWorkout = workout
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     NavigationLink {
@@ -192,6 +201,13 @@ struct PlanTabView: View {
             // (or has since been deleted) (M37).
             adaptTask?.cancel()
         }
+    }
+
+    /// The session with `id`, or `nil` when it has since been deleted (a replaced plan).
+    private func scheduledWorkout(id: UUID) -> ScheduledWorkout? {
+        var descriptor = FetchDescriptor<ScheduledWorkout>(predicate: #Predicate { $0.id == id })
+        descriptor.fetchLimit = 1
+        return try? context.fetch(descriptor).first
     }
 
     /// A plan is safe to keep mutating only while it's still live in the store and
