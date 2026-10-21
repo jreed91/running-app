@@ -29,10 +29,21 @@ final class AppNavigation {
 
     var selectedTab: StrideTab = .home
 
+    /// A scheduled workout whose detail the Plan tab should push, set by a morning-reminder
+    /// tap. The Plan tab resolves it against its store and clears it, so it is a request
+    /// rather than state: reading it after that returns `nil`.
+    var requestedScheduledWorkoutID: UUID?
+
     /// Sends the app to `tab`. Named rather than assigned at call sites so the deep-link
     /// handler reads as an instruction, and so there is one place to add anything a tab
     /// switch should also do (scroll to top, dismiss a sheet) if that ever becomes true.
     func select(_ tab: StrideTab) {
         selectedTab = tab
+    }
+
+    /// Sends the app to the Plan tab with `workoutID`'s detail pushed on it.
+    func openScheduledWorkout(_ workoutID: UUID) {
+        select(.plan)
+        requestedScheduledWorkoutID = workoutID
     }
 }
