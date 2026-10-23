@@ -49,7 +49,7 @@ extension RunSummaryView {
     private func splitFootnote(_ metric: SplitChartMetric) -> String {
         guard metric == .pace, let average = averageSplitPace else { return metric.footnote }
         let pace = average.paceString(unit: appSettings.unitPreference)
-        return "Above the dashed line ran faster than this run's \(pace) average"
+        return "Higher is faster. The dashed line is this run's \(pace) average"
     }
 
     /// The splits card: the chart and, under it, the table, so the two readings of the same
@@ -182,98 +182,100 @@ extension RunSummaryView {
 
     // MARK: Split pace chart
 
-    /// This run's average split pace, the line the pace bars are drawn against.
+    /// This run's average split pace, the dashed line the pace line is read against.
     private var averageSplitPace: Double? {
         SplitPaceStats.averagePaceSecondsPerKm(chartedSplits.splits)
     }
 
-    private var splitPaceYDomain: AutomaticScaleDomain {
-        chartedSplits.splits.count > 1 && averageSplitPace != nil
-            ? .automatic(includesZero: false, reversed: true)
-            : .automatic
+    /// The split the pace chart's tooltip is showing. Snapped to the nearest bucket for the
+    /// same reason as `selectedHeartRateSplit`: a chart drawn from `LineMark`/`PointMark`
+    /// reports selections between buckets.
+    private var selectedPaceSplit: Split? {
+        guard let bucket = selectedSplitPaceKm else { return nil }
+        return SplitChartSeries.nearestSplit(to: bucket, in: chartedSplits.splits)
     }
 
-    /// Pace per split, as deviation from the run's own average.
+    /// Pace through the run as a line, against the run's own average, opened by a one-line
+    /// read of how the second half compared with the first.
     ///
-    /// This was zero-anchored absolute-pace bars, which is close to unreadable for pace: a
-    /// 30-second spread between the fastest and slowest split is a few percent of a bar
-    /// that starts at 0:00, so every split looked identical — and because a bigger number
-    /// means a slower split, the tallest bar was the *worst* one. Bars now run from the
-    /// average pace to each split's pace on a reversed, zero-free scale, so faster splits
-    /// rise above the dashed average line and slower ones hang below it, coloured to match.
+    /// This was deviation bars on a reversed, auto-fitted scale, and on device (a 1.5 mi
+    /// run on quarter-mile buckets) it drew no visible bars and an axis from 5:21 to 21:27:
+    /// one slow bucket stretched the scale, and the automatic ticks fell on round seconds
+    /// per kilometre, which read as odd paces in miles. Now:
     ///
-    /// Axis labels come from the bucket's cumulative distance in the charted unit, so a
-    /// mile-bucketed run reads "4", a mile run charted on tenths reads "0.4", and a legacy
-    /// kilometre-bucketed one still counts kilometres.
+    /// - The y value is seconds faster than the average, so up is faster without reversing
+    ///   the scale, and the dashed average line sits at zero, mid-chart.
+    /// - The domain is set from the data (`SplitPaceStats.chartDomain`): at least ±15 s/km
+    ///   so an even run looks even, at most ±90 s/km so a stop does not flatten the rest. A
+    ///   bucket past that is drawn on the edge; its tooltip gives the real pace.
+    /// - Three axis labels: the fast edge, the average and the slow edge, as paces.
+    /// - A line in the route gradient rather than bars, since the question is how pace moved
+    ///   through the run; each bucket keeps a dot coloured faster/on pace/slower.
+    @ViewBuilder
     private var splitPaceChart: some View {
         let splits = chartedSplits.splits
-        // Deviation bars need something to deviate from, and a lone split is its own
-        // average — that run keeps a plain zero-anchored bar, which is honest when there is
-        // nothing to compare it with.
-        let average = splits.count > 1 ? averageSplitPace : nil
-        return Chart {
-            ForEach(splits, id: \.kilometer) { split in
-                let tone = splitPaceTone(split.paceSecondsPerKm, average: average)
-                    .opacity(selectedSplitPaceKm == nil || selectedSplitPaceKm == split.kilometer ? 1.0 : 0.4)
-                if let average {
-                    BarMark(
-                        x: .value(splitLabelUpper, split.kilometer),
-                        yStart: .value("Average", average),
-                        yEnd: .value("Pace", split.paceSecondsPerKm),
-                        width: .ratio(0.62)
-                    )
-                    .foregroundStyle(tone)
-                    .cornerRadius(AppRadius.micro)
-                } else {
-                    BarMark(
-                        x: .value(splitLabelUpper, split.kilometer),
-                        y: .value("Pace", split.paceSecondsPerKm),
-                        width: .ratio(0.62)
-                    )
-                    .foregroundStyle(tone)
-                    .cornerRadius(AppRadius.micro)
+        if let average = averageSplitPace {
+            let domain = SplitPaceStats.chartDomain(paces: splits.map(\.paceSecondsPerKm), average: average)
+            let half = domain.upperBound - average
+            let selected = selectedPaceSplit
+            VStack(alignment: .leading, spacing: 8) {
+                if let shape = SplitPaceStats.shape(splits, unit: appSettings.unitPreference) {
+                    Text(SplitPaceStats.shapeHeadline(shape, unit: appSettings.unitPreference))
+                        .font(.dsHeadline)
                 }
-            }
+                Chart {
+                    // Deliberately unlabelled inside the plot; the footnote names it.
+                    RuleMark(y: .value("Average", 0.0))
+                        .foregroundStyle(.secondary.opacity(0.5))
+                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
 
-            if let average {
-                // Deliberately unlabelled inside the plot: an annotation pinned to the line
-                // collides with whichever bar happens to sit at that edge. The footnote
-                // under the chart names the line and its pace instead.
-                RuleMark(y: .value("Average", average))
-                    .foregroundStyle(.secondary.opacity(0.5))
-                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
-            }
-
-            if let bucket = selectedSplitPaceKm, let split = chartedSplit(forBucket: bucket) {
-                RuleMark(x: .value(splitLabelUpper, bucket))
-                    .foregroundStyle(selectionRuleColor)
-                    .lineStyle(selectionRuleStyle)
-                    .annotation(
-                        position: .top,
-                        overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
-                    ) {
-                        splitPaceTooltip(split, average: average)
+                    ForEach(splits, id: \.kilometer) { split in
+                        let faster = average - SplitPaceStats.clamped(split.paceSecondsPerKm, to: domain)
+                        LineMark(
+                            x: .value(splitLabelUpper, split.kilometer),
+                            y: .value("Faster than average", faster)
+                        )
+                        .foregroundStyle(.route)
+                        .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+                        .interpolationMethod(.monotone)
+                        PointMark(
+                            x: .value(splitLabelUpper, split.kilometer),
+                            y: .value("Faster than average", faster)
+                        )
+                        .foregroundStyle(splitPaceTone(split.paceSecondsPerKm, average: average))
+                        .symbolSize(selected?.kilometer == split.kilometer ? 80 : 30)
                     }
-            }
-        }
-        .frame(height: 140)
-        // Zero is meaningless for a pace comparison, and reversing the axis puts the faster
-        // splits on top. The single-bar fallback keeps the plain upright scale, where a bar
-        // hanging from the top edge would just look broken.
-        .chartYScale(domain: splitPaceYDomain)
-        .chartYAxis {
-            AxisMarks(values: .automatic(desiredCount: 4)) { value in
-                AxisGridLine()
-                AxisValueLabel {
-                    if let secs = value.as(Double.self) {
-                        Text(secs.paceValueString(unit: appSettings.unitPreference))
+
+                    if let split = selected {
+                        RuleMark(x: .value(splitLabelUpper, split.kilometer))
+                            .foregroundStyle(selectionRuleColor)
+                            .lineStyle(selectionRuleStyle)
+                            .annotation(
+                                position: .top,
+                                overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
+                            ) {
+                                splitPaceTooltip(split, average: splits.count > 1 ? average : nil)
+                            }
                     }
                 }
+                .frame(height: 150)
+                .chartYScale(domain: -half...half)
+                .chartYAxis {
+                    AxisMarks(values: [-half, 0, half]) { value in
+                        AxisGridLine()
+                        AxisValueLabel {
+                            // Back from "seconds faster" to the pace at that height.
+                            if let faster = value.as(Double.self) {
+                                Text((average - faster).paceValueString(unit: appSettings.unitPreference))
+                            }
+                        }
+                    }
+                }
+                .chartXAxis { splitXAxis }
+                .chartXSelection(value: $selectedSplitPaceKm)
+                .chartAccessibility("Split pace chart", splitPaceSummary)
             }
         }
-        .chartXAxis { splitXAxis }
-        .chartXSelection(value: $selectedSplitPaceKm)
-        .chartAccessibility("Split pace chart", splitPaceSummary)
     }
 
     private func splitPaceTooltip(_ split: Split, average: Double?) -> some View {
@@ -322,7 +324,7 @@ extension RunSummaryView {
 
     /// The chart is read against the run's average now, so the spoken summary names it
     /// first — otherwise a VoiceOver user gets the split values with nothing to judge them
-    /// against, which is exactly what the bars show sighted users.
+    /// against, which is exactly what the dashed line shows sighted users.
     private var splitPaceSummary: String {
         let values = ChartAccessibility.summary(splitPoints(chartedSplits.splits) { $0.paceSecondsPerKm }) {
             SpokenMetric.spoken(measurement: $0.paceString(unit: appSettings.unitPreference))

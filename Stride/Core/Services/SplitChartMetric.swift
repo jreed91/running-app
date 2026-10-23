@@ -25,7 +25,7 @@ enum SplitChartMetric: String, CaseIterable, Hashable, Sendable {
     /// run has no average to name.
     var footnote: String {
         switch self {
-        case .pace:      return "Above the dashed line ran faster than this run's average"
+        case .pace:      return "Higher is faster. The dashed line is this run's average"
         case .heartRate: return "Average heart rate in each split"
         case .elevation: return "Gain within each split"
         }
