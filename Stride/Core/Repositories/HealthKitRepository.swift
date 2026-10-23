@@ -144,7 +144,7 @@ private final class HealthKitObserverCompletion: @unchecked Sendable {
     }
 }
 
-private enum HealthKitRepositoryError: LocalizedError {
+enum HealthKitRepositoryError: LocalizedError {
     case workoutKitUnsupported
     case workoutKitNotAuthorized
 
