@@ -198,12 +198,25 @@ extension RunSummaryView {
         nextWorkout.applyAdaptation(from: adapted)
         context.saveOrLog("the coach-adapted next session")
 
-        if let plan = nextWorkout.week?.plan {
-            try? await container.healthKitRepository.removeWorkoutPlans(for: plan)
-            try? await container.healthKitRepository.syncWorkoutPlans(for: plan, unitPreference: appSettings.unitPreference)
-        }
-
+        // The plan is updated the moment it is saved; Plan and Home read the store, so
+        // they already show it. Say so now rather than after the Watch is caught up.
         nextSessionUpdateMessage = "Updated \(workoutLabel(nextWorkout)) in your plan."
+        updatedNextSessionID = nextWorkout.id
+
+        // Then bring along the copies that live outside the store. Only this session
+        // changed, so only its Watch workout is replaced: this used to remove and
+        // re-schedule every remaining workout in the plan, one WorkoutKit call each,
+        // before the button would let go.
+        WidgetRefreshService.refresh(context: context, appSettings: appSettings)
+        if appSettings.morningReminderEnabled {
+            // Same identifier, so this replaces the reminder carrying the old targets.
+            try? await container.notificationService.scheduleMorningReminder(for: nextWorkout)
+        }
+        try? await container.healthKitRepository.syncWorkoutPlan(
+            for: nextWorkout,
+            unitPreference: appSettings.unitPreference
+        )
+        context.saveOrLog("the coach-adapted session's Watch workout id")
     }
 
     /// The soonest planned run the coach's feedback can be applied to.

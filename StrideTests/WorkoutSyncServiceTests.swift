@@ -86,6 +86,8 @@ final class MockHealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sen
 
     @MainActor func removeWorkoutPlans(for plan: TrainingPlan) async throws {}
 
+    @MainActor func syncWorkoutPlan(for workout: ScheduledWorkout, unitPreference: UnitPreference) async throws {}
+
     @MainActor
     func fetchImportableWorkouts(
         from startDate: Date,

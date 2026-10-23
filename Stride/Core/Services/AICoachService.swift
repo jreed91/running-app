@@ -370,7 +370,7 @@ struct AICoachService: Sendable {
                     useServerModel: provider.usesPrivateCloudCompute,
                     onPartialText: onPartialText
                 )
-                return makeInsight(from: structured, provider: provider)
+                return makeInsight(from: structured, provider: provider, unitPreference: unitPreference)
             } catch {
                 // Every failure lands on the local summary, so without this line a broken
                 // read and an unavailable model look the same from the outside.
@@ -382,17 +382,33 @@ struct AICoachService: Sendable {
         return localHeuristicInsight(context: context, provider: provider)
     }
 
-    private func makeInsight(from structured: AICoachStructuredResponse, provider: AIProvider) -> AICoachInsight {
-        AICoachInsight(
+    private func makeInsight(
+        from structured: AICoachStructuredResponse,
+        provider: AIProvider,
+        unitPreference: UnitPreference
+    ) -> AICoachInsight {
+        // The instructions' examples are written in kilometres, so a stray "per km" can
+        // reach a runner who reads miles; the prose fields are put into their unit here.
+        let prose = { (text: String) in CoachProseUnits.localized(text, to: unitPreference) }
+        let actionItems = structured.actionItems.prefix(3).map {
+            AICoachActionItem(
+                title: $0.title,
+                detail: prose($0.detail),
+                priority: $0.priority,
+                metric: $0.metric,
+                tone: $0.tone
+            )
+        }
+        return AICoachInsight(
             headline: structured.headline.isEmpty ? "\(provider.displayName) Analysis" : structured.headline,
-            summary: structured.summary,
-            fullAnalysis: structured.fullAnalysis,
+            summary: prose(structured.summary),
+            fullAnalysis: structured.fullAnalysis.map(prose),
             confidence: min(max(structured.confidence, 0), 100),
             evidence: Array(structured.evidence.prefix(3)),
-            actionItems: Array(structured.actionItems.prefix(3)),
+            actionItems: actionItems,
             focusAreas: structured.actionItems.map(\.title),
-            nextWorkoutSuggestion: structured.nextWorkout.title,
-            nextWorkoutRationale: structured.nextWorkout.rationale,
+            nextWorkoutSuggestion: prose(structured.nextWorkout.title),
+            nextWorkoutRationale: prose(structured.nextWorkout.rationale),
             apiReady: true
         )
     }
@@ -451,7 +467,7 @@ struct AICoachService: Sendable {
                 useServerModel: provider.usesPrivateCloudCompute
             )
             guard Self.isValidAdaptation(structured),
-                  let adapted = makeScheduledWorkout(from: structured, scheduled: scheduled) else {
+                  let adapted = makeScheduledWorkout(from: structured, scheduled: scheduled, unitPreference: unitPreference) else {
                 return nil
             }
             return adapted
@@ -498,7 +514,7 @@ struct AICoachService: Sendable {
             guard let id = UUID(uuidString: item.workoutID),
                   let original = adaptableWorkouts.first(where: { $0.id == id }),
                   Self.isValidAdaptation(item.adaptation),
-                  let adapted = makeScheduledWorkout(from: item.adaptation, scheduled: original) else {
+                  let adapted = makeScheduledWorkout(from: item.adaptation, scheduled: original, unitPreference: unitPreference) else {
                 continue
             }
             adaptedByID[id] = adapted
@@ -550,7 +566,8 @@ struct AICoachService: Sendable {
     @MainActor
     private func makeScheduledWorkout(
         from adaptation: AIWorkoutAdaptationResponse,
-        scheduled: ScheduledWorkout
+        scheduled: ScheduledWorkout,
+        unitPreference: UnitPreference
     ) -> ScheduledWorkout? {
         guard let responseType = Self.workoutType(from: adaptation.workoutType) else { return nil }
         let type = protectedWorkoutType(responseType, for: scheduled.workoutType)
@@ -561,7 +578,8 @@ struct AICoachService: Sendable {
             targetDistanceMeters: adaptation.targetDistanceMeters,
             targetPaceLowerBound: adaptation.targetPaceLowerBound,
             targetPaceUpperBound: adaptation.targetPaceUpperBound,
-            notes: adaptation.explanation
+            // The model writes this in kilometres, the unit of the numbers it worked in.
+            notes: CoachProseUnits.localized(adaptation.explanation, to: unitPreference)
         )
         // Deliberately NOT setting `adapted.week`: relating an unmanaged model to a
         // managed one auto-inserts it into the SwiftData context, persisting a phantom
