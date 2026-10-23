@@ -72,3 +72,30 @@ struct WorkoutKitFireDateTests {
         #expect((fire ?? .distantPast) > now)
     }
 }
+
+/// The ids the single-workout resync clears before it re-schedules the coach's edit.
+@MainActor
+struct WorkoutKitPlanIDTests {
+
+    @Test("A workout is found under its own id even after an edit cleared the recorded one")
+    func ownIDSurvivesAnEdit() {
+        let workout = ScheduledWorkout(scheduledDate: .now, workoutType: .easy, targetDistanceMeters: 5_000)
+        workout.healthKitPlanID = workout.id.uuidString
+
+        // What the coach's update does: it clears the recorded id, and the Watch still
+        // holds the old composition under the workout's own id.
+        workout.applyAdaptation(from: ScheduledWorkout(scheduledDate: .now, workoutType: .easy))
+
+        #expect(workout.healthKitPlanID == nil)
+        #expect(HealthKitRepository.workoutKitPlanIDs(for: workout) == [workout.id.uuidString])
+    }
+
+    @Test("An id recorded by an older sync is cleared too")
+    func recordedIDIsIncluded() {
+        let workout = ScheduledWorkout(scheduledDate: .now, workoutType: .tempo)
+        let legacy = UUID().uuidString
+        workout.healthKitPlanID = legacy
+
+        #expect(HealthKitRepository.workoutKitPlanIDs(for: workout) == [workout.id.uuidString, legacy])
+    }
+}

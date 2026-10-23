@@ -45,6 +45,10 @@ protocol HealthKitRepositoryProtocol: Sendable {
     @MainActor func syncWorkoutPlans(for plan: TrainingPlan, unitPreference: UnitPreference) async throws
     /// Removes all WorkoutKit scheduled compositions for the plan.
     @MainActor func removeWorkoutPlans(for plan: TrainingPlan) async throws
+    /// Re-schedules one workout's WorkoutKit composition after its prescription changed,
+    /// leaving the rest of the plan alone. Unlike ``syncWorkoutPlans(for:unitPreference:)``
+    /// this never asks for authorization: it is an edit, not a first sync.
+    @MainActor func syncWorkoutPlan(for workout: ScheduledWorkout, unitPreference: UnitPreference) async throws
     /// Fetches running workouts from HealthKit, converts them to RunWorkout models,
     /// and skips any whose HK UUID is already in `existingIDs`. `context` supplies the
     /// runner's paces and split unit; pass `.unknownRunner` when neither is known.
@@ -140,7 +144,7 @@ private final class HealthKitObserverCompletion: @unchecked Sendable {
     }
 }
 
-private enum HealthKitRepositoryError: LocalizedError {
+enum HealthKitRepositoryError: LocalizedError {
     case workoutKitUnsupported
     case workoutKitNotAuthorized
 

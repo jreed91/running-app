@@ -193,7 +193,8 @@ extension RunSummaryView {
                 }
             }
 
-            if hasAIKey, profiles.first != nil, let target = nextWorkoutForFeedback() {
+            if hasAIKey, profiles.first != nil, let target = nextWorkoutForFeedback(),
+               target.id != updatedNextSessionID {
                 Button {
                     Task { await applyNextSessionFeedback(insight) }
                 } label: {
