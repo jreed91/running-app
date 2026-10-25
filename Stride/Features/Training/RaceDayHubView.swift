@@ -68,7 +68,10 @@ struct RaceDayHubView: View {
 
     private func content(_ racePlan: RaceDayPlan) -> some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            // Two columns on a wide page (iPhone Duo open, in landscape): the race and the
+            // goals on the leading side, the plan for the day on the trailing side. One
+            // column is the old order.
+            StrideColumns(spacing: 20) {
                 header(racePlan)
 
                 if let result = racePlan.result {
@@ -78,7 +81,7 @@ struct RaceDayHubView: View {
                 if !racePlan.goals.isEmpty {
                     goalLadder(racePlan)
                 }
-
+            } trailing: {
                 if showsBriefing(racePlan) {
                     RaceBriefingCard(wording: currentBriefing(racePlan))
                 }
@@ -96,7 +99,7 @@ struct RaceDayHubView: View {
                 }
             }
             .padding()
-            .strideReadableWidth()
+            .strideReadableWidth(hasColumns: true)
         }
         .task(id: briefingRequestKey(racePlan)) { await refreshBriefing(racePlan) }
     }

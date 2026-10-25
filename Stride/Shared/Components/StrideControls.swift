@@ -259,8 +259,12 @@ extension View {
     /// the page's own ground. Apply it to the stack inside a `ScrollView`, after its
     /// padding, rather than to the `ScrollView`: the scroll view keeps the full width, so
     /// the page can still be dragged from its margins and the indicator stays at the edge.
-    func strideReadableWidth() -> some View {
-        frame(maxWidth: StrideLayout.readableWidth)
+    ///
+    /// `hasColumns`: the page lays its cards out with `StrideColumns`, so it may grow to
+    /// two columns' width. Below that it is one column, which is never wider than the
+    /// one-column cap anyway.
+    func strideReadableWidth(hasColumns: Bool = false) -> some View {
+        frame(maxWidth: hasColumns ? StrideColumnsLayout.maximumWidth : StrideLayout.readableWidth)
             .frame(maxWidth: .infinity)
     }
 }

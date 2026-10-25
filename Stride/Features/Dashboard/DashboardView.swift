@@ -409,7 +409,11 @@ struct DashboardView: View {
                 VStack(spacing: 0) {
                     WeekCalendarView(activePlan: activePlan, selectedDate: $selectedDate)
 
-                    VStack(alignment: .leading, spacing: AppSpacing.lg) {
+                    // Two columns when the page is wide enough (iPhone Duo open, in
+                    // landscape): what's on (today, alerts, the race, what's next) on the
+                    // leading side; how the week is going and the ways to start on the
+                    // trailing side. One column is the same order as always.
+                    StrideColumns(spacing: AppSpacing.lg) {
                         // Today first: the screen used to open on a week readout and up to
                         // three alert cards before it got to the run. The selected day's
                         // session, with its Start button, is now what Home leads with.
@@ -430,6 +434,7 @@ struct DashboardView: View {
                             nextUpSection(session)
                                 .dashboardEntrance(appeared: dashboardAppeared, delay: 0.1)
                         }
+                    } trailing: {
                         weekSummaryCard
                             .dashboardEntrance(appeared: dashboardAppeared, delay: 0.12)
                         if !coachCards.isEmpty {
@@ -445,7 +450,7 @@ struct DashboardView: View {
                     .padding(.horizontal, AppSpacing.lg)
                     .padding(.vertical, AppSpacing.lg)
                 }
-                .strideReadableWidth()
+                .strideReadableWidth(hasColumns: true)
             }
             .task { dashboardAppeared = true }
             .background(Color.surfacePrimary)
