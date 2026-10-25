@@ -3,7 +3,7 @@ import SwiftData
 
 // MARK: - History Entry (merges run + strength)
 
-private enum HistoryEntry: Identifiable {
+private enum HistoryEntry: Identifiable, Hashable {
     case run(RunWorkout)
     case strength(StrengthWorkout)
 
@@ -20,12 +20,21 @@ private enum HistoryEntry: Identifiable {
         case .strength(let w): return w.date
         }
     }
+
+    // Equal by `id` rather than by the models' identity, so a selection survives the list
+    // re-fetching (a page loaded, a sync landed) and still matches its row.
+    static func == (lhs: HistoryEntry, rhs: HistoryEntry) -> Bool { lhs.id == rhs.id }
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
 
 // MARK: - HistoryView
 
 struct HistoryView: View {
     @Environment(AppContainer.self) private var container
+    /// Read here, outside the split view, because a split view's sidebar column is compact
+    /// even when the window is wide. Regular means the list and the detail are both on
+    /// screen (iPhone Duo open), which is when the detail should never sit empty.
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     @State private var isSyncing = false
     /// How many entries the list is currently showing. Held here, and passed *into* the
@@ -38,14 +47,21 @@ struct HistoryView: View {
     @State private var searchText = ""
     /// Date range and minimum distance, applied the same way and for the same reason.
     @State private var filter = HistoryFilter()
+    /// The workout in the detail column. A split view rather than a stack so that on
+    /// iPhone Duo's inner display the list stays beside the run being read; in compact
+    /// width (every other iPhone, and the Duo closed) it collapses to the same push as
+    /// before, and a run open when the phone folds stays open.
+    @State private var selection: HistoryEntry?
 
     var body: some View {
-        NavigationStack {
+        NavigationSplitView {
             HistoryEntryList(
                 limit: displayLimit,
                 searchText: searchText,
                 filter: filter,
                 isSyncing: isSyncing,
+                selection: $selection,
+                selectsNewest: horizontalSizeClass == .regular,
                 clearFilter: { filter = HistoryFilter() },
                 syncNow: { await syncRecentHealthKitWorkouts() }
             ) {
@@ -82,6 +98,12 @@ struct HistoryView: View {
             }
             .task {
                 await syncRecentHealthKitWorkouts()
+            }
+        } detail: {
+            // A stack of its own, so a run's pages and links push inside the detail column
+            // instead of replacing it.
+            NavigationStack {
+                HistoryEntryDetail(entry: selection)
             }
         }
     }
@@ -200,6 +222,11 @@ private struct HistoryEntryList: View {
     private let searchTerm: String
     private let filter: HistoryFilter
     private let isSyncing: Bool
+    @Binding private var selection: HistoryEntry?
+    /// Whether an empty selection should fall to the newest workout. Only when the detail
+    /// column is on screen: in compact width a selection *is* a push, so choosing one here
+    /// would open a run the moment the tab appeared.
+    private let selectsNewest: Bool
     private let clearFilter: () -> Void
     /// Runs the same importer as pull-to-refresh, so the empty state can offer the action it
     /// names instead of only describing it (S6).
@@ -220,6 +247,8 @@ private struct HistoryEntryList: View {
         searchText: String,
         filter: HistoryFilter,
         isSyncing: Bool,
+        selection: Binding<HistoryEntry?>,
+        selectsNewest: Bool,
         clearFilter: @escaping () -> Void,
         syncNow: @escaping () async -> Void,
         loadMore: @escaping () -> Void
@@ -227,6 +256,8 @@ private struct HistoryEntryList: View {
         self.limit = limit
         self.filter = filter
         self.isSyncing = isSyncing
+        self._selection = selection
+        self.selectsNewest = selectsNewest
         self.clearFilter = clearFilter
         self.syncNow = syncNow
         self.loadMore = loadMore
@@ -311,7 +342,7 @@ private struct HistoryEntryList: View {
     }
 
     var body: some View {
-        List {
+        List(selection: $selection) {
             // The month at a glance, as Plan and Progress open with their hero. Only on the
             // unfiltered list: under a search or filter the totals would describe rows the
             // runner can't see.
@@ -353,6 +384,14 @@ private struct HistoryEntryList: View {
         }
         .strideList()
         .overlay { emptyStateOverlay }
+        // A deleted or filtered-out workout can't stay in the detail column: from the list
+        // or from the run's own Delete, which can't pop a split view's root.
+        .onChange(of: displayedEntries.map(\.id), initial: true) { _, ids in
+            reconcileSelection(with: ids)
+        }
+        .onChange(of: selectsNewest) { _, _ in
+            reconcileSelection(with: displayedEntries.map(\.id))
+        }
         .confirmationDialog(
             "Delete this workout?",
             isPresented: Binding(
@@ -448,17 +487,27 @@ private struct HistoryEntryList: View {
     private func entryRow(for entry: HistoryEntry, index: Int) -> some View {
         switch entry {
         case .run(let workout):
-            NavigationLink { RunSummaryView(workout: workout) } label: {
+            // A value link, so the list's selection drives the detail column.
+            NavigationLink(value: entry) {
                 WorkoutRowView(workout: workout)
             }
             // `StrideUITests.testBreakdownRowOpensItsPage` opens the newest run by this.
             .accessibilityIdentifier("history.run")
             .onAppear { loadMoreIfNeeded(index: index) }
         case .strength(let workout):
-            NavigationLink { StrengthSummaryView(workout: workout) } label: {
+            NavigationLink(value: entry) {
                 StrengthWorkoutRowView(workout: workout)
             }
             .onAppear { loadMoreIfNeeded(index: index) }
+        }
+    }
+
+    private func reconcileSelection(with ids: [String]) {
+        if let selected = selection, !ids.contains(selected.id) {
+            selection = nil
+        }
+        if selection == nil, selectsNewest {
+            selection = displayedEntries.first
         }
     }
 
@@ -494,6 +543,39 @@ private struct HistoryEntryList: View {
         }
         if let failure {
             deleteErrorMessage = failure.localizedDescription
+        }
+    }
+}
+
+// MARK: - HistoryEntryDetail
+
+/// The split view's detail column: the selected workout, or a prompt to pick one.
+private struct HistoryEntryDetail: View {
+    let entry: HistoryEntry?
+
+    var body: some View {
+        // `isDeleted`: the run's own Delete can't pop a split view's root, so for the
+        // moment between the delete and the list clearing its selection the detail would
+        // otherwise read a model that has gone.
+        switch entry {
+        case .run(let workout) where !workout.isDeleted:
+            // Keyed by the entry, so a newly picked run opens on its summary rather than
+            // on whichever Breakdown page the last one was left on.
+            RunSummaryView(workout: workout)
+                .id(entry?.id)
+        case .strength(let workout) where !workout.isDeleted:
+            StrengthSummaryView(workout: workout)
+                .id(entry?.id)
+        default:
+            StrideEmptyState(
+                "Pick a workout",
+                systemImage: "figure.run.circle",
+                description: Text("Choose a run or a session from the list to read it here.")
+            ) {
+                EmptyView()
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.surfacePrimary)
         }
     }
 }
