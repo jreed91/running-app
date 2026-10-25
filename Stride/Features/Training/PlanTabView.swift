@@ -6,6 +6,9 @@ import SwiftData
 struct PlanTabView: View {
     @Environment(AppSettings.self) private var appSettings
     @Environment(AppContainer.self) private var container
+    /// Read here, outside the split view, whose columns are compact even when the window
+    /// is wide.
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.modelContext) private var context
 
     @Query(filter: #Predicate<TrainingPlan> { $0.isActive == true })
@@ -24,6 +27,39 @@ struct PlanTabView: View {
     /// The session a week row's tap opens. One destination for the whole tab rather than a
     /// `NavigationLink` per row: a link inside the reorder container would claim the drag.
     @State private var selectedWorkout: ScheduledWorkout?
+    /// The plan's other pages, when one is open in the detail column. In a stack they are
+    /// ordinary pushes and this stays nil.
+    @State private var openPage: PlanPage?
+    /// The tab's width and, on iPhone Duo, where its fold is.
+    @State private var space = PlanSpace()
+
+    private enum PlanPage: Hashable {
+        case raceDay, paceInsights, planHistory
+    }
+
+    private struct PlanSpace: Equatable {
+        var width: CGFloat = 0
+        /// The leading edge of a fold running top to bottom, inactive ones included.
+        var foldMinX: CGFloat?
+    }
+
+    /// The plan on one side and a session on the other: iPhone Duo open in landscape. It
+    /// takes regular width *and* room for two phone-width columns, by the same rule as
+    /// `StrideColumns`, so the Duo in portrait keeps the push it has on every other iPhone
+    /// rather than squeezing the plan into a sidebar.
+    private var showsDetailColumn: Bool {
+        horizontalSizeClass == .regular
+            && activePlan != nil
+            && space.width >= StrideColumnsLayout.minimumColumnWidth * 2
+    }
+
+    /// The plan column's width: up to the fold, so each column has one side of it, or
+    /// half the width without one.
+    private var planColumnWidth: CGFloat {
+        let minimum = StrideColumnsLayout.minimumColumnWidth
+        let width = space.foldMinX ?? space.width / 2
+        return min(max(width, minimum), space.width - minimum)
+    }
 
     private var activePlan: TrainingPlan? { activePlans.first }
 
@@ -50,157 +86,262 @@ struct PlanTabView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if let plan = activePlan {
-                    ScrollView {
-                        VStack(spacing: AppSpacing.xl) {
-                            // The plan is built toward a race date and, until now, never
-                            // said anything else about it. This is the whole season's
-                            // countdown, so it sits here rather than on the dashboard,
-                            // which only carries it once the race is close (A10).
-                            let racePlan = raceDayPlan(for: plan)
-                            if let racePlan {
-                                NavigationLink {
-                                    RaceDayHubView()
-                                } label: {
-                                    RaceCountdownCard(
-                                        racePlan: racePlan,
-                                        unit: appSettings.unitPreference
-                                    )
-                                }
-                                .buttonStyle(.plain)
-                            }
-
-                            // Below the race: when there is one, the countdown is the
-                            // screen's hero and leads it, and this card is the progress.
-                            // The countdown already names the race and its goal, so the overview
-                            // then only says what the plan is.
-                            PlanOverviewCard(plan: plan, isHero: racePlan == nil)
-
-                            // This week comes straight after the overview, opened up: it is
-                            // what the runner acts on. The rest of the season sits below it,
-                            // collapsed, rather than leading with a list of every week.
-                            let sortedWeeks = (plan.weeks ?? []).sorted { $0.weekNumber < $1.weekNumber }
-                            let currentWeekID = plan.currentWeek?.id
-                            if let thisWeek = sortedWeeks.first(where: { $0.id == currentWeekID }) {
-                                sectionEyebrow("THIS WEEK")
-                                PlanWeekSummaryRow(
-                                    week: thisWeek,
-                                    currentWeekID: currentWeekID,
-                                    startsExpanded: true
-                                ) { workout in
-                                    selectedWorkout = workout
-                                }
-                            }
-
-                            // Smart Adapt and Pace Insights are both VDOT machinery, and a
-                            // pregnancy plan has no pace targets to insight about and is not
-                            // the coach's to rewrite (`AdaptableWorkoutSelector` already
-                            // returns nothing for one). Showing a permanently-empty card
-                            // instead of the guidance that does apply would be worse than
-                            // showing neither.
-                            if plan.isPregnancyPlan {
-                                PregnancyPlanGuidanceCard(plan: plan)
-                            } else {
-                                SmartAdaptPlanCard(
-                                    workoutCount: remainingAdaptableWorkouts(in: plan).count,
-                                    isAdapting: isAdaptingPlan,
-                                    progress: smartAdaptProgress,
-                                    unavailableReason: smartAdaptUnavailableReason(for: plan)
-                                ) {
-                                    adaptTask?.cancel()
-                                    adaptTask = Task { await adaptRemainingWorkouts(in: plan) }
-                                }
-
-                                // The finish estimate and training paces used to fill a card
-                                // here on every visit; they are a reference, so one row opens
-                                // them on their own page.
-                                // A value destination, built in this body: the page reads this
-                                // view's `@Query` results, which a closure destination would
-                                // read later, outside the body.
-                                NavigationLink(destination: paceInsightsPage(plan: plan)) {
-                                    PaceInsightsRow()
-                                }
-                                .buttonStyle(.plain)
-                                .accessibilityIdentifier("plan.paceInsightsRow")
-                            }
-
-                            // Route Genius moved to Home, beside the run button, where a
-                            // route is wanted.
-
-                            let otherWeeks = sortedWeeks.filter { $0.id != currentWeekID }
-                            if !otherWeeks.isEmpty {
-                                // "All weeks" once this week is pulled out above; a plan that
-                                // has not started has no current week, so it is every week.
-                                let weeksTitle: LocalizedStringKey = currentWeekID == nil ? "TRAINING WEEKS" : "ALL WEEKS"
-                                sectionEyebrow(weeksTitle)
-                                    .accessibilityIdentifier("plan.weeksHeader")
-
-                                LazyVStack(spacing: AppSpacing.md) {
-                                    ForEach(otherWeeks) { week in
-                                        PlanWeekSummaryRow(
-                                            week: week,
-                                            currentWeekID: currentWeekID
-                                        ) { workout in
-                                            selectedWorkout = workout
-                                        }
-                                    }
-                                }
-                            }
+        Group {
+            if showsDetailColumn {
+                NavigationSplitView {
+                    planPage
+                        .navigationSplitViewColumnWidth(planColumnWidth)
+                        // The plan is the tab; it isn't put away to read a session.
+                        .toolbar(removing: .sidebarToggle)
+                } detail: {
+                    NavigationStack {
+                        detailColumn
+                    }
+                    // A newly picked session or page opens at its top, not on whatever
+                    // the last one had pushed.
+                    .id(detailID)
+                }
+                .navigationSplitViewStyle(.balanced)
+            } else {
+                NavigationStack {
+                    planPage
+                        .navigationDestination(item: $selectedWorkout) { workout in
+                            WorkoutDetailView(workout: workout)
                         }
-                        .padding()
-                        .strideReadableWidth()
-                    }
-                } else {
-                    StrideEmptyState(
-                        "No Active Plan",
-                        systemImage: "calendar.badge.plus",
-                        description: Text("Tap + to generate a personalised training plan.")
-                    )
                 }
             }
-            // The page's own ground, as on Home and Progress. Without it the tab drew the
-            // system background, so its white cards sat on white (and ink cards on black).
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color.surfacePrimary)
-            .navigationTitle("My Plan")
-            .navigationDestination(item: $selectedWorkout) { workout in
-                WorkoutDetailView(workout: workout)
+        }
+        .onGeometryChange(for: PlanSpace.self) { proxy in
+            var space = PlanSpace(width: proxy.size.width)
+            if #available(iOS 27.1, *) {
+                space.foldMinX = proxy
+                    .reservedRegions(kind: .division, options: .includeInactive)
+                    .first { $0.frame.height > $0.frame.width }?
+                    .frame.minX
             }
-            // A morning-reminder tap names the session the banner was about. `initial` covers
-            // the cold launch, where this tab is built after the request was made.
-            .onChange(of: container.appNavigation.requestedScheduledWorkoutID, initial: true) { _, id in
-                guard let id else { return }
-                container.appNavigation.requestedScheduledWorkoutID = nil
-                if let workout = scheduledWorkout(id: id) {
-                    selectedWorkout = workout
-                }
-            }
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    NavigationLink {
-                        TrainingPlanListView()
-                    } label: {
-                        // Not the History tab's clock: this is past plans, not past runs.
-                        Label("Plan History", systemImage: "list.bullet.rectangle")
-                    }
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    NewPlanMenu(
-                        showsTrainingPlan: $showNewPlanSheet,
-                        showsPregnancyPlan: $showPregnancyPlanSheet
-                    )
-                    .disabled(profiles.isEmpty)
-                }
-            }
-            .newPlanSheets(training: $showNewPlanSheet, pregnancy: $showPregnancyPlanSheet)
+            return space
+        } action: { newSpace in
+            space = newSpace
         }
         .onDisappear {
             // Stop adapting if the user leaves the tab so the fire-and-forget task
             // can't keep mutating and re-syncing a plan that's no longer on screen
             // (or has since been deleted) (M37).
             adaptTask?.cancel()
+        }
+    }
+
+    /// The plan: the whole tab in a stack, the leading column beside a session.
+    private var planPage: some View {
+        Group {
+            if let plan = activePlan {
+                ScrollView {
+                    VStack(spacing: AppSpacing.xl) {
+                        // The plan is built toward a race date and, until now, never
+                        // said anything else about it. This is the whole season's
+                        // countdown, so it sits here rather than on the dashboard,
+                        // which only carries it once the race is close (A10).
+                        let racePlan = raceDayPlan(for: plan)
+                        if let racePlan {
+                            pageLink(to: .raceDay) {
+                                RaceDayHubView()
+                            } label: {
+                                RaceCountdownCard(
+                                    racePlan: racePlan,
+                                    unit: appSettings.unitPreference
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                        // Below the race: when there is one, the countdown is the
+                        // screen's hero and leads it, and this card is the progress.
+                        // The countdown already names the race and its goal, so the overview
+                        // then only says what the plan is.
+                        PlanOverviewCard(plan: plan, isHero: racePlan == nil)
+
+                        // This week comes straight after the overview, opened up: it is
+                        // what the runner acts on. The rest of the season sits below it,
+                        // collapsed, rather than leading with a list of every week.
+                        let sortedWeeks = (plan.weeks ?? []).sorted { $0.weekNumber < $1.weekNumber }
+                        let currentWeekID = plan.currentWeek?.id
+                        if let thisWeek = sortedWeeks.first(where: { $0.id == currentWeekID }) {
+                            sectionEyebrow("THIS WEEK")
+                            PlanWeekSummaryRow(
+                                week: thisWeek,
+                                currentWeekID: currentWeekID,
+                                startsExpanded: true
+                            ) { workout in
+                                open(workout)
+                            }
+                        }
+
+                        // Smart Adapt and Pace Insights are both VDOT machinery, and a
+                        // pregnancy plan has no pace targets to insight about and is not
+                        // the coach's to rewrite (`AdaptableWorkoutSelector` already
+                        // returns nothing for one). Showing a permanently-empty card
+                        // instead of the guidance that does apply would be worse than
+                        // showing neither.
+                        if plan.isPregnancyPlan {
+                            PregnancyPlanGuidanceCard(plan: plan)
+                        } else {
+                            SmartAdaptPlanCard(
+                                workoutCount: remainingAdaptableWorkouts(in: plan).count,
+                                isAdapting: isAdaptingPlan,
+                                progress: smartAdaptProgress,
+                                unavailableReason: smartAdaptUnavailableReason(for: plan)
+                            ) {
+                                adaptTask?.cancel()
+                                adaptTask = Task { await adaptRemainingWorkouts(in: plan) }
+                            }
+
+                            // The finish estimate and training paces used to fill a card
+                            // here on every visit; they are a reference, so one row opens
+                            // them on their own page.
+                            // A value destination, built in this body: the page reads this
+                            // view's `@Query` results, which a closure destination would
+                            // read later, outside the body.
+                            pageLink(to: .paceInsights) {
+                                paceInsightsPage(plan: plan)
+                            } label: {
+                                PaceInsightsRow()
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("plan.paceInsightsRow")
+                        }
+
+                        // Route Genius moved to Home, beside the run button, where a
+                        // route is wanted.
+
+                        let otherWeeks = sortedWeeks.filter { $0.id != currentWeekID }
+                        if !otherWeeks.isEmpty {
+                            // "All weeks" once this week is pulled out above; a plan that
+                            // has not started has no current week, so it is every week.
+                            let weeksTitle: LocalizedStringKey = currentWeekID == nil ? "TRAINING WEEKS" : "ALL WEEKS"
+                            sectionEyebrow(weeksTitle)
+                                .accessibilityIdentifier("plan.weeksHeader")
+
+                            LazyVStack(spacing: AppSpacing.md) {
+                                ForEach(otherWeeks) { week in
+                                    PlanWeekSummaryRow(
+                                        week: week,
+                                        currentWeekID: currentWeekID
+                                    ) { workout in
+                                        open(workout)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding()
+                    .strideReadableWidth()
+                }
+            } else {
+                StrideEmptyState(
+                    "No Active Plan",
+                    systemImage: "calendar.badge.plus",
+                    description: Text("Tap + to generate a personalised training plan.")
+                )
+            }
+        }
+        // The page's own ground, as on Home and Progress. Without it the tab drew the
+        // system background, so its white cards sat on white (and ink cards on black).
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.surfacePrimary)
+        .navigationTitle("My Plan")
+        // A morning-reminder tap names the session the banner was about. `initial` covers
+        // the cold launch, where this tab is built after the request was made.
+        .onChange(of: container.appNavigation.requestedScheduledWorkoutID, initial: true) { _, id in
+            guard let id else { return }
+            container.appNavigation.requestedScheduledWorkoutID = nil
+            if let workout = scheduledWorkout(id: id) {
+                open(workout)
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                pageLink(to: .planHistory) {
+                    TrainingPlanListView()
+                } label: {
+                    // Not the History tab's clock: this is past plans, not past runs.
+                    Label("Plan History", systemImage: "list.bullet.rectangle")
+                }
+            }
+            ToolbarItem(placement: .primaryAction) {
+                NewPlanMenu(
+                    showsTrainingPlan: $showNewPlanSheet,
+                    showsPregnancyPlan: $showPregnancyPlanSheet
+                )
+                .disabled(profiles.isEmpty)
+            }
+        }
+        .newPlanSheets(training: $showNewPlanSheet, pregnancy: $showPregnancyPlanSheet)
+    }
+
+    // MARK: Detail column
+
+    /// What sits beside the plan: an open page, else the picked session, else the one the
+    /// runner is most likely to do next (the session Home's Up Next and the widget show).
+    /// The fallback is never written into `selectedWorkout`, so folding the phone doesn't
+    /// push a session nobody opened.
+    @ViewBuilder
+    private var detailColumn: some View {
+        if let openPage {
+            switch openPage {
+            case .raceDay:
+                RaceDayHubView()
+            case .paceInsights:
+                if let plan = activePlan {
+                    paceInsightsPage(plan: plan)
+                }
+            case .planHistory:
+                TrainingPlanListView()
+            }
+        } else if let workout = detailWorkout {
+            WorkoutDetailView(workout: workout)
+        } else {
+            StrideEmptyState(
+                "Pick a session",
+                systemImage: "calendar",
+                description: Text("Tap a session in your plan to see it here.")
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.surfacePrimary)
+        }
+    }
+
+    private var detailWorkout: ScheduledWorkout? {
+        selectedWorkout ?? WidgetSnapshotBuilder.nextScheduledWorkout(in: activePlan)
+    }
+
+    private var detailID: String {
+        if let openPage { return "\(openPage)" }
+        return detailWorkout?.id.uuidString ?? "none"
+    }
+
+    /// Opens a session: pushed in a stack, beside the plan in a split view.
+    private func open(_ workout: ScheduledWorkout) {
+        openPage = nil
+        selectedWorkout = workout
+    }
+
+    /// A link to one of the plan's pages: a push in a stack, the detail column beside the
+    /// plan. Not a `NavigationLink` there, which would replace the detail column's stack
+    /// and leave `selectedWorkout` with nowhere to show.
+    @ViewBuilder
+    private func pageLink<Destination: View, LinkLabel: View>(
+        to page: PlanPage,
+        @ViewBuilder destination: () -> Destination,
+        @ViewBuilder label: () -> LinkLabel
+    ) -> some View {
+        if showsDetailColumn {
+            Button {
+                openPage = page
+            } label: {
+                label()
+            }
+        } else {
+            NavigationLink(destination: destination(), label: label)
         }
     }
 
