@@ -371,32 +371,39 @@ struct RunSummaryView: View {
         // then the one thing the screen asks of the runner, then the route, the
         // coach's headline, and a list of everything else. Each long reading opens
         // as its own page so this scroll stays short.
-        titleBlock
-        // A walk is not training, so there is nothing for its rating to adjust. The
-        // rating is read against a *run's* intended type, so not a ride either (B8).
-        if workout.countsAsRunning {
-            feelSection
-        }
-        routeMap
-        // The coach and the pace read are both written against the runner's
-        // training paces, which say nothing about a walk. Absent rather than
-        // shown empty: an insight on a walk is not a smaller insight, it is one
-        // about the wrong thing. The same holds for a ride or a swim (B8).
-        if workout.countsAsRunning {
-            coachSummaryCard
-        }
-        breakdownSection
-            .id(Self.breakdownAnchor)
-        // A walk can never fulfil a planned session, so the screen does not offer
-        // to link one — the same rule the importer's linker applies (N38). The sheet
-        // lists run days only, so it is not offered for cross-training either (B8).
-        if workout.scheduledWorkout == nil, workout.countsAsRunning {
-            linkToPlannedWorkoutButton
-        }
-        weatherSection
-        // Shoes are for running; a ride or a swim has none to pick (B8).
-        if !workout.isCrossTraining {
-            RunShoeRow(workout: workout)
+        // Two columns when opened full width on a wide page (iPhone Duo open, in
+        // landscape): the run and its route on the leading side, what to make of it on
+        // the trailing side. As History's detail column it is too narrow for two, and one
+        // column is the old order.
+        StrideColumns(spacing: AppSpacing.md) {
+            titleBlock
+            // A walk is not training, so there is nothing for its rating to adjust. The
+            // rating is read against a *run's* intended type, so not a ride either (B8).
+            if workout.countsAsRunning {
+                feelSection
+            }
+            routeMap
+        } trailing: {
+            // The coach and the pace read are both written against the runner's
+            // training paces, which say nothing about a walk. Absent rather than
+            // shown empty: an insight on a walk is not a smaller insight, it is one
+            // about the wrong thing. The same holds for a ride or a swim (B8).
+            if workout.countsAsRunning {
+                coachSummaryCard
+            }
+            breakdownSection
+                .id(Self.breakdownAnchor)
+            // A walk can never fulfil a planned session, so the screen does not offer
+            // to link one — the same rule the importer's linker applies (N38). The sheet
+            // lists run days only, so it is not offered for cross-training either (B8).
+            if workout.scheduledWorkout == nil, workout.countsAsRunning {
+                linkToPlannedWorkoutButton
+            }
+            weatherSection
+            // Shoes are for running; a ride or a swim has none to pick (B8).
+            if !workout.isCrossTraining {
+                RunShoeRow(workout: workout)
+            }
         }
     }
 
@@ -416,7 +423,7 @@ struct RunSummaryView: View {
                 }
                 .padding(.horizontal, AppSpacing.lg)
                 .padding(.bottom, AppSpacing.xxxl)
-                .strideReadableWidth()
+                .strideReadableWidth(hasColumns: openPage == nil)
                 .id(Self.topAnchor)
             }
             .onChange(of: openPage) { _, page in

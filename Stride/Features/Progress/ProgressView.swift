@@ -101,51 +101,65 @@ struct ProgressDashboardView: View {
                 } else if selectedTab == .stats {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 16) {
-                            summaryHeader
-                                .opacity(progressAppeared ? 1 : 0)
-                                .scaleEffect(progressAppeared ? 1 : 0.94, anchor: .top)
-                                .adaptiveAnimation(AppAnimation.entrance.delay(0.05), value: progressAppeared)
-                            // Above the range picker because it ignores it: the week is
-                            // the week, whatever period the charts below are showing.
-                            WeekReviewCard(runs: workouts)
-                                .opacity(progressAppeared ? 1 : 0)
-                                .offset(y: progressAppeared ? 0 : 10)
-                                .adaptiveAnimation(AppAnimation.entrance.delay(0.08), value: progressAppeared)
+                            // Pairs, so on a wide page (iPhone Duo open, in landscape) the charts
+                            // read as a grid with the gap on the fold. One column keeps the old order.
+                            StrideColumns(spacing: 16) {
+                                summaryHeader
+                                    .opacity(progressAppeared ? 1 : 0)
+                                    .scaleEffect(progressAppeared ? 1 : 0.94, anchor: .top)
+                                    .adaptiveAnimation(AppAnimation.entrance.delay(0.05), value: progressAppeared)
+                            } trailing: {
+                                // Above the range picker because it ignores it: the week is
+                                // the week, whatever period the charts below are showing.
+                                WeekReviewCard(runs: workouts)
+                                    .opacity(progressAppeared ? 1 : 0)
+                                    .offset(y: progressAppeared ? 0 : 10)
+                                    .adaptiveAnimation(AppAnimation.entrance.delay(0.08), value: progressAppeared)
+                            }
                             rangePicker
                                 .opacity(progressAppeared ? 1 : 0)
                                 .offset(y: progressAppeared ? 0 : 10)
                                 .adaptiveAnimation(AppAnimation.entrance.delay(0.10), value: progressAppeared)
-                            weeklyVolumeChart
-                                .opacity(progressAppeared ? 1 : 0)
-                                .offset(y: progressAppeared ? 0 : 18)
-                                .adaptiveAnimation(AppAnimation.entrance.delay(0.15), value: progressAppeared)
-                            paceProgressChart
-                                .opacity(progressAppeared ? 1 : 0)
-                                .offset(y: progressAppeared ? 0 : 18)
-                                .adaptiveAnimation(AppAnimation.entrance.delay(0.20), value: progressAppeared)
-                            heartRateTrendChart
-                                .opacity(progressAppeared ? 1 : 0)
-                                .offset(y: progressAppeared ? 0 : 18)
-                                .adaptiveAnimation(AppAnimation.entrance.delay(0.25), value: progressAppeared)
-                            heartRateZoneChart
-                                .opacity(progressAppeared ? 1 : 0)
-                                .offset(y: progressAppeared ? 0 : 18)
-                                .adaptiveAnimation(AppAnimation.entrance.delay(0.28), value: progressAppeared)
-                            elevationTrendChart
-                                .opacity(progressAppeared ? 1 : 0)
-                                .offset(y: progressAppeared ? 0 : 18)
-                                .adaptiveAnimation(AppAnimation.entrance.delay(0.30), value: progressAppeared)
-                            vo2MaxTrendChart
-                                .opacity(progressAppeared ? 1 : 0)
-                                .offset(y: progressAppeared ? 0 : 18)
-                                .adaptiveAnimation(AppAnimation.entrance.delay(0.35), value: progressAppeared)
+                            StrideColumns(spacing: 16) {
+                                weeklyVolumeChart
+                                    .opacity(progressAppeared ? 1 : 0)
+                                    .offset(y: progressAppeared ? 0 : 18)
+                                    .adaptiveAnimation(AppAnimation.entrance.delay(0.15), value: progressAppeared)
+                            } trailing: {
+                                paceProgressChart
+                                    .opacity(progressAppeared ? 1 : 0)
+                                    .offset(y: progressAppeared ? 0 : 18)
+                                    .adaptiveAnimation(AppAnimation.entrance.delay(0.20), value: progressAppeared)
+                            }
+                            StrideColumns(spacing: 16) {
+                                heartRateTrendChart
+                                    .opacity(progressAppeared ? 1 : 0)
+                                    .offset(y: progressAppeared ? 0 : 18)
+                                    .adaptiveAnimation(AppAnimation.entrance.delay(0.25), value: progressAppeared)
+                            } trailing: {
+                                heartRateZoneChart
+                                    .opacity(progressAppeared ? 1 : 0)
+                                    .offset(y: progressAppeared ? 0 : 18)
+                                    .adaptiveAnimation(AppAnimation.entrance.delay(0.28), value: progressAppeared)
+                            }
+                            StrideColumns(spacing: 16) {
+                                elevationTrendChart
+                                    .opacity(progressAppeared ? 1 : 0)
+                                    .offset(y: progressAppeared ? 0 : 18)
+                                    .adaptiveAnimation(AppAnimation.entrance.delay(0.30), value: progressAppeared)
+                            } trailing: {
+                                vo2MaxTrendChart
+                                    .opacity(progressAppeared ? 1 : 0)
+                                    .offset(y: progressAppeared ? 0 : 18)
+                                    .adaptiveAnimation(AppAnimation.entrance.delay(0.35), value: progressAppeared)
+                            }
                             periodSummaryCard
                                 .opacity(progressAppeared ? 1 : 0)
                                 .offset(y: progressAppeared ? 0 : 18)
                                 .adaptiveAnimation(AppAnimation.entrance.delay(0.40), value: progressAppeared)
                         }
                         .padding()
-                        .strideReadableWidth()
+                        .strideReadableWidth(hasColumns: true)
                         .task { progressAppeared = true }
                         .task(id: selectedRange) { await backfillHeartRateSamples() }
                     }
