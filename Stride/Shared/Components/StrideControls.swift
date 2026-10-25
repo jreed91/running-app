@@ -242,6 +242,29 @@ private struct StrideFieldModifier: ViewModifier {
     }
 }
 
+// MARK: Page width
+
+/// The widest a scrolling page's column of cards gets, padding included. Every iPhone
+/// screen in portrait is narrower than this, so it changes nothing there. It exists for
+/// iPhone Duo: the inner display is regular width in both orientations and about 950pt
+/// across in landscape, where a full-width card turns a one-line headline into a long
+/// thin strip and puts a card's leading label and trailing figure a hand-span apart.
+/// 700 keeps the text column near UIKit's readable width at the default text size.
+enum StrideLayout {
+    static let readableWidth: CGFloat = 700
+}
+
+extension View {
+    /// Caps a page's content column at `StrideLayout.readableWidth` and centres it, on
+    /// the page's own ground. Apply it to the stack inside a `ScrollView`, after its
+    /// padding, rather than to the `ScrollView`: the scroll view keeps the full width, so
+    /// the page can still be dragged from its margins and the indicator stays at the edge.
+    func strideReadableWidth() -> some View {
+        frame(maxWidth: StrideLayout.readableWidth)
+            .frame(maxWidth: .infinity)
+    }
+}
+
 // MARK: Lists, forms and sheets
 
 /// Puts a `List` or `Form` on the page's ground. Without it, a grouped list draws the

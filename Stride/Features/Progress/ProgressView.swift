@@ -145,7 +145,7 @@ struct ProgressDashboardView: View {
                                 .adaptiveAnimation(AppAnimation.entrance.delay(0.40), value: progressAppeared)
                         }
                         .padding()
-                        .frame(maxWidth: .infinity)
+                        .strideReadableWidth()
                         .task { progressAppeared = true }
                         .task(id: selectedRange) { await backfillHeartRateSamples() }
                     }

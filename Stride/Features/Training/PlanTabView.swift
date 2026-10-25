@@ -150,6 +150,7 @@ struct PlanTabView: View {
                             }
                         }
                         .padding()
+                        .strideReadableWidth()
                     }
                 } else {
                     StrideEmptyState(

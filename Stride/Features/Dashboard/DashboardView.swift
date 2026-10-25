@@ -445,6 +445,7 @@ struct DashboardView: View {
                     .padding(.horizontal, AppSpacing.lg)
                     .padding(.vertical, AppSpacing.lg)
                 }
+                .strideReadableWidth()
             }
             .task { dashboardAppeared = true }
             .background(Color.surfacePrimary)

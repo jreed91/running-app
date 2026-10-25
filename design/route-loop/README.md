@@ -78,6 +78,7 @@ Shared in `Stride/Shared/Components/StrideControls.swift`. Use these rather than
 | A button | `.buttonStyle(.strideButton())`: `.primary` (the route, one per screen), `.secondary` (brand tint), `.quiet` (card), `.destructive`; `compact:` for rows, `fullWidth: false` to hug |
 | A filter or quick reply | `.buttonStyle(.strideChip(selected:))` |
 | A segmented choice on a page | `StrideSegmentedControl`; inside a `Form` the system `.segmented` picker, tinted by `AppChrome` |
+| A scrolling page's column of cards | `.strideReadableWidth()` on the stack inside the `ScrollView`, after its padding: caps it at 700pt and centres it, for iPhone Duo's inner display |
 | Progress along a line | `StrideProgressBar(value:, tint:)`, the route on a `surfaceTertiary` track |
 | A free-standing text field | `.strideField()`; a field inside a card is a well on `surfacePrimary` with the hairline |
 | A `List` or `Form` | `.strideList()` on it and `.strideListRow()` on each `Section`, so dark mode is ink, not system black |

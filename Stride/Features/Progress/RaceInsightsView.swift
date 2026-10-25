@@ -218,7 +218,7 @@ struct RaceInsightsView: View {
                     .adaptiveAnimation(AppAnimation.entrance.delay(0.25), value: appeared)
             }
             .padding()
-            .frame(maxWidth: .infinity)
+            .strideReadableWidth()
             .task { appeared = true }
         }
         .background(Color.surfacePrimary)
