@@ -416,7 +416,7 @@ struct RunSummaryView: View {
                 }
                 .padding(.horizontal, AppSpacing.lg)
                 .padding(.bottom, AppSpacing.xxxl)
-                .frame(maxWidth: .infinity)
+                .strideReadableWidth()
                 .id(Self.topAnchor)
             }
             .onChange(of: openPage) { _, page in

@@ -96,6 +96,7 @@ struct RaceDayHubView: View {
                 }
             }
             .padding()
+            .strideReadableWidth()
         }
         .task(id: briefingRequestKey(racePlan)) { await refreshBriefing(racePlan) }
     }
