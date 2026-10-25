@@ -48,7 +48,7 @@ struct RouteGeniusView: View {
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }
+                    Button("Close", systemImage: "xmark") { dismiss() }
                 }
                 ToolbarItem(placement: .primaryAction) {
                     NavigationLink {
@@ -359,7 +359,7 @@ struct RouteGeniusView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { showSaveSheet = false }
+                    Button("Cancel", systemImage: "xmark") { showSaveSheet = false }
                 }
             }
         }
