@@ -442,13 +442,15 @@ struct RunSummaryView: View {
         .navigationBarBackButtonHidden(openPage != nil)
         .toolbar {
             if openPage != nil {
-                ToolbarItem(placement: .topBarLeading) {
+                // `.cancellationAction`, not `.topBarLeading`: on iPhone Duo the bars stack
+                // down the side of the display, and back and close belong at the top of
+                // that stack. It never shares the bar with the close button below.
+                ToolbarItem(placement: .cancellationAction) {
                     Button {
                         openPage = nil
                     } label: {
-                        Image(systemName: "chevron.backward")
+                        Label("Back", systemImage: "chevron.backward")
                     }
-                    .accessibilityLabel("Back")
                 }
             }
             // A page's only control is the way back; the run's own actions wait for it.
@@ -457,9 +459,8 @@ struct RunSummaryView: View {
                     Button {
                         dismiss()
                     } label: {
-                        Image(systemName: "xmark")
+                        Label("Close", systemImage: "xmark")
                     }
-                    .accessibilityLabel("Close")
                 }
             }
             if openPage == nil {
@@ -484,10 +485,12 @@ struct RunSummaryView: View {
                             }
                         }
                     } label: {
+                        // A `Label`, not a bare image: a toolbar shows the icon, and an
+                        // overflow menu (iPhone Duo's side bar runs out of room) shows both.
                         if isRenderingShareCard {
                             ProgressView()
                         } else {
-                            Image(systemName: "square.and.arrow.up")
+                            Label("Share run", systemImage: "square.and.arrow.up")
                         }
                     }
                     .disabled(isRenderingShareCard)
@@ -497,9 +500,8 @@ struct RunSummaryView: View {
                     Button(role: .destructive) {
                         showDeleteConfirmation = true
                     } label: {
-                        Image(systemName: "trash")
+                        Label("Delete workout", systemImage: "trash")
                     }
-                    .accessibilityLabel("Delete workout")
                 }
             }
         }
