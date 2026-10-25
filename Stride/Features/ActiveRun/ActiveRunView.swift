@@ -230,37 +230,89 @@ struct ActiveRunView: View {
             )
             .ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                topBar
-                zoneLabel
-                heroPace
-                if let target = paceTargetRange, tracker.trackingState == .active {
-                    paceMeter(target: target)
-                        .padding(.horizontal, 22)
-                        .padding(.top, 22)
+            // Flat or closed, the HUD as it has always been (the run screen's design is
+            // frozen). Propped up on iPhone Duo with the fold across the display (a
+            // treadmill console), the same pieces split at the fold: what is read from a
+            // step away on top, what is tapped below it. Jacob agreed this exception to the
+            // freeze on 2026-10-25.
+            TabletopLayout {
+                VStack(spacing: 0) {
+                    topBar
+                    zoneLabel
+                    heroPace
+                    paceMeterRow
+                    guidedBannerRow
+                    routeBannerRow
+                    metricsGrid
+                    Spacer()
+                    controls
                 }
-                if let unwrappedGuided = Binding(guidedBinding) {
-                    GuidedWorkoutBanner(
-                        tracker: tracker,
-                        guided: unwrappedGuided,
-                        unit: appSettings.unitPreference
-                    )
-                    .padding(.horizontal, AppSpacing.lg)
-                    .padding(.top, 18)
+            } top: {
+                VStack(spacing: 0) {
+                    topBar
+                    // Stacked when the half is tall enough for it, else the pace beside
+                    // the grid: in landscape the upper half is wide and short.
+                    ViewThatFits(in: .vertical) {
+                        VStack(spacing: 0) {
+                            zoneLabel
+                            heroPace
+                            paceMeterRow
+                            metricsGrid
+                        }
+                        HStack(alignment: .center, spacing: AppSpacing.lg) {
+                            VStack(spacing: 0) {
+                                zoneLabel
+                                heroPace
+                                paceMeterRow
+                            }
+                            metricsGrid
+                        }
+                        .padding(.horizontal, AppSpacing.lg)
+                    }
+                    Spacer(minLength: 0)
                 }
-                RouteGuidanceBanner(
-                    guide: container.runRouteGuide,
-                    trackingState: tracker.trackingState,
-                    isOutdoor: selectedLocation == .outdoor,
-                    unit: appSettings.unitPreference,
-                    loadSavedRoutes: { (try? container.routeRepository.fetchAll()) ?? [] }
-                )
-                .padding(.horizontal, AppSpacing.lg)
-                metricsGrid
-                Spacer()
-                controls
+            } bottom: {
+                VStack(spacing: 0) {
+                    guidedBannerRow
+                    routeBannerRow
+                    Spacer(minLength: 0)
+                    controls
+                }
             }
         }
+    }
+
+    @ViewBuilder
+    private var paceMeterRow: some View {
+        if let target = paceTargetRange, tracker.trackingState == .active {
+            paceMeter(target: target)
+                .padding(.horizontal, 22)
+                .padding(.top, 22)
+        }
+    }
+
+    @ViewBuilder
+    private var guidedBannerRow: some View {
+        if let unwrappedGuided = Binding(guidedBinding) {
+            GuidedWorkoutBanner(
+                tracker: tracker,
+                guided: unwrappedGuided,
+                unit: appSettings.unitPreference
+            )
+            .padding(.horizontal, AppSpacing.lg)
+            .padding(.top, 18)
+        }
+    }
+
+    private var routeBannerRow: some View {
+        RouteGuidanceBanner(
+            guide: container.runRouteGuide,
+            trackingState: tracker.trackingState,
+            isOutdoor: selectedLocation == .outdoor,
+            unit: appSettings.unitPreference,
+            loadSavedRoutes: { (try? container.routeRepository.fetchAll()) ?? [] }
+        )
+        .padding(.horizontal, AppSpacing.lg)
     }
 
     /// Runs on every appearance, which since U7 includes *reopening* a minimised run —
