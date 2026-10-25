@@ -50,32 +50,46 @@ struct StrengthActiveView: View {
         ZStack {
             Color.surfacePrimary.ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                // Header bar
-                headerBar
-
-                if exercises.isEmpty {
-                    noExercisesView
-                } else if let exercise = currentExercise {
-                    ScrollView {
-                        VStack(spacing: 20) {
-                            progressHeader
-                            exerciseCard(exercise: exercise)
-                            if restTimerActive {
-                                restTimerCard
-                            } else {
-                                logSetCard(exercise: exercise)
+            // Propped half-open on the floor (iPhone Duo, fold across the display), the
+            // exercise is read from the mat on the upper half and the set is logged on the
+            // lower half, which rests on the floor. Flat or closed, the same screen as
+            // always. See `TabletopLayout`.
+            TabletopLayout(isEnabled: currentExercise != nil) {
+                flatLayout
+            } top: {
+                if let exercise = currentExercise {
+                    VStack(spacing: 0) {
+                        headerBar
+                        ScrollView {
+                            VStack(spacing: 20) {
+                                progressHeader
+                                exerciseCard(exercise: exercise)
+                                completedSetsHistory
                             }
-                            completedSetsHistory
+                            .padding(.horizontal, AppSpacing.lg)
+                            .padding(.vertical, AppSpacing.md)
+                            .strideReadableWidth()
                         }
-                        .padding(.horizontal, AppSpacing.lg)
-                        .padding(.vertical, AppSpacing.xl)
                     }
-                } else {
-                    workoutCompleteView
                 }
-
-                finishButton
+            } bottom: {
+                if let exercise = currentExercise {
+                    VStack(spacing: 0) {
+                        ScrollView {
+                            Group {
+                                if restTimerActive {
+                                    restTimerCard
+                                } else {
+                                    logSetCard(exercise: exercise)
+                                }
+                            }
+                            .padding(.horizontal, AppSpacing.lg)
+                            .padding(.vertical, AppSpacing.md)
+                            .strideReadableWidth()
+                        }
+                        finishButton
+                    }
+                }
             }
         }
         .onAppear { setupForCurrentExercise() }
@@ -102,6 +116,37 @@ struct StrengthActiveView: View {
         // the lifter is mid-movement and not looking at the phone.
         .sensoryFeedback(.selection, trigger: completedSets.count) { old, new in new > old }
         .sensoryFeedback(.success, trigger: restTimeRemaining) { old, new in old == 1 && new == 0 }
+    }
+
+    /// The session as it has always been laid out: everything in one scroll.
+    private var flatLayout: some View {
+        VStack(spacing: 0) {
+            // Header bar
+            headerBar
+
+            if exercises.isEmpty {
+                noExercisesView
+            } else if let exercise = currentExercise {
+                ScrollView {
+                    VStack(spacing: 20) {
+                        progressHeader
+                        exerciseCard(exercise: exercise)
+                        if restTimerActive {
+                            restTimerCard
+                        } else {
+                            logSetCard(exercise: exercise)
+                        }
+                        completedSetsHistory
+                    }
+                    .padding(.horizontal, AppSpacing.lg)
+                    .padding(.vertical, AppSpacing.xl)
+                }
+            } else {
+                workoutCompleteView
+            }
+
+            finishButton
+        }
     }
 
     // MARK: - Header
