@@ -111,6 +111,11 @@ private struct HeroCardBackground: ViewModifier {
     let cornerRadius: CGFloat
     let showsGrid: Bool
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// False until the hero first appears, so the route's light comes up on the card
+    /// (`AppAnimation.dawn`) rather than being there already. Once per hero.
+    @State private var isLit = false
+
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         content
@@ -132,10 +137,13 @@ private struct HeroCardBackground: ViewModifier {
                             endRadiusFraction: 0.9
                         )
                         .clipShape(shape)
+                        .opacity(isLit || reduceMotion ? 1 : 0)
+                        .animation(AppAnimation.dawn, value: isLit)
                     }
                     .overlay(shape.strokeBorder(Color.brand.opacity(0.22), lineWidth: 1))
             }
             .appShadow(.e1)
+            .onAppear { isLit = true }
     }
 }
 

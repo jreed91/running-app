@@ -20,6 +20,59 @@ enum AppAnimation {
     static let pinDrop  = Animation.spring(response: 0.35, dampingFraction: 0.55)
     /// The start pin's halo: one slow ripple outwards, repeated. Never under Reduce Motion.
     static let pinPulse = Animation.easeOut(duration: 1.8).repeatForever(autoreverses: false)
+    /// The hero's route light coming up as the screen opens: slow, no bounce, like dawn on
+    /// the map. Played once per hero.
+    static let dawn     = Animation.easeOut(duration: 0.9)
+
+    /// The gap between items in a staggered entrance: item `n` waits `n * stagger`.
+    static let stagger: Double = 0.06
+
+    /// What every Route Loop animation becomes under Reduce Motion: a short cross-fade,
+    /// never a slide, scale or bounce.
+    static let reduced  = Animation.easeInOut(duration: 0.2)
+}
+
+// MARK: - Entrance
+
+extension View {
+    /// The one way content enters a screen: it fades in and rises `rise` points into place
+    /// with `AppAnimation.entrance`, `delay` seconds after `appeared` turns true. Stagger a
+    /// screen's sections with `delay: Double(n) * AppAnimation.stagger`.
+    ///
+    /// Under Reduce Motion it only fades, with no rise and no delay.
+    func strideEntrance(_ appeared: Bool, delay: Double = 0, rise: CGFloat = 18) -> some View {
+        modifier(StrideEntranceModifier(appeared: appeared, delay: delay, rise: rise))
+    }
+
+    /// A figure that changes in place (a total when the period changes, a count when a run
+    /// lands) rolls its digits rather than snapping. It plays when the change happens
+    /// inside an animation, as a `StrideSegmentedControl` selection does. Under Reduce
+    /// Motion the old figure cross-fades to the new one.
+    func strideNumericTransition() -> some View {
+        modifier(StrideNumericTransitionModifier())
+    }
+}
+
+private struct StrideEntranceModifier: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let appeared: Bool
+    let delay: Double
+    let rise: CGFloat
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(appeared ? 1 : 0)
+            .offset(y: appeared || reduceMotion ? 0 : rise)
+            .animation(reduceMotion ? AppAnimation.reduced : AppAnimation.entrance.delay(delay), value: appeared)
+    }
+}
+
+private struct StrideNumericTransitionModifier: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content.contentTransition(reduceMotion ? .opacity : .numericText())
+    }
 }
 
 // MARK: - adaptiveAnimation modifier
@@ -28,7 +81,7 @@ extension View {
     /// Spring animation that degrades to a simple easeInOut when Reduce Motion is on.
     func adaptiveAnimation<V: Equatable>(
         _ spring: Animation = AppAnimation.bouncy,
-        reducedFallback: Animation = .easeInOut(duration: 0.2),
+        reducedFallback: Animation = AppAnimation.reduced,
         value: V
     ) -> some View {
         modifier(AdaptiveAnimationModifier(spring: spring, reducedFallback: reducedFallback, value: value))

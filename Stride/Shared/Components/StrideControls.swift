@@ -99,7 +99,8 @@ extension ButtonStyle where Self == StrideButtonStyle {
 // MARK: Chips
 
 /// A pill that can be on or off: filters, suggestions, quick replies. On, it takes the
-/// route; off, it is a card with a hairline.
+/// route; off, it is a card with a hairline. Turning on, the route fades in under the
+/// label with a small press-and-settle, so the change is felt as well as seen.
 struct StrideChipStyle: ButtonStyle {
     var isSelected = false
 
@@ -122,6 +123,7 @@ struct StrideChipStyle: ButtonStyle {
             .contentShape(Capsule())
             .scaleEffect(configuration.isPressed && !reduceMotion ? 0.95 : 1)
             .animation(reduceMotion ? nil : AppAnimation.snappy, value: configuration.isPressed)
+            .animation(reduceMotion ? AppAnimation.reduced : AppAnimation.bouncy, value: isSelected)
             .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
@@ -146,6 +148,7 @@ struct StrideSegmentedControl<Value: Hashable>: View {
     let title: (Value) -> Text
 
     @Namespace private var namespace
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(
         selection: Binding<Value>,
@@ -164,7 +167,9 @@ struct StrideSegmentedControl<Value: Hashable>: View {
             ForEach(options, id: \.self) { option in
                 let isSelected = option == selection
                 Button {
-                    withAnimation(AppAnimation.bouncy) { selection = option }
+                    // The route slides to the new segment; under Reduce Motion it moves
+                    // there at once rather than travelling across the track.
+                    withAnimation(reduceMotion ? nil : AppAnimation.bouncy) { selection = option }
                 } label: {
                     title(option)
                         .font(.dsSubhead.weight(.semibold))
@@ -197,13 +202,21 @@ struct StrideSegmentedControl<Value: Hashable>: View {
 /// A linear progress bar: the route filling a `surfaceTertiary` track, with round caps.
 /// `tint` replaces the route for a bar that means something else (a met goal in
 /// `success`, a worn shoe in `warning`).
+///
+/// The bar draws itself in from empty when it first appears, as the app mark's route and
+/// the Home ring do, and slides to a new value when it changes. Under Reduce Motion it
+/// appears already filled.
 struct StrideProgressBar: View {
     let value: Double
     var tint: Color?
     var height: CGFloat = 8
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var hasAppeared = false
+
     var body: some View {
         let fraction = min(max(value.isFinite ? value : 0, 0), 1)
+        let shown = hasAppeared || reduceMotion ? fraction : 0
         GeometryReader { proxy in
             ZStack(alignment: .leading) {
                 Capsule().fill(.surfaceTertiary)
@@ -216,11 +229,12 @@ struct StrideProgressBar: View {
                 }
                 // A sliver of a capsule draws as a dot rather than nothing, so a started
                 // bar never looks empty.
-                .frame(width: fraction > 0 ? max(proxy.size.width * fraction, height) : 0)
+                .frame(width: shown > 0 ? max(proxy.size.width * shown, height) : 0)
             }
         }
         .frame(height: height)
-        .adaptiveAnimation(AppAnimation.gentle, value: fraction)
+        .adaptiveAnimation(AppAnimation.gentle, value: shown)
+        .onAppear { hasAppeared = true }
         .accessibilityElement()
         .accessibilityValue(Text(fraction, format: .percent.precision(.fractionLength(0))))
     }
@@ -338,11 +352,18 @@ extension View {
 /// Replaces `ContentUnavailableView` so empty states carry the identity: the symbol sits
 /// on a small hero disc, the title is in the rounded display face, and the action is a
 /// route button.
+///
+/// It arrives the way the start pin does: the disc lands with `pinDrop` and its symbol
+/// bounces once, then the words and the action rise in behind it. Under Reduce Motion
+/// it fades in whole.
 struct StrideEmptyState<Actions: View>: View {
     let title: LocalizedStringKey
     let systemImage: String
     let description: Text?
     @ViewBuilder let actions: () -> Actions
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var appeared = false
 
     init(
         _ title: LocalizedStringKey,
@@ -365,8 +386,12 @@ struct StrideEmptyState<Actions: View>: View {
                     .font(.dsTitle1)
                     .foregroundStyle(.brandText)
                     .symbolRenderingMode(.hierarchical)
+                    .symbolEffect(.bounce, value: appeared && !reduceMotion)
             }
             .frame(width: 76, height: 76)
+            .scaleEffect(appeared || reduceMotion ? 1 : 0.6)
+            .opacity(appeared ? 1 : 0)
+            .animation(reduceMotion ? AppAnimation.reduced : AppAnimation.pinDrop, value: appeared)
             .accessibilityHidden(true)
             .padding(.bottom, AppSpacing.xs)
 
@@ -374,6 +399,7 @@ struct StrideEmptyState<Actions: View>: View {
                 .font(.dsTitle3)
                 .multilineTextAlignment(.center)
                 .accessibilityAddTraits(.isHeader)
+                .strideEntrance(appeared, delay: AppAnimation.stagger * 2, rise: 10)
 
             if let description {
                 description
@@ -381,6 +407,7 @@ struct StrideEmptyState<Actions: View>: View {
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
+                    .strideEntrance(appeared, delay: AppAnimation.stagger * 3, rise: 10)
             }
 
             VStack(spacing: AppSpacing.sm) {
@@ -388,10 +415,12 @@ struct StrideEmptyState<Actions: View>: View {
             }
             .buttonStyle(.strideButton(fullWidth: false))
             .padding(.top, AppSpacing.sm)
+            .strideEntrance(appeared, delay: AppAnimation.stagger * 4, rise: 10)
         }
         .padding(.horizontal, AppSpacing.xxxl)
         .padding(.vertical, AppSpacing.xxl)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear { appeared = true }
     }
 }
 
