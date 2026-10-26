@@ -198,24 +198,16 @@ struct RaceInsightsView: View {
                     .adaptiveAnimation(AppAnimation.entrance.delay(0.05), value: appeared)
 
                 predictedRacePaceChart
-                    .opacity(appeared ? 1 : 0)
-                    .offset(y: appeared ? 0 : 18)
-                    .adaptiveAnimation(AppAnimation.entrance.delay(0.10), value: appeared)
+                    .strideEntrance(appeared, delay: 0.10, rise: 18)
 
                 trainingZonesCard
-                    .opacity(appeared ? 1 : 0)
-                    .offset(y: appeared ? 0 : 18)
-                    .adaptiveAnimation(AppAnimation.entrance.delay(0.15), value: appeared)
+                    .strideEntrance(appeared, delay: 0.15, rise: 18)
 
                 performanceMetricsCard
-                    .opacity(appeared ? 1 : 0)
-                    .offset(y: appeared ? 0 : 18)
-                    .adaptiveAnimation(AppAnimation.entrance.delay(0.20), value: appeared)
+                    .strideEntrance(appeared, delay: 0.20, rise: 18)
 
                 improvementTipsCard
-                    .opacity(appeared ? 1 : 0)
-                    .offset(y: appeared ? 0 : 18)
-                    .adaptiveAnimation(AppAnimation.entrance.delay(0.25), value: appeared)
+                    .strideEntrance(appeared, delay: 0.25, rise: 18)
             }
             .padding()
             .strideReadableWidth()

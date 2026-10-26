@@ -64,18 +64,18 @@ struct AchievementsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: AppSpacing.lg) {
                 streakCard(streak)
-                    .fadeSlide(appeared, delay: 0.05)
+                    .strideEntrance(appeared, delay: 0.05)
 
                 weeklyGoalCard(weekly)
-                    .fadeSlide(appeared, delay: 0.10)
+                    .strideEntrance(appeared, delay: 0.10)
 
                 ForEach(Array(StreakGoalService.AchievementCategory.allCases.enumerated()), id: \.element) { index, category in
                     badgeSection(for: category, achievements: achievements)
-                        .fadeSlide(appeared, delay: 0.15 + Double(index) * 0.05)
+                        .strideEntrance(appeared, delay: 0.15 + Double(index) * 0.05)
                 }
 
                 medalsSection
-                    .fadeSlide(
+                    .strideEntrance(
                         appeared,
                         delay: 0.15 + Double(StreakGoalService.AchievementCategory.allCases.count) * 0.05
                     )
@@ -409,18 +409,6 @@ private struct WeeklyGoalEditor: View {
             }
         }
         .presentationDetents([.medium])
-    }
-}
-
-// MARK: - Entrance helper
-
-private extension View {
-    /// Applies the shared fade-and-slide entrance animation used across the
-    /// Achievements surface.
-    func fadeSlide(_ appeared: Bool, delay: Double) -> some View {
-        opacity(appeared ? 1 : 0)
-            .offset(y: appeared ? 0 : 18)
-            .adaptiveAnimation(AppAnimation.entrance.delay(delay), value: appeared)
     }
 }
 

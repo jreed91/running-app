@@ -418,9 +418,9 @@ struct DashboardView: View {
                         // three alert cards before it got to the run. The selected day's
                         // session, with its Start button, is now what Home leads with.
                         selectedDaySection
-                            .dashboardEntrance(appeared: dashboardAppeared, delay: 0.03)
+                            .strideEntrance(dashboardAppeared, delay: 0.03, rise: 20)
                         alertSlot
-                            .dashboardEntrance(appeared: dashboardAppeared, delay: 0.05)
+                            .strideEntrance(dashboardAppeared, delay: 0.05, rise: 20)
                         if let racePlan = racePlan {
                             NavigationLink {
                                 RaceDayHubView()
@@ -428,24 +428,24 @@ struct DashboardView: View {
                                 RaceCountdownCard(racePlan: racePlan, unit: appSettings.unitPreference)
                             }
                             .buttonStyle(.plain)
-                            .dashboardEntrance(appeared: dashboardAppeared, delay: 0.07)
+                            .strideEntrance(dashboardAppeared, delay: 0.07, rise: 20)
                         }
                         if let session = nextUpSession {
                             nextUpSection(session)
-                                .dashboardEntrance(appeared: dashboardAppeared, delay: 0.1)
+                                .strideEntrance(dashboardAppeared, delay: 0.1, rise: 20)
                         }
                     } trailing: {
                         weekSummaryCard
-                            .dashboardEntrance(appeared: dashboardAppeared, delay: 0.12)
+                            .strideEntrance(dashboardAppeared, delay: 0.12, rise: 20)
                         if !coachCards.isEmpty {
                             SmartCoachCardsSection(cards: CoachTipRewriter.apply(coachTipWording, to: coachCards))
-                                .dashboardEntrance(appeared: dashboardAppeared, delay: 0.15)
+                                .strideEntrance(dashboardAppeared, delay: 0.15, rise: 20)
                         }
                         VStack(spacing: AppSpacing.sm) {
                             startRunButton
                             planRouteButton
                         }
-                        .dashboardEntrance(appeared: dashboardAppeared, delay: 0.18, offset: 16)
+                        .strideEntrance(dashboardAppeared, delay: 0.18, rise: 16)
                     }
                     .padding(.horizontal, AppSpacing.lg)
                     .padding(.vertical, AppSpacing.lg)
@@ -1241,16 +1241,5 @@ private struct ProgressRingView: View {
         }
         .frame(width: size, height: size)
         .onAppear { hasAppeared = true }
-    }
-}
-
-// MARK: - Entrance
-
-private extension View {
-    /// The fade-and-rise each Home section enters with, staggered by `delay`.
-    func dashboardEntrance(appeared: Bool, delay: Double, offset: CGFloat = 20) -> some View {
-        opacity(appeared ? 1 : 0)
-            .offset(y: appeared ? 0 : offset)
-            .adaptiveAnimation(AppAnimation.entrance.delay(delay), value: appeared)
     }
 }

@@ -56,18 +56,60 @@ Every colour is an asset-catalog colour with light, dark and Increase Contrast v
 - Strokes are round-capped and round-joined, like the route.
 - `appShadow(.e1–.e3)` for height; `appGlow(_, color: .brand)` for emphasis. A primary
   action is the route gradient with a `.strong` brand glow.
-- Motion tokens live in `AppAnimations.swift`; every animation goes through
-  `adaptiveAnimation` (or reads `accessibilityReduceMotion`) so Reduce Motion is honoured.
+- Motion tokens live in `AppAnimations.swift`; see Motion below.
 
 ## Motion
 
-The route draws itself, then the pin lands. `StrideAppMark(size:, drawsOn: true)` strokes
-the loop in with `AppAnimation.routeDraw` (1.1s ease-in-out) and drops the pin with
-`pinDrop` 0.85s later; `ProgressRingView` fills from zero with `gentle`;
-`StartPin(diameter:, pulses: true)` ripples with `pinPulse` for a live position.
-Everything else uses `entrance` (staggered 80ms), `bouncy`, `snappy` and `gentle`. Only
-the route and the pin get signature motion, a route draws once, one pulse per screen, and
-under Reduce Motion the mark appears whole and the pulse is off.
+Motion in Stride says one thing: *you are moving along a route*. Things draw in along a
+line, land like the start pin, or rise into place. Nothing loops for decoration, nothing
+spins, and nothing moves under Reduce Motion except a short cross-fade.
+
+### Tokens (`AppAnimation`, `Stride/Shared/Theme/AppAnimations.swift`)
+
+| Token | Curve | Use |
+| --- | --- | --- |
+| `snappy` | spring 0.22s, damping 0.78 | Press feedback on buttons and chips |
+| `bouncy` | spring 0.32s, damping 0.72 | Selection: a segment sliding, a chip turning on |
+| `gentle` | spring 0.45s, damping 0.82 | A value moving: progress bars and rings |
+| `entrance` | spring 0.40s, damping 0.75 | Content arriving on a screen |
+| `routeDraw` | ease-in-out 1.1s | The app mark's loop stroking itself in |
+| `pinDrop` | spring 0.35s, damping 0.55 | Something landing: the start pin, an empty state's disc |
+| `pinPulse` | ease-out 1.8s, repeating | A live position's ripple. One per screen |
+| `dawn` | ease-out 0.9s | The hero's route light coming up, once |
+| `stagger` | 0.06s | The gap between items in a staggered entrance |
+| `reduced` | ease-in-out 0.2s | What everything becomes under Reduce Motion |
+
+### What moves, and how
+
+| Thing | Motion | Under Reduce Motion |
+| --- | --- | --- |
+| A screen's sections | `.strideEntrance(appeared, delay:)`: fade and rise 18pt with `entrance`, staggered | Fade only, no delay |
+| A changing figure | `.strideNumericTransition()`: digits roll when the change is animated (Progress totals when the range changes) | Cross-fade |
+| `.heroCard()` | The route's light in the corner comes up with `dawn` the first time the hero appears | Already lit |
+| `StrideProgressBar` | Draws in from empty on first appear, then slides between values with `gentle` | Appears filled |
+| `ProgressRingView` (Home) | Same as the bar, as a ring | Same |
+| `StrideSegmentedControl` | The route slides to the chosen segment (`bouncy`, matched geometry) | Jumps there |
+| `.strideChip(selected:)` | Presses to 95%; turning on, the route fades in under the label (`bouncy`) | Cross-fade, no press scale |
+| `.strideButton()` | Presses to 97% and darkens slightly (`snappy`) | Darkens only |
+| `StrideEmptyState` | The disc lands with `pinDrop` and its symbol bounces once; title, text and action rise in behind it | Fades in whole |
+| `StrideAppMark(drawsOn: true)` | The loop draws itself in (`routeDraw`), then the pin drops 0.85s later | Appears whole |
+| `StartPin(pulses: true)` | One slow ripple outwards, repeated | No ripple |
+
+### Rules
+
+1. **Go through the system.** Use the tokens and modifiers above, not a bare
+   `.spring(...)` or `.easeInOut(...)`. A one-off animation reads `accessibilityReduceMotion`
+   or uses `adaptiveAnimation`.
+2. **Signature motion is for the route and the pin.** Drawing along a line belongs to the
+   route (progress, the mark); landing with an overshoot belongs to the pin and things
+   that stand in for it. Cards and text only fade and rise.
+3. **Once.** A route draws once, a hero lights once, an empty state lands once. Only a live
+   position repeats, and only one per screen.
+4. **Fast enough to ignore.** A screen's entrance is done inside about half a second;
+   stagger at most about six items, then let the rest arrive together.
+5. **The live run screen keeps its own motion.** It is the written exception here as it
+   is for colour (see "The live run screen" below); leave its animations as they are.
+6. **Reduce Motion means a cross-fade.** No slide, scale, bounce, draw or ripple.
 
 ## Controls
 

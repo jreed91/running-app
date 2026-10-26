@@ -112,51 +112,33 @@ struct ProgressDashboardView: View {
                                 // Above the range picker because it ignores it: the week is
                                 // the week, whatever period the charts below are showing.
                                 WeekReviewCard(runs: workouts)
-                                    .opacity(progressAppeared ? 1 : 0)
-                                    .offset(y: progressAppeared ? 0 : 10)
-                                    .adaptiveAnimation(AppAnimation.entrance.delay(0.08), value: progressAppeared)
+                                    .strideEntrance(progressAppeared, delay: 0.08, rise: 10)
                             }
                             rangePicker
-                                .opacity(progressAppeared ? 1 : 0)
-                                .offset(y: progressAppeared ? 0 : 10)
-                                .adaptiveAnimation(AppAnimation.entrance.delay(0.10), value: progressAppeared)
+                                .strideEntrance(progressAppeared, delay: 0.10, rise: 10)
                             StrideColumns(spacing: 16) {
                                 weeklyVolumeChart
-                                    .opacity(progressAppeared ? 1 : 0)
-                                    .offset(y: progressAppeared ? 0 : 18)
-                                    .adaptiveAnimation(AppAnimation.entrance.delay(0.15), value: progressAppeared)
+                                    .strideEntrance(progressAppeared, delay: 0.15, rise: 18)
                             } trailing: {
                                 paceProgressChart
-                                    .opacity(progressAppeared ? 1 : 0)
-                                    .offset(y: progressAppeared ? 0 : 18)
-                                    .adaptiveAnimation(AppAnimation.entrance.delay(0.20), value: progressAppeared)
+                                    .strideEntrance(progressAppeared, delay: 0.20, rise: 18)
                             }
                             StrideColumns(spacing: 16) {
                                 heartRateTrendChart
-                                    .opacity(progressAppeared ? 1 : 0)
-                                    .offset(y: progressAppeared ? 0 : 18)
-                                    .adaptiveAnimation(AppAnimation.entrance.delay(0.25), value: progressAppeared)
+                                    .strideEntrance(progressAppeared, delay: 0.25, rise: 18)
                             } trailing: {
                                 heartRateZoneChart
-                                    .opacity(progressAppeared ? 1 : 0)
-                                    .offset(y: progressAppeared ? 0 : 18)
-                                    .adaptiveAnimation(AppAnimation.entrance.delay(0.28), value: progressAppeared)
+                                    .strideEntrance(progressAppeared, delay: 0.28, rise: 18)
                             }
                             StrideColumns(spacing: 16) {
                                 elevationTrendChart
-                                    .opacity(progressAppeared ? 1 : 0)
-                                    .offset(y: progressAppeared ? 0 : 18)
-                                    .adaptiveAnimation(AppAnimation.entrance.delay(0.30), value: progressAppeared)
+                                    .strideEntrance(progressAppeared, delay: 0.30, rise: 18)
                             } trailing: {
                                 vo2MaxTrendChart
-                                    .opacity(progressAppeared ? 1 : 0)
-                                    .offset(y: progressAppeared ? 0 : 18)
-                                    .adaptiveAnimation(AppAnimation.entrance.delay(0.35), value: progressAppeared)
+                                    .strideEntrance(progressAppeared, delay: 0.35, rise: 18)
                             }
                             periodSummaryCard
-                                .opacity(progressAppeared ? 1 : 0)
-                                .offset(y: progressAppeared ? 0 : 18)
-                                .adaptiveAnimation(AppAnimation.entrance.delay(0.40), value: progressAppeared)
+                                .strideEntrance(progressAppeared, delay: 0.40, rise: 18)
                         }
                         .padding()
                         .strideReadableWidth(hasColumns: true)
@@ -222,6 +204,8 @@ struct ProgressDashboardView: View {
             Text(value)
                 .font(.dsTitle2.monospacedDigit())
                 .foregroundStyle(.primary)
+                // Rolls to the new total when the range picker changes the period.
+                .strideNumericTransition()
                 .minimumScaleFactor(0.7)
                 .lineLimit(1)
             Text(label)
