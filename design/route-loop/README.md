@@ -7,7 +7,7 @@ three things, and nothing else carries the brand:
 | --- | --- | --- |
 | **The route** | One stroke with round caps, amber where it starts and orange where it ends | `LinearGradient.route` (`.fill(.route)`, `.stroke(.route, …)`) |
 | **The start pin** | A white disc with an orange centre | `StartPin(diameter:)` |
-| **The map** | A faint square grid on the page: daylight paper in light, night ink in dark | `MapGridPattern`, `MapBackdrop`, `.heroCard()` |
+| **The map** | A faint square grid behind full-screen backdrops (welcome, onboarding) and the app mark: daylight paper in light, night ink in dark | `MapGridPattern`, `MapBackdrop` |
 
 The live reference, with every token, type style and component, is the Design System
 artifact *Stride Route Loop*. This file is the in-repo summary; the Swift sources under
@@ -75,7 +75,6 @@ spins, and nothing moves under Reduce Motion except a short cross-fade.
 | `routeDraw` | ease-in-out 1.1s | The app mark's loop stroking itself in |
 | `pinDrop` | spring 0.35s, damping 0.55 | Something landing: the start pin, an empty state's disc |
 | `pinPulse` | ease-out 1.8s, repeating | A live position's ripple. One per screen |
-| `dawn` | ease-out 0.9s | The hero's route light coming up, once |
 | `stagger` | 0.06s | The gap between items in a staggered entrance |
 | `reduced` | ease-in-out 0.2s | What everything becomes under Reduce Motion |
 
@@ -85,7 +84,7 @@ spins, and nothing moves under Reduce Motion except a short cross-fade.
 | --- | --- | --- |
 | A screen's sections | `.strideEntrance(appeared, delay:)`: fade and rise 18pt with `entrance`, staggered | Fade only, no delay |
 | A changing figure | `.strideNumericTransition()`: digits roll when the change is animated (Progress totals when the range changes) | Cross-fade |
-| `.heroCard()` | The route's light in the corner comes up with `dawn` the first time the hero appears | Already lit |
+| `.heroCard()` | Nothing. The route's light in the corner is part of the card, there from the start | Same |
 | `StrideProgressBar` | Draws in from empty on first appear, then slides between values with `gentle` | Appears filled |
 | `ProgressRingView` (Home) | Same as the bar, as a ring | Same |
 | `StrideSegmentedControl` | The route slides to the chosen segment (`bouncy`, matched geometry) | Jumps there |
@@ -103,7 +102,7 @@ spins, and nothing moves under Reduce Motion except a short cross-fade.
 2. **Signature motion is for the route and the pin.** Drawing along a line belongs to the
    route (progress, the mark); landing with an overshoot belongs to the pin and things
    that stand in for it. Cards and text only fade and rise.
-3. **Once.** A route draws once, a hero lights once, an empty state lands once. Only a live
+3. **Once.** A route draws once, an empty state lands once. Only a live
    position repeats, and only one per screen.
 4. **Fast enough to ignore.** A screen's entrance is done inside about half a second;
    stagger at most about six items, then let the rest arrive together.
@@ -170,7 +169,8 @@ for f in ../../AppStore/iphone-6.9/*.png; do sips -z 2622 1206 "$f" --out ../../
    actions and drawn routes. Not for decoration or backgrounds.
 4. **The start pin means "you are here".** The start of a route, today on a plan, the
    current point on a chart. One per view.
-5. **The grid is a texture, not a chart.** Only on heroes and full-screen backdrops (welcome, onboarding),
+5. **The grid is a texture, not a chart.** Only on full-screen backdrops (welcome, onboarding), the app mark and the share card;
+   never on a card in the app (decided 2026-10-27),
    at a 30–36pt pitch, never under data.
 6. **Zone colours stay data.** They mark training intensity and nothing else.
 

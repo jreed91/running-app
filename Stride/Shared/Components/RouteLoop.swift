@@ -109,12 +109,6 @@ struct MapGridPattern: View {
 
 private struct HeroCardBackground: ViewModifier {
     let cornerRadius: CGFloat
-    let showsGrid: Bool
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// False until the hero first appears, so the route's light comes up on the card
-    /// (`AppAnimation.dawn`) rather than being there already. Once per hero.
-    @State private var isLit = false
 
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
@@ -123,13 +117,8 @@ private struct HeroCardBackground: ViewModifier {
                 shape
                     .fill(.heroGround)
                     .overlay {
-                        if showsGrid {
-                            MapGridPattern()
-                                .clipShape(shape)
-                        }
-                    }
-                    .overlay {
-                        // The route's light falling on the card from the top corner.
+                        // The route's light falling on the card from the top corner. Static:
+                        // it is part of the card, not an entrance.
                         EllipticalGradient(
                             colors: [Color.brand.opacity(0.16), .clear],
                             center: .topTrailing,
@@ -137,13 +126,10 @@ private struct HeroCardBackground: ViewModifier {
                             endRadiusFraction: 0.9
                         )
                         .clipShape(shape)
-                        .opacity(isLit || reduceMotion ? 1 : 0)
-                        .animation(AppAnimation.dawn, value: isLit)
                     }
                     .overlay(shape.strokeBorder(Color.brand.opacity(0.22), lineWidth: 1))
             }
             .appShadow(.e1)
-            .onAppear { isLit = true }
     }
 }
 
@@ -160,13 +146,13 @@ private struct StrideCardBackground: ViewModifier {
 
 extension View {
     /// The screen's hero: the card that matters most — the next session, the race, the
-    /// profile. Warm dawn paper with the map grid in light, raised ink in dark, with the
+    /// profile. Warm dawn paper in light, raised ink in dark, with the
     /// route's light in the corner and a brand hairline. It follows the appearance, so
     /// it never puts a dark card on a light page.
     ///
     /// One per screen: a screen of heroes has no hero.
-    func heroCard(cornerRadius: CGFloat = AppRadius.lg, showsGrid: Bool = true) -> some View {
-        modifier(HeroCardBackground(cornerRadius: cornerRadius, showsGrid: showsGrid))
+    func heroCard(cornerRadius: CGFloat = AppRadius.lg) -> some View {
+        modifier(HeroCardBackground(cornerRadius: cornerRadius))
     }
 
     /// Every other card: `surfaceSecondary` with a `cardStroke` hairline. The hairline

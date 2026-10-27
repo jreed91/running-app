@@ -20,9 +20,6 @@ enum AppAnimation {
     static let pinDrop  = Animation.spring(response: 0.35, dampingFraction: 0.55)
     /// The start pin's halo: one slow ripple outwards, repeated. Never under Reduce Motion.
     static let pinPulse = Animation.easeOut(duration: 1.8).repeatForever(autoreverses: false)
-    /// The hero's route light coming up as the screen opens: slow, no bounce, like dawn on
-    /// the map. Played once per hero.
-    static let dawn     = Animation.easeOut(duration: 0.9)
 
     /// The gap between items in a staggered entrance: item `n` waits `n * stagger`.
     static let stagger: Double = 0.06
