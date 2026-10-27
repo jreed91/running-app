@@ -36,6 +36,8 @@ struct SettingsView: View {
     @State private var notificationsDeniedBySystem = false
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
+    /// Settings opens as a sheet from Home's profile button (it was a tab).
+    @Environment(\.dismiss) private var dismiss
     /// Private Cloud Compute availability + daily quota, refreshed whenever the model
     /// picker changes. `nil` until read, and on devices with no server model at all.
     ///
@@ -85,6 +87,12 @@ struct SettingsView: View {
             }
             .background(Color.surfacePrimary)
             .navigationTitle("Settings")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                        .accessibilityIdentifier("settings.done")
+                }
+            }
             .confirmationDialog(
                 "Reset all data?",
                 isPresented: $showResetConfirmation,

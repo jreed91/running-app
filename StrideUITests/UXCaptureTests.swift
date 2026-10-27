@@ -77,9 +77,9 @@ final class UXCaptureTests: XCTestCase {
     /// by label alone: the iOS 26+ floating bar minimises on scroll-down, and while
     /// minimised its buttons are not hittable even though they still resolve.
     /// ``scrollToTop()`` restores it before every switch.
+    // Four tabs since Settings became a sheet from Home: the same bar, quartered.
     private static let tabOffsets: [String: CGFloat] = [
-        "Home": 0.157, "Plan": 0.328, "History": 0.498,
-        "Progress": 0.669, "Settings": 0.838
+        "Home": 0.178, "Plan": 0.391, "History": 0.604, "Progress": 0.817
     ]
 
     private func scrollToTop() {
@@ -107,10 +107,22 @@ final class UXCaptureTests: XCTestCase {
         sleep(2)
         captureScrollingScreen(named: "home")
 
-        for tab in ["Plan", "History", "Progress", "Settings"] {
+        for tab in ["Plan", "History", "Progress"] {
             selectTab(tab)
             sleep(2)
             captureScrollingScreen(named: "tab-\(tab.lowercased())")
+        }
+
+        // Settings opens as a sheet from Home's profile button.
+        selectTab("Home")
+        sleep(1)
+        let settingsButton = app.buttons["home.settings"]
+        if settingsButton.waitForExistence(timeout: 5) {
+            settingsButton.tap()
+            sleep(2)
+            captureScrollingScreen(named: "settings")
+            let done = app.buttons["settings.done"]
+            if done.waitForExistence(timeout: 5) { done.tap() }
         }
 
         captureRunHUD()

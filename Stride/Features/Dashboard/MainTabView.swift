@@ -33,9 +33,8 @@ struct MainTabView: View {
             Tab("Progress", systemImage: "chart.line.uptrend.xyaxis", value: StrideTab.progress) {
                 ProgressDashboardView()
             }
-            Tab("Settings", systemImage: "gear", value: StrideTab.settings) {
-                SettingsView()
-            }
+            // Settings is not a tab: it opens as a sheet from Home's profile button
+            // (`AppNavigation.openSettings()`), leaving four everyday places in the bar.
         }
         .tint(.brand)
         .accessibilityIdentifier("main.tabs")
@@ -55,6 +54,10 @@ struct MainTabView: View {
         .fullScreenCover(isPresented: isRunPresented) {
             ActiveRunView()
         }
+        .sheet(isPresented: isSettingsPresented) {
+            SettingsView()
+                .strideSheet()
+        }
         // A closed split has to be felt whether or not the HUD is on screen, and while the
         // run is minimised this view is the only one left to do it (U4/U7). The HUD carries
         // the same modifier with `isActive: true`, so the two never both fire. Spoken cues
@@ -72,6 +75,13 @@ struct MainTabView: View {
         Binding(
             get: { container.appNavigation.selectedTab },
             set: { container.appNavigation.selectedTab = $0 }
+        )
+    }
+
+    private var isSettingsPresented: Binding<Bool> {
+        Binding(
+            get: { container.appNavigation.isSettingsPresented },
+            set: { container.appNavigation.isSettingsPresented = $0 }
         )
     }
 
