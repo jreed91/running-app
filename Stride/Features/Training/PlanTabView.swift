@@ -761,13 +761,6 @@ private struct PlanOverviewCard: View {
             localized: "Goal \(plan.goalTimeSeconds.durationString)  ·  \(length)",
             comment: "Race plan subtitle: goal time and plan length"
         )
-    } ?? String(localized: "\(plan.totalWeeks) weeks", comment: "Plan subtitle: plan length, before it starts")
-        // Maintain Fitness has no race, so a bare "Goal 52:35" had no distance to belong to.
-        guard plan.targetRace.isGoalRace, plan.goalTimeSeconds > 0 else { return position }
-        return String(
-            localized: "Goal \(plan.goalTimeSeconds.durationString)  ·  \(position)",
-            comment: "Race plan subtitle: goal time and where the runner is in the plan"
-        )
     }
 
     var body: some View {
