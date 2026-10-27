@@ -108,9 +108,11 @@ struct AchievementsView: View {
                 Circle()
                     .fill(streak.current > 0 ? Color.brand.opacity(0.15) : Color.secondary.opacity(0.12))
                     .frame(width: streakBadgeSize, height: streakBadgeSize)
-                Image(systemName: "flame.fill")
-                    .font(.system(size: streakBadgeSize * 0.47))
-                    .foregroundStyle(streak.current > 0 ? Color.brand : Color.secondary.opacity(0.35))
+                StrideIcon(
+                    name: .flame,
+                    size: streakBadgeSize * 0.47,
+                    color: streak.current > 0 ? Color.brand : Color.secondary.opacity(0.35)
+                )
             }
 
             VStack(alignment: .leading, spacing: 2) {

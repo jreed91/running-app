@@ -22,9 +22,7 @@ extension RunSummaryView {
                     .font(.dsSubhead.weight(.semibold))
                     .foregroundStyle(.brandText)
                 Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.dsCaption2.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                StrideIcon(name: .chevronRight, size: 12, color: .secondary, strokeWeight: 2)
             }
             .padding(.horizontal, AppSpacing.md)
             .padding(.vertical, AppSpacing.md)

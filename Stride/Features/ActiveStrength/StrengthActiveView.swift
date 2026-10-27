@@ -154,9 +154,7 @@ struct StrengthActiveView: View {
     private var headerBar: some View {
         HStack {
             Button { showFinishConfirmation = true } label: {
-                Image(systemName: "xmark")
-                    .font(.dsCallout.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                StrideIcon(name: .close, size: 16, color: .secondary, strokeWeight: 2)
                     // 44pt: the minimum tap target, on a screen used mid-set.
                     .frame(width: 44, height: 44)
                     .background(.surfaceSecondary, in: Circle())
@@ -254,9 +252,7 @@ struct StrengthActiveView: View {
                     Circle()
                         .fill(Color.brand.opacity(0.12))
                         .frame(width: exerciseBadgeSize, height: exerciseBadgeSize)
-                    Image(systemName: "figure.strengthtraining.traditional")
-                        .font(.system(size: exerciseBadgeSize * 0.46))
-                        .foregroundStyle(Color.brand)
+                    StrideIcon(name: .barbell, size: exerciseBadgeSize * 0.46, color: .brand)
                 }
             }
 

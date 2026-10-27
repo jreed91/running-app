@@ -136,7 +136,7 @@ struct RunPlaylistCard: View {
                     ProgressView().controlSize(.small).tint(.onFill)
                     Text("Building…")
                 } else {
-                    Image(systemName: "music.note.list")
+                    StrideIcon(name: .music, size: 16, color: .onFill, strokeWeight: 2)
                     Text("Build playlist")
                 }
             }
@@ -147,8 +147,7 @@ struct RunPlaylistCard: View {
 
     private func playlistRow(link: RunPlaylistLink, showsChevron: Bool) -> some View {
         HStack(spacing: 10) {
-            Image(systemName: "music.note.list")
-                .foregroundStyle(.secondary)
+            StrideIcon(name: .music, size: 18, color: .secondary, strokeWeight: 2)
             VStack(alignment: .leading, spacing: 2) {
                 Text(link.name)
                     .font(.bodyStrong)
@@ -194,7 +193,7 @@ struct RunPlaylistCard: View {
                     Task { await play(link) }
                 } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: "play.fill")
+                        StrideIcon(name: .play, size: 14, color: .onFill, strokeWeight: 2)
                         Text("Play")
                     }
                 }

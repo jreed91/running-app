@@ -147,6 +147,22 @@ Shared in `Stride/Shared/Components/StrideControls.swift`. Use these rather than
 
 Text on the route or on brand is always `onFill`, never white (2.8:1).
 
+## Icons
+
+Decided 2026-10-27: **`StrideIcon` wherever it has the glyph, SF Symbols for the rest.**
+
+- `StrideIcon(name:, size:, color:, strokeWeight:)` draws Stride's own set on a 24pt grid
+  with round caps, like the route (`StrideIconName`: workout types, tab glyphs, chevrons,
+  check, plus, close, play, pause, heart, timer, ruler, flag, gear, music and more). The
+  workout-type glyphs render filled SF Symbols underneath (PR #322) so they stay legible.
+- Use an SF Symbol only when `StrideIconName` has no such glyph (clock, map, sparkles,
+  trash, share…), when iOS draws the glyph itself (`Label` in menus, swipe actions,
+  toolbars, `systemImage:` parameters), or when the glyph needs an SF symbol effect
+  (the check that draws itself in on Achievements).
+- A glyph inside a `.primary` button is `onFill`, like its label.
+- Needing a Stride glyph that doesn't exist yet: add a case to `StrideIconName` rather
+  than reaching for the SF Symbol.
+
 ## App Store screenshots
 
 Screenshots are taken in dark appearance, so the screen, the night-map frame and the

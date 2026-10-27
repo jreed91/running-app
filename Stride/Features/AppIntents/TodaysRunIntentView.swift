@@ -34,9 +34,7 @@ struct TodaysRunIntentView: View {
             .padding()
         } else {
             HStack(spacing: 12) {
-                Image(systemName: "figure.run")
-                    .font(.dsTitle2)
-                    .foregroundStyle(.secondary)
+                StrideIcon(name: .run, size: 24, color: .secondary)
                 Text("Rest day — no run scheduled")
                     .font(.dsSubhead)
                     .foregroundStyle(.secondary)
