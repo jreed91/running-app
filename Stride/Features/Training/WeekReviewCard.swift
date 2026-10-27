@@ -1,12 +1,13 @@
 import SwiftUI
 import SwiftData
 
-/// The Progress tab's "this week" card: the week's runs and distance in a plain sentence,
-/// and — with AI Coach on — a short coach's read of the week by Apple Intelligence.
+/// Plan's coach's read of the week by Apple Intelligence, under the week it reads.
 ///
-/// The plain copy is always the first thing drawn and stays whenever the model is off,
-/// unavailable, still writing, or wrote something `WeekReview` would not accept, so the
-/// card never waits on a model to say something true. See `WeekReview`.
+/// It was Progress's first card, where it led with the week's runs and distance in a
+/// plain sentence. On Plan the week card right above already says those, so the card
+/// only draws once there is a checked read to show: with AI Coach off, the model
+/// unavailable or still writing, or a read `WeekReview` would not accept, it draws
+/// nothing rather than repeat the week card. See `WeekReview`.
 struct WeekReviewCard: View {
     /// The runner's runs, as the Progress tab already fetched them (a year, runs only).
     let runs: [RunWorkout]
@@ -30,32 +31,34 @@ struct WeekReviewCard: View {
 
     var body: some View {
         if let facts {
-            card(for: facts)
-                .task(id: requestKey(for: facts)) { await refresh(for: facts) }
+            Group {
+                if let shown = currentWording(for: facts) {
+                    card(for: facts, shown: shown)
+                }
+            }
+            .task(id: requestKey(for: facts)) { await refresh(for: facts) }
         }
     }
 
-    private func card(for facts: WeekReviewFacts) -> some View {
-        let shown = currentWording(for: facts)
-        return VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            Text(facts.isCurrentWeek ? "THIS WEEK" : "LAST WEEK")
+    private func card(for facts: WeekReviewFacts, shown: WeekReviewWording) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            // Under Plan's "This week" card, so it names itself rather than the week.
+            Text(facts.isCurrentWeek ? "COACH'S READ" : "LAST WEEK")
                 .strideEyebrow()
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, AppSpacing.xs)
 
             VStack(alignment: .leading, spacing: AppSpacing.sm) {
-                Text(shown?.headline ?? WeekReview.plainHeadline(for: facts, unit: unit))
+                Text(shown.headline)
                     .font(.dsHeadline)
-                Text(shown?.summary ?? WeekReview.plainSummary(for: facts, unit: unit))
+                Text(shown.summary)
                     .font(.dsBody)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                if let shown {
-                    Text(shown.nextFocus)
-                        .font(.dsCallout.weight(.semibold))
-                        .fixedSize(horizontal: false, vertical: true)
-                    footer
-                }
+                Text(shown.nextFocus)
+                    .font(.dsCallout.weight(.semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+                footer
             }
             .padding(AppSpacing.lg)
             .frame(maxWidth: .infinity, alignment: .leading)

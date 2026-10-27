@@ -31,9 +31,10 @@ struct ProgressDashboardView: View {
     @State private var progressAppeared = false
     @State private var selectedTab: ProgressTab = .stats
 
+    /// Two tabs: trends over time, and what they add up to. Race insights moved to Plan,
+    /// beside the race they predict.
     enum ProgressTab: String, CaseIterable {
         case stats    = "Stats"
-        case insights = "Insights"
         case medals   = "Achievements"
     }
 
@@ -96,26 +97,23 @@ struct ProgressDashboardView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 tabPicker
-                if selectedTab == .insights {
-                    RaceInsightsView()
-                } else if selectedTab == .stats {
+                if selectedTab == .stats {
+                    // The range sits right under the tabs, above everything it changes,
+                    // the totals hero included. It used to sit under the week card, so
+                    // nothing said it moved the numbers above it.
+                    rangePicker
+                        .padding(.horizontal, AppSpacing.lg)
+                        .padding(.bottom, AppSpacing.xs)
                     ScrollView {
                         VStack(alignment: .leading, spacing: 16) {
+                            // The week card moved to Plan, which owns the week; this tab is
+                            // only about the period the range picks.
+                            summaryHeader
+                                .opacity(progressAppeared ? 1 : 0)
+                                .scaleEffect(progressAppeared ? 1 : 0.94, anchor: .top)
+                                .adaptiveAnimation(AppAnimation.entrance.delay(0.05), value: progressAppeared)
                             // Pairs, so on a wide page (iPhone Duo open, in landscape) the charts
                             // read as a grid with the gap on the fold. One column keeps the old order.
-                            StrideColumns(spacing: 16) {
-                                summaryHeader
-                                    .opacity(progressAppeared ? 1 : 0)
-                                    .scaleEffect(progressAppeared ? 1 : 0.94, anchor: .top)
-                                    .adaptiveAnimation(AppAnimation.entrance.delay(0.05), value: progressAppeared)
-                            } trailing: {
-                                // Above the range picker because it ignores it: the week is
-                                // the week, whatever period the charts below are showing.
-                                WeekReviewCard(runs: workouts)
-                                    .strideEntrance(progressAppeared, delay: 0.08, rise: 10)
-                            }
-                            rangePicker
-                                .strideEntrance(progressAppeared, delay: 0.10, rise: 10)
                             StrideColumns(spacing: 16) {
                                 weeklyVolumeChart
                                     .strideEntrance(progressAppeared, delay: 0.15, rise: 18)
@@ -220,12 +218,23 @@ struct ProgressDashboardView: View {
 
     // MARK: - Range picker
 
+    /// Chips rather than a second segmented control: two stacked controls both drew the
+    /// route under their choice, and the route means progress or go. One segmented control
+    /// (the tabs) picks the page; the chips filter it.
     private var rangePicker: some View {
-        StrideSegmentedControl(
-            selection: $selectedRange,
-            options: ChartRange.allCases,
-            monospaced: true
-        ) { Text($0.rawValue) }
+        HStack(spacing: AppSpacing.sm) {
+            ForEach(ChartRange.allCases, id: \.self) { range in
+                Button {
+                    withAnimation(AppAnimation.bouncy) { selectedRange = range }
+                } label: {
+                    Text(range.rawValue)
+                        .monospacedDigit()
+                }
+                .buttonStyle(.strideChip(selected: selectedRange == range))
+                .accessibilityAddTraits(selectedRange == range ? [.isButton, .isSelected] : .isButton)
+            }
+            Spacer(minLength: 0)
+        }
     }
 
     // MARK: - Tab picker
