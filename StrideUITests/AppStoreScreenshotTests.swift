@@ -48,9 +48,9 @@ final class AppStoreScreenshotTests: XCTestCase {
         }
     }
 
+    // Four tabs since Settings became a sheet from Home: the same bar, quartered.
     private static let tabOffsets: [String: CGFloat] = [
-        "Home": 0.157, "Plan": 0.328, "History": 0.498,
-        "Progress": 0.669, "Settings": 0.838
+        "Home": 0.178, "Plan": 0.391, "History": 0.604, "Progress": 0.817
     ]
 
     private func selectTab(_ name: String) {

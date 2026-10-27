@@ -63,7 +63,15 @@ final class StrideUITests: XCTestCase {
         assertTab("Plan", showsNavigationTitle: "My Plan")
         assertTab("History", showsNavigationTitle: "History")
         assertTab("Progress", showsNavigationTitle: "Progress")
-        assertTab("Settings", showsNavigationTitle: "Settings")
+
+        // Settings is a sheet from Home's profile button, not a tab.
+        assertTab("Home", showsNavigationTitle: "Home")
+        let settingsButton = app.buttons["home.settings"]
+        XCTAssertTrue(settingsButton.waitForExistence(timeout: 5))
+        settingsButton.tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+        app.buttons["settings.done"].tap()
+        XCTAssertTrue(app.navigationBars["Home"].waitForExistence(timeout: 5))
     }
 
     func testE2EFreeRunHUDOpensFromDashboard() throws {

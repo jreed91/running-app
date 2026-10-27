@@ -465,6 +465,18 @@ struct DashboardView: View {
             // A large title like Plan, History and Progress. "Home" rather than "Today":
             // the selected day's section below already says "Today".
             .navigationTitle("Home")
+            // Settings left the tab bar for this button: rarely visited, so it sits behind
+            // the runner's profile rather than taking one of the everyday tabs.
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        container.appNavigation.openSettings()
+                    } label: {
+                        Label("Settings", systemImage: "person.crop.circle")
+                    }
+                    .accessibilityIdentifier("home.settings")
+                }
+            }
             // The active-run HUD is presented by `MainTabView`, not here: a run started
             // from this tab now outlives the screen that shows it, so it can be
             // minimised into the tab-bar accessory instead of only finished (U7).

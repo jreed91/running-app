@@ -404,10 +404,9 @@ struct AICoachChatView: View {
         )
     }
 
-    /// Closes the chat and switches to the Settings tab, where the AI Coach toggle and
-    /// model picker live.
+    /// Closes the chat and opens Settings, where the AI Coach toggle and model picker live.
     private func openCoachSettings() {
-        container.appNavigation.select(.settings)
+        container.appNavigation.openSettings()
         // The chat can sit on the post-run review sheet; close that too, or Settings opens
         // underneath it.
         container.pendingReviewWorkout = nil

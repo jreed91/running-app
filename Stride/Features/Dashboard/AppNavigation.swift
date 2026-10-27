@@ -12,7 +12,6 @@ enum StrideTab: String, Hashable, Sendable, CaseIterable {
     case plan
     case history
     case progress
-    case settings
 }
 
 // MARK: - AppNavigation
@@ -29,6 +28,11 @@ final class AppNavigation {
 
     var selectedTab: StrideTab = .home
 
+    /// Settings, open over the tabs. It was a fifth tab; it is a sheet now, opened from
+    /// the profile button on Home, because it is visited rarely and a tab is for places
+    /// the runner goes every day.
+    var isSettingsPresented = false
+
     /// A scheduled workout whose detail the Plan tab should push, set by a morning-reminder
     /// tap. The Plan tab resolves it against its store and clears it, so it is a request
     /// rather than state: reading it after that returns `nil`.
@@ -39,6 +43,11 @@ final class AppNavigation {
     /// switch should also do (scroll to top, dismiss a sheet) if that ever becomes true.
     func select(_ tab: StrideTab) {
         selectedTab = tab
+    }
+
+    /// Opens Settings over whatever tab is showing.
+    func openSettings() {
+        isSettingsPresented = true
     }
 
     /// Sends the app to the Plan tab with `workoutID`'s detail pushed on it.
