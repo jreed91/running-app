@@ -314,7 +314,7 @@ struct RaceInsightsView: View {
                     if let selected = selectedPredictionDate,
                        let point = closestPredictionPoint(to: selected) {
                         selectionRule(x: .value("Date", point.date)) {
-                            tooltipContainer {
+                            StrideTooltip {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(point.date, format: .dateTime.month(.abbreviated).day())
                                         .font(.dsCaption2).foregroundStyle(.secondary)
@@ -583,11 +583,4 @@ struct RaceInsightsView: View {
             )
     }
 
-    private func tooltipContainer<C: View>(@ViewBuilder content: () -> C) -> some View {
-        content()
-            .padding(.horizontal, AppSpacing.sm).padding(.vertical, 5)
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.sm, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: AppRadius.sm, style: .continuous).strokeBorder(.cardStroke, lineWidth: 1))
-            .appShadow(.e2)
-    }
 }

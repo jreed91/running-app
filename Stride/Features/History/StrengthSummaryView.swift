@@ -143,16 +143,7 @@ struct StrengthSummaryView: View {
                     .strideEyebrow()
                     .foregroundStyle(.secondary)
                 Spacer()
-                HStack(spacing: 4) {
-                    Image(systemName: "clock")
-                        .font(.dsCaption2)
-                    Text("\(plan.estimatedDurationMinutes) min")
-                        .font(.dsCaption.weight(.semibold))
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(.surfaceSecondary, in: Capsule())
-                .foregroundStyle(.secondary)
+                StrideTag("\(plan.estimatedDurationMinutes) min", systemImage: "clock")
             }
             .padding(.leading, AppSpacing.xs)
 
@@ -167,8 +158,7 @@ struct StrengthSummaryView: View {
     private var sourceRow: some View {
         HStack(spacing: 8) {
             if workout.healthKitWorkoutID != nil {
-                Image(systemName: "heart.fill")
-                    .foregroundStyle(.destructive)
+                StrideIcon(name: .heart, size: 13, color: .destructive, strokeWeight: 2)
                 Text("Synced from Apple Health")
             } else {
                 Image(systemName: "checkmark.seal.fill")

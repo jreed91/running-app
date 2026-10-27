@@ -22,9 +22,7 @@ extension RunSummaryView {
                     .font(.dsSubhead.weight(.semibold))
                     .foregroundStyle(.brandText)
                 Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.dsCaption2.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                StrideIcon(name: .chevronRight, size: 12, color: .secondary, strokeWeight: 2)
             }
             .padding(.horizontal, AppSpacing.md)
             .padding(.vertical, AppSpacing.md)
@@ -151,10 +149,7 @@ extension RunSummaryView {
                     // Muted, so the route reads first — the night map of the Route Loop.
                     .mapStyle(.standard(emphasis: .muted))
                     Text(routeName)
-                        .font(.dsCaption2.weight(.semibold))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: AppRadius.xs))
+                        .strideMapLabel()
                         .padding(10)
                 }
                 .frame(height: 180)

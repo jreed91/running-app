@@ -72,7 +72,7 @@ extension RunSummaryView {
                 .onAppear {
                     // A steady placeholder under Reduce Motion; the pulse is motion.
                     guard !reduceMotion else { return }
-                    withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                    withAnimation(AppAnimation.thinking) {
                         opacity = 0.28
                     }
                 }

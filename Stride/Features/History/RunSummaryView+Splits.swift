@@ -296,8 +296,7 @@ extension RunSummaryView {
                 .foregroundStyle(splitPaceTone(split.paceSecondsPerKm, average: average))
             }
         }
-        .padding(.horizontal, AppSpacing.sm).padding(.vertical, 5)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: AppRadius.xs))
+        .strideTooltip()
     }
 
     /// Faster than this run's average reads as a gain, slower as a caution, and anything
@@ -406,8 +405,7 @@ extension RunSummaryView {
                             Text("\(Int(hr)) bpm")
                                 .font(.dsCaption.weight(.bold))
                         }
-                        .padding(.horizontal, AppSpacing.sm).padding(.vertical, 5)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: AppRadius.xs))
+                        .strideTooltip()
                     }
             }
         }
@@ -454,8 +452,7 @@ extension RunSummaryView {
                             Text("\(gain >= 0 ? "+" : "")\(Int(gain)) \(appSettings.unitPreference.elevationLabel)")
                                 .font(.dsCaption.weight(.bold))
                         }
-                        .padding(.horizontal, AppSpacing.sm).padding(.vertical, 5)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: AppRadius.xs))
+                        .strideTooltip()
                     }
             }
         }

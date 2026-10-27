@@ -242,11 +242,11 @@ struct NewPlanOnboardingView: View {
 
     private func advance() {
         goingForward = true
-        withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : AppAnimation.bouncy) { step += 1 }
+        withAnimation(reduceMotion ? AppAnimation.reduced : AppAnimation.bouncy) { step += 1 }
     }
     private func retreat() {
         goingForward = false
-        withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : AppAnimation.bouncy) { step -= 1 }
+        withAnimation(reduceMotion ? AppAnimation.reduced : AppAnimation.bouncy) { step -= 1 }
     }
 
     // MARK: - Step content

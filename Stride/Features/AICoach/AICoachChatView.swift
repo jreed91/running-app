@@ -317,8 +317,7 @@ struct AICoachChatView: View {
                         .animation(
                             reduceMotion
                                 ? nil
-                                : Animation.easeInOut(duration: 0.7)
-                                    .repeatForever()
+                                : AppAnimation.thinking
                                     .delay(Double(index) * 0.12),
                             value: isWaitingForCoach
                         )

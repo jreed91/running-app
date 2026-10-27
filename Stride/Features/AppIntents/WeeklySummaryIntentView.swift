@@ -11,9 +11,7 @@ struct WeeklySummaryIntentView: View {
                 Circle()
                     .fill(Color.brand.opacity(0.12))
                     .frame(width: 52, height: 52)
-                Image(systemName: "chart.bar.fill")
-                    .font(.dsTitle2)
-                    .foregroundStyle(Color.brandText)
+                StrideIcon(name: .chart, size: 24, color: .brandText, strokeWeight: 2)
             }
             VStack(alignment: .leading, spacing: 4) {
                 Text("This Week")

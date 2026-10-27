@@ -298,16 +298,7 @@ struct WorkoutDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("EXERCISES").strideEyebrow().foregroundStyle(.secondary)
             // Summary chip
-            HStack(spacing: 6) {
-                Image(systemName: "clock")
-                    .font(.dsCaption2)
-                Text("\(plan.estimatedDurationMinutes) min")
-                    .font(.dsCaption.weight(.semibold))
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(.surfaceSecondary, in: Capsule())
-            .foregroundStyle(.secondary)
+            StrideTag("\(plan.estimatedDurationMinutes) min", systemImage: "clock")
 
             ForEach(Array(plan.exercises.enumerated()), id: \.offset) { _, exercise in
                 ExerciseRow(exercise: exercise)
@@ -333,20 +324,10 @@ struct ExerciseRow: View {
             }
             HStack(spacing: 6) {
                 ForEach(exercise.muscleGroups.prefix(3), id: \.self) { group in
-                    Text(group)
-                        .font(.dsCaption2.weight(.medium))
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
-                        .background(Color.brand.opacity(0.12), in: Capsule())
-                        .foregroundStyle(Color.brandText)
+                    StrideTag(group, tone: .brand)
                 }
                 if let weight = exercise.targetWeight {
-                    Text(weight)
-                        .font(.dsCaption2.weight(.medium))
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
-                        .background(.surfaceSecondary, in: Capsule())
-                        .foregroundStyle(.secondary)
+                    StrideTag(weight)
                 }
             }
             if let notes = exercise.notes {
@@ -410,7 +391,7 @@ private struct GoalRaceCelebrationCard: View {
         .heroCard()
         .onAppear {
             guard !reduceMotion else { return }
-            withAnimation(.spring(response: 0.9, dampingFraction: 0.82).delay(0.1)) {
+            withAnimation(AppAnimation.celebrate.delay(0.1)) {
                 burst = true
             }
         }

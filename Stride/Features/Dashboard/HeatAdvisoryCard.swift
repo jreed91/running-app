@@ -31,7 +31,7 @@ struct HeatAdvisoryCard: View {
             actionButtons
         }
         .padding(AppSpacing.lg)
-        .background(cardBackground)
+        .strideCard()
         .accessibilityElement(children: .contain)
     }
 
@@ -159,17 +159,6 @@ struct HeatAdvisoryCard: View {
 
     private var startTimeText: String {
         advisory.plannedStart.formatted(.dateTime.hour().minute())
-    }
-
-    /// A plain card, like every other card on Home: the status colour is on the icon
-    /// tile and the action, not the card's ground.
-    private var cardBackground: some View {
-        RoundedRectangle(cornerRadius: AppRadius.lg, style: .continuous)
-            .fill(Color.surfaceSecondary)
-            .overlay(
-                RoundedRectangle(cornerRadius: AppRadius.lg, style: .continuous)
-                    .strokeBorder(Color.cardStroke, lineWidth: 1)
-            )
     }
 }
 

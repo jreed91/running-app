@@ -14,7 +14,7 @@ struct MissedWorkoutsRecoveryCard: View {
             actionButtons
         }
         .padding(AppSpacing.lg)
-        .background(cardBackground)
+        .strideCard()
         .overlay {
             if isLoading {
                 RoundedRectangle(cornerRadius: AppRadius.lg, style: .continuous)
@@ -65,19 +65,6 @@ struct MissedWorkoutsRecoveryCard: View {
             Button("Skip missed workouts", action: onDismiss)
                 .buttonStyle(.strideButton(.quiet, compact: true))
         }
-    }
-
-    // MARK: - Background
-
-    /// A plain card, like every other card on Home: the status colour is on the icon
-    /// tile and the action, not the card's ground.
-    private var cardBackground: some View {
-        RoundedRectangle(cornerRadius: AppRadius.lg, style: .continuous)
-            .fill(Color.surfaceSecondary)
-            .overlay(
-                RoundedRectangle(cornerRadius: AppRadius.lg, style: .continuous)
-                    .strokeBorder(Color.cardStroke, lineWidth: 1)
-            )
     }
 }
 

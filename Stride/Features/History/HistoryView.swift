@@ -738,9 +738,7 @@ struct StrengthWorkoutRowView: View {
                             .foregroundStyle(.brand)
                     }
                     if workout.healthKitWorkoutID != nil {
-                        Image(systemName: "heart.fill")
-                            .font(.dsCaption2)
-                            .foregroundStyle(.destructive)
+                        StrideIcon(name: .heart, size: 11, color: .destructive, strokeWeight: 2)
                     }
                 }
             }
