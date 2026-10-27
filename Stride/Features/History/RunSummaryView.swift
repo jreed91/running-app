@@ -346,24 +346,6 @@ struct RunSummaryView: View {
         return (String(format: "%.2f", converted), appSettings.unitPreference.distanceLabel)
     }
 
-    var routeName: String {
-        if let name = workout.scheduledWorkout?.week?.plan?.raceName?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !name.isEmpty {
-            return name
-        }
-        if workout.isWalk {
-            return String(
-                localized: "\(workout.workoutLocation.localizedName) Walk",
-                comment: "Title for an imported walk, e.g. Outdoor Walk"
-            )
-        }
-        if workout.isCrossTraining {
-            return WorkoutType.crossTraining.localizedName
-        }
-        return workout.scheduledWorkout?.workoutType.localizedName ?? "\(workout.workoutLocation.localizedName) Run"
-    }
-
-
     /// The run screen itself: everything but an opened Breakdown page.
     @ViewBuilder
     private var summaryContent: some View {
@@ -473,9 +455,10 @@ struct RunSummaryView: View {
             if openPage == nil {
                 ToolbarItem(placement: .primaryAction) {
                     // Always present, rather than popping into the toolbar seconds after the
-                    // screen appears once a pre-render finished (N21). A menu rather than a
-                    // button since B6 gave the run a second thing to send: the picture of it
-                    // and the data behind it are different asks, and neither is the default.
+                    // screen appears once a pre-render finished (N21). One menu for the run's
+                    // actions: the picture of it and the data behind it are different asks
+                    // (B6), and Delete sits at the bottom of it rather than as a bright trash
+                    // can one thumb-width from Share.
                     Menu {
                         Button {
                             Task { await renderShareCard() }
@@ -491,24 +474,23 @@ struct RunSummaryView: View {
                                 Label("Export route as GPX", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
                             }
                         }
+                        Divider()
+                        Button(role: .destructive) {
+                            showDeleteConfirmation = true
+                        } label: {
+                            Label("Delete workout", systemImage: "trash")
+                        }
                     } label: {
                         // A `Label`, not a bare image: a toolbar shows the icon, and an
                         // overflow menu (iPhone Duo's side bar runs out of room) shows both.
                         if isRenderingShareCard {
                             ProgressView()
                         } else {
-                            Label("Share run", systemImage: "square.and.arrow.up")
+                            Label("Run actions", systemImage: "ellipsis")
                         }
                     }
                     .disabled(isRenderingShareCard)
-                    .accessibilityLabel("Share run")
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    Button(role: .destructive) {
-                        showDeleteConfirmation = true
-                    } label: {
-                        Label("Delete workout", systemImage: "trash")
-                    }
+                    .accessibilityLabel("Run actions")
                 }
             }
         }

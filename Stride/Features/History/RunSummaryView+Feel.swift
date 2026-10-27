@@ -12,7 +12,7 @@ extension RunSummaryView {
     /// can be given (or changed) afterwards; a second tap on the active choice clears it.
     var feelSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // The chosen answer shows on its own chip, so the header doesn't repeat it.
+            // The chosen answer shows under the row, so the header doesn't repeat it.
             sectionHeader(title: "How did that feel?")
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 6) {
@@ -20,6 +20,7 @@ extension RunSummaryView {
                         feelButton(feel)
                     }
                 }
+                feelCaption
 
                 // Only when there is something to do about it. What the rating is for is
                 // the buttons' hint, rather than a standing line under them on every open.
@@ -37,6 +38,26 @@ extension RunSummaryView {
         }
     }
 
+    /// The chosen answer in words, or the scale's two ends before anything is chosen.
+    private var feelCaption: some View {
+        Group {
+            if let feel = workout.feel {
+                Text(feel.localizedName)
+                    .foregroundStyle(.primary)
+            } else {
+                HStack {
+                    Text(RunFeel.veryEasy.localizedName)
+                    Spacer()
+                    Text(RunFeel.veryHard.localizedName)
+                }
+                .foregroundStyle(.secondary)
+            }
+        }
+        .font(.dsCaption.weight(.semibold))
+        .frame(maxWidth: .infinity, alignment: workout.feel == nil ? .leading : .center)
+        .accessibilityHidden(true)
+    }
+
     private func feelButton(_ feel: RunFeel) -> some View {
         let isActive = workout.feel == feel
         return Button {
@@ -46,16 +67,11 @@ extension RunSummaryView {
             feelChangedSinceInsight = true
             context.saveOrLog("the run-feel rating")
         } label: {
-            VStack(spacing: AppSpacing.xxs) {
-                Text("\(feel.rawValue)")
-                    .font(.dsHeadline.weight(.bold).monospacedDigit())
-                Text(feel.localizedName)
-                    .font(.dsCaption2.weight(.semibold))
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
-                    .minimumScaleFactor(0.8)
-            }
-            .frame(maxWidth: .infinity, minHeight: 44)
+            // The number only: five words in five narrow buttons broke "Moder-ate" in
+            // half. The words live in the caption under the row.
+            Text("\(feel.rawValue)")
+                .font(.dsHeadline.weight(.bold).monospacedDigit())
+                .frame(maxWidth: .infinity, minHeight: 44)
         }
         // The chip sets the colours: the route when chosen, a card when not.
         .buttonStyle(.strideChip(selected: isActive))

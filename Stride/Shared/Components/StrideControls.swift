@@ -268,11 +268,15 @@ struct StrideTag: View {
     let text: String
     var systemImage: String?
     var tone: Tone = .neutral
+    /// A status colour for the glyph alone (a run against its plan), so the status shows
+    /// in the icon and the text stays readable rather than coloured on its own tint.
+    var iconTint: Color?
 
-    init(_ text: String, systemImage: String? = nil, tone: Tone = .neutral) {
+    init(_ text: String, systemImage: String? = nil, tone: Tone = .neutral, iconTint: Color? = nil) {
         self.text = text
         self.systemImage = systemImage
         self.tone = tone
+        self.iconTint = iconTint
     }
 
     var body: some View {
@@ -280,6 +284,7 @@ struct StrideTag: View {
             if let systemImage {
                 Image(systemName: systemImage)
                     .font(.dsCaption2)
+                    .foregroundStyle(iconTint.map(AnyShapeStyle.init) ?? AnyShapeStyle(.foreground))
             }
             Text(text)
                 .font(.dsCaption.weight(.semibold))

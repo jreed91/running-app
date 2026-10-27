@@ -134,24 +134,21 @@ extension RunSummaryView {
                             .foregroundStyle(.secondary)
                     }
             } else {
-                ZStack(alignment: .topLeading) {
-                    Map {
-                        MapPolyline(coordinates: workout.routeCoordinates.map(\.clCoordinate))
-                            .stroke(.route, style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
-                        if let start = workout.routeCoordinates.first {
-                            Annotation("Start", coordinate: start.clCoordinate, anchor: .center) {
-                                StartPin(diameter: 18)
-                                    .appShadow(.e2)
-                            }
-                            .annotationTitles(.hidden)
+                // No label on the map: the run's type is already the title and the hero's
+                // eyebrow, and a third "Easy" on the route only crowded it.
+                Map {
+                    MapPolyline(coordinates: workout.routeCoordinates.map(\.clCoordinate))
+                        .stroke(.route, style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
+                    if let start = workout.routeCoordinates.first {
+                        Annotation("Start", coordinate: start.clCoordinate, anchor: .center) {
+                            StartPin(diameter: 18)
+                                .appShadow(.e2)
                         }
+                        .annotationTitles(.hidden)
                     }
-                    // Muted, so the route reads first — the night map of the Route Loop.
-                    .mapStyle(.standard(emphasis: .muted))
-                    Text(routeName)
-                        .strideMapLabel()
-                        .padding(10)
                 }
+                // Muted, so the route reads first — the night map of the Route Loop.
+                .mapStyle(.standard(emphasis: .muted))
                 .frame(height: 180)
                 .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
             }
@@ -165,7 +162,6 @@ extension RunSummaryView {
         let label: String
         let value: String
         let unit: String?
-        var tone: Color?
         var id: String { label }
     }
 
@@ -176,12 +172,12 @@ extension RunSummaryView {
         var vitals: [RunVital] = []
         if let hr = workout.averageHeartRate {
             vitals.append(RunVital(
-                label: String(localized: "Avg HR"), value: "\(Int(hr))", unit: "bpm", tone: hrTone(hr)
+                label: String(localized: "Avg HR"), value: "\(Int(hr))", unit: "bpm"
             ))
         }
         if let maxHR = workout.maxHeartRate {
             vitals.append(RunVital(
-                label: String(localized: "Max HR"), value: "\(Int(maxHR))", unit: "bpm", tone: hrTone(maxHR)
+                label: String(localized: "Max HR"), value: "\(Int(maxHR))", unit: "bpm"
             ))
         }
         // Cadence was live-only until A5 — the HUD showed it mid-run and nothing kept
@@ -206,7 +202,7 @@ extension RunSummaryView {
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text(vital.value)
                     .font(.dsHeadline.weight(.semibold).monospacedDigit())
-                    .foregroundStyle(vital.tone ?? .primary)
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
                 if let unit = vital.unit {
@@ -224,10 +220,6 @@ extension RunSummaryView {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(vital.label)
         .accessibilityValue(SpokenMetric.spoken(value: vital.value, unit: vital.unit))
-    }
-
-    private func hrTone(_ value: Double) -> Color? {
-        value >= 155 ? .warning : nil
     }
 
     // MARK: Conditions
