@@ -11,36 +11,14 @@ struct UnitPreferencePicker: View {
     @Binding var selection: UnitPreference
 
     var body: some View {
-        HStack(spacing: AppSpacing.xs) {
-            ForEach(UnitPreference.allCases, id: \.self) { unit in
-                Button { selection = unit } label: {
-                    VStack(spacing: 3) {
-                        Text(unit.localizedName)
-                            .font(.dsSubhead.weight(.semibold))
-                        Text(unit == .metric ? "km · min/km" : "mi · min/mi")
-                            .font(.dsCaption2)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, AppSpacing.md)
-                    .background {
-                        if selection == unit {
-                            RoundedRectangle(cornerRadius: AppRadius.sm, style: .continuous).fill(.route)
-                        }
-                    }
-                    // `.onFill`, not `.white`: white on `Color.brand` is 2.84:1, below even
-                    // the 3.0 large-text bar, which is why `onFill` exists (U3a). The
-                    // Settings copy of this control was still using white.
-                    .foregroundStyle(selection == unit ? Color.onFill : Color.secondary)
-                    .adaptiveAnimation(AppAnimation.snappy, value: selection)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(unit.localizedName)
-                .accessibilityAddTraits(selection == unit ? [.isSelected] : [])
-            }
-        }
-        // The same card track as `StrideSegmentedControl`, so the two read as one control.
-        .padding(AppSpacing.xs)
-        .strideCard(cornerRadius: AppRadius.md)
+        // A `StrideSegmentedControl` with a hint line, so it is the same control as every
+        // other segmented choice: the route slides between the two.
+        StrideSegmentedControl(
+            selection: $selection,
+            options: UnitPreference.allCases,
+            title: { Text($0.localizedName) },
+            subtitle: { Text($0 == .metric ? "km · min/km" : "mi · min/mi") }
+        )
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Distance and pace units")
     }

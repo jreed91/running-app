@@ -75,6 +75,10 @@ spins, and nothing moves under Reduce Motion except a short cross-fade.
 | `routeDraw` | ease-in-out 1.1s | The app mark's loop stroking itself in |
 | `pinDrop` | spring 0.35s, damping 0.55 | Something landing: the start pin, an empty state's disc |
 | `pinPulse` | ease-out 1.8s, repeating | A live position's ripple. One per screen |
+| `quick` | ease-in-out 0.2s | A state flipping with no spring: a disclosure chevron, a status line changing |
+| `thinking` | ease-in-out 0.8s, repeating | Waiting on the coach: skeleton lines and typing dots breathe |
+| `celebrate` | spring 0.9s, damping 0.82 | A goal met: the confetti burst, once |
+| `countdown` | linear 1s | A countdown ring moving at clock speed (strength rest timer) |
 | `stagger` | 0.06s | The gap between items in a staggered entrance |
 | `reduced` | ease-in-out 0.2s | What everything becomes under Reduce Motion |
 
@@ -93,6 +97,8 @@ spins, and nothing moves under Reduce Motion except a short cross-fade.
 | `StrideEmptyState` | The disc lands with `pinDrop` and its symbol bounces once; title, text and action rise in behind it | Fades in whole |
 | `StrideAppMark(drawsOn: true)` | The loop draws itself in (`routeDraw`), then the pin drops 0.85s later | Appears whole |
 | `StartPin(pulses: true)` | One slow ripple outwards, repeated | No ripple |
+| Coach skeleton and typing dots | Breathe with `thinking` while the coach writes | Still |
+| A disclosure row (Plan weeks) | The chevron turns with `quick` | Same |
 
 ### Rules
 
@@ -102,8 +108,8 @@ spins, and nothing moves under Reduce Motion except a short cross-fade.
 2. **Signature motion is for the route and the pin.** Drawing along a line belongs to the
    route (progress, the mark); landing with an overshoot belongs to the pin and things
    that stand in for it. Cards and text only fade and rise.
-3. **Once.** A route draws once, an empty state lands once. Only a live
-   position repeats, and only one per screen.
+3. **Once.** A route draws once, an empty state lands once. Only a live position and
+   something waiting on the coach (`thinking`) repeat, and only one of each per screen.
 4. **Fast enough to ignore.** A screen's entrance is done inside about half a second;
    stagger at most about six items, then let the rest arrive together.
 5. **The live run screen keeps its own motion.** It is the written exception here as it
@@ -118,7 +124,16 @@ Shared in `Stride/Shared/Components/StrideControls.swift`. Use these rather than
 | --- | --- |
 | A button | `.buttonStyle(.strideButton())`: `.primary` (the route, one per screen), `.secondary` (brand tint), `.quiet` (card), `.destructive`; `compact:` for rows, `fullWidth: false` to hug |
 | A filter or quick reply | `.buttonStyle(.strideChip(selected:))` |
-| A segmented choice on a page | `StrideSegmentedControl`; inside a `Form` the system `.segmented` picker, tinted by `AppChrome` |
+| A segmented choice on a page | `StrideSegmentedControl`; `subtitle:` adds a hint line under each title (`UnitPreferencePicker`). Inside a `Form`, the system `.segmented` picker, tinted by `AppChrome` |
+| Days of the week | `DayOfWeekPicker`: seven route-on, card-off toggles |
+| A number to step or type | `NumericStepperField` |
+| A tappable card or custom control that isn't a button style | `.buttonStyle(BouncyButtonStyle())`: presses to 95% with `snappy` |
+| A label that isn't a control (a duration, a weight, a muscle group) | `StrideTag(text, systemImage:, tone:)`: `.neutral` is the chip's card look in secondary text, `.brand` is brand at 12% with `brandText` |
+| A chart's selected-point readout | `StrideTooltip { … }` (or `.strideTooltip()`): a small card on `e2`, never system material |
+| A label on a map (the route's name) | `.strideMapLabel()`: the tooltip's card |
+| A scheduled workout in a list | `WorkoutCardView` |
+| Weather data | `AppleWeatherAttribution()` under it, every time (App Review 5.2.5) |
+| A coach reply | `CoachText`, so its lists and headings render as lists and headings |
 | A scrolling page's column of cards | `.strideReadableWidth()` on the stack inside the `ScrollView`, after its padding: caps it at 700pt and centres it, for iPhone Duo's inner display |
 | Progress along a line | `StrideProgressBar(value:, tint:)`, the route on a `surfaceTertiary` track |
 | A free-standing text field | `.strideField()`; a field inside a card is a well on `surfacePrimary` with the hairline |
@@ -126,7 +141,7 @@ Shared in `Stride/Shared/Components/StrideControls.swift`. Use these rather than
 | A sheet with its own scroll view | `.strideSheet()` |
 | A section header | `Text(...).strideEyebrow()` in `.secondary`, above its card (not inside it), with `.padding(.horizontal, AppSpacing.xs)`; `brandText` only on a hero |
 | An icon tile | A circle tinted at 12–15% with the glyph in the tint: 48pt leading a card, 32pt in a row. Settings rows keep their small square tiles |
-| A card | `.padding(AppSpacing.lg).strideCard()` at the default `lg` radius; status (heat, missed runs) shows in the icon and the action, not a tinted ground |
+| A card | `.padding(AppSpacing.lg).strideCard()` at the default `lg` radius, never a hand-drawn fill and stroke; status (heat, missed runs) shows in the icon and the action, not a tinted ground |
 | An empty screen | `StrideEmptyState(title, systemImage:, description:) { actions }`, not `ContentUnavailableView` |
 | A chart | Bars in `.routeBar`, a progress line in `.route` at 3pt with round caps, the selection rule dashed in brand, tooltips as cards; zone and data colours stay as they are |
 

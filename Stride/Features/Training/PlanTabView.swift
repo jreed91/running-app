@@ -1213,7 +1213,7 @@ private struct PlanWeekSummaryRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button {
-                withAnimation(.easeInOut(duration: 0.2)) { isExpanded.toggle() }
+                withAnimation(AppAnimation.quick) { isExpanded.toggle() }
             } label: {
                 HStack(spacing: 14) {
                     statusIcon
@@ -1272,7 +1272,7 @@ private struct PlanWeekSummaryRow: View {
 
                     StrideIcon(name: .chevronDown, size: 12, color: .secondary, strokeWeight: 2)
                         .rotationEffect(.degrees(isExpanded ? 180 : 0))
-                        .animation(.easeInOut(duration: 0.2), value: isExpanded)
+                        .animation(AppAnimation.quick, value: isExpanded)
                 }
                 .padding()
             }

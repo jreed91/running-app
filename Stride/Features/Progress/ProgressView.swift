@@ -276,7 +276,7 @@ struct ProgressDashboardView: View {
                     }
                     if let selected = selectedVolumeDate, let bucket = closestWeekBucket(to: selected) {
                         selectionRule(x: .value("Week", bucket.weekStart)) {
-                            tooltipContainer {
+                            StrideTooltip {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(bucket.weekStart, format: .dateTime.month(.abbreviated).day())
                                         .font(.dsCaption2).foregroundStyle(.secondary)
@@ -469,7 +469,7 @@ struct ProgressDashboardView: View {
             }
             if let run = selectedRun {
                 selectionRule(x: .value("Date", run.date)) {
-                    tooltipContainer {
+                    StrideTooltip {
                         VStack(alignment: .leading, spacing: 2) {
                             let day = run.date.formatted(.dateTime.month(.abbreviated).day())
                             Text("\(day) · \(run.workoutType.localizedName)")
@@ -544,7 +544,7 @@ struct ProgressDashboardView: View {
                        let workout = closestWorkout(to: selected, in: withHR),
                        let hr = workout.averageHeartRate {
                         selectionRule(x: .value("Date", workout.date)) {
-                            tooltipContainer {
+                            StrideTooltip {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(workout.date, format: .dateTime.month(.abbreviated).day())
                                         .font(.dsCaption2).foregroundStyle(.secondary)
@@ -691,7 +691,7 @@ struct ProgressDashboardView: View {
                        let workout = closestWorkout(to: selected, in: withElev),
                        let gain = workout.elevationGainMeters {
                         selectionRule(x: .value("Date", workout.date)) {
-                            tooltipContainer {
+                            StrideTooltip {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(workout.date, format: .dateTime.month(.abbreviated).day())
                                         .font(.dsCaption2).foregroundStyle(.secondary)
@@ -745,7 +745,7 @@ struct ProgressDashboardView: View {
                     if let selected = selectedVO2Date,
                        let point = closestVO2Point(to: selected) {
                         selectionRule(x: .value("Date", point.date)) {
-                            tooltipContainer {
+                            StrideTooltip {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(point.date, format: .dateTime.month(.abbreviated).day())
                                         .font(.dsCaption2).foregroundStyle(.secondary)
@@ -877,13 +877,6 @@ struct ProgressDashboardView: View {
             )
     }
 
-    private func tooltipContainer<C: View>(@ViewBuilder content: () -> C) -> some View {
-        content()
-            .padding(.horizontal, AppSpacing.sm).padding(.vertical, 5)
-            .background(.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.sm, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: AppRadius.sm, style: .continuous).strokeBorder(.cardStroke, lineWidth: 1))
-            .appShadow(.e2)
-    }
 
     // MARK: - Weekly buckets
 

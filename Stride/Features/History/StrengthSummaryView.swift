@@ -143,16 +143,7 @@ struct StrengthSummaryView: View {
                     .strideEyebrow()
                     .foregroundStyle(.secondary)
                 Spacer()
-                HStack(spacing: 4) {
-                    Image(systemName: "clock")
-                        .font(.dsCaption2)
-                    Text("\(plan.estimatedDurationMinutes) min")
-                        .font(.dsCaption.weight(.semibold))
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(.surfaceSecondary, in: Capsule())
-                .foregroundStyle(.secondary)
+                StrideTag("\(plan.estimatedDurationMinutes) min", systemImage: "clock")
             }
             .padding(.leading, AppSpacing.xs)
 

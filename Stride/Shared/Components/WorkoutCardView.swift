@@ -58,10 +58,10 @@ struct WorkoutCardView: View {
         ZStack {
             Circle()
                 .fill(workout.workoutType.color.opacity(0.15))
-                .frame(width: 44, height: 44)
+                .frame(width: 48, height: 48)
             StrideIcon(
                 name: workout.workoutType.strideIcon,
-                size: 22,
+                size: 24,
                 color: workout.workoutType.color,
                 strokeWeight: 2.0
             )

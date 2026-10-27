@@ -146,6 +146,9 @@ struct StrideSegmentedControl<Value: Hashable>: View {
     /// to SF Mono, a typewriter face no other control uses.
     var monospaced = false
     let title: (Value) -> Text
+    /// An optional second line under each title, for choices that need a hint
+    /// ("km · min/km"). Segments with one grow taller; the route still slides.
+    var subtitle: ((Value) -> Text)?
 
     @Namespace private var namespace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -154,12 +157,14 @@ struct StrideSegmentedControl<Value: Hashable>: View {
         selection: Binding<Value>,
         options: [Value],
         monospaced: Bool = false,
-        title: @escaping (Value) -> Text
+        title: @escaping (Value) -> Text,
+        subtitle: ((Value) -> Text)? = nil
     ) {
         _selection = selection
         self.options = options
         self.monospaced = monospaced
         self.title = title
+        self.subtitle = subtitle
     }
 
     var body: some View {
@@ -171,22 +176,30 @@ struct StrideSegmentedControl<Value: Hashable>: View {
                     // there at once rather than travelling across the track.
                     withAnimation(reduceMotion ? nil : AppAnimation.bouncy) { selection = option }
                 } label: {
-                    title(option)
-                        .font(.dsSubhead.weight(.semibold))
-                        .monospacedDigit()
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, AppSpacing.sm)
-                        .foregroundStyle(isSelected ? Color.onFill : Color.secondary)
-                        .background {
-                            if isSelected {
-                                RoundedRectangle(cornerRadius: AppRadius.sm, style: .continuous)
-                                    .fill(.route)
-                                    .matchedGeometryEffect(id: "segment", in: namespace)
-                            }
+                    VStack(spacing: 3) {
+                        title(option)
+                            .font(.dsSubhead.weight(.semibold))
+                            .monospacedDigit()
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                        if let subtitle {
+                            subtitle(option)
+                                .font(.dsCaption2)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
                         }
-                        .contentShape(Rectangle())
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, subtitle == nil ? AppSpacing.sm : AppSpacing.md)
+                    .foregroundStyle(isSelected ? Color.onFill : Color.secondary)
+                    .background {
+                        if isSelected {
+                            RoundedRectangle(cornerRadius: AppRadius.sm, style: .continuous)
+                                .fill(.route)
+                                .matchedGeometryEffect(id: "segment", in: namespace)
+                        }
+                    }
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(BouncyButtonStyle())
                 .accessibilityAddTraits(isSelected ? .isSelected : [])
@@ -237,6 +250,83 @@ struct StrideProgressBar: View {
         .onAppear { hasAppeared = true }
         .accessibilityElement()
         .accessibilityValue(Text(fraction, format: .percent.precision(.fractionLength(0))))
+    }
+}
+
+// MARK: Tags
+
+/// A small label that isn't a control: a duration, a weight, a muscle group. It reads as a
+/// chip at rest, so it shares the chip's shape, but nothing presses or selects it.
+struct StrideTag: View {
+    enum Tone {
+        /// A fact about the thing: the card ground with its hairline, secondary text.
+        case neutral
+        /// A category the brand picks out: brand at 12% with `brandText`.
+        case brand
+    }
+
+    let text: String
+    var systemImage: String?
+    var tone: Tone = .neutral
+
+    init(_ text: String, systemImage: String? = nil, tone: Tone = .neutral) {
+        self.text = text
+        self.systemImage = systemImage
+        self.tone = tone
+    }
+
+    var body: some View {
+        HStack(spacing: AppSpacing.xs) {
+            if let systemImage {
+                Image(systemName: systemImage)
+                    .font(.dsCaption2)
+            }
+            Text(text)
+                .font(.dsCaption.weight(.semibold))
+        }
+        .padding(.horizontal, AppSpacing.sm)
+        .padding(.vertical, AppSpacing.xs)
+        .foregroundStyle(tone == .brand ? AnyShapeStyle(Color.brandText) : AnyShapeStyle(.secondary))
+        .background {
+            switch tone {
+            case .neutral:
+                Capsule().fill(.surfaceSecondary)
+                    .overlay(Capsule().strokeBorder(.cardStroke, lineWidth: 1))
+            case .brand:
+                Capsule().fill(Color.brand.opacity(0.12))
+            }
+        }
+    }
+}
+
+// MARK: Tooltips and map labels
+
+/// A chart's selected-point readout: a small card lifted off the chart (`e2`), so it reads
+/// as the same material as every other card rather than system frosted glass.
+struct StrideTooltip<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        content.strideTooltip()
+    }
+}
+
+extension View {
+    /// See `StrideTooltip`.
+    func strideTooltip() -> some View {
+        let shape = RoundedRectangle(cornerRadius: AppRadius.sm, style: .continuous)
+        return padding(.horizontal, AppSpacing.sm)
+            .padding(.vertical, 5)
+            .background(.surfaceSecondary, in: shape)
+            .overlay(shape.strokeBorder(.cardStroke, lineWidth: 1))
+            .appShadow(.e2)
+    }
+
+    /// A label sitting on a map (the route's name): the tooltip's card, so a map label and
+    /// a chart label look the same.
+    func strideMapLabel() -> some View {
+        font(.dsCaption2.weight(.semibold))
+            .strideTooltip()
     }
 }
 

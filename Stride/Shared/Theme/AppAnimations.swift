@@ -21,6 +21,17 @@ enum AppAnimation {
     /// The start pin's halo: one slow ripple outwards, repeated. Never under Reduce Motion.
     static let pinPulse = Animation.easeOut(duration: 1.8).repeatForever(autoreverses: false)
 
+    /// A state flipping with no spring: a disclosure chevron turning, a status line
+    /// changing its words.
+    static let quick    = Animation.easeInOut(duration: 0.2)
+    /// Something waiting on the coach: a skeleton line or the typing dots breathing. The
+    /// only loop besides `pinPulse`, and off under Reduce Motion.
+    static let thinking = Animation.easeInOut(duration: 0.8).repeatForever(autoreverses: true)
+    /// A goal met: the confetti burst, once.
+    static let celebrate = Animation.spring(response: 0.9, dampingFraction: 0.82)
+    /// A countdown ticking down by the second, so the ring moves at clock speed.
+    static let countdown = Animation.linear(duration: 1)
+
     /// The gap between items in a staggered entrance: item `n` waits `n * stagger`.
     static let stagger: Double = 0.06
 

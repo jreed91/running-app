@@ -364,7 +364,7 @@ struct StrengthActiveView: View {
                     .stroke(.route, style: StrokeStyle(lineWidth: 6, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                     .frame(width: 100, height: 100)
-                    .animation(.linear(duration: 1), value: restTimeRemaining)
+                    .animation(AppAnimation.countdown, value: restTimeRemaining)
                 VStack(spacing: 2) {
                     Text("\(restTimeRemaining)")
                         .font(.dsTitle1.monospacedDigit())

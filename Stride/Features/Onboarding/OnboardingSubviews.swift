@@ -184,7 +184,7 @@ struct OBWelcomeBack: View {
                     .kerning(-0.95)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.primary)
-                    .animation(.easeInOut(duration: 0.3), value: hasData)
+                    .adaptiveAnimation(AppAnimation.quick, value: hasData)
                 Spacer().frame(height: 14)
                 if !hasData {
                     Text("Looking for your training data in iCloud.\nThis can take a few minutes on a new device.")
@@ -1011,7 +1011,7 @@ struct OBPermissionRow: View {
                 Text(label).font(.dsSubhead.weight(.semibold))
                 Text(isActive ? "Requesting access…" : desc)
                     .font(.dsCaption).foregroundStyle(isActive ? Color.brandText : Color.secondary)
-                    .animation(.easeInOut(duration: 0.2), value: isActive)
+                    .adaptiveAnimation(AppAnimation.quick, value: isActive)
             }
             Spacer()
             // Status, not a control. This row has no tap target — the CTA at the bottom
@@ -1042,8 +1042,8 @@ struct OBPermissionRow: View {
                         .frame(height: 28)
                 }
             }
-            .animation(.easeInOut(duration: 0.2), value: isActive)
-            .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isOn)
+            .adaptiveAnimation(AppAnimation.quick, value: isActive)
+            .adaptiveAnimation(AppAnimation.bouncy, value: isOn)
         }
         .padding(.vertical, AppSpacing.md)
         .accessibilityElement(children: .combine)
