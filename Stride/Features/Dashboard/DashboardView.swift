@@ -419,6 +419,13 @@ struct DashboardView: View {
                         // session, with its Start button, is now what Home leads with.
                         selectedDaySection
                             .strideEntrance(dashboardAppeared, delay: 0.03, rise: 20)
+                        // On a day with nothing to start, the free run is the day's
+                        // action, so it sits under today's card rather than below the
+                        // fold under the coach's tip.
+                        if !scheduledStartIsShowing {
+                            runButtons
+                                .strideEntrance(dashboardAppeared, delay: 0.04, rise: 16)
+                        }
                         alertSlot
                             .strideEntrance(dashboardAppeared, delay: 0.05, rise: 20)
                         if let racePlan = racePlan {
@@ -430,22 +437,23 @@ struct DashboardView: View {
                             .buttonStyle(.plain)
                             .strideEntrance(dashboardAppeared, delay: 0.07, rise: 20)
                         }
-                        if let session = nextUpSession {
+                        if let session = nextUpSession, !restDayFoldsInNextUp {
                             nextUpSection(session)
                                 .strideEntrance(dashboardAppeared, delay: 0.1, rise: 20)
                         }
                     } trailing: {
-                        weekSummaryCard
+                        weekSummaryRow
                             .strideEntrance(dashboardAppeared, delay: 0.12, rise: 20)
                         if !coachCards.isEmpty {
                             SmartCoachCardsSection(cards: CoachTipRewriter.apply(coachTipWording, to: coachCards))
                                 .strideEntrance(dashboardAppeared, delay: 0.15, rise: 20)
                         }
-                        VStack(spacing: AppSpacing.sm) {
-                            startRunButton
-                            planRouteButton
+                        // Under the day's own Start button they step down to secondary
+                        // and wait at the bottom, so the screen has one primary action.
+                        if scheduledStartIsShowing {
+                            runButtons
+                                .strideEntrance(dashboardAppeared, delay: 0.18, rise: 16)
                         }
-                        .strideEntrance(dashboardAppeared, delay: 0.18, rise: 16)
                     }
                     .padding(.horizontal, AppSpacing.lg)
                     .padding(.vertical, AppSpacing.lg)
@@ -626,47 +634,77 @@ struct DashboardView: View {
         }
     }
 
-    // MARK: - Week Summary Card
+    // MARK: - Week Summary
 
-    private var weekSummaryCard: some View {
-        // The header above the card, like "Today" and "Coach Tips" below it.
-        VStack(alignment: .leading, spacing: 10) {
-            Text("This Week")
-                .strideEyebrow()
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, AppSpacing.xs)
-                .accessibilityIdentifier("dashboard.thisWeekHeader")
-            weekSummaryCardBody
+    /// The week in one row. Plan owns the week (its sessions, its target, how far along it
+    /// is), so Home says how it's going and links there rather than keeping a second
+    /// summary with its own percentage, which it used to print twice: as a number and as
+    /// the ring beside it.
+    @ViewBuilder
+    private var weekSummaryRow: some View {
+        let target = activePlan?.currentWeek.flatMap { $0.targetDistanceKm > 0 ? $0 : nil }
+        let content = HStack(spacing: AppSpacing.md) {
+            if let week = target {
+                let pct = min(week.completedDistanceKm / week.targetDistanceKm, 1.0)
+                ZStack {
+                    ProgressRingView(progress: pct, size: 40, lineWidth: 4)
+                    Text(String(format: "%.0f%%", pct * 100))
+                        .font(.dsCaption2.weight(.bold).monospacedDigit())
+                }
+                .accessibilityHidden(true)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text("This Week")
+                    .strideEyebrow()
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("dashboard.thisWeekHeader")
+                Text(weekSummaryLine(target: target))
+                    .font(.bodyStrong)
+                    .monospacedDigit()
+                    // Ink inside the button too, not the tint a button label picks up.
+                    .foregroundStyle(.primary)
+            }
+            Spacer(minLength: 0)
+            if target != nil {
+                StrideIcon(name: .chevronRight, size: 12, color: .secondary, strokeWeight: 2)
+            }
+        }
+        .padding(AppSpacing.md)
+        .strideCard()
+
+        if target != nil {
+            Button {
+                container.appNavigation.select(.plan)
+            } label: {
+                content
+            }
+            .buttonStyle(BouncyButtonStyle())
+            .accessibilityHint(String(localized: "Opens this week on your plan", comment: "Hint on Home's week row"))
+        } else {
+            content
         }
     }
 
-    private var weekSummaryCardBody: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 0) {
-                statItem(value: weekDistanceString, label: "Distance")
-                Spacer()
-                statItem(value: weekRunCountString, label: "Runs")
-                Spacer()
-                if let plan = activePlan, let week = plan.currentWeek,
-                   week.targetDistanceKm > 0 {
-                    let pct = min(week.completedDistanceKm / week.targetDistanceKm, 1.0)
-                    statItem(
-                        value: String(format: "%.0f%%", pct * 100),
-                        label: "Plan",
-                        color: .brandText
-                    )
-                    Spacer()
-                    // The ring draws the number the `statItem` beside it just spoke, so
-                    // it is redundant to VoiceOver rather than missing from it — say so
-                    // explicitly instead of leaving an unlabelled element (U10). It also
-                    // used to recompute `pct` under a second name.
-                    ProgressRingView(progress: pct, size: 44, lineWidth: 5)
-                        .accessibilityHidden(true)
-                }
-            }
+    /// "2.1 of 13.4 mi · 1 run", or "2.1 mi · 1 run" with no plan target to measure against.
+    private func weekSummaryLine(target: TrainingWeek?) -> String {
+        let monday = Date().startOfWeek
+        let runs = recentWorkouts.filter { $0.date >= monday }
+        let meters = runs.reduce(0) { $0 + $1.distanceMeters }
+        let count = AttributedString(
+            localized: "^[\(runs.count) run](inflect: true)",
+            comment: "Number of runs this week on Home"
+        )
+        let runText = String(count.characters)
+        guard let week = target else {
+            return "\(meters.distanceString(unit: appSettings.unitPreference)) · \(runText)"
         }
-        .padding(AppSpacing.lg)
-        .strideCard(cornerRadius: AppRadius.lg)
+        let unit = appSettings.unitPreference
+        let done = String(format: "%.1f", meters.distanceValue(unit: unit))
+        let goal = week.targetDistanceKm.distanceStringFromKm(unit: unit)
+        return String(
+            localized: "\(done) of \(goal) · \(runText)",
+            comment: "Home's week line: distance run of the week's target, and the number of runs"
+        )
     }
 
     // MARK: - Selected Day Section
@@ -688,7 +726,15 @@ struct DashboardView: View {
                 // "Nothing scheduled" is three different things, and calling them all a
                 // rest day claimed a plan said something it never said (N23).
                 switch selectedDayState {
-                case .rest, .scheduled: restDayCard
+                case .rest, .scheduled:
+                    if restDayFoldsInNextUp, let session = nextUpSession {
+                        nextUpSection(session, restDayNote: String(
+                            localized: "Rest day. Recovery is part of training.",
+                            comment: "Rest-day line at the top of Home's up-next card"
+                        ))
+                    } else {
+                        restDayCard
+                    }
                 case .beforePlanStart(let daysUntilStart):
                     planStartsSoonCard(daysUntilStart: daysUntilStart)
                 case .outsidePlan:      outsidePlanCard
@@ -849,18 +895,31 @@ struct DashboardView: View {
     /// Tapping it opens the session's detail rather than starting it: `canStart`
     /// deliberately refuses future days so the plan is not run out of order, and a card
     /// that looks like a start button but is not one would be worse than no card.
-    private func nextUpSection(_ workout: ScheduledWorkout) -> some View {
+    private func nextUpSection(_ workout: ScheduledWorkout, restDayNote: String? = nil) -> some View {
         NavigationLink {
             WorkoutDetailView(workout: workout)
         } label: {
             NextUpCardView(
                 briefing: NextUpBriefing.make(for: workout, unit: appSettings.unitPreference),
                 workoutType: workout.workoutType,
-                // Today's session leads the screen now, so this is a plain card under it.
-                isHero: false
+                // Today's session leads the screen, so this is a plain card under it. On a
+                // rest day it *is* today's card, so it leads as the hero unless the race
+                // countdown is up (one hero per screen).
+                isHero: restDayNote != nil && racePlan == nil,
+                restDayNote: restDayNote
             )
         }
         .buttonStyle(.plain)
+    }
+
+    /// Today is a rest day with a session coming: one card that says both, rather than a
+    /// "Rest day" card and an "Up next" card stacked, with no hero between them.
+    private var restDayFoldsInNextUp: Bool {
+        guard Calendar.current.isDateInToday(selectedDate), nextUpSession != nil else { return false }
+        switch selectedDayState {
+        case .rest, .scheduled: return sessionsForSelectedDate.isEmpty
+        default: return false
+        }
     }
 
     /// Shown when there is no active plan at all — a CTA, not a rest day (N23).
@@ -909,6 +968,13 @@ struct DashboardView: View {
     /// run then steps down to a secondary button, so the screen has one primary action.
     private var scheduledStartIsShowing: Bool {
         canStartSelectedDay && sessionsForSelectedDate.contains { !$0.isCompleted }
+    }
+
+    private var runButtons: some View {
+        VStack(spacing: AppSpacing.sm) {
+            startRunButton
+            planRouteButton
+        }
     }
 
     @ViewBuilder
@@ -981,17 +1047,6 @@ struct DashboardView: View {
     }
 
     // MARK: - Helpers
-
-    private func statItem(value: String, label: String, color: Color = .primary) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(value)
-                .font(.metricSmall)
-                .foregroundStyle(color)
-            Text(label)
-                .font(.captionStrong)
-                .foregroundStyle(.secondary)
-        }
-    }
 
     private var selectedDayLabel: String {
         if Calendar.current.isDateInToday(selectedDate) { return "Today" }
@@ -1092,20 +1147,6 @@ struct DashboardView: View {
 
     private func workoutOnDay(_ date: Date) -> ScheduledWorkout? {
         ScheduledDayResolver.workouts(on: date, in: activePlan).first
-    }
-
-    private var weekDistanceString: String {
-        let monday = Date().startOfWeek
-        let total = recentWorkouts
-            .filter { $0.date >= monday }
-            .reduce(0) { $0 + $1.distanceMeters }
-        return total.distanceString(unit: appSettings.unitPreference)
-    }
-
-    private var weekRunCountString: String {
-        let monday = Date().startOfWeek
-        let count = recentWorkouts.filter { $0.date >= monday }.count
-        return "\(count)"
     }
 
     // MARK: - Missed Workout Recovery
