@@ -34,7 +34,7 @@ struct PlanTabView: View {
     @State private var space = PlanSpace()
 
     private enum PlanPage: Hashable {
-        case raceDay, paceInsights, planHistory
+        case raceDay, paceInsights, raceInsights, planHistory
     }
 
     private struct PlanSpace: Equatable {
@@ -83,6 +83,14 @@ struct PlanTabView: View {
         .background(Color.surfacePrimary)
         .navigationTitle("Pace Insights")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    /// Race fitness, predicted pace, zones and trends. It was a tab on Progress; it lives
+    /// here now, beside the race it predicts.
+    private var raceInsightsPage: some View {
+        RaceInsightsView()
+            .navigationTitle("Race Insights")
+            .navigationBarTitleDisplayMode(.inline)
     }
 
     var body: some View {
@@ -174,6 +182,9 @@ struct PlanTabView: View {
                             ) { workout in
                                 open(workout)
                             }
+                            // The week in a sentence, and the coach's read of it with AI
+                            // Coach on. It was Progress's first card; Plan owns the week.
+                            WeekReviewCard(runs: recentWorkouts)
                         }
 
                         // Smart Adapt and Pace Insights are both VDOT machinery, and a
@@ -208,6 +219,18 @@ struct PlanTabView: View {
                             }
                             .buttonStyle(.plain)
                             .accessibilityIdentifier("plan.paceInsightsRow")
+
+                            pageLink(to: .raceInsights) {
+                                raceInsightsPage
+                            } label: {
+                                PlanPageRow(
+                                    title: "Race Insights",
+                                    subtitle: "Predicted pace, zones and trends",
+                                    systemImage: "chart.line.uptrend.xyaxis"
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("plan.raceInsightsRow")
                         }
 
                         // Route Genius moved to Home, beside the run button, where a
@@ -241,7 +264,16 @@ struct PlanTabView: View {
                     "No Active Plan",
                     systemImage: "calendar.badge.plus",
                     description: Text("Tap + to generate a personalised training plan.")
-                )
+                ) {
+                    // Race insights predict from the profile's goal without a plan, and
+                    // since they left Progress this is the only way to them.
+                    pageLink(to: .raceInsights) {
+                        raceInsightsPage
+                    } label: {
+                        Text("See Race Insights")
+                    }
+                    .buttonStyle(.strideButton(.secondary, compact: true, fullWidth: false))
+                }
             }
         }
         // The page's own ground, as on Home and Progress. Without it the tab drew the
@@ -294,6 +326,8 @@ struct PlanTabView: View {
                 if let plan = activePlan {
                     paceInsightsPage(plan: plan)
                 }
+            case .raceInsights:
+                raceInsightsPage
             case .planHistory:
                 TrainingPlanListView()
             }
@@ -939,17 +973,32 @@ private struct OverviewStat: View {
 /// The row on Plan that opens the pace insights page.
 private struct PaceInsightsRow: View {
     var body: some View {
+        PlanPageRow(
+            title: "Pace Insights",
+            subtitle: "Estimated finish and training paces",
+            systemImage: "speedometer"
+        )
+    }
+}
+
+/// A row that opens one of the plan's reference pages.
+private struct PlanPageRow: View {
+    let title: LocalizedStringKey
+    let subtitle: LocalizedStringKey
+    let systemImage: String
+
+    var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: "speedometer")
+            Image(systemName: systemImage)
                 .font(.dsFootnote.weight(.semibold))
                 .foregroundStyle(.brand)
                 .frame(width: 32, height: 32)
                 .background(Color.brand.opacity(0.13), in: Circle())
             VStack(alignment: .leading, spacing: 2) {
-                Text("Pace Insights")
+                Text(title)
                     .font(.dsSubhead.weight(.semibold))
                     .foregroundStyle(.primary)
-                Text("Estimated finish and training paces")
+                Text(subtitle)
                     .font(.dsCaption)
                     .foregroundStyle(.secondary)
             }
