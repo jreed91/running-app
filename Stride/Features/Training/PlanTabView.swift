@@ -71,6 +71,7 @@ struct PlanTabView: View {
         Text(title)
             .strideEyebrow()
             .foregroundStyle(.secondary)
+            .padding(.horizontal, AppSpacing.xs)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -701,8 +702,11 @@ private struct PlanOverviewCard: View {
     var isHero = false
     @Environment(AppSettings.self) private var appSettings
 
-    private var weeksCompleted: Int {
-        (plan.weeks ?? []).filter(\.isCompleted).count
+    /// "2/12" in the plan's current week; before it starts "0/12", after it ends "12/12".
+    private var weekPosition: String {
+        let current = plan.currentWeek?.weekNumber
+            ?? (hasStarted ? plan.totalWeeks : 0)
+        return "\(current)/\(plan.totalWeeks)"
     }
 
     private var totalCompletedDistanceKm: Double {
@@ -750,8 +754,11 @@ private struct PlanOverviewCard: View {
             )
         }
         if !isHero { return nil }
+        let length = String(localized: "\(plan.totalWeeks) weeks", comment: "Plan subtitle: plan length")
+        // Maintain Fitness has no race, so a bare "Goal 52:35" had no distance to belong to.
+        guard plan.targetRace.isGoalRace, plan.goalTimeSeconds > 0 else { return length }
         return String(
-            localized: "Goal \(plan.goalTimeSeconds.durationString)  ·  \(plan.totalWeeks) weeks",
+            localized: "Goal \(plan.goalTimeSeconds.durationString)  ·  \(length)",
             comment: "Race plan subtitle: goal time and plan length"
         )
     }
@@ -776,11 +783,6 @@ private struct PlanOverviewCard: View {
                     }
                 }
                 Spacer()
-                Text("\(Int(plan.progress * 100))%")
-                    .font(.dsTitle2.monospacedDigit())
-                    .foregroundStyle(.brandText)
-                    .accessibilityLabel("Plan progress")
-                    .accessibilityValue("\(Int(plan.progress * 100)) percent")
             }
 
             // Phase progress bar with Base / Build / Peak / Taper labels
@@ -788,10 +790,13 @@ private struct PlanOverviewCard: View {
 
             Divider()
 
+            // Where the runner is, what they have run, and when it ends. A "0%" in the
+            // header counted finished weeks, so in week 2 it sat at 0% beside a non-zero
+            // "Completed"; the week number says the same thing without contradicting it.
             HStack {
                 OverviewStat(
-                    value: "\(weeksCompleted)/\(plan.totalWeeks)",
-                    label: "Weeks Done"
+                    value: weekPosition,
+                    label: "Week"
                 )
                 Divider().frame(height: 36)
                 OverviewStat(
@@ -799,12 +804,13 @@ private struct PlanOverviewCard: View {
                     label: "Completed"
                 )
                 Divider().frame(height: 36)
-                // "Started" was hardcoded, so a plan created today with next Monday's start
-                // — the default onboarding hands out — rendered "Aug 3 / Started" on the
-                // 27th of July, reporting a future date in the past tense (S20).
+                // Before the start, the start date: "Started" was once hardcoded and
+                // reported a future date in the past tense (S20). After it, the end, which
+                // is the date a runner plans around.
                 OverviewStat(
-                    value: plan.startDate.formatted(.dateTime.month(.abbreviated).day()),
-                    label: hasStarted ? "Started" : "Starts"
+                    value: (hasStarted ? plan.endDate : plan.startDate)
+                        .formatted(.dateTime.month(.abbreviated).day()),
+                    label: hasStarted ? "Ends" : "Starts"
                 )
             }
         }
@@ -1227,20 +1233,14 @@ private struct PlanWeekSummaryRow: View {
                             Text(week.phase.localizedName)
                                 .font(.bodyRegular)
                                 .foregroundStyle(.secondary)
-                            if isCurrentWeek {
-                                Text("CURRENT")
-                                    .font(.dsCaption)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, AppSpacing.xxs)
-                                    .background(.brand.opacity(0.15), in: Capsule())
-                                    .foregroundStyle(.brandText)
-                            } else if week.isCompleted {
-                                Text("DONE")
-                                    .font(.dsCaption)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, AppSpacing.xxs)
-                                    .background(.success.opacity(0.15), in: Capsule())
-                                    .foregroundStyle(.success)
+                            // The current week has no badge: it sits under "This week" with
+                            // the start pin beside it, and a "CURRENT" tag made a third marker.
+                            if week.isCompleted && !isCurrentWeek {
+                                StrideTag(
+                                    String(localized: "Done", comment: "Tag on a finished plan week"),
+                                    systemImage: "checkmark",
+                                    iconTint: .success
+                                )
                             }
                         }
 
@@ -1288,7 +1288,10 @@ private struct PlanWeekSummaryRow: View {
                         // lift with the row and leave a gap behind. As a bottom overlay it
                         // draws in the same place and belongs to the row's frame.
                         .overlay(alignment: .bottom) {
-                            Divider().padding(.leading, 44)
+                            // Not under the last row, where it drew over the card's edge.
+                            if workout.id != orderedWorkouts.last?.id {
+                                Divider().padding(.leading, 60)
+                            }
                         }
                         // The lift gesture hit-tests the row's *drawn* content, and a row
                         // is an icon, two labels and a `Spacer`. Without a shape the
@@ -1454,7 +1457,6 @@ private struct PlanWorkoutSummaryRow: View {
                 StrideIcon(name: workout.workoutType.strideIcon, size: 18,
                            color: workout.workoutType.color, strokeWeight: 1.8)
             }
-            .padding(.leading, AppSpacing.xs)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(workout.workoutType.localizedName)
@@ -1485,7 +1487,9 @@ private struct PlanWorkoutSummaryRow: View {
             StrideIcon(name: .chevronRight, size: 11, color: .secondary, strokeWeight: 2)
         }
         .padding(.vertical, AppSpacing.sm)
-        .padding(.trailing)
+        // The same inset as the week's header above it, so the icons line up with the
+        // header's pin rather than sitting against the card's edge.
+        .padding(.horizontal)
     }
 
 }

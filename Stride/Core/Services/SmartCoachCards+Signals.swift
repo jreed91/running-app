@@ -104,6 +104,9 @@ extension SmartCoachCards {
             unit: context.unit
         )
         let humidity = Int(weather.humidityPercent.rounded())
+        let drink = drinkClause(
+            fluid: fluid, duration: duration, context: context, feelsLikeCelsius: weather.feelsLikeCelsius
+        )
 
         return SmartCoachCard(
             kind: .heat,
@@ -111,7 +114,7 @@ extension SmartCoachCards {
             message: String(
                 localized: """
                 Your last run out there felt like \(weather.feelsLikeString(unit: context.unit)) \
-                at \(humidity)% humidity. Plan on \(fluid.amount)\(durationClause(duration)), \
+                at \(humidity)% humidity. \(drink), \
                 add electrolytes if you'll be out over an hour, and let the pace sit 10–20 \
                 seconds per \(unitWord(context.unit)) slower for the same effort.
                 """,
@@ -127,15 +130,26 @@ extension SmartCoachCards {
         )
     }
 
-    /// " across roughly 1.5 hours out there" — appended to the fluid amount so an hourly
-    /// rate has a session length attached to it. Silent when the plan sets neither a
-    /// distance nor a pace to multiply out, rather than guessing at one.
-    private static func durationClause(_ durationSeconds: Double?) -> String {
-        guard let seconds = durationSeconds, seconds >= 1_800 else { return "" }
-        let hours = seconds / 3_600
+    /// "Drink about 14 fl oz over this 36-minute run": the session's total, so the runner
+    /// reads what to carry. It used to append " across roughly 0.6 hours out there" to an
+    /// hourly rate and leave the multiplying to them. Falls back to the hourly amount when
+    /// there is no body mass or no session length to multiply out, rather than guessing.
+    private static func drinkClause(
+        fluid: CoachNutrition.Target,
+        duration: Double?,
+        context: Context,
+        feelsLikeCelsius: Double
+    ) -> String {
+        guard let seconds = duration, seconds >= 1_200, fluid.isPersonalised,
+              let mass = context.bodyMassKilograms else {
+            return String(localized: "Plan on \(fluid.amount)", comment: "Heat card: an hourly fluid amount")
+        }
+        let rate = CoachNutrition.fluidRate(feelsLikeCelsius: feelsLikeCelsius)
+        let total = CoachNutrition.volumeTotalText(millilitres: mass * rate * seconds / 3_600, unit: context.unit)
+        let minutes = Int((seconds / 60).rounded())
         return String(
-            localized: " across roughly \(String(format: "%.1f", hours)) hours out there",
-            comment: "Clause naming how long a session will take, inside the heat card"
+            localized: "Drink \(total) over this \(minutes)-minute run",
+            comment: "Heat card: the fluid to drink across the next session, and its length"
         )
     }
 

@@ -56,16 +56,9 @@ extension RunSummaryView {
     }
 
     private func verdictChip(label: String, status: PaceStatus) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: status.icon)
-                .font(.dsCaption2.weight(.bold))
-            Text("\(label): \(status.label)")
-                .font(.dsCaption.weight(.bold))
-        }
-        .foregroundStyle(status.color)
-        .padding(.horizontal, AppSpacing.sm)
-        .padding(.vertical, AppSpacing.xs)
-        .background(status.color.opacity(0.1), in: Capsule())
+        // The system's tag: status sits in the glyph, the words stay in secondary text, so
+        // a warning is not yellow text on a yellow tint.
+        StrideTag("\(label): \(status.label)", systemImage: status.icon, iconTint: status.color)
     }
 
     // MARK: Planned Workout Section
