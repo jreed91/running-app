@@ -31,6 +31,7 @@ enum StrideIconName: String {
     case stop
     case lock
     case heart
+    case droplet
     case location
     case mountain
     case timer
@@ -233,20 +234,47 @@ struct StrideIcon: View {
             ctx.stroke(shackle, with: .foreground, style: stroke)
 
         case .heart:
+            // Two lobes meeting in a notch at (12, 8). The old path ran straight across
+            // the top, so it drew a dome that read as a cup or a shield.
             var p = Path()
             p.move(to: CGPoint(x: 12, y: 20))
-            p.addCurve(to: CGPoint(x: 5, y: 10),
-                       control1: CGPoint(x: 5, y: 20),
-                       control2: CGPoint(x: 5, y: 14.5))
-            p.addCurve(to: CGPoint(x: 12, y: 7.5),
-                       control1: CGPoint(x: 5, y: 7),
-                       control2: CGPoint(x: 8.5, y: 7.5))
-            p.addCurve(to: CGPoint(x: 19, y: 10),
-                       control1: CGPoint(x: 15.5, y: 7.5),
-                       control2: CGPoint(x: 19, y: 7))
+            p.addCurve(to: CGPoint(x: 3.5, y: 9.5),
+                       control1: CGPoint(x: 7, y: 16.5),
+                       control2: CGPoint(x: 3.5, y: 13.5))
+            p.addCurve(to: CGPoint(x: 8, y: 5),
+                       control1: CGPoint(x: 3.5, y: 7),
+                       control2: CGPoint(x: 5.5, y: 5))
+            p.addCurve(to: CGPoint(x: 12, y: 8),
+                       control1: CGPoint(x: 10, y: 5),
+                       control2: CGPoint(x: 11.3, y: 6.5))
+            p.addCurve(to: CGPoint(x: 16, y: 5),
+                       control1: CGPoint(x: 12.7, y: 6.5),
+                       control2: CGPoint(x: 14, y: 5))
+            p.addCurve(to: CGPoint(x: 20.5, y: 9.5),
+                       control1: CGPoint(x: 18.5, y: 5),
+                       control2: CGPoint(x: 20.5, y: 7))
             p.addCurve(to: CGPoint(x: 12, y: 20),
-                       control1: CGPoint(x: 19, y: 14.5),
-                       control2: CGPoint(x: 19, y: 20))
+                       control1: CGPoint(x: 20.5, y: 13.5),
+                       control2: CGPoint(x: 17, y: 16.5))
+            p.closeSubpath()
+            ctx.stroke(p, with: .foreground, style: stroke)
+
+        case .droplet:
+            // Water: drink and heat tips, which had borrowed Tempo's gauge.
+            var p = Path()
+            p.move(to: CGPoint(x: 12, y: 3.5))
+            p.addCurve(to: CGPoint(x: 6, y: 14.5),
+                       control1: CGPoint(x: 9.5, y: 7),
+                       control2: CGPoint(x: 6, y: 10.5))
+            p.addCurve(to: CGPoint(x: 12, y: 20.5),
+                       control1: CGPoint(x: 6, y: 18),
+                       control2: CGPoint(x: 8.7, y: 20.5))
+            p.addCurve(to: CGPoint(x: 18, y: 14.5),
+                       control1: CGPoint(x: 15.3, y: 20.5),
+                       control2: CGPoint(x: 18, y: 18))
+            p.addCurve(to: CGPoint(x: 12, y: 3.5),
+                       control1: CGPoint(x: 18, y: 10.5),
+                       control2: CGPoint(x: 14.5, y: 7))
             p.closeSubpath()
             ctx.stroke(p, with: .foreground, style: stroke)
 

@@ -19,13 +19,12 @@ struct SmartCoachCardsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                StrideIcon(name: .bolt, size: 12, color: .brand, strokeWeight: 2.4)
-                Text("Coach Tips")
-                    .strideEyebrow()
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, AppSpacing.xs)
+            // A plain eyebrow like every other section's. The bolt it carried also marked
+            // Plan a Route a few cards down, so one glyph meant two things.
+            Text("Coach Tips")
+                .strideEyebrow()
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, AppSpacing.xs)
 
             if let primary {
                 PrimaryCoachCardView(card: primary)
@@ -41,6 +40,7 @@ struct SmartCoachCardsSection: View {
 
 private struct PrimaryCoachCardView: View {
     let card: SmartCoachCard
+    @State private var showsWorking = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -62,8 +62,21 @@ private struct PrimaryCoachCardView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
+            // The working is a tap away rather than a standing line: "0.27 fl oz/kg/h ·
+            // 186 lb (85 kg)" under every tip read as debug output.
             if let derivation = card.derivation {
-                derivationLine(derivation)
+                Button {
+                    withAnimation(AppAnimation.quick) { showsWorking.toggle() }
+                } label: {
+                    Text(showsWorking ? "Hide the working" : "How this was worked out")
+                        .font(.dsCaption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHidden(true)
+                if showsWorking {
+                    derivationLine(derivation)
+                }
             }
         }
         .padding(AppSpacing.lg)
@@ -156,7 +169,7 @@ private extension SmartCoachCard {
         case .refuel:              return .heart
         case .longRunFuel:         return .flame
         case .sessionFuel:         return .flame
-        case .heat:                return .tempo
+        case .heat:                return .droplet
         case .restDay:             return .moon
         case .fade:                return .chart
         case .polarization:        return .tortoise

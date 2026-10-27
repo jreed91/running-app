@@ -275,6 +275,19 @@ enum CoachNutrition {
         }
     }
 
+    /// A total for one session ("about 14 fl oz"), rounded the same way as `volumeText`,
+    /// so a runner reads what to carry rather than multiplying an hourly rate out.
+    static func volumeTotalText(millilitres: Double, unit: UnitPreference) -> String {
+        switch unit {
+        case .metric:
+            let rounded = max(50, Int((millilitres / 50).rounded() * 50))
+            return String(localized: "about \(rounded) ml", comment: "Fluid to drink across one session, metric")
+        case .imperial:
+            let ounces = max(1, Int(convertedVolume(millilitres: millilitres, unit: unit).rounded()))
+            return String(localized: "about \(ounces) fl oz", comment: "Fluid to drink across one session, imperial")
+        }
+    }
+
     /// The guideline range, converted the same way, so the two units cannot drift.
     static func volumeRangeText(
         lowerMillilitres: Double,
