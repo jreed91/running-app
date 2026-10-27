@@ -29,7 +29,11 @@ final class StrideUITests: XCTestCase {
         XCTAssertTrue(tabBar.waitForExistence(timeout: 8))
         XCTAssertTrue(app.navigationBars["Home"].waitForExistence(timeout: 5))
         // By identifier: the eyebrow's `.textCase(.uppercase)` may change the label's case.
-        XCTAssertTrue(app.staticTexts["dashboard.thisWeekHeader"].waitForExistence(timeout: 5))
+        // Any element type: inside the week row's button (a plan week with a target) the
+        // eyebrow is folded into the button rather than exposed as its own static text.
+        XCTAssertTrue(
+            app.descendants(matching: .any)["dashboard.thisWeekHeader"].waitForExistence(timeout: 5)
+        )
         XCTAssertTrue(app.buttons["dashboard.startFreeRun"].waitForExistence(timeout: 5))
 
         tabBar.buttons["Plan"].tap()

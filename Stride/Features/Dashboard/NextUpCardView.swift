@@ -13,9 +13,22 @@ struct NextUpCardView: View {
     let workoutType: WorkoutType
     /// False when the race countdown is on the screen: it is the hero then (rule 2).
     var isHero = true
+    /// A rest day folded into the card: "Rest day. Recovery is part of training." above
+    /// the next session, so a rest day is one card on Home rather than two.
+    var restDayNote: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            if let restDayNote {
+                HStack(spacing: AppSpacing.sm) {
+                    StrideIcon(name: .moon, size: 16, color: .secondary, strokeWeight: 2)
+                    Text(restDayNote)
+                        .font(.dsCaption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Divider()
+            }
             header
             if !metrics.isEmpty {
                 metricRow
@@ -129,12 +142,13 @@ struct NextUpCardView: View {
     /// their labels as separate fragments in visual order — "8.0 km", "Distance" — which
     /// is the wrong way round for every one of them.
     private var accessibilityDescription: String {
-        var parts = [
+        var parts = restDayNote.map { [$0] } ?? []
+        parts.append(
             String(
                 localized: "Up next: \(briefing.title), \(briefing.dayPhrase), \(briefing.dateText)",
                 comment: "VoiceOver summary of the dashboard's up-next card"
             )
-        ]
+        )
         for metric in metrics {
             // Label first: the card draws the value above its label, which is the wrong
             // way round to hear.
