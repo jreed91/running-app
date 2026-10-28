@@ -33,7 +33,9 @@ struct MonthCalendarView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        // Grouped once per render, not once per cell.
+        let byDay = sessionsByDay
+        return NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: AppSpacing.lg) {
                     VStack(spacing: 0) {
@@ -42,7 +44,7 @@ struct MonthCalendarView: View {
                         LazyVGrid(columns: columns, spacing: AppSpacing.xs) {
                             ForEach(gridDays, id: \.self) { day in
                                 if let day {
-                                    dayButton(day)
+                                    dayButton(day, sessions: byDay[cal.startOfDay(for: day)] ?? [])
                                 } else {
                                     Color.clear.frame(height: 56)
                                 }
@@ -53,7 +55,7 @@ struct MonthCalendarView: View {
                     }
                     .strideCard()
 
-                    if let summary = monthSummary {
+                    if let summary = monthSummary(byDay) {
                         Text(summary)
                             .font(.dsFootnote)
                             .foregroundStyle(.secondary)
@@ -133,9 +135,8 @@ struct MonthCalendarView: View {
         return Array(repeating: nil, count: leading) + days
     }
 
-    private func dayButton(_ day: Date) -> some View {
-        let sessions = sessionsByDay[cal.startOfDay(for: day)] ?? []
-        return Button {
+    private func dayButton(_ day: Date, sessions: [ScheduledWorkout]) -> some View {
+        Button {
             selectedDate = day
             dismiss()
         } label: {
@@ -165,9 +166,9 @@ struct MonthCalendarView: View {
     }
 
     /// "9 of 14 sessions done · 2 missed" for the shown month, or nil with no plan in it.
-    private var monthSummary: String? {
+    private func monthSummary(_ byDay: [Date: [ScheduledWorkout]]) -> String? {
         guard let interval = cal.dateInterval(of: .month, for: monthStart) else { return nil }
-        let sessions = sessionsByDay
+        let sessions = byDay
             .filter { interval.contains($0.key) }
             .flatMap(\.value)
             .filter { $0.workoutType != .rest }
