@@ -40,6 +40,9 @@ enum StrideIconName: String {
     case flag
     case gear
     case music
+    case person
+    case cloud
+    case export
 
     /// The SF Symbol that stands in for the hand-drawn glyph, or nil to draw the path.
     ///
@@ -372,6 +375,50 @@ struct StrideIcon: View {
                 ctx.stroke(sp, with: .foreground, style: stroke)
             }
 
+        case .person:
+            // A head over shoulders: the runner's own details, which had borrowed
+            // the run glyph that My Shoes uses.
+            ctx.stroke(Path(ellipseIn: CGRect(x: 8.5, y: 3.5, width: 7, height: 7)),
+                       with: .foreground, style: stroke)
+            var shoulders = Path()
+            shoulders.move(to: CGPoint(x: 4.5, y: 20.5))
+            shoulders.addCurve(to: CGPoint(x: 19.5, y: 20.5),
+                               control1: CGPoint(x: 4.5, y: 13),
+                               control2: CGPoint(x: 19.5, y: 13))
+            ctx.stroke(shoulders, with: .foreground, style: stroke)
+
+        case .cloud:
+            // iCloud sync, which had been a clock.
+            var p = Path()
+            p.move(to: CGPoint(x: 7, y: 18.5))
+            p.addCurve(to: CGPoint(x: 5.5, y: 12.5),
+                       control1: CGPoint(x: 3.5, y: 18.5),
+                       control2: CGPoint(x: 2.5, y: 13.5))
+            p.addCurve(to: CGPoint(x: 16.5, y: 9.5),
+                       control1: CGPoint(x: 6.5, y: 5.5),
+                       control2: CGPoint(x: 15, y: 5.5))
+            p.addCurve(to: CGPoint(x: 17.5, y: 18.5),
+                       control1: CGPoint(x: 21, y: 9.5),
+                       control2: CGPoint(x: 22, y: 18.5))
+            p.closeSubpath()
+            ctx.stroke(p, with: .foreground, style: stroke)
+
+        case .export:
+            // An open tray with an arrow leaving it: saving data out of the app.
+            var tray = Path()
+            tray.move(to: CGPoint(x: 5, y: 12))
+            tray.addLine(to: CGPoint(x: 5, y: 20))
+            tray.addLine(to: CGPoint(x: 19, y: 20))
+            tray.addLine(to: CGPoint(x: 19, y: 12))
+            ctx.stroke(tray, with: .foreground, style: stroke)
+            var arrow = Path()
+            arrow.move(to: CGPoint(x: 12, y: 15))
+            arrow.addLine(to: CGPoint(x: 12, y: 3.5))
+            arrow.move(to: CGPoint(x: 8, y: 7.5))
+            arrow.addLine(to: CGPoint(x: 12, y: 3.5))
+            arrow.addLine(to: CGPoint(x: 16, y: 7.5))
+            ctx.stroke(arrow, with: .foreground, style: stroke)
+
         case .music:
             // Beamed pair of eighth notes: two note heads, two stems, one beam.
             ctx.fill(Path(ellipseIn: CGRect(x: 4, y: 15.2, width: 5, height: 4)), with: .foreground)
@@ -408,6 +455,7 @@ extension Label where Title == Text, Icon == StrideIcon {
         ("play", .play), ("history", .history), ("chart", .chart),
         ("chevronR", .chevronRight), ("check", .check), ("pause", .pause),
         ("stop", .stop), ("lock", .lock), ("timer", .timer), ("flag", .flag), ("gear", .gear),
+        ("person", .person), ("cloud", .cloud), ("export", .export),
     ]
     return LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 5), spacing: 16) {
         ForEach(all, id: \.0) { name, icon in

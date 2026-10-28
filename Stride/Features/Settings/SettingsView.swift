@@ -74,11 +74,11 @@ struct SettingsView: View {
                     musicRoutesGearCard
                     aiCoachCard
                     dataSyncCard
-                    if BuildEnvironment.showsTestFlightDiagnostics {
-                        notificationTestingCard
-                    }
                     aboutCard
                     dangerCard
+                    if BuildEnvironment.showsTestFlightDiagnostics {
+                        testFlightCard
+                    }
                     #if DEBUG
                     developerCard
                     #endif
@@ -166,7 +166,7 @@ struct SettingsView: View {
 
     private func profileCard(_ profile: UserProfile) -> some View {
         settingsSection("Profile") {
-            settingsRow(icon: .run, iconColor: .brand, title: "Name") {
+            settingsRow(icon: .person, iconColor: .brand, title: "Name") {
                 TextField("Your name", text: profileNameBinding(for: profile))
                     .multilineTextAlignment(.trailing)
                     .font(.bodyRegular)
@@ -186,18 +186,15 @@ struct SettingsView: View {
                     showsLabel: false
                 )
             }
-            Text(bodyMassFootnote)
-                .font(.dsCaption)
-                .foregroundStyle(.secondary)
-                .padding(.leading, Self.footnoteIndent)
-                .padding(.trailing, AppSpacing.lg)
-                .padding(.bottom, 10)
+            footnote(Text(bodyMassFootnote))
             rowDivider
             settingsRow(icon: .walk, iconColor: .brand, title: "Gender") {
-                Picker("Gender", selection: profileGenderBinding(for: profile)) {
-                    ForEach(Gender.allCases, id: \.self) { Text($0.localizedName).tag($0) }
-                }
-                .labelsHidden()
+                menuPicker(
+                    "Gender",
+                    selection: profileGenderBinding(for: profile),
+                    options: Gender.allCases,
+                    label: \.localizedName
+                )
             }
             rowDivider
             // Typable as well as steppable, and the same control onboarding uses (S25).
@@ -220,18 +217,16 @@ struct SettingsView: View {
                 )
             }
             if profile.maxHeartRateBPM != nil {
-                rowDivider
                 Button {
                     profile.maxHeartRateBPM = nil
                     persistProfileEdit(profile)
                 } label: {
-                    HStack {
-                        Text("Reset to age estimate (\(UserProfile.estimatedMaxHeartRate(forAge: profile.age ?? UserProfile.assumedAge)) bpm)")
-                            .font(.dsCaption).foregroundStyle(.brandText)
-                        Spacer()
-                    }
-                    .padding(.horizontal, AppSpacing.lg).padding(.vertical, AppSpacing.md)
+                    footnote(
+                        Text("Reset to age estimate (\(UserProfile.estimatedMaxHeartRate(forAge: profile.age ?? UserProfile.assumedAge)) bpm)"),
+                        color: .brandText
+                    )
                 }
+                .buttonStyle(.plain)
             }
         }
     }
@@ -304,11 +299,7 @@ struct SettingsView: View {
                         }
                     }
             }
-            Text("An evening reminder when a run streak is about to end or the plan has slipped behind, and a recap of your week on Sunday evening. At most one a day.")
-                .font(.dsCaption)
-                .foregroundStyle(.secondary)
-                .padding(.leading, Self.footnoteIndent)
-                .padding(.trailing, AppSpacing.lg)
+            footnote(Text("An evening nudge when a streak or your plan is slipping, and a Sunday recap. At most one a day."))
             rowDivider
             settingsRow(icon: .flame, iconColor: .warning, title: "Heat Adaptation") {
                 Toggle("Heat Adaptation", isOn: Bindable(appSettings).heatAdaptationEnabled)
@@ -331,12 +322,7 @@ struct SettingsView: View {
                         }
                     }
             }
-            Text("Checks tomorrow's forecast where you usually run. When a session lands in heat or humidity that would change what it's worth doing, Stride asks the evening before whether to ease it.")
-                .font(.dsCaption)
-                .foregroundStyle(.secondary)
-                .padding(.leading, Self.footnoteIndent)
-                .padding(.trailing, AppSpacing.lg)
-                .padding(.bottom, 10)
+            footnote(Text("When tomorrow looks hot or humid enough to matter, asks the evening before whether to ease the session."))
         }
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
@@ -357,7 +343,7 @@ struct SettingsView: View {
                 guard let url = URL(string: UIApplication.openNotificationSettingsURLString) else { return }
                 openURL(url)
             }
-            .font(.dsCaption)
+            .buttonStyle(.strideButton(.secondary, compact: true, fullWidth: false))
             .accessibilityIdentifier("settings.openNotificationSettings")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -415,12 +401,7 @@ struct SettingsView: View {
                     .labelsHidden()
                     .tint(.brand)
             }
-            Text("Announces each \(appSettings.unitPreference.distanceLabel) and its pace out loud during a run. Music ducks for the announcement.")
-                .font(.dsCaption)
-                .foregroundStyle(.secondary)
-                .padding(.leading, Self.footnoteIndent)
-                .padding(.trailing, AppSpacing.lg)
-                .padding(.bottom, 10)
+            footnote(Text("Reads out each \(appSettings.unitPreference.distanceLabel) and its pace. Music ducks while it speaks."))
             rowDivider
             // Off until asked, like Spoken Splits above: it talks over the runner's music.
             settingsRow(icon: .tempo, iconColor: .brand, title: "Spoken Workout Steps") {
@@ -429,12 +410,7 @@ struct SettingsView: View {
                     .tint(.brand)
                     .accessibilityIdentifier("settings.spokenWorkoutSteps")
             }
-            Text("Talks you through interval and tempo sessions: each rep, recovery and cool-down as it starts, with a heads-up just before a rep or recovery ends.")
-                .font(.dsCaption)
-                .foregroundStyle(.secondary)
-                .padding(.leading, Self.footnoteIndent)
-                .padding(.trailing, AppSpacing.lg)
-                .padding(.bottom, 10)
+            footnote(Text("Calls out each rep, recovery and cool-down in interval and tempo sessions, with a heads-up before each ends."))
         }
     }
 
@@ -446,56 +422,48 @@ struct SettingsView: View {
                 RunPlaylistSettingsView()
             } label: {
                 settingsRow(icon: .music, iconColor: .brand, title: "Run Playlists") {
-                    StrideIcon(name: .chevronRight, size: 12,
-                               color: Color.secondary.opacity(0.5), strokeWeight: 2)
+                    rowChevron
                 }
             }
             .buttonStyle(.plain)
             .foregroundStyle(.primary)
-
-            Text("Builds a playlist shaped like the session — calmer through the warm-up and cool-down, harder through the work — and saves it to your Apple Music library. Start one from any run in your plan.")
-                .font(.dsCaption)
-                .foregroundStyle(.secondary)
-                .padding(.leading, Self.footnoteIndent)
-                .padding(.trailing, AppSpacing.lg)
-                .padding(.bottom, 10)
-
-            rowDivider
-            settingsRow(icon: .location, iconColor: .brand, title: "Custom routing key (optional)") {
-                EmptyView()
-            }
-            SecureField("Leave empty to use Apple Maps", text: Bindable(appSettings).orsAPIKey)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-                .font(.dsFootnote.monospaced())
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, AppSpacing.lg)
-                .padding(.bottom, 6)
-            Text("Route Genius plans loops with Apple Maps and needs no key. To shape loops with openrouteservice instead, paste a free key from openrouteservice.org. Stored on this iPhone only.")
-                .font(.dsCaption)
-                .foregroundStyle(.secondary)
-                .padding(.leading, Self.footnoteIndent)
-                .padding(.trailing, AppSpacing.lg)
-                .padding(.bottom, 14)
+            footnote(Text("Apple Music playlists shaped like the session: calmer for the warm-up and cool-down, harder through the work."))
 
             rowDivider
             NavigationLink {
                 ShoesView()
             } label: {
                 settingsRow(icon: .run, iconColor: .brand, title: "My Shoes") {
-                    StrideIcon(name: .chevronRight, size: 12,
-                               color: Color.secondary.opacity(0.5), strokeWeight: 2)
+                    rowChevron
                 }
             }
             .buttonStyle(.plain)
             .foregroundStyle(.primary)
+            footnote(Text("Tracks how far each pair has gone and warns you when one is nearly worn out."))
 
-            Text("Tracks how far each pair has gone and tells you when one is nearly worn out. New runs go on your default pair; change it on any run.")
-                .font(.dsCaption)
-                .foregroundStyle(.secondary)
+            rowDivider
+            settingsRow(icon: .location, iconColor: .brand, title: "Routing Key") {
+                Text("Optional")
+                    .font(.dsCaption)
+                    .foregroundStyle(.secondary)
+            }
+            // A well inside the card, lined up with the row's title like the footnotes.
+            SecureField("Leave empty to use Apple Maps", text: Bindable(appSettings).orsAPIKey)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .font(.dsSubhead)
+                .padding(.horizontal, AppSpacing.md)
+                .padding(.vertical, AppSpacing.sm)
+                .background(.surfacePrimary, in: RoundedRectangle(cornerRadius: AppRadius.sm, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppRadius.sm, style: .continuous)
+                        .strokeBorder(.cardStroke, lineWidth: 1)
+                )
                 .padding(.leading, Self.footnoteIndent)
                 .padding(.trailing, AppSpacing.lg)
-                .padding(.bottom, 10)
+                .padding(.bottom, AppSpacing.sm)
+                .accessibilityIdentifier("settings.routingKey")
+            footnote(Text("Route Genius uses Apple Maps. Paste a free openrouteservice.org key to plan loops with it instead. Stored on this iPhone only."))
         }
     }
 
@@ -510,25 +478,28 @@ struct SettingsView: View {
                     .labelsHidden()
                     .tint(.brand)
             }
-            rowDivider
-            settingsRow(icon: .tempo, iconColor: .brand, title: "Model") {
-                Picker("Model", selection: Bindable(appSettings).aiProvider) {
-                    ForEach(AIProvider.allCases, id: \.self) { provider in
-                        Text(provider.localizedName).tag(provider)
-                    }
-                }
-                .labelsHidden()
-            }
-            if appSettings.aiProvider == .applePrivateCloud, let status = pccStatus {
+            // The model only matters while the coach is on. A segmented control rather
+            // than a menu `Picker`: the menu drew in system blue and its long value
+            // ("Apple Private Cloud Compute") wrapped over the row's own title.
+            if appSettings.aiInsightsEnabled {
                 rowDivider
-                privateCloudComputeStatusRow(status)
+                StrideSegmentedControl(
+                    selection: Bindable(appSettings).aiProvider,
+                    options: AIProvider.allCases,
+                    title: { Text($0 == .appleOnDevice ? "On iPhone" : "Private Cloud") },
+                    subtitle: { Text($0 == .appleOnDevice ? "Apple Intelligence" : "Apple's servers") }
+                )
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("Where coaching runs")
+                .padding(AppSpacing.lg)
+                if appSettings.aiProvider == .applePrivateCloud,
+                   let status = pccStatus,
+                   status.quotaMessage != nil || status.canRequestLimitIncrease {
+                    rowDivider
+                    privateCloudComputeStatusRow(status)
+                }
+                footnote(Text(Self.aiProviderFootnote(for: appSettings.aiProvider, status: pccStatus)))
             }
-            Text(Self.aiProviderFootnote(for: appSettings.aiProvider, status: pccStatus))
-                .font(.dsCaption)
-                .foregroundStyle(.secondary)
-                .padding(.leading, Self.footnoteIndent)
-                .padding(.trailing, AppSpacing.lg)
-                .padding(.bottom, 14)
         }
         .task(id: appSettings.aiProvider) {
             pccStatus = await container.aiCoachService.serverModelStatus()
@@ -537,32 +508,27 @@ struct SettingsView: View {
 
     /// Apple asks apps not to spring the daily Private Cloud Compute limit on people in a
     /// dismissible alert, but to keep the current standing visible and offer the upgrade
-    /// flow — so the quota lives here, next to the model picker that opted into it.
+    /// flow — so the quota lives here, next to the model picker that opted into it. Drawn
+    /// only when there is something to say: a plain "Ready" row repeated the footnote.
     @ViewBuilder
     private func privateCloudComputeStatusRow(_ status: ServerModelStatus) -> some View {
         settingsRow(
-            icon: status.isAvailable ? .bolt : .gear,
+            icon: .timer,
             iconColor: status.isLimitReached ? .destructive : (status.isApproachingLimit ? .warning : .brand),
-            title: "Private Cloud Compute"
+            title: "Daily Allowance"
         ) {
             if status.canRequestLimitIncrease {
-                Button("Show options") {
+                Button("Options") {
                     container.aiCoachService.presentServerLimitIncrease()
                 }
-                .font(.dsCaption)
-            } else {
-                Text(status.isAvailable ? "Ready" : "Unavailable")
-                    .font(.dsCaption)
-                    .foregroundStyle(.secondary)
+                .buttonStyle(.strideButton(.quiet, compact: true, fullWidth: false))
             }
         }
         if let message = status.quotaMessage {
-            Text(message)
-                .font(.dsCaption)
-                .foregroundStyle(status.isLimitReached ? Color.destructive : Color.warning)
-                .padding(.leading, Self.footnoteIndent)
-                .padding(.trailing, AppSpacing.lg)
-                .padding(.bottom, 6)
+            footnote(
+                Text(message),
+                color: status.isLimitReached ? Color.destructive : Color.warning
+            )
         }
     }
 
@@ -575,7 +541,10 @@ struct SettingsView: View {
     ) -> String {
         switch provider {
         case .appleOnDevice:
-            return "Runs on your device with Apple Intelligence. No API key, no cost, and your training data never leaves your iPhone. Requires a supported device with Apple Intelligence enabled."
+            return String(
+                localized: "Runs on your iPhone with Apple Intelligence. Your training data never leaves it.",
+                comment: "Settings footnote for the on-device AI model"
+            )
         case .applePrivateCloud:
             // The unavailable case is worth spelling out: the runner picked the server
             // model and is quietly getting the on-device one, which is the fallback
@@ -583,12 +552,21 @@ struct SettingsView: View {
             if let status, !status.isAvailable {
                 switch status.availability {
                 case .deviceNotEligible:
-                    return "Private Cloud Compute needs a newer iPhone. Coaching runs on the on-device model instead."
+                    return String(
+                        localized: "Private Cloud Compute needs a newer iPhone, so coaching runs on your iPhone instead.",
+                        comment: "Settings footnote when Private Cloud Compute is unsupported"
+                    )
                 case .systemNotReady, .unknownReason, .available:
-                    return "Private Cloud Compute is not ready right now, so coaching runs on the on-device model. It needs Apple Intelligence turned on and a network connection."
+                    return String(
+                        localized: "Private Cloud Compute isn't ready, so coaching runs on your iPhone for now. It needs Apple Intelligence on and a connection.",
+                        comment: "Settings footnote when Private Cloud Compute is not ready"
+                    )
                 }
             }
-            return "Runs on Apple's servers with Private Cloud Compute: a larger context window and deeper reasoning than the on-device model, with no API key and no cost. Apple does not store your data, and requests fall back to the on-device model when the network or your daily allowance is out."
+            return String(
+                localized: "Deeper reads from Apple's servers. Apple doesn't keep your data, and Stride falls back to your iPhone when you're offline or past the daily limit.",
+                comment: "Settings footnote for the Private Cloud Compute AI model"
+            )
         }
     }
 
@@ -624,43 +602,20 @@ struct SettingsView: View {
                 }
             }
             rowDivider
-            settingsRow(icon: .history, iconColor: .secondary, title: "iCloud Sync") {
+            settingsRow(icon: .cloud, iconColor: .brand, title: "iCloud Sync") {
                 Toggle("iCloud Sync", isOn: Bindable(appSettings).iCloudSyncEnabled)
                     .labelsHidden()
                     .tint(.brand)
             }
             if syncRestartPending {
-                Text("Restart the app for this change to take effect.")
-                    .font(.dsCaption)
-                    .foregroundStyle(.secondary)
-                    .padding(.leading, Self.footnoteIndent)
-                    .padding(.trailing, AppSpacing.lg)
-                    .padding(.bottom, 10)
-            }
-            // Store and Pulse details are for testers verifying sync, not for runners.
-            if BuildEnvironment.showsTestFlightDiagnostics {
-                rowDivider
-                settingsRow(icon: .check, iconColor: .brand, title: "Active Store") {
-                    Text(persistenceStatusText)
-                        .font(.bodyRegular)
-                        .foregroundStyle(.secondary)
-                }
-                if appSettings.iCloudSyncEnabled {
-                    Text("Verify CloudKit on-device in Pulse Console: look for `CloudKit` `setup`, `export`, and `import` events.")
-                        .font(.dsCaption)
-                        .foregroundStyle(.secondary)
-                        .padding(.leading, Self.footnoteIndent)
-                        .padding(.trailing, AppSpacing.lg)
-                        .padding(.bottom, 10)
-                }
+                footnote(Text("Restart the app for this change to take effect."))
             }
             rowDivider
             NavigationLink {
                 HealthKitImportView()
             } label: {
                 settingsRow(icon: .heart, iconColor: .destructive, title: "Import from Apple Health") {
-                    StrideIcon(name: .chevronRight, size: 12,
-                               color: Color.secondary.opacity(0.5), strokeWeight: 2)
+                    rowChevron
                 }
             }
             .buttonStyle(.plain)
@@ -673,23 +628,17 @@ struct SettingsView: View {
                     .tint(.brand)
                     .accessibilityIdentifier("settings.importWalks")
             }
-            Text("Brings walking workouts from Apple Health into your history. They're kept out of your training stats — mileage, pace, records, and streaks stay running-only.")
-                .font(.dsCaption)
-                .foregroundStyle(.secondary)
-                .padding(.leading, Self.footnoteIndent)
-                .padding(.trailing, AppSpacing.lg)
-                .padding(.bottom, 10)
+            footnote(Text("Adds walks from Apple Health to your history. They stay out of your mileage, pace, records and streaks."))
 
             rowDivider
             Button {
                 exportAllData()
             } label: {
-                settingsRow(icon: .chart, iconColor: .brand, title: "Export All Data") {
+                settingsRow(icon: .export, iconColor: .brand, title: "Export All Data") {
                     if isExportingData {
                         ProgressView()
                     } else {
-                        StrideIcon(name: .chevronRight, size: 12,
-                                   color: Color.secondary.opacity(0.5), strokeWeight: 2)
+                        rowChevron
                     }
                 }
             }
@@ -697,33 +646,48 @@ struct SettingsView: View {
             .foregroundStyle(.primary)
             .disabled(isExportingData)
             .accessibilityIdentifier("settings.exportAllData")
-            Text("Saves every workout, strength session and pair of shoes as spreadsheet files, with each GPS route as a GPX file, in one ZIP you can keep or send anywhere.")
-                .font(.dsCaption)
-                .foregroundStyle(.secondary)
-                .padding(.leading, Self.footnoteIndent)
-                .padding(.trailing, AppSpacing.lg)
-                .padding(.bottom, 10)
-
-            if BuildEnvironment.showsTestFlightDiagnostics {
-                rowDivider
-                NavigationLink {
-                    CloudKitDebugView()
-                } label: {
-                    settingsRow(icon: .timer, iconColor: .brand, title: "CloudKit Debug Data") {
-                        StrideIcon(name: .chevronRight, size: 12,
-                                   color: Color.secondary.opacity(0.5), strokeWeight: 2)
-                    }
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.primary)
-            }
+            footnote(Text("One ZIP with every workout, strength session and shoe as spreadsheets, and each route as a GPX file."))
         }
     }
 
-    // MARK: - TestFlight notifications card
+    // MARK: - TestFlight card
 
-    private var notificationTestingCard: some View {
-        settingsSection("TestFlight · Notifications") {
+    /// Everything that is for testers rather than runners, in one card at the bottom:
+    /// the store and sync checks, the logs, and the notification test harness. Gated on
+    /// `BuildEnvironment.showsTestFlightDiagnostics`, so an App Store build never draws it.
+    private var testFlightCard: some View {
+        settingsSection("TestFlight") {
+            settingsRow(icon: .cloud, iconColor: .secondary, title: "Active Store") {
+                Text(persistenceStatusText)
+                    .font(.bodyRegular)
+                    .foregroundStyle(.secondary)
+            }
+            if appSettings.iCloudSyncEnabled {
+                footnote(Text("Check sync in Pulse Console: look for CloudKit setup, export and import events."))
+            }
+            rowDivider
+            NavigationLink {
+                CloudKitDebugView()
+            } label: {
+                settingsRow(icon: .gear, iconColor: .secondary, title: "CloudKit Debug Data") {
+                    rowChevron
+                }
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.primary)
+            #if canImport(PulseUI)
+            rowDivider
+            Button {
+                showPulseConsole = true
+            } label: {
+                settingsRow(icon: .history, iconColor: .secondary, title: "Pulse Console") {
+                    rowChevron
+                }
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.primary)
+            #endif
+            rowDivider
             Button {
                 Task {
                     do {
@@ -737,7 +701,7 @@ struct SettingsView: View {
                     }
                 }
             } label: {
-                settingsRow(icon: .bell, iconColor: .brand, title: "Trigger All Notifications") {
+                settingsRow(icon: .bell, iconColor: .secondary, title: "Trigger All Notifications") {
                     StrideIcon(name: .play, size: 12,
                                color: Color.secondary.opacity(0.7), strokeWeight: 2)
                 }
@@ -765,63 +729,37 @@ struct SettingsView: View {
                     }
                 }
             } label: {
-                settingsRow(icon: .history, iconColor: .brand, title: "Notify Latest Run") {
+                settingsRow(icon: .run, iconColor: .secondary, title: "Notify Latest Run") {
                     StrideIcon(name: .play, size: 12,
                                color: Color.secondary.opacity(0.7), strokeWeight: 2)
                 }
             }
             .buttonStyle(.plain)
             .foregroundStyle(.primary)
-
             if let notificationTestStatus {
-                rowDivider
-                Text(notificationTestStatus)
-                    .font(.dsCaption)
-                    .foregroundStyle(.secondary)
-                    .padding(.leading, Self.footnoteIndent)
-                    .padding(.trailing, AppSpacing.lg)
-                    .padding(.bottom, 14)
+                footnote(Text(notificationTestStatus))
             } else {
-                rowDivider
-                Text("Sends each local notification type immediately so QA can verify copy, sounds, and tap behavior.")
-                    .font(.dsCaption)
-                    .foregroundStyle(.secondary)
-                    .padding(.leading, Self.footnoteIndent)
-                    .padding(.trailing, AppSpacing.lg)
-                    .padding(.bottom, 14)
+                footnote(Text("Sends each local notification now, to check copy, sound and what a tap opens."))
             }
         }
+        #if canImport(PulseUI)
+        .sheet(isPresented: $showPulseConsole) { NavigationStack { ConsoleView() } }
+        #endif
     }
 
     // MARK: - About card
 
     private var aboutCard: some View {
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "—"
+        let build = info?["CFBundleVersion"] as? String
         return settingsSection("About") {
             settingsRow(icon: .gear, iconColor: Color.secondary, title: "Version") {
-                Text(version)
+                Text(build.map { "\(version) (\($0))" } ?? version)
                     .font(.dsSubhead.weight(.medium).monospacedDigit())
                     .foregroundStyle(.secondary)
             }
-            #if canImport(PulseUI)
-            if BuildEnvironment.showsTestFlightDiagnostics {
-                rowDivider
-                Button {
-                    showPulseConsole = true
-                } label: {
-                    settingsRow(icon: .chart, iconColor: .brand, title: "Pulse Console") {
-                        StrideIcon(name: .chevronRight, size: 12,
-                                   color: Color.secondary.opacity(0.5), strokeWeight: 2)
-                    }
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.primary)
-            }
-            #endif
         }
-        #if canImport(PulseUI)
-        .sheet(isPresented: $showPulseConsole) { NavigationStack { ConsoleView() } }
-        #endif
     }
 
     // MARK: - Danger card
@@ -940,7 +878,9 @@ struct SettingsView: View {
                 .strideEyebrow()
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, AppSpacing.xs)
-            VStack(spacing: 0) {
+            // Leading, not the default centre: a footnote narrower than the card was
+            // centred, so each one started at a different x.
+            VStack(alignment: .leading, spacing: 0) {
                 content()
             }
             .strideCard()
@@ -982,6 +922,52 @@ struct SettingsView: View {
 
     private var rowDivider: some View {
         Divider().padding(.leading, Self.footnoteIndent)
+    }
+
+    /// The line of explanation under a row. One helper so every footnote starts under the
+    /// row's title and keeps the same gap above the next divider; hand-padded copies had
+    /// drifted (one had no bottom gap at all and sat on the divider).
+    private func footnote(_ text: Text, color: Color = .secondary) -> some View {
+        text
+            .font(.dsCaption)
+            .foregroundStyle(color)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.leading, Self.footnoteIndent)
+            .padding(.trailing, AppSpacing.lg)
+            .padding(.bottom, AppSpacing.md)
+    }
+
+    private var rowChevron: some View {
+        StrideIcon(name: .chevronRight, size: 12,
+                   color: Color.secondary.opacity(0.5), strokeWeight: 2)
+    }
+
+    /// A choice from a short list as a row value: the current value in secondary text with
+    /// the up-down chevron, opening the system menu. A bare menu `Picker` drew in system
+    /// blue, the one blue thing on the screen (the same shape as `RunShoeRow`).
+    private func menuPicker<Value: Hashable>(
+        _ title: LocalizedStringKey,
+        selection: Binding<Value>,
+        options: [Value],
+        label: @escaping (Value) -> String
+    ) -> some View {
+        Menu {
+            Picker(title, selection: selection) {
+                ForEach(options, id: \.self) { Text(label($0)).tag($0) }
+            }
+        } label: {
+            HStack(spacing: AppSpacing.xs) {
+                Text(label(selection.wrappedValue))
+                    .font(.bodyRegular)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.dsCaption2.weight(.semibold))
+            }
+            .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(title))
+        .accessibilityValue(label(selection.wrappedValue))
     }
 
     // MARK: - Actions

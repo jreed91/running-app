@@ -64,6 +64,9 @@ struct NumericStepperField: View {
                 Color.brand.opacity(isEditing ? 0.12 : 0),
                 in: RoundedRectangle(cornerRadius: AppRadius.xs)
             )
+            // Never compressed: in a Settings row the unit was the part that gave way,
+            // so Max HR read "184 …" with the stepper still beside it.
+            .fixedSize()
 
             Stepper(title, value: stepperBinding, in: range, step: step)
                 .labelsHidden()
