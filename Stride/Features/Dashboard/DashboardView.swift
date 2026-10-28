@@ -22,6 +22,9 @@ struct WeekCalendarView: View {
             headerRow
             dayStrip
         }
+        // The design system's DayCell strip sits in a card, like every other block on
+        // Home; on the bare page ground it read as loose text above the first card.
+        .strideCard()
         .onChange(of: selectedDate) { _, newDate in
             let target = newDate.startOfWeek
             guard !cal.isDate(target, inSameDayAs: weekStart) else { return }
@@ -43,9 +46,9 @@ struct WeekCalendarView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(.horizontal, AppSpacing.lg)
+        .padding(.horizontal, AppSpacing.md)
         .padding(.top, AppSpacing.md)
-        .padding(.bottom, 6)
+        .padding(.bottom, AppSpacing.xs)
     }
 
     private var dayStrip: some View {
@@ -151,17 +154,23 @@ private struct DayCell: View {
 
     var body: some View {
         VStack(spacing: 4) {
+            // Weekday in plain caption: only today's disc carries the brand, so the
+            // letter above it stays secondary like the rest.
             Text(date.formatted(.dateTime.weekday(.narrow)))
-                .font(.dsCaption2.weight(.semibold))
-                .foregroundStyle(isToday ? .brand : .secondary)
+                .font(.dsCaption)
+                .foregroundStyle(.secondary)
 
             ZStack {
                 Circle()
                     .fill(circleFill)
                     .frame(width: 32, height: 32)
                     .adaptiveAnimation(AppAnimation.snappy, value: isSelected)
+                // Rounded tabular digits, the face the design system gives every number.
                 Text(date.formatted(.dateTime.day()))
-                    .font(.dsSubhead.weight(isToday || isSelected ? .bold : .regular))
+                    .font(
+                        .system(.subheadline, design: .rounded, weight: isToday || isSelected ? .bold : .semibold)
+                            .monospacedDigit()
+                    )
                     .foregroundStyle(numberForeground)
                     .adaptiveAnimation(AppAnimation.snappy, value: isSelected)
             }
@@ -404,10 +413,12 @@ struct DashboardView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                // The week strip scrolls with the page, on the page's own ground, so the
-                // large title collapses over it like every other tab's content.
+                // The week strip scrolls with the page, so the large title collapses
+                // over it like every other tab's content.
                 VStack(spacing: 0) {
                     WeekCalendarView(activePlan: activePlan, selectedDate: $selectedDate)
+                        .padding(.horizontal, AppSpacing.lg)
+                        .padding(.top, AppSpacing.sm)
 
                     // Two columns when the page is wide enough (iPhone Duo open, in
                     // landscape): what's on (today, alerts, the race, what's next) on the
