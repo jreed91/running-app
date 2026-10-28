@@ -31,6 +31,7 @@ struct WeekCalendarView: View {
         .onChange(of: selectedDate) { _, newDate in
             let target = newDate.startOfWeek
             guard !cal.isDate(target, inSameDayAs: weekStart) else { return }
+            incomingEdge = target > weekStart ? .trailing : .leading
             withAnimation(AppAnimation.bouncy) {
                 weekStart = target
             }
@@ -74,10 +75,61 @@ struct WeekCalendarView: View {
 
     private var dayStrip: some View {
         HStack(spacing: 0) {
-            navChevron(icon: .chevronLeft, label: "Previous week") {
-                weekStart = weekStart.adding(weeks: -1)
-            }
+            navChevron(icon: .chevronLeft, label: "Previous week") { step(weeks: -1) }
 
+            // The seven days swipe as one page: a new `id` per week lets the old week
+            // slide out the way the finger went while the next one slides in.
+            // The ZStack holds both weeks while they cross, so the row's width never
+            // doubles mid-swipe.
+            ZStack {
+                weekDays
+                    .id(weekStart)
+                    .transition(weekTransition)
+            }
+            .frame(maxWidth: .infinity)
+            .clipped()
+                // Simultaneous so a vertical drag that starts on the strip still scrolls
+                // the page; only a clearly sideways drag turns the week.
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 24).onEnded { value in
+                        let dx = value.translation.width
+                        guard abs(dx) > 44, abs(dx) > abs(value.translation.height) * 1.5 else { return }
+                        step(weeks: dx < 0 ? 1 : -1)
+                    }
+                )
+
+            navChevron(icon: .chevronRight, label: "Next week") { step(weeks: 1) }
+        }
+        .padding(.bottom, AppSpacing.sm)
+        // Seven day columns plus two chevrons across the screen width — the other
+        // layout that can't reflow, so it scales up to accessibility1 and stops (U2).
+        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+        .accessibilityScrollAction { edge in
+            switch edge {
+            case .leading: step(weeks: -1)
+            case .trailing: step(weeks: 1)
+            default: break
+            }
+        }
+    }
+
+    /// Which side the next week slides in from: the trailing side going forward.
+    @State private var incomingEdge: Edge = .trailing
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var weekTransition: AnyTransition {
+        reduceMotion ? .opacity : .push(from: incomingEdge)
+    }
+
+    private func step(weeks: Int) {
+        incomingEdge = weeks > 0 ? .trailing : .leading
+        withAnimation(AppAnimation.bouncy) {
+            weekStart = weekStart.adding(weeks: weeks)
+        }
+    }
+
+    private var weekDays: some View {
+        HStack(spacing: 0) {
             // Day cells were `.onTapGesture` on a `Rectangle` content shape, so they
             // were not buttons to assistive tech and exposed no label — `StrideIcon`
             // is a raw `Canvas` and the date/indicator read as loose fragments (N18).
@@ -99,15 +151,7 @@ struct WeekCalendarView: View {
                 .buttonStyle(.plain)
                 .contextMenu { moveMenu(for: date) }
             }
-
-            navChevron(icon: .chevronRight, label: "Next week") {
-                weekStart = weekStart.adding(weeks: 1)
-            }
         }
-        .padding(.bottom, AppSpacing.sm)
-        // Seven day columns plus two chevrons across the screen width — the other
-        // layout that can't reflow, so it scales up to accessibility1 and stops (U2).
-        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
     }
 
     private func navChevron(
