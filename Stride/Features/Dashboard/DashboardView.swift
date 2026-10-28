@@ -37,11 +37,30 @@ struct WeekCalendarView: View {
         }
     }
 
+    @State private var isMonthCalendarPresented = false
+
     private var headerRow: some View {
         HStack {
-            Text(monthRangeLabel)
-                .strideEyebrow()
-                .foregroundStyle(.primary)
+            // The month opens the whole month: the strip only steps a week at a time.
+            Button {
+                isMonthCalendarPresented = true
+            } label: {
+                HStack(spacing: AppSpacing.xs) {
+                    Text(monthRangeLabel)
+                        .strideEyebrow()
+                        .foregroundStyle(.primary)
+                    StrideIcon(name: .chevronDown, size: 9, color: .secondary, strokeWeight: 2.2)
+                }
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(String(localized: "Shows the whole month"))
+            .accessibilityIdentifier("home.monthCalendar")
+            .sheet(isPresented: $isMonthCalendarPresented) {
+                MonthCalendarView(activePlan: activePlan, selectedDate: $selectedDate)
+                    .strideSheet()
+            }
             Spacer()
             if let label = planWeekLabel {
                 Text(label)
@@ -50,8 +69,7 @@ struct WeekCalendarView: View {
             }
         }
         .padding(.horizontal, AppSpacing.md)
-        .padding(.top, AppSpacing.md)
-        .padding(.bottom, AppSpacing.xs)
+        .padding(.top, AppSpacing.xs)
     }
 
     private var dayStrip: some View {
