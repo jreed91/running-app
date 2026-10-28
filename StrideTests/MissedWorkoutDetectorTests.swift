@@ -178,4 +178,30 @@ struct MissedWorkoutDetectorTests {
         let result = MissedWorkoutDetector.detect(in: plan, today: today)
         #expect(result == nil)
     }
+
+    // MARK: Single-session rule (calendar)
+
+    @Test("A past, unfinished session is missed")
+    func pastUnfinishedIsMissed() {
+        let workout = ScheduledWorkout(scheduledDate: date(2026, 5, 4), workoutType: .tempo)
+        #expect(MissedWorkoutDetector.isMissed(workout, today: date(2026, 5, 6)))
+    }
+
+    @Test("Today's, completed and rest sessions are not missed")
+    func todayCompletedAndRestAreNotMissed() {
+        let today = date(2026, 5, 6)
+        let todays = ScheduledWorkout(scheduledDate: today, workoutType: .easy)
+        let done = ScheduledWorkout(scheduledDate: date(2026, 5, 4), workoutType: .easy)
+        done.isCompleted = true
+        let rest = ScheduledWorkout(scheduledDate: date(2026, 5, 4), workoutType: .rest)
+        #expect(!MissedWorkoutDetector.isMissed(todays, today: today))
+        #expect(!MissedWorkoutDetector.isMissed(done, today: today))
+        #expect(!MissedWorkoutDetector.isMissed(rest, today: today))
+    }
+
+    @Test("A past strength session counts as missed on the calendar")
+    func pastStrengthIsMissed() {
+        let workout = ScheduledWorkout(scheduledDate: date(2026, 5, 4), workoutType: .strength)
+        #expect(MissedWorkoutDetector.isMissed(workout, today: date(2026, 5, 6)))
+    }
 }

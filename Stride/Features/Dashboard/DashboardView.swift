@@ -203,6 +203,13 @@ private struct DayCell: View {
     private func indicator(for workout: ScheduledWorkout) -> some View {
         if workout.isCompleted {
             StrideIcon(name: .check, size: 8, color: workout.workoutType.color, strokeWeight: 2.5)
+        } else if MissedWorkoutDetector.isMissed(workout) {
+            // Hollow: the session was set and the day went by. The outline is a shape
+            // change, not a colour one, so it reads with Differentiate Without Color too.
+            let isLong = workout.workoutType == .longRun && sessions.count == 1
+            RoundedRectangle(cornerRadius: AppRadius.micro)
+                .strokeBorder(workout.workoutType.color, lineWidth: 1.5)
+                .frame(width: isLong ? 12 : 6, height: 6)
         } else if differentiateWithoutColor {
             // Each type's own glyph, so the day is identifiable without reading the
             // colour. Sized to the strip's 10pt indicator row.
@@ -231,9 +238,15 @@ private struct DayCell: View {
             return "\(day), \(isRestDay ? "rest day" : "nothing scheduled")"
         }
         let list = sessions
-            .map { "\($0.workoutType.localizedName)\($0.isCompleted ? ", completed" : "")" }
+            .map { "\($0.workoutType.localizedName)\(statusSuffix(for: $0))" }
             .joined(separator: ", ")
         return "\(day), \(list)"
+    }
+
+    private func statusSuffix(for workout: ScheduledWorkout) -> String {
+        if workout.isCompleted { return ", completed" }
+        if MissedWorkoutDetector.isMissed(workout) { return ", missed" }
+        return ""
     }
 
     /// Today is the route gradient — "you are here" in the Route Loop language — with
