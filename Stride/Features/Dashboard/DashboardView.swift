@@ -9,6 +9,9 @@ struct WeekCalendarView: View {
 
     @State private var weekStart: Date
 
+    @Environment(AppContainer.self) private var container
+    @Environment(\.modelContext) private var context
+
     private let cal = Calendar.current
 
     init(activePlan: TrainingPlan?, selectedDate: Binding<Date>) {
@@ -76,6 +79,7 @@ struct WeekCalendarView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .contextMenu { moveMenu(for: date) }
             }
 
             navChevron(icon: .chevronRight, label: "Next week") {
@@ -120,6 +124,81 @@ struct WeekCalendarView: View {
         let match = (plan.weeks ?? []).first { cal.isDate($0.startDate, inSameDayAs: weekStart) }
         guard let week = match else { return nil }
         return "Week \(week.weekNumber) of \(plan.totalWeeks)"
+    }
+
+    // MARK: Move to…
+
+    /// Long-press a day to move its session to another day of the same plan week. The
+    /// rules are Plan's drag rules (`WorkoutReorderPlanner`): past, completed and fixed
+    /// race-day sessions stay put, and the two days swap so the week keeps its shape.
+    @ViewBuilder
+    private func moveMenu(for date: Date) -> some View {
+        let sessions = workouts(on: date).filter { $0.workoutType != .rest }
+        ForEach(sessions) { session in
+            let targets = WorkoutReorderPlanner.moveTargets(for: session.id, in: weekSlots(for: session))
+            if !targets.isEmpty {
+                Menu {
+                    ForEach(targets, id: \.self) { day in
+                        Button(moveTargetLabel(day, in: session)) { move(session, to: day) }
+                    }
+                } label: {
+                    Label(
+                        sessions.count > 1
+                            ? String(localized: "Move \(session.workoutType.localizedName) to…")
+                            : String(localized: "Move to…"),
+                        systemImage: "calendar"
+                    )
+                }
+            }
+        }
+    }
+
+    private var hasFixedRaceDate: Bool { activePlan?.raceDate != nil }
+
+    private func weekSlots(for session: ScheduledWorkout) -> [WorkoutReorderPlanner.Slot] {
+        WorkoutReorderPlanner.slots(for: session.week?.workouts ?? [], hasFixedRaceDate: hasFixedRaceDate)
+    }
+
+    /// "Thursday 30 · Rest": the day and what it holds now, which is what it will swap.
+    private func moveTargetLabel(_ day: Date, in session: ScheduledWorkout) -> String {
+        let held = (session.week?.workouts ?? [])
+            .filter { cal.isDate($0.scheduledDate, inSameDayAs: day) }
+            .map(\.workoutType.localizedName)
+            .joined(separator: " + ")
+        let dayText = day.formatted(.dateTime.weekday(.wide).day())
+        return held.isEmpty ? dayText : "\(dayText) · \(held)"
+    }
+
+    /// Same save path as Plan's drag: write the dates, roll back if the store refuses,
+    /// then rebuild the 8 AM reminders, which are addressed to dates.
+    @MainActor
+    private func move(_ session: ScheduledWorkout, to day: Date) {
+        let weekWorkouts = session.week?.workouts ?? []
+        let changes = WorkoutReorderPlanner.move(session.id, toDay: day, slots: weekSlots(for: session))
+        guard !changes.isEmpty else { return }
+
+        withAnimation(AppAnimation.snappy) {
+            for workout in weekWorkouts {
+                if let newDate = changes[workout.id] {
+                    workout.scheduledDate = newDate
+                }
+            }
+            selectedDate = day
+        }
+
+        do {
+            try context.save()
+        } catch {
+            context.rollback()
+            AppLogger.log("Moving a session failed to save: \(error)", label: "Home", level: .error)
+            return
+        }
+
+        if let plan = activePlan, plan.isActive {
+            Task { @MainActor in
+                await container.notificationService.scheduleMorningReminders(for: plan)
+            }
+        }
     }
 
     /// Every session the plan schedules on `date`. A day can hold a run *and* a gym

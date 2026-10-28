@@ -103,7 +103,54 @@ enum WorkoutReorderPlanner {
         return changes
     }
 
-    // MARK: Classification
+    // MARK: Moving one session to a day
+
+    /// The new dates for "move this session to that day", as the calendar's Move to…
+    /// menu asks it: the session takes the target day and whatever the target day held
+    /// takes the session's old day. A swap, so the week keeps the same set of days, the
+    /// same rule the drag above holds.
+    ///
+    /// - Returns: Only the sessions whose date changes; empty when the move isn't
+    ///   allowed (a pinned session on either end, the same day, or a day the week doesn't
+    ///   hold).
+    static func move(
+        _ id: UUID,
+        toDay day: Date,
+        slots: [Slot],
+        calendar: Calendar = .current
+    ) -> [UUID: Date] {
+        guard let source = slots.first(where: { $0.id == id }), source.isMovable else { return [:] }
+        let targetDay = calendar.startOfDay(for: day)
+        guard calendar.startOfDay(for: source.date) != targetDay else { return [:] }
+
+        let targets = slots.filter { calendar.startOfDay(for: $0.date) == targetDay }
+        guard let first = targets.min(by: isOrderedBefore),
+              targets.allSatisfy(\.isMovable) else { return [:] }
+
+        var changes: [UUID: Date] = [source.id: first.date]
+        for target in targets {
+            changes[target.id] = source.date
+        }
+        return changes
+    }
+
+    /// The days a session can be moved to with `move`: every other day in `slots`
+    /// whose sessions are all free to change hands. Empty when the session itself is
+    /// pinned.
+    static func moveTargets(
+        for id: UUID,
+        in slots: [Slot],
+        calendar: Calendar = .current
+    ) -> [Date] {
+        guard let source = slots.first(where: { $0.id == id }), source.isMovable else { return [] }
+        let sourceDay = calendar.startOfDay(for: source.date)
+        let byDay = Dictionary(grouping: slots) { calendar.startOfDay(for: $0.date) }
+        return byDay
+            .filter { day, daySlots in day != sourceDay && daySlots.allSatisfy(\.isMovable) }
+            .keys
+            .sorted()
+    }
+
 
     /// Classifies a week's sessions into the ones a runner may drag and the ones the
     /// plan pins in place.

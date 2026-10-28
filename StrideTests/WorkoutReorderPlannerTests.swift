@@ -328,4 +328,42 @@ struct WorkoutReorderPlannerTests {
             ) == false
         )
     }
+
+    // MARK: Move to… (calendar)
+
+    @Test("Moving a session to another day swaps it with that day's session")
+    func moveSwapsDays() {
+        let week = slots(4)
+        let changes = WorkoutReorderPlanner.move(week[1].id, toDay: week[3].date, slots: week, calendar: calendar)
+        #expect(changes == [week[1].id: week[3].date, week[3].id: week[1].date])
+    }
+
+    @Test("Every session on the target day takes the old day")
+    func moveCarriesPairedSessions() {
+        let week = slots(3)
+        let paired = WorkoutReorderPlanner.Slot(id: UUID(), date: week[2].date, isMovable: true)
+        let all = week + [paired]
+        let changes = WorkoutReorderPlanner.move(week[0].id, toDay: week[2].date, slots: all, calendar: calendar)
+        #expect(changes[week[0].id] == week[2].date)
+        #expect(changes[week[2].id] == week[0].date)
+        #expect(changes[paired.id] == week[0].date)
+    }
+
+    @Test("A pinned day is neither a target nor a source")
+    func movePinned() {
+        var week = slots(3)
+        week[2] = WorkoutReorderPlanner.Slot(id: week[2].id, date: week[2].date, isMovable: false)
+        #expect(WorkoutReorderPlanner.move(week[0].id, toDay: week[2].date, slots: week, calendar: calendar).isEmpty)
+        #expect(WorkoutReorderPlanner.move(week[2].id, toDay: week[0].date, slots: week, calendar: calendar).isEmpty)
+        #expect(WorkoutReorderPlanner.moveTargets(for: week[0].id, in: week, calendar: calendar) == [week[1].date])
+        #expect(WorkoutReorderPlanner.moveTargets(for: week[2].id, in: week, calendar: calendar).isEmpty)
+    }
+
+    @Test("A day the week doesn't hold, or the same day, is not a move")
+    func moveNoOps() {
+        let week = slots(3)
+        let outside = day(10, from: monday)
+        #expect(WorkoutReorderPlanner.move(week[0].id, toDay: outside, slots: week, calendar: calendar).isEmpty)
+        #expect(WorkoutReorderPlanner.move(week[0].id, toDay: week[0].date, slots: week, calendar: calendar).isEmpty)
+    }
 }
