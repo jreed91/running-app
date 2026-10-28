@@ -17,6 +17,19 @@ struct MissedWorkoutDetector {
 
     static let minimumConsecutiveMissed = 2
 
+    /// Whether one session counts as missed on the calendar: a real session (not rest)
+    /// on a day before today that was never completed. Strength and cross-training count
+    /// here, unlike in `detect`, because the calendar shows every session the plan set.
+    static func isMissed(
+        _ workout: ScheduledWorkout,
+        today: Date = .now,
+        calendar: Calendar = .current
+    ) -> Bool {
+        workout.workoutType != .rest
+            && !workout.isCompleted
+            && workout.scheduledDate < calendar.startOfDay(for: today)
+    }
+
     /// Defaults key holding when the dashboard's recovery card was last put away
     /// (dismissed or acted on), as a `timeIntervalSince1970`. The card shows at most once
     /// a week and reads this to decide.
