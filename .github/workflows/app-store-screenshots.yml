@@ -9,8 +9,8 @@ name: App Store screenshots
 #   iphone-raw/  the unframed captures
 #   watch/       raw Apple Watch captures (App Store Connect takes them unframed)
 # and the `app-store-screenshots-duo` artifact, from its own job:
-#   duo-inner/   framed, 2007 x 2853, for the iPhone Duo slot (inner display, portrait)
-#   duo-raw/     the unframed inner-display captures
+#   duo-outer/   framed, 1398 x 2034, for the iPhone Duo slot (outer display, portrait)
+#   duo-raw/     the unframed captures
 
 on:
   workflow_dispatch:
@@ -204,8 +204,10 @@ jobs:
           retention-days: 30
 
   duo:
-    # iPhone Duo (the foldable): the same capture on the inner display, which needs an
-    # iOS 27.1+ runtime. Its own job so a missing runtime or device never holds up the
+    # iPhone Duo (the foldable): the same capture, which needs an iOS 27.1+ runtime. The
+    # simulator boots closed, so the shots come from the outer display at its App Store
+    # size, 1398 x 2034. Apple has no simctl or XCTest way to open it, so there are no
+    # inner-display (2007 x 2853) shots yet. Its own job so a missing runtime or device never holds up the
     # iPhone and Watch set.
     name: iPhone Duo screenshots
     if: >-
@@ -261,10 +263,6 @@ jobs:
           xcrun simctl ui "$UDID" appearance dark
           xcrun simctl status_bar "$UDID" override --time "9:41" --dataNetwork wifi --wifiMode active \
             --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
-          # Which display a screenshot comes from: printed so the outer display can be
-          # added once there's a way to close the simulated device.
-          xcrun simctl io "$UDID" enumerate || true
-          xcrun simctl help 2>&1 | grep -iE 'fold|posture|hinge|display' || true
 
       - name: Capture iPhone Duo screens
         run: |
@@ -279,14 +277,18 @@ jobs:
             -skipMacroValidation -skipPackagePluginValidation \
             COMPILER_INDEX_STORE_ENABLE=NO CODE_SIGNING_ALLOWED=NO \
             | xcbeautify --renderer github-actions
-          sips -g pixelWidth -g pixelHeight "$RAW"/*.png
+          # The closed device's outer display; anything else means the simulator changed.
+          for f in "$RAW"/*.png; do
+            size=$(sips -g pixelWidth -g pixelHeight "$f" | awk '/pixel/ {print $2}' | paste -sd x -)
+            [[ "$size" == "1398x2034" ]] || { echo "::error::$f is $size, not the outer display's 1398x2034"; exit 1; }
+          done
 
       - name: Frame the iPhone Duo screens
         run: |
           cd design/appstore
           npm install --no-save --no-package-lock playwright@1.49.1
           npx playwright install webkit
-          node compose.mjs "$RAW" "$GITHUB_WORKSPACE/AppStore/duo-inner" webkit duo-inner
+          node compose.mjs "$RAW" "$GITHUB_WORKSPACE/AppStore/duo-outer" webkit duo-outer
 
       - name: Flatten every screenshot to RGB, no alpha
         # Same reason as the iPhone job: App Store Connect rejects alpha.
@@ -315,6 +317,6 @@ jobs:
         with:
           name: app-store-screenshots-duo
           path: |
-            AppStore/duo-inner/
+            AppStore/duo-outer/
             AppStore/duo-raw/
           retention-days: 30

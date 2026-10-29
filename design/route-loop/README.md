@@ -171,6 +171,10 @@ from the Actions tab, or label a PR `app-store-screenshots`). `AppStoreScreensho
 takes the iPhone screens at 9:41 on the largest iPhone; the Watch app's
 `--seed-demo-data --demo-page <n>` gives each Watch page; `design/appstore/compose.mjs`
 frames the iPhone ones with the captions in `design/appstore/captions.json`.
+The workflow's iPhone Duo job runs the same test on the Duo simulator, which boots
+closed, and frames the outer-display shots at 1398 x 2034 (`compose.mjs ... webkit
+duo-outer`). Apple has no command to open the simulated Duo, so inner-display shots
+(2007 x 2853, preset `duo-inner`) are not generated yet.
 
 To take them on a Mac instead (the workflow's steps, by hand):
 
