@@ -8,7 +8,8 @@ import XCTest
 /// `TEST_RUNNER_APP_STORE_CAPTURE_DIR`). The PNGs land there as `NN-name.png`;
 /// `design/appstore/compose.mjs` then frames each one with its caption. Run it on the
 /// largest iPhone simulator (6.9", 1320 × 2868) with the status bar overridden to 9:41,
-/// and again on the iPhone Duo simulator (outer display, 1398 × 2034).
+/// and again on the iPhone Duo simulator, closed (outer display, 1398 × 2034) and
+/// opened (inner display, 2007 × 2853).
 ///
 /// Navigation is `UXCaptureTests`' own — the onboarding CTAs and the tab-bar offsets —
 /// so a layout change that breaks one breaks both, visibly.
