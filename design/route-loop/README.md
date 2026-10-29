@@ -217,6 +217,9 @@ screen sit on the normal Route Loop ground.
 ## Icon
 
 `icon-light.svg` (the App Store icon), `icon-dark.svg` and `icon-tinted.svg` are the
-sources for `AppIcon.appiconset` and the Watch's `WatchAppIcon`. Render a variant to a
+sources for `AppIcon.appiconset`. `icon-watch.svg` is the source for the Watch's
+`WatchAppIcon`: the same loop in `ink` on the `route` gradient. watchOS masks the icon
+to a circle on a black face, so a dark ground makes the circle disappear; App Review
+rejected 1.0 (275) for it under Guideline 4. Keep the Watch icon on a light ground. Render a variant to a
 1024 px RGB PNG with no alpha (any SVG renderer; Chrome headless was used) and copy it
 over the matching file. `StrideAppMark` draws the same geometry live in the app.
