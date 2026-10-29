@@ -2,8 +2,11 @@
 <html><head><meta charset="utf-8">
 <style>
   /* Route Loop tokens (design/route-loop/README.md). */
+  /* Canvas and device geometry come from compose.mjs: --w/--h are the output size and
+     --s scales the iPhone layout (1 at 1320 x 2868) to it. */
+  :root { {{GEOMETRY}} }
   :root { --brand:#ff5a1a; --brand-glow:#ffb36b; --ink:#1f2433; --ink-deep:#0d1018; --on-ink:#f5f6fa; --on-ink-muted:#a9afc2; }
-  html, body { margin:0; width:1320px; height:2868px; overflow:hidden; }
+  html, body { margin:0; width:var(--w); height:var(--h); overflow:hidden; }
   body {
     position:relative;
     background:
@@ -18,24 +21,24 @@
     background-image:
       linear-gradient(rgba(255,255,255,.05) 2px, transparent 2px),
       linear-gradient(90deg, rgba(255,255,255,.05) 2px, transparent 2px);
-    background-size:96px 96px;
+    background-size:calc(96px * var(--s)) calc(96px * var(--s));
   }
-  .copy { position:absolute; left:110px; right:110px; top:190px; }
-  .eyebrow { display:flex; align-items:center; gap:22px; font:700 40px/1 -apple-system, system-ui, sans-serif;
-    letter-spacing:6px; text-transform:uppercase; color:var(--brand); }
+  .copy { position:absolute; left:calc(110px * var(--s)); right:calc(110px * var(--s)); top:calc(190px * var(--s)); }
+  .eyebrow { display:flex; align-items:center; gap:calc(22px * var(--s)); font:700 calc(40px * var(--s))/1 -apple-system, system-ui, sans-serif;
+    letter-spacing:calc(6px * var(--s)); text-transform:uppercase; color:var(--brand); }
   /* The start pin: "you are here". */
-  .pin { width:34px; height:34px; border-radius:50%; background:#fff; display:grid; place-items:center; flex:none; }
+  .pin { width:calc(34px * var(--s)); height:calc(34px * var(--s)); border-radius:50%; background:#fff; display:grid; place-items:center; flex:none; }
   .pin i { width:45%; height:45%; border-radius:50%; background:var(--brand); }
-  h1 { margin:34px 0 0; font-weight:800; font-size:118px; line-height:1.02; letter-spacing:-2px; }
-  /* The whole device fits on the canvas: the screen keeps its 1320x2868 aspect inside the
-     26px bezel (946x2056), so nothing at the bottom of a screen (Sign in with Apple, the
-     tab bar) is cropped. It used to run 140px off the bottom edge. */
+  h1 { margin:calc(34px * var(--s)) 0 0; font-weight:800; font-size:calc(118px * var(--s)); line-height:1.02; letter-spacing:calc(-2px * var(--s)); }
+  /* The whole device fits on the canvas: the screen keeps the canvas aspect inside the
+     bezel (946x2056 inside 26px at 1320x2868), so nothing at the bottom of a screen (Sign
+     in with Apple, the tab bar) is cropped. It used to run 140px off the bottom edge. */
   .device {
-    position:absolute; left:50%; top:700px; width:998px; height:2108px; transform:translateX(-50%);
-    border-radius:150px; padding:26px; box-sizing:border-box; background:#05060a;
+    position:absolute; left:50%; top:var(--dev-top); width:var(--dev-w); height:var(--dev-h); transform:translateX(-50%);
+    border-radius:var(--radius); padding:var(--bezel); box-sizing:border-box; background:#05060a;
     box-shadow: 0 0 0 3px rgba(255,255,255,.10), 0 60px 120px rgba(0,0,0,.55), 0 0 140px rgba(255,90,26,.18);
   }
-  .device img { display:block; width:100%; height:100%; object-fit:cover; object-position:top; border-radius:124px; }
+  .device img { display:block; width:100%; height:100%; object-fit:cover; object-position:top; border-radius:var(--screen-radius); }
 </style></head>
 <body>
   <div class="copy">

@@ -7,7 +7,8 @@ import XCTest
 /// set, which only the App Store screenshots workflow does (pass it to the test runner as
 /// `TEST_RUNNER_APP_STORE_CAPTURE_DIR`). The PNGs land there as `NN-name.png`;
 /// `design/appstore/compose.mjs` then frames each one with its caption. Run it on the
-/// largest iPhone simulator (6.9", 1320 × 2868) with the status bar overridden to 9:41.
+/// largest iPhone simulator (6.9", 1320 × 2868) with the status bar overridden to 9:41,
+/// and again on the iPhone Duo simulator (inner display, 2007 × 2853).
 ///
 /// Navigation is `UXCaptureTests`' own — the onboarding CTAs and the tab-bar offsets —
 /// so a layout change that breaks one breaks both, visibly.
@@ -53,11 +54,28 @@ final class AppStoreScreenshotTests: XCTestCase {
         "Home": 0.178, "Plan": 0.391, "History": 0.604, "Progress": 0.817
     ]
 
+    /// The offsets only hold on an iPhone-shaped screen. The iPhone Duo's inner display is
+    /// regular width, where the tab bar is not at the bottom, so there the tab is found by
+    /// its label.
+    private var hasPhoneShapedScreen: Bool {
+        let frame = app.windows.firstMatch.frame
+        return frame.height > 0 && frame.width / frame.height < 0.6
+    }
+
     private func selectTab(_ name: String) {
         guard let dx = Self.tabOffsets[name] else { return XCTFail("Unknown tab \(name)") }
         for _ in 0..<4 { app.swipeDown(velocity: .fast) }
         sleep(1)
-        app.coordinate(withNormalizedOffset: CGVector(dx: dx, dy: 0.951)).tap()
+        if hasPhoneShapedScreen {
+            app.coordinate(withNormalizedOffset: CGVector(dx: dx, dy: 0.951)).tap()
+            return
+        }
+        let tab = app.tabBars.buttons[name].exists ? app.tabBars.buttons[name] : app.buttons[name].firstMatch
+        if tab.waitForExistence(timeout: 5) {
+            tab.tap()
+        } else {
+            XCTFail("No \(name) tab")
+        }
     }
 
     func testCaptureAppStoreScreens() throws {

@@ -8,6 +8,9 @@ name: App Store screenshots
 #   iphone-6.3/  the same, scaled to 1206 x 2622, for the 6.1" / 6.3" slot
 #   iphone-raw/  the unframed captures
 #   watch/       raw Apple Watch captures (App Store Connect takes them unframed)
+# and the `app-store-screenshots-duo` artifact, from its own job:
+#   duo-inner/   framed, 2007 x 2853, for the iPhone Duo slot (inner display, portrait)
+#   duo-raw/     the unframed inner-display captures
 
 on:
   workflow_dispatch:
@@ -198,4 +201,120 @@ jobs:
             AppStore/iphone-6.3/
             AppStore/iphone-raw/
             AppStore/watch/
+          retention-days: 30
+
+  duo:
+    # iPhone Duo (the foldable): the same capture on the inner display, which needs an
+    # iOS 27.1+ runtime. Its own job so a missing runtime or device never holds up the
+    # iPhone and Watch set.
+    name: iPhone Duo screenshots
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'app-store-screenshots')
+    runs-on: xcode-27
+    timeout-minutes: 100
+    env:
+      RAW: ${{ github.workspace }}/AppStore/duo-raw
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_27*.app 2>/dev/null | sort -V | tail -1)
+          [[ -n "$XCODE" ]] || { echo "::error::No Xcode 27 on this runner"; exit 1; }
+          sudo xcode-select -switch "$XCODE"
+          xcodebuild -version
+
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen xcbeautify
+          xcodegen generate
+          mkdir -p Stride.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
+          cp ci_scripts/Package.resolved Stride.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+
+      - name: Boot the iPhone Duo simulator at 9:41, in dark appearance
+        timeout-minutes: 40
+        run: |
+          echo "Duo device types:"; xcrun simctl list devicetypes | grep -i duo || true
+          echo "iOS runtimes:"; xcrun simctl list runtimes | grep -i ios || true
+          boot_duo() {
+            TYPE=$(xcrun simctl list devicetypes -j \
+              | jq -r '[.devicetypes[] | select(.name | test("Duo"))] | last | .identifier // empty')
+            [[ -n "$TYPE" ]] || return 1
+            RUNTIME=$(xcrun simctl list runtimes -j \
+              | jq -r --arg t "$TYPE" '[.runtimes[] | select(.platform == "iOS" and .isAvailable and any(.supportedDeviceTypes[]?; .identifier == $t))] | last | .identifier // empty')
+            [[ -n "$RUNTIME" ]] || return 1
+            UDID=$(xcrun simctl list devices available -j \
+              | jq -r --arg rt "$RUNTIME" --arg t "$TYPE" '(.devices[$rt] // []) | map(select(.deviceTypeIdentifier == $t)) | .[0].udid // empty')
+            [[ -n "$UDID" ]] || UDID=$(xcrun simctl create "iPhone Duo (screenshots)" "$TYPE" "$RUNTIME") || return 1
+            xcrun simctl boot "$UDID" || true   # fails harmlessly when already booted
+            xcrun simctl bootstatus "$UDID" -b || return 1
+          }
+          # As with the Watch, a listed runtime may have no files behind it, so a boot is
+          # the real check; fetch the iOS platform once if it fails.
+          if ! boot_duo; then
+            echo "No bootable iPhone Duo simulator; downloading the iOS platform."
+            xcodebuild -downloadPlatform iOS
+            boot_duo || { echo "::error::No bootable iPhone Duo simulator on this runner"; xcrun simctl list devicetypes; exit 1; }
+          fi
+          echo "DUO_UDID=$UDID" >> "$GITHUB_ENV"
+          xcrun simctl ui "$UDID" appearance dark
+          xcrun simctl status_bar "$UDID" override --time "9:41" --dataNetwork wifi --wifiMode active \
+            --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
+          # Which display a screenshot comes from: printed so the outer display can be
+          # added once there's a way to close the simulated device.
+          xcrun simctl io "$UDID" enumerate || true
+          xcrun simctl help 2>&1 | grep -iE 'fold|posture|hinge|display' || true
+
+      - name: Capture iPhone Duo screens
+        run: |
+          set -o pipefail
+          mkdir -p "$RAW"
+          TEST_RUNNER_APP_STORE_CAPTURE_DIR="$RAW" xcodebuild test \
+            -scheme Stride \
+            -destination "platform=iOS Simulator,id=$DUO_UDID" \
+            -derivedDataPath DerivedData \
+            -only-testing:StrideUITests/AppStoreScreenshotTests \
+            -resultBundlePath AppStore/duo.xcresult \
+            -skipMacroValidation -skipPackagePluginValidation \
+            COMPILER_INDEX_STORE_ENABLE=NO CODE_SIGNING_ALLOWED=NO \
+            | xcbeautify --renderer github-actions
+          sips -g pixelWidth -g pixelHeight "$RAW"/*.png
+
+      - name: Frame the iPhone Duo screens
+        run: |
+          cd design/appstore
+          npm install --no-save --no-package-lock playwright@1.49.1
+          npx playwright install webkit
+          node compose.mjs "$RAW" "$GITHUB_WORKSPACE/AppStore/duo-inner" webkit duo-inner
+
+      - name: Flatten every screenshot to RGB, no alpha
+        # Same reason as the iPhone job: App Store Connect rejects alpha.
+        if: always()
+        run: |
+          python3 -m venv "$RUNNER_TEMP/pil"
+          "$RUNNER_TEMP/pil/bin/pip" install --quiet pillow
+          "$RUNNER_TEMP/pil/bin/python" - <<'PY'
+          import glob
+          from PIL import Image
+          for path in sorted(glob.glob("AppStore/*/*.png")):
+              im = Image.open(path)
+              if im.mode != "RGB":
+                  base = Image.new("RGB", im.size, (13, 16, 24))
+                  rgba = im.convert("RGBA")
+                  base.paste(rgba, mask=rgba.getchannel("A"))
+                  base.save(path, "PNG", optimize=True)
+              im = Image.open(path)
+              assert im.mode == "RGB", f"{path} is still {im.mode}"
+              print(f"{path}: {im.size[0]} x {im.size[1]} {im.mode}")
+          PY
+
+      - name: Upload
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-store-screenshots-duo
+          path: |
+            AppStore/duo-inner/
+            AppStore/duo-raw/
           retention-days: 30
