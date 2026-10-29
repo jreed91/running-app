@@ -9,8 +9,9 @@ name: App Store screenshots
 #   iphone-raw/  the unframed captures
 #   watch/       raw Apple Watch captures (App Store Connect takes them unframed)
 # and the `app-store-screenshots-duo` artifact, from its own job:
-#   duo-outer/   framed, 1398 x 2034, for the iPhone Duo slot (outer display, portrait)
-#   duo-raw/     the unframed captures
+#   duo-inner/      framed, 2007 x 2853, for the iPhone Duo slot (inner display, portrait)
+#   duo-outer/      framed, 1398 x 2034, for the iPhone Duo slot (outer display, portrait)
+#   duo-*-raw/      the unframed captures
 
 on:
   workflow_dispatch:
@@ -204,11 +205,11 @@ jobs:
           retention-days: 30
 
   duo:
-    # iPhone Duo (the foldable): the same capture, which needs an iOS 27.1+ runtime. The
-    # simulator boots closed, so the shots come from the outer display at its App Store
-    # size, 1398 x 2034. Apple has no simctl or XCTest way to open it, so there are no
-    # inner-display (2007 x 2853) shots yet. Its own job so a missing runtime or device never holds up the
-    # iPhone and Watch set.
+    # iPhone Duo (the foldable): the same capture twice, which needs an iOS 27.1+ runtime.
+    # The simulator boots closed, so the first pass is the outer display (1398 x 2034).
+    # Apple has no simctl or XCTest way to open it, so duoctl (a community tool, pinned
+    # below) opens it for the inner-display pass (2007 x 2853); that pass is best effort.
+    # Its own job so a missing runtime or device never holds up the iPhone and Watch set.
     name: iPhone Duo screenshots
     if: >-
       github.event_name == 'workflow_dispatch' ||
@@ -216,7 +217,11 @@ jobs:
     runs-on: xcode-27
     timeout-minutes: 100
     env:
-      RAW: ${{ github.workspace }}/AppStore/duo-raw
+      OUTER_RAW: ${{ github.workspace }}/AppStore/duo-outer-raw
+      INNER_RAW: ${{ github.workspace }}/AppStore/duo-inner-raw
+      # duoctl 0.2.1 (MIT, github.com/skarol/duoctl). It drives the simulator's hinge
+      # through private interfaces, so it is pinned to a reviewed commit, not a tag.
+      DUOCTL_SHA: c6ff3e961a9858fb061907448e702d7d1617dc4a
     steps:
       - uses: actions/checkout@v4
 
@@ -264,23 +269,61 @@ jobs:
           xcrun simctl status_bar "$UDID" override --time "9:41" --dataNetwork wifi --wifiMode active \
             --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
 
-      - name: Capture iPhone Duo screens
+      - name: Capture the outer display
         run: |
           set -o pipefail
-          mkdir -p "$RAW"
-          TEST_RUNNER_APP_STORE_CAPTURE_DIR="$RAW" xcodebuild test \
+          mkdir -p "$OUTER_RAW"
+          TEST_RUNNER_APP_STORE_CAPTURE_DIR="$OUTER_RAW" xcodebuild test \
             -scheme Stride \
             -destination "platform=iOS Simulator,id=$DUO_UDID" \
             -derivedDataPath DerivedData \
             -only-testing:StrideUITests/AppStoreScreenshotTests \
-            -resultBundlePath AppStore/duo.xcresult \
+            -resultBundlePath AppStore/duo-outer.xcresult \
             -skipMacroValidation -skipPackagePluginValidation \
             COMPILER_INDEX_STORE_ENABLE=NO CODE_SIGNING_ALLOWED=NO \
             | xcbeautify --renderer github-actions
           # The closed device's outer display; anything else means the simulator changed.
-          for f in "$RAW"/*.png; do
+          for f in "$OUTER_RAW"/*.png; do
             size=$(sips -g pixelWidth -g pixelHeight "$f" | awk '/pixel/ {print $2}' | paste -sd x -)
             [[ "$size" == "1398x2034" ]] || { echo "::error::$f is $size, not the outer display's 1398x2034"; exit 1; }
+          done
+
+      - name: Open the Duo with duoctl
+        id: open
+        continue-on-error: true
+        run: |
+          git clone --quiet https://github.com/skarol/duoctl.git "$RUNNER_TEMP/duoctl"
+          git -C "$RUNNER_TEMP/duoctl" checkout --quiet "$DUOCTL_SHA"
+          DUOCTL="$RUNNER_TEMP/duoctl/bin/duoctl"
+          export DUOCTL_UDID="$DUO_UDID"
+          "$DUOCTL" open --duration 1.5
+          "$DUOCTL" rotate portrait
+          sleep 3
+          STATE=$("$DUOCTL" state); echo "$STATE"
+          [[ $(jq -r .activeScreen <<<"$STATE") == inner ]] || { echo "::warning::The Duo didn't open; no inner-display shots."; exit 1; }
+          xcrun simctl status_bar "$DUO_UDID" override --time "9:41" --dataNetwork wifi --wifiMode active \
+            --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
+
+      - name: Capture the inner display
+        # Best effort: if XCUITest can't drive or capture the inner display, the outer set
+        # still ships.
+        if: steps.open.outcome == 'success'
+        id: inner
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          mkdir -p "$INNER_RAW"
+          TEST_RUNNER_APP_STORE_CAPTURE_DIR="$INNER_RAW" xcodebuild test-without-building \
+            -scheme Stride \
+            -destination "platform=iOS Simulator,id=$DUO_UDID" \
+            -derivedDataPath DerivedData \
+            -only-testing:StrideUITests/AppStoreScreenshotTests \
+            -resultBundlePath AppStore/duo-inner.xcresult \
+            COMPILER_INDEX_STORE_ENABLE=NO CODE_SIGNING_ALLOWED=NO \
+            | xcbeautify --renderer github-actions
+          for f in "$INNER_RAW"/*.png; do
+            size=$(sips -g pixelWidth -g pixelHeight "$f" | awk '/pixel/ {print $2}' | paste -sd x -)
+            [[ "$size" == "2007x2853" ]] || { echo "::error::$f is $size, not the inner display's 2007x2853"; exit 1; }
           done
 
       - name: Frame the iPhone Duo screens
@@ -288,7 +331,10 @@ jobs:
           cd design/appstore
           npm install --no-save --no-package-lock playwright@1.49.1
           npx playwright install webkit
-          node compose.mjs "$RAW" "$GITHUB_WORKSPACE/AppStore/duo-outer" webkit duo-outer
+          node compose.mjs "$OUTER_RAW" "$GITHUB_WORKSPACE/AppStore/duo-outer" webkit duo-outer
+          if [[ "${{ steps.inner.outcome }}" == success ]]; then
+            node compose.mjs "$INNER_RAW" "$GITHUB_WORKSPACE/AppStore/duo-inner" webkit duo-inner
+          fi
 
       - name: Flatten every screenshot to RGB, no alpha
         # Same reason as the iPhone job: App Store Connect rejects alpha.
@@ -317,6 +363,8 @@ jobs:
         with:
           name: app-store-screenshots-duo
           path: |
+            AppStore/duo-inner/
             AppStore/duo-outer/
-            AppStore/duo-raw/
+            AppStore/duo-inner-raw/
+            AppStore/duo-outer-raw/
           retention-days: 30
