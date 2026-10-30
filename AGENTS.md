@@ -566,7 +566,9 @@ Both conform to `LanguageModel`, so `LanguageModelSession`, the `@Generable` sch
   `.quotaLimitReached` becomes `OnDeviceCoachError.serverQuotaExceeded(resetDate:)`,
   **Settings → AI Coach** renders `ServerModelStatus` with the "Show options" upgrade button
   (`QuotaUsage.limitIncreaseSuggestion.show()`), and the chat view names the real cause
-  instead of telling the runner to go and enable Apple Intelligence.
+  instead of telling the runner to go and enable Apple Intelligence. The run read is the
+  exception: it starts by itself when a run is opened, so on `.serverQuotaExceeded` it is
+  written on-device (as the Coach Tips are) rather than dropping to the local summary.
 - **Reasoning level** is set per task through `ContextOptions(reasoningLevel:)` and only on
   the server path: `.light` for chat (a runner is waiting on it), `.moderate` for run
   insights and single-workout adaptation, `.deep` for whole-plan adaptation. When passing
@@ -583,6 +585,15 @@ Both conform to `LanguageModel`, so `LanguageModelSession`, the `@Generable` sch
   (PCC by default); on `.serverQuotaExceeded` it retries on-device instead of surfacing
   the quota, since nobody asked for the tips. `glance` (widget, Siri) and `derivation`
   are never rewritten.
+- **A tempo or interval session's planned pace is for the work, not the whole run.** The
+  run read judges a run as the session it fulfilled (`AICoachService.readBasis`: the
+  planned type, else `intendedWorkoutType`) and never holds the whole run's average pace —
+  warm-up, recoveries and cool-down included — against a work pace.
+  `CoachRunComparison.PlannedPaceScope` says which a target is; for a tempo block between a
+  warm-up and a cool-down, `CoachRunComparison.blockPace` reads the block off the splits.
+  Pace fade and heart-rate drift are only read for a run meant to be one effort
+  (`RunWorkout.splitsAreOneEffort`), and the "usual" a run is compared with is the same
+  intended type's.
 - `AICoachService` never imports `FoundationModels`. It talks to `OnDeviceCoachGenerating`,
   and PCC state reaches the UI as `ServerModelStatus`, a plain value type. That is what keeps
   the coach testable with a fake backend — see `StrideTests/FoundationModelsCoachServiceTests.swift`.
