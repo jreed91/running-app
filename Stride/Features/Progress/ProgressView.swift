@@ -108,33 +108,34 @@ struct ProgressDashboardView: View {
                         VStack(alignment: .leading, spacing: 16) {
                             // The week card moved to Plan, which owns the week; this tab is
                             // only about the period the range picks.
+                            // One `stagger` step per card, in reading order, capped at six.
                             summaryHeader
-                                .strideEntrance(progressAppeared, delay: 0.05)
+                                .strideEntrance(progressAppeared)
                             // Pairs, so on a wide page (iPhone Duo open, in landscape) the charts
                             // read as a grid with the gap on the fold. One column keeps the old order.
                             StrideColumns(spacing: 16) {
                                 weeklyVolumeChart
-                                    .strideEntrance(progressAppeared, delay: 0.15, rise: 18)
+                                    .strideEntrance(progressAppeared, delay: AppAnimation.stagger)
                             } trailing: {
                                 paceProgressChart
-                                    .strideEntrance(progressAppeared, delay: 0.20, rise: 18)
+                                    .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 2)
                             }
                             StrideColumns(spacing: 16) {
                                 heartRateTrendChart
-                                    .strideEntrance(progressAppeared, delay: 0.25, rise: 18)
+                                    .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 3)
                             } trailing: {
                                 heartRateZoneChart
-                                    .strideEntrance(progressAppeared, delay: 0.28, rise: 18)
+                                    .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 4)
                             }
                             StrideColumns(spacing: 16) {
                                 elevationTrendChart
-                                    .strideEntrance(progressAppeared, delay: 0.30, rise: 18)
+                                    .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 5)
                             } trailing: {
                                 vo2MaxTrendChart
-                                    .strideEntrance(progressAppeared, delay: 0.35, rise: 18)
+                                    .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 6)
                             }
                             periodSummaryCard
-                                .strideEntrance(progressAppeared, delay: 0.40, rise: 18)
+                                .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 6)
                         }
                         .padding()
                         .strideReadableWidth(hasColumns: true)

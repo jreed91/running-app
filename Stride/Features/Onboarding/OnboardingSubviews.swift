@@ -51,7 +51,7 @@ struct OBWelcome: View {
             Text("WELCOME TO STRIDE")
                 .strideEyebrow()
                 .foregroundStyle(.brandText)
-                .strideEntrance(appeared, delay: 0.08, rise: 10)
+                .strideEntrance(appeared, delay: AppAnimation.stagger, rise: 10)
 
             Spacer().frame(height: 10)
 
@@ -61,7 +61,7 @@ struct OBWelcome: View {
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.primary)
                 .lineSpacing(-4)
-                .strideEntrance(appeared, delay: 0.14, rise: 16)
+                .strideEntrance(appeared, delay: AppAnimation.stagger * 2, rise: 16)
 
             Spacer().frame(height: 14)
 
@@ -71,7 +71,7 @@ struct OBWelcome: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, AppSpacing.md)
                 .lineSpacing(2)
-                .strideEntrance(appeared, delay: 0.20, rise: 14)
+                .strideEntrance(appeared, delay: AppAnimation.stagger * 3, rise: 14)
         }
     }
 
@@ -101,7 +101,7 @@ struct OBWelcome: View {
                 }
                 .buttonStyle(.strideButton())
                 .accessibilityIdentifier("onboarding.getStarted")
-                .strideEntrance(appeared, delay: 0.28)
+                .strideEntrance(appeared, delay: AppAnimation.stagger * 4)
 
                 SignInWithAppleButton(.signIn) { request in
                     request.requestedScopes = []
@@ -118,7 +118,7 @@ struct OBWelcome: View {
                 // The same radius as the strideButton above it.
                 .clipShape(RoundedRectangle(cornerRadius: AppRadius.lg))
                 .padding(.top, AppSpacing.md)
-                .strideEntrance(appeared, delay: 0.34, rise: 0)
+                .strideEntrance(appeared, delay: AppAnimation.stagger * 5, rise: 0)
 
                 // The step ignores the safe area, so this has to clear the home indicator
                 // (34pt) itself. At exactly 34 the button sat on the indicator's line.

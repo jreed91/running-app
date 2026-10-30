@@ -193,19 +193,19 @@ struct RaceInsightsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 raceFitnessHeroCard
-                    .strideEntrance(appeared, delay: 0.05, rise: 18)
+                    .strideEntrance(appeared)
 
                 predictedRacePaceChart
-                    .strideEntrance(appeared, delay: 0.10, rise: 18)
+                    .strideEntrance(appeared, delay: AppAnimation.stagger)
 
                 trainingZonesCard
-                    .strideEntrance(appeared, delay: 0.15, rise: 18)
+                    .strideEntrance(appeared, delay: AppAnimation.stagger * 2)
 
                 performanceMetricsCard
-                    .strideEntrance(appeared, delay: 0.20, rise: 18)
+                    .strideEntrance(appeared, delay: AppAnimation.stagger * 3)
 
                 improvementTipsCard
-                    .strideEntrance(appeared, delay: 0.25, rise: 18)
+                    .strideEntrance(appeared, delay: AppAnimation.stagger * 4)
             }
             .padding()
             .strideReadableWidth()

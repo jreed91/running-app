@@ -406,58 +406,6 @@ private struct DayCell: View {
     }
 }
 
-// MARK: - WeeklyLoadBar
-
-private struct WeeklyLoadBar: View {
-    let fraction: CGFloat    // 0–1
-    let color: Color
-    let isActive: Bool       // today (no bar yet)
-    /// One-letter weekday initial drawn under the bar.
-    ///
-    /// Seven bars with nothing under them were unreadable on a fresh install: the only
-    /// filled one is today's `isActive` marker, in the brand colour, sitting directly below
-    /// "0.0 mi / 0 Runs" — which makes it look like a progress meter reading 1/7 rather than
-    /// a day marker. The chart already had a full `chartAccessibility` summary, so VoiceOver
-    /// users could read this strip and sighted ones could not (S22).
-    let dayLetter: String
-
-    var body: some View {
-        VStack(spacing: 4) {
-            bar
-            Text(dayLetter)
-                .font(.dsCaption2)
-                .foregroundStyle(isActive ? Color.brand : .secondary)
-                .fontWeight(isActive ? .bold : .regular)
-        }
-    }
-
-    private var bar: some View {
-        VStack(spacing: 0) {
-            Spacer(minLength: 0)
-            if isActive {
-                RoundedRectangle(cornerRadius: AppRadius.micro)
-                    .fill(Color.brand)
-                    .frame(height: 3)
-            } else if fraction > 0 {
-                // Full height, scaled from the bottom, rather than a measured height: it
-                // retires the `GeometryReader` this view existed inside (U7) and draws the
-                // same bar. The only casualty is the corner radius, which squashes with the
-                // bar — at `micro` on a chart bar that is a fraction of a point.
-                // The route, like Progress's weekly bars: distance is progress, and the
-                // workout type already shows on the calendar strip above.
-                RoundedRectangle(cornerRadius: AppRadius.micro)
-                    .fill(.routeBar)
-                    .frame(maxHeight: .infinity)
-                    .scaleEffect(y: fraction, anchor: .bottom)
-            } else {
-                RoundedRectangle(cornerRadius: AppRadius.micro)
-                    .fill(Color.surfaceTertiary)
-                    .frame(height: 3)
-            }
-        }
-    }
-}
-
 // MARK: - DashboardView
 
 struct DashboardView: View {
@@ -582,17 +530,18 @@ struct DashboardView: View {
                         // Today first: the screen used to open on a week readout and up to
                         // three alert cards before it got to the run. The selected day's
                         // session, with its Start button, is now what Home leads with.
+                        // One `stagger` step per section, in reading order, capped at six.
                         selectedDaySection
-                            .strideEntrance(dashboardAppeared, delay: 0.03, rise: 20)
+                            .strideEntrance(dashboardAppeared)
                         // On a day with nothing to start, the free run is the day's
                         // action, so it sits under today's card rather than below the
                         // fold under the coach's tip.
                         if !scheduledStartIsShowing {
                             runButtons
-                                .strideEntrance(dashboardAppeared, delay: 0.04, rise: 16)
+                                .strideEntrance(dashboardAppeared, delay: AppAnimation.stagger)
                         }
                         alertSlot
-                            .strideEntrance(dashboardAppeared, delay: 0.05, rise: 20)
+                            .strideEntrance(dashboardAppeared, delay: AppAnimation.stagger * 2)
                         if let racePlan = racePlan {
                             NavigationLink {
                                 RaceDayHubView()
@@ -600,24 +549,24 @@ struct DashboardView: View {
                                 RaceCountdownCard(racePlan: racePlan, unit: appSettings.unitPreference)
                             }
                             .buttonStyle(.plain)
-                            .strideEntrance(dashboardAppeared, delay: 0.07, rise: 20)
+                            .strideEntrance(dashboardAppeared, delay: AppAnimation.stagger * 3)
                         }
                         if let session = nextUpSession, !restDayFoldsInNextUp {
                             nextUpSection(session)
-                                .strideEntrance(dashboardAppeared, delay: 0.1, rise: 20)
+                                .strideEntrance(dashboardAppeared, delay: AppAnimation.stagger * 4)
                         }
                     } trailing: {
                         weekSummaryRow
-                            .strideEntrance(dashboardAppeared, delay: 0.12, rise: 20)
+                            .strideEntrance(dashboardAppeared, delay: AppAnimation.stagger * 5)
                         if !coachCards.isEmpty {
                             SmartCoachCardsSection(cards: CoachTipRewriter.apply(coachTipWording, to: coachCards))
-                                .strideEntrance(dashboardAppeared, delay: 0.15, rise: 20)
+                                .strideEntrance(dashboardAppeared, delay: AppAnimation.stagger * 6)
                         }
                         // Under the day's own Start button they step down to secondary
                         // and wait at the bottom, so the screen has one primary action.
                         if scheduledStartIsShowing {
                             runButtons
-                                .strideEntrance(dashboardAppeared, delay: 0.18, rise: 16)
+                                .strideEntrance(dashboardAppeared, delay: AppAnimation.stagger * 6)
                         }
                     }
                     .padding(.horizontal, AppSpacing.lg)

@@ -63,21 +63,24 @@ struct AchievementsView: View {
 
         ScrollView {
             VStack(alignment: .leading, spacing: AppSpacing.lg) {
+                // One stagger step per section, capped at six so a long list of
+                // categories arrives together rather than trickling in.
                 streakCard(streak)
-                    .strideEntrance(appeared, delay: 0.05)
+                    .strideEntrance(appeared)
 
                 weeklyGoalCard(weekly)
-                    .strideEntrance(appeared, delay: 0.10)
+                    .strideEntrance(appeared, delay: AppAnimation.stagger)
 
                 ForEach(Array(StreakGoalService.AchievementCategory.allCases.enumerated()), id: \.element) { index, category in
                     badgeSection(for: category, achievements: achievements)
-                        .strideEntrance(appeared, delay: 0.15 + Double(index) * 0.05)
+                        .strideEntrance(appeared, delay: Double(min(2 + index, 6)) * AppAnimation.stagger)
                 }
 
                 medalsSection
                     .strideEntrance(
                         appeared,
-                        delay: 0.15 + Double(StreakGoalService.AchievementCategory.allCases.count) * 0.05
+                        delay: Double(min(2 + StreakGoalService.AchievementCategory.allCases.count, 6))
+                            * AppAnimation.stagger
                     )
             }
             .padding(AppSpacing.lg)
@@ -185,7 +188,7 @@ struct AchievementsView: View {
     private func weeklyGoalSubtitle(_ weekly: StreakGoalService.WeeklyGoalProgress) -> String {
         let goal = appSettings.weeklyGoalMeters.distanceString(unit: appSettings.unitPreference)
         if weekly.isMet {
-            return "Goal reached — \(goal) 🎉"
+            return "Goal reached — \(goal)"
         }
         return "\(weekly.remainingMeters.distanceString(unit: appSettings.unitPreference)) to go of \(goal)"
     }
