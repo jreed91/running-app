@@ -1249,6 +1249,10 @@ private struct WeeklyMileageChart: View {
         }
     }
 
+    private func barHeight(_ miles: Int) -> CGFloat {
+        max(6, CGFloat(miles) / CGFloat(peakMiles) * 72)
+    }
+
     private func phaseSchedule(for weeks: Int) -> [TrainingPhase] {
         let base = max(weeks * 3 / 8, 1)
         let build = max(weeks * 2 / 8, 1)
@@ -1279,7 +1283,7 @@ private struct WeeklyMileageChart: View {
                             .opacity(barsVisible ? 1 : 0)
                         RoundedRectangle(cornerRadius: AppRadius.micro)
                             .fill(bar.phase.tint)
-                            .frame(height: barsVisible || reduceMotion ? max(6, CGFloat(bar.mi) / CGFloat(peakMiles) * 72) : 2)
+                            .frame(height: barsVisible || reduceMotion ? barHeight(bar.mi) : 2)
                             // Grow in like a progress bar, staggering only the first six;
                             // under Reduce Motion they are there from the start.
                             .animation(

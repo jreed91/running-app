@@ -312,7 +312,9 @@ struct RouteGeniusView: View {
             )
             .frame(height: 280)
             .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
-            .transition(reduceMotion ? AnyTransition.opacity : AnyTransition.opacity.combined(with: .scale(scale: 0.97)))
+            .transition(
+                reduceMotion ? AnyTransition.opacity : AnyTransition.opacity.combined(with: .scale(scale: 0.97))
+            )
 
             Button {
                 routeNameInput = ""

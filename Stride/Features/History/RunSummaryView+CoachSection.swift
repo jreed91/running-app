@@ -296,7 +296,9 @@ extension RunSummaryView {
                     .font(.dsFootnote)
                     .foregroundStyle(.secondary)
                     .lineSpacing(3)
-                    .transition(reduceMotion ? AnyTransition.opacity : AnyTransition.opacity.combined(with: .move(edge: .top)))
+                    .transition(
+                        reduceMotion ? AnyTransition.opacity : AnyTransition.opacity.combined(with: .move(edge: .top))
+                    )
             }
         }
         .padding(.horizontal, AppSpacing.xs)
