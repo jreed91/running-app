@@ -511,11 +511,14 @@ struct AICoachChatView: View {
 
     private var contextSubtitle: String {
         if let latestRun {
-            "After \(latestRun.workoutType.localizedName.lowercased()) run"
+            // "After long run", not "After long run run".
+            let type = latestRun.intendedWorkoutType
+            let name = type.localizedName.lowercased()
+            return type == .longRun || type == .race ? "After \(name)" : "After \(name) run"
         } else if let activePlan {
-            "\(activePlan.targetRace.localizedName) plan context"
+            return "\(activePlan.targetRace.localizedName) plan context"
         } else {
-            "Plan and workout context"
+            return "Plan and workout context"
         }
     }
 
@@ -552,7 +555,7 @@ struct AICoachChatView: View {
             """
             Current workout context:
             Date: \(run.date.formatted(date: .abbreviated, time: .shortened))
-            Type: \(run.workoutType.displayName)
+            Type: \(run.intendedWorkoutType.displayName)
             Distance: \(run.distanceMeters.distanceString(unit: unit))
             Duration: \(run.durationSeconds.durationString)
             Average pace: \(run.averagePaceSecondsPerKm.paceString(unit: unit))
@@ -577,14 +580,20 @@ struct AICoachChatView: View {
             .prefix(Self.promptRunCount)
             .map { run in
                 let hr = run.averageHeartRate.map { "\(Int($0.rounded())) bpm" } ?? "n/a"
-                return "\(run.date.formatted(date: .abbreviated, time: .omitted)) | \(run.workoutType.displayName) | \(run.distanceMeters.distanceString(unit: unit)) | \(run.averagePaceSecondsPerKm.paceString(unit: unit)) | avg HR \(hr)\(RunFeelSignal.historySuffix(for: run.feel))"
+                return "\(run.date.formatted(date: .abbreviated, time: .omitted)) | \(run.intendedWorkoutType.displayName) | \(run.distanceMeters.distanceString(unit: unit)) | \(run.averagePaceSecondsPerKm.paceString(unit: unit)) | avg HR \(hr)\(RunFeelSignal.historySuffix(for: run.feel))"
             }
             .joined(separator: "\n")
 
         let recovery = readiness?.promptSummary ?? "Readiness this morning: no Health data."
 
+        // The chat instructions' examples are in kilometres; the reply is not converted
+        // afterwards, so the unit has to be asked for here.
+        let units = unit == .imperial
+            ? "miles: write every pace per mile and every distance in miles"
+            : "kilometres: write every pace per km and every distance in km"
+
         return """
-        Unit preference: \(unit.rawValue)
+        Units: \(units).
 
         \(selectedRun)
 

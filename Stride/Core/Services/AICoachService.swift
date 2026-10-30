@@ -338,15 +338,23 @@ struct AICoachService: Sendable {
         lookup: CoachLookup? = nil,
         onPartialText: @escaping @MainActor @Sendable (String) -> Void = { _ in }
     ) async -> AICoachInsight {
-        let context = makePromptContext(
+        let plannedSession = plannedSession ?? workout.scheduledWorkout
+        let basis = readBasis(
             workout: workout,
             recentHistory: recentHistory,
+            profile: profile,
+            plannedSession: plannedSession
+        )
+        let context = makePromptContext(
+            workout: workout,
+            basis: basis,
             profile: profile,
             heartRateZones: heartRateZones,
             unitPreference: unitPreference
         )
         let details = makeWorkoutDetails(
             workout: workout,
+            basis: basis,
             recentHistory: recentHistory,
             profile: profile,
             heartRateZones: heartRateZones,
@@ -363,13 +371,29 @@ struct AICoachService: Sendable {
                     focusAreas: context.focusAreas,
                     details: details
                 )
-                let structured = try await backend.generateCoachInsight(
-                    instructions: CoachLookup.instructions(Self.insightInstructions, withToolsFor: lookup),
-                    prompt: prompt,
-                    lookup: lookup,
-                    useServerModel: provider.usesPrivateCloudCompute,
-                    onPartialText: onPartialText
-                )
+                let instructions = CoachLookup.instructions(Self.insightInstructions, withToolsFor: lookup)
+                let structured: AICoachStructuredResponse
+                do {
+                    structured = try await backend.generateCoachInsight(
+                        instructions: instructions,
+                        prompt: prompt,
+                        lookup: lookup,
+                        useServerModel: provider.usesPrivateCloudCompute,
+                        onPartialText: onPartialText
+                    )
+                } catch OnDeviceCoachError.serverQuotaExceeded(_) where provider.usesPrivateCloudCompute {
+                    // The read starts by itself when the page opens, so there is no one
+                    // waiting to be told about the quota (Settings shows it), and the
+                    // on-device model writes a far better read than the local summary the
+                    // catch below would land on. The same call the Coach Tips make.
+                    structured = try await backend.generateCoachInsight(
+                        instructions: instructions,
+                        prompt: prompt,
+                        lookup: lookup,
+                        useServerModel: false,
+                        onPartialText: onPartialText
+                    )
+                }
                 return makeInsight(from: structured, provider: provider, unitPreference: unitPreference)
             } catch {
                 // Every failure lands on the local summary, so without this line a broken
@@ -572,12 +596,23 @@ struct AICoachService: Sendable {
         guard let responseType = Self.workoutType(from: adaptation.workoutType) else { return nil }
         let type = protectedWorkoutType(responseType, for: scheduled.workoutType)
 
+        // A target the model left out is a target it did not change. Every target field is
+        // optional in the schema, and `applyAdaptation` copies each one across, so a
+        // left-out distance, pace band or rep prescription used to wipe the session's own
+        // instead of keeping it. The distance stays whatever the model does with the type
+        // (`fallbackStructure` already builds from it); the pace band and the reps belong
+        // to the kind of session, so they stay only while it is the same kind.
+        let keepsType = type == scheduled.workoutType
+        let paceGiven = adaptation.targetPaceLowerBound != nil || adaptation.targetPaceUpperBound != nil
+        let keepsPace = keepsType && !paceGiven
+        let intervals = adaptation.intervals.compactMap(\.domainValue)
+
         let adapted = ScheduledWorkout(
             scheduledDate: scheduled.scheduledDate,
             workoutType: type,
-            targetDistanceMeters: adaptation.targetDistanceMeters,
-            targetPaceLowerBound: adaptation.targetPaceLowerBound,
-            targetPaceUpperBound: adaptation.targetPaceUpperBound,
+            targetDistanceMeters: adaptation.targetDistanceMeters ?? scheduled.targetDistanceMeters,
+            targetPaceLowerBound: keepsPace ? scheduled.targetPaceLowerBound : adaptation.targetPaceLowerBound,
+            targetPaceUpperBound: keepsPace ? scheduled.targetPaceUpperBound : adaptation.targetPaceUpperBound,
             // The model writes this in kilometres, the unit of the numbers it worked in.
             notes: CoachProseUnits.localized(adaptation.explanation, to: unitPreference)
         )
@@ -585,7 +620,7 @@ struct AICoachService: Sendable {
         // managed one auto-inserts it into the SwiftData context, persisting a phantom
         // duplicate workout. Callers copy fields back onto the scheduled workout.
         adapted.workoutLocation = scheduled.workoutLocation
-        adapted.intervals = adaptation.intervals.compactMap(\.domainValue)
+        adapted.intervals = intervals.isEmpty && keepsType ? scheduled.intervals : intervals
         adapted.workoutStructure = adaptation.workoutStructure?.domainValue
             ?? fallbackStructure(for: type, adaptation: adaptation, scheduled: scheduled, intervals: adapted.intervals)
         return adapted
@@ -694,163 +729,10 @@ struct AICoachService: Sendable {
         return responseType
     }
 
-    private func makePromptContext(
-        workout: RunWorkout,
-        recentHistory: [RunWorkout],
-        profile: UserProfile?,
-        heartRateZones: [HRZoneSlice],
-        unitPreference: UnitPreference
-    ) -> (summary: String, focusAreas: [String]) {
-        let drift = paceDriftPercent(for: workout)
-        let hrDrift = heartRateDrift(for: workout)
-        let qualityRuns = recentHistory.filter { $0.workoutType.isQualitySession }
-        let averageRecentPace = qualityRuns.isEmpty
-            ? nil
-            : qualityRuns.reduce(0) { $0 + $1.averagePaceSecondsPerKm } / Double(qualityRuns.count)
-
-        var focus: [String] = []
-        var summaryBits: [String] = []
-
-        if let drift {
-            let driftPct = Int(drift.rounded())
-            if drift <= 3 {
-                summaryBits.append("Pacing held steady across the run (about \(driftPct)% drift).")
-            } else if drift <= 7 {
-                focus.append("Start 3–5 sec/\(unitPreference.distanceLabel) easier for the first 2 splits.")
-                summaryBits.append("Pace faded around \(driftPct)% from the opening to the closing splits.")
-            } else {
-                focus.append("Pace conservatively early and protect form in final third.")
-                summaryBits.append("A \(driftPct)% late-run fade suggests a pacing or endurance mismatch.")
-            }
-        }
-
-        // Cardiac drift rises naturally on longer, harder, hotter, or hillier
-        // efforts, so only surface it when it is clearly beyond the normal range
-        // for this kind of run instead of flagging routine drift every time.
-        if let hrDrift {
-            let driftThreshold: Double
-            switch workout.workoutType {
-            case .interval, .tempo, .race: driftThreshold = 16
-            case .longRun: driftThreshold = 14
-            default: driftThreshold = 12
-            }
-            if hrDrift > driftThreshold {
-                focus.append("Add easy aerobic volume to rebuild durability before the next hard day.")
-                summaryBits.append("Heart-rate drift of \(Int(hrDrift.rounded()))% ran high for a \(workout.workoutType.displayName.lowercased()), hinting at accumulating fatigue.")
-            }
-        }
-
-        // The split table and the zone breakdown both sit above the coach card on the run
-        // summary, so the read has to speak to them.
-        let breakdown = breakdownContext(
-            workout: workout,
-            heartRateZones: heartRateZones,
-            // The pace-drift bit above already frames the fade, so the half-to-half
-            // comparison is only worth repeating when drift was not computed (fewer than
-            // four splits).
-            includeHalfComparison: drift == nil,
-            unitPreference: unitPreference
-        )
-        summaryBits.append(contentsOf: breakdown.summaryBits)
-        focus.append(contentsOf: breakdown.focusAreas)
-
-        if let averageRecentPace {
-            let delta = workout.averagePaceSecondsPerKm - averageRecentPace
-            if delta < -8 {
-                summaryBits.append("This run was faster than your recent quality baseline.")
-            } else if delta > 8 {
-                focus.append("Prioritize recovery before the next quality day.")
-                summaryBits.append("This run was slower than your recent quality baseline.")
-            }
-        }
-
-        // The runner's own rating is the one thing here they told us rather than a sensor
-        // did, and it is what the numbers above cannot say: whether the run felt the way it
-        // was meant to. It leads the focus list when it points somewhere.
-        if let feel = workout.feel {
-            summaryBits.append(RunFeelSignal.runSentence(feel: feel, type: workout.intendedWorkoutType))
-            if let feelFocus = RunFeelSignal.runFocus(feel: feel, type: workout.intendedWorkoutType) {
-                focus.insert(feelFocus, at: 0)
-            }
-        }
-
-        // Conditions and terrain are unique to each run, so let them shape the
-        // analysis rather than leaning on the same generic talking points.
-        if let weather = workout.weather, weather.temperatureCelsius >= 24 {
-            summaryBits.append("Warm conditions (\(weather.temperatureString(unit: unitPreference))) likely added cardiovascular strain, so weigh effort by feel over pace.")
-        }
-        if let elevationGain = workout.elevationGainMeters,
-           workout.distanceMeters > 0,
-           elevationGain / (workout.distanceMeters / 1_000) >= 15 {
-            summaryBits.append("Notable climbing (\(elevationGain.elevationString(unit: unitPreference))) shaped pace and heart rate on this route.")
-        }
-
-        if focus.isEmpty {
-            focus.append("Keep weekly consistency: 1 long run, 1 quality run, remaining easy.")
-        }
-
-        let raceContext = profile.map {
-            "Goal: \(raceLabel(race: $0.goalRace, distanceMeters: $0.effectiveRaceDistanceMeters, unitPreference: unitPreference))."
-        } ?? ""
-        let summary = ([raceContext] + summaryBits)
-            .filter { !$0.isEmpty }
-            .joined(separator: " ")
-
-        return (summary: summary.isEmpty ? "No local summary available." : summary, focusAreas: Array(focus.prefix(3)))
-    }
-
-    /// Summary sentences and focus items drawn from the run's splits and its time-in-zone
-    /// breakdown — the two blocks the run summary shows directly above the coaching read.
-    private func breakdownContext(
-        workout: RunWorkout,
-        heartRateZones: [HRZoneSlice],
-        includeHalfComparison: Bool,
-        unitPreference: UnitPreference
-    ) -> (summaryBits: [String], focusAreas: [String]) {
-        var summaryBits: [String] = []
-        var focus: [String] = []
-
-        if let trend = CoachRunBreakdown.splitTrend(splits: workout.splits, unit: unitPreference) {
-            let splitLabel = workout.splitUnit.distanceLabel
-            summaryBits.append(
-                includeHalfComparison
-                    ? CoachRunBreakdown.splitTrendSentence(trend, splitLabel: splitLabel, unit: unitPreference)
-                    : CoachRunBreakdown.splitRangeSentence(trend, splitLabel: splitLabel, unit: unitPreference)
-            )
-        }
-
-        if let zoneSentence = CoachRunBreakdown.zoneSentence(heartRateZones) {
-            summaryBits.append(zoneSentence)
-        }
-
-        // Cadence: captured on every run but discarded at finish until A5, so no coaching
-        // read — local or model — could ever say anything about form.
-        let cadence = workout.averageCadenceStepsPerMinute
-        if let cadenceSentence = CoachRunBreakdown.cadenceSentence(cadence) {
-            summaryBits.append(cadenceSentence)
-        }
-        if let cadenceFocus = CoachRunBreakdown.cadenceFocus(cadence, workoutType: workout.workoutType) {
-            focus.append(cadenceFocus)
-        }
-
-        // An easy or long run that spent a big share of its time at threshold or above is
-        // the one zone read that changes the next session's advice.
-        if let hardShare = CoachRunBreakdown.hardEffortShare(heartRateZones),
-           hardShare >= 0.20,
-           workout.workoutType == .easy || workout.workoutType == .longRun {
-            focus.append(
-                "Hold the next \(workout.workoutType.displayName.lowercased()) by effort in Z1–Z2 — "
-                    + "\(Int((hardShare * 100).rounded()))% of this one sat at threshold or harder."
-            )
-        }
-
-        return (summaryBits: summaryBits, focusAreas: focus)
-    }
-
     /// A label for the goal race that appends the concrete distance for
     /// custom-distance goals (e.g. "Custom Distance (10.0 km)"), so the model
     /// knows the actual target rather than just "Custom Distance".
-    private func raceLabel(
+    func raceLabel(
         race: RaceType,
         distanceMeters: Double,
         unitPreference: UnitPreference
@@ -902,7 +784,7 @@ struct AICoachService: Sendable {
         let recent = recentHistory.runsOnly.prefix(8).map { run in
             let avgHR = run.averageHeartRate.map { "\(Int($0)) bpm" } ?? "n/a"
             // swiftlint:disable:next line_length
-            return "\(run.date.formatted(date: .abbreviated, time: .omitted)) | \(run.workoutType.displayName) | \(run.distanceMeters.distanceString(unit: unitPreference)) | avg pace \(run.averagePaceSecondsPerKm.paceString(unit: unitPreference)) | duration \(run.durationSeconds.durationString) | avg HR \(avgHR)\(RunFeelSignal.historySuffix(for: run.feel))"
+            return "\(run.date.formatted(date: .abbreviated, time: .omitted)) | \(run.intendedWorkoutType.displayName) | \(run.distanceMeters.distanceString(unit: unitPreference)) | avg pace \(run.averagePaceSecondsPerKm.paceString(unit: unitPreference)) | duration \(run.durationSeconds.durationString) | avg HR \(avgHR)\(RunFeelSignal.historySuffix(for: run.feel))"
         }.joined(separator: "\n")
         let feelTrend = Self.feelTrendSection(recentHistory)
 
@@ -957,7 +839,9 @@ struct AICoachService: Sendable {
         let planLongRunDays = longRunDayNames(in: plan)
         let recent = recentHistory.runsOnly.prefix(8).map { run in
             let avgHR = run.averageHeartRate.map { "\(Int($0)) bpm" } ?? "n/a"
-            return "\(run.date.formatted(date: .abbreviated, time: .omitted)) | \(run.workoutType.displayName) | \(run.distanceMeters.distanceString(unit: unitPreference)) | pace \(run.averagePaceSecondsPerKm.paceString(unit: unitPreference)) | \(run.durationSeconds.durationString) | HR \(avgHR)\(RunFeelSignal.historySuffix(for: run.feel))"
+            return "\(run.date.formatted(date: .abbreviated, time: .omitted)) | \(run.intendedWorkoutType.displayName) | "
+                + "\(run.distanceMeters.distanceString(unit: unitPreference)) | pace \(run.averagePaceSecondsPerKm.paceString(unit: unitPreference)) | "
+                + "\(run.durationSeconds.durationString) | HR \(avgHR)\(RunFeelSignal.historySuffix(for: run.feel))"
         }.joined(separator: "\n")
         let feelTrend = Self.feelTrendSection(recentHistory)
         let workoutRows = workouts.map { workout in
@@ -1070,138 +954,6 @@ struct AICoachService: Sendable {
         let pace = segment.targetPaceSecondsPerKm?.paceString(unit: unitPreference) ?? "open"
         return "\(segment.label) distance \(distance), duration \(duration), pace \(pace)"
     }
-
-    private func paceDriftPercent(for workout: RunWorkout) -> Double? {
-        guard workout.splits.count >= 4 else { return nil }
-        let quarter = max(1, workout.splits.count / 4)
-        let first = workout.splits.prefix(quarter).reduce(0) { $0 + $1.paceSecondsPerKm } / Double(quarter)
-        let last = workout.splits.suffix(quarter).reduce(0) { $0 + $1.paceSecondsPerKm } / Double(quarter)
-        guard first > 0 else { return nil }
-        return max(0, ((last - first) / first) * 100)
-    }
-
-    private func heartRateDrift(for workout: RunWorkout) -> Double? {
-        let hrs = workout.splits.compactMap(\.heartRate)
-        guard hrs.count >= 4 else { return nil }
-        let quarter = max(1, hrs.count / 4)
-        let first = hrs.prefix(quarter).reduce(0, +) / Double(quarter)
-        let last = hrs.suffix(quarter).reduce(0, +) / Double(quarter)
-        guard first > 0 else { return nil }
-        return ((last - first) / first) * 100
-    }
-
-    private func makeWorkoutDetails(
-        workout: RunWorkout,
-        recentHistory: [RunWorkout],
-        profile: UserProfile?,
-        heartRateZones: [HRZoneSlice],
-        unitPreference: UnitPreference,
-        plannedSession: ScheduledWorkout?,
-        nextPlannedSession: ScheduledWorkout?
-    ) -> String {
-        let date = workout.date.formatted(date: .abbreviated, time: .shortened)
-        let avgPace = workout.averagePaceSecondsPerKm.paceString(unit: unitPreference)
-        let avgHR = workout.averageHeartRate.map { "\(Int($0)) bpm" } ?? "n/a"
-        let maxHR = workout.maxHeartRate.map { "\(Int($0)) bpm" } ?? "n/a"
-        let elevation = workout.elevationGainMeters.map { $0.elevationString(unit: unitPreference) } ?? "n/a"
-        // The one form signal the app records. Given raw rather than judged — the model has
-        // the run's pace and type beside it, which is what makes a number interpretable (A5).
-        let cadence = workout.averageCadenceStepsPerMinute
-            .map { "\(Int($0.rounded())) spm" } ?? "n/a"
-        let weather = workout.weather.map {
-            "\($0.conditionDescription), \($0.temperatureString(unit: unitPreference)), humidity \(Int($0.humidityPercent))%"
-        } ?? "n/a"
-        let feel = workout.feel?.promptDescription ?? "not rated"
-        let profileContext = profile.map {
-            "Goal race: \(raceLabel(race: $0.goalRace, distanceMeters: $0.effectiveRaceDistanceMeters, unitPreference: unitPreference)), fitness level: \($0.fitnessLevel.displayName), run days/week: \($0.weeklyRunDays)"
-        } ?? "No athlete profile available."
-
-        // Splits and zones are what the runner sees immediately above the coach card, so the
-        // prompt carries the same two blocks: every split (middle ones dropped only on very
-        // long runs), the derived pacing trend, and the time-in-zone table.
-        let splitLabel = workout.splitUnit.distanceLabel
-        let splitSection = CoachRunBreakdown.splitSection(
-            splits: workout.splits,
-            unit: unitPreference,
-            splitLabel: splitLabel
-        )
-        let splitTrendSection = CoachRunBreakdown
-            .splitTrend(splits: workout.splits, unit: unitPreference)
-            .map { CoachRunBreakdown.splitTrendLine($0, splitLabel: splitLabel, unit: unitPreference) }
-            ?? "Not enough splits to derive a trend."
-        let zoneSection = CoachRunBreakdown.zoneSection(
-            heartRateZones,
-            maxHR: profile?.effectiveMaxHeartRate.map(Double.init),
-            maxHRIsEstimated: (profile?.maxHeartRateBPM ?? 0) <= 0
-        )
-
-        let recent = recentHistory.runsOnly.prefix(5).map { run in
-            "\(run.date.formatted(date: .abbreviated, time: .omitted)) • \(run.workoutType.displayName) • \(run.distanceMeters.distanceString(unit: unitPreference)) • \(run.averagePaceSecondsPerKm.paceString(unit: unitPreference))"
-                + (run.averageHeartRate.map { " • \(Int($0.rounded())) bpm" } ?? "")
-                + (run.feel.map { " • felt \($0.promptName)" } ?? "")
-        }.joined(separator: "\n")
-
-        // The references a verdict needs: what this run was meant to be, what is usual for
-        // this kind of run, and what comes next. Without them the coach can only restate
-        // the totals and fall back on general advice.
-        let planSection = plannedSessionSection(plannedSession, workout: workout, unitPreference: unitPreference)
-        let sameType = recentHistory.runsOnly
-            .filter { $0.id != workout.id && $0.workoutType == workout.workoutType }
-            .map {
-                CoachRunComparison.Sample(
-                    paceSecondsPerKm: $0.averagePaceSecondsPerKm,
-                    heartRate: $0.averageHeartRate,
-                    distanceMeters: $0.distanceMeters
-                )
-            }
-        let usualSection = CoachRunComparison.baselineLine(
-            typeName: workout.workoutType.displayName,
-            currentPaceSecondsPerKm: workout.averagePaceSecondsPerKm,
-            currentHeartRate: workout.averageHeartRate,
-            baseline: CoachRunComparison.baseline(from: sameType),
-            unit: unitPreference
-        ) + (plannedSession?.targetPaceRange == nil ? "" : " " + CoachRunComparison.planSetsPaceNote)
-        let nextSection = nextPlannedSession.map {
-            "\($0.scheduledDate.formatted(.dateTime.weekday(.wide))): "
-                + plannedTargetsDescription($0, unitPreference: unitPreference)
-        } ?? "Nothing planned yet."
-        let recentSection = recent.isEmpty ? "No recent runs." : recent
-
-        return """
-        Date: \(date)
-        Type: \(workout.workoutType.displayName)
-        Distance: \(workout.distanceMeters.distanceString(unit: unitPreference))
-        Duration: \(workout.durationSeconds.durationString)
-        Avg pace: \(avgPace)
-        Avg HR: \(avgHR)
-        Max HR: \(maxHR)
-        Avg cadence: \(cadence)
-        Elevation gain: \(elevation)
-        Weather: \(weather)
-        How it felt to the runner: \(feel)
-        \(profileContext)
-
-        What this run was meant to be:
-        \(planSection)
-
-        Compared with your usual:
-        \(usualSection)
-
-        Next planned run:
-        \(nextSection)
-
-        Splits (one per \(splitLabel)):
-        \(splitSection)
-
-        Split trend: \(splitTrendSection)
-
-        Time in heart-rate zones:
-        \(zoneSection)
-
-        Recent history:
-        \(recentSection)
-        """
-    }
 }
 
 extension AICoachService {
@@ -1217,13 +969,22 @@ extension AICoachService {
             return "Not a planned session. Judge it by what this kind of run (\(type)) is for."
         }
         var lines = ["Planned: " + plannedTargetsDescription(planned, unitPreference: unitPreference)]
+        // A tempo or interval session's pace is for the work, so the whole run's average —
+        // warm-up and cool-down included — is never held against it.
+        let scope = planned.paceScope
         if let comparison = CoachRunComparison.planLine(
             actualPaceSecondsPerKm: workout.averagePaceSecondsPerKm,
             actualDistanceMeters: workout.distanceMeters,
             targetPaceLower: planned.targetPaceLowerBound,
             targetPaceUpper: planned.targetPaceUpperBound,
             targetDistanceMeters: planned.targetDistanceMeters,
-            unit: unitPreference
+            unit: unitPreference,
+            paceScope: scope,
+            blockPace: CoachRunComparison.blockPace(
+                for: scope,
+                splits: workout.splits,
+                splitMeters: workout.splitUnit.splitLengthMeters
+            )
         ) {
             lines.append("Result: " + comparison)
         }
@@ -1298,9 +1059,12 @@ extension AICoachService {
     When the plan sets a pace, the plan decides whether the pace was right, not the \
     usual. A run inside the plan's range, or close enough to count as on plan, hit its \
     pace: do not tell the runner to slow down or speed up, and never give the gap to \
-    their usual as the reason to change pace. If the zones come from a max heart rate \
-    estimated from age, they are approximate: do not call a run too hard on the zones \
-    alone.
+    their usual as the reason to change pace. A tempo or interval session's planned pace \
+    is for the work, not the warm-up, recoveries or cool-down: never hold the whole \
+    run's average pace against it, and when the plan line says the average cannot show \
+    the work's pace, judge the work by its heart rate and how it felt instead. If the \
+    zones come from a max heart rate estimated from age, they are approximate: do not \
+    call a run too hard on the zones alone.
 
     Choose the three numbers that prove the verdict. Prefer comparisons with the plan or \
     the usual over totals the runner already sees at the top of the screen; a bare \

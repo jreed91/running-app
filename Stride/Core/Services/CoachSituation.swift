@@ -187,9 +187,12 @@ enum CoachSituation: Equatable, Sendable {
         let elapsed = now.timeIntervalSince(run.date.addingTimeInterval(run.durationSeconds))
         guard elapsed >= 0, elapsed <= recoveryWindowSeconds else { return nil }
 
+        // The planned session's type when there is one: an interval session imported from
+        // the Watch is typed by its average pace, and never as `.interval`.
+        let type = run.intendedWorkoutType
         let demanding = run.distanceMeters >= demandingDistanceMeters
-            || run.workoutType.isQualitySession
-            || run.workoutType == .longRun
+            || type.isQualitySession
+            || type == .longRun
         guard demanding else { return nil }
 
         return max(1, Int((elapsed / 60).rounded()))

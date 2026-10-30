@@ -157,6 +157,65 @@ private struct QuotaReportingCoach: OnDeviceCoachGenerating {
     }
 }
 
+/// Records which model each insight request asked for.
+private actor ServerModelCalls {
+    private(set) var flags: [Bool] = []
+
+    func record(_ useServerModel: Bool) {
+        flags.append(useServerModel)
+    }
+}
+
+/// Fails every Private Cloud Compute request the way an exhausted daily quota does, and
+/// answers on-device; returns `adaptation` for a single-session adaptation.
+private struct QuotaThenOnDeviceCoach: OnDeviceCoachGenerating {
+    let calls: ServerModelCalls
+    let insight: AICoachStructuredResponse
+    var adaptation: AIWorkoutAdaptationResponse?
+
+    func isAvailable() async -> Bool { true }
+    func unavailableReason() async -> String? { nil }
+
+    func generateCoachInsight(
+        instructions: String,
+        prompt: String,
+        useServerModel: Bool,
+        onPartialText: @escaping @MainActor @Sendable (String) -> Void
+    ) async throws -> AICoachStructuredResponse {
+        await calls.record(useServerModel)
+        if useServerModel { throw OnDeviceCoachError.serverQuotaExceeded(resetDate: nil) }
+        return insight
+    }
+
+    func generateWorkoutAdaptation(
+        instructions: String,
+        prompt: String,
+        useServerModel: Bool
+    ) async throws -> AIWorkoutAdaptationResponse {
+        guard let adaptation else { throw OnDeviceCoachError.unavailable }
+        return adaptation
+    }
+
+    func generatePlanAdaptation(
+        instructions: String,
+        prompt: String,
+        useServerModel: Bool,
+        onPartialText: @escaping @MainActor @Sendable (String) -> Void
+    ) async throws -> AIWorkoutPlanAdaptationResponse {
+        AIWorkoutPlanAdaptationResponse(adaptations: [])
+    }
+
+    func generateChatReply(
+        instructions: String,
+        context: String,
+        messages: [AIProviderChatMessage],
+        useServerModel: Bool,
+        onPartialText: @escaping @MainActor @Sendable (String) -> Void
+    ) async throws -> String {
+        ""
+    }
+}
+
 private func sampleStructured() -> AICoachStructuredResponse {
     AICoachStructuredResponse(
         headline: "Strong Negative Split",
@@ -467,6 +526,253 @@ struct FoundationModelsCoachServiceTests {
         // Each partial contains the one before it rather than continuing it: a view that
         // appended these would render "Keep yourKeep your easy runs…".
         #expect(partials.texts.last == reply)
+    }
+
+    // MARK: - What the read judges a run against
+
+    private func split(_ index: Int, _ pace: Double, hr: Double? = nil) -> Split {
+        Split(
+            kilometer: index + 1,
+            paceSecondsPerKm: pace,
+            heartRate: hr,
+            elevationGainMeters: 0,
+            cumulativeDistanceMeters: Double(index + 1) * 1_000
+        )
+    }
+
+    private func segment(_ meters: Double?, _ label: String, pace: Double? = nil) -> WorkoutSegment {
+        WorkoutSegment(distanceMeters: meters, durationSeconds: nil, targetPaceSecondsPerKm: pace, label: label)
+    }
+
+    private func recordedPrompt(
+        workout: RunWorkout,
+        recentHistory: [RunWorkout] = [],
+        profile: UserProfile? = nil,
+        heartRateZones: [HRZoneSlice] = [],
+        unitPreference: UnitPreference = .metric,
+        plannedSession: ScheduledWorkout? = nil
+    ) async -> String {
+        let recorder = PromptRecorder()
+        let service = AICoachService(
+            onDeviceBackend: RecordingOnDeviceCoach(recorder: recorder, insight: sampleStructured())
+        )
+        _ = await service.evaluateWithProvider(
+            workout: workout,
+            recentHistory: recentHistory,
+            profile: profile,
+            provider: .appleOnDevice,
+            heartRateZones: heartRateZones,
+            unitPreference: unitPreference,
+            plannedSession: plannedSession
+        )
+        return await recorder.prompt
+    }
+
+    @Test("A tempo run to plan is judged on its tempo block, not on its whole-run average")
+    func tempoIsJudgedOnItsBlock() async {
+        // 2 km warm-up at 6:00, 5 km at 4:50, 2 km cool-down: exactly the plan, and a
+        // 5:21 average that used to read "26 seconds slower than the planned 4:45–4:55".
+        let paces: [Double] = [360, 360, 290, 290, 290, 290, 290, 360, 360]
+        // `.easy` is what the Watch import infers from that average.
+        let workout = RunWorkout(date: Date(), distanceMeters: 9_000, durationSeconds: paces.reduce(0, +), workoutType: .easy)
+        workout.splits = paces.enumerated().map { index, pace in split(index, pace) }
+        let planned = ScheduledWorkout(
+            scheduledDate: Date(),
+            workoutType: .tempo,
+            targetDistanceMeters: 9_000,
+            targetPaceLowerBound: 285,
+            targetPaceUpperBound: 295
+        )
+        planned.workoutStructure = WorkoutStructure(
+            warmup: segment(2_000, "Warm-up"),
+            mainSets: [
+                WorkoutSet(
+                    repetitions: 1,
+                    workSegment: segment(5_000, "Tempo", pace: 290),
+                    recoverySegment: segment(nil, "Recovery jog"),
+                    label: "Tempo Block"
+                )
+            ],
+            cooldown: segment(2_000, "Cool-down"),
+            totalEstimatedDistanceMeters: 9_000,
+            totalEstimatedDurationSeconds: 2_890
+        )
+
+        let prompt = await recordedPrompt(workout: workout, plannedSession: planned)
+
+        #expect(prompt.contains("Type: Tempo"))
+        #expect(prompt.contains("The fastest 4.0 km of splits ran 4:50 min/km, inside the planned 4:45–4:55 min/km."))
+        #expect(!prompt.contains("seconds slower than the planned"))
+        #expect(prompt.contains("These splits mix the work with the easy running around it"))
+        #expect(prompt.contains("Fewer than 3 recent tempo runs"))
+    }
+
+    @Test("An interval session imported as an easy run is read as intervals")
+    func intervalsAreNotReadAsAnEasyRun() async {
+        let profile = UserProfile(
+            name: "Runner",
+            goalRace: .fiveK,
+            goalFinishTime: 1_500,
+            weeklyRunDays: 4,
+            fitnessLevel: .intermediate
+        )
+        profile.maxHeartRateBPM = 190
+        let workout = RunWorkout(date: Date(), distanceMeters: 8_000, durationSeconds: 2_390, workoutType: .easy)
+        // Heart rate climbs from the warm-up to the last rep, as it should.
+        let laps: [(Double, Double)] = [
+            (345, 128), (330, 140), (260, 165), (300, 160), (255, 172), (300, 168), (250, 178), (350, 170)
+        ]
+        workout.splits = laps.enumerated().map { index, lap in split(index, lap.0, hr: lap.1) }
+        let planned = ScheduledWorkout(
+            scheduledDate: Date(),
+            workoutType: .interval,
+            targetDistanceMeters: 8_000,
+            targetPaceLowerBound: 240,
+            targetPaceUpperBound: 250
+        )
+        let zones = HeartRateZoneService.timeInZones(
+            bpmSamples: [130, 160, 170, 175, 178, 165],
+            totalSeconds: workout.durationSeconds,
+            maxHR: 190
+        )
+
+        let prompt = await recordedPrompt(
+            workout: workout,
+            profile: profile,
+            heartRateZones: zones,
+            plannedSession: planned
+        )
+
+        #expect(prompt.contains("Type: Interval"))
+        #expect(prompt.contains("is the pace for the work, not the whole run"))
+        #expect(!prompt.contains("seconds slower than the planned"))
+        // Neither the climb nor the time at threshold is a problem in an interval session.
+        #expect(!prompt.contains("Heart-rate drift"))
+        #expect(!prompt.contains("Hold the next"))
+    }
+
+    @Test("An easy run is held against the usual easy run, not the recent quality sessions")
+    func easyRunIsComparedWithEasyRuns() async {
+        // 6:20 per km, against easy runs at 5:50 and tempo runs at 4:50.
+        let workout = RunWorkout(date: Date(), distanceMeters: 8_000, durationSeconds: 3_040, workoutType: .easy)
+        let easy = (1...3).map { day in
+            RunWorkout(date: Date().addingTimeInterval(-86_400 * Double(day)), distanceMeters: 8_000, durationSeconds: 2_800, workoutType: .easy)
+        }
+        let tempo = (4...6).map { day in
+            RunWorkout(date: Date().addingTimeInterval(-86_400 * Double(day)), distanceMeters: 8_000, durationSeconds: 2_320, workoutType: .tempo)
+        }
+
+        let prompt = await recordedPrompt(workout: workout, recentHistory: easy + tempo)
+
+        #expect(prompt.contains("This run was slower than your usual easy run."))
+        #expect(!prompt.contains("quality baseline"))
+        #expect(!prompt.contains("Prioritize recovery"))
+    }
+
+    @Test("Zones from an age-estimated max heart rate do not call an easy run too hard")
+    func estimatedZonesDoNotFlagAnEasyRun() async {
+        let workout = RunWorkout(date: Date(), distanceMeters: 8_000, durationSeconds: 2_800, workoutType: .easy)
+        let zones = HeartRateZoneService.timeInZones(
+            bpmSamples: [150, 160, 165, 168],
+            totalSeconds: workout.durationSeconds,
+            maxHR: 185
+        )
+
+        let estimated = await recordedPrompt(workout: workout, heartRateZones: zones)
+        #expect(!estimated.contains("Hold the next"))
+
+        let profile = UserProfile(
+            name: "Runner",
+            goalRace: .fiveK,
+            goalFinishTime: 1_500,
+            weeklyRunDays: 4,
+            fitnessLevel: .intermediate
+        )
+        profile.maxHeartRateBPM = 185
+        let measured = await recordedPrompt(workout: workout, profile: profile, heartRateZones: zones)
+        #expect(measured.contains("Hold the next easy run by effort in Z1–Z2"))
+    }
+
+    @Test("The prompt names the runner's unit")
+    func promptNamesTheUnit() async {
+        let workout = RunWorkout(date: Date(), distanceMeters: 8_000, durationSeconds: 2_500, workoutType: .easy)
+
+        let miles = await recordedPrompt(workout: workout, unitPreference: .imperial)
+        #expect(miles.contains("Units: miles: write every pace per mile and every distance in miles."))
+
+        let kilometres = await recordedPrompt(workout: workout)
+        #expect(kilometres.contains("Units: kilometres: write every pace per km and every distance in km."))
+    }
+
+    @Test("A run read that hits the Private Cloud Compute quota is written on-device instead")
+    func insightFallsBackOnDeviceOnQuota() async {
+        let calls = ServerModelCalls()
+        let service = AICoachService(
+            onDeviceBackend: QuotaThenOnDeviceCoach(calls: calls, insight: sampleStructured())
+        )
+        let workout = RunWorkout(date: Date(), distanceMeters: 8_000, durationSeconds: 2_500, workoutType: .easy)
+
+        let insight = await service.evaluateWithProvider(
+            workout: workout,
+            recentHistory: [],
+            profile: nil,
+            provider: .applePrivateCloud
+        )
+
+        #expect(insight.apiReady)
+        #expect(insight.headline == "Strong Negative Split")
+        #expect(await calls.flags == [true, false])
+    }
+
+    @Test("An adaptation keeps the targets the model left out")
+    func adaptationKeepsOmittedTargets() async throws {
+        let profile = UserProfile(
+            name: "Runner",
+            goalRace: .halfMarathon,
+            goalFinishTime: 6_300,
+            weeklyRunDays: 4,
+            fitnessLevel: .intermediate
+        )
+        func adapted(type: String) async -> ScheduledWorkout? {
+            let scheduled = ScheduledWorkout(
+                scheduledDate: Date().addingTimeInterval(86_400),
+                workoutType: .tempo,
+                targetDistanceMeters: 8_000,
+                targetPaceLowerBound: 285,
+                targetPaceUpperBound: 295
+            )
+            let backend = QuotaThenOnDeviceCoach(
+                calls: ServerModelCalls(),
+                insight: sampleStructured(),
+                adaptation: AIWorkoutAdaptationResponse(
+                    workoutType: type,
+                    targetDistanceMeters: nil,
+                    targetPaceLowerBound: nil,
+                    targetPaceUpperBound: nil,
+                    explanation: "Keep the tempo controlled after a hard week.",
+                    intervals: [],
+                    workoutStructure: nil
+                )
+            )
+            return await AICoachService(onDeviceBackend: backend).adaptScheduledWorkoutWithProvider(
+                scheduled: scheduled,
+                recentHistory: [],
+                profile: profile,
+                provider: .appleOnDevice
+            )
+        }
+
+        let sameType = try #require(await adapted(type: "Tempo"))
+        #expect(sameType.workoutType == .tempo)
+        #expect(sameType.targetDistanceMeters == 8_000)
+        #expect(sameType.targetPaceLowerBound == 285)
+        #expect(sameType.targetPaceUpperBound == 295)
+
+        // A tempo pace is no target for an easy run, so it goes with the type.
+        let easier = try #require(await adapted(type: "Easy"))
+        #expect(easier.workoutType == .easy)
+        #expect(easier.targetDistanceMeters == 8_000)
+        #expect(easier.targetPaceRange == nil)
     }
 }
 

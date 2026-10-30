@@ -93,13 +93,12 @@ extension RunSummaryView {
             await loadHeartRateZones()
         }
 
-        let historySlice = Array(recentHistory.prefix(Self.insightHistoryRunCount))
         // The request below reads the rating as it stands now, so the "refresh to include
         // it" hint under the feel card is answered from here on.
         feelChangedSinceInsight = false
         let result = await container.aiCoachService.evaluateWithProvider(
             workout: workout,
-            recentHistory: historySlice,
+            recentHistory: insightHistory(),
             profile: profiles.first,
             provider: appSettings.aiProvider,
             heartRateZones: zoneSlices,
@@ -117,6 +116,24 @@ extension RunSummaryView {
             workout.cachedAIInsight = result
             context.saveOrLog("the cached coach insight")
         }
+    }
+
+    /// The runs before this one, newest first, for the coach's read: the runner's usual and
+    /// recent history as they stood when this run was done.
+    ///
+    /// Not `recentHistory`, which is the newest runs overall. For a run opened a few weeks
+    /// later that was the weeks after it, so "your usual easy run" was built from runs
+    /// the runner had not done yet — the mistake `CoachLookup.make(now:)` already avoids
+    /// for the tools.
+    func insightHistory() -> [RunWorkout] {
+        let descriptor = RunWorkout.runsOnlyDescriptor(
+            before: workout.date,
+            fetchLimit: Self.insightHistoryRunCount
+        )
+        if let runs = try? context.fetch(descriptor) {
+            return runs
+        }
+        return Array(recentHistory.filter { $0.date < workout.date }.prefix(Self.insightHistoryRunCount))
     }
 
     /// Starts the coach's read the first time a run without one is opened, so the
@@ -234,12 +251,17 @@ extension RunSummaryView {
         let unit = appSettings.unitPreference
         let planned = matchedScheduled
         var paceOffset: Double?
-        if let range = planned?.targetPaceRange, workout.averagePaceSecondsPerKm > 0 {
-            let actual = workout.averagePaceSecondsPerKm.paceSecondsValue(unit: unit)
+        if let planned, let range = planned.targetPaceRange,
+           let pace = paceAgainstPlan(planned), pace > 0 {
+            let actual = pace.paceSecondsValue(unit: unit)
             let lower = range.lowerBound.paceSecondsValue(unit: unit)
             let upper = range.upperBound.paceSecondsValue(unit: unit)
             paceOffset = actual < lower ? actual - lower : (actual > upper ? actual - upper : 0)
         }
+        // A session that runs easy, hard and easy again has a slower or faster half by design.
+        let isOneEffort = (planned?.paceScope ?? CoachRunComparison.plannedPaceScope(
+            type: displayType, structure: nil, intervals: []
+        )) == .wholeRun
         let distanceRatio = planned?.targetDistanceMeters
             .flatMap { $0 > 0 ? workout.distanceMeters / $0 : nil }
         let nextLabel = nextWorkoutForFeedback().map {
@@ -250,13 +272,27 @@ extension RunSummaryView {
         return CoachQuestionSuggestions.questions(for: .init(
             workoutType: displayType,
             hardEffortShare: CoachRunBreakdown.hardEffortShare(zoneSlices),
-            secondHalfDeltaSeconds: CoachRunBreakdown
-                .splitTrend(splits: workout.splits, unit: unit)?
-                .secondHalfDeltaSeconds,
+            secondHalfDeltaSeconds: isOneEffort
+                ? CoachRunBreakdown.splitTrend(splits: workout.splits, unit: unit)?.secondHalfDeltaSeconds
+                : nil,
             planDistanceRatio: distanceRatio,
             planPaceOffsetSeconds: paceOffset,
             feel: workout.feel,
             nextPlannedLabel: nextLabel
         ))
+    }
+
+    /// The run's pace to hold against `planned`'s target, by the rule the coach's plan line
+    /// uses: the whole run's average for a whole-run target, the block's pace from the
+    /// splits for a tempo between a warm-up and a cool-down, and nil for reps, where the
+    /// average says nothing about the work. See `CoachRunComparison.PlannedPaceScope`.
+    func paceAgainstPlan(_ planned: ScheduledWorkout) -> Double? {
+        let scope = planned.paceScope
+        guard scope != .wholeRun else { return workout.averagePaceSecondsPerKm }
+        return CoachRunComparison.blockPace(
+            for: scope,
+            splits: workout.splits,
+            splitMeters: workout.splitUnit.splitLengthMeters
+        )?.paceSecondsPerKm
     }
 }

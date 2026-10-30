@@ -247,4 +247,22 @@ extension RunWorkout {
         descriptor.fetchLimit = fetchLimit
         return descriptor
     }
+
+    /// ``runsOnlyDescriptor(sortBy:fetchLimit:)`` for the runs that started before `date`,
+    /// newest first: the runner's history as it stood at a past run, for a read of that run.
+    static func runsOnlyDescriptor(before date: Date, fetchLimit: Int? = nil) -> FetchDescriptor<RunWorkout> {
+        let cutoff = date
+        let walkRaw = WorkoutType.walk.rawValue
+        let crossTrainingRaw = WorkoutType.crossTraining.rawValue
+        var descriptor = FetchDescriptor<RunWorkout>(
+            predicate: #Predicate {
+                $0.date < cutoff
+                    && $0.workoutTypeRaw != walkRaw
+                    && $0.workoutTypeRaw != crossTrainingRaw
+            },
+            sortBy: [SortDescriptor(\.date, order: .reverse)]
+        )
+        descriptor.fetchLimit = fetchLimit
+        return descriptor
+    }
 }

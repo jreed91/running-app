@@ -439,7 +439,11 @@ struct PlanTabView: View {
             updates: []
         )
         context.saveOrLog("the plan before Smart Adapt")
-        try? await container.healthKitRepository.removeWorkoutPlans(for: plan)
+        // The Watch's copies are left alone until something has changed. They used to be
+        // removed here, before the coach was even asked, so a request that failed — no
+        // model, the daily quota, an answer that did not validate — or a tab left mid-way
+        // returned below with every planned workout gone from the Watch until the next
+        // launch. `syncWorkoutPlans` at the end replaces each one it schedules anyway.
 
         smartAdaptProgress.currentMessage = "Streaming coach response..."
         let adaptedByID = await container.adaptedWorkouts(

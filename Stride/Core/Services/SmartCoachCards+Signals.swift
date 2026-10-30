@@ -217,6 +217,10 @@ extension SmartCoachCards {
         guard let run = context.recentRuns.first(where: {
             context.now.timeIntervalSince($0.date) <= 7 * 86_400
         }) else { return nil }
+        // Only a run meant to be one effort can fade. Intervals, and a tempo between a
+        // warm-up and a cool-down, slow down in the back half by design — a long cool-down
+        // jog was enough to tell the runner to start their next run slower.
+        guard run.splitsAreOneEffort else { return nil }
 
         let splits = run.splits
             .filter { $0.paceSecondsPerKm > 0 }
