@@ -338,7 +338,9 @@ struct RouteGeniusView: View {
         NavigationStack {
             VStack(spacing: 20) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: AppRadius.md)
+                    // A tile is a tinted circle, never a rounded square. Larger than a
+                    // card's 48pt because it leads the sheet, as an empty state's disc does.
+                    Circle()
                         .fill(Color.brand.opacity(0.12))
                         .frame(width: 64, height: 64)
                     StrideIcon(name: .flag, size: 28, color: .brand, strokeWeight: 2.0)

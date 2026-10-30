@@ -45,7 +45,7 @@ struct OBSpecializedPlanCard: View {
             }
             .padding(AppSpacing.lg)
             .strideCard(cornerRadius: AppRadius.lg)
-            .overlay(RoundedRectangle(cornerRadius: AppRadius.lg)
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.lg, style: .continuous)
                 .strokeBorder(isSelected ? Color.brand : Color.clear, lineWidth: 2))
         }
         .buttonStyle(BouncyButtonStyle())

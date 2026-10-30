@@ -56,8 +56,8 @@ struct NextUpCardView: View {
             ZStack {
                 Circle()
                     .fill(tint.opacity(0.15))
-                    .frame(width: 44, height: 44)
-                StrideIcon(name: workoutType.strideIcon, size: 20, color: tint, strokeWeight: 2.2)
+                    .frame(width: 48, height: 48)
+                StrideIcon(name: workoutType.strideIcon, size: 24, color: tint, strokeWeight: 2.0)
             }
             VStack(alignment: .leading, spacing: 3) {
                 // brandText on the hero, secondary on a card, as every eyebrow.

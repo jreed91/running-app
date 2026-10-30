@@ -942,7 +942,7 @@ private struct PhaseProgressBar: View {
                 ForEach([TrainingPhase.base, .build, .peak, .taper], id: \.self) { phase in
                     Text(phase.localizedName)
                         .strideEyebrow()
-                        .foregroundStyle(phase == currentPhase ? Color.brandText : Color.secondary.opacity(0.55))
+                        .foregroundStyle(phase == currentPhase ? Color.brandText : Color.secondary)
                     if phase != .taper { Spacer() }
                 }
             }

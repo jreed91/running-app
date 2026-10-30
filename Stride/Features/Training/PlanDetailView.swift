@@ -279,10 +279,19 @@ struct ScheduledWorkoutRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Circle()
-                .fill(workout.isCompleted ? Color.success : Color.surfaceTertiary)
-                .frame(width: 10)
-                .padding(.leading)
+            // Done is a filled dot; not done is a hollow ring, as Home marks a missed day.
+            // A surfaceTertiary fill all but vanished on the card, and the ring is a shape
+            // change, so it reads with Differentiate Without Color too.
+            Group {
+                if workout.isCompleted {
+                    Circle().fill(Color.success)
+                } else {
+                    Circle().strokeBorder(Color.secondary, lineWidth: 1.5)
+                }
+            }
+            .frame(width: 10, height: 10)
+            .padding(.leading)
+            .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(workout.workoutType.localizedName).font(.bodyRegular)

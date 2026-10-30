@@ -189,7 +189,7 @@ struct SettingsView: View {
             }
             footnote(Text(bodyMassFootnote))
             rowDivider
-            settingsRow(icon: .walk, iconColor: .brand, title: "Gender") {
+            settingsRow(icon: .person, iconColor: .brand, title: "Gender") {
                 menuPicker(
                     "Gender",
                     selection: profileGenderBinding(for: profile),
@@ -208,7 +208,7 @@ struct SettingsView: View {
                 )
             }
             rowDivider
-            settingsRow(icon: .heart, iconColor: .destructive, title: "Max HR") {
+            settingsRow(icon: .heart, iconColor: .brand, title: "Max HR") {
                 NumericStepperField(
                     title: "Max HR",
                     value: maxHRBinding(for: profile),
@@ -605,8 +605,8 @@ struct SettingsView: View {
                 }
             }
             rowDivider
-            settingsRow(icon: .cloud, iconColor: .brand, title: "iCloud Sync") {
-                Toggle("iCloud Sync", isOn: Bindable(appSettings).iCloudSyncEnabled)
+            settingsRow(icon: .cloud, iconColor: .brand, title: "iCloud sync") {
+                Toggle("iCloud sync", isOn: Bindable(appSettings).iCloudSyncEnabled)
                     .labelsHidden()
                     .tint(.brand)
             }
@@ -617,7 +617,7 @@ struct SettingsView: View {
             NavigationLink {
                 HealthKitImportView()
             } label: {
-                settingsRow(icon: .heart, iconColor: .destructive, title: "Import from Apple Health") {
+                settingsRow(icon: .heart, iconColor: .brand, title: "Import from Apple Health") {
                     rowChevron
                 }
             }
@@ -625,7 +625,7 @@ struct SettingsView: View {
             .foregroundStyle(.primary)
 
             rowDivider
-            settingsRow(icon: .tortoise, iconColor: .brand, title: "Import walks") {
+            settingsRow(icon: .walk, iconColor: .brand, title: "Import walks") {
                 Toggle("Import walks", isOn: Bindable(appSettings).walkImportEnabled)
                     .labelsHidden()
                     .tint(.brand)

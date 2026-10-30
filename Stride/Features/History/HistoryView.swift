@@ -637,10 +637,12 @@ struct WorkoutRowView: View {
     var body: some View {
         HStack(spacing: 14) {
             ZStack {
+                // The icon tile every workout row shares: a 48pt tinted circle, as
+                // `WorkoutCardView` draws it.
                 Circle()
                     .fill(displayType.color.opacity(0.15))
-                    .frame(width: 44, height: 44)
-                StrideIcon(name: displayType.strideIcon, size: 22,
+                    .frame(width: 48, height: 48)
+                StrideIcon(name: displayType.strideIcon, size: 24,
                            color: displayType.color, strokeWeight: 2.0)
             }
 
@@ -720,8 +722,8 @@ struct StrengthWorkoutRowView: View {
             ZStack {
                 Circle()
                     .fill(WorkoutType.strength.color.opacity(0.15))
-                    .frame(width: 44, height: 44)
-                StrideIcon(name: WorkoutType.strength.strideIcon, size: 22,
+                    .frame(width: 48, height: 48)
+                StrideIcon(name: WorkoutType.strength.strideIcon, size: 24,
                            color: WorkoutType.strength.color, strokeWeight: 2.0)
             }
 

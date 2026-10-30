@@ -71,8 +71,8 @@ private struct ScheduledWorkoutPickerRow: View {
             ZStack {
                 Circle()
                     .fill(scheduled.workoutType.color.opacity(0.15))
-                    .frame(width: 44, height: 44)
-                StrideIcon(name: scheduled.workoutType.strideIcon, size: 22,
+                    .frame(width: 48, height: 48)
+                StrideIcon(name: scheduled.workoutType.strideIcon, size: 24,
                            color: scheduled.workoutType.color, strokeWeight: 2.0)
             }
 

@@ -72,10 +72,10 @@ private struct SavedRouteRow: View {
         HStack(spacing: 14) {
             // Icon
             ZStack {
-                RoundedRectangle(cornerRadius: AppRadius.sm)
+                Circle()
                     .fill(Color.brand.opacity(0.12))
-                    .frame(width: 44, height: 44)
-                StrideIcon(name: route.routeType.strideIcon, size: 22, color: .brand, strokeWeight: 2.0)
+                    .frame(width: 48, height: 48)
+                StrideIcon(name: route.routeType.strideIcon, size: 24, color: .brand, strokeWeight: 2.0)
             }
 
             VStack(alignment: .leading, spacing: 4) {

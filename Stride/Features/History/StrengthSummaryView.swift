@@ -40,8 +40,8 @@ struct StrengthSummaryView: View {
                 ZStack {
                     Circle()
                         .fill(WorkoutType.strength.color.opacity(0.15))
-                        .frame(width: 52, height: 52)
-                    StrideIcon(name: WorkoutType.strength.strideIcon, size: 26,
+                        .frame(width: 48, height: 48)
+                    StrideIcon(name: WorkoutType.strength.strideIcon, size: 24,
                                color: WorkoutType.strength.color, strokeWeight: 2.0)
                 }
                 VStack(alignment: .leading, spacing: 4) {
