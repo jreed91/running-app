@@ -385,6 +385,30 @@ struct SmartCoachCardsTests {
         #expect(!kinds(SmartCoachCards.cards(makeContext(runs: [short]))).contains(.fade))
     }
 
+    @Test("A slower back half is no fade when the run was an interval session")
+    func fadeStaysQuietForIntervals() {
+        let context = TestStore.makeContext()
+        // Recorded as easy from its average pace, but it fulfilled the plan's intervals:
+        // the reps sit in the middle and the cool-down jog in the back half.
+        let run = makeRun(in: context, daysAgo: 1, distanceMeters: 6_000, durationSeconds: 1_900)
+        run.splits = [
+            makeSplit(kilometer: 1, paceSecondsPerKm: 300),
+            makeSplit(kilometer: 2, paceSecondsPerKm: 250),
+            makeSplit(kilometer: 3, paceSecondsPerKm: 260),
+            makeSplit(kilometer: 4, paceSecondsPerKm: 330),
+            makeSplit(kilometer: 5, paceSecondsPerKm: 380),
+            makeSplit(kilometer: 6, paceSecondsPerKm: 390)
+        ]
+        #expect(kinds(SmartCoachCards.cards(makeContext(runs: [run]))).contains(.fade))
+
+        let scheduled = ScheduledWorkout(scheduledDate: run.date, workoutType: .interval)
+        context.insert(scheduled)
+        run.scheduledWorkout = scheduled
+        scheduled.completedWorkout = run
+
+        #expect(!kinds(SmartCoachCards.cards(makeContext(runs: [run]))).contains(.fade))
+    }
+
     @Test("Easy runs sitting on top of the hard ones produce a polarization card")
     func polarizationFires() {
         let context = TestStore.makeContext()

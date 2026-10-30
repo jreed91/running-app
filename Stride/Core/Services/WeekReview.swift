@@ -160,8 +160,10 @@ enum WeekReview {
         let averageFeel = feels.isEmpty
             ? nil
             : RunFeel(rawValue: Int((Double(feels.map(\.rawValue).reduce(0, +)) / Double(feels.count)).rounded()))
+        // The planned session's type, not the one guessed from an imported run's average
+        // pace: that guess is never `.interval`, and is `.easy` for a structured tempo.
         let easyFeltHard = weekRuns.filter {
-            $0.workoutType == .easy && ($0.feel == .hard || $0.feel == .veryHard)
+            $0.intendedWorkoutType == .easy && ($0.feel == .hard || $0.feel == .veryHard)
         }.count
 
         return WeekReviewFacts(
@@ -172,7 +174,7 @@ enum WeekReview {
             totalMeters: weekRuns.reduce(0) { $0 + $1.distanceMeters },
             longestRunMeters: weekRuns.map(\.distanceMeters).max() ?? 0,
             totalSeconds: weekRuns.reduce(0) { $0 + $1.durationSeconds },
-            keySessions: weekRuns.map(\.workoutType).filter { keySessionTypes.contains($0) },
+            keySessions: weekRuns.map(\.intendedWorkoutType).filter { keySessionTypes.contains($0) },
             plannedSessions: planned.count,
             completedSessions: completed,
             upcomingSessions: upcoming,
