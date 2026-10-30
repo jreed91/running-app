@@ -117,16 +117,22 @@ struct NewPlanOnboardingView: View {
         !goalRace.isGoalRace || !raceName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    /// Steps slide the way the runner is going; under Reduce Motion they cross-fade.
+    private var stepTransition: AnyTransition {
+        guard !reduceMotion else { return .opacity }
+        return .asymmetric(
+            insertion: .move(edge: goingForward ? .trailing : .leading).combined(with: .opacity),
+            removal: .move(edge: goingForward ? .leading : .trailing).combined(with: .opacity)
+        )
+    }
+
     // MARK: - Body
 
     var body: some View {
         ZStack {
             currentStep
                 .id(step)
-                .transition(.asymmetric(
-                    insertion: .move(edge: goingForward ? .trailing : .leading).combined(with: .opacity),
-                    removal: .move(edge: goingForward ? .leading : .trailing).combined(with: .opacity)
-                ))
+                .transition(stepTransition)
         }
         .adaptiveAnimation(AppAnimation.bouncy, value: step)
         .ignoresSafeArea()

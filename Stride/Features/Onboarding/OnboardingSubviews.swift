@@ -32,6 +32,7 @@ struct OBWelcome: View {
     let onSignIn: (String) -> Void
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var appeared = false
 
     /// The mark and the welcome copy, above the buttons.
@@ -40,7 +41,8 @@ struct OBWelcome: View {
             Spacer().frame(height: 90)
 
             StrideAppMark(size: 120, drawsOn: true)
-                .scaleEffect(appeared ? 1 : 0.55)
+                // Grows into place; under Reduce Motion it only fades in.
+                .scaleEffect(appeared || reduceMotion ? 1 : 0.55)
                 .opacity(appeared ? 1 : 0)
                 .adaptiveAnimation(AppAnimation.entrance, value: appeared)
 
@@ -50,9 +52,7 @@ struct OBWelcome: View {
                 .font(.dsCaption2.weight(.bold))
                 .kerning(1.8)
                 .foregroundStyle(.brandText)
-                .opacity(appeared ? 1 : 0)
-                .offset(y: appeared ? 0 : 10)
-                .adaptiveAnimation(AppAnimation.entrance.delay(0.08), value: appeared)
+                .strideEntrance(appeared, delay: 0.08, rise: 10)
 
             Spacer().frame(height: 10)
 
@@ -62,9 +62,7 @@ struct OBWelcome: View {
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.primary)
                 .lineSpacing(-4)
-                .opacity(appeared ? 1 : 0)
-                .offset(y: appeared ? 0 : 16)
-                .adaptiveAnimation(AppAnimation.entrance.delay(0.14), value: appeared)
+                .strideEntrance(appeared, delay: 0.14, rise: 16)
 
             Spacer().frame(height: 14)
 
@@ -74,9 +72,7 @@ struct OBWelcome: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, AppSpacing.md)
                 .lineSpacing(2)
-                .opacity(appeared ? 1 : 0)
-                .offset(y: appeared ? 0 : 14)
-                .adaptiveAnimation(AppAnimation.entrance.delay(0.20), value: appeared)
+                .strideEntrance(appeared, delay: 0.20, rise: 14)
         }
     }
 
@@ -106,9 +102,7 @@ struct OBWelcome: View {
                 }
                 .buttonStyle(.strideButton())
                 .accessibilityIdentifier("onboarding.getStarted")
-                .opacity(appeared ? 1 : 0)
-                .offset(y: appeared ? 0 : 18)
-                .adaptiveAnimation(AppAnimation.entrance.delay(0.28), value: appeared)
+                .strideEntrance(appeared, delay: 0.28)
 
                 SignInWithAppleButton(.signIn) { request in
                     request.requestedScopes = []
@@ -125,8 +119,7 @@ struct OBWelcome: View {
                 // The same radius as the strideButton above it.
                 .clipShape(RoundedRectangle(cornerRadius: AppRadius.lg))
                 .padding(.top, AppSpacing.md)
-                .opacity(appeared ? 1 : 0)
-                .adaptiveAnimation(AppAnimation.entrance.delay(0.34), value: appeared)
+                .strideEntrance(appeared, delay: 0.34, rise: 0)
 
                 // The step ignores the safe area, so this has to clear the home indicator
                 // (34pt) itself. At exactly 34 the button sat on the indicator's line.
@@ -1057,6 +1050,13 @@ struct OBRadio: View {
     let isSelected: Bool
     let color: Color
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// The fill grows in; under Reduce Motion it only fades.
+    private var fillTransition: AnyTransition {
+        reduceMotion ? .opacity : .scale(scale: 0.4).combined(with: .opacity)
+    }
+
     var body: some View {
         ZStack {
             Circle()
@@ -1064,9 +1064,9 @@ struct OBRadio: View {
                 .frame(width: 22, height: 22)
             if isSelected {
                 Circle().fill(color).frame(width: 22, height: 22)
-                    .transition(.scale(scale: 0.4).combined(with: .opacity))
+                    .transition(fillTransition)
                 StrideIcon(name: .check, size: 12, color: .onFill, strokeWeight: 3)
-                    .transition(.scale(scale: 0.4).combined(with: .opacity))
+                    .transition(fillTransition)
             }
         }
         .adaptiveAnimation(AppAnimation.snappy, value: isSelected)
@@ -1231,6 +1231,7 @@ private struct WeeklyMileageChart: View {
     let peakMiles: Int
     let unit: UnitPreference
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var barsVisible = false
 
     /// Bars: (week number, mileage, phase).
@@ -1285,8 +1286,15 @@ private struct WeeklyMileageChart: View {
                             .opacity(barsVisible ? 1 : 0)
                         RoundedRectangle(cornerRadius: AppRadius.micro)
                             .fill(bar.phase.tint)
-                            .frame(height: barsVisible ? max(6, CGFloat(bar.mi) / CGFloat(peakMiles) * 72) : 2)
-                            .animation(AppAnimation.bouncy.delay(Double(index) * 0.04), value: barsVisible)
+                            .frame(height: barsVisible || reduceMotion ? max(6, CGFloat(bar.mi) / CGFloat(peakMiles) * 72) : 2)
+                            // Grow in like a progress bar, staggering only the first six;
+                            // under Reduce Motion they are there from the start.
+                            .animation(
+                                reduceMotion
+                                    ? AppAnimation.reduced
+                                    : AppAnimation.gentle.delay(Double(min(index, 6)) * AppAnimation.stagger),
+                                value: barsVisible
+                            )
                         Text("W\(bar.n)")
                             .font(.dsCaption2.weight(.semibold).monospacedDigit())
                             .foregroundStyle(Color.secondary.opacity(0.6))

@@ -309,7 +309,7 @@ struct RouteGeniusView: View {
             )
             .frame(height: 280)
             .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
-            .transition(.opacity.combined(with: .scale(scale: 0.97)))
+            .transition(reduceMotion ? AnyTransition.opacity : AnyTransition.opacity.combined(with: .scale(scale: 0.97)))
 
             Button {
                 routeNameInput = ""
@@ -376,6 +376,8 @@ private struct RouteOptionCard: View {
     let viewModel: RouteGeniusViewModel
     let onSelect: () -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         Button(action: onSelect) {
             VStack(alignment: .leading, spacing: 10) {
@@ -392,7 +394,7 @@ private struct RouteOptionCard: View {
                             Circle().fill(Color.brand).frame(width: 20, height: 20)
                             StrideIcon(name: .check, size: 10, color: .onFill, strokeWeight: 2.5)
                         }
-                        .transition(.scale.combined(with: .opacity))
+                        .transition(reduceMotion ? AnyTransition.opacity : AnyTransition.scale.combined(with: .opacity))
                     }
                 }
 

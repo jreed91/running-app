@@ -109,9 +109,7 @@ struct ProgressDashboardView: View {
                             // The week card moved to Plan, which owns the week; this tab is
                             // only about the period the range picks.
                             summaryHeader
-                                .opacity(progressAppeared ? 1 : 0)
-                                .scaleEffect(progressAppeared ? 1 : 0.94, anchor: .top)
-                                .adaptiveAnimation(AppAnimation.entrance.delay(0.05), value: progressAppeared)
+                                .strideEntrance(progressAppeared, delay: 0.05)
                             // Pairs, so on a wide page (iPhone Duo open, in landscape) the charts
                             // read as a grid with the gap on the fold. One column keeps the old order.
                             StrideColumns(spacing: 16) {

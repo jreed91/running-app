@@ -183,16 +183,22 @@ struct OnboardingView: View {
         return trainingStyle == .maintainFitness ? base * 1.2 : base * 1.5
     }
 
+    /// Steps slide the way the runner is going; under Reduce Motion they cross-fade.
+    private var stepTransition: AnyTransition {
+        guard !reduceMotion else { return .opacity }
+        return .asymmetric(
+            insertion: .move(edge: goingForward ? .trailing : .leading).combined(with: .opacity),
+            removal: .move(edge: goingForward ? .leading : .trailing).combined(with: .opacity)
+        )
+    }
+
     // MARK: - Body
 
     var body: some View {
         ZStack {
             currentStep
                 .id(step)
-                .transition(.asymmetric(
-                    insertion: .move(edge: goingForward ? .trailing : .leading).combined(with: .opacity),
-                    removal: .move(edge: goingForward ? .leading : .trailing).combined(with: .opacity)
-                ))
+                .transition(stepTransition)
         }
         .adaptiveAnimation(AppAnimation.bouncy, value: step)
         .ignoresSafeArea()
@@ -704,22 +710,19 @@ struct OnboardingView: View {
                                 desc: "Record GPS routes during runs.",
                                 tint: .brand, isOn: locationEnabled,
                                 isActive: activePermission == 0)
-                    .opacity(permRowsVisible[0] ? 1 : 0)
-                    .offset(y: permRowsVisible[0] ? 0 : 14)
+                    .strideEntrance(permRowsVisible[0], rise: 14)
 
                 OBPermissionRow(icon: .heart, label: "Apple Health",
                                 desc: "Heart rate, VO2 max, workouts.",
                                 tint: .brand, isOn: healthEnabled,
                                 isActive: activePermission == 1)
-                    .opacity(permRowsVisible[1] ? 1 : 0)
-                    .offset(y: permRowsVisible[1] ? 0 : 14)
+                    .strideEntrance(permRowsVisible[1], rise: 14)
 
                 OBPermissionRow(icon: .bell, label: "Notifications",
                                 desc: "Plan reminders, daily workout ping.",
                                 tint: .brand, isOn: notificationsEnabled,
                                 isActive: activePermission == 2)
-                    .opacity(permRowsVisible[2] ? 1 : 0)
-                    .offset(y: permRowsVisible[2] ? 0 : 14)
+                    .strideEntrance(permRowsVisible[2], rise: 14)
 
                 // The Apple Watch row is gone (S15). It was not a permission — nothing in
                 // `requestPermissionsSequentially` touched it and both its flags were
@@ -728,9 +731,6 @@ struct OnboardingView: View {
                 // It also borrowed the notifications row's `permRowsVisible[2]`, in an array
                 // sized for three.
             }
-            .adaptiveAnimation(AppAnimation.bouncy, value: permRowsVisible[0])
-            .adaptiveAnimation(AppAnimation.bouncy, value: permRowsVisible[1])
-            .adaptiveAnimation(AppAnimation.bouncy, value: permRowsVisible[2])
         }
         .task {
             await refreshPermissionStates()

@@ -193,9 +193,7 @@ struct RaceInsightsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 raceFitnessHeroCard
-                    .opacity(appeared ? 1 : 0)
-                    .scaleEffect(appeared ? 1 : 0.96, anchor: .top)
-                    .adaptiveAnimation(AppAnimation.entrance.delay(0.05), value: appeared)
+                    .strideEntrance(appeared, delay: 0.05, rise: 18)
 
                 predictedRacePaceChart
                     .strideEntrance(appeared, delay: 0.10, rise: 18)

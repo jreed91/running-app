@@ -435,7 +435,7 @@ struct StrengthActiveView: View {
                 // The one moment in the strength flow worth celebrating. Non-repeating:
                 // this screen can sit on-screen while the runner catches their breath,
                 // and a looping bounce would be the only thing moving on it.
-                .symbolEffect(.bounce, options: .nonRepeating)
+                .symbolEffect(.bounce, options: .nonRepeating, isActive: !reduceMotion)
             Text("All exercises done!")
                 .font(.dsTitle2)
             Text("Tap Finish to save your workout.")
