@@ -37,14 +37,14 @@ struct PlanDetailView: View {
             .frame(maxWidth: .infinity)
         }
         .background(Color.surfacePrimary)
-        .navigationTitle("\(planTitle) Plan")
+        .navigationTitle("\(planTitle) plan")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .destructiveAction) {
                 Button(role: .destructive) {
                     showDeleteConfirmation = true
                 } label: {
-                    Label("Delete Plan", systemImage: "trash")
+                    Label("Delete plan", systemImage: "trash")
                 }
             }
         }
@@ -53,7 +53,7 @@ struct PlanDetailView: View {
             isPresented: $showDeleteConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Delete Plan", role: .destructive) {
+            Button("Delete plan", role: .destructive) {
                 dismiss()
                 // `deletePlan` owns the order: the Watch entries and reminders are
                 // reachable only through the plan, so they go before the record does (D3).
@@ -129,17 +129,17 @@ struct PlanSummaryCard: View {
                         $0.paceString(unit: appSettings.unitPreference)
                             .replacingOccurrences(of: " \(appSettings.unitPreference.paceLabel)", with: "")
                     } ?? "--:--",
-                    label: "Avg Pace"
+                    label: "Avg pace"
                 )
                 SummaryStat(
                     value: summary.longestRunMeters > 0
                         ? summary.longestRunMeters.distanceString(unit: appSettings.unitPreference)
                         : "--",
-                    label: "Longest Run"
+                    label: "Longest run"
                 )
                 SummaryStat(
                     value: "\(summary.weeksCompleted)/\(summary.totalWeeks)",
-                    label: "Weeks Done"
+                    label: "Weeks done"
                 )
                 SummaryStat(
                     value: "\(summary.completedRunCount + summary.completedStrengthCount)",
@@ -279,10 +279,19 @@ struct ScheduledWorkoutRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Circle()
-                .fill(workout.isCompleted ? Color.success : Color.surfaceTertiary)
-                .frame(width: 10)
-                .padding(.leading)
+            // Done is a filled dot; not done is a hollow ring, as Home marks a missed day.
+            // A surfaceTertiary fill all but vanished on the card, and the ring is a shape
+            // change, so it reads with Differentiate Without Color too.
+            Group {
+                if workout.isCompleted {
+                    Circle().fill(Color.success)
+                } else {
+                    Circle().strokeBorder(Color.secondary, lineWidth: 1.5)
+                }
+            }
+            .frame(width: 10, height: 10)
+            .padding(.leading)
+            .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(workout.workoutType.localizedName).font(.bodyRegular)

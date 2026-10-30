@@ -257,7 +257,7 @@ struct ShoeEditorView: View {
                 // swipe; the editor is where every action on a pair can be found.
                 if existing != nil {
                     Section {
-                        Button("Delete Pair", role: .destructive) { confirmingDeletion = true }
+                        Button("Delete pair", role: .destructive) { confirmingDeletion = true }
                             .buttonStyle(.strideButton(.destructive))
                             .listRowInsets(EdgeInsets())
                             .listRowBackground(Color.clear)
@@ -267,7 +267,7 @@ struct ShoeEditorView: View {
                 }
             }
             .strideList()
-            .navigationTitle(existing == nil ? "New Pair" : "Edit Pair")
+            .navigationTitle(existing == nil ? "New pair" : "Edit pair")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

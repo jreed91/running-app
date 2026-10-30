@@ -24,7 +24,7 @@ extension RunSummaryView {
                     .strideEyebrow()
                     .foregroundStyle(.secondary)
                 Spacer()
-                ProgressView().controlSize(.small)
+                CoachTypingDots(dotSize: 5)
             }
             CoachText(aiStreamBuffer)
                 .font(.dsSubhead)
@@ -41,9 +41,9 @@ extension RunSummaryView {
     var aiCoachSkeletonSection: some View {
         VStack(alignment: .leading, spacing: AppSpacing.xl) {
             VStack(alignment: .leading, spacing: 10) {
-                AIInsightSkeletonShape().frame(maxWidth: 240, minHeight: 24, maxHeight: 24)
-                AIInsightSkeletonShape().frame(maxWidth: .infinity, minHeight: 14, maxHeight: 14)
-                AIInsightSkeletonShape().frame(maxWidth: 220, minHeight: 14, maxHeight: 14)
+                CoachSkeletonLine().frame(maxWidth: 240, minHeight: 24, maxHeight: 24)
+                CoachSkeletonLine().frame(maxWidth: .infinity, minHeight: 14, maxHeight: 14)
+                CoachSkeletonLine().frame(maxWidth: 220, minHeight: 14, maxHeight: 14)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(AppSpacing.lg)
@@ -51,32 +51,15 @@ extension RunSummaryView {
 
             ForEach(0..<2, id: \.self) { _ in
                 VStack(alignment: .leading, spacing: 8) {
-                    AIInsightSkeletonShape().frame(width: 90, height: 11)
-                    AIInsightSkeletonShape().frame(maxWidth: 260, minHeight: 14, maxHeight: 14)
-                    AIInsightSkeletonShape().frame(maxWidth: .infinity, minHeight: 11, maxHeight: 11)
+                    CoachSkeletonLine().frame(width: 90, height: 11)
+                    CoachSkeletonLine().frame(maxWidth: 260, minHeight: 14, maxHeight: 14)
+                    CoachSkeletonLine().frame(maxWidth: .infinity, minHeight: 11, maxHeight: 11)
                 }
                 .padding(.horizontal, AppSpacing.xs)
             }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Coach analysis, starting")
-    }
-
-    private struct AIInsightSkeletonShape: View {
-        @Environment(\.accessibilityReduceMotion) private var reduceMotion
-        @State private var opacity: Double = 0.12
-
-        var body: some View {
-            RoundedRectangle(cornerRadius: AppRadius.micro)
-                .fill(Color.secondary.opacity(reduceMotion ? 0.2 : opacity))
-                .onAppear {
-                    // A steady placeholder under Reduce Motion; the pulse is motion.
-                    guard !reduceMotion else { return }
-                    withAnimation(AppAnimation.thinking) {
-                        opacity = 0.28
-                    }
-                }
-        }
     }
 
     // Both of these used to be spelled out here and again inside each nested row type;

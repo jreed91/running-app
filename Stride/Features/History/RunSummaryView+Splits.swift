@@ -523,8 +523,9 @@ extension RunSummaryView {
     private func elevationCell(_ meters: Double) -> some View {
         if meters != 0 {
             let g = meters.elevationValue(unit: appSettings.unitPreference)
+            // A climb is neither good nor bad, so no status colour; the sign says which way.
             Text("\(g >= 0 ? "+" : "")\(Int(g))\(appSettings.unitPreference.elevationLabel)")
-                .foregroundStyle(g >= 0 ? Color.success : Color.destructive)
+                .foregroundStyle(.secondary)
         } else {
             Text("—").foregroundStyle(.secondary)
         }

@@ -24,7 +24,7 @@ struct AssociateWorkoutSheet: View {
             Group {
                 if unassociated.isEmpty {
                     StrideEmptyState(
-                        "No Available Workouts",
+                        "No available workouts",
                         systemImage: "calendar.badge.exclamationmark",
                         description: Text("All scheduled workouts are already linked to a completed run.")
                     )
@@ -41,7 +41,7 @@ struct AssociateWorkoutSheet: View {
                     .strideList()
                 }
             }
-            .navigationTitle("Link to Planned Workout")
+            .navigationTitle("Link to planned workout")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -71,8 +71,8 @@ private struct ScheduledWorkoutPickerRow: View {
             ZStack {
                 Circle()
                     .fill(scheduled.workoutType.color.opacity(0.15))
-                    .frame(width: 44, height: 44)
-                StrideIcon(name: scheduled.workoutType.strideIcon, size: 22,
+                    .frame(width: 48, height: 48)
+                StrideIcon(name: scheduled.workoutType.strideIcon, size: 24,
                            color: scheduled.workoutType.color, strokeWeight: 2.0)
             }
 

@@ -27,7 +27,7 @@ struct RunPlaylistSettingsView: View {
             .padding(AppSpacing.lg)
         }
         .background(Color.surfacePrimary)
-        .navigationTitle("Run Playlists")
+        .navigationTitle("Run playlists")
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await service.refreshAvailability()

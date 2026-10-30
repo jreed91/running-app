@@ -29,14 +29,14 @@ struct TrainingPlanListView: View {
                 .strideListRow()
             }
             if !pastPlans.isEmpty {
-                Section("Past Plans") {
+                Section("Past plans") {
                     planRows(pastPlans)
                 }
                 .strideListRow()
             }
         }
         .strideList()
-        .navigationTitle("Plan History")
+        .navigationTitle("Plan history")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {

@@ -53,7 +53,7 @@ struct RaceDayHubView: View {
                 content(racePlan)
             } else {
                 StrideEmptyState(
-                    "No Goal Race",
+                    "No goal race",
                     systemImage: "flag.checkered",
                     description: Text("Give your plan a race date and race day lives here.")
                 )

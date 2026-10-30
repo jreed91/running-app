@@ -14,7 +14,7 @@ struct WeeklySummaryIntentView: View {
                 StrideIcon(name: .chart, size: 24, color: .brandText, strokeWeight: 2)
             }
             VStack(alignment: .leading, spacing: 4) {
-                Text("This Week")
+                Text("This week")
                     .font(.dsSubhead)
                     .foregroundStyle(.secondary)
                 Text(data.totalMeters.distanceString(unit: unit))

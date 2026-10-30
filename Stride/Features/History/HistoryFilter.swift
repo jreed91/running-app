@@ -130,7 +130,7 @@ struct HistoryFilterMenu: View {
             }
             if filter.isActive {
                 Divider()
-                Button("Clear Filters", systemImage: "arrow.counterclockwise") {
+                Button("Clear filters", systemImage: "arrow.counterclockwise") {
                     filter = HistoryFilter()
                 }
             }

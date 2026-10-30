@@ -37,7 +37,7 @@ final class StrideUITests: XCTestCase {
         XCTAssertTrue(app.buttons["dashboard.startFreeRun"].waitForExistence(timeout: 5))
 
         tabBar.buttons["Plan"].tap()
-        XCTAssertTrue(app.navigationBars["My Plan"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["My plan"].waitForExistence(timeout: 5))
         // By identifier: pace insights is a row that opens its own page, and the weeks
         // header reads "All weeks" once the current week is shown above it.
         XCTAssertTrue(app.buttons["plan.paceInsightsRow"].waitForExistence(timeout: 5))
@@ -50,7 +50,7 @@ final class StrideUITests: XCTestCase {
             app.swipeUp()
         }
         paceRow.tap()
-        XCTAssertTrue(app.navigationBars["Pace Insights"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Pace insights"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.state, .runningForeground)
     }
 
@@ -60,7 +60,7 @@ final class StrideUITests: XCTestCase {
         XCTAssertTrue(tabBar.waitForExistence(timeout: 8))
 
         assertTab("Home", showsNavigationTitle: "Home")
-        assertTab("Plan", showsNavigationTitle: "My Plan")
+        assertTab("Plan", showsNavigationTitle: "My plan")
         assertTab("History", showsNavigationTitle: "History")
         assertTab("Progress", showsNavigationTitle: "Progress")
 

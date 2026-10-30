@@ -51,7 +51,7 @@ struct OBWelcome: View {
             Text("WELCOME TO STRIDE")
                 .strideEyebrow()
                 .foregroundStyle(.brandText)
-                .strideEntrance(appeared, delay: 0.08, rise: 10)
+                .strideEntrance(appeared, delay: AppAnimation.stagger, rise: 10)
 
             Spacer().frame(height: 10)
 
@@ -61,7 +61,7 @@ struct OBWelcome: View {
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.primary)
                 .lineSpacing(-4)
-                .strideEntrance(appeared, delay: 0.14, rise: 16)
+                .strideEntrance(appeared, delay: AppAnimation.stagger * 2, rise: 16)
 
             Spacer().frame(height: 14)
 
@@ -71,7 +71,7 @@ struct OBWelcome: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, AppSpacing.md)
                 .lineSpacing(2)
-                .strideEntrance(appeared, delay: 0.20, rise: 14)
+                .strideEntrance(appeared, delay: AppAnimation.stagger * 3, rise: 14)
         }
     }
 
@@ -101,7 +101,7 @@ struct OBWelcome: View {
                 }
                 .buttonStyle(.strideButton())
                 .accessibilityIdentifier("onboarding.getStarted")
-                .strideEntrance(appeared, delay: 0.28)
+                .strideEntrance(appeared, delay: AppAnimation.stagger * 4)
 
                 SignInWithAppleButton(.signIn) { request in
                     request.requestedScopes = []
@@ -118,7 +118,7 @@ struct OBWelcome: View {
                 // The same radius as the strideButton above it.
                 .clipShape(RoundedRectangle(cornerRadius: AppRadius.lg))
                 .padding(.top, AppSpacing.md)
-                .strideEntrance(appeared, delay: 0.34, rise: 0)
+                .strideEntrance(appeared, delay: AppAnimation.stagger * 5, rise: 0)
 
                 // The step ignores the safe area, so this has to clear the home indicator
                 // (34pt) itself. At exactly 34 the button sat on the indicator's line.
@@ -206,7 +206,7 @@ struct OBWelcomeBack: View {
                         authService.welcomeBackPending = false
                     } label: {
                         HStack(spacing: 10) {
-                            Text("Continue to Dashboard")
+                            Text("Continue to dashboard")
                             StrideIcon(name: .chevronRight, size: 15, color: .onFill, strokeWeight: 2.6)
                         }
                     }
@@ -562,7 +562,7 @@ struct OBRaceCard: View {
             }
             .padding(AppSpacing.lg)
             .strideCard(cornerRadius: AppRadius.lg)
-            .overlay(RoundedRectangle(cornerRadius: AppRadius.lg)
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.lg, style: .continuous)
                 .strokeBorder(isSelected ? Color.brand : Color.clear, lineWidth: 2))
         }
         .buttonStyle(BouncyButtonStyle()).foregroundStyle(.primary)
@@ -829,7 +829,7 @@ struct OBFitnessRow: View {
             .padding(14)
             .strideCard(cornerRadius: AppRadius.md)
             .overlay(
-                RoundedRectangle(cornerRadius: AppRadius.md)
+                RoundedRectangle(cornerRadius: AppRadius.md, style: .continuous)
                     .strokeBorder(isSelected ? Color.brand : Color.clear, lineWidth: 2)
             )
         }
@@ -877,7 +877,7 @@ struct OBLevelRow: View {
             }
             .padding(.horizontal, 18).padding(.vertical, AppSpacing.lg)
             .strideCard(cornerRadius: AppRadius.md)
-            .overlay(RoundedRectangle(cornerRadius: AppRadius.md)
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.md, style: .continuous)
                 .strokeBorder(isSelected ? Color.brand : Color.clear, lineWidth: 2))
         }
         .buttonStyle(BouncyButtonStyle()).foregroundStyle(.primary)
@@ -1294,7 +1294,7 @@ private struct WeeklyMileageChart: View {
                             )
                         Text("W\(bar.n)")
                             .font(.dsCaption2.weight(.semibold).monospacedDigit())
-                            .foregroundStyle(Color.secondary.opacity(0.6))
+                            .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity)
                 }
@@ -1370,7 +1370,7 @@ struct OBEquipmentCard: View {
             .padding(.vertical, AppSpacing.md)
             .strideCard(cornerRadius: AppRadius.md)
             .overlay(
-                RoundedRectangle(cornerRadius: AppRadius.md)
+                RoundedRectangle(cornerRadius: AppRadius.md, style: .continuous)
                     .strokeBorder(isSelected ? Color.brand : Color.clear, lineWidth: 2)
             )
         }
@@ -1448,7 +1448,7 @@ private struct OBStrengthFocusRow: View {
             .padding(.vertical, AppSpacing.md)
             .strideCard(cornerRadius: AppRadius.md)
             .overlay(
-                RoundedRectangle(cornerRadius: AppRadius.md)
+                RoundedRectangle(cornerRadius: AppRadius.md, style: .continuous)
                     .strokeBorder(isSelected ? Color.brand : Color.clear, lineWidth: 2)
             )
         }

@@ -42,7 +42,7 @@ struct WorkoutDetailView: View {
         if let name = goalRacePlan?.raceName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
             return name
         }
-        return workout.week?.plan?.targetRace.localizedName ?? "Goal Race"
+        return workout.week?.plan?.targetRace.localizedName ?? "Goal race"
     }
 
     var body: some View {

@@ -189,7 +189,7 @@ struct SettingsView: View {
             }
             footnote(Text(bodyMassFootnote))
             rowDivider
-            settingsRow(icon: .walk, iconColor: .brand, title: "Gender") {
+            settingsRow(icon: .person, iconColor: .brand, title: "Gender") {
                 menuPicker(
                     "Gender",
                     selection: profileGenderBinding(for: profile),
@@ -208,7 +208,7 @@ struct SettingsView: View {
                 )
             }
             rowDivider
-            settingsRow(icon: .heart, iconColor: .destructive, title: "Max HR") {
+            settingsRow(icon: .heart, iconColor: .brand, title: "Max HR") {
                 NumericStepperField(
                     title: "Max HR",
                     value: maxHRBinding(for: profile),
@@ -249,8 +249,8 @@ struct SettingsView: View {
                 notificationsDeniedRow
                 rowDivider
             }
-            settingsRow(icon: .bell, iconColor: .brand, title: "Morning Reminder") {
-                Toggle("Morning Reminder", isOn: Bindable(appSettings).morningReminderEnabled)
+            settingsRow(icon: .bell, iconColor: .brand, title: "Morning reminder") {
+                Toggle("Morning reminder", isOn: Bindable(appSettings).morningReminderEnabled)
                     .labelsHidden()
                     .tint(.brand)
                     .onChange(of: appSettings.morningReminderEnabled) { _, enabled in
@@ -278,8 +278,8 @@ struct SettingsView: View {
                 morningReminderTimeRow
             }
             rowDivider
-            settingsRow(icon: .trophy, iconColor: .brand, title: "Training Nudges") {
-                Toggle("Training Nudges", isOn: Bindable(appSettings).trainingNudgesEnabled)
+            settingsRow(icon: .trophy, iconColor: .brand, title: "Training nudges") {
+                Toggle("Training nudges", isOn: Bindable(appSettings).trainingNudgesEnabled)
                     .labelsHidden()
                     .tint(.brand)
                     .accessibilityIdentifier("settings.trainingNudges")
@@ -302,8 +302,8 @@ struct SettingsView: View {
             }
             footnote(Text("An evening nudge when a streak or your plan is slipping, and a Sunday recap. At most one a day."))
             rowDivider
-            settingsRow(icon: .flame, iconColor: .warning, title: "Heat Adaptation") {
-                Toggle("Heat Adaptation", isOn: Bindable(appSettings).heatAdaptationEnabled)
+            settingsRow(icon: .flame, iconColor: .warning, title: "Heat adaptation") {
+                Toggle("Heat adaptation", isOn: Bindable(appSettings).heatAdaptationEnabled)
                     .labelsHidden()
                     .tint(.brand)
                     .accessibilityIdentifier("settings.heatAdaptation")
@@ -340,7 +340,7 @@ struct SettingsView: View {
             Text("Notifications are off for Stride in iOS Settings, so none of these reminders can reach you.")
                 .font(.dsCaption)
                 .foregroundStyle(.secondary)
-            Button("Open Notification Settings") {
+            Button("Open notification settings") {
                 guard let url = URL(string: UIApplication.openNotificationSettingsURLString) else { return }
                 openURL(url)
             }
@@ -353,9 +353,9 @@ struct SettingsView: View {
     }
 
     private var morningReminderTimeRow: some View {
-        settingsRow(icon: .timer, iconColor: .brand, title: "Reminder Time") {
+        settingsRow(icon: .timer, iconColor: .brand, title: "Reminder time") {
             DatePicker(
-                "Reminder Time",
+                "Reminder time",
                 selection: morningReminderTimeBinding,
                 displayedComponents: .hourAndMinute
             )
@@ -394,19 +394,19 @@ struct SettingsView: View {
     // MARK: - During a Run card
 
     private var duringRunCard: some View {
-        settingsSection("During a Run") {
+        settingsSection("During a run") {
             // The one setting that makes the app talk over the runner's music, so it
             // says what it will say and stays off until asked (U4).
-            settingsRow(icon: .flag, iconColor: .brand, title: "Spoken Splits") {
-                Toggle("Spoken Splits", isOn: Bindable(appSettings).spokenSplitsEnabled)
+            settingsRow(icon: .flag, iconColor: .brand, title: "Spoken splits") {
+                Toggle("Spoken splits", isOn: Bindable(appSettings).spokenSplitsEnabled)
                     .labelsHidden()
                     .tint(.brand)
             }
             footnote(Text("Reads out each \(appSettings.unitPreference.distanceLabel) and its pace. Music ducks while it speaks."))
             rowDivider
             // Off until asked, like Spoken Splits above: it talks over the runner's music.
-            settingsRow(icon: .tempo, iconColor: .brand, title: "Spoken Workout Steps") {
-                Toggle("Spoken Workout Steps", isOn: Bindable(appSettings).spokenWorkoutStepsEnabled)
+            settingsRow(icon: .tempo, iconColor: .brand, title: "Spoken workout steps") {
+                Toggle("Spoken workout steps", isOn: Bindable(appSettings).spokenWorkoutStepsEnabled)
                     .labelsHidden()
                     .tint(.brand)
                     .accessibilityIdentifier("settings.spokenWorkoutSteps")
@@ -422,7 +422,7 @@ struct SettingsView: View {
             NavigationLink {
                 RunPlaylistSettingsView()
             } label: {
-                settingsRow(icon: .music, iconColor: .brand, title: "Run Playlists") {
+                settingsRow(icon: .music, iconColor: .brand, title: "Run playlists") {
                     rowChevron
                 }
             }
@@ -434,7 +434,7 @@ struct SettingsView: View {
             NavigationLink {
                 ShoesView()
             } label: {
-                settingsRow(icon: .run, iconColor: .brand, title: "My Shoes") {
+                settingsRow(icon: .run, iconColor: .brand, title: "My shoes") {
                     rowChevron
                 }
             }
@@ -443,7 +443,7 @@ struct SettingsView: View {
             footnote(Text("Tracks how far each pair has gone and warns you when one is nearly worn out."))
 
             rowDivider
-            settingsRow(icon: .location, iconColor: .brand, title: "Routing Key") {
+            settingsRow(icon: .location, iconColor: .brand, title: "Routing key") {
                 Text("Optional")
                     .font(.dsCaption)
                     .foregroundStyle(.secondary)
@@ -516,7 +516,7 @@ struct SettingsView: View {
         settingsRow(
             icon: .timer,
             iconColor: status.isLimitReached ? .destructive : (status.isApproachingLimit ? .warning : .brand),
-            title: "Daily Allowance"
+            title: "Daily allowance"
         ) {
             if status.canRequestLimitIncrease {
                 Button("Options") {
@@ -574,7 +574,7 @@ struct SettingsView: View {
     // MARK: - Data & Sync card
 
     private var dataSyncCard: some View {
-        settingsSection("Data & Sync") {
+        settingsSection("Data & sync") {
             if authService.isSignedIn {
                 settingsRow(icon: .check, iconColor: .success, title: "Signed in with Apple") {
                     Button("Sign out") { showSignOutConfirmation = true }
@@ -605,8 +605,8 @@ struct SettingsView: View {
                 }
             }
             rowDivider
-            settingsRow(icon: .cloud, iconColor: .brand, title: "iCloud Sync") {
-                Toggle("iCloud Sync", isOn: Bindable(appSettings).iCloudSyncEnabled)
+            settingsRow(icon: .cloud, iconColor: .brand, title: "iCloud sync") {
+                Toggle("iCloud sync", isOn: Bindable(appSettings).iCloudSyncEnabled)
                     .labelsHidden()
                     .tint(.brand)
             }
@@ -617,7 +617,7 @@ struct SettingsView: View {
             NavigationLink {
                 HealthKitImportView()
             } label: {
-                settingsRow(icon: .heart, iconColor: .destructive, title: "Import from Apple Health") {
+                settingsRow(icon: .heart, iconColor: .brand, title: "Import from Apple Health") {
                     rowChevron
                 }
             }
@@ -625,8 +625,8 @@ struct SettingsView: View {
             .foregroundStyle(.primary)
 
             rowDivider
-            settingsRow(icon: .tortoise, iconColor: .brand, title: "Import Walks") {
-                Toggle("Import Walks", isOn: Bindable(appSettings).walkImportEnabled)
+            settingsRow(icon: .walk, iconColor: .brand, title: "Import walks") {
+                Toggle("Import walks", isOn: Bindable(appSettings).walkImportEnabled)
                     .labelsHidden()
                     .tint(.brand)
                     .accessibilityIdentifier("settings.importWalks")
@@ -637,7 +637,7 @@ struct SettingsView: View {
             Button {
                 exportAllData()
             } label: {
-                settingsRow(icon: .export, iconColor: .brand, title: "Export All Data") {
+                settingsRow(icon: .export, iconColor: .brand, title: "Export all data") {
                     if isExportingData {
                         ProgressView()
                     } else {
@@ -660,7 +660,7 @@ struct SettingsView: View {
     /// `BuildEnvironment.showsTestFlightDiagnostics`, so an App Store build never draws it.
     private var testFlightCard: some View {
         settingsSection("TestFlight") {
-            settingsRow(icon: .cloud, iconColor: .secondary, title: "Active Store") {
+            settingsRow(icon: .cloud, iconColor: .secondary, title: "Active store") {
                 Text(persistenceStatusText)
                     .font(.bodyRegular)
                     .foregroundStyle(.secondary)
@@ -672,7 +672,7 @@ struct SettingsView: View {
             NavigationLink {
                 CloudKitDebugView()
             } label: {
-                settingsRow(icon: .gear, iconColor: .secondary, title: "CloudKit Debug Data") {
+                settingsRow(icon: .gear, iconColor: .secondary, title: "CloudKit debug data") {
                     rowChevron
                 }
             }
@@ -704,7 +704,7 @@ struct SettingsView: View {
                     }
                 }
             } label: {
-                settingsRow(icon: .bell, iconColor: .secondary, title: "Trigger All Notifications") {
+                settingsRow(icon: .bell, iconColor: .secondary, title: "Trigger all notifications") {
                     StrideIcon(name: .play, size: 12,
                                color: Color.secondary.opacity(0.7), strokeWeight: 2)
                 }
@@ -732,7 +732,7 @@ struct SettingsView: View {
                     }
                 }
             } label: {
-                settingsRow(icon: .run, iconColor: .secondary, title: "Notify Latest Run") {
+                settingsRow(icon: .run, iconColor: .secondary, title: "Notify latest run") {
                     StrideIcon(name: .play, size: 12,
                                color: Color.secondary.opacity(0.7), strokeWeight: 2)
                 }
@@ -773,7 +773,7 @@ struct SettingsView: View {
         } label: {
             HStack(spacing: AppSpacing.sm) {
                 StrideIcon(name: .close, size: 16, color: .destructive, strokeWeight: 2.2)
-                Text("Reset All Data")
+                Text("Reset all data")
             }
         }
         .buttonStyle(.strideButton(.destructive))
@@ -785,7 +785,7 @@ struct SettingsView: View {
     private var developerCard: some View {
         let plan = activePlans.first
         return VStack(spacing: 16) {
-            settingsSection("Developer · Run History") {
+            settingsSection("Developer · Run history") {
                 settingsRow(icon: .history, iconColor: .secondary, title: "\(seedWeeks) weeks of history") {
                     Stepper("\(seedWeeks) weeks of history", value: $seedWeeks, in: 2...24)
                         .labelsHidden()
@@ -794,7 +794,7 @@ struct SettingsView: View {
                 Button {
                     DebugRunGenerator.seed(weeks: seedWeeks, context: context)
                 } label: {
-                    settingsRow(icon: .play, iconColor: .success, title: "Seed Run History") {
+                    settingsRow(icon: .play, iconColor: .success, title: "Seed run history") {
                         EmptyView()
                     }
                 }
@@ -804,7 +804,7 @@ struct SettingsView: View {
                 Button {
                     DebugRunGenerator.clear(context: context)
                 } label: {
-                    settingsRow(icon: .close, iconColor: .destructive, title: "Clear Seeded Runs") {
+                    settingsRow(icon: .close, iconColor: .destructive, title: "Clear seeded runs") {
                         EmptyView()
                     }
                 }
@@ -813,7 +813,7 @@ struct SettingsView: View {
             }
 
             if let plan {
-                settingsSection("Developer · Plan Progress") {
+                settingsSection("Developer · Plan progress") {
                     HStack {
                         StrideIcon(name: .calendar, size: 16, color: .brand, strokeWeight: 2)
                             .padding(.leading, AppSpacing.lg)
@@ -830,7 +830,7 @@ struct SettingsView: View {
                     Button {
                         DebugRunGenerator.completePlan(upTo: completionCutoff, plan: plan, context: context)
                     } label: {
-                        settingsRow(icon: .check, iconColor: .success, title: "Mark Workouts Complete") {
+                        settingsRow(icon: .check, iconColor: .success, title: "Mark workouts complete") {
                             EmptyView()
                         }
                     }
@@ -840,7 +840,7 @@ struct SettingsView: View {
                     Button {
                         DebugRunGenerator.resetPlanProgress(plan: plan, context: context)
                     } label: {
-                        settingsRow(icon: .close, iconColor: .destructive, title: "Reset Debug Completions") {
+                        settingsRow(icon: .close, iconColor: .destructive, title: "Reset debug completions") {
                             EmptyView()
                         }
                     }
@@ -852,7 +852,7 @@ struct SettingsView: View {
                     Button {
                         resendWorkoutsToWorkoutKit(plan: plan)
                     } label: {
-                        settingsRow(icon: .calendar, iconColor: .brand, title: "Resend Plan to WorkoutKit") {
+                        settingsRow(icon: .calendar, iconColor: .brand, title: "Resend plan to WorkoutKit") {
                             EmptyView()
                         }
                     }
@@ -1218,7 +1218,7 @@ enum DebugRunGenerator {
 
     /// Removes every seeded run, repairing the plan days they were linked to.
     ///
-    /// "Mark Workouts Complete" links its generated runs to scheduled days and sets
+    /// "Mark workouts complete" links its generated runs to scheduled days and sets
     /// `isCompleted`, and it sits directly above this button. Deleting the runs on their
     /// own left those days still marked complete with no run behind them — the exact
     /// invariant `WorkoutRepository.delete` exists to repair, skipped because this path

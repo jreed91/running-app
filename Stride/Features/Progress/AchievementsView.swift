@@ -63,21 +63,24 @@ struct AchievementsView: View {
 
         ScrollView {
             VStack(alignment: .leading, spacing: AppSpacing.lg) {
+                // One stagger step per section, capped at six so a long list of
+                // categories arrives together rather than trickling in.
                 streakCard(streak)
-                    .strideEntrance(appeared, delay: 0.05)
+                    .strideEntrance(appeared)
 
                 weeklyGoalCard(weekly)
-                    .strideEntrance(appeared, delay: 0.10)
+                    .strideEntrance(appeared, delay: AppAnimation.stagger)
 
                 ForEach(Array(StreakGoalService.AchievementCategory.allCases.enumerated()), id: \.element) { index, category in
                     badgeSection(for: category, achievements: achievements)
-                        .strideEntrance(appeared, delay: 0.15 + Double(index) * 0.05)
+                        .strideEntrance(appeared, delay: Double(min(2 + index, 6)) * AppAnimation.stagger)
                 }
 
                 medalsSection
                     .strideEntrance(
                         appeared,
-                        delay: 0.15 + Double(StreakGoalService.AchievementCategory.allCases.count) * 0.05
+                        delay: Double(min(2 + StreakGoalService.AchievementCategory.allCases.count, 6))
+                            * AppAnimation.stagger
                     )
             }
             .padding(AppSpacing.lg)
@@ -154,7 +157,7 @@ struct AchievementsView: View {
                 .frame(width: 72, height: 72)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text("This Week")
+                Text("This week")
                     .strideEyebrow()
                     .foregroundStyle(.secondary)
                 Text(weekly.completedMeters.distanceString(unit: appSettings.unitPreference))
@@ -185,7 +188,7 @@ struct AchievementsView: View {
     private func weeklyGoalSubtitle(_ weekly: StreakGoalService.WeeklyGoalProgress) -> String {
         let goal = appSettings.weeklyGoalMeters.distanceString(unit: appSettings.unitPreference)
         if weekly.isMet {
-            return "Goal reached — \(goal) 🎉"
+            return "Goal reached — \(goal)"
         }
         return "\(weekly.remainingMeters.distanceString(unit: appSettings.unitPreference)) to go of \(goal)"
     }
@@ -254,7 +257,7 @@ struct AchievementsView: View {
 
     private var medalsSection: some View {
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            Text("Distance Records")
+            Text("Distance records")
                 .strideEyebrow()
                 .foregroundStyle(.secondary)
             Text("Your fastest time at each distance")
@@ -409,7 +412,7 @@ private struct WeeklyGoalEditor: View {
                 .strideListRow()
             }
             .strideList()
-            .navigationTitle("Weekly Goal")
+            .navigationTitle("Weekly goal")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {

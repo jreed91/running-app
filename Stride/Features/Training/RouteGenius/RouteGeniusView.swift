@@ -104,7 +104,7 @@ struct RouteGeniusView: View {
 
     private var routeTypePicker: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("Route Type", systemImage: "arrow.triangle.2.circlepath")
+            Label("Route type", systemImage: "arrow.triangle.2.circlepath")
                 .strideEyebrow()
                 .foregroundStyle(.secondary)
 
@@ -123,7 +123,7 @@ struct RouteGeniusView: View {
 
     private var startPointPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("Starting Point", systemImage: "mappin.and.ellipse")
+            Label("Starting point", systemImage: "mappin.and.ellipse")
                 .strideEyebrow()
                 .foregroundStyle(.secondary)
 
@@ -234,7 +234,7 @@ struct RouteGeniusView: View {
             Task { await viewModel.generateRouteOptions() }
         } label: {
             Label(
-                viewModel.routeOptions.isEmpty ? "Generate Routes" : "Regenerate",
+                viewModel.routeOptions.isEmpty ? "Generate routes" : "Regenerate",
                 systemImage: viewModel.routeOptions.isEmpty ? "wand.and.stars" : "arrow.clockwise"
             )
         }
@@ -320,7 +320,7 @@ struct RouteGeniusView: View {
                 routeNameInput = ""
                 showSaveSheet = true
             } label: {
-                Label("Save This Route", systemImage: "bookmark")
+                Label("Save this route", systemImage: "bookmark")
             }
             // Secondary: Generate is the screen's one primary.
             .buttonStyle(.strideButton(.secondary))
@@ -338,13 +338,15 @@ struct RouteGeniusView: View {
         NavigationStack {
             VStack(spacing: 20) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: AppRadius.md)
+                    // A tile is a tinted circle, never a rounded square. Larger than a
+                    // card's 48pt because it leads the sheet, as an empty state's disc does.
+                    Circle()
                         .fill(Color.brand.opacity(0.12))
                         .frame(width: 64, height: 64)
                     StrideIcon(name: .flag, size: 28, color: .brand, strokeWeight: 2.0)
                 }
 
-                Text("Name Your Route")
+                Text("Name your route")
                     .font(.dsTitle2)
 
                 TextField("Route name (optional)", text: $routeNameInput)

@@ -94,7 +94,7 @@ struct StrengthActiveView: View {
         }
         .onAppear { setupForCurrentExercise() }
         .confirmationDialog(
-            hasLoggedWork ? "Finish Workout?" : "Discard Workout?",
+            hasLoggedWork ? "Finish workout?" : "Discard workout?",
             isPresented: $showFinishConfirmation,
             titleVisibility: .visible
         ) {
@@ -102,9 +102,9 @@ struct StrengthActiveView: View {
             // accidentally opened session must not be force-saved and mark the day
             // complete with zero sets (H5).
             if hasLoggedWork {
-                Button("Finish & Save") { finishAndSave() }
+                Button("Finish & save") { finishAndSave() }
             }
-            Button("Discard Workout", role: .destructive) { discard() }
+            Button("Discard workout", role: .destructive) { discard() }
             Button("Cancel", role: .cancel) { }
         } message: {
             Text(hasLoggedWork
@@ -322,7 +322,7 @@ struct StrengthActiveView: View {
             Button {
                 logSet(exercise: exercise)
             } label: {
-                Text(exercise.durationSeconds != nil ? "Done — Next Set" : "Log Set")
+                Text(exercise.durationSeconds != nil ? "Done — next set" : "Log set")
             }
             .buttonStyle(.strideButton())
 
@@ -368,7 +368,7 @@ struct StrengthActiveView: View {
             Button {
                 endRestTimer()
             } label: {
-                Text("Skip Rest")
+                Text("Skip rest")
             }
             .buttonStyle(.strideButton(.secondary))
         }
@@ -464,9 +464,9 @@ struct StrengthActiveView: View {
         Button {
             showFinishConfirmation = true
         } label: {
-            Text("Finish Workout")
+            Text("Finish workout")
         }
-        // Quiet while "Log Set" is on screen, so that stays the one route-gradient
+        // Quiet while "Log set" is on screen, so that stays the one route-gradient
         // primary; once every exercise is done, finishing is the only thing left to do.
         .buttonStyle(.strideButton(currentExercise == nil && hasLoggedWork ? .primary : .quiet))
         .padding(.horizontal, AppSpacing.lg)

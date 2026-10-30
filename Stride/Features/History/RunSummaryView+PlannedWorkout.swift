@@ -122,7 +122,7 @@ extension RunSummaryView {
                                 .replacingOccurrences(of: " \(appSettings.unitPreference.paceLabel)", with: "")
                             let hi = range.upperBound.paceString(unit: appSettings.unitPreference)
                             planComparisonRow(
-                                label: "Avg Pace",
+                                label: "Avg pace",
                                 planned: "\(lo)–\(hi)",
                                 actual: actual.paceString(unit: appSettings.unitPreference),
                                 status: paceStatus(actual: actual, target: range)

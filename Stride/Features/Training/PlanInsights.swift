@@ -10,7 +10,7 @@ import SwiftUI
 struct PaceInsightsRow: View {
     var body: some View {
         PlanPageRow(
-            title: "Pace Insights",
+            title: "Pace insights",
             subtitle: "Estimated finish and training paces",
             icon: .tempo
         )
@@ -135,7 +135,7 @@ struct PaceInsightsCard: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Estimated Finish")
+                    Text("Estimated finish")
                         .font(.dsCaption)
                         .foregroundStyle(.secondary)
                     Text(isVDOTReliable ? estimatedTime.durationString : "--:--")
@@ -162,7 +162,7 @@ struct PaceInsightsCard: View {
                     if !hasMeasuredFitness {
                         Text("· Log a quality run to track against it")
                             .font(.dsCaption)
-                            .foregroundStyle(Color.secondary.opacity(0.6))
+                            .foregroundStyle(.secondary)
                     }
                 } else {
                     StrideIcon(name: .chart, size: 14, color: .secondary, strokeWeight: 1.8)
