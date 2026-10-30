@@ -9,7 +9,6 @@ struct AICoachChatView: View {
     @Environment(AppContainer.self) private var container
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// How many recent runs the coach prompt summarises. Also the fetch limit below —
     /// the prompt is the only consumer of more than the newest run.
@@ -299,32 +298,19 @@ struct AICoachChatView: View {
     private var typingRow: some View {
         HStack(alignment: .top, spacing: 10) {
             coachAvatar(size: 36)
-            HStack(spacing: 6) {
-                ForEach(0..<3, id: \.self) { index in
-                    Circle()
-                        .fill(Color.secondary.opacity(0.55))
-                        .frame(width: 6, height: 6)
-                        .opacity(isWaitingForCoach ? 1 : 0.3)
-                        // A looping pulse is exactly what Reduce Motion asks to stop.
-                        .animation(
-                            reduceMotion
-                                ? nil
-                                : AppAnimation.thinking
-                                    .delay(Double(index) * 0.12),
-                            value: isWaitingForCoach
-                        )
-                }
-            }
-            .padding(14)
-            .background(
-                .surfaceSecondary,
-                in: UnevenRoundedRectangle(
-                    topLeadingRadius: AppRadius.micro,
-                    bottomLeadingRadius: AppRadius.lg,
-                    bottomTrailingRadius: AppRadius.lg,
-                    topTrailingRadius: AppRadius.lg
+            CoachTypingDots()
+                .padding(14)
+                .background(
+                    .surfaceSecondary,
+                    in: UnevenRoundedRectangle(
+                        topLeadingRadius: AppRadius.micro,
+                        bottomLeadingRadius: AppRadius.lg,
+                        bottomTrailingRadius: AppRadius.lg,
+                        topTrailingRadius: AppRadius.lg
+                    )
                 )
-            )
+                .accessibilityElement()
+                .accessibilityLabel(Text("Coach is writing"))
             Spacer(minLength: 20)
         }
     }

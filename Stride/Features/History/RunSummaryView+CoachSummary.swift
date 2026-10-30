@@ -46,13 +46,14 @@ extension RunSummaryView {
             }
 
             if isLoadingAIInsight {
-                HStack(spacing: 8) {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text("Writing your analysis…")
-                        .font(.dsFootnote)
-                        .foregroundStyle(.secondary)
+                // The headline and the "Next" line, still being written.
+                VStack(alignment: .leading, spacing: 8) {
+                    CoachSkeletonLine().frame(maxWidth: 240, minHeight: 20, maxHeight: 20)
+                    CoachSkeletonLine().frame(maxWidth: 200, minHeight: 12, maxHeight: 12)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement()
+                .accessibilityLabel(Text("Writing your analysis"))
             } else if let aiInsight {
                 Text(markdownText(aiInsight.headline))
                     .font(.dsTitle3.weight(.bold))

@@ -41,12 +41,15 @@ struct RaceBriefingCard: View {
                 footer
             }
         } else {
-            HStack(spacing: AppSpacing.sm) {
-                ProgressView()
-                Text("Writing your race plan…")
-                    .font(.dsCallout)
-                    .foregroundStyle(.secondary)
+            // The headline and pacing lines, still being written.
+            VStack(alignment: .leading, spacing: 10) {
+                CoachSkeletonLine().frame(maxWidth: 220, minHeight: 18, maxHeight: 18)
+                CoachSkeletonLine().frame(maxWidth: .infinity, minHeight: 14, maxHeight: 14)
+                CoachSkeletonLine().frame(maxWidth: 240, minHeight: 14, maxHeight: 14)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement()
+            .accessibilityLabel(Text("Writing your race plan"))
         }
     }
 
