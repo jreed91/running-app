@@ -206,7 +206,7 @@ struct OBWelcomeBack: View {
                         authService.welcomeBackPending = false
                     } label: {
                         HStack(spacing: 10) {
-                            Text("Continue to Dashboard")
+                            Text("Continue to dashboard")
                             StrideIcon(name: .chevronRight, size: 15, color: .onFill, strokeWeight: 2.6)
                         }
                     }

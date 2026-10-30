@@ -60,7 +60,7 @@ struct PregnancyPlanSetupView: View {
                 disclaimerSection
             }
             .strideList()
-            .navigationTitle("Pregnancy Plan")
+            .navigationTitle("Pregnancy plan")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -100,7 +100,7 @@ struct PregnancyPlanSetupView: View {
                     .foregroundStyle(.secondary)
             }
         } header: {
-            Text("Due Date")
+            Text("Due date")
         } footer: {
             Text("Your plan runs from the start date through the week you're due. It shortens and eases as you go — it never builds toward a race.")
         }
@@ -119,7 +119,7 @@ struct PregnancyPlanSetupView: View {
                     .font(.dsCallout)
             }
         } header: {
-            Text("Before You Start")
+            Text("Before you start")
         } footer: {
             Text("Stride won't build a pregnancy plan until this is confirmed. Some conditions mean no more activity than usual daily living; others mean the decision is your provider's, not this app's.")
         }
@@ -136,7 +136,7 @@ struct PregnancyPlanSetupView: View {
             }
             Toggle("I regularly ran hard sessions", isOn: $habituallyVigorous)
         } header: {
-            Text("Before Pregnancy")
+            Text("Before pregnancy")
         } footer: {
             Text("Minutes, not distance — the plan tapers from what you were actually doing. If you regularly ran intervals, tempo, or races, you keep one steadier session per week until 28 weeks.")
         }
@@ -149,7 +149,7 @@ struct PregnancyPlanSetupView: View {
                 .padding(.vertical, AppSpacing.xs)
         } header: {
             HStack {
-                Text("Run Days")
+                Text("Run days")
                 Spacer()
                 Text("\(selectedDays.count) day\(selectedDays.count == 1 ? "" : "s") / week")
                     .foregroundStyle(.secondary)
@@ -175,14 +175,14 @@ struct PregnancyPlanSetupView: View {
                 .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 12, trailing: 0))
                 .listRowBackground(Color.clear)
         } header: {
-            Text("Strength & Pelvic Floor")
+            Text("Strength & pelvic floor")
         } footer: {
             Text("Aerobic and resistance training together beat either alone in pregnancy. Every strength session opens with pelvic floor work — do that part daily, not just on strength days. From 16 weeks nothing is scheduled lying on your back.")
         }
     }
 
     private var startDateSection: some View {
-        Section("Start Date") {
+        Section("Start date") {
             DatePicker("First day", selection: $startDate, displayedComponents: .date)
         }
         .strideListRow()
@@ -200,7 +200,7 @@ struct PregnancyPlanSetupView: View {
                 }
             }
         } header: {
-            Text("Stop and Call Your Provider")
+            Text("Stop and call your provider")
         } footer: {
             Text("This list stays on every workout in the plan.")
         }
@@ -312,7 +312,7 @@ struct PregnancyScreeningDetailView: View {
                     Text(item.localizedText)
                 }
             } header: {
-                Text("Don't Start Without Talking to Your Provider")
+                Text("Don't start without talking to your provider")
             } footer: {
                 Text("With any of these, the guidelines advise no more strenuous activity than the usual activities of daily living.")
             }
@@ -323,7 +323,7 @@ struct PregnancyScreeningDetailView: View {
                     Text(item.localizedText)
                 }
             } header: {
-                Text("Your Provider's Call, Not Ours")
+                Text("Your provider's call, not ours")
             } footer: {
                 Text("Activity may still be right for you with any of these — the decision belongs with your maternity provider.")
             }
@@ -337,7 +337,7 @@ struct PregnancyScreeningDetailView: View {
             .strideListRow()
         }
         .strideList()
-        .navigationTitle("Health Checklist")
+        .navigationTitle("Health checklist")
         .navigationBarTitleDisplayMode(.inline)
     }
 }

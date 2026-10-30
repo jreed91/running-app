@@ -66,14 +66,14 @@ struct CloudKitDebugView: View {
         List {
             Section {
                 labeled("iCloud Sync Enabled", value: appSettings.iCloudSyncEnabled ? "Yes" : "No")
-                labeled("Active Store", value: container.persistenceMode.displayName)
+                labeled("Active store", value: container.persistenceMode.displayName)
                 // The one that answers "is this launch actually syncing?". The preference
                 // above is what the user asked for; this is what SwiftData was handed.
-                labeled("Mirroring To", value: container.cloudKitContainerIdentifier ?? "Not mirroring")
+                labeled("Mirroring to", value: container.cloudKitContainerIdentifier ?? "Not mirroring")
                 labeled("iCloud Account", value: accountStatusText)
                 labeled("UserDefaults Unit Preference", value: AppSettings.syncedUnitPreference().displayName)
             } header: {
-                Text("CloudKit Status")
+                Text("CloudKit status")
             } footer: {
                 Text("This screen shows local SwiftData records mirrored by CloudKit plus iCloud key-value settings. Each table is capped at \(Self.recordLimit) records.")
             }
@@ -81,15 +81,15 @@ struct CloudKitDebugView: View {
 
             eventSection
 
-            recordSection(title: "User Profiles", records: profiles.map(profilePayload))
-            recordSection(title: "Training Plans", records: plans.map(planPayload))
-            recordSection(title: "Training Weeks", records: weeks.map(weekPayload))
-            recordSection(title: "Scheduled Workouts", records: scheduledWorkouts.map(scheduledWorkoutPayload))
-            recordSection(title: "Run Workouts", records: runWorkouts.map(runWorkoutPayload))
-            recordSection(title: "Saved Routes", records: savedRoutes.map(savedRoutePayload))
+            recordSection(title: "User profiles", records: profiles.map(profilePayload))
+            recordSection(title: "Training plans", records: plans.map(planPayload))
+            recordSection(title: "Training weeks", records: weeks.map(weekPayload))
+            recordSection(title: "Scheduled workouts", records: scheduledWorkouts.map(scheduledWorkoutPayload))
+            recordSection(title: "Run workouts", records: runWorkouts.map(runWorkoutPayload))
+            recordSection(title: "Saved routes", records: savedRoutes.map(savedRoutePayload))
         }
         .strideList()
-        .navigationTitle("CloudKit Debug")
+        .navigationTitle("CloudKit debug")
         .navigationBarTitleDisplayMode(.inline)
         .task {
             accountStatus = try? await CKContainer(
@@ -144,7 +144,7 @@ struct CloudKitDebugView: View {
                 }
             }
         } header: {
-            Text("Recent Sync Events")
+            Text("Recent sync events")
         } footer: {
             Text("Newest first, capped at \(CloudKitDiagnostics.eventHistoryLimit). A healthy launch shows `setup finished`, then `export`/`import` pairs.")
         }

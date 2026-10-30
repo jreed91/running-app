@@ -33,7 +33,7 @@ struct NewPlanOnboardingView: View {
     // Step 4 – Duration
     private enum ScheduleMode: String, CaseIterable {
         case weeks = "Weeks"
-        case endDate = "End Date"
+        case endDate = "End date"
     }
     @State private var scheduleMode: ScheduleMode = .weeks
     @State private var selectedWeeks = 12
@@ -218,7 +218,7 @@ struct NewPlanOnboardingView: View {
                 kicker: "Strength",
                 title: "What equipment do you have?",
                 subtitle: "We'll add strength sessions on your off days, tailored to your gear.",
-                ctaLabel: "Build My Plan",
+                ctaLabel: "Build my plan",
                 secondaryLabel: "Skip strength training",
                 onSecondary: { selectedEquipment.removeAll(); advance() },
                 onBack: retreat,
@@ -584,7 +584,7 @@ struct NewPlanOnboardingView: View {
 
     private func generatePlan() {
         // Without a profile there is nothing to build a plan from. Clear the spinner
-        // and tell the user instead of leaving "Build My Plan" wedged forever.
+        // and tell the user instead of leaving "Build my plan" wedged forever.
         guard let profile else {
             isCreatingPlan = false
             planErrorMessage = "We couldn't find your runner profile. Close this screen and try again."

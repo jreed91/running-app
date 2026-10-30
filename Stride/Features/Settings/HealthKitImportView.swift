@@ -48,7 +48,7 @@ struct HealthKitImportView: View {
                 Text(Date(), style: .date).foregroundStyle(.secondary)
             }
         } header: {
-            Text("Date Range")
+            Text("Date range")
         } footer: {
             // Two `Text` literals rather than one with a ternary inside it: a ternary of
             // two string literals infers `String`, not `LocalizedStringKey`, so neither
@@ -66,7 +66,7 @@ struct HealthKitImportView: View {
         Section {
             switch importState {
             case .idle:
-                Button("Import Workouts") {
+                Button("Import workouts") {
                     Task { await runImport() }
                 }
 
@@ -95,7 +95,7 @@ struct HealthKitImportView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                Button("Import Again") { importState = .idle }
+                Button("Import again") { importState = .idle }
                     .buttonStyle(.strideButton(.secondary))
 
             case .failed(let message):
@@ -106,7 +106,7 @@ struct HealthKitImportView: View {
                         .font(.dsCaption)
                         .foregroundStyle(.secondary)
                 }
-                Button("Try Again") { importState = .idle }
+                Button("Try again") { importState = .idle }
             }
         }
         .strideListRow()

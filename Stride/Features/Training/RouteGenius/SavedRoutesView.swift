@@ -13,7 +13,7 @@ struct SavedRoutesView: View {
         Group {
             if viewModel.savedRoutes.isEmpty {
                 StrideEmptyState(
-                    "No Saved Routes",
+                    "No saved routes",
                     systemImage: "map",
                     description: Text("Generate and save a route to see it here.")
                 )
@@ -41,11 +41,11 @@ struct SavedRoutesView: View {
                 .listStyle(.insetGrouped)
             }
         }
-        .navigationTitle("Saved Routes")
+        .navigationTitle("Saved routes")
         .navigationBarTitleDisplayMode(.large)
         .onAppear { viewModel.loadSavedRoutes() }
         .confirmationDialog(
-            "Delete Route?",
+            "Delete route?",
             isPresented: $showDeleteConfirm,
             titleVisibility: .visible
         ) {
@@ -123,7 +123,7 @@ struct SavedRouteDetailView: View {
                     )
                     Divider().frame(height: 40)
                     DetailStat(
-                        label: "Est. Time",
+                        label: "Est. time",
                         value: viewModel.formattedDuration(route.estimatedDurationSeconds)
                     )
                     Divider().frame(height: 40)

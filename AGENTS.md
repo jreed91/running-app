@@ -258,7 +258,7 @@ The rules a change here has to keep:
 - **The floor is `RunEffortPolicy.isRealWalk`, not `isRealRun`.** Runs are started on
   purpose so almost anything recorded is real; a walking workout is as readily the walk to
   the shop, so the floor is 400 m and five minutes.
-- Import is on by default and switchable in **Settings → Data → Import Walks**
+- Import is on by default and switchable in **Settings → Data → Import walks**
   (`AppSettings.walkImportEnabled`, read during background sync via
   `AppSettings.syncedWalkImportEnabled()`). Turning it off stops future imports and leaves
   the walks already imported alone.
@@ -361,7 +361,7 @@ WeatherKit  →  WeatherService.hourlyForecast  →  [ForecastHour]
   on the Watch describes the old one. The structured form's per-segment paces move with the
   band, or the structure is cleared — leaving it would have the guided-run engine calling
   out the pace the runner just agreed to back off from.
-- On by default, switchable in **Settings → App → Heat Adaptation**
+- On by default, switchable in **Settings → App → Heat adaptation**
   (`AppSettings.heatAdaptationEnabled`).
 
 ## Training nudges (A9)
@@ -371,7 +371,7 @@ Three evening notifications beyond the 8 AM workout reminder: the **streak nudge
 `TrainingNudgePolicy` is pure and holds every decision, `NotificationService` holds the
 copy and the `UNUserNotificationCenter` calls, and `ContentView.refreshTrainingNudges`
 does the plumbing on every foreground and on every plan change. All of it is gated by
-`AppSettings.trainingNudgesEnabled` (**Settings → App → Training Nudges**, on by default).
+`AppSettings.trainingNudgesEnabled` (**Settings → App → Training nudges**, on by default).
 
 Rules a change here has to keep:
 
@@ -534,7 +534,7 @@ ScheduledWorkout  →  RunPlaylistPlanner  →  RunPlaylistPlan   (pure, tested)
   [developer.apple.com → Identifiers](https://developer.apple.com/account/resources/identifiers).
   Automatic signing can look that service up but never create it.
 - Entry point is the **Plan tab → workout detail** card, on any run that is not yet
-  completed. Access and the per-tier overrides live in **Settings → Run Playlists**.
+  completed. Access and the per-tier overrides live in **Settings → Run playlists**.
 
 ## AI coaching models
 

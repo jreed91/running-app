@@ -454,7 +454,7 @@ private struct HistoryEntryList: View {
                 systemImage: "line.3.horizontal.decrease.circle",
                 description: Text("\(filter.dateRange.localizedName) · \(filter.minimumDistance.localizedName)")
             ) {
-                Button("Clear Filters") { clearFilter() }
+                Button("Clear filters") { clearFilter() }
             }
         } else {
             // The description named two actions and offered neither, leaving the only route
@@ -465,7 +465,7 @@ private struct HistoryEntryList: View {
                 systemImage: "figure.run.circle",
                 description: Text("Start a run, or bring in what you've already recorded.")
             ) {
-                Button("Start a Run") {
+                Button("Start a run") {
                     container.appNavigation.select(.home)
                     container.activeRunPresentation.startOrReopen(
                         scheduledWorkout: nil,

@@ -82,7 +82,7 @@ struct PlanTabView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.surfacePrimary)
-        .navigationTitle("Pace Insights")
+        .navigationTitle("Pace insights")
         .navigationBarTitleDisplayMode(.inline)
     }
 
@@ -90,7 +90,7 @@ struct PlanTabView: View {
     /// here now, beside the race it predicts.
     private var raceInsightsPage: some View {
         RaceInsightsView()
-            .navigationTitle("Race Insights")
+            .navigationTitle("Race insights")
             .navigationBarTitleDisplayMode(.inline)
     }
 
@@ -225,7 +225,7 @@ struct PlanTabView: View {
                                 raceInsightsPage
                             } label: {
                                 PlanPageRow(
-                                    title: "Race Insights",
+                                    title: "Race insights",
                                     subtitle: "Predicted pace, zones and trends",
                                     icon: .chart
                                 )
@@ -262,7 +262,7 @@ struct PlanTabView: View {
                 }
             } else {
                 StrideEmptyState(
-                    "No Active Plan",
+                    "No active plan",
                     systemImage: "calendar.badge.plus",
                     description: Text("Tap + to generate a personalised training plan.")
                 ) {
@@ -271,7 +271,7 @@ struct PlanTabView: View {
                     pageLink(to: .raceInsights) {
                         raceInsightsPage
                     } label: {
-                        Text("See Race Insights")
+                        Text("See race insights")
                     }
                     .buttonStyle(.strideButton(.secondary, compact: true, fullWidth: false))
                 }
@@ -281,7 +281,7 @@ struct PlanTabView: View {
         // system background, so its white cards sat on white (and ink cards on black).
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.surfacePrimary)
-        .navigationTitle("My Plan")
+        .navigationTitle("My plan")
         // A morning-reminder tap names the session the banner was about. `initial` covers
         // the cold launch, where this tab is built after the request was made.
         .onChange(of: container.appNavigation.requestedScheduledWorkoutID, initial: true) { _, id in
@@ -297,7 +297,7 @@ struct PlanTabView: View {
                     TrainingPlanListView()
                 } label: {
                     // Not the History tab's clock: this is past plans, not past runs.
-                    Label("Plan History", systemImage: "list.bullet.rectangle")
+                    Label("Plan history", systemImage: "list.bullet.rectangle")
                 }
             }
             ToolbarItem(placement: .primaryAction) {
@@ -540,15 +540,15 @@ struct NewPlanMenu: View {
             Button {
                 showsTrainingPlan = true
             } label: {
-                Label("Training Plan", systemImage: "figure.run")
+                Label("Training plan", systemImage: "figure.run")
             }
             Button {
                 showsPregnancyPlan = true
             } label: {
-                Label("Pregnancy Plan", systemImage: "heart.text.square")
+                Label("Pregnancy plan", systemImage: "heart.text.square")
             }
         } label: {
-            Label("New Plan", systemImage: "plus")
+            Label("New plan", systemImage: "plus")
         }
     }
 }
@@ -631,7 +631,7 @@ private struct SmartAdaptPlanCard: View {
                     }
 
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(isAdapting ? "Adapting Plan" : "Smart Adapt")
+                        Text(isAdapting ? "Adapting plan" : "Smart Adapt")
                             .font(.dsHeadline)
 
                         Text(subtitle)

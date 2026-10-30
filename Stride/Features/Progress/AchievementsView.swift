@@ -154,7 +154,7 @@ struct AchievementsView: View {
                 .frame(width: 72, height: 72)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text("This Week")
+                Text("This week")
                     .strideEyebrow()
                     .foregroundStyle(.secondary)
                 Text(weekly.completedMeters.distanceString(unit: appSettings.unitPreference))
@@ -254,7 +254,7 @@ struct AchievementsView: View {
 
     private var medalsSection: some View {
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            Text("Distance Records")
+            Text("Distance records")
                 .strideEyebrow()
                 .foregroundStyle(.secondary)
             Text("Your fastest time at each distance")
@@ -409,7 +409,7 @@ private struct WeeklyGoalEditor: View {
                 .strideListRow()
             }
             .strideList()
-            .navigationTitle("Weekly Goal")
+            .navigationTitle("Weekly goal")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {

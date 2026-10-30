@@ -290,7 +290,7 @@ struct OnboardingView: View {
             // A pregnancy plan cannot skip strength outright: the daily pelvic floor
             // prescription rides on that session, so clearing the equipment falls back to
             // bodyweight rather than to nothing. The secondary label says which it is.
-            OBShell(stepIndex: 6, total: totalSteps, kicker: "Strength Training",
+            OBShell(stepIndex: 6, total: totalSteps, kicker: "Strength training",
                     title: "What equipment do you have?",
                     subtitle: isPregnancyPlan
                         ? "We'll add 1–2 sessions per week, each opening with pelvic floor work."

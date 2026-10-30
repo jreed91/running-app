@@ -802,15 +802,15 @@ struct ProgressDashboardView: View {
             LazyVGrid(columns: [.init(.flexible()), .init(.flexible())], spacing: AppSpacing.md) {
                 summaryCell(
                     value: summary.averagePaceSecondsPerKm.map { $0.paceString(unit: appSettings.unitPreference) } ?? "--",
-                    label: "Avg Pace"
+                    label: "Avg pace"
                 )
                 summaryCell(
                     value: summary.averageHeartRate.map { "\(Int($0)) bpm" } ?? "--",
-                    label: "Avg Heart Rate"
+                    label: "Avg heart rate"
                 )
                 summaryCell(
                     value: summary.averageElevationGainMeters.map { $0.elevationString(unit: appSettings.unitPreference) } ?? "--",
-                    label: "Avg Elevation"
+                    label: "Avg elevation"
                 )
                 summaryCell(
                     value: summary.averageVDOT.map { String(format: "%.0f", $0) } ?? "--",

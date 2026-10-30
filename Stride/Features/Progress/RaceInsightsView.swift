@@ -295,14 +295,14 @@ struct RaceInsightsView: View {
                     ForEach(pacePredictionPoints) { point in
                         LineMark(
                             x: .value("Date", point.date),
-                            y: .value("Predicted Pace", point.predictedPaceSecondsPerKm)
+                            y: .value("Predicted pace", point.predictedPaceSecondsPerKm)
                         )
                         .foregroundStyle(.route)
                         .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
                         .interpolationMethod(.catmullRom)
                         PointMark(
                             x: .value("Date", point.date),
-                            y: .value("Predicted Pace", point.predictedPaceSecondsPerKm)
+                            y: .value("Predicted pace", point.predictedPaceSecondsPerKm)
                         )
                         .foregroundStyle(Color.brand)
                         .symbolSize(
@@ -438,12 +438,12 @@ struct RaceInsightsView: View {
                     )
                     metricsCell(
                         value: weeklyVolumeString(meters: snap.averageWeeklyDistanceMeters),
-                        label: "Avg Weekly Vol"
+                        label: "Avg weekly vol"
                     )
                     if let fatigue = snap.intervalFatigueRatio {
                         metricsCell(
                             value: String(format: "%.2f", fatigue),
-                            label: "Interval Fatigue",
+                            label: "Interval fatigue",
                             valueColor: fatigue > 1.15 ? .destructive : .success,
                             // The colour alone is not the verdict.
                             note: fatigue > 1.15 ? String(localized: "High") : String(localized: "Normal")
@@ -452,7 +452,7 @@ struct RaceInsightsView: View {
                     if let ratio = snap.lastIntervalPaceRatio {
                         metricsCell(
                             value: String(format: "%.0f%%", ratio * 100),
-                            label: "vs Interval Target",
+                            label: "vs interval target",
                             valueColor: ratio < 1.0 ? .success : (ratio > 1.07 ? .destructive : .primary),
                             note: ratio < 1.0 ? String(localized: "Faster")
                                 : (ratio > 1.07 ? String(localized: "Slower") : String(localized: "On target"))

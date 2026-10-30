@@ -126,7 +126,7 @@ struct PregnancyRedFlagListView: View {
             .strideListRow()
         }
         .strideList()
-        .navigationTitle("Stop and Call")
+        .navigationTitle("Stop and call")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {

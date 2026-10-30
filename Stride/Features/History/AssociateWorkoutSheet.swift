@@ -24,7 +24,7 @@ struct AssociateWorkoutSheet: View {
             Group {
                 if unassociated.isEmpty {
                     StrideEmptyState(
-                        "No Available Workouts",
+                        "No available workouts",
                         systemImage: "calendar.badge.exclamationmark",
                         description: Text("All scheduled workouts are already linked to a completed run.")
                     )
@@ -41,7 +41,7 @@ struct AssociateWorkoutSheet: View {
                     .strideList()
                 }
             }
-            .navigationTitle("Link to Planned Workout")
+            .navigationTitle("Link to planned workout")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

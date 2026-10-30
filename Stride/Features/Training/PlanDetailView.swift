@@ -37,14 +37,14 @@ struct PlanDetailView: View {
             .frame(maxWidth: .infinity)
         }
         .background(Color.surfacePrimary)
-        .navigationTitle("\(planTitle) Plan")
+        .navigationTitle("\(planTitle) plan")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .destructiveAction) {
                 Button(role: .destructive) {
                     showDeleteConfirmation = true
                 } label: {
-                    Label("Delete Plan", systemImage: "trash")
+                    Label("Delete plan", systemImage: "trash")
                 }
             }
         }
@@ -53,7 +53,7 @@ struct PlanDetailView: View {
             isPresented: $showDeleteConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Delete Plan", role: .destructive) {
+            Button("Delete plan", role: .destructive) {
                 dismiss()
                 // `deletePlan` owns the order: the Watch entries and reminders are
                 // reachable only through the plan, so they go before the record does (D3).
@@ -129,17 +129,17 @@ struct PlanSummaryCard: View {
                         $0.paceString(unit: appSettings.unitPreference)
                             .replacingOccurrences(of: " \(appSettings.unitPreference.paceLabel)", with: "")
                     } ?? "--:--",
-                    label: "Avg Pace"
+                    label: "Avg pace"
                 )
                 SummaryStat(
                     value: summary.longestRunMeters > 0
                         ? summary.longestRunMeters.distanceString(unit: appSettings.unitPreference)
                         : "--",
-                    label: "Longest Run"
+                    label: "Longest run"
                 )
                 SummaryStat(
                     value: "\(summary.weeksCompleted)/\(summary.totalWeeks)",
-                    label: "Weeks Done"
+                    label: "Weeks done"
                 )
                 SummaryStat(
                     value: "\(summary.completedRunCount + summary.completedStrengthCount)",

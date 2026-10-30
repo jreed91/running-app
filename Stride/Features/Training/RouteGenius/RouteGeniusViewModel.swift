@@ -5,7 +5,7 @@ import MapKit
 // MARK: - StartMode
 
 enum StartMode: String, CaseIterable, Sendable {
-    case currentLocation = "Current Location"
+    case currentLocation = "Current location"
     case address = "Address"
 
     var systemImage: String {

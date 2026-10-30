@@ -189,7 +189,7 @@ struct NotificationServiceTests {
         #expect(defaults.string(forKey: "unrelated.key") == "keep")
     }
 
-    /// "Reset All Data" has to drop *every* snapshot, including ones for runs that
+    /// "Reset all data" has to drop *every* snapshot, including ones for runs that
     /// never imported — otherwise the next launch re-inserts a run the user just
     /// deleted from the snapshot fallback (N11).
     @Test("Reset clears the pending-review pointer and every snapshot")

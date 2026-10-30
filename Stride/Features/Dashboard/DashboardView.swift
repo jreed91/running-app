@@ -831,7 +831,7 @@ struct DashboardView: View {
                 .accessibilityHidden(true)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text("This Week")
+                Text("This week")
                     .strideEyebrow()
                     .foregroundStyle(.secondary)
                     .accessibilityIdentifier("dashboard.thisWeekHeader")
@@ -919,7 +919,7 @@ struct DashboardView: View {
                     VStack(spacing: AppSpacing.sm) {
                         noPlanCard
                         // The card used to point at the Plan tab with no way to get there.
-                        Button("Create a Plan") { container.appNavigation.select(.plan) }
+                        Button("Create a plan") { container.appNavigation.select(.plan) }
                             .buttonStyle(.strideButton(.secondary, compact: true))
                     }
                 }
@@ -981,9 +981,9 @@ struct DashboardView: View {
     private func startButtonTitle(for workout: ScheduledWorkout) -> LocalizedStringKey {
         let isStrength = workout.workoutType == .strength
         if Calendar.current.isDateInToday(selectedDate) {
-            return isStrength ? "Start Strength Workout" : "Start This Workout"
+            return isStrength ? "Start strength workout" : "Start this workout"
         }
-        return isStrength ? "Start Yesterday's Strength Workout" : "Start Yesterday's Workout"
+        return isStrength ? "Start yesterday's strength workout" : "Start yesterday's workout"
     }
 
     private var restDayCard: some View {
@@ -1050,8 +1050,8 @@ struct DashboardView: View {
                         + "\(plan.endDate.formatted(.dateTime.month().day()))."
                 } ?? "This day isn't part of your training plan."
             )
-            // A way on from the dead end, like the no-plan card's "Create a Plan".
-            Button("View Plan") { container.appNavigation.select(.plan) }
+            // A way on from the dead end, like the no-plan card's "Create a plan".
+            Button("View plan") { container.appNavigation.select(.plan) }
                 .buttonStyle(.strideButton(.secondary, compact: true))
         }
     }
@@ -1179,7 +1179,7 @@ struct DashboardView: View {
         } label: {
             HStack(spacing: 8) {
                 StrideIcon(name: .bolt, size: 16, color: .brandText, strokeWeight: 2.2)
-                Text("Plan a Route")
+                Text("Plan a route")
             }
         }
         .buttonStyle(.strideButton(.quiet))
@@ -1212,7 +1212,7 @@ struct DashboardView: View {
     /// `String`, which picks `Text`'s non-localizing overload and drops both strings out
     /// of the catalog.
     private var freeRunButtonTitle: LocalizedStringKey {
-        container.workoutTrackerService.isRecording ? "Back to Your Run" : "Start a Free Run"
+        container.workoutTrackerService.isRecording ? "Back to your run" : "Start a free run"
     }
 
     /// Starts a run, or reopens the one already recording (U7).
@@ -1362,7 +1362,7 @@ struct DashboardView: View {
             return String(
                 localized: """
                     Your remaining sessions are already as close to race day as they can go, \
-                    so nothing moved. Rebuild My Plan will fit a fresh block into the time you \
+                    so nothing moved. Rebuild my plan will fit a fresh block into the time you \
                     have left.
                     """,
                 comment: "Alert message when race day blocked the missed-workout shift entirely"

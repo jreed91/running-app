@@ -218,7 +218,7 @@ private struct RaceStartTimeEditor: View {
                 .strideListRow()
             }
             .strideList()
-            .navigationTitle("Race Start")
+            .navigationTitle("Race start")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
