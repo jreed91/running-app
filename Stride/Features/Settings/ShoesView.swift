@@ -150,21 +150,25 @@ private struct ShoeRow: View {
                 Text(shoe.name.isEmpty ? String(localized: "Unnamed pair") : shoe.name)
                     .font(.bodyStrong)
                 if shoe.isDefault {
-                    Text("Default")
-                        .font(.dsCaption2.weight(.bold))
-                        .foregroundStyle(.brandText)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.brand.opacity(0.12), in: Capsule())
+                    StrideTag(String(localized: "Default"), tone: .brand)
                 }
                 Spacer()
+                // Wear in the glyph, the words readable: warning is too light for text.
                 if !shoe.isRetired {
                     switch wear {
                     case .fresh: EmptyView()
                     case .replaceSoon:
-                        Text("Nearly done").font(.captionStrong).foregroundStyle(tone)
+                        StrideTag(
+                            String(localized: "Nearly done"),
+                            systemImage: "exclamationmark.circle.fill",
+                            iconTint: tone
+                        )
                     case .worn:
-                        Text("Worn out").font(.captionStrong).foregroundStyle(tone)
+                        StrideTag(
+                            String(localized: "Worn out"),
+                            systemImage: "exclamationmark.triangle.fill",
+                            iconTint: tone
+                        )
                     }
                 }
             }

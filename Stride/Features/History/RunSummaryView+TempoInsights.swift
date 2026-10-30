@@ -93,14 +93,8 @@ extension RunSummaryView {
                 return ("Off target", "tortoise.fill", .destructive)
             }
         }()
-        return HStack(spacing: 4) {
-            Image(systemName: icon).font(.dsCaption2.weight(.bold))
-            Text(label).font(.dsCaption2.weight(.bold))
-        }
-        .foregroundStyle(color)
-        .padding(.horizontal, AppSpacing.sm)
-        .padding(.vertical, AppSpacing.xs)
-        .background(color.opacity(0.1), in: Capsule())
+        // Status in the glyph, words in secondary text: not coloured text on its own tint.
+        return StrideTag(label, systemImage: icon, iconTint: color)
     }
 
     private func tempoInsightVDOTRow(_ insights: TempoInsights) -> some View {
@@ -157,18 +151,13 @@ extension RunSummaryView {
                 }
             }
             Spacer()
-            let (label, color): (String, Color) = {
-                if stdDevSeconds <= 5 { return ("Excellent", .success) }
-                if stdDevSeconds <= 12 { return ("Good", .brand) }
-                if stdDevSeconds <= 20 { return ("Variable", .warning) }
-                return ("Uneven", .destructive)
+            let (label, icon, color): (String, String, Color) = {
+                if stdDevSeconds <= 5 { return ("Excellent", "checkmark.circle.fill", .success) }
+                if stdDevSeconds <= 12 { return ("Good", "checkmark.circle", .brand) }
+                if stdDevSeconds <= 20 { return ("Variable", "exclamationmark.circle.fill", .warning) }
+                return ("Uneven", "exclamationmark.triangle.fill", .destructive)
             }()
-            Text(label)
-                .font(.dsCaption.weight(.bold))
-                .foregroundStyle(color)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(color.opacity(0.1), in: Capsule())
+            StrideTag(label, systemImage: icon, iconTint: color)
         }
     }
 }

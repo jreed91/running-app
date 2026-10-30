@@ -154,12 +154,7 @@ struct WorkoutDetailView: View {
     }
 
     private func summaryChip(label: String, systemImage: String) -> some View {
-        Text(label)
-            .font(.dsCaption.weight(.semibold).monospacedDigit())
-            .padding(.horizontal, AppSpacing.md)
-            .padding(.vertical, 6)
-            .background(.surfaceTertiary, in: Capsule())
-            .foregroundStyle(.secondary)
+        StrideTag(label, systemImage: systemImage)
     }
 
     private var connectorLine: some View {

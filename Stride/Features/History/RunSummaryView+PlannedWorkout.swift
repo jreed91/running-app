@@ -137,16 +137,7 @@ extension RunSummaryView {
     }
 
     private func plannedChip(icon: String, text: String) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: icon)
-                .font(.dsCaption2.weight(.semibold))
-            Text(text)
-                .font(.dsCaption.weight(.semibold))
-        }
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .background(.surfaceTertiary, in: Capsule())
+        StrideTag(text, systemImage: icon)
     }
 
     private func planComparisonRow(label: String, planned: String, actual: String, status: PaceStatus) -> some View {
@@ -167,16 +158,8 @@ extension RunSummaryView {
                 .foregroundStyle(.primary)
                 .lineLimit(1)
             Spacer(minLength: 4)
-            HStack(spacing: 4) {
-                Image(systemName: status.icon)
-                    .font(.dsCaption2.weight(.bold))
-                Text(status.label)
-                    .font(.dsCaption2.weight(.bold))
-            }
-            .foregroundStyle(status.color)
-            .padding(.horizontal, AppSpacing.sm)
-            .padding(.vertical, AppSpacing.xs)
-            .background(status.color.opacity(0.1), in: Capsule())
+            // Status in the glyph, words in secondary text, as `verdictChip` does.
+            StrideTag(status.label, systemImage: status.icon, iconTint: status.color)
         }
     }
 

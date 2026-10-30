@@ -155,10 +155,12 @@ struct PaceInsightsCard: View {
 
             HStack(spacing: 6) {
                 if isVDOTReliable {
+                    // The status colour stays in the glyph; the words stay readable
+                    // (brand and warning are too light for caption text).
                     statusIconView
                     Text(statusText)
-                        .font(.dsCaption)
-                        .foregroundStyle(statusColor)
+                        .font(.dsCaption.weight(.semibold))
+                        .foregroundStyle(.primary)
                     if !hasMeasuredFitness {
                         Text("· Log a quality run to track against it")
                             .font(.dsCaption)

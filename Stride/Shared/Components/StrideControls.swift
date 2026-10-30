@@ -287,7 +287,8 @@ struct StrideTag: View {
                     .foregroundStyle(iconTint.map(AnyShapeStyle.init) ?? AnyShapeStyle(.foreground))
             }
             Text(text)
-                .font(.dsCaption.weight(.semibold))
+                // Tags are often figures (a duration, a weight), so tabular digits.
+                .font(.dsCaption.weight(.semibold).monospacedDigit())
         }
         .padding(.horizontal, AppSpacing.sm)
         .padding(.vertical, AppSpacing.xs)

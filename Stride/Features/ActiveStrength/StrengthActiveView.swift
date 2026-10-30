@@ -236,14 +236,9 @@ struct StrengthActiveView: View {
                     Text(exercise.name)
                         .font(.dsTitle2)
                     HStack(spacing: 6) {
+                        // A muscle group is a label, not a control: the shared brand tag.
                         ForEach(exercise.muscleGroups.prefix(3), id: \.self) { group in
-                            Text(group)
-                                .font(.dsCaption2.weight(.medium))
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 3)
-                                .background(Color.brand.opacity(0.12), in: Capsule())
-                                // Small text: `brandText`, not `brand` (3.1:1 on white).
-                                .foregroundStyle(.brandText)
+                            StrideTag(group, tone: .brand)
                         }
                     }
                 }

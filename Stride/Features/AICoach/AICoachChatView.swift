@@ -152,21 +152,14 @@ struct AICoachChatView: View {
         .strideCard(cornerRadius: AppRadius.lg)
     }
 
+    /// The shared tag: the state shows in the glyph and the word stays readable, rather
+    /// than warning-coloured capitals on a warning tint.
     private var readinessBadge: some View {
-        HStack(spacing: 6) {
-            Circle()
-                .fill(appSettings.aiInsightsEnabled && hasAIKey ? Color.success : Color.warning)
-                .frame(width: 6, height: 6)
-            Text(appSettings.aiInsightsEnabled && hasAIKey ? "READY" : "SETUP")
-                .font(.dsCaption2.weight(.bold))
-                .tracking(0.7)
-        }
-        .foregroundStyle(appSettings.aiInsightsEnabled && hasAIKey ? Color.success : Color.warning)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(
-            (appSettings.aiInsightsEnabled && hasAIKey ? Color.success : Color.warning).opacity(0.14),
-            in: Capsule()
+        let isReady = appSettings.aiInsightsEnabled && hasAIKey
+        return StrideTag(
+            isReady ? String(localized: "Ready") : String(localized: "Set up"),
+            systemImage: isReady ? "checkmark.circle.fill" : "exclamationmark.circle.fill",
+            iconTint: isReady ? .success : .warning
         )
     }
 
@@ -342,18 +335,7 @@ struct AICoachChatView: View {
             Text("Coach")
                 .font(.dsFootnote.weight(.bold))
             if let status = message.status {
-                HStack(spacing: 5) {
-                    Circle()
-                        .fill(status.color)
-                        .frame(width: 5, height: 5)
-                    Text(status.title)
-                        .font(.dsCaption2.weight(.bold))
-                        .tracking(0.4)
-                }
-                .foregroundStyle(status.color)
-                .padding(.horizontal, AppSpacing.sm)
-                .padding(.vertical, 3)
-                .background(status.color.opacity(0.14), in: Capsule())
+                StrideTag(status.title, systemImage: status.systemImage, iconTint: status.color)
             }
         }
     }
@@ -707,10 +689,20 @@ private enum AICoachCoachStatus {
 
     var title: String {
         switch self {
-        case .watchEffort: "WATCH EFFORT"
-        case .actionReady: "ACTION READY"
-        case .general: "COACH"
-        case .setupNeeded: "SETUP"
+        case .watchEffort: String(localized: "Watch effort")
+        case .actionReady: String(localized: "Action ready")
+        case .general: String(localized: "Coach")
+        case .setupNeeded: String(localized: "Set up")
+        }
+    }
+
+    /// The glyph that carries the status colour in the tag.
+    var systemImage: String {
+        switch self {
+        case .watchEffort: "exclamationmark.circle.fill"
+        case .actionReady: "checkmark.circle.fill"
+        case .general: "sparkles"
+        case .setupNeeded: "gearshape.fill"
         }
     }
 
