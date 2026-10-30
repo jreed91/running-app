@@ -616,17 +616,11 @@ struct OBCustomDistanceCard: View {
                     let isOn = abs(distanceKm - pick.km) < 0.05
                     Button { distanceKm = pick.km } label: {
                         Text(pick.label)
-                            .font(.dsFootnote.weight(.semibold))
+                            .lineLimit(1)
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, AppSpacing.sm)
-                            .background(
-                                isOn ? Color.brand : Color.surfaceTertiary,
-                                in: RoundedRectangle(cornerRadius: AppRadius.sm)
-                            )
-                            .foregroundStyle(isOn ? Color.onFill : Color.primary)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(isOn ? .isSelected : [])
+                    // The shared chip: the route when chosen, a card when not.
+                    .buttonStyle(.strideChip(selected: isOn))
                 }
             }
         }
@@ -667,10 +661,15 @@ struct OBRaceDetailsCard: View {
                     .font(.dsSubhead)
                     .padding(.horizontal, 14)
                     .padding(.vertical, AppSpacing.md)
-                    .background(.surfaceTertiary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                    // A field in a card is a well: the page's ground with the hairline,
+                    // which turns red while the name is still missing.
+                    .background(.surfacePrimary, in: RoundedRectangle(cornerRadius: AppRadius.md))
                     .overlay(
                         RoundedRectangle(cornerRadius: AppRadius.md)
-                            .strokeBorder(trimmedRaceName.isEmpty ? Color.destructive.opacity(0.35) : Color.clear)
+                            .strokeBorder(
+                                trimmedRaceName.isEmpty ? Color.destructive.opacity(0.35) : Color.cardStroke,
+                                lineWidth: 1
+                            )
                     )
             }
 
