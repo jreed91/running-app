@@ -32,6 +32,7 @@ struct OBWelcome: View {
     let onSignIn: (String) -> Void
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var appeared = false
 
     /// The mark and the welcome copy, above the buttons.
@@ -40,19 +41,17 @@ struct OBWelcome: View {
             Spacer().frame(height: 90)
 
             StrideAppMark(size: 120, drawsOn: true)
-                .scaleEffect(appeared ? 1 : 0.55)
+                // Grows into place; under Reduce Motion it only fades in.
+                .scaleEffect(appeared || reduceMotion ? 1 : 0.55)
                 .opacity(appeared ? 1 : 0)
                 .adaptiveAnimation(AppAnimation.entrance, value: appeared)
 
             Spacer(minLength: 40)
 
             Text("WELCOME TO STRIDE")
-                .font(.dsCaption2.weight(.bold))
-                .kerning(1.8)
+                .strideEyebrow()
                 .foregroundStyle(.brandText)
-                .opacity(appeared ? 1 : 0)
-                .offset(y: appeared ? 0 : 10)
-                .adaptiveAnimation(AppAnimation.entrance.delay(0.08), value: appeared)
+                .strideEntrance(appeared, delay: 0.08, rise: 10)
 
             Spacer().frame(height: 10)
 
@@ -62,9 +61,7 @@ struct OBWelcome: View {
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.primary)
                 .lineSpacing(-4)
-                .opacity(appeared ? 1 : 0)
-                .offset(y: appeared ? 0 : 16)
-                .adaptiveAnimation(AppAnimation.entrance.delay(0.14), value: appeared)
+                .strideEntrance(appeared, delay: 0.14, rise: 16)
 
             Spacer().frame(height: 14)
 
@@ -74,9 +71,7 @@ struct OBWelcome: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, AppSpacing.md)
                 .lineSpacing(2)
-                .opacity(appeared ? 1 : 0)
-                .offset(y: appeared ? 0 : 14)
-                .adaptiveAnimation(AppAnimation.entrance.delay(0.20), value: appeared)
+                .strideEntrance(appeared, delay: 0.20, rise: 14)
         }
     }
 
@@ -106,9 +101,7 @@ struct OBWelcome: View {
                 }
                 .buttonStyle(.strideButton())
                 .accessibilityIdentifier("onboarding.getStarted")
-                .opacity(appeared ? 1 : 0)
-                .offset(y: appeared ? 0 : 18)
-                .adaptiveAnimation(AppAnimation.entrance.delay(0.28), value: appeared)
+                .strideEntrance(appeared, delay: 0.28)
 
                 SignInWithAppleButton(.signIn) { request in
                     request.requestedScopes = []
@@ -125,8 +118,7 @@ struct OBWelcome: View {
                 // The same radius as the strideButton above it.
                 .clipShape(RoundedRectangle(cornerRadius: AppRadius.lg))
                 .padding(.top, AppSpacing.md)
-                .opacity(appeared ? 1 : 0)
-                .adaptiveAnimation(AppAnimation.entrance.delay(0.34), value: appeared)
+                .strideEntrance(appeared, delay: 0.34, rise: 0)
 
                 // The step ignores the safe area, so this has to clear the home indicator
                 // (34pt) itself. At exactly 34 the button sat on the indicator's line.
@@ -175,8 +167,7 @@ struct OBWelcomeBack: View {
                 Spacer(minLength: 40)
 
                 Text("WELCOME BACK")
-                    .font(.dsCaption2.weight(.bold))
-                    .kerning(1.8)
+                    .strideEyebrow()
                     .foregroundStyle(.brandText)
                 Spacer().frame(height: 10)
                 Text(hasData ? "Your training plan\nis ready." : "Checking\niCloud…")
@@ -623,17 +614,11 @@ struct OBCustomDistanceCard: View {
                     let isOn = abs(distanceKm - pick.km) < 0.05
                     Button { distanceKm = pick.km } label: {
                         Text(pick.label)
-                            .font(.dsFootnote.weight(.semibold))
+                            .lineLimit(1)
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, AppSpacing.sm)
-                            .background(
-                                isOn ? Color.brand : Color.surfaceTertiary,
-                                in: RoundedRectangle(cornerRadius: AppRadius.sm)
-                            )
-                            .foregroundStyle(isOn ? Color.onFill : Color.primary)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(isOn ? .isSelected : [])
+                    // The shared chip: the route when chosen, a card when not.
+                    .buttonStyle(.strideChip(selected: isOn))
                 }
             }
         }
@@ -674,10 +659,15 @@ struct OBRaceDetailsCard: View {
                     .font(.dsSubhead)
                     .padding(.horizontal, 14)
                     .padding(.vertical, AppSpacing.md)
-                    .background(.surfaceTertiary, in: RoundedRectangle(cornerRadius: AppRadius.md))
+                    // A field in a card is a well: the page's ground with the hairline,
+                    // which turns red while the name is still missing.
+                    .background(.surfacePrimary, in: RoundedRectangle(cornerRadius: AppRadius.md))
                     .overlay(
                         RoundedRectangle(cornerRadius: AppRadius.md)
-                            .strokeBorder(trimmedRaceName.isEmpty ? Color.destructive.opacity(0.35) : Color.clear)
+                            .strokeBorder(
+                                trimmedRaceName.isEmpty ? Color.destructive.opacity(0.35) : Color.cardStroke,
+                                lineWidth: 1
+                            )
                     )
             }
 
@@ -906,8 +896,7 @@ struct OBTimeWheelColumn: View {
     var body: some View {
         VStack(spacing: 6) {
             Text(label)
-                .font(.dsCaption2.weight(.bold))
-                .kerning(1.2)
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
 
             Picker(label, selection: $value) {
@@ -941,8 +930,7 @@ struct OBWheelColumnStyle: ViewModifier {
     func body(content: Content) -> some View {
         VStack(spacing: 6) {
             Text(label)
-                .font(.dsCaption2.weight(.bold))
-                .kerning(1.2)
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
 
             content
@@ -975,9 +963,8 @@ struct OBPaceCell: View {
             Circle().fill(color).frame(width: 8, height: 8)
             VStack(alignment: .leading, spacing: 2) {
                 // The zone colour stays on the dot; as small text it fails contrast.
-                Text(zone.uppercased())
-                    .font(.dsCaption2.weight(.bold))
-                    .kerning(0.8)
+                Text(zone)
+                    .strideEyebrow()
                     .foregroundStyle(.secondary)
                 Text(pace)
                     .font(.dsSubhead.weight(.semibold).monospacedDigit())
@@ -1057,6 +1044,13 @@ struct OBRadio: View {
     let isSelected: Bool
     let color: Color
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// The fill grows in; under Reduce Motion it only fades.
+    private var fillTransition: AnyTransition {
+        reduceMotion ? .opacity : .scale(scale: 0.4).combined(with: .opacity)
+    }
+
     var body: some View {
         ZStack {
             Circle()
@@ -1064,9 +1058,9 @@ struct OBRadio: View {
                 .frame(width: 22, height: 22)
             if isSelected {
                 Circle().fill(color).frame(width: 22, height: 22)
-                    .transition(.scale(scale: 0.4).combined(with: .opacity))
+                    .transition(fillTransition)
                 StrideIcon(name: .check, size: 12, color: .onFill, strokeWeight: 3)
-                    .transition(.scale(scale: 0.4).combined(with: .opacity))
+                    .transition(fillTransition)
             }
         }
         .adaptiveAnimation(AppAnimation.snappy, value: isSelected)
@@ -1211,8 +1205,7 @@ private struct OBSummaryStat: View {
     var body: some View {
         VStack(spacing: 6) {
             Text(label)
-                .font(.dsCaption2.weight(.semibold))
-                .kerning(0.6)
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
             Text(value)
                 .font(.dsTitle2.monospacedDigit())
@@ -1231,6 +1224,7 @@ private struct WeeklyMileageChart: View {
     let peakMiles: Int
     let unit: UnitPreference
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var barsVisible = false
 
     /// Bars: (week number, mileage, phase).
@@ -1253,6 +1247,10 @@ private struct WeeklyMileageChart: View {
             let cutback = ((i + 1) % 4 == 0 && (phase == .base || phase == .build)) ? 0.75 : 1.0
             return (i + 1, max(1, Int((peak * fraction * cutback).rounded())), phase)
         }
+    }
+
+    private func barHeight(_ miles: Int) -> CGFloat {
+        max(6, CGFloat(miles) / CGFloat(peakMiles) * 72)
     }
 
     private func phaseSchedule(for weeks: Int) -> [TrainingPhase] {
@@ -1285,8 +1283,15 @@ private struct WeeklyMileageChart: View {
                             .opacity(barsVisible ? 1 : 0)
                         RoundedRectangle(cornerRadius: AppRadius.micro)
                             .fill(bar.phase.tint)
-                            .frame(height: barsVisible ? max(6, CGFloat(bar.mi) / CGFloat(peakMiles) * 72) : 2)
-                            .animation(AppAnimation.bouncy.delay(Double(index) * 0.04), value: barsVisible)
+                            .frame(height: barsVisible || reduceMotion ? barHeight(bar.mi) : 2)
+                            // Grow in like a progress bar, staggering only the first six;
+                            // under Reduce Motion they are there from the start.
+                            .animation(
+                                reduceMotion
+                                    ? AppAnimation.reduced
+                                    : AppAnimation.gentle.delay(Double(min(index, 6)) * AppAnimation.stagger),
+                                value: barsVisible
+                            )
                         Text("W\(bar.n)")
                             .font(.dsCaption2.weight(.semibold).monospacedDigit())
                             .foregroundStyle(Color.secondary.opacity(0.6))

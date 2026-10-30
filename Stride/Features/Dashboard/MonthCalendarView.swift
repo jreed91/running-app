@@ -86,7 +86,8 @@ struct MonthCalendarView: View {
             Text(monthStart.formatted(.dateTime.month(.wide).year()))
                 .strideEyebrow()
                 .foregroundStyle(.primary)
-                .contentTransition(.numericText())
+                // The shared rolling figure, which cross-fades under Reduce Motion.
+                .strideNumericTransition()
             Spacer()
             monthChevron(icon: .chevronRight, label: String(localized: "Next month"), months: 1)
         }

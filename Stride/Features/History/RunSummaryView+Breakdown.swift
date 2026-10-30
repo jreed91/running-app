@@ -32,6 +32,19 @@ enum RunSummaryPage: Hashable {
         }
     }
 
+    /// Stride's own glyph for the page, or nil where the set has none (the coach's
+    /// sparkles), which falls back to `systemImage`.
+    var strideIcon: StrideIconName? {
+        switch self {
+        case .plannedWorkout: return .calendar
+        case .splits: return .chart
+        case .heartRateZones: return .heart
+        case .laps: return .flag
+        case .paceInsights: return .tempo
+        case .coach: return nil
+        }
+    }
+
     var systemImage: String {
         switch self {
         case .plannedWorkout: return "calendar"
@@ -141,12 +154,19 @@ extension RunSummaryView {
             openPage = row.page
         } label: {
             HStack(spacing: 12) {
-                // A 32pt icon tile, as a row takes it (Route Loop controls table).
-                Image(systemName: row.page.systemImage)
-                    .font(.dsFootnote.weight(.semibold))
-                    .foregroundStyle(.brand)
-                    .frame(width: 32, height: 32)
-                    .background(Color.brand.opacity(0.13), in: Circle())
+                // A 32pt icon tile, as a row takes it (Route Loop controls table), with
+                // Stride's own glyph wherever the set has one.
+                Group {
+                    if let icon = row.page.strideIcon {
+                        StrideIcon(name: icon, size: 16, color: .brand, strokeWeight: 2)
+                    } else {
+                        Image(systemName: row.page.systemImage)
+                            .font(.dsFootnote.weight(.semibold))
+                            .foregroundStyle(.brand)
+                    }
+                }
+                .frame(width: 32, height: 32)
+                .background(Color.brand.opacity(0.13), in: Circle())
                 VStack(alignment: .leading, spacing: 2) {
                     Text(row.page.title)
                         .font(.dsSubhead.weight(.semibold))

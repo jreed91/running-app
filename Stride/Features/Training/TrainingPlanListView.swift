@@ -153,21 +153,16 @@ struct PlanRowView: View {
 struct PlanStatusBadge: View {
     let status: PlanStatus
 
-    private var color: Color {
-        switch status {
-        // brandText, not brand: this is small text, and brand is too light for it.
-        case .active:   return .brandText
-        case .finished: return .success
-        case .ended:    return .secondary
-        }
-    }
-
+    /// A label, not a control, so the shared tag: the active plan in brand, a finished
+    /// one with its status in the glyph, an ended one neutral.
     var body: some View {
-        Text(status.displayName.uppercased())
-            .font(.dsCaption)
-            .padding(.horizontal, 6)
-            .padding(.vertical, AppSpacing.xxs)
-            .background(color.opacity(0.15), in: Capsule())
-            .foregroundStyle(color)
+        switch status {
+        case .active:
+            StrideTag(status.displayName, tone: .brand)
+        case .finished:
+            StrideTag(status.displayName, systemImage: "checkmark.circle.fill", iconTint: .success)
+        case .ended:
+            StrideTag(status.displayName)
+        }
     }
 }

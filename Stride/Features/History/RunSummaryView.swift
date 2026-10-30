@@ -31,6 +31,7 @@ struct RunSummaryView: View {
     @Environment(\.modelContext) var context
     @Environment(\.dismiss) var dismiss
     @Environment(AppContainer.self) var container
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
     /// The plan day this run fulfilled, found by the run's own id — where this screen used
     /// to fetch **every** `ScheduledWorkout` in the store and scan it (D6).
     @Query private var scheduledLinkingThisRun: [ScheduledWorkout]

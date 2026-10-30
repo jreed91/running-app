@@ -60,10 +60,10 @@ struct NextUpCardView: View {
                 StrideIcon(name: workoutType.strideIcon, size: 20, color: tint, strokeWeight: 2.2)
             }
             VStack(alignment: .leading, spacing: 3) {
+                // brandText on the hero, secondary on a card, as every eyebrow.
                 Text("UP NEXT")
-                    .font(.dsCaption2.weight(.bold))
-                    .kerning(1.2)
-                    .foregroundStyle(.secondary)
+                    .strideEyebrow()
+                    .foregroundStyle(isHero ? Color.brandText : Color.secondary)
                 Text(briefing.title)
                     .font(.bodyStrong)
                 // Verbatim: both halves are already localized, and a "%@ · %@" key in

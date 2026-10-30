@@ -41,8 +41,7 @@ extension RunSummaryView {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("TEMPO PACE")
-                    .font(.dsCaption2.weight(.bold))
-                    .kerning(0.8)
+                    .strideEyebrow()
                     .foregroundStyle(.secondary)
                 Text(insights.achievedPaceSecondsPerKm.paceString(unit: appSettings.unitPreference))
                     .font(.dsTitle2.weight(.semibold).monospacedDigit())
@@ -68,8 +67,7 @@ extension RunSummaryView {
             if let target = insights.targetThresholdSecondsPerKm {
                 VStack(alignment: .trailing, spacing: 4) {
                     Text("TARGET")
-                        .font(.dsCaption2.weight(.bold))
-                        .kerning(0.8)
+                        .strideEyebrow()
                         .foregroundStyle(.secondary)
                     Text(target.paceString(unit: appSettings.unitPreference))
                         .font(.dsCallout.weight(.semibold).monospacedDigit())
@@ -93,14 +91,8 @@ extension RunSummaryView {
                 return ("Off target", "tortoise.fill", .destructive)
             }
         }()
-        return HStack(spacing: 4) {
-            Image(systemName: icon).font(.dsCaption2.weight(.bold))
-            Text(label).font(.dsCaption2.weight(.bold))
-        }
-        .foregroundStyle(color)
-        .padding(.horizontal, AppSpacing.sm)
-        .padding(.vertical, AppSpacing.xs)
-        .background(color.opacity(0.1), in: Capsule())
+        // Status in the glyph, words in secondary text: not coloured text on its own tint.
+        return StrideTag(label, systemImage: icon, iconTint: color)
     }
 
     private func tempoInsightVDOTRow(_ insights: TempoInsights) -> some View {
@@ -108,8 +100,7 @@ extension RunSummaryView {
             if let vdot = insights.derivedVDOT {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("VDOT THIS RUN")
-                        .font(.dsCaption2.weight(.bold))
-                        .kerning(0.8)
+                        .strideEyebrow()
                         .foregroundStyle(.secondary)
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
                         Text(String(format: "%.1f", vdot))
@@ -129,8 +120,7 @@ extension RunSummaryView {
             if let prev = insights.previousVDOT {
                 VStack(alignment: .trailing, spacing: 4) {
                     Text("PREV VDOT")
-                        .font(.dsCaption2.weight(.bold))
-                        .kerning(0.8)
+                        .strideEyebrow()
                         .foregroundStyle(.secondary)
                     Text(String(format: "%.1f", prev))
                         .font(.dsTitle3.monospacedDigit())
@@ -145,8 +135,7 @@ extension RunSummaryView {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
                 Text("SPLIT CONSISTENCY")
-                    .font(.dsCaption2.weight(.bold))
-                    .kerning(0.8)
+                    .strideEyebrow()
                     .foregroundStyle(.secondary)
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text(String(format: "±%.0fs/km", stdDevSeconds))
@@ -157,18 +146,13 @@ extension RunSummaryView {
                 }
             }
             Spacer()
-            let (label, color): (String, Color) = {
-                if stdDevSeconds <= 5 { return ("Excellent", .success) }
-                if stdDevSeconds <= 12 { return ("Good", .brand) }
-                if stdDevSeconds <= 20 { return ("Variable", .warning) }
-                return ("Uneven", .destructive)
+            let (label, icon, color): (String, String, Color) = {
+                if stdDevSeconds <= 5 { return ("Excellent", "checkmark.circle.fill", .success) }
+                if stdDevSeconds <= 12 { return ("Good", "checkmark.circle", .brand) }
+                if stdDevSeconds <= 20 { return ("Variable", "exclamationmark.circle.fill", .warning) }
+                return ("Uneven", "exclamationmark.triangle.fill", .destructive)
             }()
-            Text(label)
-                .font(.dsCaption.weight(.bold))
-                .foregroundStyle(color)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(color.opacity(0.1), in: Capsule())
+            StrideTag(label, systemImage: icon, iconTint: color)
         }
     }
 }

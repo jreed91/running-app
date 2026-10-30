@@ -495,12 +495,13 @@ extension RunSummaryView {
     @ViewBuilder
     private func splitRow(_ split: Split) -> some View {
         HStack {
+            // Tabular digits throughout, so the column of paces lines up.
             Text("\(split.kilometer)")
                 .frame(width: 36, alignment: .leading)
-                .font(.bodyRegular)
+                .font(.bodyRegular.monospacedDigit())
             Spacer()
             Text(split.paceSecondsPerKm.paceString(unit: appSettings.unitPreference))
-                .font(.bodyStrong)
+                .font(.bodyStrong.monospacedDigit())
             if hasSplitHR {
                 Group {
                     if let hr = split.heartRate {
@@ -510,11 +511,11 @@ extension RunSummaryView {
                     }
                 }
                 .frame(width: 60, alignment: .trailing)
-                .font(.dsCaption)
+                .font(.dsCaption.monospacedDigit())
             }
             elevationCell(split.elevationGainMeters)
                 .frame(width: 60, alignment: .trailing)
-                .font(.dsCaption)
+                .font(.dsCaption.monospacedDigit())
         }
     }
 

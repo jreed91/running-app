@@ -36,6 +36,7 @@ struct SettingsView: View {
     @State private var notificationsDeniedBySystem = false
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
+    @Environment(\.colorScheme) private var colorScheme
     /// Settings opens as a sheet from Home's profile button (it was a tab).
     @Environment(\.dismiss) private var dismiss
     /// Private Cloud Compute availability + daily quota, refreshed whenever the model
@@ -594,7 +595,9 @@ struct SettingsView: View {
                             }
                         }
                     }
-                    .signInWithAppleButtonStyle(.black)
+                    // Black on daylight paper, white on the night map, as onboarding pairs them;
+                    // a black button disappeared into the dark card.
+                    .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
                     .frame(height: 44)
                     .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
                     .padding(.horizontal, AppSpacing.lg)

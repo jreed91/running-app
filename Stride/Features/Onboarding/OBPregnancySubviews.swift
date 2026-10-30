@@ -415,8 +415,7 @@ private struct OBPregnancyStat: View {
     var body: some View {
         VStack(spacing: 6) {
             Text(label)
-                .font(.dsCaption2.weight(.semibold))
-                .kerning(0.6)
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
             Text(value)
                 .font(.dsTitle2.monospacedDigit())

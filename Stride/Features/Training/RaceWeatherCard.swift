@@ -196,10 +196,15 @@ private struct RaceStartTimeEditor: View {
     var body: some View {
         NavigationStack {
             Form {
-                DatePicker("Start time", selection: $time, displayedComponents: .hourAndMinute)
-                    .datePickerStyle(.wheel)
-                    .labelsHidden()
-                    .frame(maxWidth: .infinity)
+                // In a section of its own so it takes the card row like the one below it,
+                // rather than the system's black row in dark mode.
+                Section {
+                    DatePicker("Start time", selection: $time, displayedComponents: .hourAndMinute)
+                        .datePickerStyle(.wheel)
+                        .labelsHidden()
+                        .frame(maxWidth: .infinity)
+                }
+                .strideListRow()
                 Section {
                     if initialStart != nil {
                         Button("Remove start time", role: .destructive) {

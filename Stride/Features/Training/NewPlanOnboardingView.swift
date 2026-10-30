@@ -117,16 +117,22 @@ struct NewPlanOnboardingView: View {
         !goalRace.isGoalRace || !raceName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    /// Steps slide the way the runner is going; under Reduce Motion they cross-fade.
+    private var stepTransition: AnyTransition {
+        guard !reduceMotion else { return .opacity }
+        return .asymmetric(
+            insertion: .move(edge: goingForward ? .trailing : .leading).combined(with: .opacity),
+            removal: .move(edge: goingForward ? .leading : .trailing).combined(with: .opacity)
+        )
+    }
+
     // MARK: - Body
 
     var body: some View {
         ZStack {
             currentStep
                 .id(step)
-                .transition(.asymmetric(
-                    insertion: .move(edge: goingForward ? .trailing : .leading).combined(with: .opacity),
-                    removal: .move(edge: goingForward ? .leading : .trailing).combined(with: .opacity)
-                ))
+                .transition(stepTransition)
         }
         .adaptiveAnimation(AppAnimation.bouncy, value: step)
         .ignoresSafeArea()
@@ -426,41 +432,8 @@ struct NewPlanOnboardingView: View {
     private var scheduleContent: some View {
         VStack(spacing: 16) {
             VStack(spacing: 12) {
-                HStack(spacing: 6) {
-                    let weekStart = Date().startOfWeek
-                    ForEach(0..<7, id: \.self) { i in
-                        let dayLabels = ["M", "T", "W", "T", "F", "S", "S"]
-                        // Real day-of-month numbers for the current (Monday-first)
-                        // week instead of hardcoded literals that read "20…26" forever.
-                        let dayDate = weekStart.adding(days: i)
-                        let dayNumber = Calendar.current.component(.day, from: dayDate)
-                        let isOn = selectedDays.contains(i)
-                        Button {
-                            if isOn { selectedDays.remove(i) } else { selectedDays.insert(i) }
-                        } label: {
-                            VStack(spacing: 2) {
-                                Text(dayLabels[i])
-                                    .font(.dsCaption2.weight(.bold))
-                                    .kerning(0.6)
-                                    .opacity(isOn ? 0.85 : 0.6)
-                                Text("\(dayNumber)")
-                                    .font(.dsSubhead.weight(.bold).monospacedDigit())
-                            }
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 52)
-                                .background(
-                                    isOn ? Color.brand : Color.surfaceTertiary,
-                                    in: RoundedRectangle(cornerRadius: AppRadius.md)
-                                )
-                                .foregroundStyle(isOn ? Color.onFill : Color.secondary)
-                                .appGlow(.subtle, color: .brand, isActive: isOn)
-                        }
-                        .buttonStyle(.plain)
-                        // "Monday", not "M 20": the letter and date are a visual shorthand.
-                        .accessibilityLabel(Text(dayDate, format: .dateTime.weekday(.wide)))
-                        .accessibilityAddTraits(isOn ? .isSelected : [])
-                    }
-                }
+                // The shared day picker (route on, card off), with this week's dates.
+                DayOfWeekPicker(selectedDays: $selectedDays, showsDates: true)
 
                 HStack(spacing: 10) {
                     Text("\(selectedDays.count)")

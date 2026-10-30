@@ -109,9 +109,7 @@ struct ProgressDashboardView: View {
                             // The week card moved to Plan, which owns the week; this tab is
                             // only about the period the range picks.
                             summaryHeader
-                                .opacity(progressAppeared ? 1 : 0)
-                                .scaleEffect(progressAppeared ? 1 : 0.94, anchor: .top)
-                                .adaptiveAnimation(AppAnimation.entrance.delay(0.05), value: progressAppeared)
+                                .strideEntrance(progressAppeared, delay: 0.05)
                             // Pairs, so on a wide page (iPhone Duo open, in landscape) the charts
                             // read as a grid with the gap on the fold. One column keeps the old order.
                             StrideColumns(spacing: 16) {
@@ -692,8 +690,9 @@ struct ProgressDashboardView: View {
                             y: .value(appSettings.unitPreference.elevationLabel,
                                       (workout.elevationGainMeters ?? 0).elevationValue(unit: appSettings.unitPreference))
                         )
-                        // `success` is a status colour, not a series colour.
-                        .foregroundStyle(Color.brandGlow)
+                        // Bars in the route's bar gradient, as every chart's bars: `success`
+                        // is a status colour, and `brandGlow` alone is too light on paper.
+                        .foregroundStyle(.routeBar)
                         .cornerRadius(AppRadius.xs)
                     }
                     if let selected = selectedElevationDate,

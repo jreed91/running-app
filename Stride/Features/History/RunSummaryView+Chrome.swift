@@ -24,7 +24,8 @@ extension RunSummaryView {
         case "easy":
             return .success
         case "brand", "medium":
-            return .brand
+            // brandText: these colour small figures, and brand is too light for text.
+            return .brandText
         case "interval", "high":
             return .destructive
         case "warning":

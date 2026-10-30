@@ -945,7 +945,7 @@ struct DashboardView: View {
             }
             }
             .id(selectedDate)
-            .transition(.asymmetric(
+            .transition(reduceMotion ? AnyTransition.opacity : .asymmetric(
                 insertion: .move(edge: .bottom).combined(with: .opacity),
                 removal: .opacity
             ))
@@ -1442,8 +1442,11 @@ private struct ProgressRingView: View {
     let size: CGFloat
     let lineWidth: CGFloat
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     /// False until the ring first appears, so the route fills in from zero rather than
-    /// showing up already drawn — the same entrance as the app mark's loop.
+    /// showing up already drawn — the same entrance as the app mark's loop. Under Reduce
+    /// Motion it appears filled, as `StrideProgressBar` does.
     @State private var hasAppeared = false
 
     var body: some View {
@@ -1451,7 +1454,7 @@ private struct ProgressRingView: View {
             Circle()
                 .stroke(Color.surfaceTertiary, lineWidth: lineWidth)
             Circle()
-                .trim(from: 0, to: hasAppeared ? progress : 0)
+                .trim(from: 0, to: hasAppeared || reduceMotion ? progress : 0)
                 .stroke(.route, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                 .rotationEffect(.degrees(-90))
                 .adaptiveAnimation(AppAnimation.gentle, value: progress)

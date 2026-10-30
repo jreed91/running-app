@@ -56,19 +56,18 @@ struct CoachTipIntentView: View {
                     .fill(tint.opacity(0.15))
                     .frame(width: 52, height: 52)
                 Image(systemName: symbolName)
-                    .font(.title2)
+                    .font(.dsTitle2)
                     .foregroundStyle(tint)
             }
             VStack(alignment: .leading, spacing: 4) {
                 Text(verbatim: overline)
-                    .font(.caption2.weight(.bold))
-                    .kerning(1.2)
+                    .strideEyebrow()
                     .foregroundStyle(.secondary)
                 Text(verbatim: title)
-                    .font(.headline)
+                    .font(.dsHeadline)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(verbatim: CoachTipIntent.dialogText(for: card))
-                    .font(.subheadline)
+                    .font(.dsSubhead)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

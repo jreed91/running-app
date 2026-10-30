@@ -127,10 +127,10 @@ struct RunShareCardView: View {
         if model.heartRate != nil || model.elevation != nil {
             HStack(spacing: 8) {
                 if let heartRate = model.heartRate {
-                    chip(icon: "heart.fill", text: heartRate)
+                    chip(icon: .heart, text: heartRate)
                 }
                 if let elevation = model.elevation {
-                    chip(icon: "mountain.2.fill", text: elevation)
+                    chip(icon: .mountain, text: elevation)
                 }
             }
         }
@@ -186,11 +186,9 @@ struct RunShareCardView: View {
         }
     }
 
-    private func chip(icon: String, text: String) -> some View {
+    private func chip(icon: StrideIconName, text: String) -> some View {
         HStack(spacing: 5) {
-            Image(systemName: icon)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(accent)
+            StrideIcon(name: icon, size: 12, color: accent, strokeWeight: 2.2)
             Text(text)
                 .font(.system(size: 13, weight: .semibold, design: .rounded))
                 .foregroundStyle(primaryText)

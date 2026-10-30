@@ -38,7 +38,7 @@ extension RunSummaryView {
         HStack {
             Text("\(lap.number)")
                 .frame(width: 36, alignment: .leading)
-                .font(.bodyRegular)
+                .font(.bodyRegular.monospacedDigit())
             Spacer()
             Text(lap.durationSeconds.durationString)
                 .frame(width: 72, alignment: .trailing)
@@ -50,7 +50,7 @@ extension RunSummaryView {
                 .foregroundStyle(.secondary)
             Text(lap.paceSecondsPerKm.paceValueString(unit: appSettings.unitPreference))
                 .frame(width: 72, alignment: .trailing)
-                .font(.bodyStrong)
+                .font(.bodyStrong.monospacedDigit())
         }
         // One element per row: read cell by cell this is four unlabelled numbers with no
         // hint which is which (N18).

@@ -236,14 +236,9 @@ struct StrengthActiveView: View {
                     Text(exercise.name)
                         .font(.dsTitle2)
                     HStack(spacing: 6) {
+                        // A muscle group is a label, not a control: the shared brand tag.
                         ForEach(exercise.muscleGroups.prefix(3), id: \.self) { group in
-                            Text(group)
-                                .font(.dsCaption2.weight(.medium))
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 3)
-                                .background(Color.brand.opacity(0.12), in: Capsule())
-                                // Small text: `brandText`, not `brand` (3.1:1 on white).
-                                .foregroundStyle(.brandText)
+                            StrideTag(group, tone: .brand)
                         }
                     }
                 }
@@ -399,9 +394,11 @@ struct StrengthActiveView: View {
                     .foregroundStyle(.secondary)
                 ForEach(Array(setsForCurrentExercise.enumerated()), id: \.offset) { _, set in
                     HStack {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(Color.brand)
-                            .font(.dsSubhead)
+                        // Stride's check on a filled disc, as a done workout shows it.
+                        ZStack {
+                            Circle().fill(Color.brand).frame(width: 18, height: 18)
+                            StrideIcon(name: .check, size: 9, color: .onFill, strokeWeight: 3)
+                        }
                         Text("Set \(set.setIndex + 1)")
                             .font(.dsSubhead)
                         Spacer()
@@ -435,7 +432,7 @@ struct StrengthActiveView: View {
                 // The one moment in the strength flow worth celebrating. Non-repeating:
                 // this screen can sit on-screen while the runner catches their breath,
                 // and a looping bounce would be the only thing moving on it.
-                .symbolEffect(.bounce, options: .nonRepeating)
+                .symbolEffect(.bounce, options: .nonRepeating, isActive: !reduceMotion)
             Text("All exercises done!")
                 .font(.dsTitle2)
             Text("Tap Finish to save your workout.")

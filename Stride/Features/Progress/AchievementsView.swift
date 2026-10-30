@@ -97,6 +97,7 @@ struct AchievementsView: View {
         .sheet(isPresented: $editingGoal) {
             WeeklyGoalEditor()
                 .environment(appSettings)
+                .strideSheet()
         }
     }
 
@@ -215,9 +216,15 @@ struct AchievementsView: View {
                 Circle()
                     .fill(badge.isEarned ? Color.brand.opacity(0.16) : Color.secondary.opacity(0.10))
                     .frame(width: badgeCircleSize, height: badgeCircleSize)
-                Image(systemName: badge.isEarned ? systemImage : "lock.fill")
-                    .font(.system(size: badgeCircleSize * 0.42))
-                    .foregroundStyle(badge.isEarned ? Color.brand : Color.secondary.opacity(0.4))
+                if badge.isEarned {
+                    Image(systemName: systemImage)
+                        .font(.system(size: badgeCircleSize * 0.42))
+                        .foregroundStyle(Color.brand)
+                } else {
+                    // Stride's own lock, as everywhere the set has the glyph.
+                    StrideIcon(name: .lock, size: badgeCircleSize * 0.42,
+                               color: Color.secondary.opacity(0.4), strokeWeight: 2)
+                }
             }
 
             Text(badge.title)

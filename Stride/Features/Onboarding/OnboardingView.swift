@@ -183,16 +183,22 @@ struct OnboardingView: View {
         return trainingStyle == .maintainFitness ? base * 1.2 : base * 1.5
     }
 
+    /// Steps slide the way the runner is going; under Reduce Motion they cross-fade.
+    private var stepTransition: AnyTransition {
+        guard !reduceMotion else { return .opacity }
+        return .asymmetric(
+            insertion: .move(edge: goingForward ? .trailing : .leading).combined(with: .opacity),
+            removal: .move(edge: goingForward ? .leading : .trailing).combined(with: .opacity)
+        )
+    }
+
     // MARK: - Body
 
     var body: some View {
         ZStack {
             currentStep
                 .id(step)
-                .transition(.asymmetric(
-                    insertion: .move(edge: goingForward ? .trailing : .leading).combined(with: .opacity),
-                    removal: .move(edge: goingForward ? .leading : .trailing).combined(with: .opacity)
-                ))
+                .transition(stepTransition)
         }
         .adaptiveAnimation(AppAnimation.bouncy, value: step)
         .ignoresSafeArea()
@@ -516,10 +522,11 @@ struct OnboardingView: View {
             .strideCard(cornerRadius: AppRadius.lg)
 
             HStack(spacing: 14) {
+                // An icon tile: a brand-tinted circle leading the card.
                 ZStack {
-                    RoundedRectangle(cornerRadius: AppRadius.md)
-                        .fill(Color.brand.opacity(0.2))
-                        .frame(width: 44, height: 44)
+                    Circle()
+                        .fill(Color.brand.opacity(0.12))
+                        .frame(width: 48, height: 48)
                     Text(String(format: "%.0f", vdotValue))
                         .font(.dsSubhead.weight(.bold).monospacedDigit())
                         .foregroundStyle(.brandText)
@@ -536,14 +543,7 @@ struct OnboardingView: View {
             }
             .padding(.horizontal, AppSpacing.lg)
             .padding(.vertical, 14)
-            .background(
-                LinearGradient(colors: [Color.brand.opacity(0.14), Color.brand.opacity(0.04)], startPoint: .topLeading, endPoint: .bottomTrailing),
-                in: RoundedRectangle(cornerRadius: AppRadius.md)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: AppRadius.md)
-                    .strokeBorder(Color.brand.opacity(0.28), lineWidth: 0.5)
-            )
+            .strideCard(cornerRadius: AppRadius.md)
 
             hrCalibrationCard
         }
@@ -584,73 +584,18 @@ struct OnboardingView: View {
 
     private var scheduleContent: some View {
         VStack(spacing: 16) {
-            VStack(spacing: 12) {
-                // Day grid
-                HStack(spacing: 8) {
-                    let weekStart = Date().startOfWeek
-                    ForEach(0..<7) { i in
-                        let labels = ["M","T","W","T","F","S","S"]
-                        // Real day-of-month numbers for the current (Monday-first)
-                        // week instead of hardcoded literals that read "20…26" forever.
-                        let dayDate = weekStart.adding(days: i)
-                        let dayNumber = Calendar.current.component(.day, from: dayDate)
-                        let isOn = selectedDays.contains(i)
-                        Button {
-                            withAnimation(reduceMotion ? AppAnimation.reduced : AppAnimation.snappy) {
-                                if isOn { selectedDays.remove(i) } else { selectedDays.insert(i) }
-                            }
-                        } label: {
-                            VStack(spacing: 2) {
-                                Text(labels[i])
-                                    .font(.dsCaption2.weight(.bold))
-                                    .kerning(0.6)
-                                    .opacity(isOn ? 0.85 : 0.6)
-                                Text("\(dayNumber)")
-                                    .font(.dsSubhead.weight(.bold).monospacedDigit())
-                            }
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 52)
-                            .background(isOn ? Color.brand : Color.surfaceTertiary,
-                                        in: RoundedRectangle(cornerRadius: AppRadius.md))
-                            .foregroundStyle(isOn ? Color.onFill : Color.primary)
-                            .appGlow(.standard, color: .brand, isActive: isOn)
-                        }
-                        .buttonStyle(BouncyButtonStyle())
-                        // "Monday", not "M 20": the letter and date are a visual shorthand.
-                        .accessibilityLabel(Text(dayDate, format: .dateTime.weekday(.wide)))
-                        .accessibilityAddTraits(isOn ? .isSelected : [])
-                    }
-                }
-            }
-            .padding(14)
-            .strideCard(cornerRadius: AppRadius.lg)
+            // The shared day picker (route on, card off), with this week's dates.
+            DayOfWeekPicker(selectedDays: $selectedDays, showsDates: true)
+                .padding(14)
+                .strideCard(cornerRadius: AppRadius.lg)
 
             VStack(alignment: .leading, spacing: 10) {
                 Text("Long run day")
                     .font(.dsFootnote)
                     .foregroundStyle(.secondary)
-                HStack(spacing: 6) {
-                    ForEach(LongRunDay.allCases, id: \.self) { option in
-                        let isChosen = longRunDay == option
-                        Button { longRunDay = option } label: {
-                            Text(option.rawValue)
-                                .font(.dsFootnote.weight(.semibold))
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, AppSpacing.sm)
-                                .background(
-                                    isChosen ? Color.surfaceSecondary : Color.clear,
-                                    in: RoundedRectangle(cornerRadius: AppRadius.xs)
-                                )
-                                .appShadow(isChosen ? .e2 : .e0)
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.primary)
-                        .accessibilityLabel(option.accessibilityName)
-                        .accessibilityAddTraits(isChosen ? .isSelected : [])
-                    }
+                StrideSegmentedControl(selection: $longRunDay, options: LongRunDay.allCases) {
+                    Text(verbatim: $0.rawValue).accessibilityLabel($0.accessibilityName)
                 }
-                .padding(AppSpacing.xxs)
-                .background(Color.surfaceTertiary, in: RoundedRectangle(cornerRadius: AppRadius.sm))
 
                 HStack {
                     Text("Runs per week")
@@ -704,22 +649,19 @@ struct OnboardingView: View {
                                 desc: "Record GPS routes during runs.",
                                 tint: .brand, isOn: locationEnabled,
                                 isActive: activePermission == 0)
-                    .opacity(permRowsVisible[0] ? 1 : 0)
-                    .offset(y: permRowsVisible[0] ? 0 : 14)
+                    .strideEntrance(permRowsVisible[0], rise: 14)
 
                 OBPermissionRow(icon: .heart, label: "Apple Health",
                                 desc: "Heart rate, VO2 max, workouts.",
                                 tint: .brand, isOn: healthEnabled,
                                 isActive: activePermission == 1)
-                    .opacity(permRowsVisible[1] ? 1 : 0)
-                    .offset(y: permRowsVisible[1] ? 0 : 14)
+                    .strideEntrance(permRowsVisible[1], rise: 14)
 
                 OBPermissionRow(icon: .bell, label: "Notifications",
                                 desc: "Plan reminders, daily workout ping.",
                                 tint: .brand, isOn: notificationsEnabled,
                                 isActive: activePermission == 2)
-                    .opacity(permRowsVisible[2] ? 1 : 0)
-                    .offset(y: permRowsVisible[2] ? 0 : 14)
+                    .strideEntrance(permRowsVisible[2], rise: 14)
 
                 // The Apple Watch row is gone (S15). It was not a permission — nothing in
                 // `requestPermissionsSequentially` touched it and both its flags were
@@ -728,9 +670,6 @@ struct OnboardingView: View {
                 // It also borrowed the notifications row's `permRowsVisible[2]`, in an array
                 // sized for three.
             }
-            .adaptiveAnimation(AppAnimation.bouncy, value: permRowsVisible[0])
-            .adaptiveAnimation(AppAnimation.bouncy, value: permRowsVisible[1])
-            .adaptiveAnimation(AppAnimation.bouncy, value: permRowsVisible[2])
         }
         .task {
             await refreshPermissionStates()
