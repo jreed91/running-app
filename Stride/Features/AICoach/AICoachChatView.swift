@@ -131,8 +131,7 @@ struct AICoachChatView: View {
                 coachAvatar(size: 42)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("AI COACH")
-                        .font(.dsCaption2.weight(.bold))
-                        .tracking(1.4)
+                        .strideEyebrow()
                         .foregroundStyle(.secondary)
                     Text(contextSubtitle)
                         .font(.dsFootnote)
@@ -344,9 +343,8 @@ struct AICoachChatView: View {
         HStack(spacing: 6) {
             ForEach(metrics) { metric in
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(metric.label.uppercased())
-                        .font(.dsCaption2.weight(.bold))
-                        .tracking(0.6)
+                    Text(metric.label)
+                        .strideEyebrow()
                         .foregroundStyle(.secondary)
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
                         Text(metric.value)

@@ -227,7 +227,7 @@ struct PlanTabView: View {
                                 PlanPageRow(
                                     title: "Race Insights",
                                     subtitle: "Predicted pace, zones and trends",
-                                    systemImage: "chart.line.uptrend.xyaxis"
+                                    icon: .chart
                                 )
                             }
                             .buttonStyle(.plain)
@@ -558,9 +558,11 @@ extension View {
     func newPlanSheets(training: Binding<Bool>, pregnancy: Binding<Bool>) -> some View {
         sheet(isPresented: training) {
             NewPlanOnboardingView()
+                .strideSheet()
         }
         .sheet(isPresented: pregnancy) {
             PregnancyPlanSetupView()
+                .strideSheet()
         }
     }
 }
@@ -938,9 +940,8 @@ private struct PhaseProgressBar: View {
 
             HStack {
                 ForEach([TrainingPhase.base, .build, .peak, .taper], id: \.self) { phase in
-                    Text(phase.localizedName.uppercased())
-                        .font(.dsCaption2.weight(phase == currentPhase ? .bold : .semibold))
-                        .kerning(0.8)
+                    Text(phase.localizedName)
+                        .strideEyebrow()
                         .foregroundStyle(phase == currentPhase ? Color.brandText : Color.secondary.opacity(0.55))
                     if phase != .taper { Spacer() }
                 }

@@ -82,6 +82,6 @@ struct CoachText: View {
         2. Run 4 x 800m at 4:45 per km.
         """
     )
-    .font(.subheadline)
+    .font(.dsSubhead)
     .padding()
 }

@@ -41,8 +41,7 @@ extension RunSummaryView {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("TEMPO PACE")
-                    .font(.dsCaption2.weight(.bold))
-                    .kerning(0.8)
+                    .strideEyebrow()
                     .foregroundStyle(.secondary)
                 Text(insights.achievedPaceSecondsPerKm.paceString(unit: appSettings.unitPreference))
                     .font(.dsTitle2.weight(.semibold).monospacedDigit())
@@ -68,8 +67,7 @@ extension RunSummaryView {
             if let target = insights.targetThresholdSecondsPerKm {
                 VStack(alignment: .trailing, spacing: 4) {
                     Text("TARGET")
-                        .font(.dsCaption2.weight(.bold))
-                        .kerning(0.8)
+                        .strideEyebrow()
                         .foregroundStyle(.secondary)
                     Text(target.paceString(unit: appSettings.unitPreference))
                         .font(.dsCallout.weight(.semibold).monospacedDigit())
@@ -102,8 +100,7 @@ extension RunSummaryView {
             if let vdot = insights.derivedVDOT {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("VDOT THIS RUN")
-                        .font(.dsCaption2.weight(.bold))
-                        .kerning(0.8)
+                        .strideEyebrow()
                         .foregroundStyle(.secondary)
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
                         Text(String(format: "%.1f", vdot))
@@ -123,8 +120,7 @@ extension RunSummaryView {
             if let prev = insights.previousVDOT {
                 VStack(alignment: .trailing, spacing: 4) {
                     Text("PREV VDOT")
-                        .font(.dsCaption2.weight(.bold))
-                        .kerning(0.8)
+                        .strideEyebrow()
                         .foregroundStyle(.secondary)
                     Text(String(format: "%.1f", prev))
                         .font(.dsTitle3.monospacedDigit())
@@ -139,8 +135,7 @@ extension RunSummaryView {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
                 Text("SPLIT CONSISTENCY")
-                    .font(.dsCaption2.weight(.bold))
-                    .kerning(0.8)
+                    .strideEyebrow()
                     .foregroundStyle(.secondary)
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text(String(format: "±%.0fs/km", stdDevSeconds))

@@ -12,7 +12,7 @@ struct PaceInsightsRow: View {
         PlanPageRow(
             title: "Pace Insights",
             subtitle: "Estimated finish and training paces",
-            systemImage: "speedometer"
+            icon: .tempo
         )
     }
 }
@@ -21,13 +21,11 @@ struct PaceInsightsRow: View {
 struct PlanPageRow: View {
     let title: LocalizedStringKey
     let subtitle: LocalizedStringKey
-    let systemImage: String
+    let icon: StrideIconName
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: systemImage)
-                .font(.dsFootnote.weight(.semibold))
-                .foregroundStyle(.brand)
+            StrideIcon(name: icon, size: 16, color: .brand, strokeWeight: 2)
                 .frame(width: 32, height: 32)
                 .background(Color.brand.opacity(0.13), in: Circle())
             VStack(alignment: .leading, spacing: 2) {

@@ -60,6 +60,7 @@ struct RouteGeniusView: View {
             }
             .sheet(isPresented: $showSaveSheet) {
                 saveRouteSheet
+                    .strideSheet()
             }
         }
     }
@@ -157,7 +158,9 @@ struct RouteGeniusView: View {
                         viewModel.addressResults = []
                         viewModel.selectedMapItem = nil
                     } label: {
-                        Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                        StrideIcon(name: .close, size: 14, color: .secondary, strokeWeight: 2.2)
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
                     }
                     .accessibilityLabel("Clear address search")
                 }

@@ -171,7 +171,7 @@ private struct SummaryStat: View {
     var body: some View {
         VStack(spacing: 2) {
             Text(value)
-                .font(.bodyStrong)
+                .font(.bodyStrong.monospacedDigit())
                 .minimumScaleFactor(0.7)
                 .lineLimit(1)
             Text(label)

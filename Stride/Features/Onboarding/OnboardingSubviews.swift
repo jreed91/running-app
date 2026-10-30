@@ -49,8 +49,7 @@ struct OBWelcome: View {
             Spacer(minLength: 40)
 
             Text("WELCOME TO STRIDE")
-                .font(.dsCaption2.weight(.bold))
-                .kerning(1.8)
+                .strideEyebrow()
                 .foregroundStyle(.brandText)
                 .strideEntrance(appeared, delay: 0.08, rise: 10)
 
@@ -168,8 +167,7 @@ struct OBWelcomeBack: View {
                 Spacer(minLength: 40)
 
                 Text("WELCOME BACK")
-                    .font(.dsCaption2.weight(.bold))
-                    .kerning(1.8)
+                    .strideEyebrow()
                     .foregroundStyle(.brandText)
                 Spacer().frame(height: 10)
                 Text(hasData ? "Your training plan\nis ready." : "Checking\niCloud…")
@@ -898,8 +896,7 @@ struct OBTimeWheelColumn: View {
     var body: some View {
         VStack(spacing: 6) {
             Text(label)
-                .font(.dsCaption2.weight(.bold))
-                .kerning(1.2)
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
 
             Picker(label, selection: $value) {
@@ -933,8 +930,7 @@ struct OBWheelColumnStyle: ViewModifier {
     func body(content: Content) -> some View {
         VStack(spacing: 6) {
             Text(label)
-                .font(.dsCaption2.weight(.bold))
-                .kerning(1.2)
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
 
             content
@@ -967,9 +963,8 @@ struct OBPaceCell: View {
             Circle().fill(color).frame(width: 8, height: 8)
             VStack(alignment: .leading, spacing: 2) {
                 // The zone colour stays on the dot; as small text it fails contrast.
-                Text(zone.uppercased())
-                    .font(.dsCaption2.weight(.bold))
-                    .kerning(0.8)
+                Text(zone)
+                    .strideEyebrow()
                     .foregroundStyle(.secondary)
                 Text(pace)
                     .font(.dsSubhead.weight(.semibold).monospacedDigit())
@@ -1210,8 +1205,7 @@ private struct OBSummaryStat: View {
     var body: some View {
         VStack(spacing: 6) {
             Text(label)
-                .font(.dsCaption2.weight(.semibold))
-                .kerning(0.6)
+                .strideEyebrow()
                 .foregroundStyle(.secondary)
             Text(value)
                 .font(.dsTitle2.monospacedDigit())

@@ -394,9 +394,11 @@ struct StrengthActiveView: View {
                     .foregroundStyle(.secondary)
                 ForEach(Array(setsForCurrentExercise.enumerated()), id: \.offset) { _, set in
                     HStack {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(Color.brand)
-                            .font(.dsSubhead)
+                        // Stride's check on a filled disc, as a done workout shows it.
+                        ZStack {
+                            Circle().fill(Color.brand).frame(width: 18, height: 18)
+                            StrideIcon(name: .check, size: 9, color: .onFill, strokeWeight: 3)
+                        }
                         Text("Set \(set.setIndex + 1)")
                             .font(.dsSubhead)
                         Spacer()

@@ -690,8 +690,9 @@ struct ProgressDashboardView: View {
                             y: .value(appSettings.unitPreference.elevationLabel,
                                       (workout.elevationGainMeters ?? 0).elevationValue(unit: appSettings.unitPreference))
                         )
-                        // `success` is a status colour, not a series colour.
-                        .foregroundStyle(Color.brandGlow)
+                        // Bars in the route's bar gradient, as every chart's bars: `success`
+                        // is a status colour, and `brandGlow` alone is too light on paper.
+                        .foregroundStyle(.routeBar)
                         .cornerRadius(AppRadius.xs)
                     }
                     if let selected = selectedElevationDate,

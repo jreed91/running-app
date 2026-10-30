@@ -145,6 +145,7 @@ private struct PendingReviewSheet: ViewModifier {
                 NavigationStack {
                     RunSummaryView(workout: workout, showsCloseButton: true)
                 }
+                .strideSheet()
                 .environment(container)
                 .environment(appSettings)
                 .environment(authService)
