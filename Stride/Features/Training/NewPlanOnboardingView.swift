@@ -313,18 +313,8 @@ struct NewPlanOnboardingView: View {
                     .frame(width: 80)
                 }
 
-                HStack(spacing: 6) {
-                    Text(String(format: "VDOT %.0f", vdotValue))
-                        .font(.dsFootnote.weight(.bold).monospacedDigit())
-                        .foregroundStyle(.brandText)
-                    Text("·").foregroundStyle(.secondary)
-                    Text(vdotLabel)
-                        .font(.dsCaption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 7)
-                .background(Color.brand.opacity(0.1), in: Capsule())
+                // A label, not a control: the shared brand tag.
+                StrideTag(String(format: "VDOT %.0f", vdotValue) + " · " + vdotLabel, tone: .brand)
             }
             .padding(AppSpacing.xl)
             .strideCard(cornerRadius: AppRadius.lg)
@@ -447,20 +437,23 @@ struct NewPlanOnboardingView: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, AppSpacing.md)
-                .background(Color.brand.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                // The same well as this flow's other notes, not a brand-tinted box.
+                .background(.surfaceTertiary, in: RoundedRectangle(cornerRadius: AppRadius.md))
             }
             .padding(AppSpacing.lg)
             .strideCard(cornerRadius: AppRadius.lg)
 
             if selectedDays.isEmpty {
+                // The problem shows in the glyph; the words and the well stay neutral.
                 HStack(spacing: 10) {
                     StrideIcon(name: .flag, size: 16, color: .destructive)
                     Text("Select at least one run day to continue.")
                         .font(.dsCaption)
-                        .foregroundStyle(.destructive)
+                        .foregroundStyle(.primary)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(14)
-                .background(Color.destructive.opacity(0.06), in: RoundedRectangle(cornerRadius: AppRadius.md))
+                .background(.surfaceTertiary, in: RoundedRectangle(cornerRadius: AppRadius.md))
             }
         }
     }

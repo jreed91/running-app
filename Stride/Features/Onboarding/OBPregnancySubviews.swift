@@ -350,13 +350,18 @@ struct OBPregnancyReady: View {
                         .padding(AppSpacing.lg)
                         .strideCard(cornerRadius: AppRadius.lg)
 
+                        // A card like the one above. The warning is in each row's glyph, as on
+                        // the plan's own red-flag list, not in a red ground or a red eyebrow.
                         VStack(alignment: .leading, spacing: 10) {
                             Text("STOP AND CALL YOUR PROVIDER")
                                 .strideEyebrow()
-                                .foregroundStyle(.destructive)
+                                .foregroundStyle(.secondary)
                             ForEach(PregnancyRedFlag.allCases) { flag in
-                                HStack(alignment: .top, spacing: 8) {
-                                    Text("•").font(.dsCaption).foregroundStyle(.destructive)
+                                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .font(.dsCaption2)
+                                        .foregroundStyle(.destructive)
+                                        .accessibilityHidden(true)
                                     Text(flag.localizedText)
                                         .font(.dsCaption)
                                         .foregroundStyle(.secondary)
@@ -369,7 +374,7 @@ struct OBPregnancyReady: View {
                                 .padding(.top, AppSpacing.xxs)
                         }
                         .padding(AppSpacing.lg)
-                        .background(Color.destructive.opacity(0.08), in: RoundedRectangle(cornerRadius: AppRadius.lg))
+                        .strideCard(cornerRadius: AppRadius.lg)
 
                         Text(PregnancyRunningPolicy.medicalDisclaimer)
                             .font(.dsCaption2)
