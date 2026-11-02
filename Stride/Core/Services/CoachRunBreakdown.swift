@@ -133,7 +133,15 @@ enum CoachRunBreakdown {
     /// - Parameter maxHRIsEstimated: the max HR came from the runner's age, not a value they
     ///   entered. The header then says the zones are approximate: an age formula can sit well
     ///   under a runner's real max, which puts a tempo in zone 5 for most of the run.
-    static func zoneSection(_ slices: [HRZoneSlice], maxHR: Double?, maxHRIsEstimated: Bool = false) -> String {
+    /// - Parameter plain: name each zone by how it feels ("hard") rather than by its
+    ///   training name ("Threshold"), for a runner the coach talks to without jargon
+    ///   (`CoachVoice.usesPlainFacts`). The model copies these names into the read.
+    static func zoneSection(
+        _ slices: [HRZoneSlice],
+        maxHR: Double?,
+        maxHRIsEstimated: Bool = false,
+        plain: Bool = false
+    ) -> String {
         let active = slices.filter { $0.seconds > 0 }
         let total = active.reduce(0) { $0 + $1.seconds }
         guard total > 0 else { return "No heart-rate zone data." }
@@ -146,7 +154,8 @@ enum CoachRunBreakdown {
                     let range = HeartRateZoneService.bounds(for: slice.zone, maxHR: maxHR)
                     return " (\(range.lower)-\(range.upper) bpm)"
                 } ?? ""
-                return "\(slice.zone.shortName) \(slice.zone.label)\(bounds): \(slice.seconds.durationString) (\(percent)%)"
+                let name = plain ? plainZoneName(slice.zone) : slice.zone.label
+                return "\(slice.zone.shortName) \(name)\(bounds): \(slice.seconds.durationString) (\(percent)%)"
             }
         let header = maxHR.map { maxHR -> String in
             let bpm = Int(maxHR.rounded())
@@ -157,17 +166,34 @@ enum CoachRunBreakdown {
         return ([header].compactMap { $0 } + rows).joined(separator: "\n")
     }
 
+    /// A zone named by how it feels, for prompts written for a runner without jargon.
+    static func plainZoneName(_ zone: HRZone) -> String {
+        switch zone {
+        case .z1: return "very easy"
+        case .z2: return "easy"
+        case .z3: return "steady"
+        case .z4: return "hard"
+        case .z5: return "very hard"
+        }
+    }
+
     /// Where the run's heart rate actually sat, as one sentence.
-    static func zoneSentence(_ slices: [HRZoneSlice]) -> String? {
+    ///
+    /// - Parameter plain: say "a hard effort" rather than "threshold" (see `zoneSection`).
+    static func zoneSentence(_ slices: [HRZoneSlice], plain: Bool = false) -> String? {
         let active = slices.filter { $0.seconds > 0 }
         let total = active.reduce(0) { $0 + $1.seconds }
         guard total > 0, let dominant = active.max(by: { $0.seconds < $1.seconds }) else { return nil }
 
         let dominantPercent = Int(((dominant.seconds / total) * 100).rounded())
+        let name = plain ? plainZoneName(dominant.zone) : dominant.zone.label.lowercased()
         var sentence = "Heart rate sat mostly in \(dominant.zone.shortName) "
-            + "(\(dominant.zone.label.lowercased())) for \(dominantPercent)% of the run"
+            + "(\(name)) for \(dominantPercent)% of the run"
         if let hardShare = hardEffortShare(slices), hardShare > 0 {
-            sentence += ", with \(Int((hardShare * 100).rounded()))% at threshold or harder"
+            let percent = Int((hardShare * 100).rounded())
+            sentence += plain
+                ? ", with \(percent)% at a hard effort or harder"
+                : ", with \(percent)% at threshold or harder"
         }
         return sentence + "."
     }
@@ -223,14 +249,18 @@ enum CoachRunBreakdown {
     /// Reported as an observation, not a diagnosis: cadence varies with pace, terrain and
     /// height, so the sentence says what it was and — only when it is low for the pace —
     /// what that can mean.
-    static func cadenceSentence(_ stepsPerMinute: Double?, paceSecondsPerKm: Double? = nil) -> String? {
+    static func cadenceSentence(
+        _ stepsPerMinute: Double?,
+        paceSecondsPerKm: Double? = nil,
+        plain: Bool = false
+    ) -> String? {
         guard let cadence = stepsPerMinute, cadence > 0, cadence.isFinite else { return nil }
         let rounded = Int(cadence.rounded())
         guard cadence < lowCadenceStepsPerMinute(paceSecondsPerKm: paceSecondsPerKm) else {
             return "Average cadence was \(rounded) steps per minute, normal for this pace."
         }
         return "Average cadence was \(rounded) steps per minute, on the low side for this pace — "
-            + "it can be a sign of overstriding."
+            + (plain ? "it can mean your strides are a little long." : "it can be a sign of overstriding.")
     }
 
     /// A cadence focus item for the coach, when there is one worth giving.
@@ -247,7 +277,7 @@ enum CoachRunBreakdown {
               cadence < lowCadenceStepsPerMinute(paceSecondsPerKm: paceSecondsPerKm),
               workoutType == .easy || workoutType == .longRun else { return nil }
         return "Try lifting cadence a few steps per minute on easy runs — "
-            + "shorter, quicker strides at the same pace, from \(Int(cadence.rounded())) spm."
+            + "shorter, quicker strides at the same pace, from \(Int(cadence.rounded())) steps per minute."
     }
 
     // MARK: - Helpers

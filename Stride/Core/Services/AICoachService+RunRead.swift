@@ -112,6 +112,7 @@ extension AICoachService {
             workout: workout,
             basis: basis,
             heartRateZones: heartRateZones,
+            plain: CoachVoice(profile?.fitnessLevel).usesPlainFacts,
             // The pace-drift bit above already frames the fade, so the half-to-half
             // comparison is only worth repeating when drift was not computed (fewer than
             // four splits) — and never for a session whose halves differ by design.
@@ -177,10 +178,13 @@ extension AICoachService {
 
     /// Summary sentences and focus items drawn from the run's splits and its time-in-zone
     /// breakdown — the two blocks the run summary shows directly above the coaching read.
+    /// - Parameter plain: write these lines without training jargon, for a runner the
+    ///   coach talks to plainly. The model tends to copy them word for word.
     private func breakdownContext(
         workout: RunWorkout,
         basis: ReadBasis,
         heartRateZones: [HRZoneSlice],
+        plain: Bool,
         includeHalfComparison: Bool,
         unitPreference: UnitPreference
     ) -> (summaryBits: [String], focusAreas: [String]) {
@@ -196,7 +200,7 @@ extension AICoachService {
             )
         }
 
-        if let zoneSentence = CoachRunBreakdown.zoneSentence(heartRateZones) {
+        if let zoneSentence = CoachRunBreakdown.zoneSentence(heartRateZones, plain: plain) {
             summaryBits.append(zoneSentence)
         }
 
@@ -205,7 +209,7 @@ extension AICoachService {
         // Judged against the run's pace: cadence falls as pace slows.
         let cadence = workout.averageCadenceStepsPerMinute
         let pace = workout.averagePaceSecondsPerKm
-        if let cadenceSentence = CoachRunBreakdown.cadenceSentence(cadence, paceSecondsPerKm: pace) {
+        if let cadenceSentence = CoachRunBreakdown.cadenceSentence(cadence, paceSecondsPerKm: pace, plain: plain) {
             summaryBits.append(cadenceSentence)
         }
         if let cadenceFocus = CoachRunBreakdown.cadenceFocus(cadence, workoutType: basis.type, paceSecondsPerKm: pace) {
@@ -221,9 +225,13 @@ extension AICoachService {
            hardShare >= 0.20,
            !basis.maxHRIsEstimated,
            basis.type == .easy || basis.type == .longRun {
+            let percent = Int((hardShare * 100).rounded())
             focus.append(
-                "Hold the next \(Self.sessionName(basis.type)) by effort in Z1–Z2 — "
-                    + "\(Int((hardShare * 100).rounded()))% of this one sat at threshold or harder."
+                plain
+                    ? "Keep the next \(Self.sessionName(basis.type)) truly easy, at a pace you could chat at — "
+                        + "\(percent)% of this one was at a hard effort."
+                    : "Hold the next \(Self.sessionName(basis.type)) by effort in Z1–Z2 — "
+                        + "\(percent)% of this one sat at threshold or harder."
             )
         }
 
@@ -267,7 +275,7 @@ extension AICoachService {
         // The one form signal the app records. Given raw rather than judged — the model has
         // the run's pace and type beside it, which is what makes a number interpretable (A5).
         let cadence = workout.averageCadenceStepsPerMinute
-            .map { "\(Int($0.rounded())) spm" } ?? "n/a"
+            .map { "\(Int($0.rounded())) steps per minute" } ?? "n/a"
         let weather = workout.weather.map {
             "\($0.conditionDescription), \($0.temperatureString(unit: unitPreference)), humidity \(Int($0.humidityPercent))%"
         } ?? "n/a"
@@ -298,7 +306,8 @@ extension AICoachService {
         let zoneSection = CoachRunBreakdown.zoneSection(
             heartRateZones,
             maxHR: profile?.effectiveMaxHeartRate.map(Double.init),
-            maxHRIsEstimated: basis.maxHRIsEstimated
+            maxHRIsEstimated: basis.maxHRIsEstimated,
+            plain: CoachVoice(profile?.fitnessLevel).usesPlainFacts
         )
 
         let recent = recentHistory.runsOnly.prefix(5).map { run in

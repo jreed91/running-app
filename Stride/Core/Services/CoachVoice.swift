@@ -44,7 +44,8 @@ enum CoachVoice: Equatable, Sendable {
             rather than "threshold" or "tempo pace", and "your heart rate" rather than \
             "HR" or "bpm". If the session itself has a name like tempo or intervals, say \
             what it means in a few words. Name a heart-rate zone by how it feels, not by \
-            its number. Keep the numbers in your sentences few, and say what each one \
+            its number. For example, not "67% at threshold or harder, cadence 153 spm" \
+            but "two-thirds of the run was at a hard effort, about 153 steps a minute". Keep the numbers in your sentences few, and say what each one \
             means for them. How the run felt and turning up again matter more than pace \
             at this stage, so say when they did the right thing. An uneven pace, a slow \
             finish or a walk break is normal for a new runner, not a fault to fix. Be \
@@ -53,11 +54,15 @@ enum CoachVoice: Equatable, Sendable {
         case .recreational:
             return """
             Who you are talking to: a runner who runs regularly but is not a specialist. \
-            Use everyday words. The first time you use a training term, explain it in a \
-            few words, for example "threshold pace, the effort you could hold for about \
-            an hour". Name a heart-rate zone by what it feels like as well as its number \
-            ("zone 4, comfortably hard"). Spell out what a number means rather than \
-            leaving it to speak for itself.
+            Use everyday words, and prefer an everyday word to a training term whenever \
+            one will do: "a hard effort" rather than "threshold", "steps a minute" rather \
+            than "cadence" or "spm". When a training term is the right word, explain it in \
+            a few words the first time, for example "threshold pace, the effort you could \
+            hold for about an hour". Name a heart-rate zone by what it feels like as well \
+            as its number ("zone 4, comfortably hard"). Spell out what a number means \
+            rather than leaving it to speak for itself. For example, not "67% at \
+            threshold or harder" but "two-thirds of the run was at a hard effort, zone 4 \
+            or above".
             """
         case .experienced:
             return """
@@ -84,8 +89,46 @@ enum CoachVoice: Equatable, Sendable {
         }
     }
 
-    /// `base`, then this voice's paragraph.
+    /// Whether the app's own lines in the prompt (zone names, the hard-effort share, the
+    /// cadence note) are written without training terms. The model copies those lines
+    /// almost word for word, so a plain voice over jargon-laden facts still came out
+    /// as "67% was at threshold or harder".
+    var usesPlainFacts: Bool {
+        self == .newRunner || self == .recreational
+    }
+
+    /// `base` with this voice's paragraph placed right after its opening paragraph.
+    ///
+    /// Up front rather than at the end: appended after several paragraphs of judging
+    /// rules, the on-device model gave it little weight. The opening paragraph (the role)
+    /// still comes first.
     func instructions(_ base: String) -> String {
-        base + "\n\n" + guidance
+        guard let split = base.range(of: "\n\n") else { return guidance + "\n\n" + base }
+        let opening = String(base[..<split.lowerBound])
+        let rest = String(base[split.upperBound...])
+        return opening + "\n\n" + guidance + "\n\n" + rest
+    }
+
+    /// A tile's label or value, or an action's metric, worded for this runner.
+    ///
+    /// The tiles fit about ten characters, so the model reaches for "spm" and "Threshold
+    /// time" even when told to write plainly. For a plain voice those two are swapped
+    /// for everyday words here; anything else is left as written.
+    func tileText(_ text: String) -> String {
+        guard usesPlainFacts else { return text }
+        var result = text.replacingOccurrences(
+            of: #"\bspm\b"#,
+            with: "steps/min",
+            options: [.regularExpression, .caseInsensitive]
+        )
+        result = result.replacingOccurrences(
+            of: #"\bthreshold\b"#,
+            with: "hard effort",
+            options: [.regularExpression, .caseInsensitive]
+        )
+        if let first = result.first, text.first?.isUppercase == true {
+            result = first.uppercased() + result.dropFirst()
+        }
+        return result
     }
 }

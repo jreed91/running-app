@@ -601,7 +601,12 @@ Both conform to `LanguageModel`, so `LanguageModelSession`, the `@Generable` sch
   profile), terms used freely and exact figures for an experienced or competitive one.
   Only the wording moves; what the coach judges is the same for every level, so keep
   judging rules in the shared text and wording rules in `CoachVoice`, and keep the
-  `@Guide` descriptions level-neutral (they are static).
+  `@Guide` descriptions level-neutral (they are static). The paragraph goes right after
+  the instructions' opening role line, not at the end, where the on-device model gave it
+  little weight. The model copies the app's own prompt lines nearly word for word, so
+  for a plain voice (`CoachVoice.usesPlainFacts`: new and recreational) those lines are
+  written plainly too (zones by feel, "a hard effort" not "threshold"), and
+  `CoachVoice.tileText` swaps "spm" and "threshold" in the short tile text.
 - `AICoachService` never imports `FoundationModels`. It talks to `OnDeviceCoachGenerating`,
   and PCC state reaches the UI as `ServerModelStatus`, a plain value type. That is what keeps
   the coach testable with a fake backend — see `StrideTests/FoundationModelsCoachServiceTests.swift`.

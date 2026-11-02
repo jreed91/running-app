@@ -279,7 +279,18 @@ struct CoachRunBreakdownTests {
         #expect(CoachRunBreakdown.cadenceFocus(nil, workoutType: .easy) == nil)
 
         let focus = try #require(CoachRunBreakdown.cadenceFocus(150, workoutType: .easy))
-        #expect(focus.contains("150 spm"))
+        #expect(focus.contains("150 steps per minute"))
+    }
+
+    @Test("Plain zone lines name zones by feel and never say threshold")
+    func plainZoneLines() throws {
+        let sentence = try #require(CoachRunBreakdown.zoneSentence(sampleZones, plain: true))
+        #expect(sentence.contains("hard effort or harder"))
+        #expect(!sentence.lowercased().contains("threshold"))
+
+        let section = CoachRunBreakdown.zoneSection(sampleZones, maxHR: 190, plain: true)
+        #expect(section.contains("Z4 hard (152-171 bpm)"))
+        #expect(!section.contains("Threshold"))
     }
 
     @Test("The low-cadence line falls as pace slows, down to a floor")
