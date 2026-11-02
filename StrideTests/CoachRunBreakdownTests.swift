@@ -248,7 +248,7 @@ struct CoachRunBreakdownTests {
     @Test("Cadence sentence reports the number, and flags only a low one")
     func cadenceSentence() throws {
         let healthy = try #require(CoachRunBreakdown.cadenceSentence(176.4))
-        #expect(healthy == "Average cadence was 176 steps per minute.")
+        #expect(healthy == "Average cadence was 176 steps per minute, normal for this pace.")
         #expect(healthy.contains("low") == false)
 
         let low = try #require(CoachRunBreakdown.cadenceSentence(151.6))
@@ -279,6 +279,40 @@ struct CoachRunBreakdownTests {
         #expect(CoachRunBreakdown.cadenceFocus(nil, workoutType: .easy) == nil)
 
         let focus = try #require(CoachRunBreakdown.cadenceFocus(150, workoutType: .easy))
-        #expect(focus.contains("150 spm"))
+        #expect(focus.contains("150 steps per minute"))
+    }
+
+    @Test("Plain zone lines name zones by feel and never say threshold")
+    func plainZoneLines() throws {
+        let sentence = try #require(CoachRunBreakdown.zoneSentence(sampleZones, plain: true))
+        #expect(sentence.contains("hard effort or harder"))
+        #expect(!sentence.lowercased().contains("threshold"))
+
+        let section = CoachRunBreakdown.zoneSection(sampleZones, maxHR: 190, plain: true)
+        #expect(section.contains("Z4 hard (152-171 bpm)"))
+        #expect(!section.contains("Threshold"))
+    }
+
+    @Test("The low-cadence line falls as pace slows, down to a floor")
+    func lowCadenceLineFollowsPace() {
+        #expect(CoachRunBreakdown.lowCadenceStepsPerMinute(paceSecondsPerKm: nil) == 160)
+        #expect(CoachRunBreakdown.lowCadenceStepsPerMinute(paceSecondsPerKm: 270) == 160)
+        #expect(CoachRunBreakdown.lowCadenceStepsPerMinute(paceSecondsPerKm: 300) == 160)
+        #expect(CoachRunBreakdown.lowCadenceStepsPerMinute(paceSecondsPerKm: 360) == 152)
+        #expect(CoachRunBreakdown.lowCadenceStepsPerMinute(paceSecondsPerKm: 600) == 148)
+    }
+
+    @Test("153 spm at about 10 minutes a mile is not called low")
+    func slowPaceCadenceIsNotFlagged() throws {
+        // 10:00 per mile is about 373 s/km: the line there is about 150 spm.
+        let pace = 373.0
+        let sentence = try #require(CoachRunBreakdown.cadenceSentence(153, paceSecondsPerKm: pace))
+        #expect(sentence.contains("low") == false)
+        #expect(sentence.contains("overstriding") == false)
+        #expect(CoachRunBreakdown.cadenceFocus(153, workoutType: .easy, paceSecondsPerKm: pace) == nil)
+
+        // The same cadence at 4:30 per km still is.
+        let fast = try #require(CoachRunBreakdown.cadenceSentence(153, paceSecondsPerKm: 270))
+        #expect(fast.contains("low side"))
     }
 }

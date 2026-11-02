@@ -324,7 +324,8 @@ struct FoundationModelsCoachServiceTests {
         #expect(prompt.contains("positive split"))
         #expect(prompt.contains("Time in heart-rate zones:"))
         #expect(prompt.contains("Zones derived from max HR 190 bpm."))
-        #expect(prompt.contains("Z5 Max (171-190 bpm)"))
+        // A recreational runner's prompt names zones by feel, not "Max" or "Threshold".
+        #expect(prompt.contains("Z5 very hard (171-190 bpm)"))
         #expect(prompt.contains("Heart rate sat mostly in"))
     }
 
@@ -680,6 +681,7 @@ struct FoundationModelsCoachServiceTests {
 
         let estimated = await recordedPrompt(workout: workout, heartRateZones: zones)
         #expect(!estimated.contains("Hold the next"))
+        #expect(!estimated.contains("Keep the next"))
 
         let profile = UserProfile(
             name: "Runner",
@@ -690,7 +692,13 @@ struct FoundationModelsCoachServiceTests {
         )
         profile.maxHeartRateBPM = 185
         let measured = await recordedPrompt(workout: workout, profile: profile, heartRateZones: zones)
-        #expect(measured.contains("Hold the next easy run by effort in Z1–Z2"))
+        // Worded plainly for this recreational runner.
+        #expect(measured.contains("Keep the next easy run truly easy"))
+        #expect(!measured.contains("threshold"))
+
+        profile.fitnessLevel = .advanced
+        let expert = await recordedPrompt(workout: workout, profile: profile, heartRateZones: zones)
+        #expect(expert.contains("Hold the next easy run by effort in Z1–Z2"))
     }
 
     @Test("The prompt names the runner's unit")

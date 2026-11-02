@@ -37,6 +37,28 @@ struct AICoachEvidenceItem: Codable, Hashable, Sendable {
     }
 }
 
+extension AICoachEvidenceItem {
+    /// This item without its delta when the delta only repeats the value's numbers.
+    ///
+    /// The instructions already say never to repeat the value as its delta, and the model
+    /// still wrote "4 seconds" over "-4s" for a pace-vs-usual stat, so the tile showed the
+    /// same figure twice. Compared on the digits alone, so "4 seconds" and "-4s" match while
+    /// "5:10/km" and "-0:12" do not.
+    func droppingEchoedDelta() -> AICoachEvidenceItem {
+        guard let delta else { return self }
+        let deltaNumbers = Self.numbers(in: delta)
+        guard !deltaNumbers.isEmpty, deltaNumbers == Self.numbers(in: value) else { return self }
+        return AICoachEvidenceItem(label: label, value: value, delta: nil, tone: tone)
+    }
+
+    private static func numbers(in text: String) -> [String] {
+        text
+            .split { !($0.isNumber || $0 == ":" || $0 == ".") }
+            .map { $0.trimmingCharacters(in: CharacterSet(charactersIn: ":.")) }
+            .filter { !$0.isEmpty }
+    }
+}
+
 struct AICoachActionItem: Codable, Hashable, Sendable {
     let title: String
     let detail: String
@@ -400,7 +422,12 @@ struct AICoachService: Sendable {
                         onPartialText: onPartialText
                     )
                 }
-                return makeInsight(from: structured, provider: provider, unitPreference: unitPreference)
+                return makeInsight(
+                    from: structured,
+                    provider: provider,
+                    unitPreference: unitPreference,
+                    voice: CoachVoice(profile?.fitnessLevel)
+                )
             } catch {
                 // Every failure lands on the local summary, so without this line a broken
                 // read and an unavailable model look the same from the outside.
@@ -415,7 +442,8 @@ struct AICoachService: Sendable {
     private func makeInsight(
         from structured: AICoachStructuredResponse,
         provider: AIProvider,
-        unitPreference: UnitPreference
+        unitPreference: UnitPreference,
+        voice: CoachVoice
     ) -> AICoachInsight {
         // The instructions' examples are written in kilometres, so a stray "per km" can
         // reach a runner who reads miles; the prose fields are put into their unit here.
@@ -425,16 +453,24 @@ struct AICoachService: Sendable {
                 title: $0.title,
                 detail: prose($0.detail),
                 priority: $0.priority,
-                metric: $0.metric,
+                metric: voice.tileText($0.metric),
                 tone: $0.tone
             )
+        }
+        let evidence = structured.evidence.prefix(3).map { item in
+            AICoachEvidenceItem(
+                label: voice.tileText(item.label),
+                value: voice.tileText(item.value),
+                delta: item.delta,
+                tone: item.tone
+            ).droppingEchoedDelta()
         }
         return AICoachInsight(
             headline: structured.headline.isEmpty ? "\(provider.displayName) Analysis" : structured.headline,
             summary: prose(structured.summary),
             fullAnalysis: structured.fullAnalysis.map(prose),
             confidence: min(max(structured.confidence, 0), 100),
-            evidence: Array(structured.evidence.prefix(3)),
+            evidence: evidence,
             actionItems: actionItems,
             focusAreas: structured.actionItems.map(\.title),
             nextWorkoutSuggestion: prose(structured.nextWorkout.title),
@@ -1037,8 +1073,8 @@ extension AICoachService {
     You are Stride's running coach, talking to one runner in a chat window.
 
     Write the way a coach talks out loud. Say "you", not "the runner" or "the athlete". \
-    Keep to one idea per sentence, and match your words to the runner described at the \
-    end. Lead with the answer, then give the reason for it.
+    Keep to one idea per sentence, and match your words to the runner described above. \
+    Lead with the answer, then give the reason for it.
 
     Write numbers the way a runner reads them off a watch: paces as minutes and seconds \
     ("5:20 per km"), times in minutes and hours ("42 minutes"), distances to one decimal \
@@ -1106,7 +1142,10 @@ extension AICoachService {
 
     Write the way a coach talks out loud: say "you" and keep each sentence to one idea. \
     The runner should understand every line on first read without looking anything up, \
-    so match your words to the runner described at the end.
+    so match your words to the runner described above. Vary how sentences start, the \
+    way a person talks: open an action with its verb ("Ease into the first mile…", "Keep \
+    Wednesday easy…"), never with "You should", and do not hang every reason on \
+    "because".
 
     Write numbers the way they appear on a watch: paces as minutes and seconds \
     ("5:20 per km"), times in minutes and hours, distances to one decimal place. Name a \

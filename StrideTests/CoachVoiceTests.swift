@@ -34,15 +34,39 @@ struct CoachVoiceTests {
         #expect(CoachVoice.competitive.guidance.contains("goal race"))
     }
 
-    @Test("Every instruction set ends with the level's paragraph")
+    @Test("Every instruction set has the level's paragraph right after its opening role")
     func instructionsCarryTheVoice() {
         for level in FitnessLevel.allCases {
             let guidance = CoachVoice(level).guidance
-            #expect(AICoachService.chatInstructions(for: level).hasSuffix(guidance))
-            #expect(AICoachService.insightInstructions(for: level).hasSuffix(guidance))
-            #expect(AICoachService.adaptationInstructions(for: level).hasSuffix(guidance))
-            #expect(AICoachService.planAdaptationInstructions(for: level).hasSuffix(guidance))
+            for instructions in [
+                AICoachService.chatInstructions(for: level),
+                AICoachService.insightInstructions(for: level),
+                AICoachService.adaptationInstructions(for: level),
+                AICoachService.planAdaptationInstructions(for: level)
+            ] {
+                let paragraphs = instructions.components(separatedBy: "\n\n")
+                #expect(paragraphs.count > 2)
+                #expect(paragraphs[0].hasPrefix("You are"))
+                #expect(paragraphs[1] == guidance)
+            }
         }
+    }
+
+    @Test("New and recreational runners get plain facts; experienced ones do not")
+    func plainFactsFollowTheVoice() {
+        #expect(CoachVoice.newRunner.usesPlainFacts)
+        #expect(CoachVoice.recreational.usesPlainFacts)
+        #expect(!CoachVoice.experienced.usesPlainFacts)
+        #expect(!CoachVoice.competitive.usesPlainFacts)
+    }
+
+    @Test("Tile jargon is swapped for everyday words for a plain voice only")
+    func tileTextIsPlainForPlainVoices() {
+        #expect(CoachVoice.recreational.tileText("153 spm") == "153 steps/min")
+        #expect(CoachVoice.recreational.tileText("Threshold time") == "Hard effort time")
+        #expect(CoachVoice.newRunner.tileText("Avg pace") == "Avg pace")
+        #expect(CoachVoice.experienced.tileText("153 spm") == "153 spm")
+        #expect(CoachVoice.competitive.tileText("Threshold time") == "Threshold time")
     }
 
     @Test("The shared instructions no longer tell every runner to have terms explained")
@@ -158,5 +182,29 @@ private struct InstructionRecordingCoach: OnDeviceCoachGenerating {
     ) async throws -> String {
         await recorder.record(instructions)
         return "ok"
+    }
+}
+
+// MARK: - Evidence deltas
+
+struct EvidenceDeltaTests {
+
+    @Test("A delta that only repeats the value's number is dropped")
+    func echoedDeltaIsDropped() {
+        let echoed = AICoachEvidenceItem(label: "Pace vs usual", value: "4 seconds", delta: "-4s", tone: "success")
+        #expect(echoed.droppingEchoedDelta().delta == nil)
+        #expect(echoed.droppingEchoedDelta().value == "4 seconds")
+    }
+
+    @Test("A real change against the plan or the usual is kept")
+    func realDeltaIsKept() {
+        let pace = AICoachEvidenceItem(label: "Avg pace", value: "5:10/km", delta: "-0:12", tone: "success")
+        #expect(pace.droppingEchoedDelta().delta == "-0:12")
+
+        let heartRate = AICoachEvidenceItem(label: "Avg HR", value: "152 bpm", delta: "+4 bpm", tone: "watch")
+        #expect(heartRate.droppingEchoedDelta().delta == "+4 bpm")
+
+        let none = AICoachEvidenceItem(label: "Cadence", value: "153 spm", delta: nil, tone: "neutral")
+        #expect(none.droppingEchoedDelta().delta == nil)
     }
 }
