@@ -97,9 +97,9 @@ struct GeneratedNextWorkout: Sendable {
 struct GeneratedCoachInsight: Sendable {
     @Guide(description: "The verdict: did this run do its job, in plain words, at most 8 words (for example \"Tempo on target, last 2 km faded\")")
     let headline: String
-    @Guide(description: "Why, in one plain sentence addressed to \"you\", naming the one number that shows it, with no jargon")
+    @Guide(description: "Why, in one plain sentence addressed to \"you\", naming the one number that shows it, in words that fit the runner described in the instructions")
     let summary: String
-    @Guide(description: "2-3 short, plain sentences addressed to \"you\": what happened, the number that shows it, and what to do about it. Write paces as minutes and seconds, and explain any training term you use")
+    @Guide(description: "2-3 short, plain sentences addressed to \"you\": what happened, the number that shows it, and what to do about it. Write paces as minutes and seconds, and use training terms only as the instructions allow for this runner")
     let fullAnalysis: String
     @Guide(description: "Confidence score", .range(0...100))
     let confidence: Int

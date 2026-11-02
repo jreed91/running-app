@@ -594,6 +594,14 @@ Both conform to `LanguageModel`, so `LanguageModelSession`, the `@Generable` sch
   Pace fade and heart-rate drift are only read for a run meant to be one effort
   (`RunWorkout.splitsAreOneEffort`), and the "usual" a run is compared with is the same
   intended type's.
+- **The coach words its replies for the runner's experience.** `CoachVoice` turns the
+  profile's `FitnessLevel` into a closing paragraph on the chat, run read and both
+  adaptation instructions (`AICoachService.chatInstructions(for:)` and friends): no jargon
+  for a new runner, terms explained once for a recreational one (also the voice with no
+  profile), terms used freely and exact figures for an experienced or competitive one.
+  Only the wording moves; what the coach judges is the same for every level, so keep
+  judging rules in the shared text and wording rules in `CoachVoice`, and keep the
+  `@Guide` descriptions level-neutral (they are static).
 - `AICoachService` never imports `FoundationModels`. It talks to `OnDeviceCoachGenerating`,
   and PCC state reaches the UI as `ServerModelStatus`, a plain value type. That is what keeps
   the coach testable with a fake backend — see `StrideTests/FoundationModelsCoachServiceTests.swift`.

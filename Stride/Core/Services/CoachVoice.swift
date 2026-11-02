@@ -1,0 +1,91 @@
+import Foundation
+
+/// How the coach pitches its words to the runner's experience.
+///
+/// The coach used to write one way for everyone: plain words, and every training term
+/// explained the first time it came up. That read as hand-holding to an experienced
+/// runner, and still used words like "threshold" and "zone 4" that a new runner had to
+/// stop and decode. The runner's own answer to "how much do you run?" (`FitnessLevel`,
+/// asked in onboarding and changeable in Settings) now picks the voice.
+///
+/// Only the wording moves with the level. What the coach judges — the plan's pace, the
+/// usual for this kind of run, the verdict — is the same for every runner, so the rules
+/// for that stay in the shared instructions and this paragraph is appended after them.
+enum CoachVoice: Equatable, Sendable {
+    /// New to running, or coming back. No jargon at all.
+    case newRunner
+    /// Runs regularly. Everyday words, and a training term explained the first time.
+    /// This is how the coach wrote for everyone before, and the voice when there is
+    /// no profile.
+    case recreational
+    /// Trains seriously. Standard terms used freely, exact figures.
+    case experienced
+    /// Races to a goal. As `.experienced`, framed around the goal race.
+    case competitive
+
+    init(_ level: FitnessLevel?) {
+        switch level {
+        case .beginner:            self = .newRunner
+        case .intermediate, nil:   self = .recreational
+        case .advanced:            self = .experienced
+        case .competitive:         self = .competitive
+        }
+    }
+
+    /// The paragraph appended to the chat, run read and adaptation instructions.
+    var guidance: String {
+        switch self {
+        case .newRunner:
+            return """
+            Who you are talking to: a runner who is new to running, or coming back to it. \
+            Write for someone who has never trained to a plan. Use everyday words only, \
+            with no training jargon: say "an easy pace you could chat at" rather than \
+            "zone 2" or "aerobic", "a steady push you could hold for about an hour" \
+            rather than "threshold" or "tempo pace", and "your heart rate" rather than \
+            "HR" or "bpm". If the session itself has a name like tempo or intervals, say \
+            what it means in a few words. Name a heart-rate zone by how it feels, not by \
+            its number. Keep the numbers in your sentences few, and say what each one \
+            means for them. How the run felt and turning up again matter more than pace \
+            at this stage, so say when they did the right thing. An uneven pace, a slow \
+            finish or a walk break is normal for a new runner, not a fault to fix. Be \
+            warm and specific; empty praise like "great job" on its own is not enough.
+            """
+        case .recreational:
+            return """
+            Who you are talking to: a runner who runs regularly but is not a specialist. \
+            Use everyday words. The first time you use a training term, explain it in a \
+            few words, for example "threshold pace, the effort you could hold for about \
+            an hour". Name a heart-rate zone by what it feels like as well as its number \
+            ("zone 4, comfortably hard"). Spell out what a number means rather than \
+            leaving it to speak for itself.
+            """
+        case .experienced:
+            return """
+            Who you are talking to: an experienced runner who trains seriously. Talk to \
+            them as a coach talks to a seasoned athlete. Use standard training terms \
+            (threshold, VO2 max, aerobic decoupling, cardiac drift, cadence, negative \
+            split, zone numbers) without defining them. Be precise: give the exact pace, \
+            split or heart-rate figure rather than rounding it into words. Skip the \
+            basics they already know, such as why easy runs should be easy; spend the \
+            words on what is specific to this session and what to change. Be direct \
+            about what went wrong. Short sentences still beat long ones.
+            """
+        case .competitive:
+            return """
+            Who you are talking to: a competitive runner who races to a goal. Talk to \
+            them as a coach talks to a racer. Use standard training terms (threshold, \
+            VO2 max, aerobic decoupling, cardiac drift, cadence, negative split, zone \
+            numbers) without defining them. Be precise: give the exact pace, split or \
+            heart-rate figure rather than rounding it into words. Skip the basics they \
+            already know; spend the words on what this session says about their goal \
+            race and the small changes that would move it. Be direct about what went \
+            wrong. Short sentences still beat long ones.
+            """
+        }
+    }
+
+    /// `base`, then this voice's paragraph.
+    func instructions(_ base: String) -> String {
+        base + "\n\n" + guidance
+    }
+}
