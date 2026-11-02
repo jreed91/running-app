@@ -37,6 +37,11 @@ struct AICoachChatView: View {
     )
     private var activePlans: [TrainingPlan]
 
+    /// Read for the runner's experience, which sets how plainly or technically the coach
+    /// words its replies (`CoachVoice`). Newest first, the order the app root reads.
+    @Query(sort: \UserProfile.updatedAt, order: .reverse)
+    private var profiles: [UserProfile]
+
     @State private var messages: [AICoachChatMessage] = []
     @State private var draft = ""
     @State private var isWaitingForCoach = false
@@ -426,6 +431,7 @@ struct AICoachChatView: View {
                 provider: appSettings.aiProvider,
                 context: coachContext,
                 messages: providerMessages,
+                fitnessLevel: profiles.first?.fitnessLevel,
                 // The eight runs in `coachContext` answer most questions; the lookup lets
                 // the coach fetch the rest ("my last five easy runs") when one needs it.
                 lookup: CoachLookup.make(

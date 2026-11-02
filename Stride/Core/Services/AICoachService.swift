@@ -251,10 +251,13 @@ struct AICoachService: Sendable {
     ///   the coach writes. Each call supersedes the last (see `OnDeviceCoachGenerating`),
     ///   so the chat renders the value it is handed rather than appending it.
     /// - Parameter lookup: the runner's log for the coach's read-only tools; nil for none.
+    /// - Parameter fitnessLevel: the runner's experience, which sets how plainly or
+    ///   technically the coach words its reply (`CoachVoice`); nil without a profile.
     func chatWithProvider(
         provider: AIProvider,
         context: String,
         messages: [AIProviderChatMessage],
+        fitnessLevel: FitnessLevel? = nil,
         lookup: CoachLookup? = nil,
         onPartialText: @escaping @MainActor @Sendable (String) -> Void = { _ in }
     ) async throws -> String {
@@ -263,7 +266,7 @@ struct AICoachService: Sendable {
         }
         do {
             return try await backend.generateChatReply(
-                instructions: CoachLookup.instructions(Self.chatInstructions, withToolsFor: lookup),
+                instructions: CoachLookup.instructions(Self.chatInstructions(for: fitnessLevel), withToolsFor: lookup),
                 context: context,
                 messages: messages,
                 lookup: lookup,
@@ -278,7 +281,7 @@ struct AICoachService: Sendable {
             // a plain answer beats an error bubble.
             AppLogger.log("Coach chat with tools failed, retrying without: \(error)", label: "ai-coach", level: .error)
             return try await backend.generateChatReply(
-                instructions: Self.chatInstructions,
+                instructions: Self.chatInstructions(for: fitnessLevel),
                 context: context,
                 messages: messages,
                 lookup: nil,
@@ -371,7 +374,10 @@ struct AICoachService: Sendable {
                     focusAreas: context.focusAreas,
                     details: details
                 )
-                let instructions = CoachLookup.instructions(Self.insightInstructions, withToolsFor: lookup)
+                let instructions = CoachLookup.instructions(
+                    Self.insightInstructions(for: profile?.fitnessLevel),
+                    withToolsFor: lookup
+                )
                 let structured: AICoachStructuredResponse
                 do {
                     structured = try await backend.generateCoachInsight(
@@ -486,7 +492,7 @@ struct AICoachService: Sendable {
         guard let backend = onDeviceBackend, await backend.isAvailable() else { return nil }
         do {
             let structured = try await backend.generateWorkoutAdaptation(
-                instructions: Self.adaptationInstructions,
+                instructions: Self.adaptationInstructions(for: profile.fitnessLevel),
                 prompt: Self.adaptationPrompt(context: adaptationContext),
                 useServerModel: provider.usesPrivateCloudCompute
             )
@@ -525,7 +531,7 @@ struct AICoachService: Sendable {
 
         guard let backend = onDeviceBackend, await backend.isAvailable() else { return [:] }
         let structured = try? await backend.generatePlanAdaptation(
-            instructions: Self.planAdaptationInstructions,
+            instructions: Self.planAdaptationInstructions(for: profile.fitnessLevel),
             prompt: Self.planAdaptationPrompt(context: adaptationContext),
             useServerModel: provider.usesPrivateCloudCompute,
             onPartialText: onPartialText
@@ -1021,18 +1027,22 @@ extension AICoachService {
 // field lengths, enum choices) live in the `@Generable` `@Guide` annotations, so these
 // strings omit the JSON-schema block the cloud prompts need.
 extension AICoachService {
-    static let chatInstructions = """
+    /// The chat's instructions, worded for the runner's experience (`CoachVoice`); `nil`
+    /// when there is no profile, which reads as a recreational runner.
+    static func chatInstructions(for level: FitnessLevel?) -> String {
+        CoachVoice(level).instructions(chatBaseInstructions)
+    }
+
+    private static let chatBaseInstructions = """
     You are Stride's running coach, talking to one runner in a chat window.
 
     Write the way a coach talks out loud. Say "you", not "the runner" or "the athlete". \
-    Use everyday words and one idea per sentence. Lead with the answer, then give the \
-    reason for it.
+    Keep to one idea per sentence, and match your words to the runner described at the \
+    end. Lead with the answer, then give the reason for it.
 
     Write numbers the way a runner reads them off a watch: paces as minutes and seconds \
     ("5:20 per km"), times in minutes and hours ("42 minutes"), distances to one decimal \
-    place. Never write a pace as a count of seconds. The first time you use a training \
-    term, explain it in a few words — for example "threshold pace, the effort you could \
-    hold for about an hour".
+    place. Never write a pace as a count of seconds.
 
     Keep it under 120 words unless the runner asks for more, and keep paragraphs to two \
     or three sentences. Use a short bullet list when you are genuinely listing separate \
@@ -1043,7 +1053,12 @@ extension AICoachService {
     to be certain when you are not.
     """
 
-    static let insightInstructions = """
+    /// The run read's instructions, worded for the runner's experience (`CoachVoice`).
+    static func insightInstructions(for level: FitnessLevel?) -> String {
+        CoachVoice(level).instructions(insightBaseInstructions)
+    }
+
+    private static let insightBaseInstructions = """
     You are a running coach reading back one finished run to the runner who just did it.
 
     The read fills one screen, in this order: a verdict, one sentence on why, three \
@@ -1089,16 +1104,14 @@ extension AICoachService {
     A delta is the change against the plan or the usual; leave it empty when there is \
     nothing to compare with, and never repeat the value as its delta.
 
-    Write the way a coach talks out loud: say "you", use everyday words, and keep each \
-    sentence to one idea. A runner should understand every line on first read without \
-    looking anything up. Explain a training term in a few words the first time you use \
-    it, and spell out what a number means rather than leaving it to speak for itself.
+    Write the way a coach talks out loud: say "you" and keep each sentence to one idea. \
+    The runner should understand every line on first read without looking anything up, \
+    so match your words to the runner described at the end.
 
     Write numbers the way they appear on a watch: paces as minutes and seconds \
     ("5:20 per km"), times in minutes and hours, distances to one decimal place. Name a \
     split by where it was in the run ("the fourth kilometre", "the last mile"), not by \
-    an index. Name a heart-rate zone by what it feels like as well as its number \
-    ("zone 4, comfortably hard").
+    an index.
 
     Use only the supplied data, and ground the read in this run: its pace, its splits, \
     its distance, its terrain, its conditions. Use the per-split table, the split trend \
@@ -1133,7 +1146,12 @@ extension AICoachService {
         """
     }
 
-    static let adaptationInstructions = """
+    /// Single-workout adaptation; only the explanation's wording follows the level.
+    static func adaptationInstructions(for level: FitnessLevel?) -> String {
+        CoachVoice(level).instructions(adaptationBaseInstructions)
+    }
+
+    private static let adaptationBaseInstructions = """
     You are a running coach adapting a single scheduled run, using only the supplied \
     athlete context.
 
@@ -1144,7 +1162,7 @@ extension AICoachService {
 
     Every numeric pace field is in seconds per kilometre, whatever the runner's display \
     unit. The explanation is the opposite: it is read by the runner, so write it the way \
-    a coach talks. Say "you", use everyday words, keep it to one or two short sentences, \
+    a coach talks. Say "you", keep it to one or two short sentences, \
     and write paces as minutes and seconds ("5:20 per km") — never as a count of \
     seconds. Say what changed and why it changed.
 
@@ -1165,7 +1183,12 @@ extension AICoachService {
         """
     }
 
-    static let planAdaptationInstructions = """
+    /// Plan-wide adaptation; only the explanations' wording follows the level.
+    static func planAdaptationInstructions(for level: FitnessLevel?) -> String {
+        CoachVoice(level).instructions(planAdaptationBaseInstructions)
+    }
+
+    private static let planAdaptationBaseInstructions = """
     You are a running coach adapting several scheduled runs as one coordinated plan \
     update, using only the supplied athlete context.
 

@@ -217,7 +217,7 @@ struct CoachLookupTests {
         let requests = await recorder.requests
         #expect(requests.map(\.hadLookup) == [true, false])
         #expect(requests.first?.instructions.contains(CoachLookup.instructionsNote) == true)
-        #expect(requests.last?.instructions == AICoachService.chatInstructions)
+        #expect(requests.last?.instructions == AICoachService.chatInstructions(for: nil))
     }
 
     @Test func aChatThatFailsWithToolsIsAskedAgainWithout() async throws {
@@ -233,7 +233,7 @@ struct CoachLookupTests {
         let requests = await recorder.requests
         #expect(reply == "ok")
         #expect(requests.map(\.hadLookup) == [true, false])
-        #expect(requests.last?.instructions == AICoachService.chatInstructions)
+        #expect(requests.last?.instructions == AICoachService.chatInstructions(for: nil))
     }
 }
 
