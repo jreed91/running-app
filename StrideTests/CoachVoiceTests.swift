@@ -160,3 +160,27 @@ private struct InstructionRecordingCoach: OnDeviceCoachGenerating {
         return "ok"
     }
 }
+
+// MARK: - Evidence deltas
+
+struct EvidenceDeltaTests {
+
+    @Test("A delta that only repeats the value's number is dropped")
+    func echoedDeltaIsDropped() {
+        let echoed = AICoachEvidenceItem(label: "Pace vs usual", value: "4 seconds", delta: "-4s", tone: "success")
+        #expect(echoed.droppingEchoedDelta().delta == nil)
+        #expect(echoed.droppingEchoedDelta().value == "4 seconds")
+    }
+
+    @Test("A real change against the plan or the usual is kept")
+    func realDeltaIsKept() {
+        let pace = AICoachEvidenceItem(label: "Avg pace", value: "5:10/km", delta: "-0:12", tone: "success")
+        #expect(pace.droppingEchoedDelta().delta == "-0:12")
+
+        let heartRate = AICoachEvidenceItem(label: "Avg HR", value: "152 bpm", delta: "+4 bpm", tone: "watch")
+        #expect(heartRate.droppingEchoedDelta().delta == "+4 bpm")
+
+        let none = AICoachEvidenceItem(label: "Cadence", value: "153 spm", delta: nil, tone: "neutral")
+        #expect(none.droppingEchoedDelta().delta == nil)
+    }
+}

@@ -75,7 +75,7 @@ struct GeneratedEvidence: Sendable {
 struct GeneratedActionItem: Sendable {
     @Guide(description: "What to do, said as an instruction to the runner, at most 6 words")
     let title: String
-    @Guide(description: "One plain sentence, addressed to \"you\", saying what to do and why")
+    @Guide(description: "One plain sentence: what to do, starting with the verb, then the reason from this run. Never start with \"You should\"")
     let detail: String
     let priority: ActionPriority
     @Guide(description: "The number this action turns on, with its unit, at most 10 characters")
@@ -88,7 +88,7 @@ struct GeneratedActionItem: Sendable {
 struct GeneratedNextWorkout: Sendable {
     @Guide(description: "The next run to do, named the way a coach would say it (for example \"Easy 5 km at 6:10 per km\"): one run with its kind, a distance or time, and an effort or pace. If a next run is planned, this is that run, changed only if this run gives a reason")
     let title: String
-    @Guide(description: "One plain sentence, addressed to \"you\", saying why this comes next")
+    @Guide(description: "One plain sentence, addressed to \"you\", saying why this comes next. Never start with \"You should\"")
     let rationale: String
 }
 

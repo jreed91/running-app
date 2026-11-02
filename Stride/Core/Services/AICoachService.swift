@@ -37,6 +37,28 @@ struct AICoachEvidenceItem: Codable, Hashable, Sendable {
     }
 }
 
+extension AICoachEvidenceItem {
+    /// This item without its delta when the delta only repeats the value's numbers.
+    ///
+    /// The instructions already say never to repeat the value as its delta, and the model
+    /// still wrote "4 seconds" over "-4s" for a pace-vs-usual stat, so the tile showed the
+    /// same figure twice. Compared on the digits alone, so "4 seconds" and "-4s" match while
+    /// "5:10/km" and "-0:12" do not.
+    func droppingEchoedDelta() -> AICoachEvidenceItem {
+        guard let delta else { return self }
+        let deltaNumbers = Self.numbers(in: delta)
+        guard !deltaNumbers.isEmpty, deltaNumbers == Self.numbers(in: value) else { return self }
+        return AICoachEvidenceItem(label: label, value: value, delta: nil, tone: tone)
+    }
+
+    private static func numbers(in text: String) -> [String] {
+        text
+            .split { !($0.isNumber || $0 == ":" || $0 == ".") }
+            .map { $0.trimmingCharacters(in: CharacterSet(charactersIn: ":.")) }
+            .filter { !$0.isEmpty }
+    }
+}
+
 struct AICoachActionItem: Codable, Hashable, Sendable {
     let title: String
     let detail: String
@@ -434,7 +456,7 @@ struct AICoachService: Sendable {
             summary: prose(structured.summary),
             fullAnalysis: structured.fullAnalysis.map(prose),
             confidence: min(max(structured.confidence, 0), 100),
-            evidence: Array(structured.evidence.prefix(3)),
+            evidence: structured.evidence.prefix(3).map { $0.droppingEchoedDelta() },
             actionItems: actionItems,
             focusAreas: structured.actionItems.map(\.title),
             nextWorkoutSuggestion: prose(structured.nextWorkout.title),
@@ -1106,7 +1128,10 @@ extension AICoachService {
 
     Write the way a coach talks out loud: say "you" and keep each sentence to one idea. \
     The runner should understand every line on first read without looking anything up, \
-    so match your words to the runner described at the end.
+    so match your words to the runner described at the end. Vary how sentences start, the \
+    way a person talks: open an action with its verb ("Ease into the first mile…", "Keep \
+    Wednesday easy…"), never with "You should", and do not hang every reason on \
+    "because".
 
     Write numbers the way they appear on a watch: paces as minutes and seconds \
     ("5:20 per km"), times in minutes and hours, distances to one decimal place. Name a \

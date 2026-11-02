@@ -188,31 +188,63 @@ enum CoachRunBreakdown {
     /// stride and moves the footstrike back under the hips. Well under the ~180 spm
     /// figure that gets quoted, because that number is an elite average and a recreational
     /// runner at 168 has nothing to fix.
+    ///
+    /// This is the line at 5:00 per km and faster. Cadence falls as pace slows, so the
+    /// line falls with it (`lowCadenceStepsPerMinute(paceSecondsPerKm:)`): a fixed 160
+    /// told a runner averaging 10 minutes a mile at 153 spm that they were overstriding,
+    /// which is a normal cadence for that pace.
     static let lowCadenceStepsPerMinute: Double = 160
+
+    /// Pace at and faster than which the full `lowCadenceStepsPerMinute` line applies.
+    static let lowCadenceReferencePaceSecondsPerKm: Double = 300
+    /// How far the line drops for each 30 s/km slower than the reference pace.
+    static let lowCadenceDropPerHalfMinute: Double = 4
+    /// The line never drops below this, however slow the run.
+    static let lowCadenceFloorStepsPerMinute: Double = 148
+
+    /// The cadence below which this run's is called low, given its average pace.
+    ///
+    /// A rough line, not a measurement: cadence also moves with height and terrain. It is
+    /// meant to flag only cadences that are low *for the pace*, so a slow run is not
+    /// read as a form fault. With no pace, the fixed line applies.
+    static func lowCadenceStepsPerMinute(paceSecondsPerKm: Double?) -> Double {
+        guard let pace = paceSecondsPerKm, pace.isFinite, pace > lowCadenceReferencePaceSecondsPerKm else {
+            return lowCadenceStepsPerMinute
+        }
+        let halfMinutesSlower = (pace - lowCadenceReferencePaceSecondsPerKm) / 30
+        return max(
+            lowCadenceFloorStepsPerMinute,
+            lowCadenceStepsPerMinute - halfMinutesSlower * lowCadenceDropPerHalfMinute
+        )
+    }
 
     /// The run's cadence as one sentence, or `nil` when the run carries none.
     ///
     /// Reported as an observation, not a diagnosis: cadence varies with pace, terrain and
-    /// height, so the sentence says what it was and — only when it is low — what that
-    /// usually means.
-    static func cadenceSentence(_ stepsPerMinute: Double?) -> String? {
+    /// height, so the sentence says what it was and — only when it is low for the pace —
+    /// what that can mean.
+    static func cadenceSentence(_ stepsPerMinute: Double?, paceSecondsPerKm: Double? = nil) -> String? {
         guard let cadence = stepsPerMinute, cadence > 0, cadence.isFinite else { return nil }
         let rounded = Int(cadence.rounded())
-        guard cadence < lowCadenceStepsPerMinute else {
-            return "Average cadence was \(rounded) steps per minute."
+        guard cadence < lowCadenceStepsPerMinute(paceSecondsPerKm: paceSecondsPerKm) else {
+            return "Average cadence was \(rounded) steps per minute, normal for this pace."
         }
-        return "Average cadence was \(rounded) steps per minute, on the low side — "
-            + "usually a sign of overstriding."
+        return "Average cadence was \(rounded) steps per minute, on the low side for this pace — "
+            + "it can be a sign of overstriding."
     }
 
     /// A cadence focus item for the coach, when there is one worth giving.
     ///
-    /// Only for low cadence on an easy or long run: those are the sessions where a runner
-    /// has the attention to change something about their form, and where doing so does not
-    /// cost them the workout's own target.
-    static func cadenceFocus(_ stepsPerMinute: Double?, workoutType: WorkoutType) -> String? {
+    /// Only for cadence that is low for the pace on an easy or long run: those are the
+    /// sessions where a runner has the attention to change something about their form,
+    /// and where doing so does not cost them the workout's own target.
+    static func cadenceFocus(
+        _ stepsPerMinute: Double?,
+        workoutType: WorkoutType,
+        paceSecondsPerKm: Double? = nil
+    ) -> String? {
         guard let cadence = stepsPerMinute, cadence > 0, cadence.isFinite,
-              cadence < lowCadenceStepsPerMinute,
+              cadence < lowCadenceStepsPerMinute(paceSecondsPerKm: paceSecondsPerKm),
               workoutType == .easy || workoutType == .longRun else { return nil }
         return "Try lifting cadence a few steps per minute on easy runs — "
             + "shorter, quicker strides at the same pace, from \(Int(cadence.rounded())) spm."

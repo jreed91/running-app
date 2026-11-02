@@ -202,11 +202,13 @@ extension AICoachService {
 
         // Cadence: captured on every run but discarded at finish until A5, so no coaching
         // read — local or model — could ever say anything about form.
+        // Judged against the run's pace: cadence falls as pace slows.
         let cadence = workout.averageCadenceStepsPerMinute
-        if let cadenceSentence = CoachRunBreakdown.cadenceSentence(cadence) {
+        let pace = workout.averagePaceSecondsPerKm
+        if let cadenceSentence = CoachRunBreakdown.cadenceSentence(cadence, paceSecondsPerKm: pace) {
             summaryBits.append(cadenceSentence)
         }
-        if let cadenceFocus = CoachRunBreakdown.cadenceFocus(cadence, workoutType: basis.type) {
+        if let cadenceFocus = CoachRunBreakdown.cadenceFocus(cadence, workoutType: basis.type, paceSecondsPerKm: pace) {
             focus.append(cadenceFocus)
         }
 
