@@ -403,31 +403,23 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             throw HealthKitRepositoryError.workoutKitNotAuthorized
         }
 
+        // Every composition this app has filed is cleared, not only the ones this plan's ids
+        // still point at: the Workout app holds at most `maxAllowedScheduledWorkoutCount`,
+        // and an orphan left by an older sync would keep a slot this week's sessions need.
         let allWorkouts = (plan.weeks ?? []).flatMap { $0.workouts ?? [] }
-        let syncableWorkouts = allWorkouts.filter {
-            $0.workoutType != .rest &&
-            !$0.isCompleted
+        let scheduled = await scheduler.scheduledWorkouts
+        for entry in scheduled {
+            await scheduler.remove(entry.plan, at: entry.date)
         }
-        var existingIDs = Set(allWorkouts.map { $0.id.uuidString })
-        existingIDs.formUnion(allWorkouts.compactMap(\.healthKitPlanID))
-        if !existingIDs.isEmpty {
-            let scheduled = await scheduler.scheduledWorkouts
-            for entry in scheduled where existingIDs.contains(entry.plan.id.uuidString) {
-                await scheduler.remove(entry.plan, at: entry.date)
-            }
-            allWorkouts.forEach { $0.healthKitPlanID = nil }
-        }
+        allWorkouts.forEach { $0.healthKitPlanID = nil }
 
         let calendar = Calendar.current
-        let now = Date()
-        for workout in syncableWorkouts {
-            guard let fireDate = Self.workoutKitFireDate(for: workout.scheduledDate, now: now, calendar: calendar)
-            else { continue }
-
-            let dateComponents = calendar.dateComponents(
-                [.year, .month, .day, .hour, .minute],
-                from: fireDate
-            )
+        let window = Self.workoutKitSchedule(
+            for: allWorkouts, now: Date(), calendar: calendar,
+            limit: WorkoutScheduler.maxAllowedScheduledWorkoutCount
+        )
+        for (workout, fireDate) in window {
+            let dateComponents = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: fireDate)
             let workoutPlan = Self.makeWorkoutPlan(for: workout, unitPreference: unitPreference)
             await scheduler.schedule(workoutPlan, at: dateComponents)
             workout.healthKitPlanID = workoutPlan.id.uuidString
