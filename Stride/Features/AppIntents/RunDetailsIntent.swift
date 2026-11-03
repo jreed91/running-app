@@ -5,6 +5,13 @@ import SwiftUI
 /// the Shortcuts app, and Apple Intelligence resolve it through the entity's query and
 /// Spotlight index — so "get details of my long run on Saturday" works without opening
 /// the app.
+// Siri AI Developer Preview: Siri may call this intent as a tool. The macro and
+// `ToolIntent` exist only in the iOS 27.3 SDK; `SiriEvaluations` ships in that same SDK,
+// so its presence switches the attribute on and older Xcodes compile as before. See
+// docs/siri-ai-developer-preview.md.
+#if canImport(SiriEvaluations)
+@AppIntent(.tool)
+#endif
 struct RunDetailsIntent: AppIntent {
     static let title: LocalizedStringResource = "Get Run Details"
     static let description = IntentDescription(

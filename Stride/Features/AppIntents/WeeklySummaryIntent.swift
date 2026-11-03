@@ -2,6 +2,13 @@ import AppIntents
 import SwiftData
 import SwiftUI
 
+// Siri AI Developer Preview: Siri may call this intent as a tool. The macro and
+// `ToolIntent` exist only in the iOS 27.3 SDK; `SiriEvaluations` ships in that same SDK,
+// so its presence switches the attribute on and older Xcodes compile as before. See
+// docs/siri-ai-developer-preview.md.
+#if canImport(SiriEvaluations)
+@AppIntent(.tool)
+#endif
 struct WeeklySummaryIntent: AppIntent {
     static let title: LocalizedStringResource = "Weekly Running Summary"
     static let description = IntentDescription(
