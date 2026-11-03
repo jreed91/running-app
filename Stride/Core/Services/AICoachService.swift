@@ -453,7 +453,7 @@ struct AICoachService: Sendable {
                 title: $0.title,
                 detail: prose($0.detail),
                 priority: $0.priority,
-                metric: voice.tileText($0.metric),
+                metric: $0.metric.map { voice.tileText($0) },
                 tone: $0.tone
             )
         }
