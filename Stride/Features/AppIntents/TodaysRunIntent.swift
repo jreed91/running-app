@@ -2,9 +2,18 @@ import AppIntents
 import SwiftData
 import SwiftUI
 
+// Siri AI Developer Preview: Siri may call this intent as a tool. The macro and
+// `ToolIntent` exist only in the iOS 27.3 SDK; `SiriEvaluations` ships in that same SDK,
+// so its presence switches the attribute on and older Xcodes compile as before. See
+// docs/siri-ai-developer-preview.md.
+#if canImport(SiriEvaluations)
+@AppIntent(.tool)
+#endif
 struct TodaysRunIntent: AppIntent {
     static let title: LocalizedStringResource = "Today's Run"
-    static let description = IntentDescription("See your scheduled run for today.")
+    static let description = IntentDescription(
+        "Says what the active training plan has scheduled today: the session type and, for runs, the planned distance."
+    )
     static let openAppWhenRun = false
 
     func perform() async throws -> some IntentResult & ProvidesDialog & ShowsSnippetView {

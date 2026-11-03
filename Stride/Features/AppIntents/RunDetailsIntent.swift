@@ -5,12 +5,24 @@ import SwiftUI
 /// the Shortcuts app, and Apple Intelligence resolve it through the entity's query and
 /// Spotlight index — so "get details of my long run on Saturday" works without opening
 /// the app.
+// Siri AI Developer Preview: Siri may call this intent as a tool. The macro and
+// `ToolIntent` exist only in the iOS 27.3 SDK; `SiriEvaluations` ships in that same SDK,
+// so its presence switches the attribute on and older Xcodes compile as before. See
+// docs/siri-ai-developer-preview.md.
+#if canImport(SiriEvaluations)
+@AppIntent(.tool)
+#endif
 struct RunDetailsIntent: AppIntent {
     static let title: LocalizedStringResource = "Get Run Details"
-    static let description = IntentDescription("Look up the details of one of your runs.")
+    static let description = IntentDescription(
+        "Shows a finished run's type, date, distance, time and average pace, in the units set in Stride."
+    )
     static let openAppWhenRun = false
 
-    @Parameter(title: "Run")
+    @Parameter(
+        title: "Run",
+        description: "A finished run, found by its type, date or distance, such as last Saturday's long run."
+    )
     var run: RunWorkoutEntity
 
     static var parameterSummary: some ParameterSummary {
@@ -21,5 +33,19 @@ struct RunDetailsIntent: AppIntent {
         return .result(dialog: "\(run.workoutTypeName): \(run.subtitle).") {
             RunDetailsIntentView(run: run)
         }
+    }
+}
+
+extension RunDetailsIntent {
+    /// Tells the system the runner just looked at this run, the behavioural cue Siri uses
+    /// to pick between intents that could answer the same request (Siri AI Developer
+    /// Preview, "Make actions discoverable"). Runs only: walks and rides aren't offered as
+    /// runs anywhere else in the intents either (N38). Best-effort and fire-and-forget.
+    @MainActor
+    static func donateViewing(_ workout: RunWorkout, unit: UnitPreference) {
+        guard workout.workoutType.countsAsRunning else { return }
+        var intent = RunDetailsIntent()
+        intent.run = workout.runWorkoutEntity(unit: unit)
+        _ = IntentDonationManager.shared.donate(intent: intent)
     }
 }
