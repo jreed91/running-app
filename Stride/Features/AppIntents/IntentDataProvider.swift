@@ -92,6 +92,38 @@ actor IntentModelActor {
         return try modelContext.fetch(descriptor).map { $0.runWorkoutEntity(unit: unit) }
     }
 
+    /// Runs on the days `from` through `to` (either order), newest first, optionally of
+    /// one type and at least `minimumMeters` long. Backs the Siri "find runs" tool. Runs
+    /// only, never walks or rides (N38), like every other run list Siri is given.
+    func findRuns(
+        workoutType: WorkoutType?,
+        from: Date,
+        to: Date,
+        minimumMeters: Double,
+        limit: Int,
+        unit: UnitPreference
+    ) throws -> [RunWorkoutEntity] {
+        let start = min(from, to).startOfDay
+        let end = max(from, to).startOfDay.adding(days: 1)
+        let walkRaw = WorkoutType.walk.rawValue
+        let crossTrainingRaw = WorkoutType.crossTraining.rawValue
+        let predicate = #Predicate<RunWorkout> {
+            $0.date >= start && $0.date < end
+                && $0.workoutTypeRaw != walkRaw && $0.workoutTypeRaw != crossTrainingRaw
+        }
+        let descriptor = FetchDescriptor<RunWorkout>(
+            predicate: predicate,
+            sortBy: [SortDescriptor(\.date, order: .reverse)]
+        )
+        // Type and distance are filtered in memory: `workoutType` reads an unknown raw
+        // value as `.easy`, which a predicate on the raw column would miss.
+        return try modelContext.fetch(descriptor)
+            .filter { workoutType == nil || $0.workoutType == workoutType }
+            .filter { $0.distanceMeters >= minimumMeters }
+            .prefix(limit)
+            .map { $0.runWorkoutEntity(unit: unit) }
+    }
+
     func runEntities(matching query: String, unit: UnitPreference) throws -> [RunWorkoutEntity] {
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return try modelContext
