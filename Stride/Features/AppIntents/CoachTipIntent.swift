@@ -9,7 +9,9 @@ import SwiftUI
 /// directly rather than reading a published snapshot the way the widget extension must.
 struct CoachTipIntent: AppIntent {
     static let title: LocalizedStringResource = "Coach Tip"
-    static let description = IntentDescription("Ask what to do about your next run, and what to eat before it.")
+    static let description = IntentDescription(
+        "Gives the coach's top tip for the next run, from the plan and recent runs, including what to eat first."
+    )
     static let openAppWhenRun = false
 
     func perform() async throws -> some IntentResult & ProvidesDialog & ShowsSnippetView {

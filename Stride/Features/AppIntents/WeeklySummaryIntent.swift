@@ -4,7 +4,9 @@ import SwiftUI
 
 struct WeeklySummaryIntent: AppIntent {
     static let title: LocalizedStringResource = "Weekly Running Summary"
-    static let description = IntentDescription("See how far you've run this week.")
+    static let description = IntentDescription(
+        "Says how far you have run this week, Monday to today, in kilometres or miles. Walks and rides are not counted."
+    )
     static let openAppWhenRun = false
 
     func perform() async throws -> some IntentResult & ProvidesDialog & ShowsSnippetView {

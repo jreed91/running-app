@@ -4,7 +4,9 @@ import SwiftUI
 
 struct TodaysRunIntent: AppIntent {
     static let title: LocalizedStringResource = "Today's Run"
-    static let description = IntentDescription("See your scheduled run for today.")
+    static let description = IntentDescription(
+        "Says what the active training plan has scheduled today: the session type and, for runs, the planned distance."
+    )
     static let openAppWhenRun = false
 
     func perform() async throws -> some IntentResult & ProvidesDialog & ShowsSnippetView {

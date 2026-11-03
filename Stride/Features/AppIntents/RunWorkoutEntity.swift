@@ -1,5 +1,6 @@
 import AppIntents
 import CoreSpotlight
+import CoreTransferable
 import Foundation
 import SwiftData
 import UniformTypeIdentifiers
@@ -14,8 +15,30 @@ struct RunWorkoutEntity: AppEntity {
     static let defaultQuery = RunWorkoutEntityQuery()
 
     let id: UUID
-    let date: Date
-    let workoutTypeName: String
+
+    // The `@Property` values are what Siri, Shortcuts and Apple Intelligence can read off
+    // a run ("how far was my long run on Saturday?"). Before these existed the entity
+    // exposed only its display title, so a run could be found and shown but none of its
+    // numbers could be answered from or passed on (Siri AI Developer Preview, "Add
+    // information to your app entities"). The preview also asks for a `description:` on
+    // each property; that initializer is iOS 27.3+ and a stored property can't be gated
+    // below the 27.0 deployment target, so it waits until the target moves.
+    @Property(title: "Date")
+    var date: Date
+
+    @Property(title: "Workout Type")
+    var workoutTypeName: String
+
+    @Property(title: "Distance")
+    var distance: Measurement<UnitLength>
+
+    @Property(title: "Duration")
+    var duration: Measurement<UnitDuration>
+
+    /// Already formatted in the runner's unit ("5:20 /km"); there is no pace unit type.
+    @Property(title: "Average Pace")
+    var averagePace: String
+
     let distanceMeters: Double
     let durationSeconds: Double
     let averagePaceSecondsPerKm: Double
@@ -26,12 +49,52 @@ struct RunWorkoutEntity: AppEntity {
     let title: String
     let subtitle: String
 
+    init(
+        id: UUID,
+        date: Date,
+        workoutTypeName: String,
+        distanceMeters: Double,
+        durationSeconds: Double,
+        averagePaceSecondsPerKm: Double,
+        averagePaceText: String,
+        title: String,
+        subtitle: String
+    ) {
+        self.id = id
+        self.distanceMeters = distanceMeters
+        self.durationSeconds = durationSeconds
+        self.averagePaceSecondsPerKm = averagePaceSecondsPerKm
+        self.title = title
+        self.subtitle = subtitle
+        self.date = date
+        self.workoutTypeName = workoutTypeName
+        self.distance = Measurement(value: distanceMeters, unit: .meters)
+        self.duration = Measurement(value: durationSeconds, unit: .seconds)
+        self.averagePace = averagePaceText
+    }
+
     var displayRepresentation: DisplayRepresentation {
         DisplayRepresentation(
             title: "\(title)",
             subtitle: "\(subtitle)",
             image: .init(systemName: "figure.run")
         )
+    }
+}
+
+// MARK: - Sharing
+
+// "Send my long run to Sam": Siri can hand a run to another app (Messages, Mail, Notes)
+// only if it has a representation that app understands. Plain text is the one every
+// destination takes; the formatted title and subtitle are already in the runner's units.
+extension RunWorkoutEntity: Transferable {
+    static var transferRepresentation: some TransferRepresentation {
+        ProxyRepresentation(exporting: { (run: RunWorkoutEntity) in run.shareText })
+    }
+
+    /// "Long Run · 18.2 km\nSat, Nov 1, 2026 · 5:31 /km · 1:40:24"
+    var shareText: String {
+        "\(title)\n\(subtitle) · \(durationSeconds.durationString)"
     }
 }
 
@@ -88,6 +151,7 @@ extension RunWorkout {
             distanceMeters: distanceMeters,
             durationSeconds: durationSeconds,
             averagePaceSecondsPerKm: averagePaceSecondsPerKm,
+            averagePaceText: paceText,
             title: "\(workoutType.localizedName) · \(distanceText)",
             subtitle: "\(dateText) · \(paceText)"
         )

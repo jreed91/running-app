@@ -1,3 +1,4 @@
+import AppIntents
 import SwiftUI
 import MapKit
 import Charts
@@ -427,6 +428,10 @@ struct RunSummaryView: View {
             resolveSplitChartSeries()
         }
         .background(Color.surfacePrimary.ignoresSafeArea())
+        // Onscreen context: with a run open, "send this run to Sam" or "how does this
+        // compare with last week" lets Siri resolve "this run" to this entity.
+        .appEntityIdentifier(EntityIdentifier(for: RunWorkoutEntity.self, identifier: workout.id))
+        .task(id: workout.id) { RunDetailsIntent.donateViewing(workout, unit: appSettings.unitPreference) }
         .navigationTitle(openPage?.title ?? displayType.localizedName)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(openPage != nil)
