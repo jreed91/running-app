@@ -1117,6 +1117,11 @@ extension AICoachService {
     zones come from a max heart rate estimated from age, they are approximate: do not \
     call a run too hard on the zones alone.
 
+    Distance against the plan is worth one mention at most, and is not the verdict or \
+    an action, unless the run was far off it (half as long again, or half as short). A \
+    tempo or interval session is judged on its work, not on how far the whole run went, \
+    and the run's total distance is never the work's distance.
+
     Choose the three numbers that prove the verdict. Prefer comparisons with the plan or \
     the usual over totals the runner already sees at the top of the screen; a bare \
     distance, time or average pace is not evidence.

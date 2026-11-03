@@ -319,6 +319,48 @@ struct CoachRunComparisonTests {
             + "not the pace to judge. Distance 9.0 km of 9.0 km planned (100%).")
     }
 
+    @Test("A tempo that ran long says the extra is whole-run distance, not work")
+    func tempoOverrunIsNotCalledWork() {
+        // 4.0 km planned, 4.8 km run: Jacob's "2.5 of 1.9 mi" read "added 0.6 miles at a
+        // hard effort" and labelled the total "Work distance".
+        let line = CoachRunComparison.planLine(
+            actualPaceSecondsPerKm: 330,
+            actualDistanceMeters: 4_800,
+            targetPaceLower: 285,
+            targetPaceUpper: 295,
+            targetDistanceMeters: 4_000,
+            unit: .metric,
+            paceScope: .workOnly(continuousMeters: nil)
+        ) ?? ""
+
+        #expect(line.contains("Distance 4.8 km of 4.0 km planned (120%)."))
+        #expect(line.contains("That is the whole run, warm-up and cool-down included, not the work."))
+        #expect(line.contains("extra 0.8 km"))
+
+        // An easy run that went long gets the plain distance line only.
+        let easy = CoachRunComparison.planLine(
+            actualPaceSecondsPerKm: 360,
+            actualDistanceMeters: 4_800,
+            targetPaceLower: 350,
+            targetPaceUpper: 370,
+            targetDistanceMeters: 4_000,
+            unit: .metric
+        ) ?? ""
+        #expect(!easy.contains("not the work"))
+
+        // A tempo within 5% of plan says nothing extra.
+        let close = CoachRunComparison.planLine(
+            actualPaceSecondsPerKm: 330,
+            actualDistanceMeters: 4_150,
+            targetPaceLower: 285,
+            targetPaceUpper: 295,
+            targetDistanceMeters: 4_000,
+            unit: .metric,
+            paceScope: .workOnly(continuousMeters: nil)
+        ) ?? ""
+        #expect(!close.contains("not the work"))
+    }
+
     @Test("Without a block to read, the line says the average cannot judge the work")
     func planLineForReps() {
         let line = CoachRunComparison.planLine(

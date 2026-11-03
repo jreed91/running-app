@@ -181,6 +181,17 @@ enum CoachRunComparison {
                 "Distance \(actualDistanceMeters.distanceString(unit: unit)) of "
                     + "\(target.distanceString(unit: unit)) planned (\(percent)%)."
             )
+            // On a tempo or interval session the extra is whole-run distance: nothing says
+            // when it was run. Without this the coach read "2.5 of 1.9 mi" as "added 0.6
+            // miles at a hard effort", called it "Work distance" and made it the verdict.
+            if case .workOnly = paceScope, actualDistanceMeters > target * 1.05 {
+                let extra = (actualDistanceMeters - target).distanceString(unit: unit)
+                parts.append(
+                    "That is the whole run, warm-up and cool-down included, not the work. "
+                        + "Nothing here says when the extra \(extra) was run or how hard; it is most "
+                        + "likely easy running before or after the work."
+                )
+            }
         }
 
         return parts.isEmpty ? nil : parts.joined(separator: " ")
