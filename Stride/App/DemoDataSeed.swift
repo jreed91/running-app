@@ -33,6 +33,17 @@ enum DemoDataSeed {
         ProcessInfo.processInfo.arguments.contains("--seed-demo-data")
     }
 
+    /// `--seed-coach-read`, on top of `--seed-demo-data`: turns AI Coach on and stores a
+    /// finished coach read on the newest run, so the coach page can be captured.
+    ///
+    /// The App Store screenshots run on a CI simulator, which has no Apple Intelligence,
+    /// so a real read can never be written there. This one is sample text, written to
+    /// agree with the seeded run it sits on (see `coachRead(metric:)`). Only
+    /// `AppStoreScreenshotTests.testCaptureCoachScreen` passes the flag.
+    static var seedsCoachRead: Bool {
+        isEnabled && ProcessInfo.processInfo.arguments.contains("--seed-coach-read")
+    }
+
     /// Weeks of history generated. Covers the 1M/3M/6M range filters on Progress with
     /// enough points either side of each boundary to tell them apart.
     private static let weeks = 18
@@ -65,6 +76,7 @@ enum DemoDataSeed {
 
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
+        var newestRun: RunWorkout?
 
         for weeksAgo in 0..<weeks where !missedWeeks.contains(weeksAgo) {
             for (index, offset) in dayOffsets.enumerated() {
@@ -74,7 +86,11 @@ enum DemoDataSeed {
                       let date = calendar.date(byAdding: .hour, value: 7, to: day) else {
                     continue
                 }
-                context.insert(makeRun(shape[index], index: index, weeksAgo: weeksAgo, date: date))
+                let run = makeRun(shape[index], index: index, weeksAgo: weeksAgo, date: date)
+                context.insert(run)
+                if newestRun.map({ run.date > $0.date }) ?? true {
+                    newestRun = run
+                }
             }
 
             // A strength session mid-week, most weeks — enough to mix the History list
@@ -87,6 +103,10 @@ enum DemoDataSeed {
                     context.insert(makeStrengthSession(weeksAgo: weeksAgo, date: date))
                 }
             }
+        }
+
+        if seedsCoachRead, let newestRun {
+            newestRun.cachedAIInsight = coachRead(metric: UnitPreference.localeDefault == .metric)
         }
 
         do {
@@ -249,6 +269,67 @@ enum DemoDataSeed {
             windSpeedKmh: 6 + Double((weeksAgo + index * 2) % 17),
             conditionSymbol: condition.0,
             conditionDescription: condition.1
+        )
+    }
+
+    // MARK: - Coach read
+
+    /// The sample read for `--seed-coach-read`. It sits on the newest run, which is this
+    /// week's long run (`weeksAgo` 0, index 3): 13.8 km at about 6:07/km with a route, a
+    /// negative split from `splits(...)`, no heart rate, and the note "Felt strong
+    /// through the second half." Last week's long run was 14.4 km and the four before
+    /// this one average the same 6:07/km, so every figure below is one the run's own
+    /// screens show. Change the seed's shape and this has to change with it.
+    static func coachRead(metric: Bool) -> AICoachInsight {
+        let distance = metric ? "13.8 km" : "8.6 mi"
+        let distanceDelta = metric ? "-0.6 km" : "-0.4 mi"
+        let pace = metric ? "6:07/km" : "9:51/mi"
+        let backHalf = metric ? "11s/km" : "18s/mi"
+        let nextLong = metric ? "14.5 km" : "9 miles"
+        return AICoachInsight(
+            headline: "Steady long run, strong finish",
+            summary: "\(distance) at your usual long-run pace, and the back half was quicker "
+                + "than the front. That's a long run doing its job.",
+            fullAnalysis: """
+                You held \(pace) for \(distance), the same pace as your last four long runs. \
+                It was a little shorter than last week, which is fine in a week that also had \
+                a tempo and an interval session.
+
+                **The finish is the good part.** Your splits got quicker as you went, and the \
+                second half was about \(backHalf) faster than the first. You wrote that you \
+                felt strong late on, and the splits agree: you started easy enough to have \
+                something left.
+
+                - Keep starting long runs at this effort.
+                - Add distance slowly, about 10% a week at most.
+                """,
+            confidence: 82,
+            evidence: [
+                AICoachEvidenceItem(label: "Distance", value: distance, delta: distanceDelta, tone: "brand"),
+                AICoachEvidenceItem(label: "Avg pace", value: pace, delta: "Your usual", tone: "easy"),
+                AICoachEvidenceItem(label: "Back half", value: backHalf, delta: "Quicker", tone: "easy")
+            ],
+            actionItems: [
+                AICoachActionItem(
+                    title: "Start the next long run the same way",
+                    detail: "Easy for the first few miles, then let the pace come to you. "
+                        + "That's what gave you a strong finish today.",
+                    priority: "high",
+                    metric: pace,
+                    tone: "easy"
+                ),
+                AICoachActionItem(
+                    title: "Keep tomorrow easy",
+                    detail: "A rest day or a short, slow run lets the long run sink in.",
+                    priority: "medium",
+                    metric: nil,
+                    tone: nil
+                )
+            ],
+            focusAreas: ["Pacing", "Endurance"],
+            nextWorkoutSuggestion: "Next week's long run can go to about \(nextLong) at the same easy effort.",
+            nextWorkoutRationale: "You finished this one with something left, so a small step up is safe.",
+            apiReady: true
         )
     }
 

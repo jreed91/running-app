@@ -21,6 +21,8 @@ extension RunSummaryView {
                     coachSummaryContent(opensPage: true)
                 }
                 .buttonStyle(.plain)
+                // `AppStoreScreenshotTests.testCaptureCoachScreen` opens the coach page by this.
+                .accessibilityIdentifier("runSummary.coachCard")
                 .accessibilityHint(
                     String(localized: "Opens the full coaching read", comment: "Hint on the run screen's coach card")
                 )

@@ -79,13 +79,13 @@ final class AppStoreScreenshotTests: XCTestCase {
         }
     }
 
-    func testCaptureAppStoreScreens() throws {
+    /// Through onboarding on its defaults, as UXCaptureTests does, to Home.
+    private func completeOnboarding(capturingWelcome: Bool) {
         let getStarted = app.buttons["onboarding.getStarted"]
         XCTAssertTrue(getStarted.waitForExistence(timeout: 15), "Onboarding never appeared")
-        capture("06-welcome")
+        if capturingWelcome { capture("06-welcome") }
         getStarted.tap()
 
-        // Through onboarding on its defaults, as UXCaptureTests does.
         for step in 1...6 {
             let button = app.buttons["onboarding.primaryCTA.\(step)"]
             if button.waitForExistence(timeout: 8) { button.tap() }
@@ -99,6 +99,10 @@ final class AppStoreScreenshotTests: XCTestCase {
             app.buttons["dashboard.startFreeRun"].waitForExistence(timeout: 20),
             "Never reached Home"
         )
+    }
+
+    func testCaptureAppStoreScreens() throws {
+        completeOnboarding(capturingWelcome: true)
         capture("02-home")
 
         selectTab("Plan")
@@ -119,5 +123,34 @@ final class AppStoreScreenshotTests: XCTestCase {
         } else {
             XCTFail("Could not reach the run screen from Home")
         }
+    }
+
+    /// The run's AI coach page, from a separate launch so the screens above keep AI Coach
+    /// off as before. A CI simulator has no Apple Intelligence, so `--seed-coach-read`
+    /// turns the coach on and stores a sample read on the newest run (see
+    /// `DemoDataSeed.coachRead(metric:)`). Raw only: it has no App Store caption, so
+    /// `compose.mjs` leaves it unframed. It feeds the Stride landing page.
+    func testCaptureCoachScreen() throws {
+        app.terminate()
+        app.launchArguments = ["--uitesting", "--seed-demo-data", "--seed-coach-read"]
+        app.launch()
+        completeOnboarding(capturingWelcome: false)
+
+        selectTab("History")
+        let newestRun = app.buttons["history.run"].firstMatch
+        guard newestRun.waitForExistence(timeout: 10) else {
+            return XCTFail("No run in History")
+        }
+        newestRun.tap()
+
+        let coachCard = app.buttons["runSummary.coachCard"]
+        for _ in 0..<4 where !coachCard.isHittable {
+            app.swipeUp(velocity: .slow)
+        }
+        guard coachCard.waitForExistence(timeout: 10) else {
+            return XCTFail("The run had no coach card; the seeded read did not load")
+        }
+        coachCard.tap()
+        capture("07-coach")
     }
 }
