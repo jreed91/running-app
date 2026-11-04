@@ -128,6 +128,73 @@ struct IntentDataProviderTests {
         #expect(TodaysRunIntent.dialogText(for: nil) == "No run scheduled for today.")
     }
 
+    /// Siri AI preview "find runs" tool: the search fills in a type, a day range in
+    /// either order, and a minimum distance; walks never come back as runs (N38).
+    @Test("Find runs filters by type, inclusive day range and minimum distance")
+    func findRunsFilters() async throws {
+        let schema = StrideSchema.make()
+        // File-backed for the same reason as the tests above: `IntentModelActor` reads
+        // through its own context, which an in-memory store does not survive.
+        let storeURL = Self.makeTemporaryStoreURL()
+        defer { Self.removeStoreArtifacts(at: storeURL) }
+        let config = ModelConfiguration(schema: schema, url: storeURL, cloudKitDatabase: .none)
+        let container = try ModelContainer(for: schema, configurations: [config])
+        let context = container.mainContext
+
+        let today = Date().startOfDay
+        // Late on the search's last day: inside an inclusive range.
+        let lastDayLong = RunWorkout(
+            date: today.addingTimeInterval(22 * 3_600), distanceMeters: 21_000, durationSeconds: 7_200,
+            workoutType: .longRun
+        )
+        let shortLong = RunWorkout(
+            date: today.adding(days: -3), distanceMeters: 12_000, durationSeconds: 4_000, workoutType: .longRun
+        )
+        let tempo = RunWorkout(
+            date: today.adding(days: -2), distanceMeters: 22_000, durationSeconds: 6_000, workoutType: .tempo
+        )
+        let tooOld = RunWorkout(
+            date: today.adding(days: -40), distanceMeters: 25_000, durationSeconds: 9_000, workoutType: .longRun
+        )
+        let walk = RunWorkout(
+            date: today.adding(days: -1), distanceMeters: 30_000, durationSeconds: 20_000, workoutType: .walk
+        )
+        for run in [lastDayLong, shortLong, tempo, tooOld, walk] { context.insert(run) }
+        try context.save()
+
+        let actor = IntentModelActor(modelContainer: container)
+
+        // Range given backwards (today, then 30 days ago) still searches those days.
+        let longOver20 = try await actor.findRuns(
+            workoutType: .longRun, from: today, to: today.adding(days: -30),
+            minimumMeters: 20_000, limit: 20, unit: .metric
+        )
+        #expect(longOver20.map(\.id) == [lastDayLong.id])
+
+        // Any type, newest first, no walk.
+        let anyOver20 = try await actor.findRuns(
+            workoutType: nil, from: today.adding(days: -30), to: today,
+            minimumMeters: 20_000, limit: 20, unit: .metric
+        )
+        #expect(anyOver20.map(\.id) == [lastDayLong.id, tempo.id])
+
+        let capped = try await actor.findRuns(
+            workoutType: nil, from: today.adding(days: -60), to: today,
+            minimumMeters: 0, limit: 2, unit: .metric
+        )
+        #expect(capped.count == 2)
+    }
+
+    @Test("Find runs answer counts runs and totals the distance")
+    func findRunsDialog() {
+        #expect(RunSearchDialog.text(count: 0, totalMeters: 0, unit: .metric) == "No runs match that.")
+        #expect(RunSearchDialog.text(count: 1, totalMeters: 21_000, unit: .metric) == "Found 1 run, 21.0 km.")
+        #expect(
+            RunSearchDialog.text(count: 2, totalMeters: 43_000, unit: .metric)
+                == "Found 2 runs, 43.0 km in total."
+        )
+    }
+
     // MARK: - Fixtures
 
     private static func makeTemporaryStoreURL() -> URL {

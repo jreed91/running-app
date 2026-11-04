@@ -8,6 +8,14 @@ options:
   createIntermediateGroups: true
   groupSortPosition: top
   generateEmptyDirectories: true
+  # Siri AI Developer Preview app skills (Stride/Resources/Skills.skillsbundle). Without
+  # this, XcodeGen walks into the bundle as a group and copies each SKILL.md flat into
+  # the app. As one file reference, Xcode 27.3+ compiles it as a skills bundle; older
+  # Xcodes copy the folder as an ordinary resource, which nothing reads.
+  fileTypes:
+    skillsbundle:
+      file: true
+      buildPhase: resources
 
 # CURRENT_PROJECT_VERSION and MARKETING_VERSION live in this xcconfig, not in
 # `settings.base` below — a project-level build setting overrides an xcconfig, so
