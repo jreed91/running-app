@@ -48,6 +48,11 @@ struct StrideApp: App {
         }
         _container = State(initialValue: appContainer)
         let settings = AppSettings()
+        // The coach page only draws with AI Coach on, and a UI-test launch starts with
+        // every preference wiped. No-op without --seed-coach-read.
+        if DemoDataSeed.seedsCoachRead {
+            settings.aiInsightsEnabled = true
+        }
         appContainer.runSpokenCues.appSettings = settings
         _appSettings = State(initialValue: settings)
         _authService = State(initialValue: AuthService())
