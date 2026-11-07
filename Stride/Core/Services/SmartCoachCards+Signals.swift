@@ -22,6 +22,11 @@ extension SmartCoachCards {
     /// Relative humidity that does the same on its own.
     static let heatHumidityPercent = 70.0
     static let heatHumidityCeilingPercent = 95.0
+    /// Apparent temperature below which humidity says nothing about heat. Damp air on a
+    /// 3 °C morning is just a damp morning: sweat still evaporates, the body is shedding
+    /// heat easily, and "drink ahead of the heat" reads as nonsense. 15 °C is the `.mild`
+    /// apparent-temperature bound in `HeatAdaptationPolicy`, where heat first registers.
+    static let heatHumidityFloorCelsius = 15.0
 
     /// Second-half slowdown, as a percentage, that counts as fading — and as a rout.
     static let fadePercent = 5.0
@@ -83,17 +88,21 @@ extension SmartCoachCards {
             .weather else { return nil }
 
         // Whichever of the two is more extreme relative to its own threshold — a humid
-        // 18° day and a dry 30° one are both worth saying something about.
+        // 18° day and a dry 30° one are both worth saying something about. Humidity only
+        // counts once it is warm enough for it to slow sweat cooling: without the floor a
+        // 3 °C run at 82% humidity fired this card, heat-pace advice and all.
         let heatScore = SmartCoachCard.urgency(
             weather.feelsLikeCelsius,
             threshold: heatFeelsLikeCelsius,
             saturatingAt: heatFeelsLikeCeilingCelsius
         )
-        let humidityScore = SmartCoachCard.urgency(
-            weather.humidityPercent,
-            threshold: heatHumidityPercent,
-            saturatingAt: heatHumidityCeilingPercent
-        )
+        let humidityScore = weather.feelsLikeCelsius >= heatHumidityFloorCelsius
+            ? SmartCoachCard.urgency(
+                weather.humidityPercent,
+                threshold: heatHumidityPercent,
+                saturatingAt: heatHumidityCeilingPercent
+            )
+            : 0
         let score = max(heatScore, humidityScore)
         guard score > 0 else { return nil }
 

@@ -308,6 +308,25 @@ struct SmartCoachCardsTests {
         #expect(!kinds(SmartCoachCards.cards(makeContext(nextSession: session, runs: [mild]))).contains(.heat))
     }
 
+    @Test("Humidity on a cold day is not heat")
+    func heatIgnoresHumidityWhenCold() {
+        let context = TestStore.makeContext()
+        let session = makeSession(in: context, type: .easy, distanceMeters: 8_000)
+
+        // The reported case: felt like 38 °F (3.3 °C) at 82% humidity.
+        let cold = makeRun(in: context, daysAgo: 1)
+        cold.weather = weather(feelsLike: 3.3, humidity: 82)
+        let coolSaturated = makeRun(in: context, daysAgo: 1)
+        coolSaturated.weather = weather(
+            feelsLike: SmartCoachCards.heatHumidityFloorCelsius - 1, humidity: 95
+        )
+
+        #expect(!kinds(SmartCoachCards.cards(makeContext(nextSession: session, runs: [cold]))).contains(.heat))
+        #expect(
+            !kinds(SmartCoachCards.cards(makeContext(nextSession: session, runs: [coolSaturated]))).contains(.heat)
+        )
+    }
+
     @Test("A hotter day scores higher than a merely warm one")
     func heatScoresWithTemperature() {
         let context = TestStore.makeContext()
