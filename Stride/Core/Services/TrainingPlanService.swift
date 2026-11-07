@@ -1011,10 +1011,12 @@ struct TrainingPlanService {
             ),
             label: "Easy Run"
         )
+        // The slow end of the band, like the warm-up. It was the fast end, which had an
+        // easy run's cool-down asking for its quickest pace of the day.
         let cooldown = WorkoutSegment(
             distanceMeters: cooldownDist,
             durationSeconds: nil,
-            targetPaceSecondsPerKm: paces.easyRange.lowerBound,
+            targetPaceSecondsPerKm: paces.easyRange.upperBound,
             label: "Cool-down"
         )
 

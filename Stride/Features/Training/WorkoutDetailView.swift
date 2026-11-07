@@ -1,6 +1,13 @@
 import SwiftUI
 import SwiftData
 
+/// A planned session, before it is run.
+///
+/// Laid out like the run detail screen (PR #334): the summary first, the detail under it.
+/// The hero answers "what am I doing and how long will it take" — distance, time and pace
+/// on two lines, where to run it, and the button that starts it. Under it come the coach's
+/// note on how it should feel and the session's steps, then the playlist. A completed run
+/// shows its `RunSummaryView` instead.
 struct WorkoutDetailView: View {
     let workout: ScheduledWorkout
 
@@ -9,7 +16,14 @@ struct WorkoutDetailView: View {
     @Environment(AppSettings.self) private var appSettings
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    @ScaledMetric(relativeTo: .largeTitle) private var heroMetricSize: CGFloat = 56
+
     @State private var isSyncingLocation = false
+    /// Strength has no minimised form, so it is presented here rather than through
+    /// `ActiveRunPresentation`, the same way Home does.
+    @State private var strengthWorkout: ScheduledWorkout?
+
+    private var unit: UnitPreference { appSettings.unitPreference }
 
     private var goalRacePlan: TrainingPlan? {
         workout.week?.plan
@@ -51,7 +65,7 @@ struct WorkoutDetailView: View {
                 RunSummaryView(workout: completed)
             } else {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
+                    VStack(alignment: .leading, spacing: AppSpacing.lg) {
                         if isCompletedGoalRace {
                             GoalRaceCelebrationCard(
                                 raceName: goalRaceName,
@@ -59,165 +73,235 @@ struct WorkoutDetailView: View {
                                 reduceMotion: reduceMotion
                             )
                         }
-                        headerSection
-                            // The celebration is the hero once the goal race is run.
-                            .strideSurface(isHero: !isCompletedGoalRace)
-                        if let range = workout.targetPaceRange {
-                            paceSection(range: range)
+                        hero
+                        if let notes = trimmedNotes {
+                            notesCard(notes)
                         }
                         if workout.workoutType == .strength, let plan = workout.strengthPlan {
                             strengthSection(plan: plan)
                         } else if let structure = workout.workoutStructure {
-                            structuredWorkoutSection(structure: structure)
+                            stepsSection(structure: structure)
                         } else if !workout.intervals.isEmpty {
                             intervalsSection
-                        }
-                        if let dist = workout.targetDistanceMeters {
-                            distanceSection(dist: dist)
-                        }
-                        if let notes = workout.notes {
-                            notesSection(notes: notes)
                         }
                         if let playlistPlan {
                             RunPlaylistCard(workout: workout, plan: playlistPlan)
                         }
                     }
                     .padding(.horizontal, AppSpacing.lg)
-                    .padding(.vertical, AppSpacing.lg)
-                    .frame(maxWidth: .infinity)
+                    .padding(.top, AppSpacing.sm)
+                    .padding(.bottom, AppSpacing.xxl)
+                    .strideReadableWidth()
                 }
                 .background(Color.surfacePrimary)
                 .navigationTitle(workout.workoutType.localizedName)
                 .navigationBarTitleDisplayMode(.inline)
+                .fullScreenCover(item: $strengthWorkout) { session in
+                    StrengthActiveView(scheduledWorkout: session)
+                }
             }
         }
+    }
+
+    // MARK: - Hero
+
+    /// The session at a glance: type and day, the distance as the big number, time and
+    /// pace under it, where to run it, and the start button.
+    ///
+    /// Replaces the old icon-and-title header plus the separate Target pace, Distance and
+    /// summary-chip rows, which said the distance twice and spread one fact per section.
+    private var hero: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            kicker
+
+            if let lead = heroLead {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(lead.value)
+                        .font(.system(size: heroMetricSize, weight: .semibold, design: .rounded).monospacedDigit())
+                        .kerning(-2.2)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+                    Text(lead.unit)
+                        .font(.dsCallout.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityElement(children: .combine)
+            } else {
+                Text(workout.workoutType.localizedName)
+                    .font(.dsTitle1)
+            }
+
+            let details = heroDetails
+            if !details.isEmpty {
+                HStack(spacing: 12) {
+                    ForEach(Array(details.enumerated()), id: \.offset) { index, detail in
+                        if index > 0 {
+                            Text("·").foregroundStyle(.tertiary)
+                        }
+                        metricInline(value: detail.value, label: detail.unit)
+                    }
+                }
+            }
+
+            if !workout.isCompleted && workout.workoutType.sessionKind == .run {
+                locationPicker
+                    .padding(.top, AppSpacing.xs)
+            }
+
+            if canStart {
+                startButton
+            }
+        }
+        .padding(AppSpacing.lg)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        // The celebration is the hero once the goal race is run.
+        .strideSurface(isHero: !isCompletedGoalRace)
+    }
+
+    /// "● EASY · FRI, NOV 6", the run detail hero's kicker. The dot carries the type's
+    /// colour; the words stay neutral, since zone colours are data, not text decoration.
+    private var kicker: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(workout.workoutType.color)
+                .frame(width: 8, height: 8)
+                .overlay(Circle().stroke(workout.workoutType.color.opacity(0.25), lineWidth: 6))
+            Text(workout.workoutType.localizedName)
+                .strideEyebrow()
+                .foregroundStyle(.secondary)
+            Circle()
+                .fill(.tertiary)
+                .frame(width: 3, height: 3)
+            Text(dayLabel)
+                .font(.dsCaption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 0)
+            if workout.isCompleted {
+                StrideTag(String(localized: "Done"), systemImage: "checkmark", tone: .brand)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var dayLabel: String {
+        let date = workout.scheduledDate
+        if Calendar.current.isDateInToday(date) { return String(localized: "Today") }
+        if Calendar.current.isDateInTomorrow(date) { return String(localized: "Tomorrow") }
+        if Calendar.current.isDateInYesterday(date) { return String(localized: "Yesterday") }
+        return date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
+    }
+
+    private struct HeroFigure {
+        let value: String
+        let unit: String
+    }
+
+    private var plannedDistanceMeters: Double? {
+        if let meters = workout.targetDistanceMeters, meters > 0 { return meters }
+        if let total = workout.workoutStructure?.totalEstimatedDistanceMeters, total > 0 { return total }
+        return nil
+    }
+
+    /// The hero's big number: the distance, or the time when there is no distance
+    /// (strength, cross-training).
+    private var heroLead: HeroFigure? {
+        if let meters = plannedDistanceMeters {
+            return HeroFigure(
+                value: String(format: "%.1f", meters.distanceValue(unit: unit)),
+                unit: unit == .metric ? "km" : "mi"
+            )
+        }
+        if let minutes = strengthMinutes {
+            return HeroFigure(value: "\(minutes)", unit: "min")
+        }
+        return nil
+    }
+
+    /// The line under the big number: the expected time, then the pace band in the short
+    /// "9:51–11:46 /mi" form, so the range fits on one line.
+    private var heroDetails: [HeroFigure] {
+        var figures: [HeroFigure] = []
+        if plannedDistanceMeters != nil,
+           let seconds = NextUpBriefing.estimatedDurationSeconds(for: workout),
+           let text = NextUpBriefing.approximateDurationText(seconds: seconds) {
+            figures.append(HeroFigure(value: text, unit: ""))
+        }
+        if let range = workout.targetPaceRange {
+            let low = range.lowerBound.paceValueString(unit: unit)
+            let high = range.upperBound.paceValueString(unit: unit)
+            figures.append(HeroFigure(value: low == high ? low : "\(low)–\(high)", unit: paceSuffix))
+        }
+        return figures
+    }
+
+    private var strengthMinutes: Int? {
+        guard workout.workoutType == .strength, let plan = workout.strengthPlan,
+              plan.estimatedDurationMinutes > 0 else { return nil }
+        return plan.estimatedDurationMinutes
+    }
+
+    private var paceSuffix: String { unit == .metric ? "/km" : "/mi" }
+
+    private func metricInline(value: String, label: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Text(value)
+                .font(.dsFootnote.weight(.semibold).monospacedDigit())
+                .foregroundStyle(.primary)
+            if !label.isEmpty {
+                Text(label)
+                    .font(.dsFootnote.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    // MARK: - Start
+
+    /// Today's session, or one missed by a day — the same window Home offers a start for
+    /// (`ScheduledDayResolver.canStart`).
+    private var canStart: Bool {
+        guard !workout.isCompleted else { return false }
+        switch workout.workoutType.sessionKind {
+        case .run, .strength: break
+        case .walk, .crossTraining, .rest: return false
+        }
+        return ScheduledDayResolver.canStart(workoutScheduledOn: workout.scheduledDate)
+    }
+
+    private var startButton: some View {
+        Button {
+            if workout.workoutType == .strength {
+                strengthWorkout = workout
+            } else {
+                container.activeRunPresentation.startOrReopen(
+                    scheduledWorkout: workout,
+                    isRunInProgress: container.workoutTrackerService.isRecording
+                )
+            }
+        } label: {
+            HStack(spacing: 10) {
+                // `onFill` on the route: white on orange is 2.8:1 (U3a).
+                StrideIcon(name: .play, size: 18, color: .onFill, strokeWeight: 2.2)
+                Text(startButtonTitle)
+            }
+        }
+        .buttonStyle(.strideButton())
+        .accessibilityIdentifier("workoutDetail.start")
+    }
+
+    /// Typed `LocalizedStringKey` so the literals stay in the string catalog.
+    private var startButtonTitle: LocalizedStringKey {
+        let isStrength = workout.workoutType == .strength
+        if !isStrength && container.workoutTrackerService.isRecording {
+            return "Back to your run"
+        }
+        if Calendar.current.isDateInToday(workout.scheduledDate) {
+            return isStrength ? "Start strength workout" : "Start this workout"
+        }
+        return isStrength ? "Start yesterday's strength workout" : "Start yesterday's workout"
     }
 
     // MARK: - Location toggle
-
-    @MainActor
-    private func changeLocation(to location: WorkoutLocation) async {
-        guard !workout.isCompleted else { return }
-        isSyncingLocation = true
-        defer { isSyncingLocation = false }
-        workout.workoutLocation = location
-        // Clear the stale WorkoutKit plan so the next sync reschedules with the new location.
-        workout.healthKitPlanID = nil
-        context.saveOrLog("the workout's indoor/outdoor change")
-        if let plan = workout.week?.plan {
-            try? await container.healthKitRepository.syncWorkoutPlans(for: plan, unitPreference: appSettings.unitPreference)
-        }
-    }
-
-    // MARK: - Structured workout timeline
-
-    private func structuredWorkoutSection(structure: WorkoutStructure) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("WORKOUT STRUCTURE")
-                .strideEyebrow()
-                .foregroundStyle(.secondary)
-
-            // Summary chips
-            HStack(spacing: 12) {
-                summaryChip(
-                    label: structure.totalEstimatedDistanceMeters.distanceString(unit: appSettings.unitPreference),
-                    systemImage: "arrow.right"
-                )
-                summaryChip(
-                    label: structure.totalEstimatedDurationSeconds.durationString,
-                    systemImage: "clock"
-                )
-            }
-
-            // Visual timeline
-            VStack(spacing: 0) {
-                SegmentRow(segment: structure.warmup, color: .zoneEasy, appSettings: appSettings)
-
-                connectorLine
-
-                ForEach(Array(structure.mainSets.enumerated()), id: \.offset) { index, set in
-                    WorkoutSetRow(
-                        workoutSet: set,
-                        color: setColor(setCount: structure.mainSets.count),
-                        appSettings: appSettings
-                    )
-                    if index < structure.mainSets.count - 1 {
-                        connectorLine
-                    }
-                }
-
-                connectorLine
-
-                SegmentRow(segment: structure.cooldown, color: .zoneEasy, appSettings: appSettings)
-            }
-        }
-    }
-
-    private func summaryChip(label: String, systemImage: String) -> some View {
-        StrideTag(label, systemImage: systemImage)
-    }
-
-    private var connectorLine: some View {
-        Rectangle()
-            .fill(Color.surfaceTertiary)
-            .frame(width: 2, height: 12)
-            .padding(.leading, 21)
-    }
-
-    private func setColor(setCount: Int) -> Color {
-        setCount > 1 ? .zoneInterval : .zoneTempo
-    }
-
-    // MARK: - Legacy sections
-
-    private var headerSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // The session's hero. The type keeps its colour in the icon tile only: zone
-            // colours are data, not a card's ground.
-            HStack(alignment: .center, spacing: 14) {
-                ZStack {
-                    Circle()
-                        .fill(workout.workoutType.color.opacity(0.15))
-                        .frame(width: 48, height: 48)
-                    StrideIcon(name: workout.workoutType.strideIcon, size: 28,
-                               color: workout.workoutType.color, strokeWeight: 2.0)
-                }
-                .frame(width: 48, height: 48)
-
-                VStack(alignment: .leading, spacing: 5) {
-                    HStack(spacing: 8) {
-                        Text(workout.workoutType.localizedName)
-                            .font(.dsTitle2)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.82)
-                        if workout.isCompleted {
-                            ZStack {
-                                Circle()
-                                    .fill(Color.success)
-                                    .frame(width: 20, height: 20)
-                                StrideIcon(name: .check, size: 11, color: .onFill, strokeWeight: 3)
-                            }
-                        }
-                    }
-                    Text(workout.scheduledDate.formatted(.dateTime.weekday(.wide).month(.wide).day()))
-                        .font(.dsCaption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .padding(.horizontal, AppSpacing.lg)
-            .padding(.top, AppSpacing.lg)
-            .padding(.bottom, AppSpacing.md)
-
-            // Indoor / outdoor toggle
-            if !workout.isCompleted && workout.workoutType != .strength {
-                locationPicker
-                    .padding(.horizontal, AppSpacing.lg)
-                    .padding(.bottom, AppSpacing.lg)
-            }
-        }
-    }
 
     private var locationPicker: some View {
         StrideSegmentedControl(
@@ -236,65 +320,117 @@ struct WorkoutDetailView: View {
         .disabled(isSyncingLocation)
     }
 
-    private func paceSection(range: ClosedRange<Double>) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("TARGET PACE").strideEyebrow().foregroundStyle(.secondary)
-            Text(
-                "\(range.lowerBound.paceString(unit: appSettings.unitPreference))" +
-                " – " +
-                "\(range.upperBound.paceString(unit: appSettings.unitPreference))"
-            )
-            .font(.metricSmall)
+    @MainActor
+    private func changeLocation(to location: WorkoutLocation) async {
+        guard !workout.isCompleted else { return }
+        isSyncingLocation = true
+        defer { isSyncingLocation = false }
+        workout.workoutLocation = location
+        // Clear the stale WorkoutKit plan so the next sync reschedules with the new location.
+        workout.healthKitPlanID = nil
+        context.saveOrLog("the workout's indoor/outdoor change")
+        if let plan = workout.week?.plan {
+            try? await container.healthKitRepository.syncWorkoutPlans(for: plan, unitPreference: unit)
         }
     }
 
-    private var intervalsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("INTERVALS").strideEyebrow().foregroundStyle(.secondary)
-            ForEach(Array(workout.intervals.enumerated()), id: \.offset) { _, interval in
-                HStack {
-                    Text("\(interval.repetitions) ×")
-                        .font(.bodyStrong)
-                    if let dist = interval.distanceMeters {
-                        Text(dist.distanceString(unit: appSettings.unitPreference))
+    // MARK: - Notes
+
+    private var trimmedNotes: String? {
+        guard let notes = workout.notes?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !notes.isEmpty else { return nil }
+        return notes
+    }
+
+    /// The coach's note on how the session should feel. Directly under the hero and with
+    /// no header: it is the one sentence of advice, not a section to look for.
+    private func notesCard(_ notes: String) -> some View {
+        Text(notes)
+            .font(.dsCallout)
+            .foregroundStyle(.primary)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(AppSpacing.lg)
+            .strideCard()
+    }
+
+    // MARK: - Steps
+
+    /// Warm-up, the main work and the cool-down as rows in one card. Segments the plan
+    /// left empty (no label, no distance, no time) are skipped rather than drawn blank.
+    private func stepsSection(structure: WorkoutStructure) -> some View {
+        let steps = PlannedStep.steps(from: structure, unit: unit)
+        return Group {
+            if !steps.isEmpty {
+                VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                    Text("Steps")
+                        .strideEyebrow()
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, AppSpacing.xs)
+                    VStack(spacing: 0) {
+                        ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
+                            if index > 0 {
+                                Divider().padding(.leading, 26)
+                            }
+                            PlannedStepRow(step: step)
+                        }
                     }
-                    Spacer()
-                    if let pace = interval.targetPaceSecondsPerKm {
-                        Text("@ \(pace.paceString(unit: appSettings.unitPreference))")
-                            .foregroundStyle(.secondary)
-                    }
+                    .padding(.horizontal, AppSpacing.lg)
+                    .padding(.vertical, AppSpacing.xs)
+                    .strideCard()
                 }
-                .padding()
-                .strideCard(cornerRadius: AppRadius.sm)
             }
         }
     }
 
-    private func distanceSection(dist: Double) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("DISTANCE").strideEyebrow().foregroundStyle(.secondary)
-            Text(dist.distanceString(unit: appSettings.unitPreference)).font(.metricSmall)
+    /// Older plans stored a flat interval list instead of a structure.
+    private var intervalsSection: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            Text("Steps")
+                .strideEyebrow()
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, AppSpacing.xs)
+            VStack(spacing: 0) {
+                ForEach(Array(workout.intervals.enumerated()), id: \.offset) { index, interval in
+                    if index > 0 {
+                        Divider().padding(.leading, 26)
+                    }
+                    PlannedStepRow(step: PlannedStep(
+                        title: String(localized: "Repeats"),
+                        amount: intervalAmount(interval),
+                        pace: interval.targetPaceSecondsPerKm.map { PlannedStep.paceText($0, unit: unit) },
+                        note: interval.recoverySeconds > 0
+                            ? String(localized: "\(Int(interval.recoverySeconds)) s recovery between")
+                            : nil,
+                        isWork: true
+                    ))
+                }
+            }
+            .padding(.horizontal, AppSpacing.lg)
+            .padding(.vertical, AppSpacing.xs)
+            .strideCard()
         }
     }
 
-    private func notesSection(notes: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("NOTES").strideEyebrow().foregroundStyle(.secondary)
-            Text(notes)
-                .font(.bodyRegular)
-                .padding()
-                .strideCard(cornerRadius: AppRadius.md)
+    private func intervalAmount(_ interval: WorkoutInterval) -> String {
+        var each = ""
+        if let meters = interval.distanceMeters, meters > 0 {
+            each = PlannedStep.distanceText(meters, unit: unit)
+        } else if let seconds = interval.durationSeconds, seconds > 0 {
+            each = seconds.durationString
         }
+        return each.isEmpty ? "\(interval.repetitions) ×" : "\(interval.repetitions) × \(each)"
     }
 
     // MARK: - Strength section
 
+    /// The duration is the hero's big number, so the old duration chip is gone from here.
     private func strengthSection(plan: StrengthWorkoutPlan) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("EXERCISES").strideEyebrow().foregroundStyle(.secondary)
-            // Summary chip
-            StrideTag("\(plan.estimatedDurationMinutes) min", systemImage: "clock")
-
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            Text("Exercises")
+                .strideEyebrow()
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, AppSpacing.xs)
             ForEach(Array(plan.exercises.enumerated()), id: \.offset) { _, exercise in
                 ExerciseRow(exercise: exercise)
             }
@@ -485,93 +621,158 @@ private struct ConfettiParticle: Identifiable, Sendable {
     }
 }
 
-// MARK: - SegmentRow
+// MARK: - PlannedStep
 
-private struct SegmentRow: View {
-    let segment: WorkoutSegment
-    let color: Color
-    let appSettings: AppSettings
+/// One row of a planned session's steps: what to do, how much, and at what pace.
+///
+/// Pure, so the step list a structure produces can be tested without a view.
+struct PlannedStep: Equatable {
+    /// "Warm-up", "Easy Run", "VO2max Intervals".
+    let title: String
+    /// "0.3 mi", "10:00", "5 × 800 m".
+    let amount: String?
+    /// "11:46 /mi".
+    let pace: String?
+    /// "90 s recovery jog between".
+    let note: String?
+    /// The main work, as opposed to a warm-up or cool-down.
+    let isWork: Bool
 
-    var body: some View {
-        HStack(spacing: 12) {
-            Circle()
-                .fill(color.opacity(0.15))
-                .frame(width: 34, height: 34)
-                .overlay(Circle().stroke(color, lineWidth: 2))
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(segment.label)
-                    .font(.bodyStrong)
-                subtitleText
-            }
-            Spacer()
+    static func steps(from structure: WorkoutStructure, unit: UnitPreference) -> [PlannedStep] {
+        var steps: [PlannedStep] = []
+        if let warmup = segmentStep(structure.warmup, fallbackTitle: String(localized: "Warm-up"), unit: unit) {
+            steps.append(warmup)
         }
-        .padding(.vertical, 6)
+        for set in structure.mainSets {
+            if let step = setStep(set, unit: unit) {
+                steps.append(step)
+            }
+        }
+        if let cooldown = segmentStep(structure.cooldown, fallbackTitle: String(localized: "Cool-down"), unit: unit) {
+            steps.append(cooldown)
+        }
+        return steps
     }
 
-    @ViewBuilder
-    private var subtitleText: some View {
-        if let dist = segment.distanceMeters {
-            Text(dist.distanceString(unit: appSettings.unitPreference))
-                .font(.dsCaption)
-                .foregroundStyle(.secondary)
+    private static func segmentStep(
+        _ segment: WorkoutSegment,
+        fallbackTitle: String,
+        unit: UnitPreference
+    ) -> PlannedStep? {
+        let amount = amountText(segment, unit: unit)
+        let label = segment.label.trimmingCharacters(in: .whitespacesAndNewlines)
+        // An open segment the plan left blank (the pregnancy plan's placeholder) is not a step.
+        guard amount != nil || !label.isEmpty else { return nil }
+        return PlannedStep(
+            title: label.isEmpty ? fallbackTitle : label,
+            amount: amount,
+            pace: segment.targetPaceSecondsPerKm.map { paceText($0, unit: unit) },
+            note: nil,
+            isWork: false
+        )
+    }
+
+    private static func setStep(_ set: WorkoutSet, unit: UnitPreference) -> PlannedStep? {
+        let work = set.workSegment
+        let base = amountText(work, unit: unit)
+        let label = set.label.trimmingCharacters(in: .whitespacesAndNewlines)
+        let workLabel = work.label.trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = label.isEmpty ? workLabel : label
+        guard base != nil || !title.isEmpty else { return nil }
+
+        let amount: String?
+        if set.repetitions > 1 {
+            amount = base.map { "\(set.repetitions) × \($0)" } ?? "\(set.repetitions) ×"
+        } else {
+            amount = base
         }
-        if let pace = segment.targetPaceSecondsPerKm {
-            Text("@ \(pace.paceString(unit: appSettings.unitPreference))")
-                .font(.dsCaption)
-                .foregroundStyle(.secondary)
+
+        var note: String?
+        if set.repetitions > 1, let recovery = set.recoverySegment.durationSeconds, recovery > 0 {
+            let time = recovery < 60 ? "\(Int(recovery)) s" : recovery.durationString
+            let kind = set.recoverySegment.label.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            note = kind.isEmpty
+                ? String(localized: "\(time) recovery between")
+                : String(localized: "\(time) \(kind) between")
         }
+
+        return PlannedStep(
+            title: title.isEmpty ? String(localized: "Main set") : title,
+            amount: amount,
+            pace: work.targetPaceSecondsPerKm.map { paceText($0, unit: unit) },
+            note: note,
+            isWork: true
+        )
+    }
+
+    private static func amountText(_ segment: WorkoutSegment, unit: UnitPreference) -> String? {
+        if let meters = segment.distanceMeters, meters > 0 {
+            return distanceText(meters, unit: unit)
+        }
+        if let seconds = segment.durationSeconds, seconds > 0 {
+            return seconds.durationString
+        }
+        return nil
+    }
+
+    /// Track-length reps read in metres ("800 m"), everything else in the runner's unit.
+    static func distanceText(_ meters: Double, unit: UnitPreference) -> String {
+        if unit == .metric && meters < 1_000 {
+            return "\(Int(meters.rounded())) m"
+        }
+        return meters.distanceString(unit: unit)
+    }
+
+    /// "11:46 /mi": the short form, so a step's pace fits beside its distance.
+    static func paceText(_ secondsPerKm: Double, unit: UnitPreference) -> String {
+        "\(secondsPerKm.paceValueString(unit: unit)) \(unit == .metric ? "/km" : "/mi")"
     }
 }
 
-// MARK: - WorkoutSetRow
+// MARK: - PlannedStepRow
 
-private struct WorkoutSetRow: View {
-    let workoutSet: WorkoutSet
-    let color: Color
-    let appSettings: AppSettings
+/// A step inside the Steps card. The marker is hollow for the warm-up and cool-down and
+/// filled with the brand for the work, so the session's shape reads down the left edge.
+private struct PlannedStepRow: View {
+    let step: PlannedStep
 
     var body: some View {
-        HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: AppRadius.xs)
-                    .fill(color.opacity(0.12))
-                    .frame(width: 34, height: 34)
-                Text("\(workoutSet.repetitions)×")
-                    .font(.dsCaption.weight(.bold))
-                    .foregroundStyle(color)
-            }
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(workoutSet.label).font(.bodyStrong)
-                workDetailText
-            }
-            Spacer()
-        }
-        .padding()
-        .strideCard(cornerRadius: AppRadius.md)
-    }
-
-    @ViewBuilder
-    private var workDetailText: some View {
-        let work = workoutSet.workSegment
-        let rec  = workoutSet.recoverySegment
-
-        if let dist = work.distanceMeters {
-            HStack(spacing: 4) {
-                Text(dist.distanceString(unit: appSettings.unitPreference))
-                if let pace = work.targetPaceSecondsPerKm {
-                    Text("@ \(pace.paceString(unit: appSettings.unitPreference))")
+        HStack(alignment: .firstTextBaseline, spacing: 14) {
+            Group {
+                if step.isWork {
+                    Circle().fill(Color.brand)
+                } else {
+                    Circle().strokeBorder(Color.secondary, lineWidth: 2)
                 }
             }
-            .font(.dsCaption)
-            .foregroundStyle(.secondary)
-        }
+            .frame(width: 12, height: 12)
+            .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 5 }
 
-        if let recDur = rec.durationSeconds, recDur > 0 {
-            Text(String(format: "%.0f s recovery jog", recDur))
-                .font(.dsCaption)
-                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(step.title)
+                    .font(.dsSubhead.weight(.semibold))
+                if let note = step.note {
+                    Text(note)
+                        .font(.dsCaption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Spacer(minLength: AppSpacing.sm)
+
+            VStack(alignment: .trailing, spacing: 2) {
+                if let amount = step.amount {
+                    Text(amount)
+                        .font(.dsSubhead.weight(.semibold).monospacedDigit())
+                }
+                if let pace = step.pace {
+                    Text(pace)
+                        .font(.dsCaption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
+        .padding(.vertical, 12)
+        .accessibilityElement(children: .combine)
     }
 }
