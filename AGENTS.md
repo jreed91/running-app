@@ -370,7 +370,11 @@ WeatherKit  →  WeatherService.hourlyForecast  →  [ForecastHour]
   prescription and nothing else, and clears `healthKitPlanID` because the workout already
   on the Watch describes the old one. The structured form's per-segment paces move with the
   band, or the structure is cleared — leaving it would have the guided-run engine calling
-  out the pace the runner just agreed to back off from.
+  out the pace the runner just agreed to back off from. `HeatAdaptationSheet` then re-files
+  the session with `syncWorkoutPlan(for:unitPreference:)` and replaces its morning reminder;
+  clearing the id alone left the Watch on the old prescription until the next cold launch
+  (P2.4). Any in-place edit to a session already in the Workout app needs the same re-file —
+  the post-run pace refresh does it through `PlanLifecycleService.refileRepacedSessions`.
 - On by default, switchable in **Settings → App → Heat adaptation**
   (`AppSettings.heatAdaptationEnabled`).
 

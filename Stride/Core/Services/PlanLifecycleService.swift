@@ -51,6 +51,36 @@ final class PlanLifecycleService {
         )
     }
 
+    /// Re-files the sessions the refresh just re-paced that are already in the Workout app.
+    ///
+    /// The refresh rewrites every future session in place, but the Workout app kept the
+    /// copies filed before it until the next full sync on a cold launch, so the Watch ran
+    /// last week's paces (P2.4). Edits only, through the single-workout sync: a session
+    /// that was never filed stays out, and nothing here asks for WorkoutKit authorization.
+    func refileRepacedSessions(in plan: TrainingPlan, unitPreference: UnitPreference, context: ModelContext) async {
+        let sessions = Self.repacedSessionsOnTheWatch(in: plan, now: Date())
+        guard !sessions.isEmpty else { return }
+        for session in sessions {
+            try? await healthKitRepository.syncWorkoutPlan(for: session, unitPreference: unitPreference)
+        }
+        context.saveOrLog("the re-paced sessions' Watch workout ids")
+    }
+
+    /// The sessions ``refileRepacedSessions(in:unitPreference:context:)`` re-files: filed
+    /// with the Workout app, not completed, and after today, which is exactly what
+    /// `refreshPaces` rewrites. Soonest first, so the sessions that matter go first.
+    static func repacedSessionsOnTheWatch(
+        in plan: TrainingPlan,
+        now: Date,
+        calendar: Calendar = .current
+    ) -> [ScheduledWorkout] {
+        let today = calendar.startOfDay(for: now)
+        return (plan.weeks ?? [])
+            .flatMap { $0.workouts ?? [] }
+            .filter { $0.healthKitPlanID != nil && !$0.isCompleted && $0.scheduledDate > today }
+            .sorted { $0.scheduledDate < $1.scheduledDate }
+    }
+
     // MARK: - Missed workout recovery
 
     /// Shifts all future uncompleted training workouts forward by `days` calendar days.

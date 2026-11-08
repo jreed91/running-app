@@ -1091,6 +1091,12 @@ struct ActiveRunView: View {
                 unitPreference: appSettings.unitPreference
             )
             context.saveOrLog("training paces refreshed after the run")
+            // The Workout app's copies still carry the old paces (P2.4).
+            let lifecycle = container.planLifecycle
+            let unit = appSettings.unitPreference
+            Task { @MainActor in
+                await lifecycle.refileRepacedSessions(in: plan, unitPreference: unit, context: context)
+            }
         }
         // Finishing a run is the moment every widget's content changes at once — the
         // week's total, the streak, and the plan's next session all move — and it is the
