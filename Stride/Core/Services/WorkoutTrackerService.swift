@@ -80,6 +80,17 @@ final class WorkoutTrackerService {
 
     private var workoutType: WorkoutType = .easy
     private var startDate = Date()
+    /// The id the finished run is saved under, fixed at the start so the checkpoint and the
+    /// finished run name the same row (P1.2).
+    private var runID = UUID()
+
+    /// How often a recording run is written to disk, in seconds of run time (P1.2). A
+    /// killed app loses at most this much of the run.
+    static let checkpointInterval: TimeInterval = 30
+    /// Where checkpoints go. Injectable so tests can point it at a temporary file, or turn
+    /// checkpoints off with `nil`.
+    @ObservationIgnored var checkpointURL: URL? = RunCheckpointStore.defaultURL
+    private var lastCheckpointElapsedSeconds: Double = 0
     private var timer: Timer?
     private var lastLocation: CLLocation?
     private var lastSplitDistance: Double = 0
@@ -272,6 +283,7 @@ final class WorkoutTrackerService {
         splitUnit = distanceUnit
         splitLengthMeters = distanceUnit.splitLengthMeters
         startDate = Date()
+        runID = UUID()
         reset()
         trackingState = .active
         stopwatch.start(at: startDate)
@@ -286,6 +298,7 @@ final class WorkoutTrackerService {
         startPedometerUpdates(from: startDate)
         activityPresenter?.runDidStart(activitySnapshot)
         onPulse?(.started)
+        writeCheckpoint()
     }
 
     func pauseWorkout() {
@@ -311,6 +324,9 @@ final class WorkoutTrackerService {
         // Pushed straight through rather than waiting for the refresh cadence: a hold is
         // one of the two things a runner checks the Lock Screen to confirm.
         activityPresenter?.runDidUpdate(activitySnapshot)
+        // No ticks while paused, and a held run is the one most likely to be killed: the
+        // runner has stopped looking at it.
+        writeCheckpoint()
     }
 
     func resumeWorkout() {
@@ -352,42 +368,60 @@ final class WorkoutTrackerService {
         // than after the save round-trip — which can fail and stay on screen (N15).
         activityPresenter?.runDidEnd(activitySnapshot)
 
-        let workout = RunWorkout(
-            date: startDate,
-            distanceMeters: distanceMeters,
-            durationSeconds: elapsedSeconds,
-            workoutType: workoutType,
-            workoutLocation: workoutLocation
-        )
         // The reading the run stopped on, so the final bucket the charts draw is bounded by
         // where the runner actually finished rather than by the last banked point (N34).
         recordDistancePoint(atElapsed: elapsedSeconds, altitude: lastLocation?.altitude, force: true)
 
-        workout.routeCoordinates = coordinates
-        workout.splits = splits
-        workout.splitUnit = splitUnit
-        workout.distanceSeries = distanceSeries
-        // The final lap is closed by the finish itself, so the run keeps every boundary the
-        // runner marked rather than losing the one they were in when they stopped (A2).
-        workout.laps = LapRecorder.laps(
-            marks: lapMarks,
-            finish: LapRecorder.Mark(elapsedSeconds: elapsedSeconds, distanceMeters: distanceMeters)
-        )
-        if elevationGainMeters > 0 {
-            workout.elevationGainMeters = elevationGainMeters
-        }
-        if !cadenceSamples.isEmpty {
-            workout.averageCadenceStepsPerMinute =
-                cadenceSamples.reduce(0, +) / Double(cadenceSamples.count)
-        }
-        if !hrSamples.isEmpty {
-            workout.averageHeartRate = hrSamples.reduce(0, +) / Double(hrSamples.count)
-            workout.maxHeartRate = hrSamples.max()
-            // Persist the raw series (previously discarded) so the time-in-zone
-            // breakdown can be computed for app-recorded runs (A6).
-            workout.heartRateSamples = hrSamples
-        }
+        // Built by the same code a recovered run is, so the two cannot drift apart.
+        let workout = checkpoint(at: Date()).makeWorkout()
+        // Saved or discarded from here, the run is the finish dialog's now. Only once the
+        // workout exists, so a kill between the two still recovers it.
+        if let checkpointURL { RunCheckpointStore.clear(at: checkpointURL) }
         return workout
+    }
+
+    // MARK: Checkpoints (P1.2)
+
+    /// The run as it stands, as a value.
+    private func checkpoint(at now: Date) -> RunCheckpoint {
+        RunCheckpoint(
+            runID: runID,
+            startDate: startDate,
+            savedAt: now,
+            workoutType: workoutType,
+            workoutLocation: workoutLocation,
+            splitUnitRaw: splitUnit.rawValue,
+            elapsedSeconds: elapsedSeconds,
+            distanceMeters: distanceMeters,
+            coordinates: coordinates,
+            splits: splits,
+            distanceSeries: distanceSeries,
+            lapMarks: lapMarks,
+            elevationGainMeters: elevationGainMeters,
+            cadenceSamples: cadenceSamples,
+            heartRateSamples: hrSamples
+        )
+    }
+
+    /// Writes the run so far to disk, so an app killed mid-run can save it on the next
+    /// launch (`AppContainer.recoverInterruptedRun`). On start, on pause, and every
+    /// ``checkpointInterval`` seconds of recording.
+    private func writeCheckpoint() {
+        guard let checkpointURL, isRecording else { return }
+        var snapshot = checkpoint(at: Date())
+        // The point the run would close on if it ended now, as `finishWorkout` banks one,
+        // so a recovered run's last chart bucket ends where it did. On the copy only.
+        if elapsedSeconds.isFinite, distanceMeters.isFinite {
+            snapshot.distanceSeries.append(
+                SplitBucketing.DistancePoint(
+                    elapsedSeconds: elapsedSeconds,
+                    cumulativeMeters: distanceMeters,
+                    altitudeMeters: lastLocation?.altitude
+                )
+            )
+        }
+        RunCheckpointStore.save(snapshot, to: checkpointURL)
+        lastCheckpointElapsedSeconds = elapsedSeconds
     }
 
     // MARK: Private helpers
@@ -415,6 +449,7 @@ final class WorkoutTrackerService {
         pedometerActive = false
         rejectedFixCounts = [:]
         gpsSignal = nil
+        lastCheckpointElapsedSeconds = 0
     }
 
     /// Banks a cumulative distance reading, if the runner has covered enough ground since
@@ -608,6 +643,9 @@ final class WorkoutTrackerService {
                 // counted by the widget rather than pushed at all (U5b).
                 self.activityPresenter?.runDidUpdate(self.activitySnapshot)
                 self.onPulse?(.tick)
+                if self.elapsedSeconds - self.lastCheckpointElapsedSeconds >= Self.checkpointInterval {
+                    self.writeCheckpoint()
+                }
             }
         }
     }

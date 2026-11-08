@@ -520,7 +520,10 @@ final class WorkoutSyncService {
     /// imported walk is not a run and must not complete one. The walk sync pass never calls
     /// this, and the guard here is what keeps that true if a future caller does (N38). The
     /// same `runsOnly` guard keeps an imported ride off a run day (B8).
-    private func linkToScheduledWorkouts(_ runWorkouts: [RunWorkout]) {
+    ///
+    /// Internal because a run recovered from a checkpoint (P1.2) has no scheduled session
+    /// attached either — the screen that knew it went with the process — and is linked here.
+    func linkToScheduledWorkouts(_ runWorkouts: [RunWorkout]) {
         let toLink = runWorkouts.runsOnly.filter { $0.scheduledWorkout == nil }
         guard !toLink.isEmpty else { return }
 
