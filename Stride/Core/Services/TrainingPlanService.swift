@@ -1133,12 +1133,13 @@ struct TrainingPlanService {
         unitPreference: UnitPreference = .metric,
         protectedSessionIDs: Set<UUID> = []
     ) {
-        // A pregnancy plan is prescribed by effort and duration, and deliberately carries no
-        // pace targets at all — pregnancy moves the pace–effort relationship week by week, so
+        // A pregnancy or Start Running plan is prescribed by effort and duration, and
+        // deliberately carries no pace targets at all — pregnancy moves the pace–effort
+        // relationship week by week, and a new runner has no pace worth training at yet, so
         // a VDOT-derived band would be wrong by construction. Re-pacing one would quietly
         // convert every remaining session back into a race-plan workout.
-        // See `docs/PREGNANCY_RUNNING_EVIDENCE.md` §3.
-        guard !plan.isPregnancyPlan else { return }
+        // See `docs/PREGNANCY_RUNNING_EVIDENCE.md` §3 and `docs/START_RUNNING_PROGRAM.md`.
+        guard !plan.prescribesByTime else { return }
 
         let today = Calendar.current.startOfDay(for: Date())
         for week in plan.weeks ?? [] {

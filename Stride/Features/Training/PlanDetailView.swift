@@ -10,12 +10,7 @@ struct PlanDetailView: View {
 
     @State private var showDeleteConfirmation = false
 
-    private var planTitle: String {
-        if let name = plan.raceName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
-            return name
-        }
-        return plan.targetRace.localizedName
-    }
+    private var planTitle: String { plan.displayTitle }
 
     // MARK: - Body
 

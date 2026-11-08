@@ -208,13 +208,15 @@ struct PlanTabView: View {
                         }
 
                         // Smart Adapt and Pace Insights are both VDOT machinery, and a
-                        // pregnancy plan has no pace targets to insight about and is not
-                        // the coach's to rewrite (`AdaptableWorkoutSelector` already
-                        // returns nothing for one). Showing a permanently-empty card
-                        // instead of the guidance that does apply would be worse than
+                        // pregnancy or Start Running plan has no pace targets to insight
+                        // about and is not the coach's to rewrite (`AdaptableWorkoutSelector`
+                        // already returns nothing for one). Showing a permanently-empty
+                        // card instead of the guidance that does apply would be worse than
                         // showing neither.
                         if plan.isPregnancyPlan {
                             PregnancyPlanGuidanceCard(plan: plan)
+                        } else if plan.isStartRunningPlan {
+                            StartRunningGuidanceCard(plan: plan)
                         } else {
                             SmartAdaptPlanCard(
                                 workoutCount: remainingAdaptableWorkouts(in: plan).count,
@@ -777,7 +779,11 @@ private struct PlanOverviewCard: View {
     }
 
     private var raceStrideIcon: StrideIconName {
-        guard !plan.isPregnancyPlan else { return .heart }
+        switch plan.planKind {
+        case .pregnancy: return .heart
+        case .startRunning: return .walk
+        case .standard: break
+        }
         switch plan.targetRace {
         case .maintainFitness: return .heart
         case .fiveK: return .bolt
@@ -788,7 +794,7 @@ private struct PlanOverviewCard: View {
     }
 
     private var planTitle: String {
-        if plan.isPregnancyPlan { return PlanKind.pregnancy.localizedName }
+        if plan.planKind != .standard { return plan.planKind.localizedName }
         // Not the hero means the race countdown leads the screen with the race's name,
         // date and goal; repeating them here made three cards say the same thing.
         if !isHero {
@@ -797,10 +803,7 @@ private struct PlanOverviewCard: View {
                 comment: "Plan overview title under the race countdown: the plan's length"
             )
         }
-        if let name = plan.raceName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
-            return name
-        }
-        return plan.targetRace.localizedName
+        return plan.displayTitle
     }
 
     /// A pregnancy plan has no goal time, so the line that would read "Goal 0:00" reports
@@ -810,6 +813,14 @@ private struct PlanOverviewCard: View {
             return String(
                 localized: "\(age.noteForm) weeks  ·  \(plan.totalWeeks) weeks planned",
                 comment: "Pregnancy plan subtitle: gestational age and plan length"
+            )
+        }
+        // A Start Running plan has no goal time either; where the runner is in the
+        // program is the number that means something.
+        if plan.isStartRunningPlan, let stage = StartRunningPlanService.guidance(for: plan)?.stage {
+            return String(
+                localized: "Stage \(stage.number) of \(StartRunningProgram.stageCount)  ·  \(plan.totalWeeks) weeks planned",
+                comment: "Start Running plan subtitle: the current stage and the plan length"
             )
         }
         if !isHero { return nil }
@@ -961,19 +972,51 @@ private struct PhaseProgressBar: View {
             }
             .frame(height: 10)
 
-            HStack {
-                ForEach([TrainingPhase.base, .build, .peak, .taper], id: \.self) { phase in
-                    Text(phase.localizedName)
+            if plan.isStartRunningPlan {
+                // Every week of a Start Running plan is `.base`, so Base / Build / Peak /
+                // Taper would sit on Base for the whole plan. The two ends of the program
+                // say where the runner is going instead.
+                HStack {
+                    Text("Run/walk")
                         .strideEyebrow()
-                        .foregroundStyle(phase == currentPhase ? Color.brandText : Color.secondary)
-                    if phase != .taper { Spacer() }
+                        .foregroundStyle(isContinuousStage ? Color.secondary : Color.brandText)
+                    Spacer()
+                    Text("30 min running")
+                        .strideEyebrow()
+                        .foregroundStyle(isContinuousStage ? Color.brandText : Color.secondary)
+                }
+            } else {
+                HStack {
+                    ForEach([TrainingPhase.base, .build, .peak, .taper], id: \.self) { phase in
+                        Text(phase.localizedName)
+                            .strideEyebrow()
+                            .foregroundStyle(phase == currentPhase ? Color.brandText : Color.secondary)
+                        if phase != .taper { Spacer() }
+                    }
                 }
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Training phases")
-        .accessibilityValue(
-            "\(currentPhase.localizedName), \(Int(plan.progress * 100)) percent of the plan done"
+        .accessibilityLabel(plan.isStartRunningPlan ? Text("Plan progress") : Text("Training phases"))
+        .accessibilityValue(progressDescription)
+    }
+
+    /// Whether this week's sessions are one continuous run rather than run/walk.
+    private var isContinuousStage: Bool {
+        StartRunningPlanService.guidance(for: plan)?.stage.isContinuous ?? false
+    }
+
+    private var progressDescription: String {
+        let percent = Int(plan.progress * 100)
+        if plan.isStartRunningPlan, let stage = StartRunningPlanService.guidance(for: plan)?.stage {
+            return String(
+                localized: "Stage \(stage.number) of \(StartRunningProgram.stageCount), \(percent) percent of the plan done",
+                comment: "Accessibility value of the Start Running plan progress bar"
+            )
+        }
+        return String(
+            localized: "\(currentPhase.localizedName), \(percent) percent of the plan done",
+            comment: "Accessibility value of the training phase progress bar"
         )
     }
 }

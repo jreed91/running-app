@@ -79,25 +79,57 @@ enum RaceType: String, Codable, CaseIterable, Sendable {
 /// different questions: `RaceType` is *what the runner is training for*, `PlanKind` is *which
 /// generator built the plan and which rules govern it*. A pregnancy plan has no goal race —
 /// it carries `.maintainFitness` — but it must never be re-paced from VDOT, adapted by the
-/// AI coach, or handed intervals, and that is what this discriminates on.
+/// AI coach, or handed intervals, and that is what this discriminates on. A Start Running
+/// plan is the same shape of exception: run/walk sessions prescribed by the clock, built by
+/// `StartRunningPlanService`, with no race at the end of it.
 ///
 /// Decoding an unknown raw value falls back to `.standard` so an older client reading a
 /// synced plan degrades rather than fails, the way `FitnessLevel` does.
 enum PlanKind: String, Codable, CaseIterable, Sendable {
     case standard
     case pregnancy
+    /// Run/walk sessions for someone new to running, or coming back to it, that end in
+    /// thirty minutes of running without a break. See `StartRunningProgram`.
+    case startRunning
 
     var displayName: String {
         switch self {
-        case .standard:  return "Training Plan"
-        case .pregnancy: return "Pregnancy Plan"
+        case .standard:     return "Training Plan"
+        case .pregnancy:    return "Pregnancy Plan"
+        case .startRunning: return "Start Running"
         }
     }
 
     var localizedName: String {
         switch self {
-        case .standard:  return String(localized: "Training Plan", comment: "Kind of training plan")
-        case .pregnancy: return String(localized: "Pregnancy Plan", comment: "Kind of training plan")
+        case .standard:     return String(localized: "Training Plan", comment: "Kind of training plan")
+        case .pregnancy:    return String(localized: "Pregnancy Plan", comment: "Kind of training plan")
+        case .startRunning: return String(localized: "Start Running", comment: "Kind of training plan: a run/walk plan for new runners")
+        }
+    }
+
+    /// True when the plan's sessions are prescribed by minutes and effort, with no pace
+    /// targets at all.
+    ///
+    /// Everything built on VDOT paces has to leave such a plan alone: the post-run pace
+    /// refresh, Smart Adapt and the coach's "update next session" (`AdaptableWorkoutSelector`),
+    /// and the heat sheet, which would widen or clear a band the plan never had and trim the
+    /// run/walk structure that *is* the prescription. Each of those asks this, not a
+    /// particular kind, so a new kind of time-based plan is covered by saying so here.
+    var prescribesByTime: Bool {
+        switch self {
+        case .standard:                   return false
+        case .pregnancy, .startRunning:   return true
+        }
+    }
+
+    /// Whether a plan of this kind can be building toward a race. A race-day hub, a
+    /// countdown or a finish prediction must not appear for one that cannot, even when an
+    /// older race date is still on the profile.
+    var hasGoalRace: Bool {
+        switch self {
+        case .standard:                   return true
+        case .pregnancy, .startRunning:   return false
         }
     }
 }

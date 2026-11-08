@@ -39,13 +39,14 @@ enum AdaptableWorkoutSelector {
     ) -> [ScheduledWorkout] {
         guard let plan else { return [] }
 
-        // A pregnancy plan is not the coach's to rewrite, for the same reason it is not
-        // `refreshPaces`'s: its sessions are prescribed by effort and duration against a
-        // published guideline, and an AI rewrite would hand them pace bands, intervals, and
-        // volume the evidence does not support. Returning no candidates here disables both
-        // Smart Adapt and apply-coach-feedback in one place.
-        // See `docs/PREGNANCY_RUNNING_EVIDENCE.md`.
-        guard !plan.isPregnancyPlan else { return [] }
+        // A pregnancy or Start Running plan is not the coach's to rewrite, for the same
+        // reason it is not `refreshPaces`'s: its sessions are prescribed by effort and
+        // duration, and an AI rewrite would hand them pace bands, intervals, and volume the
+        // plan was built without. For Start Running the week-to-week progression *is* the
+        // plan. Returning no candidates here disables both Smart Adapt and
+        // apply-coach-feedback in one place.
+        // See `docs/PREGNANCY_RUNNING_EVIDENCE.md` and `docs/START_RUNNING_PROGRAM.md`.
+        guard !plan.prescribesByTime else { return [] }
 
         let today = calendar.startOfDay(for: now)
 

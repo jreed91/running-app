@@ -49,7 +49,7 @@ struct RaceInsightsView: View {
     /// The race being predicted: the active plan's when it has one, as the race hub and
     /// Plan read it, so all three predict the same race against the same goal.
     private var racePlan: TrainingPlan? {
-        guard let plan = activePlans.first, !plan.isPregnancyPlan, plan.targetRace.isGoalRace,
+        guard let plan = activePlans.first, plan.planKind.hasGoalRace, plan.targetRace.isGoalRace,
               plan.effectiveRaceDistanceMeters > 0 else { return nil }
         return plan
     }
