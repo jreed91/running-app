@@ -682,8 +682,12 @@ struct TrainingPlanService {
 
     // MARK: - Smart Workout Adaptation
 
-    /// Returns a new ``ScheduledWorkout`` whose structure, pace targets, and volume have
-    /// been adapted to the runner's recent performance history.
+    /// Returns a new ``ScheduledWorkout`` whose structure and pace targets have been
+    /// adapted to the runner's recent performance history.
+    ///
+    /// Volume is not adapted: reps and distance stay as stored. The result must be the same
+    /// however many times it is fed back in, because ``refreshPaces(plan:history:profile:unitPreference:)``
+    /// re-adapts its own output after every run (P1.1).
     ///
     /// For `.rest` and `.crossTraining` workouts, the original is returned unchanged.
     /// The returned object is a fresh instance; the caller should copy its fields back onto the
@@ -731,20 +735,18 @@ struct TrainingPlanService {
         let baseReps     = existing?.repetitions          ?? 5
         let baseDist     = existing?.distanceMeters       ?? 800
         let baseRecovery = existing?.recoverySeconds      ?? 90
-        let basePace     = existing?.targetPaceSecondsPerKm ?? paces.interval
 
-        let adaptedReps: Int
+        // Reps stay as planned, and the pace is today's VDOT interval pace with the trend
+        // as a fixed offset, never a step from the stored pace. The post-run refresh is
+        // the one caller with history, and it re-reads its own output after every run, so
+        // a step relative to the stored session compounded: five "improving" runs turned
+        // 5 × 800 m into 10 × 800 m on every remaining interval day, with no cap (P1.1).
+        let adaptedReps = baseReps
         let adaptedPace: Double
         switch snap.performanceTrend {
-        case .improving:
-            adaptedReps = baseReps + 1
-            adaptedPace = max(basePace - 2, paces.repetition)
-        case .onTrack:
-            adaptedReps = baseReps
-            adaptedPace = basePace
-        case .struggling:
-            adaptedReps = max(baseReps - 1, 3)
-            adaptedPace = basePace + 3
+        case .improving:  adaptedPace = max(paces.interval - 2, paces.repetition)
+        case .onTrack:    adaptedPace = paces.interval
+        case .struggling: adaptedPace = paces.interval + 3
         }
 
         let warmupDist: Double   = snap.performanceTrend == .struggling ? 1_500 : 1_000
@@ -916,10 +918,11 @@ struct TrainingPlanService {
         snap: PerformanceSnapshot,
         unitPreference: UnitPreference
     ) -> ScheduledWorkout {
-        let baseDist = scheduled.targetDistanceMeters ?? 12_000
-        let adaptedDist: Double = snap.performanceTrend == .struggling
-            ? baseDist * 0.90
-            : baseDist
+        // The planned distance stands whatever the trend. Trimming it by 10% on a
+        // "struggling" read compounded through the post-run refresh, which re-reads its
+        // own output: three such runs left every remaining long run, the peak one
+        // included, at 73% of plan, and nothing ever gave it back (P1.1).
+        let adaptedDist = scheduled.targetDistanceMeters ?? 12_000
 
         let warmupDist   = adaptedDist * 0.15
         let workDist     = adaptedDist * 0.75
@@ -1057,9 +1060,9 @@ struct TrainingPlanService {
             : String(format: "%.0f s", recoverySeconds)
         let trendNote: String
         switch trend {
-        case .improving:  trendNote = "Volume increased – you've been hitting your targets."
+        case .improving:  trendNote = "Pace tightened – you've been hitting your targets."
         case .onTrack:    trendNote = "Maintain current effort."
-        case .struggling: trendNote = "Volume reduced – focus on quality over quantity."
+        case .struggling: trendNote = "Pace eased – focus on quality over quantity."
         }
         return "\(reps) × \(distStr) @ \(paceStr) with \(recStr) jog recovery. \(trendNote)"
     }
@@ -1087,7 +1090,7 @@ struct TrainingPlanService {
         switch trend {
         case .improving:  trendNote = "Full distance – aim for a slight negative split."
         case .onTrack:    trendNote = "Keep it conversational throughout."
-        case .struggling: trendNote = "Distance trimmed slightly – prioritise recovery."
+        case .struggling: trendNote = "Keep it easy throughout – prioritise recovery."
         }
         return "\(km.distanceStringFromKm(unit: unitPreference)) easy @ ~\(pace.paceString(unit: unitPreference)). \(trendNote)"
     }
@@ -1115,7 +1118,8 @@ struct TrainingPlanService {
     /// future uncompleted workout in `plan`.
     ///
     /// Call this after each completed run so workout targets stay aligned with the
-    /// runner's current fitness for any number of weekly run days. Uses
+    /// runner's current fitness for any number of weekly run days. It only re-paces:
+    /// running it twice on the same history changes nothing the second time. Uses
     /// ``WorkoutAnalyticsService/snapshot(from:profile:)`` for a live VDOT when sufficient
     /// history exists; falls back to ``estimatedVDOT(from:)`` otherwise.
     func refreshPaces(

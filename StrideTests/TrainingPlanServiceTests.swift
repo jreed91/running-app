@@ -384,6 +384,57 @@ struct TrainingPlanServiceTests {
         #expect(new < old, "Faster profile should yield a lower (faster) tempo pace lower bound")
     }
 
+    /// The post-run refresh re-reads its own output after every run. Steps relative to
+    /// the stored session used to compound: an "improving" read added a rep to every
+    /// remaining interval day per run, and a "struggling" one cut every remaining long
+    /// run by another 10% (P1.1).
+    @Test("refreshPaces on an improving read never adds reps or distance, however often it runs (P1.1)")
+    func refreshPacesImprovingNeverRatchets() {
+        // 4:00/km intervals against a 25-minute 5K's ~4:50/km interval pace.
+        expectRefreshNeverChangesVolume(lastIntervalsSeconds: 1_200, trend: .improving)
+    }
+
+    @Test("refreshPaces on a struggling read never trims reps or distance, however often it runs (P1.1)")
+    func refreshPacesStrugglingNeverRatchets() {
+        // 6:00/km intervals against the same ~4:50/km target.
+        expectRefreshNeverChangesVolume(lastIntervalsSeconds: 1_800, trend: .struggling)
+    }
+
+    private func expectRefreshNeverChangesVolume(lastIntervalsSeconds: Double, trend: PerformanceTrend) {
+        let profile = makeProfile(race: .fiveK, runDays: 4, time5KSeconds: 25 * 60)
+        let plan = service.generatePlan(profile: profile, startDate: .now, numberOfWeeks: 8)
+        let lastIntervals = RunWorkout(
+            date: Date().addingTimeInterval(-86_400),
+            distanceMeters: 5_000,
+            durationSeconds: lastIntervalsSeconds,
+            workoutType: .interval
+        )
+        let history = [lastIntervals]
+        #expect(WorkoutAnalyticsService().snapshot(from: history, profile: profile).performanceTrend == trend)
+
+        let today = Calendar.current.startOfDay(for: .now)
+        let future = workouts(in: plan).filter { !$0.isCompleted && $0.scheduledDate > today }
+        let intervalDays = future.filter { $0.workoutType == .interval }
+        let longRuns = future.filter { $0.workoutType == .longRun }
+        #expect(!intervalDays.isEmpty)
+        #expect(!longRuns.isEmpty)
+        let repsBefore = intervalDays.map { $0.intervals.first?.repetitions }
+        let longRunDistancesBefore = longRuns.map(\.targetDistanceMeters)
+
+        service.refreshPaces(plan: plan, history: history, profile: profile)
+        let pacesAfterFirst = future.map { [$0.targetPaceLowerBound, $0.targetPaceUpperBound] }
+        let notesAfterFirst = future.map(\.notes)
+
+        for _ in 0..<4 {
+            service.refreshPaces(plan: plan, history: history, profile: profile)
+        }
+
+        #expect(intervalDays.map { $0.intervals.first?.repetitions } == repsBefore)
+        #expect(longRuns.map(\.targetDistanceMeters) == longRunDistancesBefore)
+        #expect(future.map { [$0.targetPaceLowerBound, $0.targetPaceUpperBound] } == pacesAfterFirst)
+        #expect(future.map(\.notes) == notesAfterFirst)
+    }
+
     // MARK: Target distance
 
     @Test("Target distance decreases in taper week vs peak week")
