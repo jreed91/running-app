@@ -167,6 +167,15 @@ struct RaceDayPlanTests {
         #expect(resolve(profile: profile, plan: plan) == nil)
     }
 
+    @Test("A Start Running plan has no race either, even with a date left on the profile")
+    func startRunningPlanHasNoRace() {
+        let context = TestStore.makeContext()
+        let profile = makeProfile(in: context, raceIn: 12)
+        let plan = makePlan(in: context, race: .maintainFitness, raceIn: nil, goalSeconds: 0, kind: .startRunning)
+
+        #expect(resolve(profile: profile, plan: plan) == nil)
+    }
+
     @Test("The plan's race wins over a stale one left on the profile")
     func planWinsOverProfile() {
         let context = TestStore.makeContext()

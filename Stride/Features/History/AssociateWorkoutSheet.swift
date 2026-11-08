@@ -83,13 +83,7 @@ private struct ScheduledWorkoutPickerRow: View {
                     .font(.dsCaption)
                     .foregroundStyle(.secondary)
                 if let plan = scheduled.week?.plan {
-                    let planTitle: String = {
-                        if let name = plan.raceName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
-                            return name
-                        }
-                        return plan.targetRace.localizedName
-                    }()
-                    Text(planTitle)
+                    Text(plan.displayTitle)
                         .font(.dsCaption2)
                         .foregroundStyle(.tertiary)
                 }

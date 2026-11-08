@@ -109,12 +109,7 @@ struct PlanRowView: View {
 
     private var summary: PlanSummary { PlanSummaryService.summary(for: plan) }
 
-    private var planTitle: String {
-        if let name = plan.raceName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
-            return name
-        }
-        return plan.targetRace.localizedName
-    }
+    private var planTitle: String { plan.displayTitle }
 
     private var dateRange: String {
         let start = plan.startDate.formatted(.dateTime.month(.abbreviated).day().year())

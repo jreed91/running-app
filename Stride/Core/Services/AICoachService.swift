@@ -1011,6 +1011,23 @@ extension AICoachService {
             return "Not a planned session. Judge it by what this kind of run (\(type)) is for."
         }
         var lines = ["Planned: " + plannedTargetsDescription(planned, unitPreference: unitPreference)]
+
+        // A session prescribed by the clock has no pace target, and its distance is only an
+        // estimate from the minutes: "2.1 of 2.6 km planned" would read as a miss for a
+        // runner who did every minute of it. Its time is the thing to compare.
+        if let plan = planned.week?.plan, plan.prescribesByTime {
+            lines.append(Self.timePrescribedNote(for: plan))
+            if let plannedSeconds = planned.workoutStructure?.totalEstimatedDurationSeconds,
+               plannedSeconds > 0, workout.durationSeconds > 0 {
+                let percent = Int((workout.durationSeconds / plannedSeconds * 100).rounded())
+                lines.append(
+                    "Result: time \(workout.durationSeconds.durationString) of "
+                        + "\(plannedSeconds.durationString) planned (\(percent)%)."
+                )
+            }
+            return lines.joined(separator: "\n")
+        }
+
         // A tempo or interval session's pace is for the work, so the whole run's average —
         // warm-up and cool-down included — is never held against it.
         let scope = planned.paceScope
@@ -1033,8 +1050,65 @@ extension AICoachService {
         return lines.joined(separator: "\n")
     }
 
+    /// The active plan as the coach chat's context block.
+    ///
+    /// A pregnancy or Start Running plan carries `.maintainFitness` only because it has no
+    /// race, so it is described by its kind; "Race: Maintain Fitness, goal time 0:00" had
+    /// the coach talking about a race and a pace the plan does not have.
+    static func planContext(for plan: TrainingPlan) -> String {
+        guard plan.planKind == .standard else {
+            var lines = [
+                "Active plan:",
+                "Plan: \(plan.planKind.displayName)",
+                "Current week: \(plan.currentWeek?.weekNumber ?? 0) of \(plan.totalWeeks)",
+                timePrescribedNote(for: plan)
+            ]
+            if let stage = StartRunningPlanService.guidance(for: plan)?.stage {
+                lines.append("This week: stage \(stage.number) of \(StartRunningProgram.stageCount), \(stage.summary).")
+            }
+            return lines.joined(separator: "\n")
+        }
+        return """
+            Active plan:
+            Race: \(plan.targetRace.displayName)
+            Race date: \(plan.raceDate?.formatted(date: .abbreviated, time: .omitted) ?? "none")
+            Goal time: \(plan.goalTimeSeconds.durationString)
+            Current week: \(plan.currentWeek?.weekNumber ?? 0) of \(plan.totalWeeks)
+            """
+    }
+
+    /// What the coach has to know about a plan prescribed by time before it says anything
+    /// about pace or distance.
+    static func timePrescribedNote(for plan: TrainingPlan) -> String {
+        switch plan.planKind {
+        case .startRunning:
+            return "This is a Start Running plan: run/walk sessions prescribed in minutes at a "
+                + "pace the runner can talk at, building to 30 minutes of running without a break. "
+                + "It has no pace targets and no race. Judge a session on whether the runner did "
+                + "the time, never on pace or distance, and treat walking as part of the plan."
+        case .pregnancy:
+            return "This is a pregnancy plan: sessions prescribed in minutes and by effort, with no "
+                + "pace targets and no race. Judge a session on time and effort, never on pace."
+        case .standard:
+            return ""
+        }
+    }
+
     /// A planned session as one line: its type, distance, pace range and main set.
     func plannedTargetsDescription(_ planned: ScheduledWorkout, unitPreference: UnitPreference) -> String {
+        // A run/walk session is its minutes: the distance is an estimate, not a target.
+        if planned.week?.plan?.prescribesByTime == true,
+           let structure = planned.workoutStructure,
+           structure.totalEstimatedDurationSeconds > 0 {
+            var parts = [
+                planned.workoutType.displayName,
+                "\(structure.totalEstimatedDurationSeconds.durationString) by the clock, no pace target"
+            ]
+            if let set = structure.mainSets.first, !set.label.isEmpty {
+                parts.append("main set: \(set.label)")
+            }
+            return parts.joined(separator: ", ")
+        }
         var parts = [planned.workoutType.displayName]
         if let distance = planned.targetDistanceMeters, distance > 0 {
             parts.append(distance.distanceString(unit: unitPreference))

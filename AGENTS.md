@@ -113,8 +113,9 @@ Business logic belongs in services or repositories, not directly in SwiftUI view
 `Stride/Core/Models/Enums.swift` contains shared enums:
 
 - `RaceType`: `.maintainFitness`, `.fiveK`, `.halfMarathon`, `.marathon`
-- `PlanKind`: `.standard`, `.pregnancy` — *which generator built the plan*, a separate axis from
-  `RaceType`, which is *what the runner is training for*. See "Pregnancy plans" below.
+- `PlanKind`: `.standard`, `.pregnancy`, `.startRunning` — *which generator built the plan*, a
+  separate axis from `RaceType`, which is *what the runner is training for*. See "Pregnancy
+  plans" and "Start Running plans" below.
 - `FitnessLevel`: `.beginner`, `.intermediate`, `.advanced`
 - `WorkoutType`: `.easy`, `.tempo`, `.interval`, `.longRun`, `.race`, `.rest`, `.crossTraining`,
   `.strength`, `.walk` — the last of which no generator ever prescribes; see "Walking workouts" below
@@ -194,7 +195,8 @@ to read *before* touching any number in `PregnancyRunningPolicy`:
 - **Three things must never touch a pregnancy plan**: `TrainingPlanService.refreshPaces` (would
   write VDOT bands over it), `AdaptableWorkoutSelector` (gates both Smart Adapt and
   apply-coach-feedback, and returns no candidates for one), and anything that adds a race. Each
-  guard is a one-line `plan.isPregnancyPlan` check and each is tested.
+  guard is a one-line check of `plan.prescribesByTime` or `plan.planKind.hasGoalRace` (so it
+  covers Start Running plans too) and each is tested. The heat advisory skips such plans as well.
 - **The screening gate is load-bearing.** `generatePlan` throws unless
   `UserProfile.pregnancyClearedAt` is set, so a future caller cannot route around
   `PregnancyPlanSetupView`. The contraindication and red-flag lists are reproduced in full and
@@ -209,6 +211,29 @@ minutes, habitual vigorous running — and both write them to `UserProfile` befo
 generator. Onboarding also computes the plan's week span itself, to promise a number before
 the plan exists; `weekCountBoundaries` in `PregnancyPlanServiceTests` is what keeps that
 promise honest.
+
+### Start Running plans
+
+`StartRunningPlanService` is a third sibling: run/walk sessions for a new or returning runner,
+ten one-week stages from 8 × (1 min run, 1:30 walk) to 30 minutes without stopping. Every
+number is in `StartRunningProgram`; why each one is what it is, and what it was checked against
+(NHS Couch to 5K), is in [`docs/START_RUNNING_PROGRAM.md`](docs/START_RUNNING_PROGRAM.md).
+Update that doc in the same change as the table.
+
+- **Same exclusions as a pregnancy plan, by the same guards.** `PlanKind.prescribesByTime` keeps
+  `refreshPaces`, `AdaptableWorkoutSelector` and the heat advisory off it; `PlanKind.hasGoalRace`
+  keeps race surfaces away. A new guard asks those, never a specific kind.
+- **No pace targets.** Sessions are `.easy`, prescribed in minutes at talk pace; the distance is
+  an estimate. The coach prompts say so (`AICoachService.timePrescribedNote`) and the run read
+  compares time, not distance.
+- **The stage is read back, not stored.** `StartRunningProgram.stage(matching:)` matches a
+  session's structure against the table; `StartRunningPlanService.stage(of:)` does it for a week.
+  A stored stage would be a new `@Model` field and so a CloudKit schema deployment.
+- **Rebuild resumes, never skips.** `PlanLifecycleService.rebuildPlan` regenerates a Start Running
+  plan from `resumeStage(for:)`, the last stage with a completed run (and a pregnancy plan through
+  `PregnancyPlanService`). Before this switch both kinds were rebuilt as VDOT race plans.
+- Weeks run Monday to Sunday so the runner's weekdays land right; a start after the week's last
+  run day begins the next Monday.
 
 ## Persistence and Sync
 

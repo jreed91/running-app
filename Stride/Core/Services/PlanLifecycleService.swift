@@ -251,7 +251,9 @@ final class PlanLifecycleService {
     // MARK: - Rebuild
 
     /// Retires the active plan and generates a fresh one starting from today,
-    /// preserving the original race date, goal time, and race type.
+    /// preserving the original race date, goal time, and race type. A Start Running plan
+    /// restarts at the last stage the runner ran; a pregnancy plan is rebuilt from the due
+    /// date on the profile.
     ///
     /// The plan being replaced is **deactivated, never deleted** (N1). Deleting it
     /// cascaded through its weeks and every `ScheduledWorkout` in them, including
@@ -267,6 +269,28 @@ final class PlanLifecycleService {
     ) throws {
         let startDate = Date().startOfDay
         let runDayIndices = profile.preferredRunDayIndices
+
+        // A plan built by another generator is rebuilt by that generator. Falling through
+        // to the race-plan path turned a pregnancy or Start Running plan into a VDOT race
+        // plan with pace bands, the one thing either kind must never become.
+        switch oldPlan.planKind {
+        case .startRunning:
+            let newPlan = StartRunningPlanService().generatePlan(
+                profile: profile,
+                startDate: startDate,
+                firstStage: StartRunningPlanService.resumeStage(for: oldPlan)
+            )
+            try activateRebuilt(newPlan, replacing: oldPlan)
+            return
+        case .pregnancy:
+            // Throws when the due date has passed or the screening is missing, which the
+            // rebuild surfaces as its failure alert rather than building something else.
+            let newPlan = try PregnancyPlanService().generatePlan(profile: profile, startDate: startDate)
+            try activateRebuilt(newPlan, replacing: oldPlan)
+            return
+        case .standard:
+            break
+        }
 
         let newPlan: TrainingPlan
         if let raceDate = oldPlan.raceDate, let raceName = oldPlan.raceName {
@@ -290,7 +314,10 @@ final class PlanLifecycleService {
 
         newPlan.goalTimeSeconds = oldPlan.goalTimeSeconds
         newPlan.targetRace = oldPlan.targetRace
+        try activateRebuilt(newPlan, replacing: oldPlan)
+    }
 
+    private func activateRebuilt(_ newPlan: TrainingPlan, replacing oldPlan: TrainingPlan) throws {
         // `save` enforces the single-active invariant by deactivating every other
         // plan, which retires `oldPlan` while keeping it (and its history) in the store.
         try planRepository.save(newPlan)

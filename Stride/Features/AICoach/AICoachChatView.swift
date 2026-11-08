@@ -543,7 +543,7 @@ struct AICoachChatView: View {
             let name = type.localizedName.lowercased()
             return type == .longRun || type == .race ? "After \(name)" : "After \(name) run"
         } else if let activePlan {
-            return "\(activePlan.targetRace.localizedName) plan context"
+            return "\(activePlan.displayTitle) plan context"
         } else {
             return "Plan and workout context"
         }
@@ -593,15 +593,7 @@ struct AICoachChatView: View {
             """
         } ?? "Current workout context: none selected."
 
-        let planContext = activePlan.map { plan in
-            """
-            Active plan:
-            Race: \(plan.targetRace.displayName)
-            Race date: \(plan.raceDate?.formatted(date: .abbreviated, time: .omitted) ?? "none")
-            Goal time: \(plan.goalTimeSeconds.durationString)
-            Current week: \(plan.currentWeek?.weekNumber ?? 0) of \(plan.totalWeeks)
-            """
-        } ?? "Active plan: none."
+        let planContext = activePlan.map { AICoachService.planContext(for: $0) } ?? "Active plan: none."
 
         let recent = recentRuns
             .prefix(Self.promptRunCount)
@@ -645,7 +637,7 @@ struct AICoachChatView: View {
     private var openingMetrics: [AICoachMiniMetric] {
         guard let latestRun else {
             return [
-                AICoachMiniMetric(label: "Plan", value: activePlan?.targetRace.localizedName ?? "None", delta: nil, tone: .brand),
+                AICoachMiniMetric(label: "Plan", value: activePlan?.displayTitle ?? "None", delta: nil, tone: .brand),
                 AICoachMiniMetric(label: "Runs", value: "\(recentRuns.count)", delta: nil, tone: .secondary)
             ]
         }

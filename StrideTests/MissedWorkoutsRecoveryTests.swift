@@ -229,6 +229,34 @@ struct MissedWorkoutsRecoveryTests {
         #expect(storedRuns.contains { $0.id == run.id })
     }
 
+    @Test("rebuildPlan keeps a Start Running plan a Start Running plan, from the last stage run")
+    func rebuildStartRunningResumesStage() throws {
+        let container = makeContainer()
+        let context = container.modelContainer.mainContext
+        let profile = makeProfile(in: context)
+        let oldPlan = StartRunningPlanService().generatePlan(
+            profile: profile,
+            startDate: Date().startOfWeek.adding(weeks: -4)
+        )
+        try container.planRepository.save(oldPlan)
+
+        // Ran one session of stage 3, then stopped.
+        let stageThree = try #require((oldPlan.weeks ?? []).first { $0.weekNumber == 3 })
+        let ran = try #require((stageThree.workouts ?? []).first { $0.workoutType.isRunType })
+        ran.isCompleted = true
+        try context.save()
+
+        try container.planLifecycle.rebuildPlan(replacing: oldPlan, profile: profile, context: context)
+
+        let active = try #require(try container.planRepository.fetchActivePlan())
+        #expect(active.id != oldPlan.id)
+        #expect(active.planKind == .startRunning)
+        let firstWeek = try #require((active.weeks ?? []).min { $0.weekNumber < $1.weekNumber })
+        #expect(StartRunningPlanService.stage(of: firstWeek)?.number == 3)
+        let sessions = (active.weeks ?? []).flatMap { $0.workouts ?? [] }
+        #expect(sessions.allSatisfy { $0.targetPaceLowerBound == nil && $0.targetPaceUpperBound == nil })
+    }
+
     @Test("shiftMissedWorkoutsForward moves strength days with the runs")
     func shiftMovesStrengthWorkouts() throws {
         let container = makeContainer()

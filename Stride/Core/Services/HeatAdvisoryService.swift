@@ -189,7 +189,10 @@ final class HeatAdvisoryService {
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> ScheduledWorkout? {
-        guard let plan, plan.isActive, !plan.isPregnancyPlan else { return nil }
+        // Plans prescribed by effort are left out: an effort target already eases itself
+        // in the heat, and the sheet's trims would cut the run/walk structure that is the
+        // whole prescription (`HeatAdaptationPolicy` clears it in severe heat).
+        guard let plan, plan.isActive, !plan.prescribesByTime else { return nil }
 
         let tomorrow = calendar.startOfDay(for: now).addingTimeInterval(86_400)
 

@@ -96,11 +96,29 @@ final class TrainingPlan {
 
     /// True for plans built by ``PregnancyPlanService``.
     ///
-    /// Three places have to ask: `TrainingPlanService.refreshPaces` (which would overwrite
-    /// an effort-based prescription with VDOT paces), `AdaptableWorkoutSelector` (which
-    /// gates both Smart Adapt and apply-coach-feedback), and anything that offers to add a
-    /// race. See `docs/PREGNANCY_RUNNING_EVIDENCE.md`.
+    /// The guards that keep VDOT machinery off such a plan ask the wider questions instead:
+    /// ``prescribesByTime`` (`TrainingPlanService.refreshPaces`, `AdaptableWorkoutSelector`,
+    /// the heat advisory) and ``PlanKind/hasGoalRace`` (anything that offers a race), so they
+    /// cover Start Running plans too. Ask this one only for what is about the pregnancy
+    /// itself. See `docs/PREGNANCY_RUNNING_EVIDENCE.md`.
     var isPregnancyPlan: Bool { planKind == .pregnancy }
+
+    /// True for plans built by ``StartRunningPlanService``.
+    var isStartRunningPlan: Bool { planKind == .startRunning }
+
+    /// See ``PlanKind/prescribesByTime``: the question the pace refresh, Smart Adapt, the
+    /// coach and the heat sheet ask before touching a session.
+    var prescribesByTime: Bool { planKind.prescribesByTime }
+
+    /// The plan's name as a runner reads it: the race's own name when one was given,
+    /// otherwise what the plan is. A pregnancy or Start Running plan carries
+    /// `.maintainFitness` only because it has no race, so it is named by its kind.
+    var displayTitle: String {
+        if let name = raceName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
+            return name
+        }
+        return planKind == .standard ? targetRace.localizedName : planKind.localizedName
+    }
 
     /// Gestational age on `date` for a pregnancy plan; nil for every other kind.
     func gestationalAge(on date: Date = Date()) -> GestationalAge? {

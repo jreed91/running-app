@@ -241,10 +241,10 @@ extension RaceDayPlan {
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> RaceDayPlan? {
-        // A pregnancy plan carries `.maintainFitness` and has no race to peak on by
-        // design, and a stale `raceDate` left on the profile from a plan before it must
-        // not resurrect one behind the runner's back (see `PlanKind`).
-        if let plan, plan.isPregnancyPlan { return nil }
+        // A pregnancy or Start Running plan carries `.maintainFitness` and has no race to
+        // peak on by design, and a stale `raceDate` left on the profile from a plan before
+        // it must not resurrect one behind the runner's back (see `PlanKind.hasGoalRace`).
+        if let plan, !plan.planKind.hasGoalRace { return nil }
 
         guard let identity = RaceIdentity(profile: profile, plan: plan) else { return nil }
         guard let resolvedPhase = Self.phase(
