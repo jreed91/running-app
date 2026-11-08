@@ -198,6 +198,8 @@ final class WorkoutSyncService {
             return
         }
 
+        newWorkouts = relinkOwnExports(newWorkouts, source: source)
+
         if newWorkouts.isEmpty {
             AppLogger.log("No new HealthKit running workouts found during \(source) sync.", label: "HealthKit", level: .debug)
         } else {
@@ -400,6 +402,65 @@ final class WorkoutSyncService {
             session.linkedScheduledWorkoutID = match.id
             notificationService.cancelMorningReminder(for: match)
             available.removeAll { $0.id == match.id }
+        }
+    }
+
+    // MARK: - Stride's own exports (P1.3)
+
+    /// Drops imports that are Stride's own export of a run already in the store, and
+    /// stamps the HealthKit id onto that stored run instead.
+    ///
+    /// `HealthKitRepository.save(_:)` writes the workout to Health, then its route, and
+    /// only then returns the id `persistFinishedRun` stores. Writing the workout fires this
+    /// app's own observer, so a pass can read the export back while the stored run still
+    /// has no `healthKitWorkoutID`, and `existingIDs` (HealthKit UUIDs only) let it
+    /// through as a second run. An app killed between the local save and the Health save
+    /// returning left the same gap for good. The importer carries the export's
+    /// `StrideWorkoutID` metadata over as the imported run's `id`, which is what this
+    /// matches on.
+    ///
+    /// The stored runs are fetched here, after the import's awaits, rather than reused
+    /// from the snapshot `existingIDs` came from: a run finished while HealthKit was being
+    /// read is exactly the one whose export this pass may be holding.
+    private func relinkOwnExports(_ imported: [RunWorkout], source: String) -> [RunWorkout] {
+        guard !imported.isEmpty else { return imported }
+        let stored: [RunWorkout]
+        do {
+            stored = try context.fetch(FetchDescriptor<RunWorkout>())
+        } catch {
+            AppLogger.log(
+                "Failed to fetch stored runs to match own exports (\(source)): \(error.localizedDescription)",
+                label: "HealthKit",
+                level: .error
+            )
+            return imported
+        }
+        let remaining = Self.withoutOwnExports(imported, stored: stored)
+        let relinked = imported.count - remaining.count
+        if relinked > 0 {
+            context.saveOrLog("runs relinked to their own HealthKit export")
+            AppLogger.log(
+                "Linked \(relinked) HealthKit workout(s) to the Stride run that exported them (\(source)).",
+                label: "HealthKit",
+                level: .info
+            )
+        }
+        return remaining
+    }
+
+    /// `imported` minus every run whose `id` is already a stored run's, i.e. Stride's own
+    /// export of it. A stored run with no HealthKit id yet takes the export's.
+    ///
+    /// One already linked keeps its id: a second HealthKit copy of a run Stride has is
+    /// still a copy, so it is dropped either way.
+    static func withoutOwnExports(_ imported: [RunWorkout], stored: [RunWorkout]) -> [RunWorkout] {
+        let storedByID = Dictionary(stored.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        return imported.filter { run in
+            guard let original = storedByID[run.id] else { return true }
+            if original.healthKitWorkoutID == nil {
+                original.healthKitWorkoutID = run.healthKitWorkoutID
+            }
+            return false
         }
     }
 

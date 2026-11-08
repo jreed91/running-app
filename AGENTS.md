@@ -207,6 +207,12 @@ promise honest.
 - CloudKit is used for private iCloud sync when enabled and available.
 - `AppContainer` falls back from CloudKit to local storage and then emergency in-memory storage if needed.
 - `WorkoutSyncService` imports HealthKit workouts — runs, walks, and strength sessions — and can surface pending review workouts through `AppContainer.pendingReviewWorkout`. See "Walking workouts" below for the rules the walk half carries.
+- **Stride reads its own Health exports back.** Every exported workout carries
+  `HealthKitRepository.strideWorkoutIDMetadataKey` (the model's `id`), and the importer
+  keeps it as the imported run's `id`. `WorkoutSyncService.withoutOwnExports` then links
+  the stored run instead of importing a copy, because the observer fires on Stride's own
+  save before `persistFinishedRun` has stored the HealthKit id. Any new import path
+  (the Settings import uses it too) must go through the same filter.
 - Simulator builds disable CloudKit in `AppContainer.shouldUseCloudKit` — not because
   Simulator can't sync (Apple says it can) but because the unit-test suite runs there and
   builds real file-backed containers, which would otherwise write into the team's

@@ -243,6 +243,13 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
 
     // MARK: - Completed workout
 
+    /// Metadata key holding the exported model's `id`, so an import can recognise Stride's own export (P1.3).
+    static let strideWorkoutIDMetadataKey = "StrideWorkoutID"
+    /// The Stride model id in a workout's metadata, or `nil` for a workout another app wrote.
+    static func strideWorkoutID(from metadata: [String: Any]?) -> UUID? {
+        (metadata?[strideWorkoutIDMetadataKey] as? String).flatMap(UUID.init(uuidString:))
+    }
+
     @MainActor func save(_ workout: RunWorkout) async throws -> String {
         let isIndoor = workout.workoutLocation == .indoor
         let start = workout.date
@@ -275,7 +282,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
 
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             builder.addMetadata([
-                "StrideWorkoutID": workout.id.uuidString,
+                Self.strideWorkoutIDMetadataKey: workout.id.uuidString,
                 HKMetadataKeyIndoorWorkout: isIndoor
             ]) { _, error in
                 if let error { continuation.resume(throwing: error) }
@@ -319,7 +326,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         try await builder.beginCollection(at: start)
 
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            builder.addMetadata(["StrideWorkoutID": workout.id.uuidString]) { _, error in
+            builder.addMetadata([Self.strideWorkoutIDMetadataKey: workout.id.uuidString]) { _, error in
                 if let error { continuation.resume(throwing: error) }
                 else { continuation.resume() }
             }
@@ -975,6 +982,10 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             run.averageCadenceStepsPerMinute = cadence
             run.elevationGainMeters = elevation
             run.healthKitWorkoutID = hkID
+            // Stride's own export keeps its run's id, so the sync pass relinks it (P1.3).
+            if let strideID = Self.strideWorkoutID(from: hkWorkout.metadata) {
+                run.id = strideID
+            }
             if !coordinates.isEmpty { run.routeCoordinates = coordinates }
             // Kept alongside the splits, not just used to build them: a one-mile import has
             // a single whole-mile split and needs the readings behind it for the summary's
