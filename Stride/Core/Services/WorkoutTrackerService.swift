@@ -135,6 +135,8 @@ final class WorkoutTrackerService {
     /// between its final two GPS fixes.) The whole-run total is the published
     /// `elevationGainMeters`.
     private var currentSplitElevationGainMeters: Double = 0
+    /// Counts climb through a dead band so GPS altitude jitter is not added up as hills (P3).
+    private var climb = ElevationGainAccumulator()
 
     /// Distance banked from active segments before the current indoor resume, so
     /// resuming the pedometer from "now" no longer replays distance walked while
@@ -450,6 +452,7 @@ final class WorkoutTrackerService {
         rejectedFixCounts = [:]
         gpsSignal = nil
         lastCheckpointElapsedSeconds = 0
+        climb = ElevationGainAccumulator()
     }
 
     /// Banks a cumulative distance reading, if the runner has covered enough ground since
@@ -746,10 +749,13 @@ final class WorkoutTrackerService {
 
             distanceMeters += delta
 
-            // Accumulate positive altitude change across the whole run and the
-            // current split so a steady climb is recorded, not just the last
-            // fix-to-fix delta (M26).
-            let ascent = max(0, location.altitude - last.altitude)
+            // Accumulate climb across the whole run and the current split so a steady
+            // climb is recorded, not just the last fix-to-fix delta (M26), through a dead
+            // band so altitude jitter on the flat is not counted as climb (P3).
+            let altitude = ElevationGainAccumulator.usableAltitude(
+                location.altitude, verticalAccuracy: location.verticalAccuracy
+            )
+            let ascent = altitude.map { climb.add($0) } ?? 0
             elevationGainMeters += ascent
             currentSplitElevationGainMeters += ascent
 
@@ -764,7 +770,7 @@ final class WorkoutTrackerService {
             }
 
             recordDistancePoint(
-                atElapsed: stopwatch.elapsed(at: now), altitude: location.altitude
+                atElapsed: stopwatch.elapsed(at: now), altitude: altitude
             )
 
             // Record a split every unit (km or mile) the runner has chosen

@@ -150,15 +150,16 @@ extension SplitBucketing {
         var previous = DistancePoint(elapsedSeconds: 0, cumulativeMeters: 0)
         var bucketStartSeconds: Double = 0
         var completedBuckets = 0
-        // Positive altitude change banked into the bucket that is currently open, the same
-        // way the live tracker accumulates it fix by fix (M26) rather than taking the delta
-        // between a bucket's first and last reading.
+        // Climb banked into the bucket that is currently open, the same way the live
+        // tracker accumulates it reading by reading (M26) rather than taking the delta
+        // between a bucket's first and last reading, and through the same dead band (P3).
         var openBucketGain: Double = 0
+        var climb = ElevationGainAccumulator()
 
         for point in series {
             defer { previous = point }
-            if let altitude = point.altitudeMeters, let previousAltitude = previous.altitudeMeters {
-                openBucketGain += max(0, altitude - previousAltitude)
+            if let altitude = point.altitudeMeters {
+                openBucketGain += climb.add(altitude)
             }
             let bucketsAtPoint = bucketIndex(
                 distanceMeters: point.cumulativeMeters, splitLengthMeters: splitLengthMeters
