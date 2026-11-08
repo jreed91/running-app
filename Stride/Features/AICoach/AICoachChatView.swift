@@ -474,16 +474,35 @@ struct AICoachChatView: View {
     /// telling a runner to go and enable Apple Intelligence — which is already on — sends
     /// them somewhere that cannot help. Name the real cause and, when the framework knows
     /// it, when the allowance comes back.
+    ///
+    /// Only an unavailable model is a setup problem. Anything else (a request the model
+    /// turned down, a prompt it could not fit) used to be reported as "make sure Apple
+    /// Intelligence is enabled" too, which sent the runner to a setting already on (P2.5).
     private static func failureText(for error: any Error, provider: AIProvider) -> String {
-        if let coachError = error as? OnDeviceCoachError,
-           case .serverQuotaExceeded(let resetDate) = coachError {
+        switch error as? OnDeviceCoachError {
+        case .serverQuotaExceeded(let resetDate):
             guard let resetDate else {
-                return "You have used today's Private Cloud Compute requests. They refresh daily — or switch to the on-device model in Settings to keep going now."
+                return String(
+                    localized: "You have used today's Private Cloud Compute requests. They refresh daily — or switch to the on-device model in Settings to keep going now.",
+                    comment: "Coach chat error when the daily Private Cloud Compute allowance is used up"
+                )
             }
             let refresh = resetDate.formatted(date: .omitted, time: .shortened)
-            return "You have used today's Private Cloud Compute requests. They refresh at \(refresh) — or switch to the on-device model in Settings to keep going now."
+            return String(
+                localized: "You have used today's Private Cloud Compute requests. They refresh at \(refresh) — or switch to the on-device model in Settings to keep going now.",
+                comment: "Coach chat error when the daily Private Cloud Compute allowance is used up; the time it refreshes"
+            )
+        case .unavailable:
+            return String(
+                localized: "I could not reach \(provider.localizedName). Make sure Apple Intelligence is enabled on this device, then try again.",
+                comment: "Coach chat error when the model is unavailable; the model's name"
+            )
+        default:
+            return String(
+                localized: "I couldn't answer that one. Try asking again, or in fewer words.",
+                comment: "Coach chat error for a failed reply when the model itself is available"
+            )
         }
-        return "I could not reach \(provider.localizedName). Make sure Apple Intelligence is enabled on this device, then try again."
     }
 
     @MainActor
@@ -501,13 +520,15 @@ struct AICoachChatView: View {
         !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    /// The recent real exchange, without setup and failure notices (P2.5).
     private var providerMessages: [AIProviderChatMessage] {
-        messages.map { message in
-            AIProviderChatMessage(
-                role: message.sender == .coach ? "assistant" : "user",
-                content: message.text
+        CoachChatTranscript.providerMessages(from: messages.map { message in
+            CoachChatTranscript.Entry(
+                isCoach: message.sender == .coach,
+                text: message.text,
+                isNotice: message.status == .setupNeeded
             )
-        }
+        })
     }
 
     private var hasAIKey: Bool {
