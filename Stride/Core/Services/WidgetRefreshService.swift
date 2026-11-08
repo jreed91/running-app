@@ -34,19 +34,41 @@ enum WidgetRefreshService {
         store: WidgetSnapshotStore = .shared,
         reload: () -> Void = { WidgetCenter.shared.reloadAllTimelines() }
     ) -> Bool {
+        refresh(
+            context: context,
+            weeklyGoalMeters: appSettings.weeklyGoalMeters,
+            unit: appSettings.unitPreference,
+            now: now,
+            store: store,
+            reload: reload
+        )
+    }
+
+    /// The same refresh for a caller with no `AppSettings`: a HealthKit import or the
+    /// daily background refresh, which run with no scene and so no settings object. Pass
+    /// the values `AppSettings.syncedNotificationPreferences()` reads (P2.3).
+    @discardableResult
+    static func refresh(
+        context: ModelContext,
+        weeklyGoalMeters: Double,
+        unit: UnitPreference,
+        now: Date = Date(),
+        store: WidgetSnapshotStore = .shared,
+        reload: () -> Void = { WidgetCenter.shared.reloadAllTimelines() }
+    ) -> Bool {
         // UI tests run against an in-memory container seeded for a specific screen.
         // Publishing that to the real App Group would leave fixture data on the device's
         // Home Screen after the test process exits.
         guard !UITestingSupport.isEnabled else { return false }
 
-        let snapshot = makeSnapshot(context: context, appSettings: appSettings, now: now)
+        let snapshot = makeSnapshot(context: context, weeklyGoalMeters: weeklyGoalMeters, unit: unit, now: now)
 
         // The watch app shows the same snapshot (B3). Sent before the comparison below:
         // that guards WidgetKit's reload budget, and the watch has none to guard.
         WatchSyncService.shared.publish(
             snapshot: snapshot,
             nextSession: WidgetSnapshotBuilder.nextScheduledWorkout(in: activePlan(in: context), now: now),
-            unit: appSettings.unitPreference,
+            unit: unit,
             now: now
         )
 
@@ -74,15 +96,16 @@ enum WidgetRefreshService {
 
     static func makeSnapshot(
         context: ModelContext,
-        appSettings: AppSettings,
+        weeklyGoalMeters: Double,
+        unit: UnitPreference,
         now: Date = Date()
     ) -> WidgetSnapshot {
         WidgetSnapshotBuilder.snapshot(
             plan: activePlan(in: context),
             runs: runs(in: context),
             profile: profile(in: context),
-            weeklyGoalMeters: appSettings.weeklyGoalMeters,
-            unit: appSettings.unitPreference,
+            weeklyGoalMeters: weeklyGoalMeters,
+            unit: unit,
             now: now
         )
     }

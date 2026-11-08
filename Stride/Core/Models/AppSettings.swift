@@ -523,7 +523,10 @@ final class AppSettings {
             defaults: UserDefaults.standard,
             ubiquitous: NSUbiquitousKeyValueStore.default
         ) ?? ""
-        return UnitPreference(rawValue: raw) ?? .metric
+        // The same fallback as the instance (U10). `.metric` here gave a runner who never
+        // chose units kilometres in every background path and miles on screen, which the
+        // widgets, now also published from the background, would show as a flip (P2.3).
+        return UnitPreference(rawValue: raw) ?? .localeDefault
     }
 
     /// Whether walking workouts should be imported, read without an `AppSettings`.
