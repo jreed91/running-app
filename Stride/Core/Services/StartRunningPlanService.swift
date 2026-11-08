@@ -63,47 +63,141 @@ struct StartRunningPlanService {
         )
         plan.planKind = .startRunning
 
-        let jogPace = Self.jogPaceSecondsPerKm(for: profile)
-        let strengthPlan = profile.selectedEquipment.isEmpty
-            ? nil
-            : StrengthLibrary.plan(for: profile.selectedEquipment, focus: profile.strengthFocus, phase: .base)
-        let strengthOffset = Self.strengthOffset(runOffsets: runOffsets)
-
+        let schedule = WeekSchedule(profile: profile, runOffsets: runOffsets)
         for index in 0..<numberOfWeeks {
-            let stage = StartRunningProgram.stage(first + index)
-            let weekStart = firstMonday.adding(weeks: index)
-            let isFinalWeek = index == numberOfWeeks - 1
-            var workouts: [ScheduledWorkout] = []
-
-            for offset in runOffsets {
-                let date = weekStart.adding(days: offset)
-                guard date >= startDay else { continue }
-                workouts.append(runWorkout(
-                    date: date,
-                    stage: stage,
-                    jogPaceSecondsPerKm: jogPace,
-                    isFinalRun: isFinalWeek && offset == runOffsets.last
-                ))
-            }
-
-            if let strengthPlan, !strengthPlan.exercises.isEmpty, let strengthOffset {
-                let date = weekStart.adding(days: strengthOffset)
-                if date >= startDay {
-                    workouts.append(strengthWorkout(date: date, plan: strengthPlan))
-                }
-            }
-
-            let estimatedKm = workouts.reduce(0.0) { $0 + ($1.targetDistanceMeters ?? 0) } / 1_000
-            let week = TrainingWeek(
-                weekNumber: index + 1,
-                startDate: weekStart,
-                phase: .base,
-                targetDistanceKm: estimatedKm
+            let week = makeWeek(
+                number: index + 1,
+                stage: StartRunningProgram.stage(first + index),
+                weekStart: firstMonday.adding(weeks: index),
+                notBefore: startDay,
+                schedule: schedule,
+                isFinalWeek: index == numberOfWeeks - 1
             )
-            week.workouts = workouts.sorted { $0.scheduledDate < $1.scheduledDate }
             plan.weeks = (plan.weeks ?? []) + [week]
         }
         return plan
+    }
+
+    // MARK: - Repeating a week
+
+    /// Whether the week the runner is in can be run again next week.
+    ///
+    /// Not the program's last week: that one ends the plan, and a 5K plan picks up from it.
+    /// Not outside the plan's dates, where there is no "this week". And not when a later
+    /// week already holds a completed session, which moving the weeks back would put on a
+    /// day it was not run.
+    static func canRepeatWeek(in plan: TrainingPlan, now: Date = Date()) -> Bool {
+        guard plan.isStartRunningPlan,
+              let current = Self.currentWeek(in: plan, now: now),
+              let stage = Self.stage(of: current), !stage.isGraduation else { return false }
+        let later = (plan.weeks ?? []).filter { $0.weekNumber > current.weekNumber }
+        guard !later.isEmpty else { return false }
+        return !later.contains { week in (week.workouts ?? []).contains(where: \.isCompleted) }
+    }
+
+    /// Runs the current week's stage again next week, for a runner who isn't ready for
+    /// the step up.
+    ///
+    /// Inserts a fresh copy of this week's sessions as next week, on the runner's current
+    /// run days, moves every later week and its sessions back seven days, and moves the
+    /// plan's end back with them. This week is left as it is, finished sessions and all.
+    /// The progression is otherwise untouched: the stage after the repeat is the one that
+    /// would have come next.
+    ///
+    /// - Returns: The inserted week, attached to `plan`; nil, changing nothing, when
+    ///   ``canRepeatWeek(in:now:)`` is false. The caller saves and re-syncs.
+    @discardableResult
+    func repeatWeek(in plan: TrainingPlan, profile: UserProfile, now: Date = Date()) -> TrainingWeek? {
+        guard Self.canRepeatWeek(in: plan, now: now),
+              let current = Self.currentWeek(in: plan, now: now),
+              let stage = Self.stage(of: current) else { return nil }
+
+        for week in (plan.weeks ?? []) where week.weekNumber > current.weekNumber {
+            week.weekNumber += 1
+            week.startDate = week.startDate.adding(days: 7)
+            week.endDate = week.endDate.adding(days: 7)
+            for workout in week.workouts ?? [] {
+                workout.scheduledDate = workout.scheduledDate.adding(days: 7)
+            }
+        }
+
+        let runOffsets = Self.runOffsets(
+            preferred: profile.preferredRunDayIndices,
+            weeklyRunDays: profile.weeklyRunDays
+        )
+        let repeated = makeWeek(
+            number: current.weekNumber + 1,
+            stage: stage,
+            weekStart: current.startDate.startOfDay.adding(days: 7),
+            notBefore: .distantPast,
+            schedule: WeekSchedule(profile: profile, runOffsets: runOffsets),
+            isFinalWeek: false
+        )
+        plan.weeks = (plan.weeks ?? []) + [repeated]
+        plan.endDate = plan.endDate.adding(days: 7)
+        return repeated
+    }
+
+    // MARK: - Building a week
+
+    /// What every week of one plan shares: the run days, the jog pace behind the distance
+    /// estimate, and the optional strength session.
+    private struct WeekSchedule {
+        let runOffsets: [Int]
+        let jogPaceSecondsPerKm: Double
+        let strengthPlan: StrengthWorkoutPlan?
+        let strengthOffset: Int?
+
+        init(profile: UserProfile, runOffsets: [Int]) {
+            self.runOffsets = runOffsets
+            self.jogPaceSecondsPerKm = StartRunningPlanService.jogPaceSecondsPerKm(for: profile)
+            self.strengthPlan = profile.selectedEquipment.isEmpty
+                ? nil
+                : StrengthLibrary.plan(for: profile.selectedEquipment, focus: profile.strengthFocus, phase: .base)
+            self.strengthOffset = StartRunningPlanService.strengthOffset(runOffsets: runOffsets)
+        }
+    }
+
+    /// One week of the plan: the stage's session on each run day, and the strength session
+    /// when there is one. Days before `notBefore` are left out.
+    private func makeWeek(
+        number: Int,
+        stage: StartRunningProgram.Stage,
+        weekStart: Date,
+        notBefore startDay: Date,
+        schedule: WeekSchedule,
+        isFinalWeek: Bool
+    ) -> TrainingWeek {
+        var workouts: [ScheduledWorkout] = []
+
+        for offset in schedule.runOffsets {
+            let date = weekStart.adding(days: offset)
+            guard date >= startDay else { continue }
+            workouts.append(runWorkout(
+                date: date,
+                stage: stage,
+                jogPaceSecondsPerKm: schedule.jogPaceSecondsPerKm,
+                isFinalRun: isFinalWeek && offset == schedule.runOffsets.last
+            ))
+        }
+
+        if let strengthPlan = schedule.strengthPlan, !strengthPlan.exercises.isEmpty,
+           let strengthOffset = schedule.strengthOffset {
+            let date = weekStart.adding(days: strengthOffset)
+            if date >= startDay {
+                workouts.append(strengthWorkout(date: date, plan: strengthPlan))
+            }
+        }
+
+        let estimatedKm = workouts.reduce(0.0) { $0 + ($1.targetDistanceMeters ?? 0) } / 1_000
+        let week = TrainingWeek(
+            weekNumber: number,
+            startDate: weekStart,
+            phase: .base,
+            targetDistanceKm: estimatedKm
+        )
+        week.workouts = workouts.sorted { $0.scheduledDate < $1.scheduledDate }
+        return week
     }
 
     // MARK: - Reading a plan back
@@ -136,6 +230,18 @@ struct StartRunningPlanService {
         var stage: StartRunningProgram.Stage
         /// What changes next week, or what comes after the program on its last week.
         var next: String
+        /// True once the program is done: the last run of its last week is completed, or
+        /// that week is over with at least one of its runs done. The Plan tab then offers
+        /// the 5K plan that picks up from here.
+        var isFinished: Bool = false
+    }
+
+    /// The week the runner is in, or nil before the plan starts and after it ends.
+    static func currentWeek(in plan: TrainingPlan, now: Date = Date()) -> TrainingWeek? {
+        let today = now.startOfDay
+        return (plan.weeks ?? []).first {
+            $0.startDate.startOfDay <= today && $0.endDate.startOfDay >= today
+        }
     }
 
     static func guidance(for plan: TrainingPlan, now: Date = Date()) -> WeekGuidance? {
@@ -145,7 +251,7 @@ struct StartRunningPlanService {
         // The week the runner is in; before the plan starts, its first week; after it
         // ends, its last.
         let shown: TrainingWeek?
-        if let current = weeks.first(where: { $0.startDate.startOfDay <= today && $0.endDate.startOfDay >= today }) {
+        if let current = Self.currentWeek(in: plan, now: now) {
             shown = current
         } else if let firstWeek = weeks.first, today < firstWeek.startDate.startOfDay {
             shown = firstWeek
@@ -154,20 +260,57 @@ struct StartRunningPlanService {
         }
         guard let week = shown, let stage = Self.stage(of: week) else { return nil }
 
+        // Next week as the plan now has it, which after a repeat is this stage again.
+        let following = weeks.first { $0.weekNumber == week.weekNumber + 1 }.flatMap { Self.stage(of: $0) }
+
         let next: String
-        if stage.isGraduation {
+        if stage.isGraduation, following == nil {
             next = String(
-                localized: "After this week, a 5K plan picks up where this one ends. Start one from New Plan.",
+                localized: "After this week, a 5K plan picks up where this one ends.",
                 comment: "Start Running guidance on the last week of the program"
             )
-        } else {
-            let following = StartRunningProgram.stage(stage.number + 1)
+        } else if let following, following.number == stage.number {
             next = String(
-                localized: "Next week: \(following.summary).",
+                localized: "Next week: the same again, then the next step.",
+                comment: "Start Running guidance when next week repeats this week's sessions"
+            )
+        } else {
+            let nextStage = following ?? StartRunningProgram.stage(stage.number + 1)
+            next = String(
+                localized: "Next week: \(nextStage.summary).",
                 comment: "Start Running guidance: what next week's sessions are"
             )
         }
-        return WeekGuidance(stage: stage, next: next)
+
+        guard stage.isGraduation, following == nil, let lastWeek = weeks.last, week === lastWeek else {
+            return WeekGuidance(stage: stage, next: next)
+        }
+        let lastWeekRuns = (lastWeek.workouts ?? []).filter { $0.workoutType.isRunType }
+        let ranLastRun = lastWeekRuns.max { $0.scheduledDate < $1.scheduledDate }?.isCompleted == true
+        let isOver = today > lastWeek.endDate.startOfDay
+        // Over without a single run in its last week isn't finishing it: no congratulations
+        // for 30 minutes the runner hasn't run.
+        guard ranLastRun || (isOver && lastWeekRuns.contains(where: \.isCompleted)) else {
+            guard isOver else { return WeekGuidance(stage: stage, next: next) }
+            return WeekGuidance(
+                stage: stage,
+                next: String(
+                    localized: "When you can run 30 minutes without stopping, start a 5K plan from New Plan.",
+                    comment: "Start Running guidance after the plan ended without its last week run"
+                )
+            )
+        }
+        return WeekGuidance(
+            stage: stage,
+            next: String(
+                localized: """
+                You've finished Start Running. A 5K plan picks up from here: three or four runs \
+                a week, building to 5K.
+                """,
+                comment: "Start Running guidance once the last run of the program is done"
+            ),
+            isFinished: true
+        )
     }
 
     // MARK: - Days

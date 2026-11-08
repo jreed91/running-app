@@ -53,6 +53,14 @@ struct NewPlanOnboardingView: View {
     /// Six steps plus the summary, counted 1…7 like first-run onboarding counts 1…8.
     private let totalSteps = 7
 
+    /// Opened from a finished Start Running plan: starts on a 5K for a new runner rather
+    /// than on the profile's goal, which for that runner is no race at all.
+    private let startsAfterStartRunning: Bool
+
+    init(startsAfterStartRunning: Bool = false) {
+        self.startsAfterStartRunning = startsAfterStartRunning
+    }
+
     private var profile: UserProfile? { profiles.first }
 
     // MARK: - Computed
@@ -545,8 +553,26 @@ struct NewPlanOnboardingView: View {
         }
         selectedEquipment = Set(profile.selectedEquipment)
         strengthFocus = profile.strengthFocus
+        if startsAfterStartRunning {
+            applyStartRunningGraduate(hasFiveKTime: (profile.currentEstimated5KTimeSeconds ?? 0) > 0)
+        }
         clampWeeks()
         recalibrateRaceName()
+    }
+
+    /// A 5K at "New to running" for someone who has just run 30 minutes without stopping.
+    /// With no 5K time on file the time step starts at 35:00, about what 30 minutes of
+    /// steady running at a talking pace covers 5 km in; the runner can change it.
+    private func applyStartRunningGraduate(hasFiveKTime: Bool) {
+        goalRace = .fiveK
+        // Any name or date on the profile belongs to an older goal, not this first 5K.
+        raceName = ""
+        raceDate = Date().startOfWeek.adding(weeks: 12)
+        fitnessLevel = .beginner
+        if !hasFiveKTime {
+            fiveKMinutes = 35
+            fiveKSeconds = 0
+        }
     }
 
     private func clampWeeks() {

@@ -254,6 +254,15 @@ Update that doc in the same change as the table.
   builder (`HealthKitRepository.makeCustomWorkout`, which puts the last rep in a block of its
   own) both go from the final rep of the final set straight to the cool-down, matching
   `WorkoutSet.totalRecoverySeconds` and the playlist planner.
+- **Repeat this week.** `StartRunningPlanService.repeatWeek(in:profile:now:)` inserts a copy of
+  the current week and moves every later week, its sessions and the plan's end back seven days;
+  `canRepeatWeek(in:now:)` refuses on the last week, outside the plan, or past a completed later
+  session. `PlanLifecycleService.repeatStartRunningWeek` saves it and re-files the Watch
+  schedule and morning reminders. The guidance card's "next week" line reads the following
+  week's stage, so a repeat needs no stored flag.
+- **Graduation.** `WeekGuidance.isFinished` turns the card into "Start Running complete" with a
+  "Start a 5K plan" button, which opens `NewPlanOnboardingView(startsAfterStartRunning: true)`
+  set to a 5K at "New to running".
 
 ## Persistence and Sync
 
