@@ -234,6 +234,12 @@ Update that doc in the same change as the table.
   `PregnancyPlanService`). Before this switch both kinds were rebuilt as VDOT race plans.
 - Weeks run Monday to Sunday so the runner's weekdays land right; a start after the week's last
   run day begins the next Monday.
+- Two entry points, kept in step like the pregnancy plan's: **onboarding** (a card in the goal
+  step's "Specialized" section, plus a "Switch to Start Running" hint when someone picks "New
+  to running" for a race or fitness plan; it re-points step 4 to "How long can you run without
+  stopping?" and the summary to `OBStartRunningReady`, see `OBStartRunningSubviews.swift`) and
+  the **Plan tab's New Plan menu** (`StartRunningPlanSetupView`). Both ask the same question
+  (`StartRunningProgram.StartingPoint`) and pass its `firstStage` to the generator.
 
 ## Persistence and Sync
 

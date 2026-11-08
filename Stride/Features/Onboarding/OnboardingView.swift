@@ -30,6 +30,9 @@ struct OnboardingView: View {
     /// fitness level on the step before re-seeds it; once they have, it is theirs and the
     /// level no longer overwrites it.
     @State private var didEditPrePregnancyMinutes = false
+    /// How long a Start Running runner can run without stopping today, which decides the
+    /// stage their plan starts at. Asked in the 5K-time step's place.
+    @State private var startingPoint: StartRunningProgram.StartingPoint = .notYet
 
     @State private var goalRace: RaceType = .fiveK
     @State private var raceName = RaceType.fiveK.displayName
@@ -109,6 +112,7 @@ struct OnboardingView: View {
     }
 
     private var planWeeks: Int {
+        if isStartRunningPlan { return startingPoint.weeks }
         guard goalRace.isGoalRace else { return goalRace.typicalWeeks.lowerBound }
         return weeksThroughRaceDate(startDate: planStartDate, raceDate: raceDate)
     }
@@ -136,6 +140,16 @@ struct OnboardingView: View {
     // MARK: Pregnancy
 
     private var isPregnancyPlan: Bool { planKind == .pregnancy }
+
+    private var isStartRunningPlan: Bool { planKind == .startRunning }
+
+    /// Run days the Start Running plan will actually use: up to three of the chosen days.
+    private var startRunningDaysPerWeek: Int {
+        StartRunningPlanService.runOffsets(
+            preferred: selectedDays.sorted(),
+            weeklyRunDays: selectedDays.count
+        ).count
+    }
 
     private var gestationalAgeAtStart: GestationalAge {
         GestationalAge.on(planStartDate, dueDate: dueDate)
@@ -216,7 +230,7 @@ struct OnboardingView: View {
         case 1:
             OBShell(stepIndex: 1, total: totalSteps, kicker: "Your goal",
                     title: "What are you training for?",
-                    subtitle: "Pick a race distance, keep running strong without one, or choose a specialized plan.",
+                    subtitle: "Pick a race distance, keep running strong without one, or start from run/walk.",
                     ctaLabel: "Continue",
                     onBack: retreat,
                     onCTA: advance) {
@@ -251,9 +265,7 @@ struct OnboardingView: View {
         case 3:
             OBShell(stepIndex: 3, total: totalSteps, kicker: "About you",
                     title: "How would you describe your running?",
-                    subtitle: isPregnancyPlan
-                        ? "Sets the starting point for your weekly volume. A pregnancy plan prescribes effort, not pace."
-                        : "We'll calibrate volume and pace from here.",
+                    subtitle: levelSubtitle,
                     ctaLabel: "Continue", onBack: retreat, onCTA: advance) {
                 levelContent
             }
@@ -270,6 +282,17 @@ struct OnboardingView: View {
                     onCTA: advance) {
                 pregnancyHealthContent
             }
+        // A runner who can't yet run five minutes has no 5K time to give. What places a
+        // Start Running plan is how long they can run today.
+        case 4 where isStartRunningPlan:
+            OBShell(stepIndex: 4, total: totalSteps, kicker: "Starting point",
+                    title: "How long can you run without stopping?",
+                    subtitle: "Your plan starts from here. Starting a little easy costs you nothing.",
+                    ctaLabel: "Continue",
+                    onBack: retreat,
+                    onCTA: { didEnter5KTime = false; advance() }) {
+                OBStartingPointPicker(selection: $startingPoint)
+            }
         case 4:
             OBShell(stepIndex: 4, total: totalSteps, kicker: "Calibrate",
                     title: "Your recent 5K time?", subtitle: "Used to compute your VDOT and pace zones. You can skip or update this later.",
@@ -282,7 +305,10 @@ struct OnboardingView: View {
             }
         case 5:
             OBShell(stepIndex: 5, total: totalSteps, kicker: "Schedule",
-                    title: "Which days can you run?", subtitle: "Pick your typical week. We'll place harder workouts on your energy days.",
+                    title: "Which days can you run?",
+                    subtitle: isStartRunningPlan
+                        ? "Three runs a week, with a day between. Pick more and we'll use the three most spread out."
+                        : "Pick your typical week. We'll place harder workouts on your energy days.",
                     ctaLabel: "Continue", onBack: retreat, onCTA: advance) {
                 scheduleContent
             }
@@ -294,7 +320,9 @@ struct OnboardingView: View {
                     title: "What equipment do you have?",
                     subtitle: isPregnancyPlan
                         ? "We'll add 1–2 sessions per week, each opening with pelvic floor work."
-                        : "We'll add 1–2 strength sessions per week tailored to your gear.",
+                        : isStartRunningPlan
+                            ? "Optional: one short session a week, on a day off running."
+                            : "We'll add 1–2 strength sessions per week tailored to your gear.",
                     ctaLabel: "Continue",
                     secondaryLabel: isPregnancyPlan ? "Bodyweight only" : "Skip strength training",
                     onSecondary: { selectedEquipment.removeAll(); advance() },
@@ -318,7 +346,16 @@ struct OnboardingView: View {
                 permissionsContent
             }
         default:
-            if isPregnancyPlan {
+            if isStartRunningPlan {
+                OBStartRunningReady(
+                    startingPoint: startingPoint,
+                    runDaysPerWeek: startRunningDaysPerWeek,
+                    progressTotal: totalSteps,
+                    isCreatingPlan: isCreatingPlan,
+                    onBack: retreat,
+                    onViewPlan: { isCreatingPlan = true; createProfileAndPlan() }
+                )
+            } else if isPregnancyPlan {
                 OBPregnancyReady(
                     planWeeks: pregnancyPlanWeeks,
                     gestationalAgeAtStart: gestationalAgeAtStart,
@@ -355,14 +392,14 @@ struct OnboardingView: View {
     private var goalContent: some View {
         VStack(spacing: 10) {
             ForEach(RaceType.allCases, id: \.self) { race in
-                OBRaceCard(race: race, isSelected: !isPregnancyPlan && goalRace == race) {
+                OBRaceCard(race: race, isSelected: planKind == .standard && goalRace == race) {
                     planKind = .standard
                     goalRace = race
                     recalibrateRaceDate()
                 }
             }
 
-            if !isPregnancyPlan, goalRace.usesCustomDistance {
+            if planKind == .standard, goalRace.usesCustomDistance {
                 OBCustomDistanceCard(distanceKm: $customDistanceKm)
                     .onChange(of: customDistanceKm) { _, _ in recalibrateRaceDate() }
             }
@@ -377,6 +414,10 @@ struct OnboardingView: View {
                 Spacer()
             }
             .padding(.top, AppSpacing.sm)
+
+            OBStartRunningPlanCard(isSelected: isStartRunningPlan) {
+                chooseStartRunning()
+            }
 
             OBSpecializedPlanCard(isSelected: isPregnancyPlan) {
                 planKind = .pregnancy
@@ -417,6 +458,29 @@ struct OnboardingView: View {
                 habituallyVigorous: $pregnancyHabituallyVigorous,
                 onEditMinutes: { didEditPrePregnancyMinutes = true }
             )
+        }
+    }
+
+    // MARK: - Start Running
+
+    /// Points onboarding at a Start Running plan. It has no goal race, which is what
+    /// `.maintainFitness` means; `PlanKind` carries the rest. Someone choosing it is new to
+    /// running or coming back to it, so the level step opens on that answer.
+    private func chooseStartRunning() {
+        planKind = .startRunning
+        goalRace = .maintainFitness
+        fitnessSelection = .newToRunning
+        fitnessLevel = OBFitnessSelection.newToRunning.fitnessLevel
+    }
+
+    private var levelSubtitle: String {
+        switch planKind {
+        case .pregnancy:
+            return "Sets the starting point for your weekly volume. A pregnancy plan prescribes effort, not pace."
+        case .startRunning:
+            return "Helps your coach pitch its advice. Where the plan starts is the next question."
+        case .standard:
+            return "We'll calibrate volume and pace from here."
         }
     }
 
@@ -462,12 +526,20 @@ struct OnboardingView: View {
         VStack(spacing: 16) {
             VStack(spacing: 10) {
                 ForEach(OBFitnessSelection.allCases, id: \.self) { selection in
-                    OBFitnessRow(selection: selection, goalRace: goalRace, isSelected: fitnessSelection == selection) {
+                    OBFitnessRow(
+                        selection: selection,
+                        goalRace: goalRace,
+                        isSelected: fitnessSelection == selection,
+                        showsStartingVolume: planKind == .standard
+                    ) {
                         fitnessSelection = selection
                         fitnessLevel = selection.fitnessLevel
                         seedPrePregnancyMinutesIfUntouched()
                     }
                 }
+            }
+            if planKind == .standard, fitnessSelection == .newToRunning {
+                OBStartRunningSwitchHint { chooseStartRunning() }
             }
             unitsRow
         }
@@ -902,7 +974,13 @@ struct OnboardingView: View {
         }
         context.insert(profile)
         let plan: TrainingPlan
-        if isPregnancyPlan {
+        if isStartRunningPlan {
+            plan = StartRunningPlanService().generatePlan(
+                profile: profile,
+                startDate: planStartDate,
+                firstStage: startingPoint.firstStage
+            )
+        } else if isPregnancyPlan {
             do {
                 plan = try container.pregnancyPlanService.generatePlan(
                     profile: profile,

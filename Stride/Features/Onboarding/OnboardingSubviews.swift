@@ -744,7 +744,9 @@ enum OBFitnessSelection: CaseIterable, Sendable {
 
     var subtitle: String {
         switch self {
-        case .newToRunning: return "Run/walk intervals. Just getting started."
+        // Not "run/walk": a race or fitness plan starts at continuous running. Run/walk is
+        // the Start Running plan, which the level step offers beside this answer.
+        case .newToRunning: return "Just getting started, or back after a long break."
         case .recreational: return "Run weekly. Casual but consistent."
         case .experienced:  return "Consistent training week to week."
         case .competitive:  return "Racing regularly with structured training."
@@ -777,6 +779,9 @@ struct OBFitnessRow: View {
     let selection: OBFitnessSelection
     let goalRace: RaceType
     let isSelected: Bool
+    /// The "Plan starts ~N km/week" line. Off for plans prescribed in minutes, which have
+    /// no starting weekly distance to promise.
+    var showsStartingVolume = true
     let onSelect: () -> Void
 
     @Environment(AppSettings.self) private var appSettings
@@ -821,10 +826,12 @@ struct OBFitnessRow: View {
                     .foregroundStyle(.secondary)
                     .padding(.leading, 38)
 
-                Text(planStartLabel)
-                    .font(.dsCaption.weight(.semibold).monospacedDigit())
-                    .foregroundStyle(.secondary.opacity(0.75))
-                    .padding(.leading, 38)
+                if showsStartingVolume {
+                    Text(planStartLabel)
+                        .font(.dsCaption.weight(.semibold).monospacedDigit())
+                        .foregroundStyle(.secondary.opacity(0.75))
+                        .padding(.leading, 38)
+                }
             }
             .padding(14)
             .strideCard(cornerRadius: AppRadius.md)
