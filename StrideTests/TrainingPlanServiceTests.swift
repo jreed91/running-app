@@ -384,6 +384,37 @@ struct TrainingPlanServiceTests {
         #expect(new < old, "Faster profile should yield a lower (faster) tempo pace lower bound")
     }
 
+    /// A session changed through Smart Adapt, the coach or the heat sheet is the runner's
+    /// choice, and the next run's refresh used to overwrite it (P1.1).
+    @Test("refreshPaces leaves protected sessions alone and re-paces the rest (P1.1)")
+    func refreshPacesSkipsProtectedSessions() {
+        let slowProfile = makeProfile(race: .fiveK, runDays: 4, time5KSeconds: 25 * 60)
+        let plan = service.generatePlan(profile: slowProfile, startDate: .now, numberOfWeeks: 8)
+        let today = Calendar.current.startOfDay(for: .now)
+        let tempos = workouts(in: plan)
+            .filter { $0.workoutType == .tempo && $0.scheduledDate > today }
+            .sorted { $0.scheduledDate < $1.scheduledDate }
+        guard tempos.count >= 2 else {
+            Issue.record("Expected at least two future tempo sessions"); return
+        }
+        let (edited, other) = (tempos[0], tempos[1])
+        edited.targetPaceLowerBound = 400
+        edited.targetPaceUpperBound = 420
+        edited.notes = "Heat-adapted"
+        let otherBefore = other.targetPaceLowerBound
+
+        let fastProfile = makeProfile(race: .fiveK, runDays: 4, time5KSeconds: 20 * 60)
+        service.refreshPaces(plan: plan, history: [], profile: fastProfile, protectedSessionIDs: [edited.id])
+
+        #expect(edited.targetPaceLowerBound == 400)
+        #expect(edited.targetPaceUpperBound == 420)
+        #expect(edited.notes == "Heat-adapted")
+        guard let before = otherBefore, let after = other.targetPaceLowerBound else {
+            Issue.record("The unprotected tempo lost its pace target"); return
+        }
+        #expect(after < before, "The unprotected tempo should still follow the faster profile")
+    }
+
     /// The post-run refresh re-reads its own output after every run. Steps relative to
     /// the stored session used to compound: an "improving" read added a rep to every
     /// remaining interval day per run, and a "struggling" one cut every remaining long

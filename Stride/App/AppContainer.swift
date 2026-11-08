@@ -447,6 +447,15 @@ final class AppContainer {
         // it into the 19:00 recap. Settings are re-read each time for the same reason.
         workoutSyncService.onRunsImported = { [weak self, weak refresh = notificationRefreshService] in
             let preferences = AppSettings.syncedNotificationPreferences()
+            // A run from the Watch or another app re-paces the plan the way one recorded in
+            // Stride does (P1.1). First, because the widgets and the Watch show the next
+            // session's targets.
+            if let self {
+                self.planLifecycle.refreshPlanAfterImport(
+                    context: self.modelContainer.mainContext,
+                    unitPreference: preferences.unit
+                )
+            }
             // The week's total, the streak and the next session all move with a Watch run,
             // and the scene-phase refresh that would publish them never comes without a
             // scene: the widgets and the Watch kept the old figures until the app was
@@ -785,8 +794,10 @@ final class AppContainer {
         // Music library, not Stride's, and this button does not get to delete somebody's
         // music.
         RunPlaylistStore.removeAll()
-        // The shoe-nudge dismissals name pairs that are about to stop existing.
+        // The shoe-nudge dismissals name pairs that are about to stop existing, and the
+        // protected-edit notes name sessions that are.
         ShoeNudgeDismissals.removeAll()
+        AdaptedSessions.removeAll()
         await planLifecycle.resetAllData(context: context)
         // The App Group container is outside the store `PlanLifecycleService` just tore
         // down, so without this the Home Screen would be the one place the deleted plan

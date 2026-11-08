@@ -1122,11 +1122,16 @@ struct TrainingPlanService {
     /// running it twice on the same history changes nothing the second time. Uses
     /// ``WorkoutAnalyticsService/snapshot(from:profile:)`` for a live VDOT when sufficient
     /// history exists; falls back to ``estimatedVDOT(from:)`` otherwise.
+    ///
+    /// Sessions in `protectedSessionIDs` are left as they are: the runner changed them on
+    /// purpose through Smart Adapt, the coach or the heat sheet, and the callers pass
+    /// ``AdaptedSessions/protectedIDs(now:in:)`` so those edits last a week (P1.1).
     func refreshPaces(
         plan: TrainingPlan,
         history: [RunWorkout],
         profile: UserProfile,
-        unitPreference: UnitPreference = .metric
+        unitPreference: UnitPreference = .metric,
+        protectedSessionIDs: Set<UUID> = []
     ) {
         // A pregnancy plan is prescribed by effort and duration, and deliberately carries no
         // pace targets at all — pregnancy moves the pace–effort relationship week by week, so
@@ -1139,7 +1144,8 @@ struct TrainingPlanService {
         for week in plan.weeks ?? [] {
             for workout in week.workouts ?? [] {
                 guard !workout.isCompleted,
-                      workout.scheduledDate > today else { continue }
+                      workout.scheduledDate > today,
+                      !protectedSessionIDs.contains(workout.id) else { continue }
                 let adapted = adaptWorkout(
                     scheduled: workout,
                     history: history,

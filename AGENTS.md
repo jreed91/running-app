@@ -159,10 +159,15 @@ a pregnancy plan makes), `PregnancyRedFlag`, and `PregnancyContraindication`.
 3. Weekly volume uses progressive overload with regular cutback weeks.
 4. Plans balance easy/long running with quality work such as tempo and intervals.
 5. Adaptation has two paths. Smart Adapt (`AppContainer.adaptedWorkouts`, the AI coach) rewrites
-   sessions the runner picks. After every in-app run, `TrainingPlanService.refreshPaces` re-paces
-   every future session from the current VDOT and trend. The refresh re-reads its own output each
-   time, so it must only ever re-pace: an adaptation that changes reps or distance, or steps from
-   the stored pace, compounds run after run (P1.1).
+   sessions the runner picks. After every run, `TrainingPlanService.refreshPaces` re-paces
+   every future session from the current VDOT and trend: `ActiveRunView` for a run recorded in
+   Stride, `PlanLifecycleService.refreshPlanAfterImport` for one imported from Apple Health (the
+   Watch, the Workout app, another app). The refresh re-reads its own output each time, so it
+   must only ever re-pace: an adaptation that changes reps or distance, or steps from the stored
+   pace, compounds run after run (P1.1). It skips sessions the runner changed on purpose in the
+   last 7 days (`AdaptedSessions`, device-local in `UserDefaults`): `applyAdaptation(from:)` and
+   `HeatAdaptationPolicy.apply` record them. A new way to edit a session on purpose must record
+   it too, or the next run undoes the edit.
 
 ### Pregnancy plans
 

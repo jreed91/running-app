@@ -568,6 +568,9 @@ extension HeatAdaptationPolicy {
     /// old prescription: it has to be re-synced rather than matched. Forgetting that is the
     /// failure `applyAdaptation(from:)`'s doc comment calls out, and it is just as easy to
     /// forget here.
+    ///
+    /// The session is noted in ``AdaptedSessions`` for the same reason: without it, a run
+    /// the day before the hot one re-paced the session back to its fast targets (P1.1).
     @MainActor
     static func apply(_ adaptation: Adaptation, to workout: ScheduledWorkout) {
         workout.workoutType = adaptation.workoutType
@@ -584,5 +587,6 @@ extension HeatAdaptationPolicy {
         }
 
         workout.healthKitPlanID = nil
+        AdaptedSessions.record(workout.id)
     }
 }
