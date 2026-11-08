@@ -21,7 +21,7 @@ struct NewPlanOnboardingView: View {
     @State private var raceName = RaceType.halfMarathon.displayName
     @State private var raceDate = Date().startOfWeek.adding(weeks: 12)
     /// Canonical custom goal distance in kilometres (used when `goalRace == .custom`).
-    @State private var customDistanceKm: Double = 10.0
+    @State private var customDistanceKm: Double = 15.0
 
     // Step 2 – Fitness
     @State private var fitnessLevel: FitnessLevel = .intermediate
@@ -483,6 +483,7 @@ struct NewPlanOnboardingView: View {
         switch goalRace {
         case .maintainFitness: return "Recommended for Maintain Fitness"
         case .fiveK: return "Recommended for 5K"
+        case .tenK: return "Recommended for 10K"
         case .halfMarathon: return "Recommended for Half Marathon"
         case .marathon: return "Recommended for Marathon"
         case .custom: return "Recommended for your distance"

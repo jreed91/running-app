@@ -150,7 +150,7 @@ struct TrainingPlanServiceTests {
 
     @Test("Very short race horizons never crash and still end in a taper", arguments: [1, 2, 3, 4, 5])
     func shortRacePlanDoesNotCrash(weeksOut: Int) {
-        for race in [RaceType.fiveK, .halfMarathon, .marathon] {
+        for race in [RaceType.fiveK, .tenK, .halfMarathon, .marathon] {
             let profile = makeProfile(race: race, runDays: 4)
             let start = date(2026, 7, 6)
             let plan = service.generateRacePlan(
@@ -216,7 +216,10 @@ struct TrainingPlanServiceTests {
     @Test("Custom distance maps to the nearest training archetype")
     func customDistanceTrainingStyle() {
         #expect(RaceType.custom.trainingStyle(forDistanceMeters: 5_000) == .fiveK)
-        #expect(RaceType.custom.trainingStyle(forDistanceMeters: 10_000) == .halfMarathon)
+        #expect(RaceType.custom.trainingStyle(forDistanceMeters: 7_999) == .fiveK)
+        #expect(RaceType.custom.trainingStyle(forDistanceMeters: 10_000) == .tenK)
+        #expect(RaceType.custom.trainingStyle(forDistanceMeters: 14_999) == .tenK)
+        #expect(RaceType.custom.trainingStyle(forDistanceMeters: 15_000) == .halfMarathon)
         #expect(RaceType.custom.trainingStyle(forDistanceMeters: 21_097.5) == .halfMarathon)
         #expect(RaceType.custom.trainingStyle(forDistanceMeters: 42_195) == .marathon)
         // Standard race types always resolve to themselves.
@@ -261,6 +264,75 @@ struct TrainingPlanServiceTests {
         #expect(weeks(in: plan).count == 12)
         let hasQuality = workouts(in: plan).contains { $0.workoutType.isQualitySession }
         #expect(hasQuality, "Custom-distance plan should include quality sessions")
+        #expect(weeks(in: plan).last?.phase == .taper)
+    }
+
+    // MARK: 10K
+
+    @Test("10K is offered right after 5K")
+    func tenKListedAfterFiveK() throws {
+        let fiveK = try #require(RaceType.allCases.firstIndex(of: .fiveK))
+        #expect(RaceType.allCases.firstIndex(of: .tenK) == fiveK + 1)
+        #expect(RaceType.tenK.distanceMeters == 10_000)
+        #expect(!RaceType.tenK.usesCustomDistance)
+    }
+
+    @Test("10K starting volume sits between 5K and half marathon at every level")
+    func tenKStartingVolumeBetweenFiveKAndHalf() {
+        for level in FitnessLevel.allCases {
+            let fiveK = level.startingWeeklyKm(for: .fiveK)
+            let tenK = level.startingWeeklyKm(for: .tenK)
+            let half = level.startingWeeklyKm(for: .halfMarathon)
+            #expect(fiveK < tenK && tenK < half, "\(level)")
+        }
+    }
+
+    @Test("10K plan races 10 km at the pace the runner's VDOT predicts")
+    func tenKRaceDayPace() throws {
+        let fiveKSeconds = 25.0 * 60
+        let profile = makeProfile(race: .tenK, runDays: 4, time5KSeconds: fiveKSeconds)
+        let plan = service.generateRacePlan(
+            profile: profile,
+            startDate: date(2026, 1, 5),
+            raceDate: date(2026, 3, 22),
+            raceName: "City 10K",
+            runDayIndices: [0, 2, 4, 5]
+        )
+
+        #expect(plan.targetRace == .tenK)
+        #expect(plan.customDistanceMeters == nil)
+        #expect(plan.effectiveRaceDistanceMeters == 10_000)
+
+        let race = try #require(workouts(in: plan).first { $0.workoutType == .race })
+        #expect(race.targetDistanceMeters == 10_000)
+
+        let vdot = PaceCalculatorService.vdot(distanceMeters: 5_000, timeSeconds: fiveKSeconds)
+        let predicted = PaceCalculatorService.predictedTime(vdot: vdot, distanceMeters: 10_000) / 10
+        let lower = try #require(race.targetPaceLowerBound)
+        let upper = try #require(race.targetPaceUpperBound)
+        #expect(abs((lower + upper) / 2 - predicted) < 0.5)
+
+        // Slower than interval pace, faster than threshold: where a 10K belongs.
+        let paces = PaceCalculatorService.trainingPaces(forVDOT: vdot)
+        #expect(predicted > paces.interval)
+        #expect(predicted < paces.threshold)
+    }
+
+    @Test("10K intervals are 1 km reps with 2 minute jog recoveries")
+    func tenKIntervals() {
+        let profile = makeProfile(race: .tenK, runDays: 5)
+        let plan = service.generatePlan(
+            profile: profile,
+            startDate: .now,
+            numberOfWeeks: 10,
+            runDayIndices: [0, 1, 2, 4, 5]
+        )
+        let intervalSessions = workouts(in: plan).filter { $0.workoutType == .interval }
+        #expect(!intervalSessions.isEmpty)
+        for session in intervalSessions {
+            #expect(session.intervals.first?.distanceMeters == 1_000)
+            #expect(session.intervals.first?.recoverySeconds == 120)
+        }
         #expect(weeks(in: plan).last?.phase == .taper)
     }
 

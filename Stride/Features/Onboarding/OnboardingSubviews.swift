@@ -497,6 +497,7 @@ struct OBRaceCard: View {
         switch race {
         case .maintainFitness: return .heart
         case .fiveK: return .bolt
+        case .tenK: return .flame
         case .halfMarathon: return .tempo
         case .marathon: return .run
         case .custom: return .ruler
@@ -507,6 +508,7 @@ struct OBRaceCard: View {
         switch race {
         case .maintainFitness: return "No race target"
         case .fiveK:         return isImperial ? "3.1 mi"  : "5.0 km"
+        case .tenK:          return isImperial ? "6.2 mi"  : "10.0 km"
         case .halfMarathon:  return isImperial ? "13.1 mi" : "21.1 km"
         case .marathon:      return isImperial ? "26.2 mi" : "42.2 km"
         case .custom:        return "Set your own"
@@ -522,16 +524,17 @@ struct OBRaceCard: View {
     private var distanceLabelIsMeasurement: Bool {
         switch race {
         case .maintainFitness, .custom: return false
-        case .fiveK, .halfMarathon, .marathon: return true
+        case .fiveK, .tenK, .halfMarathon, .marathon: return true
         }
     }
     private var desc: String {
         switch race {
         case .maintainFitness: return "Balanced fitness, no race block"
         case .fiveK: return "Fast, speed-focused plans"
+        case .tenK: return "Speed and stamina, a step up from 5K"
         case .halfMarathon: return "Endurance with tempo work"
         case .marathon: return "Long-run focused, biggest build"
-        case .custom: return "Any distance — 10K, 50K, or anything"
+        case .custom: return "Any distance — 15K, 50K, or anything"
         }
     }
 
@@ -581,9 +584,10 @@ struct OBCustomDistanceCard: View {
 
     private var isImperial: Bool { appSettings.unitPreference == .imperial }
 
-    /// Common goal distances offered as one-tap chips (stored in kilometres).
+    /// Common goal distances offered as one-tap chips (stored in kilometres). No 10K: that
+    /// is a goal of its own on the step above, with its own training style.
     private let quickPicks: [(label: String, km: Double)] = [
-        ("10K", 10), ("15K", 15), ("20K", 20), ("30K", 30), ("50K", 50)
+        ("15K", 15), ("20K", 20), ("30K", 30), ("50K", 50)
     ]
 
     private var displayValue: String {

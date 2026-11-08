@@ -2,9 +2,21 @@ import Foundation
 
 // MARK: - RaceType
 
+/// What the runner is training for.
+///
+/// `allCases` order is the order the goal step lists them in, in onboarding and New Plan.
+///
+/// The raw value is what syncs (`goalRaceRaw`, `targetRaceRaw`), and both getters decode an
+/// unknown one as `.fiveK`. So a case added later reads as 5K on an older build sharing the
+/// same iCloud data: its plan's sessions and race-day distance are stored and stay right, only
+/// the labels and a rebuild made there fall back to 5K. Version 1.0 reads `.tenK` that way.
 enum RaceType: String, Codable, CaseIterable, Sendable {
     case maintainFitness = "Maintain Fitness"
     case fiveK = "5K"
+    /// Its own training style, between 5K and half marathon: 5K-style phasing, more volume,
+    /// and a race-day pace from the runner's VDOT. Before it existed a 10K goal was a custom
+    /// distance, trained half-marathon style.
+    case tenK = "10K"
     case halfMarathon = "Half Marathon"
     case marathon = "Marathon"
     /// A user-defined goal distance. The actual distance is stored alongside the
@@ -23,6 +35,7 @@ enum RaceType: String, Codable, CaseIterable, Sendable {
         switch self {
         case .maintainFitness: return String(localized: "Maintain Fitness", comment: "Goal race type")
         case .fiveK:           return String(localized: "5K", comment: "Goal race type")
+        case .tenK:            return String(localized: "10K", comment: "Goal race type")
         case .halfMarathon:    return String(localized: "Half Marathon", comment: "Goal race type")
         case .marathon:        return String(localized: "Marathon", comment: "Goal race type")
         case .custom:          return String(localized: "Custom Distance", comment: "Goal race type")
@@ -41,6 +54,7 @@ enum RaceType: String, Codable, CaseIterable, Sendable {
         switch self {
         case .maintainFitness: return 10_000
         case .fiveK:        return 5_000
+        case .tenK:         return 10_000
         case .halfMarathon: return 21_097.5
         case .marathon:     return 42_195
         case .custom:       return 10_000   // fallback only — see `customDistanceMeters`
@@ -51,6 +65,7 @@ enum RaceType: String, Codable, CaseIterable, Sendable {
         switch self {
         case .maintainFitness: return 6...16
         case .fiveK:        return 8...12
+        case .tenK:         return 8...14
         case .halfMarathon: return 12...20
         case .marathon:     return 16...24
         case .custom:       return 6...24
@@ -65,7 +80,8 @@ enum RaceType: String, Codable, CaseIterable, Sendable {
         guard self == .custom else { return self }
         switch meters {
         case ..<8_000:   return .fiveK          // 5K-and-under: speed focused
-        case ..<32_000:  return .halfMarathon   // 10K–30K: threshold/tempo focused
+        case ..<15_000:  return .tenK           // 8K–15K: tempo and intervals in balance
+        case ..<32_000:  return .halfMarathon   // 15K–30K: threshold/tempo focused
         default:         return .marathon       // 30K+: long-run focused
         }
     }
@@ -184,6 +200,15 @@ enum FitnessLevel: String, Codable, CaseIterable, Sendable {
             case .intermediate: return 20   // ~12 mi/wk start, ~19 mi/wk peak
             case .advanced:     return 40   // ~25 mi/wk start, ~37 mi/wk peak
             case .competitive:  return 52   // ~32 mi/wk start, ~48 mi/wk peak
+            }
+        case .tenK:
+            // Between the 5K and half marathon rows: twice the race distance asks for more
+            // aerobic base than a 5K, not the long-run volume of a half.
+            switch self {
+            case .beginner:     return 18   // ~11 mi/wk start, ~17 mi/wk peak
+            case .intermediate: return 30   // ~19 mi/wk start, ~28 mi/wk peak
+            case .advanced:     return 50   // ~31 mi/wk start, ~47 mi/wk peak
+            case .competitive:  return 62   // ~39 mi/wk start, ~58 mi/wk peak
             }
         case .halfMarathon:
             switch self {

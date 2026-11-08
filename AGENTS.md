@@ -8,8 +8,10 @@ Stride is a fully native iOS running coach app built with Swift and SwiftUI. It 
 
 - Maintain Fitness
 - 5K
+- 10K
 - Half Marathon
 - Marathon
+- A custom distance
 
 ## Key Commands
 
@@ -112,7 +114,11 @@ Business logic belongs in services or repositories, not directly in SwiftUI view
 
 `Stride/Core/Models/Enums.swift` contains shared enums:
 
-- `RaceType`: `.maintainFitness`, `.fiveK`, `.halfMarathon`, `.marathon`
+- `RaceType`: `.maintainFitness`, `.fiveK`, `.tenK`, `.halfMarathon`, `.marathon`, `.custom`.
+  `allCases` order is the goal-step order. A custom distance trains in the style of the nearest
+  of the four races (`trainingStyle(forDistanceMeters:)`: under 8 km 5K, under 15 km 10K, under
+  32 km half, then marathon). An unknown raw value decodes as `.fiveK`, so 1.0 shows a 10K goal
+  as 5K; add a case knowing an older build sharing iCloud data will read it that way.
 - `PlanKind`: `.standard`, `.pregnancy`, `.startRunning` — *which generator built the plan*, a
   separate axis from `RaceType`, which is *what the runner is training for*. See "Pregnancy
   plans" and "Start Running plans" below.

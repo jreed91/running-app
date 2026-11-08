@@ -38,7 +38,7 @@ struct OnboardingView: View {
     @State private var raceName = RaceType.fiveK.displayName
     @State private var raceDate = Date().startOfWeek.adding(weeks: 8)
     /// Canonical custom goal distance in kilometres (used when `goalRace == .custom`).
-    @State private var customDistanceKm: Double = 10.0
+    @State private var customDistanceKm: Double = 15.0
     @State private var planStart: Date = Date().startOfWeek.adding(weeks: 1).startOfDay
     @State private var fitnessLevel: FitnessLevel = .intermediate
     @State private var fitnessSelection: OBFitnessSelection = .recreational

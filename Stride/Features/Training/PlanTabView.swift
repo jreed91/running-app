@@ -807,6 +807,7 @@ private struct PlanOverviewCard: View {
         switch plan.targetRace {
         case .maintainFitness: return .heart
         case .fiveK: return .bolt
+        case .tenK: return .flame
         case .halfMarathon: return .tempo
         case .marathon: return .run
         case .custom: return .ruler
