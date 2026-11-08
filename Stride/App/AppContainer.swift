@@ -375,6 +375,11 @@ final class AppContainer {
         self.trainingPlanService = planService
         self.pregnancyPlanService = PregnancyPlanService()
         let tracker = WorkoutTrackerService()
+        // A UI test's run must not be found and "recovered" by the next normal launch on
+        // the same simulator (P1.2).
+        if UITestingSupport.isEnabled || UITestingSupport.isHostingUnitTests {
+            tracker.checkpointURL = nil
+        }
         self.workoutTrackerService = tracker
         let activityController = RunActivityController()
         self.runActivityController = activityController

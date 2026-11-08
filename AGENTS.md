@@ -222,6 +222,12 @@ promise honest.
   the stored run instead of importing a copy, because the observer fires on Stride's own
   save before `persistFinishedRun` has stored the HealthKit id. Any new import path
   (the Settings import uses it too) must go through the same filter.
+- **A run in progress is checkpointed to disk.** `WorkoutTrackerService` writes a
+  `RunCheckpoint` to Application Support on start, on pause and every 30 s of recording,
+  and clears it in `finishWorkout`. On launch, `AppContainer.recoverInterruptedRun` saves a
+  leftover one as a run and opens it for review, so a killed app loses at most 30 s (P1.2).
+  `finishWorkout` builds its run with `RunCheckpoint.makeWorkout()` too: a new field the
+  finished run carries goes in the checkpoint, or recovered runs silently lack it.
 - Simulator builds disable CloudKit in `AppContainer.shouldUseCloudKit` — not because
   Simulator can't sync (Apple says it can) but because the unit-test suite runs there and
   builds real file-backed containers, which would otherwise write into the team's

@@ -77,6 +77,10 @@ struct StrideApp: App {
                     // with nothing behind it to update or end (U5b). The run went with the
                     // process, so the card comes down here rather than going stale.
                     container.runActivityController.endActivitiesFromPreviousLaunches()
+                    // The run itself is saved from its last checkpoint and shown for
+                    // review (P1.2). Before the review check below, so the recovered run
+                    // is the one the sheet opens on.
+                    container.recoverInterruptedRun()
                     await container.workoutSyncService.startObserving()
                     await authService.checkCredentialState()
                     container.checkForPendingReviewWorkout()

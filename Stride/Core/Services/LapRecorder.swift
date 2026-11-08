@@ -14,7 +14,7 @@ import Foundation
 enum LapRecorder {
 
     /// A lap boundary: where one lap closed and the next opened.
-    struct Mark: Equatable, Sendable {
+    struct Mark: Equatable, Sendable, Codable {
         /// Elapsed run time at the boundary, in seconds.
         var elapsedSeconds: Double
         /// Cumulative run distance at the boundary, in metres.
