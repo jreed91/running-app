@@ -23,6 +23,8 @@ struct HeatAdaptationSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
+    @Environment(AppContainer.self) private var container
+    @Environment(AppSettings.self) private var appSettings
 
     private var adaptation: HeatAdaptationPolicy.Adaptation? {
         workout.map {
@@ -239,6 +241,7 @@ struct HeatAdaptationSheet: View {
                 Button {
                     HeatAdaptationPolicy.apply(adaptation, to: workout)
                     context.saveOrLog("the heat-adapted workout")
+                    updateCopiesOutsideTheStore(of: workout)
                     onAnswered()
                     dismiss()
                 } label: {
@@ -257,6 +260,31 @@ struct HeatAdaptationSheet: View {
         }
         .padding(AppSpacing.lg)
         .background(Color.surfacePrimary)
+    }
+
+    /// Brings the copies of the session that live outside the store up to the adapted one,
+    /// the way the coach's "Update next session" does.
+    ///
+    /// `apply` clears the session's Watch id because the Workout app's copy describes the
+    /// old prescription, but nothing re-filed it until the next full sync on a cold launch.
+    /// So the Watch kept the faster session on the hot day this sheet exists for, and the
+    /// 08:00 reminder kept its old targets (P2.4). Unstructured on purpose: the sheet is
+    /// dismissed straight after, and the WorkoutKit calls should not hold it open.
+    private func updateCopiesOutsideTheStore(of workout: ScheduledWorkout) {
+        WidgetRefreshService.refresh(context: context, appSettings: appSettings)
+        let repository = container.healthKitRepository
+        let notifications = container.notificationService
+        let unit = appSettings.unitPreference
+        let remindsInTheMorning = appSettings.morningReminderEnabled
+        let context = context
+        Task { @MainActor in
+            if remindsInTheMorning {
+                // Same identifier, so this replaces the reminder carrying the old targets.
+                try? await notifications.scheduleMorningReminder(for: workout)
+            }
+            try? await repository.syncWorkoutPlan(for: workout, unitPreference: unit)
+            context.saveOrLog("the heat-adapted session's Watch workout id")
+        }
     }
 
     /// Names the session's own day, which is "today" once the evening's window has closed.
