@@ -36,8 +36,8 @@ final class WatchSyncService: NSObject {
         super.init()
     }
 
-    /// Publishes `snapshot` to the watch, with `nextSession` as the startable workout when
-    /// it is today's (see ``WatchContext/startableWorkout``).
+    /// Publishes `snapshot` to the watch, with `nextSession` as the startable workout unless
+    /// it is overdue (see ``WatchContext/startableWorkout``).
     ///
     /// Called from ``WidgetRefreshService/refresh(context:appSettings:now:store:reload:)``
     /// so the watch moves whenever the widgets do: launch, plan change, foreground,
@@ -71,7 +71,14 @@ final class WatchSyncService: NSObject {
         sendLatest()
     }
 
-    /// Today's non-rest session as `WorkoutPlan.dataRepresentation`, or `nil`.
+    /// The next non-rest session, today's or later, as `WorkoutPlan.dataRepresentation`,
+    /// or `nil`.
+    ///
+    /// Sent ahead of its day. Gating on "today" here meant the phone had to publish on the
+    /// session's own day, and a morning runner whose phone app last ran the evening before
+    /// found no Start on the Watch (P2.2). The watch already holds the button back until
+    /// the day comes (``WatchContext/canStart(asOf:calendar:)``), so an overdue session is
+    /// the only thing left to refuse here.
     ///
     /// Built by the same `HealthKitRepository.makeWorkoutPlan` that schedules the plan in
     /// the Workout app, and carrying the session's own id — the id the scheduled copy
@@ -85,7 +92,7 @@ final class WatchSyncService: NSObject {
         guard let session,
               session.workoutType != .rest,
               !session.isCompleted,
-              calendar.isDate(session.scheduledDate, inSameDayAs: now)
+              session.scheduledDate >= calendar.startOfDay(for: now)
         else { return nil }
         return try? HealthKitRepository
             .makeWorkoutPlan(for: session, unitPreference: unit)
