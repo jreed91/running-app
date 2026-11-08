@@ -81,6 +81,11 @@ struct StrideApp: App {
                     // review (P1.2). Before the review check below, so the recovered run
                     // is the one the sheet opens on.
                     container.recoverInterruptedRun()
+                    // A workout session the crashed launch left running would hold the app
+                    // awake with nothing recording; the run itself was just saved (P2.1).
+                    if !container.workoutTrackerService.isRecording {
+                        container.indoorRunSession.endLeftoverSession()
+                    }
                     await container.workoutSyncService.startObserving()
                     await authService.checkCredentialState()
                     container.checkForPendingReviewWorkout()
