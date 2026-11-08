@@ -200,6 +200,50 @@ struct GuidedStepAnnouncementTests {
         #expect(GuidedStepAnnouncement.headsUp(for: rep(1, of: 6), from: remaining(meters: 120), to: remaining(meters: 0), unit: .metric) == nil)
     }
 
+    // MARK: Run/walk
+
+    private func runWalkStep(_ kind: GuidedStep.Kind, label: String, seconds: Double, rep: Int? = nil) -> GuidedStep {
+        GuidedStep(
+            kind: kind, label: label, target: .time(seconds: seconds),
+            targetPaceSecondsPerKm: nil, repIndex: rep, repCount: rep == nil ? nil : 8
+        )
+    }
+
+    @Test("A run/walk session is called in runs and walks, never reps and recoveries")
+    func runWalkCues() {
+        func start(_ step: GuidedStep) -> String {
+            GuidedStepAnnouncement.stepStart(step, unit: .metric, style: .runWalk)
+        }
+        #expect(start(runWalkStep(.warmup, label: "Brisk walk", seconds: 300)) == "Brisk walk. 5 minutes.")
+        #expect(start(runWalkStep(.work, label: "Run", seconds: 60, rep: 1)) == "Run 1 of 8. 60 seconds. Go.")
+        #expect(start(runWalkStep(.work, label: "Run", seconds: 60, rep: 8)) == "Last run, 8 of 8. 60 seconds. Go.")
+        #expect(start(runWalkStep(.recovery, label: "Walk", seconds: 90, rep: 1)) == "Walk. 90 seconds.")
+        #expect(
+            start(runWalkStep(.cooldown, label: "Walk to finish", seconds: 300))
+                == "Running done. Walk to finish. 5 minutes."
+        )
+        // One continuous run is called by its name, as a tempo block is.
+        #expect(start(runWalkStep(.work, label: "Run", seconds: 18 * 60)) == "Run. 18 minutes. Go.")
+        // Unnamed bookends fall back to the plain words.
+        #expect(start(runWalkStep(.warmup, label: "", seconds: 300)) == "Warm-up. 5 minutes.")
+    }
+
+    @Test("The end of a walk says what comes next: running")
+    func runWalkHeadsUp() {
+        let walk = runWalkStep(.recovery, label: "Walk", seconds: 90, rep: 1)
+        #expect(
+            GuidedStepAnnouncement.headsUp(
+                for: walk, from: remaining(seconds: 11), to: remaining(seconds: 10), unit: .metric, style: .runWalk
+            ) == "10 seconds. Get ready to run."
+        )
+        let run = runWalkStep(.work, label: "Run", seconds: 120, rep: 2)
+        #expect(
+            GuidedStepAnnouncement.headsUp(
+                for: run, from: remaining(seconds: 11), to: remaining(seconds: 10), unit: .metric, style: .runWalk
+            ) == "10 seconds left."
+        )
+    }
+
     @Test("Driven by the real stepper, a rep's heads-up fires exactly once")
     func headsUpOncePerRepFromState() throws {
         let warmup = WorkoutSegment(distanceMeters: 1_000, durationSeconds: nil, targetPaceSecondsPerKm: 360, label: "Warm-up")

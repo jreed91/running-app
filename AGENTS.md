@@ -246,6 +246,14 @@ Update that doc in the same change as the table.
   stopping?" and the summary to `OBStartRunningReady`, see `OBStartRunningSubviews.swift`) and
   the **Plan tab's New Plan menu** (`StartRunningPlanSetupView`). Both ask the same question
   (`StartRunningProgram.StartingPoint`) and pass its `firstStage` to the generator.
+- **The guided run calls it as run/walk.** `ActiveRunPresentation.cueStyle(for:)` gives
+  `GuidedCueStyle.runWalk` to any run from a `prescribesByTime` plan, and
+  `GuidedStepAnnouncement` then says "Run 3 of 8", "Walk", "Get ready to run", and the
+  warm-up and cool-down by their segment labels, instead of "Rep", "Recover", "Main set done".
+- **No recovery after the last rep, anywhere.** `GuidedWorkoutState.flatten` and the WorkoutKit
+  builder (`HealthKitRepository.makeCustomWorkout`, which puts the last rep in a block of its
+  own) both go from the final rep of the final set straight to the cool-down, matching
+  `WorkoutSet.totalRecoverySeconds` and the playlist planner.
 
 ## Persistence and Sync
 

@@ -21,6 +21,10 @@ import Foundation
 /// Warm-up and cool-down get a start cue but never a heads-up: they are easy running, and
 /// a countdown into the first rep is what the warm-up's own heads-up would be for — the
 /// start cue for rep 1 already says "Go".
+///
+/// A run/walk session (``GuidedCueStyle/runWalk``) is called in its own words: "Run 3 of
+/// 8. 2 minutes. Go.", "Walk. 90 seconds.", and the warm-up and cool-down by the names the
+/// banner shows ("Brisk walk", "Walk to finish").
 enum GuidedStepAnnouncement {
 
     /// How long before a time-based step ends its heads-up is spoken, in seconds.
@@ -43,18 +47,35 @@ enum GuidedStepAnnouncement {
     // MARK: Step start
 
     /// The announcement for a step that has just begun.
-    static func stepStart(_ step: GuidedStep, unit: UnitPreference) -> String {
+    static func stepStart(_ step: GuidedStep, unit: UnitPreference, style: GuidedCueStyle = .reps) -> String {
         var sentences: [String] = []
 
-        switch step.kind {
-        case .warmup:
+        switch (step.kind, style) {
+        case (.warmup, .reps):
             sentences.append(String(localized: "Warm-up.", comment: "Spoken when a guided workout's warm-up begins"))
-        case .work:
+        case (.warmup, .runWalk):
+            sentences.append(labelSentence(step, fallback: String(
+                localized: "Warm-up.", comment: "Spoken when a guided workout's warm-up begins"
+            )))
+        case (.work, .reps):
             sentences.append(workTitle(step))
-        case .recovery:
+        case (.work, .runWalk):
+            sentences.append(runTitle(step))
+        case (.recovery, .reps):
             sentences.append(String(localized: "Recover.", comment: "Spoken when a recovery between guided reps begins"))
-        case .cooldown:
+        case (.recovery, .runWalk):
+            sentences.append(String(
+                localized: "Walk.", comment: "Spoken when a walk between the runs of a run/walk session begins"
+            ))
+        case (.cooldown, .reps):
             sentences.append(String(localized: "Main set done. Cool-down.", comment: "Spoken when a guided workout's cool-down begins"))
+        case (.cooldown, .runWalk):
+            sentences.append(String(
+                localized: "Running done.", comment: "Spoken when the last run of a run/walk session ends"
+            ))
+            sentences.append(labelSentence(step, fallback: String(
+                localized: "Cool-down.", comment: "Spoken when a run/walk session's unnamed cool-down begins"
+            )))
         }
 
         sentences.append(targetSentence(step, unit: unit))
@@ -77,7 +98,35 @@ enum GuidedStepAnnouncement {
         }
         // A single-rep set (a tempo block) has no rep count to call; its label is what
         // the banner shows, so it is what the runner hears.
-        return step.label.hasSuffix(".") ? step.label : step.label + "."
+        return sentence(step.label)
+    }
+
+    /// "Run 3 of 8." / "Last run, 8 of 8." / "Run." — the run/walk session's runs. A
+    /// single run (the continuous weeks at the end of a Start Running plan) is called by
+    /// its label, as a tempo block is.
+    private static func runTitle(_ step: GuidedStep) -> String {
+        if let index = step.repIndex, let count = step.repCount {
+            if index == count {
+                return String(
+                    localized: "Last run, \(index) of \(count).",
+                    comment: "Spoken when the final run of a run/walk session begins"
+                )
+            }
+            return String(
+                localized: "Run \(index) of \(count).", comment: "Spoken when a run of a run/walk session begins"
+            )
+        }
+        return sentence(step.label)
+    }
+
+    /// The step's own name as a sentence, or `fallback` when it has none.
+    private static func labelSentence(_ step: GuidedStep, fallback: String) -> String {
+        let label = step.label.trimmingCharacters(in: .whitespaces)
+        return label.isEmpty ? fallback : sentence(label)
+    }
+
+    private static func sentence(_ text: String) -> String {
+        text.hasSuffix(".") ? text : text + "."
     }
 
     /// What the step asks for: its distance or duration, and for a rep its pace.
@@ -125,7 +174,8 @@ enum GuidedStepAnnouncement {
         for step: GuidedStep,
         from old: GuidedStepProgress,
         to new: GuidedStepProgress,
-        unit: UnitPreference
+        unit: UnitPreference,
+        style: GuidedCueStyle = .reps
     ) -> String? {
         guard step.kind == .work || step.kind == .recovery else { return nil }
 
@@ -136,9 +186,17 @@ enum GuidedStepAnnouncement {
                   let now = new.remainingSeconds,
                   before > headsUpSeconds, now <= headsUpSeconds, now > 0 else { return nil }
             let amount = spokenDuration(seconds: headsUpSeconds)
-            return step.kind == .recovery
-                ? String(localized: "\(amount). Get ready.", comment: "Spoken shortly before a guided recovery ends")
-                : String(localized: "\(amount) left.", comment: "Spoken shortly before a timed guided rep ends")
+            switch (step.kind, style) {
+            case (.recovery, .runWalk):
+                return String(
+                    localized: "\(amount). Get ready to run.",
+                    comment: "Spoken shortly before a walk in a run/walk session ends"
+                )
+            case (.recovery, _):
+                return String(localized: "\(amount). Get ready.", comment: "Spoken shortly before a guided recovery ends")
+            default:
+                return String(localized: "\(amount) left.", comment: "Spoken shortly before a timed guided rep ends")
+            }
 
         case .distance(let total):
             let threshold = headsUpMeters(unit: unit)
