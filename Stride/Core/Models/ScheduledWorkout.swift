@@ -124,6 +124,9 @@ extension ScheduledWorkout {
     ///
     /// Identity, scheduling, and completion state are deliberately untouched: the coach
     /// changes what the session is, never when it is or whether it happened.
+    ///
+    /// The session is also noted in ``AdaptedSessions``, so the next run's automatic pace
+    /// refresh leaves the coach's answer alone for a week instead of overwriting it (P1.1).
     func applyAdaptation(from adapted: ScheduledWorkout) {
         workoutType = adapted.workoutType
         workoutStructure = adapted.workoutStructure
@@ -133,5 +136,6 @@ extension ScheduledWorkout {
         notes = adapted.notes
         intervals = adapted.intervals
         healthKitPlanID = nil
+        AdaptedSessions.record(id)
     }
 }

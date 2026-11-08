@@ -37,6 +37,8 @@ final class PlanLifecycleService {
     /// Re-derives training paces from recent history and updates all future uncompleted
     /// workouts in the plan. Call this after the user completes any run so workout
     /// targets stay aligned with their current VDOT for any number of weekly run days.
+    /// Sessions the runner changed on purpose in the last week are left alone
+    /// (``AdaptedSessions``, P1.1).
     func refreshPlanAfterWorkout(
         plan: TrainingPlan,
         history: [RunWorkout],
@@ -47,8 +49,35 @@ final class PlanLifecycleService {
             plan: plan,
             history: history,
             profile: profile,
-            unitPreference: unitPreference
+            unitPreference: unitPreference,
+            protectedSessionIDs: AdaptedSessions.protectedIDs()
         )
+    }
+
+    /// The same refresh for runs that arrive from Apple Health: the Watch, the Workout
+    /// app, or another app. Only runs recorded in Stride used to move the plan's paces, so
+    /// a runner who records on the Watch kept the paces of their last phone run (P1.1).
+    /// Saves, then re-files the sessions already in the Workout app.
+    ///
+    /// The re-file is left running rather than awaited: the import calls this before it
+    /// sends the "Run synced" banner, and a background wake's budget is short (P2.6).
+    func refreshPlanAfterImport(context: ModelContext, unitPreference: UnitPreference) {
+        guard let plan = try? planRepository.fetchActivePlan(),
+              let profile = Self.latestProfile(in: context)
+        else { return }
+        // Runs only: this history re-derives the plan's pace targets (N38).
+        let history = (try? context.fetch(RunWorkout.runsOnlyDescriptor())) ?? []
+        refreshPlanAfterWorkout(plan: plan, history: history, profile: profile, unitPreference: unitPreference)
+        context.saveOrLog("training paces refreshed after an imported run")
+        Task { @MainActor in
+            await self.refileRepacedSessions(in: plan, unitPreference: unitPreference, context: context)
+        }
+    }
+
+    private static func latestProfile(in context: ModelContext) -> UserProfile? {
+        var descriptor = FetchDescriptor<UserProfile>(sortBy: [SortDescriptor(\.updatedAt, order: .reverse)])
+        descriptor.fetchLimit = 1
+        return (try? context.fetch(descriptor))?.first
     }
 
     /// Re-files the sessions the refresh just re-paced that are already in the Workout app.
@@ -58,7 +87,10 @@ final class PlanLifecycleService {
     /// last week's paces (P2.4). Edits only, through the single-workout sync: a session
     /// that was never filed stays out, and nothing here asks for WorkoutKit authorization.
     func refileRepacedSessions(in plan: TrainingPlan, unitPreference: UnitPreference, context: ModelContext) async {
+        // A protected session was not re-paced, so its filed copy is already current.
+        let unchanged = AdaptedSessions.protectedIDs()
         let sessions = Self.repacedSessionsOnTheWatch(in: plan, now: Date())
+            .filter { !unchanged.contains($0.id) }
         guard !sessions.isEmpty else { return }
         for session in sessions {
             try? await healthKitRepository.syncWorkoutPlan(for: session, unitPreference: unitPreference)
