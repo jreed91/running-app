@@ -191,6 +191,11 @@ final class WorkoutTrackerService {
     /// there. Optional so tests and previews construct a tracker without one.
     @ObservationIgnored weak var activityPresenter: RunActivityPresenting?
 
+    /// Keeps the app running through an indoor run with the phone locked (P2.1). An
+    /// outdoor run's location session already does. Held weakly and optional for the
+    /// reasons `activityPresenter` is: `AppContainer` owns it, and tests run without one.
+    @ObservationIgnored weak var indoorKeepalive: IndoorRunKeepalive?
+
     /// Called with every fix accepted into `coordinates` — what `RunRouteGuide` checks
     /// against the route being followed (A7). A hook rather than something a view
     /// observes, for the reason `activityPresenter` is: the off-route warning matters most
@@ -298,6 +303,9 @@ final class WorkoutTrackerService {
         // The pedometer runs on both paths: indoors it is the distance source,
         // outdoors it is read for cadence only (N20).
         startPedometerUpdates(from: startDate)
+        if workoutLocation == .indoor {
+            indoorKeepalive?.indoorRunDidStart(at: startDate)
+        }
         activityPresenter?.runDidStart(activitySnapshot)
         onPulse?(.started)
         writeCheckpoint()
@@ -362,6 +370,8 @@ final class WorkoutTrackerService {
         }
         stopPedometerUpdates()
         if let q = hrQuery { hkStore.stop(q); hrQuery = nil }
+        // Discarding a run finishes it too, so this covers both ends of the finish dialog.
+        indoorKeepalive?.indoorRunDidEnd()
         stopwatch.pause(at: Date())
         elapsedSeconds = stopwatch.accumulated
         trackingState = .finished

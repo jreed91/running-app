@@ -203,6 +203,10 @@ final class AppContainer {
     /// while the phone is locked — the situation the activity exists for.
     let runActivityController: RunActivityController
 
+    /// The iPhone workout session that keeps an indoor run recording with the phone locked
+    /// (P2.1). Wired into `workoutTrackerService` below, except under test.
+    let indoorRunSession: IndoorRunWorkoutSession
+
     /// Which tab is on screen. Owned here so a widget's deep link, handled at the scene
     /// root, can drive a `TabView` several levels below it (B1).
     let appNavigation = AppNavigation()
@@ -387,6 +391,12 @@ final class AppContainer {
         // reaching for it: three verbs (started, updated, ended) instead of a dependency on
         // ActivityKit inside the service that records the run (U5b).
         tracker.activityPresenter = activityController
+        let indoorSession = IndoorRunWorkoutSession()
+        self.indoorRunSession = indoorSession
+        // A test's indoor run must not start a real workout session on the simulator.
+        if !(UITestingSupport.isEnabled || UITestingSupport.isHostingUnitTests) {
+            tracker.indoorKeepalive = indoorSession
+        }
         let notifications = NotificationService.shared
         self.notificationService = notifications
         self.workoutAnalyticsService = WorkoutAnalyticsService()

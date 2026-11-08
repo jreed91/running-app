@@ -228,6 +228,12 @@ promise honest.
   leftover one as a run and opens it for review, so a killed app loses at most 30 s (P1.2).
   `finishWorkout` builds its run with `RunCheckpoint.makeWorkout()` too: a new field the
   finished run carries goes in the checkpoint, or recovered runs silently lack it.
+- **An indoor run holds an iPhone workout session.** Outdoors the location session keeps
+  the app running with the phone locked; indoors `IndoorRunWorkoutSession` starts an
+  `HKWorkoutSession` (iOS 26+) on start and ends it in `finishWorkout` (P2.1). Its builder
+  never collects, so it writes nothing to Health: the run is still saved once, by
+  `HealthKitRepository.save(_:)`. Don't begin collection on that builder, or Health gets
+  a second workout. A session left by a crash is ended at launch.
 - **A full `RunWorkout` fetch reads every blob.** Route, splits, distance series and
   samples are plain `Data` attributes, not external storage, so fetching a run loads them
   all. A check that only compares ids uses `RunWorkout.identityDescriptor` (ids only); a
