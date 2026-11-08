@@ -24,6 +24,23 @@ enum SplitBucketing {
             > bucketIndex(distanceMeters: previousMeters, splitLengthMeters: splitLengthMeters)
     }
 
+    /// Every bucket advancing from `previousMeters` to `currentMeters` completes, as the
+    /// bucket indexes a ``Split`` is numbered by, in order (P2.1).
+    ///
+    /// Usually none or one. A single reading can complete several: the pedometer reports
+    /// all the distance covered while the app was suspended in one callback, and a GPS
+    /// gap does the same outdoors. Recording one split per reading dropped the others.
+    static func bucketsCompleted(
+        previousMeters: Double,
+        currentMeters: Double,
+        splitLengthMeters: Double
+    ) -> [Int] {
+        let from = bucketIndex(distanceMeters: previousMeters, splitLengthMeters: splitLengthMeters)
+        let to = bucketIndex(distanceMeters: currentMeters, splitLengthMeters: splitLengthMeters)
+        guard to > from else { return [] }
+        return Array((from + 1)...to)
+    }
+
     // MARK: - Split pace (N7)
 
     /// The average pace across one split bucket — Δtime ÷ Δdistance — in seconds per

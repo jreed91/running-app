@@ -42,6 +42,18 @@ struct SplitBucketingTests {
         #expect(!SplitBucketing.crossedBoundary(previousMeters: 1_010, currentMeters: 1_200, splitLengthMeters: km))
     }
 
+    @Test("One reading that covers several splits completes every one of them (P2.1)")
+    func severalBucketsInOneReading() {
+        // A treadmill run's pedometer after the phone was locked: 0.9 km to 3.1 km at once.
+        #expect(SplitBucketing.bucketsCompleted(previousMeters: 900, currentMeters: 3_100, splitLengthMeters: km) == [1, 2, 3])
+        // The usual case is unchanged: one boundary, one split.
+        #expect(SplitBucketing.bucketsCompleted(previousMeters: 950, currentMeters: 1_010, splitLengthMeters: km) == [1])
+        #expect(SplitBucketing.bucketsCompleted(previousMeters: 1_010, currentMeters: 1_200, splitLengthMeters: km).isEmpty)
+        // Miles count by miles.
+        #expect(SplitBucketing.bucketsCompleted(previousMeters: 1_000, currentMeters: 5_000, splitLengthMeters: mile) == [1, 2, 3])
+        #expect(SplitBucketing.bucketsCompleted(previousMeters: 3_000, currentMeters: 900, splitLengthMeters: km).isEmpty)
+    }
+
     @Test("A 5 km run yields exactly 5 mile buckets vs 3 mile buckets")
     func fullRunBucketCounts() {
         // 5 km → 5 complete km buckets.

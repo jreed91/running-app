@@ -521,27 +521,40 @@ final class WorkoutTrackerService {
     }
 
     private func updateSplitsForIndoor() {
-        guard SplitBucketing.crossedBoundary(
+        // A treadmill has no climb, so every indoor split reports none.
+        closeCompletedSplits(atElapsed: stopwatch.elapsed(at: Date()), elevationGainMeters: 0)
+    }
+
+    /// Closes every split bucket the latest reading completed, one ``Split`` each, and
+    /// opens the next bucket. Returns whether anything closed.
+    ///
+    /// Usually that is none or one. After the app was suspended with the phone locked, the
+    /// pedometer reports the missed distance in one callback, and a GPS gap does the same
+    /// outdoors; recording one split per reading lost the rest from the run (P2.1). The
+    /// bucket's time is shared out by distance, so every split it closes carries the
+    /// bucket's average pace (Δtime ÷ Δdistance, N7). The last one ends where the runner is
+    /// now and takes the bucket's climb, exactly as a single split did before.
+    @discardableResult
+    private func closeCompletedSplits(atElapsed elapsed: Double, elevationGainMeters: Double) -> Bool {
+        let completed = SplitBucketing.bucketsCompleted(
             previousMeters: lastSplitDistance,
             currentMeters: distanceMeters,
             splitLengthMeters: splitLengthMeters
-        ) else { return }
-        let unitsCovered = SplitBucketing.bucketIndex(
-            distanceMeters: distanceMeters, splitLengthMeters: splitLengthMeters
         )
-        // `currentPaceSecondsPerKm` on this path is the cumulative session average,
-        // so using it made every indoor split report the same number (N7). Take the
-        // bucket's own Δtime ÷ Δdistance instead.
-        let elapsed = stopwatch.elapsed(at: Date())
-        let split = Split(
-            kilometer: unitsCovered,
-            paceSecondsPerKm: closingSplitPace(atElapsed: elapsed),
-            heartRate: currentHeartRate,
-            elevationGainMeters: 0,
-            cumulativeDistanceMeters: distanceMeters
-        )
-        splits.append(split)
+        guard let last = completed.last else { return false }
+        let pace = closingSplitPace(atElapsed: elapsed)
+        for index in completed {
+            let isLast = index == last
+            splits.append(Split(
+                kilometer: index,
+                paceSecondsPerKm: pace,
+                heartRate: currentHeartRate,
+                elevationGainMeters: isLast ? elevationGainMeters : 0,
+                cumulativeDistanceMeters: isLast ? distanceMeters : Double(index) * splitLengthMeters
+            ))
+        }
         openNextSplitBucket(atElapsed: elapsed)
+        return true
     }
 
     // MARK: - Heart rate
@@ -717,24 +730,10 @@ final class WorkoutTrackerService {
             )
 
             // Record a split every unit (km or mile) the runner has chosen
-            if SplitBucketing.crossedBoundary(
-                previousMeters: lastSplitDistance,
-                currentMeters: distanceMeters,
-                splitLengthMeters: splitLengthMeters
+            if closeCompletedSplits(
+                atElapsed: stopwatch.elapsed(at: now),
+                elevationGainMeters: currentSplitElevationGainMeters
             ) {
-                let unitsCovered = SplitBucketing.bucketIndex(
-                    distanceMeters: distanceMeters, splitLengthMeters: splitLengthMeters
-                )
-                let elapsed = stopwatch.elapsed(at: now)
-                let split = Split(
-                    kilometer: unitsCovered,
-                    paceSecondsPerKm: closingSplitPace(atElapsed: elapsed),
-                    heartRate: currentHeartRate,
-                    elevationGainMeters: currentSplitElevationGainMeters,
-                    cumulativeDistanceMeters: distanceMeters
-                )
-                splits.append(split)
-                openNextSplitBucket(atElapsed: elapsed)
                 currentSplitElevationGainMeters = 0
             }
         }

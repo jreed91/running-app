@@ -227,12 +227,6 @@ final class WorkoutSyncService {
                 await onRunsImported?()
             }
 
-            for workout in newWorkouts {
-                if let coordinate = workout.routeCoordinates.first {
-                    await attachWeather(to: workout, coordinate: coordinate)
-                }
-            }
-
             if Self.shouldBatchSyncNotifications(count: newWorkouts.count) {
                 // A large import (fresh-install 90-day recovery) fired one banner per
                 // recovered run — 50+ simultaneous notifications. Send one summary
@@ -251,6 +245,19 @@ final class WorkoutSyncService {
                     )
                 }
                 onWorkoutsSynced?(newWorkouts)
+            }
+
+            // Weather comes last (P2.6). It is a WeatherKit round trip per run, and a
+            // background wake has a short budget: with weather first, a slow fetch held
+            // the "Run synced" banner back or lost it when the app was suspended. The
+            // runs are already saved and the review sheet holds the live model, so the
+            // weather shows up there when it lands; the review snapshot is rewritten
+            // so a tap that restores from it gets the weather too.
+            for workout in newWorkouts {
+                if let coordinate = workout.routeCoordinates.first {
+                    await attachWeather(to: workout, coordinate: coordinate)
+                    notificationService.refreshReviewSnapshot(for: workout)
+                }
             }
             AppLogger.log(
                 "Imported \(newWorkouts.count) HealthKit running workout(s) during \(source) sync.",

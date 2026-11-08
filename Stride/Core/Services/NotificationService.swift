@@ -1008,6 +1008,15 @@ final class NotificationService: NSObject {
         return "\(workout.workoutType.localizedName) · \(distance) · \(pace)"
     }
 
+    /// Rewrites a run's review snapshot once its weather has landed. The sync pass
+    /// sends the banner before the WeatherKit fetch (P2.6), so the snapshot stored
+    /// with the banner has no weather. Runs with no snapshot are left alone: a batch
+    /// import stores none, and one already pruned has its real row in the store.
+    func refreshReviewSnapshot(for workout: RunWorkout) {
+        guard UserDefaults.standard.data(forKey: Self.reviewSnapshotKey(workout.id.uuidString)) != nil else { return }
+        storeReviewSnapshot(for: workout)
+    }
+
     private func storeReviewSnapshot(for workout: RunWorkout) {
         let snapshot = SyncedRunReviewSnapshot(workout: workout)
         guard let data = try? JSONEncoder().encode(snapshot) else { return }
