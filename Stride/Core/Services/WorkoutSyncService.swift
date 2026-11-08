@@ -147,7 +147,9 @@ final class WorkoutSyncService {
     private func runSyncPass(source: String, lookbackDays: Int? = nil) async {
         let existingIDs: Set<String>
         do {
-            let stored = try context.fetch(FetchDescriptor<RunWorkout>())
+            // Ids only (P3): every pass compares against every stored workout, and a full
+            // fetch would read each one's route and samples to do it.
+            let stored = try context.fetch(RunWorkout.identityDescriptor)
             let tombstoned = try context.fetch(FetchDescriptor<DeletedWorkout>())
             existingIDs = Set(stored.compactMap(\.healthKitWorkoutID))
                 .union(tombstoned.map(\.healthKitWorkoutID))
@@ -433,7 +435,7 @@ final class WorkoutSyncService {
         guard !imported.isEmpty else { return imported }
         let stored: [RunWorkout]
         do {
-            stored = try context.fetch(FetchDescriptor<RunWorkout>())
+            stored = try context.fetch(RunWorkout.identityDescriptor)
         } catch {
             AppLogger.log(
                 "Failed to fetch stored runs to match own exports (\(source)): \(error.localizedDescription)",

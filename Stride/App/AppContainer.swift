@@ -670,8 +670,10 @@ final class AppContainer {
     func checkForPendingReviewWorkout() {
         // Drop review snapshots (full run copies in UserDefaults) for runs that
         // have since imported into the store, so they don't accumulate (S3).
+        // Ids only (P3): this runs at every launch, and a full fetch reads every run's
+        // route and samples to collect them.
         let storedRunIDs = Set(
-            ((try? modelContainer.mainContext.fetch(FetchDescriptor<RunWorkout>())) ?? []).map(\.id)
+            ((try? modelContainer.mainContext.fetch(RunWorkout.identityDescriptor)) ?? []).map(\.id)
         )
         NotificationService.pruneReviewSnapshots(storedRunIDs: storedRunIDs)
 
@@ -688,9 +690,12 @@ final class AppContainer {
             return
         }
         let context = modelContainer.mainContext
-        let all = (try? context.fetch(FetchDescriptor<RunWorkout>())) ?? []
+        // The one run asked for, where this used to fetch every run and scan them (P3).
+        var lookup = FetchDescriptor<RunWorkout>(predicate: #Predicate { $0.id == uuid })
+        lookup.fetchLimit = 1
+        let stored = (try? context.fetch(lookup))?.first
         let workout: RunWorkout
-        if let storedWorkout = all.first(where: { $0.id == uuid }) {
+        if let storedWorkout = stored {
             workout = storedWorkout
         } else if let snapshotWorkout = notificationService.workoutFromReviewSnapshot(idString: idString) {
             // Resurrection guard (M6): the snapshot is a full copy of a synced run. Before
@@ -699,7 +704,15 @@ final class AppContainer {
             let hkID = snapshotWorkout.healthKitWorkoutID
             let tombstoned = (try? context.fetch(FetchDescriptor<DeletedWorkout>())) ?? []
             let isTombstoned = hkID.map { id in tombstoned.contains { $0.healthKitWorkoutID == id } } ?? false
-            let existingSameSource = hkID.flatMap { id in all.first { $0.healthKitWorkoutID == id } }
+            let existingSameSource = hkID.flatMap { id -> RunWorkout? in
+                // `String?` so the predicate compares like for like with the stored optional.
+                let source: String? = id
+                var sameSource = FetchDescriptor<RunWorkout>(
+                    predicate: #Predicate { $0.healthKitWorkoutID == source }
+                )
+                sameSource.fetchLimit = 1
+                return (try? context.fetch(sameSource))?.first
+            }
 
             if isTombstoned {
                 AppLogger.log("Skipped resurrecting tombstoned review snapshot id=\(idString)", label: "Notifications", level: .warning)
@@ -717,7 +730,7 @@ final class AppContainer {
             context.saveOrLog("the restored review snapshot")
             workout = snapshotWorkout
         } else {
-            AppLogger.log("Could not find workout for pending review id=\(idString); fetched \(all.count) workouts", label: "Notifications", level: .warning)
+            AppLogger.log("Could not find workout for pending review id=\(idString)", label: "Notifications", level: .warning)
             return
         }
         pendingReviewWorkout = workout

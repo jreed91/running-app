@@ -7,7 +7,6 @@ struct HealthKitImportView: View {
     @Environment(\.modelContext) private var context
     @Environment(AppContainer.self) private var container
     @Environment(AppSettings.self) private var appSettings
-    @Query private var existingWorkouts: [RunWorkout]
 
     @State private var startDate: Date = Calendar.current.date(
         byAdding: .year, value: -5, to: Date()
@@ -126,7 +125,12 @@ struct HealthKitImportView: View {
             let tombstonedIDs = Set(
                 ((try? context.fetch(FetchDescriptor<DeletedWorkout>())) ?? []).map(\.healthKitWorkoutID)
             )
-            let existingIDs = Set(existingWorkouts.compactMap(\.healthKitWorkoutID)).union(tombstonedIDs)
+            // Fetched when the import runs, ids only (P3). This screen used to hold a live
+            // query of every run, routes and samples included, for as long as it was open,
+            // to read two ids off each one.
+            let existingIDs = Set(
+                try context.fetch(RunWorkout.identityDescriptor).compactMap(\.healthKitWorkoutID)
+            ).union(tombstonedIDs)
             let skipped = allHKWorkouts.filter { existingIDs.contains($0.uuid.uuidString) }.count
 
             let importContext = WorkoutImportContext.resolve(from: context)
@@ -138,7 +142,12 @@ struct HealthKitImportView: View {
             )
             // Stride's own export of a run it already has links to that run rather than
             // importing a second copy, as in the background sync (P1.3).
-            let newWorkouts = WorkoutSyncService.withoutOwnExports(fetchedWorkouts, stored: existingWorkouts)
+            // Fetched again after the HealthKit reads, as the background sync does: a run
+            // finished while they were awaited is exactly the one whose export this holds.
+            let newWorkouts = WorkoutSyncService.withoutOwnExports(
+                fetchedWorkouts,
+                stored: try context.fetch(RunWorkout.identityDescriptor)
+            )
             let relinked = fetchedWorkouts.count - newWorkouts.count
             if relinked > 0 {
                 context.saveOrLog("runs relinked to their own HealthKit export")
