@@ -40,6 +40,7 @@ struct PlanTabView: View {
 
     @State private var showNewPlanSheet = false
     @State private var showPregnancyPlanSheet = false
+    @State private var showStartRunningPlanSheet = false
     @State private var isAdaptingPlan = false
     @State private var smartAdaptProgress = SmartAdaptProgress.idle
     @State private var adaptTask: Task<Void, Never>?
@@ -324,12 +325,17 @@ struct PlanTabView: View {
             ToolbarItem(placement: .primaryAction) {
                 NewPlanMenu(
                     showsTrainingPlan: $showNewPlanSheet,
+                    showsStartRunningPlan: $showStartRunningPlanSheet,
                     showsPregnancyPlan: $showPregnancyPlanSheet
                 )
                 .disabled(profiles.isEmpty)
             }
         }
-        .newPlanSheets(training: $showNewPlanSheet, pregnancy: $showPregnancyPlanSheet)
+        .newPlanSheets(
+            training: $showNewPlanSheet,
+            startRunning: $showStartRunningPlanSheet,
+            pregnancy: $showPregnancyPlanSheet
+        )
     }
 
     // MARK: Detail column
@@ -558,6 +564,7 @@ struct PlanTabView: View {
 /// than inside the toolbar item, which can be rebuilt while a sheet is up.
 struct NewPlanMenu: View {
     @Binding var showsTrainingPlan: Bool
+    @Binding var showsStartRunningPlan: Bool
     @Binding var showsPregnancyPlan: Bool
 
     var body: some View {
@@ -566,6 +573,11 @@ struct NewPlanMenu: View {
                 showsTrainingPlan = true
             } label: {
                 Label("Training plan", systemImage: "figure.run")
+            }
+            Button {
+                showsStartRunningPlan = true
+            } label: {
+                Label("Start Running (run/walk)", systemImage: "figure.walk")
             }
             Button {
                 showsPregnancyPlan = true
@@ -579,10 +591,18 @@ struct NewPlanMenu: View {
 }
 
 extension View {
-    /// The two flows `NewPlanMenu` opens.
-    func newPlanSheets(training: Binding<Bool>, pregnancy: Binding<Bool>) -> some View {
+    /// The three flows `NewPlanMenu` opens.
+    func newPlanSheets(
+        training: Binding<Bool>,
+        startRunning: Binding<Bool>,
+        pregnancy: Binding<Bool>
+    ) -> some View {
         sheet(isPresented: training) {
             NewPlanOnboardingView()
+                .strideSheet()
+        }
+        .sheet(isPresented: startRunning) {
+            StartRunningPlanSetupView()
                 .strideSheet()
         }
         .sheet(isPresented: pregnancy) {
