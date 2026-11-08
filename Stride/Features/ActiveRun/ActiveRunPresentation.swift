@@ -63,12 +63,21 @@ final class ActiveRunPresentation {
         self.scheduledWorkout = scheduledWorkout
         // Built here rather than in the HUD's `onAppear`, which now runs again on every
         // reopen and would restart the stepper each time.
-        if let structure = scheduledWorkout?.workoutStructure, !structure.mainSets.isEmpty {
-            guided = GuidedWorkoutState(structure: structure)
+        if let scheduledWorkout, let structure = scheduledWorkout.workoutStructure, !structure.mainSets.isEmpty {
+            guided = GuidedWorkoutState(structure: structure, cueStyle: Self.cueStyle(for: scheduledWorkout))
         } else {
             guided = nil
         }
         isPresented = true
+    }
+
+    /// Run/walk words for a run from a plan prescribed in minutes (Start Running, pregnancy):
+    /// its sessions are runs with walks between them, and its segments are named that way.
+    /// Everything else is called as reps.
+    static func cueStyle(for workout: ScheduledWorkout) -> GuidedCueStyle {
+        guard workout.workoutType.isRunType,
+              workout.week?.plan?.planKind.prescribesByTime == true else { return .reps }
+        return .runWalk
     }
 
     /// Hides the HUD and keeps the session: the tracker goes on recording and the

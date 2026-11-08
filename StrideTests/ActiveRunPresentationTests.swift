@@ -68,9 +68,34 @@ struct ActiveRunPresentationTests {
 
         #expect(presentation.isPresented)
         #expect(presentation.scheduledWorkout != nil)
-        // 1 warm-up + 3 × (work + recovery) + 1 cool-down.
-        #expect(presentation.guided?.stepCount == 8)
+        // 1 warm-up + 3 work + 2 recoveries between them + 1 cool-down.
+        #expect(presentation.guided?.stepCount == 7)
         #expect(presentation.guided?.stepNumber == 1)
+    }
+
+    @Test("A run from a plan set in minutes is called as run/walk; anything else as reps")
+    func cueStyleFollowsThePlan() {
+        let context = TestStore.makeContext()
+        func session(_ kind: PlanKind, _ type: WorkoutType) -> ScheduledWorkout {
+            let plan = TrainingPlan(targetRace: .maintainFitness, startDate: Date(), endDate: Date().adding(weeks: 10))
+            plan.planKind = kind
+            context.insert(plan)
+            let week = TrainingWeek(weekNumber: 1, startDate: Date(), phase: .base, targetDistanceKm: 0)
+            context.insert(week)
+            week.plan = plan
+            let workout = ScheduledWorkout(scheduledDate: Date(), workoutType: type)
+            context.insert(workout)
+            workout.week = week
+            return workout
+        }
+
+        #expect(ActiveRunPresentation.cueStyle(for: session(.startRunning, .easy)) == .runWalk)
+        #expect(ActiveRunPresentation.cueStyle(for: session(.pregnancy, .easy)) == .runWalk)
+        #expect(ActiveRunPresentation.cueStyle(for: session(.standard, .interval)) == .reps)
+        // Not a run, so not "Running done" at the end of it.
+        #expect(ActiveRunPresentation.cueStyle(for: session(.pregnancy, .crossTraining)) == .reps)
+        // A workout on no plan at all.
+        #expect(ActiveRunPresentation.cueStyle(for: intervalWorkout()) == .reps)
     }
 
     @Test("A flat run gets no stepper, even though it is a scheduled workout")

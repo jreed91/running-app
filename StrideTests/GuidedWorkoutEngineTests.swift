@@ -54,21 +54,41 @@ struct GuidedWorkoutEngineTests {
 
     // MARK: Flattening
 
-    @Test("Interval flattens to warm-up + reps × (work + recovery) + cool-down")
+    @Test("Interval flattens to warm-up + reps with recoveries between them + cool-down")
     func flattenInterval() {
         let steps = GuidedWorkoutState.flatten(intervalStructure(reps: 3))
-        // 1 warm-up + 3×(work+recovery) + 1 cool-down = 8
-        #expect(steps.count == 8)
+        // 1 warm-up + 3 work + 2 recoveries + 1 cool-down = 7: the cool-down follows the
+        // last rep, so there is no recovery after it.
+        #expect(steps.count == 7)
         #expect(steps.first?.kind == .warmup)
         #expect(steps.last?.kind == .cooldown)
 
         let kinds = steps.map(\.kind)
-        #expect(kinds == [.warmup, .work, .recovery, .work, .recovery, .work, .recovery, .cooldown])
+        #expect(kinds == [.warmup, .work, .recovery, .work, .recovery, .work, .cooldown])
 
         // Rep indices are 1-based and paired with the total rep count.
         let workSteps = steps.filter { $0.kind == .work }
         #expect(workSteps.map(\.repIndex) == [1, 2, 3])
         #expect(workSteps.allSatisfy { $0.repCount == 3 })
+    }
+
+    @Test("A single rep goes straight into the cool-down, recovery or not")
+    func singleRepHasNoRecovery() {
+        let steps = GuidedWorkoutState.flatten(intervalStructure(reps: 1))
+        #expect(steps.map(\.kind) == [.warmup, .work, .cooldown])
+    }
+
+    @Test("Between two sets the recovery stays; only the last set's last rep loses it")
+    func recoveryBetweenSetsStays() {
+        var structure = intervalStructure(reps: 2)
+        structure.mainSets.append(structure.mainSets[0])
+        let kinds = GuidedWorkoutState.flatten(structure).map(\.kind)
+        #expect(kinds == [
+            .warmup,
+            .work, .recovery, .work, .recovery,
+            .work, .recovery, .work,
+            .cooldown
+        ])
     }
 
     @Test("Empty recovery segments (tempo) produce no recovery step")
@@ -82,7 +102,7 @@ struct GuidedWorkoutEngineTests {
 
     @Test("Segment targets prefer distance, then time, then open")
     func targetPrecedence() {
-        let steps = GuidedWorkoutState.flatten(intervalStructure(reps: 1))
+        let steps = GuidedWorkoutState.flatten(intervalStructure(reps: 2))
         #expect(steps[0].target == .distance(meters: 1_000))   // warm-up
         #expect(steps[1].target == .distance(meters: 800))     // work
         #expect(steps[2].target == .time(seconds: 90))         // recovery jog
@@ -113,7 +133,7 @@ struct GuidedWorkoutEngineTests {
         let state = GuidedWorkoutState(structure: intervalStructure(reps: 2))
         #expect(state != nil)
         #expect(state?.stepNumber == 1)
-        #expect(state?.stepCount == 6)
+        #expect(state?.stepCount == 5)
         #expect(state?.currentStep.kind == .warmup)
         #expect(state?.isOnFinalStep == false)
         #expect(state?.nextStep?.kind == .work)
@@ -134,7 +154,7 @@ struct GuidedWorkoutEngineTests {
 
     @Test("Time-step progress uses elapsed offset from when the step began")
     func timeProgressUsesOffset() {
-        var state = GuidedWorkoutState(structure: intervalStructure(reps: 1))!
+        var state = GuidedWorkoutState(structure: intervalStructure(reps: 2))!
         // Advance past warm-up (1 000 m) then work (800 m) to reach recovery.
         state.advance(cumulativeDistanceMeters: 1_000, cumulativeElapsedSeconds: 360)
         state.advance(cumulativeDistanceMeters: 1_800, cumulativeElapsedSeconds: 550)

@@ -136,7 +136,11 @@ final class RunSpokenCues {
         guard let appSettings, appSettings.spokenWorkoutStepsEnabled,
               let guided = presentation.guided else { return }
         voiceCoach.speak(
-            GuidedStepAnnouncement.stepStart(guided.currentStep, unit: appSettings.unitPreference),
+            GuidedStepAnnouncement.stepStart(
+                guided.currentStep,
+                unit: appSettings.unitPreference,
+                style: guided.cueStyle
+            ),
             interrupting: true
         )
     }
@@ -148,13 +152,14 @@ final class RunSpokenCues {
         guard let appSettings, appSettings.spokenWorkoutStepsEnabled,
               let old, let new,
               old.stepNumber == new.stepNumber,
-              let step = presentation.guided?.currentStep else { return }
+              let guided = presentation.guided else { return }
         voiceCoach.speak(
             GuidedStepAnnouncement.headsUp(
-                for: step,
+                for: guided.currentStep,
                 from: old.progress,
                 to: new.progress,
-                unit: appSettings.unitPreference
+                unit: appSettings.unitPreference,
+                style: guided.cueStyle
             )
         )
     }

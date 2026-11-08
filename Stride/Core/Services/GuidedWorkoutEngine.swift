@@ -7,7 +7,7 @@ import Foundation
 /// A structured plan workout stores its shape as warm-up → main sets (each a
 /// number of work + recovery repetitions) → cool-down. To *guide* a runner
 /// through it live we flatten that shape into an ordered list of concrete steps
-/// — one per warm-up, per rep's work, per rep's recovery, and per cool-down —
+/// — one per warm-up, per rep's work, per recovery between reps, and per cool-down —
 /// each carrying the target the runner should hit before advancing.
 struct GuidedStep: Equatable, Sendable {
 
@@ -54,6 +54,19 @@ struct GuidedStepProgress: Equatable, Sendable {
     let remainingSeconds: Double?
 }
 
+// MARK: - GuidedCueStyle
+
+/// The words a guided workout is called in, out loud.
+///
+/// `.reps` is the track: "Rep 3 of 6", "Recover", "Main set done". `.runWalk` is for plans
+/// prescribed in minutes rather than pace (`PlanKind.prescribesByTime`), whose sessions are
+/// runs with walks between them: "Run 3 of 8", "Walk", and the segments' own names for the
+/// walks either side. A new runner told to "recover" has to work out that it means walk.
+enum GuidedCueStyle: Equatable, Sendable {
+    case reps
+    case runWalk
+}
+
 // MARK: - GuidedWorkoutState
 
 /// Pure, `Sendable` state machine that steps a runner through a structured
@@ -68,6 +81,8 @@ struct GuidedWorkoutState: Equatable, Sendable {
 
     private(set) var steps: [GuidedStep]
     private(set) var currentIndex: Int
+    /// How the steps are called out loud. Fixed for the session.
+    let cueStyle: GuidedCueStyle
     /// Cumulative distance/time snapshot captured when the current step began.
     private var stepStartDistanceMeters: Double
     private var stepStartElapsedSeconds: Double
@@ -76,13 +91,14 @@ struct GuidedWorkoutState: Equatable, Sendable {
 
     /// Builds the guided state for a structured workout, or returns `nil` when
     /// the structure has no meaningful multi-segment shape to guide (a flat run).
-    init?(structure: WorkoutStructure) {
+    init?(structure: WorkoutStructure, cueStyle: GuidedCueStyle = .reps) {
         let flattened = GuidedWorkoutState.flatten(structure)
         // Guided mode only earns its screen space when there is real work to
         // step through — a warm-up/cool-down-only shell is just a free run.
         guard flattened.contains(where: { $0.kind == .work }) else { return nil }
         self.steps = flattened
         self.currentIndex = 0
+        self.cueStyle = cueStyle
         self.stepStartDistanceMeters = 0
         self.stepStartElapsedSeconds = 0
     }
@@ -164,9 +180,10 @@ struct GuidedWorkoutState: Equatable, Sendable {
 
         out.append(step(from: structure.warmup, kind: .warmup, fallbackLabel: "Warm-up"))
 
-        for set in structure.mainSets {
+        for (setIndex, set) in structure.mainSets.enumerated() {
             let reps = max(1, set.repetitions)
             let multiRep = reps > 1
+            let isLastSet = setIndex == structure.mainSets.count - 1
             for rep in 1...reps {
                 out.append(step(
                     from: set.workSegment,
@@ -180,10 +197,18 @@ struct GuidedWorkoutState: Equatable, Sendable {
                 // prescribes a real distance or time — mirroring the WorkoutKit
                 // builder (``HealthKitRepository.makeCustomWorkout``). Tempo
                 // blocks, whose recovery segment is empty, get no recovery step.
+                //
+                // Nor does the last rep of the last set: the cool-down follows it.
+                // A recovery there put a 90 s walk in front of a five-minute walk in
+                // every run/walk session, and ran every interval session longer than
+                // its estimate, which counts `reps - 1` recoveries
+                // (``WorkoutSet/totalRecoverySeconds``). Between sets it stays: it is
+                // the only rest before the next set starts.
                 let recovery = set.recoverySegment
                 let hasRecovery = (recovery.durationSeconds ?? 0) > 0
                     || (recovery.distanceMeters ?? 0) > 0
-                if hasRecovery {
+                let isFinalRep = isLastSet && rep == reps
+                if hasRecovery, !isFinalRep {
                     out.append(step(
                         from: recovery,
                         kind: .recovery,

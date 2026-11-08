@@ -548,7 +548,8 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             displayName: warmupName
         )
 
-        let blocks: [IntervalBlock] = structure.mainSets.map { set in
+        var blocks: [IntervalBlock] = []
+        for (setIndex, set) in structure.mainSets.enumerated() {
             let workGoal: WorkoutGoal
             if let dist = set.workSegment.distanceMeters {
                 workGoal = distanceGoal(meters: dist, unitPreference: unitPreference)
@@ -565,22 +566,34 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
                 alert: paceAlert(secondsPerKm: set.workSegment.targetPaceSecondsPerKm)
             )
 
-            var steps: [IntervalStep] = [workStep]
+            var recoveryStep: IntervalStep?
             if let recDur = set.recoverySegment.durationSeconds, recDur > 0 {
-                steps.append(IntervalStep(
+                recoveryStep = IntervalStep(
                     .recovery,
                     goal: .time(recDur, UnitDuration.seconds),
                     alert: paceAlert(secondsPerKm: set.recoverySegment.targetPaceSecondsPerKm)
-                ))
+                )
             } else if let recDist = set.recoverySegment.distanceMeters, recDist > 0 {
-                steps.append(IntervalStep(
+                recoveryStep = IntervalStep(
                     .recovery,
                     goal: distanceGoal(meters: recDist, unitPreference: unitPreference),
                     alert: paceAlert(secondsPerKm: set.recoverySegment.targetPaceSecondsPerKm)
-                ))
+                )
             }
 
-            return IntervalBlock(steps: steps, iterations: set.repetitions)
+            // No recovery after the last rep of the last set: the cool-down follows it, as
+            // in `GuidedWorkoutState.flatten`. WorkoutKit repeats a block's steps whole, so
+            // that last rep goes in a block of its own, without the recovery.
+            let isLastSet = setIndex == structure.mainSets.count - 1
+            if let recovery = recoveryStep, isLastSet {
+                if set.repetitions > 1 {
+                    blocks.append(IntervalBlock(steps: [workStep, recovery], iterations: set.repetitions - 1))
+                }
+                blocks.append(IntervalBlock(steps: [workStep], iterations: 1))
+            } else {
+                let steps = recoveryStep.map { [workStep, $0] } ?? [workStep]
+                blocks.append(IntervalBlock(steps: steps, iterations: set.repetitions))
+            }
         }
 
         let cooldownGoal: WorkoutGoal

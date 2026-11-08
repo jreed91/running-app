@@ -87,6 +87,14 @@ The distance shown on each session is an estimate from the minutes (the runner's
 when there is a 5K time on file, otherwise 8:00 per km running and 12:00 per km walking). It
 is never a target, and the coach is told so.
 
+## On the run
+
+The guided run steps through the session and, with spoken cues on, calls it in run/walk words
+(`GuidedCueStyle.runWalk`): "Brisk walk. 5 minutes.", "Run 1 of 8. 60 seconds. Go.", "Walk. 90
+seconds.", "10 seconds. Get ready to run.", and after the last run "Running done. Walk to
+finish. 5 minutes." The last run goes straight into that walk; there is no 90 second walk in
+front of it, on the phone or on the Watch.
+
 ## Safety wording
 
 Every session note and the Plan tab card carry: "Stop and get checked if you have chest pain,
