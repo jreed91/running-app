@@ -109,15 +109,14 @@ struct WatchContextTests {
         #expect(try WorkoutPlan(from: data).id == workout.id)
     }
 
-    @Test("Only today's outstanding, non-rest session is startable")
-    func onlyTodaysSessionIsStartable() {
-        let tomorrow = session(on: offset(1))
+    @Test("No overdue, rest or completed session is ever sent")
+    func overdueRestAndDoneAreNotSent() {
         let overdue = session(on: offset(-1))
         let rest = session(on: now, type: .rest)
         let done = session(on: now)
         done.isCompleted = true
 
-        for workout in [tomorrow, overdue, rest, done] {
+        for workout in [overdue, rest, done] {
             #expect(WatchSyncService.startableWorkoutData(
                 for: workout, unit: .metric, now: now, calendar: calendar
             ) == nil)
@@ -125,5 +124,22 @@ struct WatchContextTests {
         #expect(WatchSyncService.startableWorkoutData(
             for: nil, unit: .metric, now: now, calendar: calendar
         ) == nil)
+    }
+
+    /// A morning runner whose phone app last ran the evening before still gets Start: the
+    /// phone sends tomorrow's session the night before, and the watch holds the button back
+    /// until its day (P2.2).
+    @Test("Tomorrow's session is sent ahead, and startable only once its day comes (P2.2)")
+    func tomorrowsSessionIsSentAhead() throws {
+        let tomorrow = session(on: offset(1))
+
+        let data = try #require(
+            WatchSyncService.startableWorkoutData(for: tomorrow, unit: .metric, now: now, calendar: calendar)
+        )
+        #expect(try WorkoutPlan(from: data).id == tomorrow.id)
+
+        let watch = WatchContext(snapshot: snapshot(nextOn: offset(1)), startableWorkout: data)
+        #expect(!watch.canStart(asOf: now, calendar: calendar))
+        #expect(watch.canStart(asOf: offset(1), calendar: calendar))
     }
 }

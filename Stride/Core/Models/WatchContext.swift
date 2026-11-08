@@ -20,18 +20,20 @@ struct WatchContext: Sendable, Equatable {
 
     var snapshot: WidgetSnapshot
 
-    /// Today's session as a WorkoutKit plan, in `WorkoutPlan.dataRepresentation` form,
-    /// or `nil` when there is nothing the watch should offer to start.
+    /// The next session as a WorkoutKit plan, in `WorkoutPlan.dataRepresentation` form,
+    /// or `nil` when there is nothing the watch could offer to start.
     ///
     /// Raw `Data` rather than a `WorkoutPlan` so this file stays free of WorkoutKit. The
     /// phone builds it with the same builder that schedules the plan in the Workout app
     /// (`HealthKitRepository.makeWorkoutPlan`), so a run started from Stride's watch app
     /// is the same structured workout, with the same pace alerts, as the scheduled one.
     ///
-    /// **Only ever today's session.** A run recorded on the Watch is matched back to the
-    /// plan by calendar day (`WorkoutSyncService.linkToScheduledWorkouts`), so starting an
-    /// overdue Tuesday session on Thursday would record a run that fulfils Thursday — or
-    /// nothing. Offering Start only for today keeps the button honest about what it does.
+    /// **Only ever started on its own day.** A run recorded on the Watch is matched back to
+    /// the plan by calendar day (`WorkoutSyncService.linkToScheduledWorkouts`), so starting
+    /// an overdue Tuesday session on Thursday would record a run that fulfils Thursday — or
+    /// nothing. The phone never sends an overdue one, and sends a future one ahead of its
+    /// day so the Watch can start it without the phone app having run that morning (P2.2);
+    /// ``canStart(asOf:calendar:)`` holds the button back until the day comes.
     var startableWorkout: Data?
 
     init(snapshot: WidgetSnapshot, startableWorkout: Data? = nil) {
