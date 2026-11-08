@@ -9,7 +9,7 @@ import SwiftData
 /// unavailable or still writing, or a read `WeekReview` would not accept, it draws
 /// nothing rather than repeat the week card. See `WeekReview`.
 struct WeekReviewCard: View {
-    /// The runner's runs, as the Progress tab already fetched them (a year, runs only).
+    /// The runner's runs, as the Plan tab already fetched them (the last 12 weeks, runs only).
     let runs: [RunWorkout]
 
     @Query(filter: #Predicate<TrainingPlan> { $0.isActive == true })

@@ -17,7 +17,26 @@ struct PlanTabView: View {
     @Query private var profiles: [UserProfile]
     /// Newest runs first, walks excluded — this feeds Smart Adapt and the pace insights,
     /// both of which read it as training history (N38).
-    @Query(RunWorkout.runsOnlyDescriptor()) private var recentWorkouts: [RunWorkout]
+    ///
+    /// The last ``historyWeeks`` weeks rather than every run ever logged (P3), which this
+    /// tab root loaded with every route and sample in it. Each reader looks back less far.
+    @Query(RunWorkout.runsOnlyDescriptor(since: PlanTabView.historyStart()))
+    private var recentWorkouts: [RunWorkout]
+
+    /// The widest look back on this tab, with room to spare: the fitness estimate behind
+    /// the pace insights and the race countdown reads 8 weeks
+    /// (`RaceDayPlan.fitnessLookbackWeeks`), the week review reads last week plus the 4
+    /// before it, and Smart Adapt reads the newest 8 runs and 21 days of feel ratings. A
+    /// race-day result found by date, rather than through the plan's linked run, is the
+    /// one read this can miss, for a race more than 12 weeks ago.
+    static let historyWeeks = 12
+
+    /// The window's start, at midnight so the query's predicate is the same on every
+    /// re-render through the day rather than a new one each time the view is rebuilt.
+    static func historyStart(now: Date = Date(), calendar: Calendar = .current) -> Date {
+        let today = calendar.startOfDay(for: now)
+        return calendar.date(byAdding: .day, value: -7 * historyWeeks, to: today) ?? .distantPast
+    }
 
     @State private var showNewPlanSheet = false
     @State private var showPregnancyPlanSheet = false

@@ -265,4 +265,35 @@ extension RunWorkout {
         descriptor.fetchLimit = fetchLimit
         return descriptor
     }
+
+    /// ``runsOnlyDescriptor(sortBy:fetchLimit:)`` for the runs on or after `date`, newest
+    /// first: a window by date rather than by count, for screens whose reads are all
+    /// "the last N weeks". A count limit would cut a heavy-mileage runner's window short
+    /// without saying so.
+    static func runsOnlyDescriptor(since date: Date) -> FetchDescriptor<RunWorkout> {
+        let start = date
+        let walkRaw = WorkoutType.walk.rawValue
+        let crossTrainingRaw = WorkoutType.crossTraining.rawValue
+        return FetchDescriptor<RunWorkout>(
+            predicate: #Predicate {
+                $0.date >= start
+                    && $0.workoutTypeRaw != walkRaw
+                    && $0.workoutTypeRaw != crossTrainingRaw
+            },
+            sortBy: [SortDescriptor(\.date, order: .reverse)]
+        )
+    }
+
+    /// Every stored workout with only its two identities loaded: the local `id` and the
+    /// HealthKit id. For the dedup checks that compare against every workout ever stored.
+    ///
+    /// A plain fetch reads each workout's route, splits, distance series and samples along
+    /// with it, because none of those blobs is external storage, so the import dedup was
+    /// reading the whole history's routes to compare two strings (P3). Any other property
+    /// read off a result still works: SwiftData faults it in.
+    static var identityDescriptor: FetchDescriptor<RunWorkout> {
+        var descriptor = FetchDescriptor<RunWorkout>()
+        descriptor.propertiesToFetch = [\.id, \.healthKitWorkoutID]
+        return descriptor
+    }
 }

@@ -228,6 +228,12 @@ promise honest.
   leftover one as a run and opens it for review, so a killed app loses at most 30 s (P1.2).
   `finishWorkout` builds its run with `RunCheckpoint.makeWorkout()` too: a new field the
   finished run carries goes in the checkpoint, or recovered runs silently lack it.
+- **A full `RunWorkout` fetch reads every blob.** Route, splits, distance series and
+  samples are plain `Data` attributes, not external storage, so fetching a run loads them
+  all. A check that only compares ids uses `RunWorkout.identityDescriptor` (ids only); a
+  screen bounds its `@Query` by date (`runsOnlyDescriptor(since:)`) or by count. Leave a
+  query unbounded only when its answer is all-time (achievements, shoe mileage), and say
+  so in a comment (P3).
 - Simulator builds disable CloudKit in `AppContainer.shouldUseCloudKit` — not because
   Simulator can't sync (Apple says it can) but because the unit-test suite runs there and
   builds real file-backed containers, which would otherwise write into the team's
