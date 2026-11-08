@@ -445,11 +445,17 @@ final class AppContainer {
         // scene to run the foreground refresh, so the import asks for it directly:
         // tonight's streak nudge comes down, tomorrow's goes up, and a Sunday run makes
         // it into the 19:00 recap. Settings are re-read each time for the same reason.
-        workoutSyncService.onRunsImported = { [weak refresh = notificationRefreshService] in
+        workoutSyncService.onRunsImported = { [weak self, weak refresh = notificationRefreshService] in
+            let preferences = AppSettings.syncedNotificationPreferences()
+            // The week's total, the streak and the next session all move with a Watch run,
+            // and the scene-phase refresh that would publish them never comes without a
+            // scene: the widgets and the Watch kept the old figures until the app was
+            // opened (P2.3).
+            self?.refreshWidgetsWithoutScene(preferences: preferences)
             guard let refresh else { return }
             await refresh.refreshTrainingNudges(
                 plan: refresh.activePlan(),
-                preferences: AppSettings.syncedNotificationPreferences()
+                preferences: preferences
             )
         }
 
@@ -488,7 +494,21 @@ final class AppContainer {
         guard !UITestingSupport.isEnabled, !UITestingSupport.isHostingUnitTests else { return }
         await workoutSyncService.syncNow(source: "app-refresh")
         guard !Task.isCancelled else { return }
-        await notificationRefreshService.refreshAll(preferences: AppSettings.syncedNotificationPreferences())
+        let preferences = AppSettings.syncedNotificationPreferences()
+        // Also the daily catch-up for the widgets and the Watch: the date has moved on
+        // since they were last published, even when no run was imported (P2.3).
+        refreshWidgetsWithoutScene(preferences: preferences)
+        await notificationRefreshService.refreshAll(preferences: preferences)
+    }
+
+    /// Republishes the widgets and the Watch from a path with no scene, and so no
+    /// `AppSettings`: a background HealthKit import or the daily app refresh (P2.3).
+    private func refreshWidgetsWithoutScene(preferences: NotificationPreferences) {
+        WidgetRefreshService.refresh(
+            context: modelContainer.mainContext,
+            weeklyGoalMeters: preferences.weeklyGoalMeters,
+            unit: preferences.unit
+        )
     }
 
     // MARK: - Store configuration
