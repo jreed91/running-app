@@ -130,12 +130,19 @@ struct HealthKitImportView: View {
             let skipped = allHKWorkouts.filter { existingIDs.contains($0.uuid.uuidString) }.count
 
             let importContext = WorkoutImportContext.resolve(from: context)
-            let newWorkouts = try await repo.fetchImportableWorkouts(
+            let fetchedWorkouts = try await repo.fetchImportableWorkouts(
                 from: startDate,
                 to: Date(),
                 existingIDs: existingIDs,
                 context: importContext
             )
+            // Stride's own export of a run it already has links to that run rather than
+            // importing a second copy, as in the background sync (P1.3).
+            let newWorkouts = WorkoutSyncService.withoutOwnExports(fetchedWorkouts, stored: existingWorkouts)
+            let relinked = fetchedWorkouts.count - newWorkouts.count
+            if relinked > 0 {
+                context.saveOrLog("runs relinked to their own HealthKit export")
+            }
             // The same walks the background sync brings in, over the range the runner
             // chose here — a retroactive import that quietly covered only half of what
             // Stride imports would be the more surprising behaviour (N38).
@@ -165,7 +172,7 @@ struct HealthKitImportView: View {
                 }
             }
 
-            importState = .done(imported: newWorkouts.count + newWalks.count, skipped: skipped)
+            importState = .done(imported: newWorkouts.count + newWalks.count, skipped: skipped + relinked)
         } catch {
             importState = .failed(error.localizedDescription)
         }

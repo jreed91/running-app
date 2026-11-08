@@ -406,6 +406,71 @@ struct WorkoutSyncServiceTests {
         #expect(mock.lastImportContext?.paces == nil)
     }
 
+    // MARK: Stride's own exports (P1.3)
+
+    /// The in-app run is saved before its HealthKit save returns an id, and writing the
+    /// workout fires Stride's own observer. The importer hands that export back with the
+    /// run's own `id` (its `StrideWorkoutID` metadata); it must link, not import.
+    @Test("Stride's own HealthKit export links the stored run instead of importing a copy (P1.3)")
+    func ownExportLinksInsteadOfImporting() async throws {
+        let mock = MockHealthKitRepository()
+        let (service, context) = makeService(mock: mock)
+
+        let recorded = RunWorkout(
+            date: Date(),
+            distanceMeters: 8_000,
+            durationSeconds: 2_400,
+            workoutType: .easy
+        )
+        context.insert(recorded)
+        try context.save()
+
+        let export = RunWorkout(
+            date: recorded.date,
+            distanceMeters: 8_000,
+            durationSeconds: 2_400,
+            workoutType: .easy
+        )
+        export.id = recorded.id
+        let exportHealthKitID = UUID().uuidString
+        export.healthKitWorkoutID = exportHealthKitID
+        mock.runFetchResults = [[export]]
+
+        await service.syncNow(source: "test")
+
+        let runs = try context.fetch(FetchDescriptor<RunWorkout>())
+        #expect(runs.count == 1)
+        #expect(runs.first?.id == recorded.id)
+        #expect(runs.first?.healthKitWorkoutID == exportHealthKitID)
+    }
+
+    @Test("A run already linked keeps its HealthKit id and a second copy is dropped (P1.3)")
+    func ownExportOfLinkedRunIsDropped() {
+        let linked = RunWorkout(date: Date(), distanceMeters: 5_000, durationSeconds: 1_500, workoutType: .easy)
+        linked.healthKitWorkoutID = "original"
+        let copy = RunWorkout(date: linked.date, distanceMeters: 5_000, durationSeconds: 1_500, workoutType: .easy)
+        copy.id = linked.id
+        copy.healthKitWorkoutID = "second-copy"
+        let other = RunWorkout(date: Date(), distanceMeters: 10_000, durationSeconds: 3_000, workoutType: .longRun)
+        other.healthKitWorkoutID = "watch-run"
+
+        let remaining = WorkoutSyncService.withoutOwnExports([copy, other], stored: [linked])
+
+        #expect(remaining.map(\.id) == [other.id])
+        #expect(linked.healthKitWorkoutID == "original")
+    }
+
+    @Test("Only a valid StrideWorkoutID in a workout's metadata names a Stride run (P1.3)")
+    func strideWorkoutIDMetadata() {
+        let key = HealthKitRepository.strideWorkoutIDMetadataKey
+        let id = UUID()
+
+        #expect(HealthKitRepository.strideWorkoutID(from: [key: id.uuidString]) == id)
+        #expect(HealthKitRepository.strideWorkoutID(from: nil) == nil)
+        #expect(HealthKitRepository.strideWorkoutID(from: [key: "not-a-uuid"]) == nil)
+        #expect(HealthKitRepository.strideWorkoutID(from: ["SomeOtherKey": id.uuidString]) == nil)
+    }
+
     // MARK: Notification batching (M5)
 
     @Test("Imports collapse to one summary notification only above the per-run banner limit (M5)")
