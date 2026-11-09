@@ -33,6 +33,10 @@ struct StrengthActiveView: View {
     /// carry the name of what was actually done.
     @State private var swaps: [Int: StrengthExercise] = [:]
     @State private var guideExercise: StrengthExercise?
+    /// An unplanned session's exercises as they were when it was interrupted, so a resume
+    /// doesn't pick up a different week's session from Home.
+    @State private var restoredPlan: StrengthWorkoutPlan?
+    @State private var hasRestored = false
     @State private var showSwapOptions = false
 
     static var recentSessionsDescriptor: FetchDescriptor<StrengthWorkout> {
@@ -81,7 +85,7 @@ struct StrengthActiveView: View {
 
     private var unit: UnitPreference { appSettings.unitPreference }
 
-    private var plan: StrengthWorkoutPlan? { scheduledWorkout?.strengthPlan ?? unplannedPlan }
+    private var plan: StrengthWorkoutPlan? { scheduledWorkout?.strengthPlan ?? restoredPlan ?? unplannedPlan }
     private var exercises: [StrengthExercise] {
         (plan?.exercises ?? []).enumerated().map { index, exercise in swaps[index] ?? exercise }
     }
@@ -142,7 +146,10 @@ struct StrengthActiveView: View {
                 }
             }
         }
-        .onAppear { setupForCurrentExercise() }
+        .onAppear {
+            restoreIfInterrupted()
+            setupForCurrentExercise()
+        }
         .confirmationDialog(
             hasLoggedWork ? "Finish workout?" : "Discard workout?",
             isPresented: $showFinishConfirmation,
@@ -682,6 +689,41 @@ struct StrengthActiveView: View {
     private func swap(to option: StrengthExercise) {
         swaps[currentExerciseIndex] = option
         setupForCurrentExercise()
+        saveCheckpoint()
+    }
+
+    // MARK: - Checkpoint
+
+    /// Picks the session back up where it was if the app closed mid-session: same
+    /// scheduled day (or both unplanned), within six hours, with a set done.
+    private func restoreIfInterrupted() {
+        guard !hasRestored else { return }
+        hasRestored = true
+        guard let checkpoint = StrengthSessionCheckpoint.load(),
+              checkpoint.resumes(scheduledWorkoutID: scheduledWorkout?.id)
+        else { return }
+        if scheduledWorkout == nil {
+            restoredPlan = checkpoint.plan
+        }
+        swaps = checkpoint.swaps
+        completedSets = checkpoint.completedSets
+        currentExerciseIndex = checkpoint.currentExerciseIndex
+        currentSetIndex = checkpoint.currentSetIndex
+        startTime = checkpoint.startTime
+    }
+
+    private func saveCheckpoint() {
+        guard let plan, hasLoggedWork else { return }
+        StrengthSessionCheckpoint(
+            scheduledWorkoutID: scheduledWorkout?.id,
+            plan: plan,
+            swaps: swaps,
+            completedSets: completedSets,
+            currentExerciseIndex: currentExerciseIndex,
+            currentSetIndex: currentSetIndex,
+            startTime: startTime,
+            savedAt: Date()
+        ).save()
     }
 
     private func takesLoad(_ exercise: StrengthExercise) -> Bool {
@@ -724,6 +766,7 @@ struct StrengthActiveView: View {
     }
 
     private func advanceAfterSet(exercise: StrengthExercise) {
+        defer { saveCheckpoint() }
         let nextSet = currentSetIndex + 1
         if nextSet < exercise.sets {
             currentSetIndex = nextSet
@@ -785,11 +828,13 @@ struct StrengthActiveView: View {
     /// Leave without persisting anything — the scheduled day stays open (H5).
     private func discard() {
         endRestTimer()
+        StrengthSessionCheckpoint.clear()
         dismiss()
     }
 
     private func finishAndSave() {
         endRestTimer()
+        StrengthSessionCheckpoint.clear()
         // Never persist an empty session or mark the scheduled day complete when
         // nothing was logged (H5) — a safety net behind the dialog's gating.
         guard hasLoggedWork else { dismiss(); return }

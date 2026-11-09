@@ -4,6 +4,7 @@ import SwiftData
 struct StrengthSummaryView: View {
     let workout: StrengthWorkout
     @Environment(\.modelContext) private var context
+    @State private var isEditing = false
 
     private var durationLabel: String {
         let total = Int(workout.durationSeconds)
@@ -30,6 +31,22 @@ struct StrengthSummaryView: View {
         .background(Color.surfacePrimary)
         .navigationTitle("Strength Workout")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            // Only sets logged in Stride can be corrected; a Health import has none.
+            if !workout.completedSets.isEmpty {
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Edit") { isEditing = true }
+                }
+            }
+        }
+        .sheet(isPresented: $isEditing) {
+            NavigationStack {
+                StrengthSetsEditor(sets: workout.completedSets) { edited in
+                    workout.completedSets = edited
+                    context.saveOrLog("the corrected strength sets")
+                }
+            }
+        }
     }
 
     // MARK: - Header
@@ -178,5 +195,129 @@ struct StrengthSummaryView: View {
         .padding(AppSpacing.md)
         .frame(maxWidth: .infinity)
         .strideCard(cornerRadius: AppRadius.md)
+    }
+}
+
+// MARK: - StrengthSetsEditor
+
+/// Corrects a finished session: the reps and weight of each set, or a set deleted.
+///
+/// Edits stay on a copy until Save, so Cancel leaves the session as it was. Weights are
+/// entered in the runner's unit and stored in kilograms (``StrengthProgression/edited``),
+/// so next session's suggestion reads the corrected numbers.
+private struct StrengthSetsEditor: View {
+    let onSave: ([CompletedStrengthSet]) -> Void
+
+    @Environment(AppSettings.self) private var appSettings
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var rows: [Row]
+
+    private struct Row: Identifiable {
+        let id = UUID()
+        var original: CompletedStrengthSet
+        var reps: Int
+        var weight: Double?
+    }
+
+    init(sets: [CompletedStrengthSet], onSave: @escaping ([CompletedStrengthSet]) -> Void) {
+        self.onSave = onSave
+        // The unit isn't readable from the environment yet; the weights are filled in
+        // `onAppear` once it is.
+        _rows = State(initialValue: sets.map { Row(original: $0, reps: $0.completedReps, weight: nil) })
+    }
+
+    private var unit: UnitPreference { appSettings.unitPreference }
+
+    var body: some View {
+        List {
+            ForEach(groups, id: \.self) { exerciseIndex in
+                Section(name(ofExercise: exerciseIndex)) {
+                    ForEach(indices(ofExercise: exerciseIndex), id: \.self) { index in
+                        row(at: index)
+                    }
+                    .onDelete { offsets in
+                        let doomed = Set(offsets.map { indices(ofExercise: exerciseIndex)[$0] })
+                        rows = rows.enumerated().filter { !doomed.contains($0.offset) }.map(\.element)
+                    }
+                }
+            }
+        }
+        .navigationTitle("Edit sets")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Cancel") { dismiss() }
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Save", action: save)
+            }
+        }
+        .onAppear(perform: loadWeights)
+    }
+
+    @ViewBuilder
+    private func row(at index: Int) -> some View {
+        let set = rows[index].original
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Set \(set.setIndex + 1)")
+                .font(.dsFootnote.weight(.medium).monospacedDigit())
+                .foregroundStyle(.secondary)
+            if set.skipped {
+                Text("Skipped")
+                    .font(.dsFootnote)
+                    .foregroundStyle(.tertiary)
+            } else {
+                Stepper(value: $rows[index].reps, in: 0...100) {
+                    Text("\(rows[index].reps) reps")
+                        .font(.dsBody.monospacedDigit())
+                }
+                HStack {
+                    Text("Weight")
+                        .font(.dsBody)
+                    Spacer()
+                    TextField("None", value: $rows[index].weight, format: .number.precision(.fractionLength(0...1)))
+                        .font(.dsBody.monospacedDigit())
+                        .keyboardType(.decimalPad)
+                        .multilineTextAlignment(.trailing)
+                        .frame(maxWidth: 90)
+                        .accessibilityLabel("Weight in \(unit == .metric ? "kg" : "lb")")
+                    Text(verbatim: unit == .metric ? "kg" : "lb")
+                        .font(.dsFootnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    private var groups: [Int] {
+        Array(Set(rows.map(\.original.exerciseIndex))).sorted()
+    }
+
+    private func indices(ofExercise exerciseIndex: Int) -> [Int] {
+        rows.indices.filter { rows[$0].original.exerciseIndex == exerciseIndex }
+    }
+
+    private func name(ofExercise exerciseIndex: Int) -> String {
+        rows.lazy.filter { $0.original.exerciseIndex == exerciseIndex }
+            .compactMap(\.original.exerciseName).first
+            ?? String(localized: "Exercise \(exerciseIndex + 1)")
+    }
+
+    private func loadWeights() {
+        for index in rows.indices where rows[index].weight == nil {
+            rows[index].weight = StrengthProgression.editableWeight(of: rows[index].original, unit: unit)
+        }
+    }
+
+    private func save() {
+        let edited = rows.map { row in
+            row.original.skipped
+                ? row.original
+                : StrengthProgression.edited(row.original, reps: row.reps, displayWeight: row.weight, unit: unit)
+        }
+        onSave(edited)
+        dismiss()
     }
 }

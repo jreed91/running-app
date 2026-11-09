@@ -48,7 +48,7 @@ struct DataExportTests {
 
     // MARK: Archive layout
 
-    @Test("The archive holds a README, three CSVs and one GPX per routed workout")
+    @Test("The archive holds a README, four CSVs and one GPX per routed workout")
     func archiveLayout() {
         let entries = DataExport.entries(
             runs: [
@@ -60,7 +60,7 @@ struct DataExportTests {
             exportedAt: referenceDate
         )
         let paths = entries.map(\.path)
-        #expect(Array(paths.prefix(4)) == ["README.txt", "runs.csv", "strength.csv", "shoes.csv"])
+        #expect(Array(paths.prefix(5)) == ["README.txt", "runs.csv", "strength.csv", "strength_sets.csv", "shoes.csv"])
         #expect(paths.filter { $0.hasPrefix("routes/") }.count == 1)
         #expect(paths.last?.hasSuffix(".gpx") == true)
     }
@@ -70,7 +70,7 @@ struct DataExportTests {
         let entries = DataExport.entries(runs: [], strengthSessions: [], shoes: [], exportedAt: referenceDate)
         let runsCSV = try #require(entries.first { $0.path == "runs.csv" })
         #expect(runsCSV.contents == DataExport.runsHeader.joined(separator: ",") + "\r\n")
-        #expect(entries.count == 4)
+        #expect(entries.count == 5)
     }
 
     @Test("Walks and cross-training are exported alongside runs")
@@ -184,6 +184,24 @@ struct DataExportTests {
         ]
         let fields = try #require(rows(DataExport.strengthCSV([session])).last)
         #expect(Array(fields[2...]) == ["1800", "2", "1", "18", "gym"])
+    }
+
+    @Test("Each logged set gets a row with its exercise name and weight in kilograms")
+    func strengthSets() {
+        let session = StrengthWorkout(date: referenceDate, durationSeconds: 1_800)
+        session.completedSets = [
+            CompletedStrengthSet(exerciseIndex: 0, setIndex: 0, completedReps: 8, actualWeight: "60 kg",
+                                 skipped: false, exerciseName: "Back Squat", weightKilograms: 60),
+            CompletedStrengthSet(exerciseIndex: 1, setIndex: 0, completedReps: 12, actualWeight: "Red band",
+                                 skipped: false, exerciseName: "Monster Walk"),
+            CompletedStrengthSet(exerciseIndex: 1, setIndex: 1, completedReps: 0, actualWeight: nil,
+                                 skipped: true, exerciseName: "Monster Walk"),
+        ]
+        let lines = rows(DataExport.strengthSetsCSV([session]))
+        #expect(lines.first == DataExport.strengthSetsHeader)
+        #expect(Array(lines[1][2...]) == ["Back Squat", "1", "8", "60.00", "false", ""])
+        #expect(Array(lines[2][2...]) == ["Monster Walk", "1", "12", "", "false", "Red band"])
+        #expect(Array(lines[3][2...]) == ["Monster Walk", "2", "", "", "true", ""])
     }
 
     // MARK: Writing

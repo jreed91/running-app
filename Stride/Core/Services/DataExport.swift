@@ -13,6 +13,7 @@ import Foundation
 ///   README.txt      what each file is and which units it uses
 ///   runs.csv        one row per recorded workout: runs, walks and cross-training
 ///   strength.csv    one row per strength session
+///   strength_sets.csv one row per logged set
 ///   shoes.csv       one row per pair
 ///   routes/*.gpx    one GPX per outdoor workout that has a route
 /// ```
@@ -55,6 +56,10 @@ enum DataExport {
             Entry(
                 path: "strength.csv",
                 contents: strengthCSV(strengthSessions.sorted { $0.date < $1.date })
+            ),
+            Entry(
+                path: "strength_sets.csv",
+                contents: strengthSetsCSV(strengthSessions.sorted { $0.date < $1.date })
             ),
             Entry(path: "shoes.csv", contents: shoesCSV(shoes.sorted { $0.startDate < $1.startDate })),
         ]
@@ -119,10 +124,7 @@ enum DataExport {
         "id", "start_time_utc", "duration_s", "sets_completed", "sets_skipped", "total_reps", "notes",
     ]
 
-    /// One row per session. The logged sets name their exercise by its index into the
-    /// scheduled session's plan, not by name, so a per-set file would be a column of
-    /// numbers that mean nothing outside the app — the session totals are what survive
-    /// the trip.
+    /// One row per session: its totals. The sets themselves are in `strength_sets.csv`.
     static func strengthCSV(_ sessions: [StrengthWorkout]) -> String {
         let rows = sessions.map { session -> [String] in
             let sets = session.completedSets
@@ -138,6 +140,35 @@ enum DataExport {
             ]
         }
         return csv(header: strengthHeader, rows: rows)
+    }
+
+    static let strengthSetsHeader = [
+        "session_id", "start_time_utc", "exercise", "set", "reps", "weight_kg", "skipped", "note",
+    ]
+
+    /// One row per logged set, in the order it was logged. Sets carry their exercise's
+    /// name; older sets that don't fall back to the name in the session's plan, or an
+    /// empty cell. `weight_kg` is the number; `note` keeps an older free-text weight that
+    /// had no number behind it ("Light").
+    static func strengthSetsCSV(_ sessions: [StrengthWorkout]) -> String {
+        let rows = sessions.flatMap { session -> [[String]] in
+            let planned = session.scheduledWorkout?.strengthPlan?.exercises ?? []
+            return session.completedSets.map { set in
+                let name = set.exerciseName
+                    ?? (planned.indices.contains(set.exerciseIndex) ? planned[set.exerciseIndex].name : "")
+                return [
+                    session.id.uuidString,
+                    timestampString(session.date),
+                    name,
+                    String(set.setIndex + 1),
+                    set.skipped ? "" : String(set.completedReps),
+                    optionalNumber(set.weightKilograms, decimals: 2),
+                    set.skipped ? "true" : "false",
+                    set.weightKilograms == nil ? (set.actualWeight ?? "") : "",
+                ]
+            }
+        }
+        return csv(header: strengthSetsHeader, rows: rows)
     }
 
     static let shoesHeader = [
@@ -210,6 +241,9 @@ enum DataExport {
                       column separates runs from walks ("Walk") and cross-training
                       ("Cross Training"), which Stride keeps out of its running stats.
         strength.csv  Every strength session, one per row.
+        strength_sets.csv
+                      Every set logged in a strength session: exercise, set number,
+                      reps and weight in kilograms. "session_id" matches strength.csv.
         shoes.csv     Every pair of shoes. A run's "shoe" column names the pair it was run in.
         routes/       One GPX file per outdoor workout with a GPS route. A run's
                       "route_file" column names its file.
