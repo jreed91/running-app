@@ -14,7 +14,7 @@ import WidgetKit
 struct RunLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: RunActivityAttributes.self) { context in
-            RunActivityLockScreenView(
+            RunActivityContentView(
                 attributes: context.attributes,
                 state: context.state
             )
@@ -61,6 +61,78 @@ struct RunLiveActivity: Widget {
                 RunActivityGlyph(isPaused: context.state.isPaused)
             }
         }
+        // The paired Apple Watch's Smart Stack. Without the small family, watchOS draws
+        // the Dynamic Island's compact pair instead — the glyph and the clock — so a run
+        // on the phone showed only its elapsed time on the wrist.
+        .supplementalActivityFamilies([.small])
+    }
+}
+
+// MARK: - Content
+
+/// The non-island presentation: the full Lock Screen card, or the small one the Watch's
+/// Smart Stack shows.
+struct RunActivityContentView: View {
+    @Environment(\.activityFamily) private var activityFamily
+    let attributes: RunActivityAttributes
+    let state: RunActivityAttributes.ContentState
+
+    var body: some View {
+        switch activityFamily {
+        case .small:
+            RunActivityWatchView(attributes: attributes, state: state)
+        case .medium:
+            RunActivityLockScreenView(attributes: attributes, state: state)
+        @unknown default:
+            RunActivityLockScreenView(attributes: attributes, state: state)
+        }
+    }
+}
+
+// MARK: - Apple Watch
+
+/// The run on the Watch's Smart Stack: the clock large, then distance and pace.
+///
+/// Three figures in a space a little bigger than a complication, so no labels: the clock
+/// reads as time, and the distance and pace carry their units.
+struct RunActivityWatchView: View {
+    let attributes: RunActivityAttributes
+    let state: RunActivityAttributes.ContentState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 4) {
+                RunActivityGlyph(isPaused: state.isPaused)
+                Text(attributes.workoutName.uppercased())
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                // In words, as on the Lock Screen card, not by the glyph alone.
+                if state.isPaused {
+                    Text("PAUSED")
+                }
+            }
+            .font(.caption2.weight(.bold))
+            .foregroundStyle(.strideBrand)
+
+            RunActivityClock(state: state)
+                .font(.title3.weight(.bold).monospacedDigit())
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+
+            HStack(spacing: 8) {
+                Text(state.distance)
+                if let pace = state.pace {
+                    Text(pace)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .font(.footnote.weight(.semibold).monospacedDigit())
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .foregroundStyle(.white)
+        .widgetURL(RunActivityDeepLink.activeRun)
     }
 }
 

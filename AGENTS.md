@@ -781,6 +781,12 @@ WidgetRefreshService.refresh  →  WatchSyncService  →  WCSession application 
   why Start is only offered for *today's* session (`WatchContext.canStart`).
 - Recording a run inside Stride's own watch app (`HKWorkoutSession`, live pace and coaching
   on the wrist) is not built yet.
+- **The watch app targets watchOS 26, not 27.** watchOS 27 drops Series 6/7/8, SE 2 and
+  the first Ultra, and those watches stay on 26 while their iPhones run iOS 27. Check any
+  new watch API against watchOS 26 (or wrap it in `if #available(watchOS 27, *)`).
+- **A run recorded on the iPhone reaches the Watch only as its Live Activity**, in the
+  Smart Stack, drawn by `RunActivityWatchView` (the `.small` supplemental family). Without
+  that family watchOS falls back to the Dynamic Island's compact glyph and clock.
 - `com.running.stride.watchkitapp` needs its own App ID registered before the first
   archive, for the same reason `StrideWidgets` does (see "Implementation Guidance").
 

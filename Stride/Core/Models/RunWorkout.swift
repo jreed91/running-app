@@ -285,7 +285,9 @@ extension RunWorkout {
     }
 
     /// Every stored workout with only its two identities loaded: the local `id` and the
-    /// HealthKit id. For the dedup checks that compare against every workout ever stored.
+    /// HealthKit id, plus the start, length and type the same-time dedup compares
+    /// (`WorkoutSyncService.splittingSameTimeCopies`). For the dedup checks that compare
+    /// against every workout ever stored.
     ///
     /// A plain fetch reads each workout's route, splits, distance series and samples along
     /// with it, because none of those blobs is external storage, so the import dedup was
@@ -293,7 +295,7 @@ extension RunWorkout {
     /// read off a result still works: SwiftData faults it in.
     static var identityDescriptor: FetchDescriptor<RunWorkout> {
         var descriptor = FetchDescriptor<RunWorkout>()
-        descriptor.propertiesToFetch = [\.id, \.healthKitWorkoutID]
+        descriptor.propertiesToFetch = [\.id, \.healthKitWorkoutID, \.date, \.durationSeconds, \.workoutTypeRaw]
         return descriptor
     }
 }

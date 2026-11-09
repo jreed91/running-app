@@ -460,6 +460,79 @@ struct WorkoutSyncServiceTests {
         #expect(linked.healthKitWorkoutID == "original")
     }
 
+    // MARK: Same run recorded twice
+
+    /// A free run on the phone with the Workout app also going on the Watch is two
+    /// workouts in Health. The Watch's copy has its own UUID and no `StrideWorkoutID`, so
+    /// it used to come in as a second run and complete the day's planned session.
+    @Test("A Watch recording of a run Stride already has is skipped and tombstoned, and completes nothing")
+    func sameTimeCopyIsSkipped() async throws {
+        let mock = MockHealthKitRepository()
+        let (service, context) = makeService(mock: mock)
+        let scheduled = try makePlanWithTodaysRun(in: context, isActive: true)
+
+        let start = Date().addingTimeInterval(-3_600)
+        let freeRun = RunWorkout(date: start, distanceMeters: 5_000, durationSeconds: 1_800, workoutType: .easy)
+        context.insert(freeRun)
+        try context.save()
+
+        // Started a minute later on the wrist, stopped a minute earlier.
+        let watchCopy = RunWorkout(
+            date: start.addingTimeInterval(60),
+            distanceMeters: 4_800,
+            durationSeconds: 1_680,
+            workoutType: .tempo
+        )
+        let watchID = UUID().uuidString
+        watchCopy.healthKitWorkoutID = watchID
+        mock.runFetchResults = [[watchCopy]]
+
+        await service.syncNow(source: "test")
+
+        let runs = try context.fetch(FetchDescriptor<RunWorkout>())
+        #expect(runs.map(\.id) == [freeRun.id])
+        #expect(scheduled.isCompleted == false)
+        let tombstones = try context.fetch(FetchDescriptor<DeletedWorkout>())
+        #expect(tombstones.map(\.healthKitWorkoutID) == [watchID])
+
+        UserDefaults.standard.removeObject(forKey: "pendingReviewWorkoutID")
+    }
+
+    @Test("Runs that share most of their time are one run; back-to-back runs are two")
+    func sameRecordingOverlap() {
+        let start = Date()
+        func run(_ offset: TimeInterval, _ duration: TimeInterval) -> RunWorkout {
+            RunWorkout(
+                date: start.addingTimeInterval(offset),
+                distanceMeters: 5_000,
+                durationSeconds: duration,
+                workoutType: .easy
+            )
+        }
+        let phone = run(0, 1_800)
+
+        #expect(WorkoutSyncService.isSameRecording(phone, run(60, 1_680)))
+        // Watch stopped half way: still the same run.
+        #expect(WorkoutSyncService.isSameRecording(phone, run(0, 900)))
+        // A cool-down jog straight after: touches but does not overlap.
+        #expect(!WorkoutSyncService.isSameRecording(phone, run(1_800, 600)))
+        // A second run that morning that only clips the first's last few minutes.
+        #expect(!WorkoutSyncService.isSameRecording(phone, run(1_500, 1_800)))
+        #expect(!WorkoutSyncService.isSameRecording(phone, run(7_200, 1_800)))
+    }
+
+    @Test("A walk at the same time as an imported run does not swallow it")
+    func storedWalkDoesNotDropRun() {
+        let start = Date()
+        let walk = RunWorkout(date: start, distanceMeters: 3_000, durationSeconds: 1_800, workoutType: .walk)
+        let run = RunWorkout(date: start, distanceMeters: 5_000, durationSeconds: 1_800, workoutType: .easy)
+
+        let (kept, copies) = WorkoutSyncService.splittingSameTimeCopies([run], stored: [walk])
+
+        #expect(kept.map(\.id) == [run.id])
+        #expect(copies.isEmpty)
+    }
+
     @Test("Only a valid StrideWorkoutID in a workout's metadata names a Stride run (P1.3)")
     func strideWorkoutIDMetadata() {
         let key = HealthKitRepository.strideWorkoutIDMetadataKey

@@ -144,14 +144,15 @@ struct HealthKitImportView: View {
             // importing a second copy, as in the background sync (P1.3).
             // Fetched again after the HealthKit reads, as the background sync does: a run
             // finished while they were awaited is exactly the one whose export this holds.
-            let newWorkouts = WorkoutSyncService.withoutOwnExports(
-                fetchedWorkouts,
-                stored: try context.fetch(RunWorkout.identityDescriptor)
-            )
-            let relinked = fetchedWorkouts.count - newWorkouts.count
+            let stored = try context.fetch(RunWorkout.identityDescriptor)
+            let afterExports = WorkoutSyncService.withoutOwnExports(fetchedWorkouts, stored: stored)
+            let relinked = fetchedWorkouts.count - afterExports.count
             if relinked > 0 {
                 context.saveOrLog("runs relinked to their own HealthKit export")
             }
+            // A Watch or another app's recording of a run Stride already has is the same
+            // run, not a second one, as in the background sync.
+            let newWorkouts = WorkoutSyncService.splittingSameTimeCopies(afterExports, stored: stored).kept
             // The same walks the background sync brings in, over the range the runner
             // chose here — a retroactive import that quietly covered only half of what
             // Stride imports would be the more surprising behaviour (N38).
