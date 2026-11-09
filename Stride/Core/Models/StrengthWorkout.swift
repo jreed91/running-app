@@ -39,3 +39,31 @@ extension StrengthWorkout {
         set { completedSetsData = newValue.isEmpty ? nil : .encoded(newValue, keeping: completedSetsData) }
     }
 }
+
+// MARK: - As values
+
+extension StrengthWorkout {
+    /// The session as ``StrengthProgression`` reads it: every set named, every load in
+    /// kilograms where one can be known.
+    ///
+    /// A set logged before names were stored takes its name from the scheduled workout's
+    /// plan by index; one whose plan is gone, or whose index no longer exists in it, is
+    /// left out rather than guessed. A text weight from before weights were numbers is
+    /// read in `unit` when it has no unit of its own.
+    func sessionLog(unit: UnitPreference) -> StrengthSessionLog {
+        let planExercises = scheduledWorkout?.strengthPlan?.exercises ?? []
+        let sets = completedSets.compactMap { set -> LoggedStrengthSet? in
+            let name = set.exerciseName
+                ?? (planExercises.indices.contains(set.exerciseIndex) ? planExercises[set.exerciseIndex].name : nil)
+            guard let name else { return nil }
+            return LoggedStrengthSet(
+                exerciseName: name,
+                reps: set.completedReps,
+                weightKilograms: set.weightKilograms
+                    ?? StrengthProgression.legacyWeightKilograms(from: set.actualWeight, unit: unit),
+                skipped: set.skipped
+            )
+        }
+        return StrengthSessionLog(date: date, sets: sets)
+    }
+}

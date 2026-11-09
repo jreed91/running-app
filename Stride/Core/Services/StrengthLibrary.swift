@@ -37,14 +37,22 @@ struct StrengthLibrary: Sendable {
 
         // Always add bodyweight core/glute anchors for running-specific focus
         if focus == .runningSpecific {
-            result += runningSpecificAnchors(sets: sets, reps: reps)
+            result += runningSpecificAnchors(sets: sets, reps: reps).map { exercise in
+                var stamped = exercise
+                stamped.equipment = .bodyweight
+                return stamped
+            }
         }
 
         // Equipment-specific exercises, added in focus-relevance order so that when the
         // list is capped below, the most relevant equipment survives instead of whichever
         // equipment happened to sort first alphabetically.
         for item in prioritizedEquipment(equipment, focus: focus) {
-            result += exercisesFor(item, focus: focus, sets: sets, reps: reps)
+            result += exercisesFor(item, focus: focus, sets: sets, reps: reps).map { exercise in
+                var stamped = exercise
+                stamped.equipment = item
+                return stamped
+            }
         }
 
         // Deduplicate by name (equipment may overlap) and cap total
@@ -54,6 +62,30 @@ struct StrengthLibrary: Sendable {
         let maxExercises = maxExerciseCount(phase: phase, focus: focus)
         return Array(result.prefix(maxExercises))
     }
+
+    // MARK: - Equipment lookup
+
+    /// What a library exercise is done with, by name, for plans saved before
+    /// ``StrengthExercise/equipment`` was stamped on them. Nil for a name the library
+    /// does not have (renamed since, or never one of its own).
+    static func equipment(forExerciseNamed name: String) -> StrengthEquipment? {
+        equipmentByName[name]
+    }
+
+    private static let equipmentByName: [String: StrengthEquipment] = {
+        var table: [String: StrengthEquipment] = [:]
+        for exercise in runningSpecificAnchors(sets: 1, reps: 1) {
+            table[exercise.name] = .bodyweight
+        }
+        for item in StrengthEquipment.allCases {
+            for focus in StrengthFocus.allCases {
+                for exercise in exercisesFor(item, focus: focus, sets: 1, reps: 1) where table[exercise.name] == nil {
+                    table[exercise.name] = item
+                }
+            }
+        }
+        return table
+    }()
 
     // MARK: - Equipment Prioritization
 
