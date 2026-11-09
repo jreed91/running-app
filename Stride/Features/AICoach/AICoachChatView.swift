@@ -37,6 +37,17 @@ struct AICoachChatView: View {
     )
     private var activePlans: [TrainingPlan]
 
+    /// The newest strength sessions, for the coach's strength block
+    /// (`StrengthCoachContext`): enough to cover its four-week lookback.
+    @Query(AICoachChatView.recentStrengthDescriptor)
+    private var recentStrength: [StrengthWorkout]
+
+    static var recentStrengthDescriptor: FetchDescriptor<StrengthWorkout> {
+        var descriptor = FetchDescriptor<StrengthWorkout>(sortBy: [SortDescriptor(\.date, order: .reverse)])
+        descriptor.fetchLimit = 12
+        return descriptor
+    }
+
     /// Read for the runner's experience, which sets how plainly or technically the coach
     /// words its replies (`CoachVoice`). Newest first, the order the app root reads.
     @Query(sort: \UserProfile.updatedAt, order: .reverse)
@@ -605,6 +616,14 @@ struct AICoachChatView: View {
 
         let recovery = readiness?.promptSummary ?? "Readiness this morning: no Health data."
 
+        let weekStrength = (activePlan?.currentWeek?.workouts ?? []).filter { $0.workoutType == .strength }
+        let strength = StrengthCoachContext.summary(
+            sessions: recentStrength.map { $0.sessionLog(unit: unit) },
+            plannedThisWeek: weekStrength.count,
+            doneThisWeek: weekStrength.filter(\.isCompleted).count,
+            unit: unit
+        )
+
         // The chat instructions' examples are in kilometres; the reply is not converted
         // afterwards, so the unit has to be asked for here.
         let units = unit == .imperial
@@ -619,6 +638,8 @@ struct AICoachChatView: View {
         \(planContext)
 
         \(recovery)
+
+        \(strength)
 
         Recent runs:
         \(recent.isEmpty ? "No recent runs." : recent)
