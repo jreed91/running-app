@@ -1422,10 +1422,13 @@ struct DashboardView: View {
             localized: "We couldn't rebuild your plan.",
             comment: "Alert message when rebuilding the plan fails"
         )) {
+            // A rebuild starts again from today: size it from what Health says they ran.
+            let recentVolume = await container.healthKitRepository.recentRunningVolume()
             try container.planLifecycle.rebuildPlan(
                 replacing: plan,
                 profile: profile,
                 context: context,
+                recentVolume: recentVolume,
                 unitPreference: appSettings.unitPreference
             )
             return (notice: nil, flagPrompt: true)
@@ -1434,7 +1437,7 @@ struct DashboardView: View {
 
     /// Runs a plan-recovery mutation with the card's loading state applied.
     ///
-    /// The work itself is synchronous main-actor SwiftData work, so it is hopped
+    /// The work is main-actor SwiftData work (a rebuild first awaits a Health read), hopped
     /// through a `Task` — that yields a render pass between raising the flag and
     /// doing the work, which is what makes `MissedWorkoutsRecoveryCard`'s loading
     /// overlay reachable at all. Failures now surface in an alert instead of only
@@ -1444,13 +1447,13 @@ struct DashboardView: View {
     /// and whether the prompt has earned its once-a-week dismissal.
     private func runRecovery(
         failureMessage: String,
-        _ work: @escaping () throws -> (notice: String?, flagPrompt: Bool)
+        _ work: @escaping @MainActor () async throws -> (notice: String?, flagPrompt: Bool)
     ) {
         isHandlingRecovery = true
         Task { @MainActor in
             defer { isHandlingRecovery = false }
             do {
-                let result = try work()
+                let result = try await work()
                 if result.flagPrompt {
                     flagMissedWorkoutPrompt()
                 }
