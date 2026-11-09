@@ -175,14 +175,14 @@ extension RaceCourse {
     }
 
     /// Great-circle distance between two points.
-    static func distanceMeters(from a: TrackPoint, to b: TrackPoint) -> Double {
+    static func distanceMeters(from start: TrackPoint, to end: TrackPoint) -> Double {
         let radians = Double.pi / 180
-        let lat1 = a.latitude * radians
-        let lat2 = b.latitude * radians
+        let lat1 = start.latitude * radians
+        let lat2 = end.latitude * radians
         let dLat = lat2 - lat1
-        let dLon = (b.longitude - a.longitude) * radians
-        let h = sin(dLat / 2) * sin(dLat / 2) + cos(lat1) * cos(lat2) * sin(dLon / 2) * sin(dLon / 2)
-        return 2 * earthRadiusMeters * asin(min(1, sqrt(h)))
+        let dLon = (end.longitude - start.longitude) * radians
+        let haversine = sin(dLat / 2) * sin(dLat / 2) + cos(lat1) * cos(lat2) * sin(dLon / 2) * sin(dLon / 2)
+        return 2 * earthRadiusMeters * asin(min(1, sqrt(haversine)))
     }
 
     /// Heights every `spacing` metres from the start, interpolated along the line. The

@@ -38,8 +38,8 @@ enum CoursePacing {
 
     /// Cost of running on a grade, in J/(kg·m) — Minetti et al. (2002).
     static func costOfRunning(grade: Double) -> Double {
-        let i = min(max(grade, -maximumGrade), maximumGrade)
-        return ((((155.4 * i - 30.4) * i - 43.3) * i + 46.3) * i + 19.5) * i + 3.6
+        let slope = min(max(grade, -maximumGrade), maximumGrade)
+        return ((((155.4 * slope - 30.4) * slope - 43.3) * slope + 46.3) * slope + 19.5) * slope + 3.6
     }
 
     /// Pace on a grade relative to flat ground at the same effort: 1.11 on a 2 % climb,
