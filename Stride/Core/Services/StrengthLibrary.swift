@@ -96,17 +96,35 @@ struct StrengthLibrary: Sendable {
 
     private static let equipmentByName: [String: StrengthEquipment] = {
         var table: [String: StrengthEquipment] = [:]
-        for exercise in runningSpecificAnchors(sets: 1, reps: 1) {
-            table[exercise.name] = .bodyweight
+        for exercise in catalog {
+            table[exercise.name] = exercise.equipment
+        }
+        return table
+    }()
+
+    /// Every exercise the library can produce, once, with its equipment stamped: the
+    /// running-specific anchors as bodyweight, then each equipment's moves for both
+    /// focuses. Sets and reps are placeholders; the swap list and the name lookup only
+    /// read names, muscle groups, equipment and whether a move is held for time.
+    static let catalog: [StrengthExercise] = {
+        var seen = Set<String>()
+        var result: [StrengthExercise] = []
+        for exercise in runningSpecificAnchors(sets: 3, reps: 10) where seen.insert(exercise.name).inserted {
+            var stamped = exercise
+            stamped.equipment = .bodyweight
+            result.append(stamped)
         }
         for item in StrengthEquipment.allCases {
             for focus in StrengthFocus.allCases {
-                for exercise in exercisesFor(item, focus: focus, sets: 1, reps: 1) where table[exercise.name] == nil {
-                    table[exercise.name] = item
+                for exercise in exercisesFor(item, focus: focus, sets: 3, reps: 10)
+                where seen.insert(exercise.name).inserted {
+                    var stamped = exercise
+                    stamped.equipment = item
+                    result.append(stamped)
                 }
             }
         }
-        return table
+        return result
     }()
 
     // MARK: - Equipment Prioritization

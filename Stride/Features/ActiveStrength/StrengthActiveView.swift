@@ -26,6 +26,15 @@ struct StrengthActiveView: View {
     @Query(StrengthActiveView.recentSessionsDescriptor)
     private var recentSessions: [StrengthWorkout]
 
+    @Query private var profiles: [UserProfile]
+
+    /// Exercises swapped for this session only, by position in the plan. The plan itself
+    /// is left alone: next week's session still has the original, and the logged sets
+    /// carry the name of what was actually done.
+    @State private var swaps: [Int: StrengthExercise] = [:]
+    @State private var guideExercise: StrengthExercise?
+    @State private var showSwapOptions = false
+
     static var recentSessionsDescriptor: FetchDescriptor<StrengthWorkout> {
         var descriptor = FetchDescriptor<StrengthWorkout>(sortBy: [SortDescriptor(\.date, order: .reverse)])
         descriptor.fetchLimit = 60
@@ -73,7 +82,15 @@ struct StrengthActiveView: View {
     private var unit: UnitPreference { appSettings.unitPreference }
 
     private var plan: StrengthWorkoutPlan? { scheduledWorkout?.strengthPlan ?? unplannedPlan }
-    private var exercises: [StrengthExercise] { plan?.exercises ?? [] }
+    private var exercises: [StrengthExercise] {
+        (plan?.exercises ?? []).enumerated().map { index, exercise in swaps[index] ?? exercise }
+    }
+
+    /// What the current exercise could be swapped for with the runner's equipment.
+    private var swapOptions: [StrengthExercise] {
+        guard let exercise = currentExercise else { return [] }
+        return StrengthLibrary.alternatives(to: exercise, equipment: profiles.first?.selectedEquipment ?? [])
+    }
     private var currentExercise: StrengthExercise? {
         guard currentExerciseIndex < exercises.count else { return nil }
         return exercises[currentExerciseIndex]
@@ -145,6 +162,22 @@ struct StrengthActiveView: View {
                  : "No sets were logged — this workout won't be saved and the day stays open.")
         }
         .onDisappear { endRestTimer() }
+        .sheet(item: $guideExercise) { exercise in
+            StrengthExerciseGuide(exercise: exercise)
+                .presentationDetents([.medium, .large])
+        }
+        .confirmationDialog(
+            "Swap \(currentExercise?.name ?? "exercise") for",
+            isPresented: $showSwapOptions,
+            titleVisibility: .visible
+        ) {
+            ForEach(swapOptions, id: \.name) { option in
+                Button(option.name) { swap(to: option) }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Just for this session. Your plan keeps the original.")
+        }
         // Haptics (U4). Logging a set and the rest timer expiring are both moments
         // the lifter is mid-movement and not looking at the phone.
         .sensoryFeedback(.selection, trigger: completedSets.count) { old, new in new > old }
@@ -304,9 +337,33 @@ struct StrengthActiveView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+
+            exerciseActions(exercise)
         }
         .padding(AppSpacing.lg)
         .strideCard(cornerRadius: AppRadius.lg)
+    }
+
+    /// "How to" for any exercise the library knows; "Swap" before the exercise's first
+    /// set, when there is something to swap it for.
+    @ViewBuilder
+    private func exerciseActions(_ exercise: StrengthExercise) -> some View {
+        let hasGuide = StrengthLibrary.cues(forExerciseNamed: exercise.name) != nil
+        let canSwap = currentSetIndex == 0 && !swapOptions.isEmpty
+        if hasGuide || canSwap {
+            HStack(spacing: 10) {
+                if hasGuide {
+                    Button("How to") { guideExercise = exercise }
+                        .buttonStyle(.strideButton(.quiet, compact: true, fullWidth: false))
+                        .accessibilityHint("Shows how to do \(exercise.name)")
+                }
+                if canSwap {
+                    Button("Swap") { showSwapOptions = true }
+                        .buttonStyle(.strideButton(.quiet, compact: true, fullWidth: false))
+                        .accessibilityHint("Replaces \(exercise.name) for this session only")
+                }
+            }
+        }
     }
 
     /// What was done last time and why the suggested load is what it is. Nothing the
@@ -622,6 +679,11 @@ struct StrengthActiveView: View {
         restSeconds = StrengthProgression.restSeconds(for: exercise)
     }
 
+    private func swap(to option: StrengthExercise) {
+        swaps[currentExerciseIndex] = option
+        setupForCurrentExercise()
+    }
+
     private func takesLoad(_ exercise: StrengthExercise) -> Bool {
         exercise.durationSeconds == nil && StrengthProgression.takesLoad(StrengthProgression.equipment(for: exercise))
     }
@@ -808,5 +870,63 @@ private struct StrengthWeightField: View {
             .buttonStyle(.strideButton(.quiet, compact: true, fullWidth: false))
             .accessibilityLabel("Heavier")
         }
+    }
+}
+
+// MARK: - StrengthExerciseGuide
+
+/// How to do one exercise: the muscles it works and three cues, as a sheet over the
+/// session so the lifter doesn't lose their place.
+private struct StrengthExerciseGuide: View {
+    let exercise: StrengthExercise
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: AppSpacing.lg) {
+                    HStack(spacing: 6) {
+                        ForEach(exercise.muscleGroups.prefix(3), id: \.self) { group in
+                            StrideTag(group, tone: .brand)
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 14) {
+                        ForEach(Array((StrengthLibrary.cues(forExerciseNamed: exercise.name) ?? []).enumerated()), id: \.offset) { index, cue in
+                            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                                Text(verbatim: "\(index + 1)")
+                                    .font(.dsHeadline.monospacedDigit())
+                                    .foregroundStyle(.brandText)
+                                    .frame(width: 20, alignment: .leading)
+                                Text(verbatim: cue)
+                                    .font(.dsBody)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                    .padding(AppSpacing.lg)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .strideCard()
+
+                    if let notes = exercise.notes {
+                        Text(notes)
+                            .font(.dsFootnote)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(AppSpacing.lg)
+            }
+            .background(Color.surfacePrimary)
+            .navigationTitle(exercise.name)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+        .strideSheet()
     }
 }
