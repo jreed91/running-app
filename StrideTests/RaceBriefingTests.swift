@@ -248,4 +248,48 @@ private struct BriefingWritingCoach: OnDeviceCoachGenerating {
     ) async throws -> String {
         throw OnDeviceCoachError.unavailable
     }
+
+    // MARK: Course
+
+    /// A marathon course flat to 30 km, up 40 m over the next 2 km, then flat again.
+    private func hillyCourse(lengthMeters: Double = 42_195) -> RaceCourse {
+        // Every 50 m, plus the finish itself so the course is exactly the race's length.
+        let distances = Array(stride(from: 0.0, to: lengthMeters, by: 50)) + [lengthMeters]
+        let samples = distances.map { distance -> RaceCourse.Sample in
+            let rise = min(max(distance - 30_000, 0), 2_000) / 2_000 * 40
+            return RaceCourse.Sample(distanceMeters: distance, elevationMeters: 10 + rise)
+        }
+        return RaceCourse(name: "City Marathon", samples: samples, climbMeters: 40, descentMeters: 0)
+    }
+
+    @Test func promptNamesTheCourseClimbWhenThereIsOne() {
+        let prompt = RaceBriefing.prompt(for: plan(), unit: .metric, course: hillyCourse())
+        #expect(prompt.contains("Course: 40 m of climbing and 0 m of descent"))
+        #expect(prompt.contains("Biggest climb: km 30 to km 31, up 20 m"))
+        #expect(!prompt.contains("Biggest descent"))
+
+        // Without a course, or with one for another distance, the prompt is unchanged.
+        #expect(RaceBriefing.prompt(for: plan(), unit: .metric, course: nil) == RaceBriefing.prompt(for: plan(), unit: .metric))
+        #expect(
+            RaceBriefing.prompt(for: plan(), unit: .metric, course: hillyCourse(lengthMeters: 21_097))
+                == RaceBriefing.prompt(for: plan(), unit: .metric)
+        )
+    }
+
+    @Test func courseNumbersPassTheNumberCheckOnlyWithTheCourse() {
+        // 2:55:00 is not a fact with or without the course.
+        let draft = RaceBriefingDraft(
+            headline: "Run the climb at km 30 by feel",
+            pacing: "Ease off for the 40 m climb from km 30, then settle back to 2:55:00 effort.",
+            beforeTheRace: "Keep the last runs easy."
+        )
+        let fixed = RaceBriefingDraft(
+            headline: draft.headline,
+            pacing: "Ease off for the 40 m climb from km 30, then hold your effort to the finish.",
+            beforeTheRace: draft.beforeTheRace
+        )
+        #expect(RaceBriefing.validated(fixed, for: plan(), unit: .metric, course: hillyCourse()) != nil)
+        #expect(RaceBriefing.validated(fixed, for: plan(), unit: .metric) == nil)
+        #expect(RaceBriefing.validated(draft, for: plan(), unit: .metric, course: hillyCourse()) == nil)
+    }
 }

@@ -59,6 +59,10 @@ enum RaceBriefing {
     than the A goal, be honest that the A goal is a stretch and suggest starting at the B \
     goal's pace.
 
+    If the course is given, tell the runner to run its hills by effort rather than by \
+    the clock: slower up the climbs named, quicker down the descents, and to expect the \
+    split table to show that.
+
     Use only the facts given. Copy any time, pace, distance or unit exactly as it is \
     written, and write no other numbers: do not add, subtract, round or convert them. Do \
     not invent splits, weather, courses or nutrition amounts.
@@ -69,7 +73,7 @@ enum RaceBriefing {
 
     /// The facts as the model reads them, one per line, in English like every coach
     /// prompt. Doubles as the key a wording is bound to (``RaceBriefingWording/source``).
-    static func prompt(for plan: RaceDayPlan, unit: UnitPreference) -> String {
+    static func prompt(for plan: RaceDayPlan, unit: UnitPreference, course: RaceCourse? = nil) -> String {
         var lines: [String] = []
         lines.append("Race: \(plan.raceName)")
         lines.append("Distance: \(plan.distanceMeters.distanceString(unit: unit))")
@@ -101,12 +105,52 @@ enum RaceBriefing {
             }
         }
 
+        lines.append(contentsOf: courseLines(for: plan, course: course, unit: unit))
+
         return """
         Write a race plan for this race.
 
         \(lines.joined(separator: "\n"))
         """
     }
+
+    /// The course in a few facts: its total climb and descent, and the stretch between two
+    /// markers that rises most and the one that falls most, when either is big enough to
+    /// matter. Empty without a course for this race, so a briefing written before a course
+    /// was added keeps its source line for line.
+    static func courseLines(for plan: RaceDayPlan, course: RaceCourse?, unit: UnitPreference) -> [String] {
+        guard let course, CoursePacing.matches(course, distanceMeters: plan.distanceMeters) else { return [] }
+
+        var lines = [
+            "Course: \(course.climbMeters.elevationString(unit: unit)) of climbing and "
+                + "\(course.descentMeters.elevationString(unit: unit)) of descent"
+        ]
+
+        // Marker to marker in the runner's unit, at the A goal (the markers are the same
+        // for every rung; only the clock differs).
+        let finish = plan.goal?.finishSeconds ?? plan.distanceMeters / 1_000 * 300
+        let splits = CoursePacing.splits(course: course, distanceMeters: plan.distanceMeters, finishSeconds: finish, unit: unit)
+        let label = unit == .metric ? "km" : "mile"
+
+        func stretch(_ split: RaceSplit) -> String {
+            let start = split.marker - 1
+            let end = split.isPartial ? "the finish" : "\(label) \(split.marker)"
+            return start == 0 ? "the start to \(end)" : "\(label) \(start) to \(end)"
+        }
+
+        if let climb = splits.max(by: { ($0.elevationChangeMeters ?? 0) < ($1.elevationChangeMeters ?? 0) }),
+           let rise = climb.elevationChangeMeters, rise >= minimumNamedHillMeters {
+            lines.append("Biggest climb: \(stretch(climb)), up \(rise.elevationString(unit: unit))")
+        }
+        if let drop = splits.min(by: { ($0.elevationChangeMeters ?? 0) < ($1.elevationChangeMeters ?? 0) }),
+           let fall = drop.elevationChangeMeters, -fall >= minimumNamedHillMeters {
+            lines.append("Biggest descent: \(stretch(drop)), down \((-fall).elevationString(unit: unit))")
+        }
+        return lines
+    }
+
+    /// A rise or fall between two markers smaller than this is not a hill worth naming.
+    static let minimumNamedHillMeters = 5.0
 
     private static func whenLine(_ phase: RacePhase) -> String {
         switch phase {
@@ -134,7 +178,8 @@ enum RaceBriefing {
     static func validated(
         _ draft: RaceBriefingDraft,
         for plan: RaceDayPlan,
-        unit: UnitPreference
+        unit: UnitPreference,
+        course: RaceCourse? = nil
     ) -> RaceBriefingWording? {
         let headline = draft.headline.trimmingCharacters(in: .whitespacesAndNewlines)
         let pacing = draft.pacing.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -143,7 +188,7 @@ enum RaceBriefing {
               !pacing.isEmpty, pacing.count <= maximumPacingLength,
               !before.isEmpty, before.count <= maximumBeforeLength else { return nil }
 
-        let source = prompt(for: plan, unit: unit)
+        let source = prompt(for: plan, unit: unit, course: course)
         let allowed = WeekReview.normalizedNumbers(in: source)
         let written = WeekReview.normalizedNumbers(in: headline)
             .union(WeekReview.normalizedNumbers(in: pacing))
