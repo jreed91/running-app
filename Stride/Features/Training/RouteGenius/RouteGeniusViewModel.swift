@@ -39,14 +39,19 @@ final class RouteGeniusViewModel {
 
     // MARK: State
 
-    var isGenerating: Bool = false
-    var routeOptions: [GeneratedRoute] = []
-    var selectedRouteIndex: Int? = nil
-    var errorMessage: String?
+    /// Idle, generating, the options with the one picked, or why it failed. See
+    /// `RouteGenerationState`; the properties below are its reads, for the views.
+    private(set) var generation: RouteGenerationState<GeneratedRoute> = .idle
 
-    var selectedRoute: GeneratedRoute? {
-        guard let i = selectedRouteIndex, routeOptions.indices.contains(i) else { return nil }
-        return routeOptions[i]
+    var isGenerating: Bool { generation.isGenerating }
+    var routeOptions: [GeneratedRoute] { generation.routes }
+    var errorMessage: String? { generation.errorMessage }
+    var selectedRoute: GeneratedRoute? { generation.selectedRoute }
+
+    /// The option on the map. Setting it outside the options is ignored.
+    var selectedRouteIndex: Int? {
+        get { generation.selectedIndex }
+        set { generation.select(newValue) }
     }
 
     // MARK: Current location
@@ -177,25 +182,20 @@ final class RouteGeniusViewModel {
 
     func generateRouteOptions() async {
         guard let coord = startCoordinate, let distance = requestedDistanceMeters else { return }
-        isGenerating = true
-        routeOptions = []
-        selectedRouteIndex = nil
-        errorMessage = nil
+        generation.begin()
 
         do {
-            routeOptions = try await service.generateRouteOptions(
+            let routes = try await service.generateRouteOptions(
                 start: coord,
                 distanceMeters: distance,
                 routeType: routeType,
                 apiKey: appSettings.orsAPIKey
             )
-            // Auto-select the first option so the map appears immediately.
-            if !routeOptions.isEmpty { selectedRouteIndex = 0 }
+            // Auto-selects the first option so the map appears immediately.
+            generation.succeed(routes)
         } catch {
-            errorMessage = error.localizedDescription
+            generation.fail(error.localizedDescription)
         }
-
-        isGenerating = false
     }
 
     // MARK: Saving

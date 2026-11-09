@@ -194,19 +194,19 @@ extension RunSummaryView {
             }
 
             if hasAIKey, profiles.first != nil, let target = nextWorkoutForFeedback(),
-               target.id != updatedNextSessionID {
+               target.id != nextSessionUpdate.updatedSessionID {
                 Button {
                     Task { await applyNextSessionFeedback(insight) }
                 } label: {
                     HStack(spacing: 6) {
-                        if isApplyingNextSessionFeedback {
+                        if nextSessionUpdate.isApplying {
                             ProgressView().controlSize(.small)
                         }
                         Text("Update \(workoutLabel(target))")
                     }
                 }
                 .buttonStyle(.strideButton(.secondary, compact: true, fullWidth: false))
-                .disabled(isApplyingNextSessionFeedback)
+                .disabled(nextSessionUpdate.isApplying)
                 .accessibilityHint(
                     String(
                         localized: "Rewrites that planned run using this analysis",
@@ -215,10 +215,10 @@ extension RunSummaryView {
                 )
             }
 
-            if let nextSessionUpdateMessage {
-                Text(nextSessionUpdateMessage)
+            if let message = nextSessionUpdate.message {
+                Text(message)
                     .font(.dsCaption.weight(.medium))
-                    .foregroundStyle(nextSessionUpdateMessage.hasPrefix("Updated") ? Color.success : Color.secondary)
+                    .foregroundStyle(nextSessionUpdate.isSuccess ? Color.success : Color.secondary)
             }
         }
         .padding(.horizontal, AppSpacing.xs)

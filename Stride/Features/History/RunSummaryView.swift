@@ -73,11 +73,10 @@ struct RunSummaryView: View {
     /// `CoachReplyStream`.
     @State var aiReadStream: CoachReplyStream = .idle
     @State var showFullAIAnalysis = false
-    @State var isApplyingNextSessionFeedback = false
-    @State var nextSessionUpdateMessage: String?
-    /// The session the coach's feedback was last applied to, so its button stands down
-    /// instead of offering to rewrite the same session again.
-    @State var updatedNextSessionID: UUID?
+    /// The "Update <next session>" button: applying, applied (its button stands down
+    /// instead of offering to rewrite the same session again), or why not. See
+    /// `NextSessionUpdate`.
+    @State var nextSessionUpdate: NextSessionUpdate = .idle
     @State var coachChatRequest: AICoachChatRequest?
     @State var zoneSlices: [HRZoneSlice] = []
     /// The Breakdown page shown in place of the summary, if one is open.
@@ -88,13 +87,13 @@ struct RunSummaryView: View {
     /// The rendered share card (B5), non-nil only while the share sheet is up. Rendering
     /// is deferred until the user taps Share (N21) — the map snapshot plus a ×3
     /// `ImageRenderer` pass is far too expensive to run on every run-detail open.
-    @State private var shareCard: ShareCardImage?
-    @State private var isRenderingShareCard = false
-    /// The run's route written out as GPX (B6), non-nil only while its share sheet is up.
-    @State private var gpxFile: ExportedFile?
-    /// Shown when the export could not be written — a full disk or a sandbox refusal is
-    /// rare, but silently doing nothing when the runner taps Export is worse.
-    @State private var exportErrorMessage: String?
+    /// The share card (B5): rendering, then ready for the share sheet. See `ExportState`.
+    @State private var shareCardExport: ExportState<ShareCardImage> = .idle
+    /// The run's route written out as GPX (B6), ready only while its share sheet is up,
+    /// or the error shown when the export could not be written — a full disk or a
+    /// sandbox refusal is rare, but silently doing nothing when the runner taps Export
+    /// is worse.
+    @State private var gpxExport: ExportState<ExportedFile> = .idle
     /// Shown when deleting the run failed, so the screen doesn't just stay put unexplained.
     @State private var deleteErrorMessage: String?
 
@@ -246,9 +245,10 @@ struct RunSummaryView: View {
     /// actually looks at, for a card most opens never share (N21). It now runs only when
     /// Share is tapped.
     private func renderShareCard() async {
-        guard !isRenderingShareCard else { return }
-        isRenderingShareCard = true
-        defer { isRenderingShareCard = false }
+        guard !shareCardExport.isWorking else { return }
+        shareCardExport.begin()
+        // A render that comes back empty is logged below and leaves nothing to show.
+        defer { shareCardExport.abandon() }
 
         let model = ShareCardModel.make(from: workout, unit: appSettings.unitPreference)
         let mapImage = await RouteSnapshotService.routeSnapshot(
@@ -266,7 +266,7 @@ struct RunSummaryView: View {
             AppLogger.log("Share card render produced no image", label: "Share", level: .error)
             return
         }
-        shareCard = ShareCardImage(image: uiImage)
+        shareCardExport.succeed(ShareCardImage(image: uiImage))
     }
 
     /// Writes this run's route out as GPX and presents the share sheet (B6).
@@ -282,10 +282,10 @@ struct RunSummaryView: View {
             .appendingPathComponent(GPXExport.fileName(for: workout))
         do {
             try document.write(to: url, atomically: true, encoding: .utf8)
-            gpxFile = ExportedFile(url: url)
+            gpxExport.succeed(ExportedFile(url: url))
         } catch {
             AppLogger.log("GPX export failed: \(error.localizedDescription)", label: "Share", level: .error)
-            exportErrorMessage = error.localizedDescription
+            gpxExport.fail(error.localizedDescription)
         }
     }
 
@@ -491,13 +491,13 @@ struct RunSummaryView: View {
                     } label: {
                         // A `Label`, not a bare image: a toolbar shows the icon, and an
                         // overflow menu (iPhone Duo's side bar runs out of room) shows both.
-                        if isRenderingShareCard {
+                        if shareCardExport.isWorking {
                             ProgressView()
                         } else {
                             Label("Run actions", systemImage: "ellipsis")
                         }
                     }
-                    .disabled(isRenderingShareCard)
+                    .disabled(shareCardExport.isWorking)
                     .accessibilityLabel("Run actions")
                 }
             }
@@ -506,19 +506,25 @@ struct RunSummaryView: View {
             AssociateWorkoutSheet(workout: workout)
                 .strideSheet()
         }
-        .sheet(item: $shareCard) { card in
+        .sheet(item: Binding(
+            get: { shareCardExport.output },
+            set: { if $0 == nil { shareCardExport.dismiss() } }
+        )) { card in
             ShareSheet(image: card.image)
         }
-        .sheet(item: $gpxFile) { file in
+        .sheet(item: Binding(
+            get: { gpxExport.output },
+            set: { if $0 == nil { gpxExport.dismiss() } }
+        )) { file in
             ShareSheet(items: [file.url])
         }
         .alert("Couldn't export this route", isPresented: Binding(
-            get: { exportErrorMessage != nil },
-            set: { if !$0 { exportErrorMessage = nil } }
+            get: { gpxExport.errorMessage != nil },
+            set: { if !$0 { gpxExport.dismiss() } }
         )) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text(exportErrorMessage ?? "")
+            Text(gpxExport.errorMessage ?? "")
         }
         .sheet(item: $coachChatRequest) { request in
             AICoachChatView(workout: workout, initialPrompt: request.prompt)

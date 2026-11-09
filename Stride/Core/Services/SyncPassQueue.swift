@@ -8,47 +8,75 @@ import Foundation
 /// `WorkoutSyncService` held this as `isSyncing` plus `pendingSyncSource`, written in
 /// three places. A trigger that lands mid-pass must not be dropped (M1): the running pass
 /// took its snapshot of stored ids before the workout that fired the trigger existed. So
-/// at most one follow-up is queued, and the latest trigger names it.
+/// at most one follow-up is queued. It carries the latest trigger's source and the widest
+/// look-back window any queued trigger asked for.
 ///
 /// ```
 ///           request(a) → run a
 ///   idle ─────────────────────▶ syncing(queued: nil)
 ///    ▲                            │   ▲        │ request(b) → queued
 ///    │ next() → nil               │   │        ▼
-///    └────────────────────────────┘   └── syncing(queued: b) ── request(c) → queued (c replaces b)
+///    └────────────────────────────┘   └── syncing(queued: b) ── request(c) → queued (b ∪ c)
 ///                                    next() → b
 /// ```
 ///
-/// Only the source label is queued. The follow-up pass reuses the look-back window of the
-/// call that started the loop, as it always has; see `WorkoutSyncService.handleNewWorkoutsDetected`.
+/// The window used to be dropped: only the source was queued, and the follow-up reused the
+/// window of the call that started the loop. So History's 60-day pull, opened while the
+/// launch sync was running, ran with the 7-day default.
 enum SyncPassQueue: Equatable, Sendable {
     /// No pass running.
     case idle
-    /// A pass is running; `queued` is the source of the one follow-up owed, if any.
-    case syncing(queued: String?)
+    /// A pass is running; `queued` is the one follow-up owed, if any.
+    case syncing(queued: Request?)
 
-    /// The source of the follow-up pass owed, if one is queued.
-    var queuedSource: String? {
+    /// One import pass to run: who asked, and how far back they asked to look (`nil` is
+    /// the service's default window).
+    struct Request: Equatable, Sendable {
+        var source: String
+        var lookbackDays: Int?
+
+        init(source: String, lookbackDays: Int? = nil) {
+            self.source = source
+            self.lookbackDays = lookbackDays
+        }
+
+        /// `other`'s source, with the wider of the two windows, so folding several
+        /// triggers into one follow-up never narrows what any of them asked for.
+        func merged(with other: Request) -> Request {
+            let widest: Int? = switch (lookbackDays, other.lookbackDays) {
+            case let (mine?, theirs?): max(mine, theirs)
+            case let (mine?, nil): mine
+            case let (nil, theirs): theirs
+            }
+            return Request(source: other.source, lookbackDays: widest)
+        }
+    }
+
+    /// The follow-up pass owed, if one is queued.
+    var queued: Request? {
         guard case .syncing(let queued) = self else { return nil }
         return queued
     }
 
-    /// A trigger from `source` arrived. Returns true when the caller should run the pass
-    /// now; false when one is already running and this trigger has been queued behind it.
-    mutating func request(_ source: String) -> Bool {
+    /// The source of the follow-up pass owed, if one is queued.
+    var queuedSource: String? { queued?.source }
+
+    /// A trigger arrived. Returns true when the caller should run the pass now; false when
+    /// one is already running and this trigger has been folded into the follow-up.
+    mutating func request(_ request: Request) -> Bool {
         switch self {
         case .idle:
             self = .syncing(queued: nil)
             return true
-        case .syncing:
-            self = .syncing(queued: source)
+        case .syncing(let queued):
+            self = .syncing(queued: queued.map { $0.merged(with: request) } ?? request)
             return false
         }
     }
 
-    /// The running pass finished. Returns the queued source to run next, still holding the
+    /// The running pass finished. Returns the follow-up to run next, still holding the
     /// queue busy, or nil once nothing is owed and the queue is idle again.
-    mutating func next() -> String? {
+    mutating func next() -> Request? {
         guard case .syncing(let queued) = self else { return nil }
         guard let queued else {
             self = .idle

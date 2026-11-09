@@ -217,9 +217,21 @@ struct ContentView: View {
     )
     private var activePlans: [TrainingPlan]
 
-    // Tracks that we entered the app via a reinstall/restore flow and need to
-    // re-register WorkoutKit plans once CloudKit delivers them.
-    @State private var needsWorkoutKitSync = false
+    /// Whether this launch is a reinstall/restore, and whether the restored plan has
+    /// arrived yet. Was a single `needsWorkoutKitSync` Bool, cleared when the plan
+    /// arrived — which also told the permission prompt below "not a restore" whenever
+    /// CloudKit delivered the plan before the profile, so that prompt never ran.
+    @State private var restoreFlow: RestoreFlow = .notRestoring
+
+    private enum RestoreFlow {
+        /// An ordinary launch.
+        case notRestoring
+        /// Signed in with no local data: waiting for CloudKit to deliver the plan so its
+        /// WorkoutKit workouts, wiped by the reinstall, can be registered again.
+        case awaitingPlan
+        /// The restored plan arrived and its WorkoutKit workouts were re-registered.
+        case planRestored
+    }
     /// The post-restore permission prompt runs once per launch: not yet, in flight (so a
     /// second trigger stands down), then done. Was two Bools whose fourth combination
     /// meant nothing.
@@ -291,8 +303,8 @@ struct ContentView: View {
             deduplicate()
             // CloudKit delivered the restored plan while in a reinstall flow — re-register
             // WorkoutKit scheduled workouts, which were wiped by the reinstall.
-            if oldCount == 0, newCount > 0, needsWorkoutKitSync, let plan = activePlans.first {
-                needsWorkoutKitSync = false
+            if oldCount == 0, newCount > 0, restoreFlow == .awaitingPlan, let plan = activePlans.first {
+                restoreFlow = .planRestored
                 Task {
                     try? await container.healthKitRepository.syncWorkoutPlans(
                         for: plan,
@@ -314,13 +326,13 @@ struct ContentView: View {
         .task {
             if authService.isSignedIn && profiles.isEmpty {
                 authService.welcomeBackPending = true
-                needsWorkoutKitSync = true
+                restoreFlow = .awaitingPlan
             }
         }
         .onChange(of: authService.isSignedIn) { _, isSignedIn in
             if isSignedIn && profiles.isEmpty {
                 authService.welcomeBackPending = true
-                needsWorkoutKitSync = true
+                restoreFlow = .awaitingPlan
             }
         }
         .onChange(of: profiles.count) { _, newCount in
@@ -455,7 +467,7 @@ struct ContentView: View {
     }
 
     private func requestMissingPermissionsAfterRestoreIfNeeded() async {
-        guard needsWorkoutKitSync, !profiles.isEmpty else { return }
+        guard restoreFlow != .notRestoring, !profiles.isEmpty else { return }
         guard restorePermissionCheck == .notStarted else { return }
 
         restorePermissionCheck = .running

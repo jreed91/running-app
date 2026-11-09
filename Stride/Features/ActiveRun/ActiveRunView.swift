@@ -20,10 +20,10 @@ struct ActiveRunView: View {
     )
     private var activePlans: [TrainingPlan]
     @State private var showFinishConfirmation = false
-    @State private var saveErrorMessage: String?
     /// The finished run awaiting persistence, kept so a failed save can be retried
-    /// without re-finishing the (one-shot) tracker.
-    @State private var pendingSave: RunWorkout?
+    /// without re-finishing the (one-shot) tracker, and the error that save hit. See
+    /// `RunSaveState`.
+    @State private var saveState: RunSaveState<RunWorkout> = .unsaved
     @State private var recPulse = false
     @State private var heartPulse = false
     @State private var controlsAppeared = false
@@ -107,7 +107,7 @@ struct ActiveRunView: View {
                 case .idle:     return nil
                 }
             }
-            .sensoryFeedback(.error, trigger: saveErrorMessage != nil) { _, isShowing in isShowing }
+            .sensoryFeedback(.error, trigger: saveState.errorMessage != nil) { _, isShowing in isShowing }
             // Each closed kilometre/mile, felt. Shared with `MainTabView`, which owns the
             // same haptic while the run is minimised and this screen is gone — see
             // `RunSplitFeedback`. Speaking splits and steps is `RunSpokenCues`'s.
@@ -149,14 +149,14 @@ struct ActiveRunView: View {
             .alert(
                 "Couldn't save your run",
                 isPresented: Binding(
-                    get: { saveErrorMessage != nil },
-                    set: { if !$0 { saveErrorMessage = nil } }
+                    get: { saveState.errorMessage != nil },
+                    set: { if !$0 { saveState.dismissError() } }
                 )
             ) {
                 Button("Try Again") { retrySave() }
                 Button("Discard", role: .destructive) { discardUnsavedRun() }
             } message: {
-                Text(saveErrorMessage ?? "")
+                Text(saveState.errorMessage ?? "")
             }
             // The display sleeps after 30 seconds on default settings, so the hero pace,
             // zone colour, pace meter and guided-workout banner all went black while the
@@ -980,10 +980,10 @@ struct ActiveRunView: View {
 
     private func finishAndSave() {
         // `finishWorkout()` is one-shot — it transitions the tracker to `.finished`
-        // and a second call returns nil — so the run is held in `pendingSave` and a
+        // and a second call returns nil — so the run is held in `saveState` and a
         // failed save is retried from there rather than re-finishing the tracker.
-        guard let workout = pendingSave ?? tracker.finishWorkout() else { endRun(); return }
-        pendingSave = workout
+        guard let workout = saveState.heldRun ?? tracker.finishWorkout() else { endRun(); return }
+        saveState.hold(workout)
         persistFinishedRun(workout)
     }
 
@@ -994,19 +994,17 @@ struct ActiveRunView: View {
     /// tracker and dismissing is the whole job.
     private func discardRunWithoutSaving() {
         _ = tracker.finishWorkout()
-        pendingSave = nil
+        saveState.clear()
         AppLogger.log("Run discarded from the finish dialog; nothing saved", label: "ActiveRun")
         endRun()
     }
 
     private func retrySave() {
-        saveErrorMessage = nil
-        guard let workout = pendingSave else { endRun(); return }
+        guard let workout = saveState.retry() else { endRun(); return }
         persistFinishedRun(workout)
     }
 
     private func discardUnsavedRun() {
-        saveErrorMessage = nil
         // Undo the link too, or the scheduled day is left marked complete with no
         // run behind it (the relationship nullifies when the run is deleted).
         if let scheduled = scheduledWorkout {
@@ -1014,10 +1012,10 @@ struct ActiveRunView: View {
             scheduled.linkedRunWorkoutID = nil
             scheduled.isCompleted = false
         }
-        if let workout = pendingSave {
+        if let workout = saveState.heldRun {
             context.delete(workout)
-            pendingSave = nil
         }
+        saveState.clear()
         context.saveOrLog("the discard of an unsaved run")
         endRun()
     }
@@ -1060,15 +1058,15 @@ struct ActiveRunView: View {
                 label: "ActiveRun",
                 level: .error
             )
-            saveErrorMessage = """
+            saveState.fail(workout, message: """
             Your run couldn't be saved to this device. It's still here — try again, \
             or discard it.
 
             \(error.localizedDescription)
-            """
+            """)
             return
         }
-        pendingSave = nil
+        saveState.clear()
 
         Task { @MainActor in
             if let hkID = try? await container.healthKitRepository.save(workout) {
