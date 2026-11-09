@@ -212,6 +212,10 @@ struct StrengthExercise: Codable, Hashable, Sendable {
     var targetWeight: String?  // "Bodyweight", "Light", "Moderate", "Heavy"
     var notes: String?
     var muscleGroups: [String]
+    /// What the exercise is done with, stamped by ``StrengthLibrary``. It decides whether a
+    /// set takes a weight and how big a step the next one is. Nil on plans built before it
+    /// existed, which ``StrengthProgression/equipment(for:)`` fills in from the name.
+    var equipment: StrengthEquipment? = nil
 }
 
 struct StrengthWorkoutPlan: Codable, Hashable, Sendable {
@@ -225,6 +229,16 @@ struct CompletedStrengthSet: Codable, Hashable, Sendable {
     var exerciseIndex: Int
     var setIndex: Int
     var completedReps: Int
+    /// Free text, as sets were logged before weights were numbers ("40 kg", "Light"). Kept
+    /// for those sets; ``StrengthProgression/legacyWeightKilograms(from:unit:)`` reads a
+    /// number out of it where there is one.
     var actualWeight: String?
     var skipped: Bool
+    /// The exercise's name when the set was logged. `exerciseIndex` points into the
+    /// scheduled workout's plan, which a plan rebuild can replace or delete; the name is
+    /// what keeps the set attached to the right exercise afterwards. Nil on older sets.
+    var exerciseName: String? = nil
+    /// The load in kilograms, whatever the runner's unit: stored in one unit so it keeps
+    /// its meaning when they flip the toggle, like `UserProfile.bodyMassKilograms`.
+    var weightKilograms: Double? = nil
 }

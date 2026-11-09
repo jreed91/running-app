@@ -524,7 +524,8 @@ struct StrengthActiveView: View {
             setIndex: currentSetIndex,
             completedReps: reps,
             actualWeight: weight.isEmpty ? nil : weight,
-            skipped: false
+            skipped: false,
+            exerciseName: exercise.name
         )
         completedSets.append(set)
         advanceAfterSet(exercise: exercise)
@@ -536,7 +537,8 @@ struct StrengthActiveView: View {
             setIndex: currentSetIndex,
             completedReps: 0,
             actualWeight: nil,
-            skipped: true
+            skipped: true,
+            exerciseName: currentExercise?.name
         )
         completedSets.append(set)
         advanceAfterSet(exercise: currentExercise ?? exercises[0])
