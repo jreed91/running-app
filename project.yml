@@ -392,7 +392,12 @@ targets:
   StrideWatch:
     type: application
     platform: watchOS
-    deploymentTarget: "27.0"
+    # 26.0, not 27.0 like every other target: watchOS 27 runs only on Series 9, Ultra 2,
+    # SE 3 and later, and a Series 6, 7 or 8 or the first Ultra stays on watchOS 26. A
+    # watchOS 27 target simply never installed on those watches, paired with an iPhone
+    # on iOS 27 or not. Nothing in the watch app needs 27: WorkoutKit's
+    # `openInWorkoutApp`, WatchConnectivity and the SwiftUI it uses are all watchOS 10.
+    deploymentTarget: "26.0"
 
     sources:
       - path: StrideWatch
