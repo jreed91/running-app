@@ -104,4 +104,41 @@ struct StrengthPreferencesTests {
         let decoded = try JSONDecoder().decode(StrengthPreferences.self, from: older)
         #expect(decoded == StrengthPreferences(daysPerWeek: 2))
     }
+
+    // MARK: Standing swaps
+
+    @Test("A standing swap puts the stand-in in with the original's sets and reps")
+    func standingSwap() throws {
+        let full = StrengthLibrary.plan(for: [.dumbbells], focus: .generalStrength, phase: .build)
+        let original = try #require(full.exercises.first { $0.equipment == .dumbbells })
+        let standIn = try #require(StrengthLibrary.alternatives(to: original, equipment: [.dumbbells]).first)
+
+        let swapped = StrengthLibrary.plan(
+            for: [.dumbbells], focus: .generalStrength, phase: .build,
+            preferences: StrengthPreferences(replacements: [original.name: standIn.name])
+        )
+        #expect(!swapped.exercises.contains { $0.name == original.name })
+        let placed = try #require(swapped.exercises.first { $0.name == standIn.name })
+        #expect(placed.sets == original.sets)
+    }
+
+    @Test("A standing swap needing equipment the runner doesn't have is ignored")
+    func standingSwapNeedsEquipment() {
+        let plan = StrengthLibrary.plan(
+            for: [.bodyweight], focus: .runningSpecific, phase: .base,
+            preferences: StrengthPreferences(replacements: ["Glute Bridge": "Barbell Hip Thrust"])
+        )
+        #expect(plan.exercises.contains { $0.name == "Glute Bridge" })
+        #expect(!plan.exercises.contains { $0.name == "Barbell Hip Thrust" })
+    }
+
+    @Test("Swapping again follows the original; swapping back drops the rule")
+    func replaceChains() {
+        var preferences = StrengthPreferences()
+        preferences.replace("Back Squat", with: "DB Goblet Squat")
+        preferences.replace("DB Goblet Squat", with: "KB Goblet Squat")
+        #expect(preferences.replacements == ["Back Squat": "KB Goblet Squat"])
+        preferences.replace("KB Goblet Squat", with: "Back Squat")
+        #expect(preferences.replacements.isEmpty)
+    }
 }
