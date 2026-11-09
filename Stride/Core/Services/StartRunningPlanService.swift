@@ -153,7 +153,10 @@ struct StartRunningPlanService {
             self.jogPaceSecondsPerKm = StartRunningPlanService.jogPaceSecondsPerKm(for: profile)
             self.strengthPlan = profile.selectedEquipment.isEmpty
                 ? nil
-                : StrengthLibrary.plan(for: profile.selectedEquipment, focus: profile.strengthFocus, phase: .base)
+                : StrengthLibrary.plan(
+                    for: profile.selectedEquipment, focus: profile.strengthFocus, phase: .base,
+                    minutes: StrengthPreferences.load().sessionMinutes
+                )
             self.strengthOffset = StartRunningPlanService.strengthOffset(runOffsets: runOffsets)
         }
     }

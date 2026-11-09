@@ -5,6 +5,9 @@ import Foundation
 /// Generates a periodised training plan using the 80/20 principle and VDOT-based pacing.
 struct TrainingPlanService {
 
+    /// The runner's strength sessions a week and minutes a session, from Settings.
+    var strengthPreferences: StrengthPreferences = .load()
+
     // MARK: Public API
 
     /// Builds a complete `TrainingPlan` from the runner's profile.
@@ -182,14 +185,12 @@ struct TrainingPlanService {
 
         let focus = profile.strengthFocus
 
-        // Determine how many strength days to insert based on phase and focus
-        let maxStrengthDays: Int
-        switch (phase, focus) {
-        case (.taper, _):          maxStrengthDays = profile.fitnessLevel == .beginner ? 0 : 1
-        case (.peak, _):           maxStrengthDays = 1
-        case (_, .generalStrength): maxStrengthDays = 1
-        default:                   maxStrengthDays = 2
-        }
+        // How many strength days: the runner's choice from Settings, or the phase's rule.
+        let maxStrengthDays = strengthPreferences.strengthDays(
+            phase: phase,
+            focus: focus,
+            isBeginner: profile.fitnessLevel == .beginner
+        )
         guard maxStrengthDays > 0 else { return [] }
 
         // Build a set of occupied day-offsets (0=Mon … 6=Sun) and find quality/long-run days.
@@ -209,22 +210,21 @@ struct TrainingPlanService {
             }
         }
 
-        // Candidate offsets: unoccupied, not adjacent to a quality or long-run day,
-        // and never on or after race day (M31 — no strength once the race has run).
-        var candidates: [Int] = []
-        for offset in 0...6 {
-            guard !occupiedOffsets.contains(offset) else { continue }
-            if let raceOffset, offset >= raceOffset - 1 { continue }
-            let adjacentToProtected = qualityOrLongRunOffsets.contains(offset - 1)
-                || qualityOrLongRunOffsets.contains(offset + 1)
-            if !adjacentToProtected {
-                candidates.append(offset)
-            }
-        }
+        // Unoccupied, not adjacent to a quality or long-run day, and never on or after
+        // race day (M31 — no strength once the race has run).
+        let offsets = StrengthPreferences.strengthDayOffsets(
+            count: maxStrengthDays,
+            occupied: occupiedOffsets,
+            hardDays: qualityOrLongRunOffsets,
+            raceDay: raceOffset
+        )
 
-        let plan = StrengthLibrary.plan(for: equipment, focus: focus, phase: phase)
+        let plan = StrengthLibrary.plan(
+            for: equipment, focus: focus, phase: phase,
+            minutes: strengthPreferences.sessionMinutes
+        )
         var result: [ScheduledWorkout] = []
-        for offset in candidates.prefix(maxStrengthDays) {
+        for offset in offsets {
             let date = weekStart.adding(days: offset)
             let workout = ScheduledWorkout(
                 scheduledDate: date,
