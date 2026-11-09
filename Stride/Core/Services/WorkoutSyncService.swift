@@ -444,8 +444,8 @@ final class WorkoutSyncService {
             )
             return imported
         }
-        let remaining = Self.withoutOwnExports(imported, stored: stored)
-        let relinked = imported.count - remaining.count
+        let afterExports = Self.withoutOwnExports(imported, stored: stored)
+        let relinked = imported.count - afterExports.count
         if relinked > 0 {
             context.saveOrLog("runs relinked to their own HealthKit export")
             AppLogger.log(
@@ -454,7 +454,69 @@ final class WorkoutSyncService {
                 level: .info
             )
         }
+
+        let (remaining, copies) = Self.splittingSameTimeCopies(afterExports, stored: stored)
+        if !copies.isEmpty {
+            // Tombstoned, so the next pass does not read the copy's route and samples
+            // again only to drop it again.
+            for copy in copies {
+                if let hkID = copy.healthKitWorkoutID {
+                    context.insert(DeletedWorkout(healthKitWorkoutID: hkID))
+                }
+            }
+            context.saveOrLog("HealthKit copies of runs Stride already has")
+            AppLogger.log(
+                "Skipped \(copies.count) HealthKit workout(s) recorded at the same time as a stored run (\(source)).",
+                label: "HealthKit",
+                level: .info
+            )
+        }
         return remaining
+    }
+
+    /// Splits `imported` into the runs to keep and the ones recorded at the same time as a
+    /// run Stride already has.
+    ///
+    /// A second recording of the same run is a second workout in Health with its own UUID
+    /// and no `StrideWorkoutID`: the Workout app on a Watch started alongside a phone run
+    /// (the Watch's Start opens today's session there), or another app writing the same
+    /// run. ``withoutOwnExports(_:stored:)`` cannot see it, and it came in as a second run
+    /// and, typed from its pace, completed the plan's session for the day, beside the
+    /// free run the runner actually started. Two runs that share most of their time are one
+    /// run, so the stored one stands and the copy is dropped.
+    static func splittingSameTimeCopies(
+        _ imported: [RunWorkout],
+        stored: [RunWorkout]
+    ) -> (kept: [RunWorkout], copies: [RunWorkout]) {
+        let storedRuns = stored.runsOnly
+        guard !storedRuns.isEmpty else { return (imported, []) }
+        var kept: [RunWorkout] = []
+        var copies: [RunWorkout] = []
+        for run in imported {
+            if storedRuns.contains(where: { isSameRecording(run, $0) }) {
+                copies.append(run)
+            } else {
+                kept.append(run)
+            }
+        }
+        return (kept, copies)
+    }
+
+    /// Share of the shorter workout's duration two runs must overlap by to be the same run.
+    /// Half: a Watch started a few minutes after the phone, or stopped a few minutes before
+    /// it, is still the same run, and two separate runs never share half their time.
+    static let sameRecordingOverlapShare = 0.5
+
+    /// Whether two runs are the same run recorded twice: their time ranges overlap by at
+    /// least ``sameRecordingOverlapShare`` of the shorter one.
+    static func isSameRecording(_ lhs: RunWorkout, _ rhs: RunWorkout) -> Bool {
+        guard lhs.id != rhs.id else { return true }
+        let lhsEnd = lhs.date.addingTimeInterval(max(lhs.durationSeconds, 0))
+        let rhsEnd = rhs.date.addingTimeInterval(max(rhs.durationSeconds, 0))
+        let overlap = min(lhsEnd, rhsEnd).timeIntervalSince(max(lhs.date, rhs.date))
+        let shorter = min(lhs.durationSeconds, rhs.durationSeconds)
+        guard overlap > 0, shorter > 0 else { return false }
+        return overlap >= shorter * sameRecordingOverlapShare
     }
 
     /// `imported` minus every run whose `id` is already a stored run's, i.e. Stride's own
