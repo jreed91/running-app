@@ -420,6 +420,19 @@ struct SettingsView: View {
     private var musicRoutesGearCard: some View {
         settingsSection("Music, Routes & Gear") {
             NavigationLink {
+                StrengthSettingsView()
+            } label: {
+                settingsRow(icon: .dumbbell, iconColor: .brand, title: "Strength training") {
+                    rowChevron
+                }
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.primary)
+            .accessibilityIdentifier("settings.strengthTraining")
+            footnote(Text("The equipment you have and what your strength sessions focus on."))
+
+            rowDivider
+            NavigationLink {
                 RunPlaylistSettingsView()
             } label: {
                 settingsRow(icon: .music, iconColor: .brand, title: "Run playlists") {
