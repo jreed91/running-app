@@ -10,6 +10,11 @@ import Foundation
 /// by at most ``weeklyGrowth`` until it meets the plan's usual volume, after which the plan
 /// is exactly what it was. A runner already doing more than the plan asks is unaffected.
 ///
+/// The long run gets its own ceiling from the longest run in the same four weeks: plus
+/// ``startAllowance`` in week one, growing ``weeklyGrowth`` a week, never under
+/// ``longRunFloorKm``. Someone running 25 km a week in 5 km runs would otherwise get a
+/// 9.6 km long run on day one, nearly twice anything they have run lately.
+///
 /// No runs at all in the last ``lookbackWeeks`` means there is nothing to go on: no Health
 /// access, a new watch, or a first plan. That is `nil`, and the plan is built as before.
 struct RecentRunningVolume: Equatable, Sendable {
@@ -29,9 +34,13 @@ struct RecentRunningVolume: Equatable, Sendable {
     static let weeklyGrowth = 1.10
     /// The smallest starting week, so someone who has barely run still gets real sessions.
     static let floorKm = 12.0
+    /// The smallest long-run ceiling, so a runner with only short runs lately can build.
+    static let longRunFloorKm = 5.0
 
     /// Average weekly distance over the last ``averageWeeks`` weeks, in km.
     let averageWeeklyKm: Double
+    /// The longest single run in the last ``averageWeeks`` weeks, in km. 0 when there was none.
+    let longestRunKm: Double
 
     /// - Returns: `nil` when no run of any distance falls in the last ``lookbackWeeks``.
     init?(runs: [Run], now: Date = Date()) {
@@ -40,14 +49,14 @@ struct RecentRunningVolume: Equatable, Sendable {
         let recent = runs.filter { $0.date <= now && $0.date >= lookbackStart && $0.meters > 0 }
         guard !recent.isEmpty else { return nil }
         let averageStart = now.addingTimeInterval(-Double(Self.averageWeeks) * week)
-        let meters = recent
-            .filter { $0.date >= averageStart }
-            .reduce(0.0) { $0 + $1.meters }
-        averageWeeklyKm = meters / 1_000 / Double(Self.averageWeeks)
+        let window = recent.filter { $0.date >= averageStart }
+        averageWeeklyKm = window.reduce(0.0) { $0 + $1.meters } / 1_000 / Double(Self.averageWeeks)
+        longestRunKm = (window.map(\.meters).max() ?? 0) / 1_000
     }
 
-    init(averageWeeklyKm: Double) {
+    init(averageWeeklyKm: Double, longestRunKm: Double) {
         self.averageWeeklyKm = averageWeeklyKm
+        self.longestRunKm = longestRunKm
     }
 
     /// The most a plan built today may ask for in week one, in km.
@@ -59,5 +68,11 @@ struct RecentRunningVolume: Equatable, Sendable {
     /// that week's own cutback or taper reduction.
     func ceilingKm(weekIndex: Int) -> Double {
         startingKm * pow(Self.weeklyGrowth, Double(max(0, weekIndex)))
+    }
+
+    /// The longest the long run in the plan's week at `weekIndex` may be, in km.
+    func longRunCeilingKm(weekIndex: Int) -> Double {
+        max(Self.longRunFloorKm, longestRunKm * Self.startAllowance)
+            * pow(Self.weeklyGrowth, Double(max(0, weekIndex)))
     }
 }

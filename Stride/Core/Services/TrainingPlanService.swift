@@ -100,34 +100,26 @@ struct TrainingPlanService {
 
         let vdot = estimatedVDOT(from: profile)
         let paces = PaceCalculatorService.trainingPaces(forVDOT: vdot)
-        let phases = phaseSchedule(totalWeeks: numberOfWeeks, raceType: style)
-        let baseKm = profile.fitnessLevel.startingWeeklyKm(for: style)
 
         // Prefer explicit indices; fall back to even distribution from profile
         let effectiveDayOffsets: [Int]? = runDayIndices.isEmpty ? nil : sanitizeDayOffsets(runDayIndices)
+        let volumes = weekVolumes(
+            fitnessLevel: profile.fitnessLevel,
+            style: style,
+            numberOfWeeks: numberOfWeeks,
+            runDays: effectiveDayOffsets?.count ?? runDayOffsets(count: profile.weeklyRunDays).count,
+            recentVolume: recentVolume
+        )
 
-        for (index, phase) in phases.enumerated() {
+        for (index, volume) in volumes.enumerated() {
+            let phase = volume.phase
             let weekStart = startDate.adding(weeks: index)
-            let targetKm = weeklyKm(
-                base: baseKm,
-                weekIndex: index,
-                totalWeeks: numberOfWeeks,
-                phase: phase,
-                raceType: style,
-                ceilingKm: recentVolume?.ceilingKm(weekIndex: index)
-            )
-            let runDayCount = effectiveDayOffsets?.count ?? runDayOffsets(count: profile.weeklyRunDays).count
-            let shares = RunVolumeShares(
-                runDays: runDayCount,
-                qualitySlots: qualitySlotCount(runDays: runDayCount, phase: phase, raceType: style)
-            )
             let week = TrainingWeek(
                 weekNumber: index + 1,
                 startDate: weekStart,
                 phase: phase,
-                // What the week's runs actually add up to: on three days the easy run is
-                // held under the long run, so a week can schedule less than the trend.
-                targetDistanceKm: targetKm * shares.scheduledFraction
+                // What the week's runs actually add up to, which a cap can hold under the trend.
+                targetDistanceKm: volume.scheduledKm
             )
             let workouts = buildWorkouts(
                 weekStart: weekStart,
@@ -136,13 +128,14 @@ struct TrainingPlanService {
                 phase: phase,
                 paces: paces,
                 raceType: style,
-                targetKm: targetKm,
+                targetKm: volume.trendKm,
+                shares: volume.shares,
                 unitPreference: unitPreference
             )
             let weekWorkouts: [ScheduledWorkout]
             if let raceDate,
                profile.goalRace != .maintainFitness,
-               index == phases.count - 1 {
+               index == volumes.count - 1 {
                 weekWorkouts = workoutsForRaceWeek(
                     workouts,
                     raceDate: raceDate,
@@ -347,7 +340,7 @@ struct TrainingPlanService {
     /// - 5K, 10K (8–14 w): Base 40% | Build 30% | Peak 20% | Taper 10%
     /// - HM    (12–20 w):  Base 40% | Build 35% | Peak 15% | Taper 10%
     /// - Marathon (16–24 w): Base 40% | Build 30% | Peak 18% | Taper 12%
-    private func phaseSchedule(totalWeeks: Int, raceType: RaceType) -> [TrainingPhase] {
+    func phaseSchedule(totalWeeks: Int, raceType: RaceType) -> [TrainingPhase] {
         let taperWeeks: Int
         let peakWeeks: Int
         let buildWeeks: Int
@@ -392,7 +385,7 @@ struct TrainingPlanService {
 
     // MARK: Weekly mileage progression
 
-    private func weeklyKm(
+    func weeklyKm(
         base: Double,
         weekIndex: Int,
         totalWeeks: Int,
@@ -494,6 +487,7 @@ struct TrainingPlanService {
         paces: TrainingPaces,
         raceType: RaceType,
         targetKm: Double,
+        shares: RunVolumeShares,
         unitPreference: UnitPreference
     ) -> [ScheduledWorkout] {
         let days = dayOffsets ?? runDayOffsets(count: runDays)
@@ -502,12 +496,9 @@ struct TrainingPlanService {
         // Determine quality session types for the week
         let qualityTypes = weekQualityTypes(phase: phase, raceType: raceType)
 
-        // Pre-calculate volume distribution so every easy run gets an equal share of
-        // whatever weekly km remains after the long run and quality sessions are budgeted.
-        // qualitySlots: quality sessions that fit (all slots except the long-run slot)
-        // easySlots:    remaining slots after quality + long run
-        let qualitySlots = qualitySlotCount(runDays: days.count, phase: phase, raceType: raceType)
-        let shares = RunVolumeShares(runDays: days.count, qualitySlots: qualitySlots)
+        // The volume split (`RunVolumeShares`) was worked out with the week's trend, from the
+        // same day count and phase, so `shares.qualitySlots` is this week's quality count.
+        let qualitySlots = shares.qualitySlots
         let easyKmEach = targetKm * shares.easyEach
         let longFraction = shares.long
 
@@ -526,7 +517,7 @@ struct TrainingPlanService {
                 workouts.append(qualityWorkout(
                     date: date,
                     type: qualityTypes[slotIndex],
-                    targetKm: targetKm * RunVolumeShares.qualityEach,
+                    targetKm: targetKm * shares.qualityEach,
                     paces: paces,
                     raceType: raceType,
                     unitPreference: unitPreference
@@ -615,7 +606,7 @@ struct TrainingPlanService {
 
     /// How many of the week's run days get a quality session: the phase's quality types,
     /// capped by ``qualitySessionCap(runDays:phase:raceType:)``, and never the long-run day.
-    private func qualitySlotCount(runDays: Int, phase: TrainingPhase, raceType: RaceType) -> Int {
+    func qualitySlotCount(runDays: Int, phase: TrainingPhase, raceType: RaceType) -> Int {
         let qualityTypes = weekQualityTypes(phase: phase, raceType: raceType)
         let cap = qualitySessionCap(runDays: runDays, phase: phase, raceType: raceType)
         return min(qualityTypes.count, min(max(0, runDays - 1), cap))

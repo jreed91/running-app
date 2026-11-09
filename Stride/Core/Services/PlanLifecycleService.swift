@@ -303,6 +303,7 @@ final class PlanLifecycleService {
         replacing oldPlan: TrainingPlan,
         profile: UserProfile,
         context: ModelContext,
+        recentVolume: RecentRunningVolume? = nil,
         unitPreference: UnitPreference = .metric
     ) throws {
         let startDate = Date().startOfDay
@@ -338,6 +339,7 @@ final class PlanLifecycleService {
                 raceDate: raceDate,
                 raceName: raceName,
                 runDayIndices: runDayIndices,
+                recentVolume: recentVolume,
                 unitPreference: unitPreference
             )
         } else {
@@ -346,6 +348,7 @@ final class PlanLifecycleService {
                 startDate: startDate,
                 numberOfWeeks: PlanRebuildWindow.remainingWeeks(from: startDate, to: oldPlan.endDate),
                 runDayIndices: runDayIndices,
+                recentVolume: recentVolume,
                 unitPreference: unitPreference
             )
         }

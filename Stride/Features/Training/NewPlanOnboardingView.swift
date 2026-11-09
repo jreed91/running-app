@@ -82,11 +82,6 @@ struct NewPlanOnboardingView: View {
         goalRace.usesCustomDistance ? customDistanceKm * 1_000 : goalRace.distanceMeters
     }
 
-    /// The standard race archetype the current goal maps to for volume/pace estimates.
-    private var trainingStyle: RaceType {
-        goalRace.trainingStyle(forDistanceMeters: effectiveRaceDistanceMeters)
-    }
-
     private var computedEndDate: Date { startDate.adding(weeks: selectedWeeks) }
 
     private var computedWeeks: Int {
@@ -105,10 +100,36 @@ struct NewPlanOnboardingView: View {
 
     private var estimatedWorkouts: Int { effectiveWeeks * max(selectedDays.count, 3) }
 
-    /// Peak weekly volume in km, mirroring `TrainingPlanService.weeklyKm` for the peak phase.
-    private var peakKm: Double {
-        let base = fitnessLevel.startingWeeklyKm(for: trainingStyle)
-        return trainingStyle == .maintainFitness ? base * 1.2 : base * 1.5
+    /// The runner's recent running in Health, read on each step so it is there once Health
+    /// access is granted. Sizes the previews below; the plan itself reads it again at build.
+    @State private var recentVolume: RecentRunningVolume?
+
+    /// The weeks the plan would build for `level` with today's choices.
+    private func previewWeeks(for level: FitnessLevel) -> [TrainingPlanService.WeekVolume] {
+        container.trainingPlanService.previewWeeks(
+            fitnessLevel: level,
+            goalRace: goalRace,
+            raceDistanceMeters: effectiveRaceDistanceMeters,
+            numberOfWeeks: effectiveWeeks,
+            runDays: max(selectedDays.count, 1),
+            recentVolume: recentVolume
+        )
+    }
+
+    private var planPreview: [TrainingPlanService.WeekVolume] { previewWeeks(for: fitnessLevel) }
+
+    /// Whether the runner's recent running lowered week one below what the level alone gives.
+    private var startsFromRecentRunning: Bool {
+        guard recentVolume != nil, let first = planPreview.first else { return false }
+        let usual = container.trainingPlanService.previewWeeks(
+            fitnessLevel: fitnessLevel,
+            goalRace: goalRace,
+            raceDistanceMeters: effectiveRaceDistanceMeters,
+            numberOfWeeks: effectiveWeeks,
+            runDays: max(selectedDays.count, 1),
+            recentVolume: nil
+        ).first
+        return first.scheduledKm < (usual?.scheduledKm ?? 0) - 0.5
     }
 
     private var goalFinishTimeSeconds: Double {
@@ -145,6 +166,9 @@ struct NewPlanOnboardingView: View {
         .adaptiveAnimation(AppAnimation.bouncy, value: step)
         .ignoresSafeArea()
         .onAppear { loadFromProfile() }
+        .task {
+            recentVolume = await container.healthKitRepository.recentRunningVolume()
+        }
         .alert(
             "Couldn't build your plan",
             isPresented: Binding(
@@ -240,7 +264,8 @@ struct NewPlanOnboardingView: View {
                 progressTotal: totalSteps,
                 goalTimeSeconds: goalFinishTimeSeconds,
                 estimatedWorkouts: estimatedWorkouts,
-                peakKm: peakKm,
+                weeks: planPreview,
+                startsFromRecentRunning: startsFromRecentRunning,
                 isCreatingPlan: isCreatingPlan,
                 onBack: retreat,
                 onViewPlan: {
@@ -290,7 +315,11 @@ struct NewPlanOnboardingView: View {
     private var levelContent: some View {
         VStack(spacing: 10) {
             ForEach(FitnessLevel.allCases, id: \.self) { level in
-                OBLevelRow(level: level, race: goalRace, isSelected: fitnessLevel == level) {
+                OBLevelRow(
+                    level: level,
+                    startingKm: previewWeeks(for: level).first?.scheduledKm ?? 0,
+                    isSelected: fitnessLevel == level
+                ) {
                     fitnessLevel = level
                 }
             }

@@ -1422,10 +1422,13 @@ struct DashboardView: View {
             localized: "We couldn't rebuild your plan.",
             comment: "Alert message when rebuilding the plan fails"
         )) {
+            // A rebuild starts again from today: size it from what Health says they ran.
+            let recentVolume = await container.healthKitRepository.recentRunningVolume()
             try container.planLifecycle.rebuildPlan(
                 replacing: plan,
                 profile: profile,
                 context: context,
+                recentVolume: recentVolume,
                 unitPreference: appSettings.unitPreference
             )
             return (notice: nil, flagPrompt: true)
@@ -1434,7 +1437,7 @@ struct DashboardView: View {
 
     /// Runs a plan-recovery mutation with the card's loading state applied.
     ///
-    /// The work itself is synchronous main-actor SwiftData work, so it is hopped
+    /// The work is main-actor SwiftData work (a rebuild first awaits a Health read), hopped
     /// through a `Task` — that yields a render pass between raising the flag and
     /// doing the work, which is what makes `MissedWorkoutsRecoveryCard`'s loading
     /// overlay reachable at all. Failures now surface in an alert instead of only
@@ -1444,13 +1447,13 @@ struct DashboardView: View {
     /// and whether the prompt has earned its once-a-week dismissal.
     private func runRecovery(
         failureMessage: String,
-        _ work: @escaping () throws -> (notice: String?, flagPrompt: Bool)
+        _ work: @escaping @MainActor () async throws -> (notice: String?, flagPrompt: Bool)
     ) {
         isHandlingRecovery = true
         Task { @MainActor in
             defer { isHandlingRecovery = false }
             do {
-                let result = try work()
+                let result = try await work()
                 if result.flagPrompt {
                     flagMissedWorkoutPrompt()
                 }
@@ -1468,37 +1471,6 @@ struct DashboardView: View {
                 AppLogger.log("Plan recovery failed: \(error)", label: "Dashboard", level: .error)
             }
         }
-    }
-}
-
-// MARK: - ProgressRingView
-
-/// The week's progress drawn as a route: the Route Loop gradient on a faint track.
-private struct ProgressRingView: View {
-    let progress: Double
-    let size: CGFloat
-    let lineWidth: CGFloat
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    /// False until the ring first appears, so the route fills in from zero rather than
-    /// showing up already drawn — the same entrance as the app mark's loop. Under Reduce
-    /// Motion it appears filled, as `StrideProgressBar` does.
-    @State private var hasAppeared = false
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .stroke(Color.surfaceTertiary, lineWidth: lineWidth)
-            Circle()
-                .trim(from: 0, to: hasAppeared || reduceMotion ? progress : 0)
-                .stroke(.route, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-                .adaptiveAnimation(AppAnimation.gentle, value: progress)
-                .adaptiveAnimation(AppAnimation.gentle, value: hasAppeared)
-        }
-        .frame(width: size, height: size)
-        .onAppear { hasAppeared = true }
     }
 }
 

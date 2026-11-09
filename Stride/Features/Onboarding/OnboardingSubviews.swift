@@ -781,19 +781,19 @@ enum OBFitnessSelection: CaseIterable, Sendable {
 
 struct OBFitnessRow: View {
     let selection: OBFitnessSelection
-    let goalRace: RaceType
+    /// Week one of the plan this level would build, in km, from
+    /// `TrainingPlanService.previewWeeks`: the goal's training style, the run days and the
+    /// runner's recent running in Health. `nil` hides the line, as for plans prescribed in
+    /// minutes, which have no starting weekly distance to promise.
+    let startingKm: Double?
     let isSelected: Bool
-    /// The "Plan starts ~N km/week" line. Off for plans prescribed in minutes, which have
-    /// no starting weekly distance to promise.
-    var showsStartingVolume = true
     let onSelect: () -> Void
 
     @Environment(AppSettings.self) private var appSettings
 
     private let barHeights: [CGFloat] = [8, 12, 16, 22]
 
-    private var planStartLabel: String {
-        let km = selection.fitnessLevel.startingWeeklyKm(for: goalRace)
+    private func planStartLabel(_ km: Double) -> String {
         switch appSettings.unitPreference {
         case .metric:
             return String(format: "Plan starts ~%.0f km/week", km)
@@ -830,8 +830,8 @@ struct OBFitnessRow: View {
                     .foregroundStyle(.secondary)
                     .padding(.leading, 38)
 
-                if showsStartingVolume {
-                    Text(planStartLabel)
+                if let startingKm {
+                    Text(planStartLabel(startingKm))
                         .font(.dsCaption.weight(.semibold).monospacedDigit())
                         .foregroundStyle(.secondary.opacity(0.75))
                         .padding(.leading, 38)
@@ -851,7 +851,8 @@ struct OBFitnessRow: View {
 
 struct OBLevelRow: View {
     let level: FitnessLevel
-    let race: RaceType
+    /// Week one of the plan this level would build, in km (`TrainingPlanService.previewWeeks`).
+    let startingKm: Double
     let isSelected: Bool
     let onSelect: () -> Void
 
@@ -874,11 +875,10 @@ struct OBLevelRow: View {
                     Text(desc)
                         .font(.dsCaption).foregroundStyle(.secondary)
                     Text({
-                        let km = level.startingWeeklyKm(for: race)
                         if appSettings.unitPreference == .imperial {
-                            return String(format: "%.0f mi/wk base", km * 0.621371)
+                            return String(format: "Starts ~%.0f mi/wk", startingKm * 0.621371)
                         }
-                        return String(format: "%.0f km/wk base", km)
+                        return String(format: "Starts ~%.0f km/wk", startingKm)
                     }())
                         .font(.dsCaption.weight(.semibold).monospacedDigit())
                         .foregroundStyle(.secondary)
@@ -1086,7 +1086,12 @@ struct OBReady: View {
     var progressTotal = 8
     let goalTimeSeconds: Double
     let estimatedWorkouts: Int
-    let peakKm: Double
+    /// The plan's weeks as it will build them (`TrainingPlanService.previewWeeks`), so the
+    /// peak and the chart are the plan's own numbers rather than an approximation of them.
+    let weeks: [TrainingPlanService.WeekVolume]
+    /// True when the runner's recent running in Health lowered the plan's first weeks, so
+    /// the screen can say why week one is smaller than the level they picked suggests.
+    var startsFromRecentRunning = false
     let isCreatingPlan: Bool
     /// This screen used to draw the progress bar without the chevron every other step has,
     /// which made the one screen most likely to prompt a change of mind — the first sight of
@@ -1097,9 +1102,10 @@ struct OBReady: View {
 
     @Environment(AppSettings.self) private var appSettings
 
-    /// Peak weekly volume for the chart's y-axis, expressed in the user's preferred unit.
+    /// Peak weekly volume, expressed in the user's preferred unit.
     private var peakMiles: Int {
-        appSettings.unitPreference == .imperial
+        let peakKm = weeks.map(\.scheduledKm).max() ?? 0
+        return appSettings.unitPreference == .imperial
             ? max(1, Int((peakKm * 0.621371).rounded()))
             : max(1, Int(peakKm.rounded()))
     }
@@ -1169,12 +1175,17 @@ struct OBReady: View {
                         .heroCard()
 
                         // Weekly mileage chart
-                        WeeklyMileageChart(
-                            planWeeks: planWeeks,
-                            goalRace: goalRace,
-                            peakMiles: peakMiles,
-                            unit: appSettings.unitPreference
-                        )
+                        WeeklyMileageChart(weeks: weeks, unit: appSettings.unitPreference)
+
+                        if startsFromRecentRunning {
+                            Text(
+                                "Week one starts from your last four weeks of running in Health, then builds about 10% a week.",
+                                comment: "Onboarding plan summary: why the first weeks are lighter than usual"
+                            )
+                            .font(.dsFootnote)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                     .padding(.horizontal, AppSpacing.xxl)
                     .padding(.top, AppSpacing.sm)
@@ -1230,53 +1241,26 @@ private struct OBSummaryStat: View {
 // MARK: - WeeklyMileageChart
 
 private struct WeeklyMileageChart: View {
-    let planWeeks: Int
-    let goalRace: RaceType
-    let peakMiles: Int
+    let weeks: [TrainingPlanService.WeekVolume]
     let unit: UnitPreference
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var barsVisible = false
 
-    /// Bars: (week number, mileage, phase).
+    /// Bars: (week number, distance in the runner's unit, phase), the plan's own weeks.
     private var bars: [(n: Int, mi: Int, phase: TrainingPhase)] {
-        guard planWeeks > 0 else { return [] }
-        let phases = phaseSchedule(for: planWeeks)
-        let peak = Double(peakMiles)
-        return (0..<planWeeks).map { i in
-            let phase = phases[i]
-            let fraction: Double = {
-                let progress = Double(i) / Double(max(planWeeks - 1, 1))
-                switch phase {
-                case .base:  return 0.5 + progress * 0.25
-                case .build: return 0.75 + progress * 0.20
-                case .peak:  return 1.00
-                case .taper: return 0.45
-                }
-            }()
-            // Cutback every 4th week in base/build.
-            let cutback = ((i + 1) % 4 == 0 && (phase == .base || phase == .build)) ? 0.75 : 1.0
-            return (i + 1, max(1, Int((peak * fraction * cutback).rounded())), phase)
+        weeks.enumerated().map { index, week in
+            let distance = unit == .imperial ? week.scheduledKm * 0.621371 : week.scheduledKm
+            return (index + 1, max(1, Int(distance.rounded())), week.phase)
         }
     }
+
+    private var peakMiles: Int { bars.map(\.mi).max() ?? 1 }
 
     private func barHeight(_ miles: Int) -> CGFloat {
         max(6, CGFloat(miles) / CGFloat(peakMiles) * 72)
     }
 
-    private func phaseSchedule(for weeks: Int) -> [TrainingPhase] {
-        let base = max(weeks * 3 / 8, 1)
-        let build = max(weeks * 2 / 8, 1)
-        let peak = max(weeks * 2 / 8, 1)
-        let taperStart = weeks - 1
-        return (0..<weeks).map { i in
-            if i >= taperStart { return .taper }
-            if i < base { return .base }
-            if i < base + build { return .build }
-            if i < base + build + peak { return .peak }
-            return .taper
-        }
-    }
 
 
     var body: some View {
