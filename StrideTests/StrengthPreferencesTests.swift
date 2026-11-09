@@ -66,4 +66,42 @@ struct StrengthPreferencesTests {
         chosen.save(to: defaults)
         #expect(StrengthPreferences.load(from: defaults) == chosen)
     }
+
+    // MARK: Excluded exercises
+
+    @Test("An excluded exercise is left out and the next in line takes its place")
+    func excludedExercisesAreReplaced() {
+        let full = StrengthLibrary.plan(for: [.dumbbells, .resistanceBands], focus: .runningSpecific, phase: .build)
+        let dropped = full.exercises[1].name
+        let without = StrengthLibrary.plan(
+            for: [.dumbbells, .resistanceBands], focus: .runningSpecific, phase: .build,
+            excluding: [dropped]
+        )
+        #expect(!without.exercises.contains { $0.name == dropped })
+        #expect(without.exercises.count == full.exercises.count)
+    }
+
+    @Test("Swap never offers an excluded exercise")
+    func swapSkipsExcluded() throws {
+        let squat = try #require(StrengthLibrary.catalog.first { $0.name == "DB Goblet Squat" })
+        let offered = StrengthLibrary.alternatives(to: squat, equipment: [.dumbbells, .kettlebell])
+        let first = try #require(offered.first)
+        let filtered = StrengthLibrary.alternatives(to: squat, equipment: [.dumbbells, .kettlebell], excluding: [first.name])
+        #expect(!filtered.contains { $0.name == first.name })
+    }
+
+    @Test("Excluding is idempotent, putting back removes it, and older saved preferences still load")
+    func excludeAndInclude() throws {
+        var preferences = StrengthPreferences()
+        preferences.exclude("Deadlift")
+        preferences.exclude("Deadlift")
+        preferences.exclude("Good Morning")
+        #expect(preferences.excludedExercises == ["Deadlift", "Good Morning"])
+        preferences.include("Deadlift")
+        #expect(preferences.excluded == ["Good Morning"])
+
+        let older = Data(#"{"daysPerWeek":2}"#.utf8)
+        let decoded = try JSONDecoder().decode(StrengthPreferences.self, from: older)
+        #expect(decoded == StrengthPreferences(daysPerWeek: 2))
+    }
 }

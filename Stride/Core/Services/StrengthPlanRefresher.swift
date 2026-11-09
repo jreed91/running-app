@@ -24,6 +24,8 @@ enum StrengthPlanRefresher {
         equipment: [StrengthEquipment],
         focus: StrengthFocus,
         minutes: Int? = nil,
+        excluding excluded: Set<String> = [],
+        except inProgressID: UUID? = nil,
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> Int {
@@ -35,12 +37,14 @@ enum StrengthPlanRefresher {
 
         for week in plan.weeks ?? [] {
             for workout in week.workouts ?? [] {
+                // The session on screen keeps its plan: its logged sets point into it.
                 guard workout.workoutType == .strength,
+                      workout.id != inProgressID,
                       !workout.isCompleted,
                       calendar.startOfDay(for: workout.scheduledDate) >= today
                 else { continue }
 
-                var next = StrengthLibrary.plan(for: effective, focus: focus, phase: week.phase, minutes: minutes)
+                var next = StrengthLibrary.plan(for: effective, focus: focus, phase: week.phase, minutes: minutes, excluding: excluded)
                 if plan.isPregnancyPlan, let dueDate = plan.dueDate {
                     let gestationalWeek = GestationalAge.on(week.startDate, dueDate: dueDate, calendar: calendar).weeks
                     next = PregnancyStrengthAdapter.adapt(next, atGestationalWeek: gestationalWeek)
@@ -131,7 +135,8 @@ enum StrengthPlanRefresher {
             )
             let session = StrengthLibrary.plan(
                 for: profile.selectedEquipment, focus: focus, phase: week.phase,
-                minutes: preferences.sessionMinutes
+                minutes: preferences.sessionMinutes,
+                excluding: preferences.excluded
             )
             var added: [ScheduledWorkout] = []
             for day in days {

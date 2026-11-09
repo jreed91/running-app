@@ -1147,7 +1147,7 @@ struct DashboardView: View {
     }
 
     /// The exercises an unplanned strength session would run, or nil when there is none
-    /// to offer (see ``StrengthLibrary/unplannedPlan(weekStrengthPlan:isPregnancyPlan:equipment:focus:phase:)``).
+    /// to offer (see ``StrengthLibrary/unplannedPlan(weekStrengthPlan:isPregnancyPlan:equipment:focus:phase:preferences:)``).
     private var unplannedStrengthPlan: StrengthWorkoutPlan? {
         let week = activePlan?.currentWeek
         let profile = profiles.first
@@ -1159,7 +1159,8 @@ struct DashboardView: View {
             isPregnancyPlan: activePlan?.isPregnancyPlan == true,
             equipment: profile?.selectedEquipment ?? [],
             focus: profile?.strengthFocus ?? .runningSpecific,
-            phase: week?.phase
+            phase: week?.phase,
+            preferences: StrengthPreferences.load()
         )
     }
 
