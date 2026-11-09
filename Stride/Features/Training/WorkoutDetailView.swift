@@ -63,6 +63,10 @@ struct WorkoutDetailView: View {
         Group {
             if let completed = workout.completedWorkout {
                 RunSummaryView(workout: completed)
+            } else if let lifted = workout.completedStrengthWorkout {
+                // A done strength day shows what was lifted, as History does, rather
+                // than the plan for a session that is already behind the runner.
+                StrengthSummaryView(workout: lifted)
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: AppSpacing.lg) {

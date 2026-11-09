@@ -101,7 +101,11 @@ struct StrengthSummaryView: View {
             let grouped = Dictionary(grouping: workout.completedSets, by: \.exerciseIndex)
             ForEach(grouped.keys.sorted(), id: \.self) { exerciseIndex in
                 let sets = grouped[exerciseIndex] ?? []
-                let exerciseName: String = if let plan, plan.exercises.indices.contains(exerciseIndex) {
+                // The name the set was logged under wins: the plan it points into can be
+                // rebuilt since, and an unplanned session has no plan at all.
+                let exerciseName: String = if let logged = sets.lazy.compactMap(\.exerciseName).first {
+                    logged
+                } else if let plan, plan.exercises.indices.contains(exerciseIndex) {
                     plan.exercises[exerciseIndex].name
                 } else {
                     "Exercise \(exerciseIndex + 1)"
@@ -157,7 +161,10 @@ struct StrengthSummaryView: View {
 
     private var sourceRow: some View {
         HStack(spacing: 8) {
-            if workout.healthKitWorkoutID != nil {
+            // A session logged here gets a HealthKit id too, once it is exported, so the
+            // id alone would call every Stride session "synced from Apple Health". Sets
+            // are only ever logged in Stride.
+            if workout.healthKitWorkoutID != nil && workout.completedSets.isEmpty {
                 StrideIcon(name: .heart, size: 13, color: .destructive, strokeWeight: 2)
                 Text("Synced from Apple Health")
             } else {

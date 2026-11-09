@@ -11,6 +11,14 @@ struct StrengthActiveView: View {
     @Environment(AppSettings.self) private var appSettings
 
     let scheduledWorkout: ScheduledWorkout?
+    /// The exercises for a session the plan didn't schedule ("Strength session" on Home).
+    /// Ignored when `scheduledWorkout` carries its own plan.
+    let unplannedPlan: StrengthWorkoutPlan?
+
+    init(scheduledWorkout: ScheduledWorkout?, unplannedPlan: StrengthWorkoutPlan? = nil) {
+        self.scheduledWorkout = scheduledWorkout
+        self.unplannedPlan = unplannedPlan
+    }
 
     /// Recent sessions, newest first, for "last time" and the next-load suggestion. Sixty
     /// sessions is over a year at a typical one or two a week, far more than any one
@@ -64,7 +72,7 @@ struct StrengthActiveView: View {
 
     private var unit: UnitPreference { appSettings.unitPreference }
 
-    private var plan: StrengthWorkoutPlan? { scheduledWorkout?.strengthPlan }
+    private var plan: StrengthWorkoutPlan? { scheduledWorkout?.strengthPlan ?? unplannedPlan }
     private var exercises: [StrengthExercise] { plan?.exercises ?? [] }
     private var currentExercise: StrengthExercise? {
         guard currentExerciseIndex < exercises.count else { return nil }

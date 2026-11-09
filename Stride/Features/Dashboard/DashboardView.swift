@@ -443,6 +443,9 @@ struct DashboardView: View {
     /// `fullScreenCover(item:)` so the cover can never open onto an empty,
     /// undismissable screen when the selected day changes mid-presentation.
     @State private var strengthWorkout: ScheduledWorkout?
+    /// An unplanned strength session to present ("Strength session" under the run
+    /// buttons), captured at tap time like `strengthWorkout`.
+    @State private var unplannedStrength: UnplannedStrengthSession?
     @State private var selectedDate = Date()
     /// Timestamp of the last time the rearrange-workouts prompt was flagged
     /// (dismissed or acted on). Used to limit the prompt to once per week.
@@ -605,6 +608,9 @@ struct DashboardView: View {
             // Strength stays local — it has no minimised form.
             .fullScreenCover(item: $strengthWorkout) { workout in
                 StrengthActiveView(scheduledWorkout: workout)
+            }
+            .fullScreenCover(item: $unplannedStrength) { session in
+                StrengthActiveView(scheduledWorkout: nil, unplannedPlan: session.plan)
             }
             .sheet(isPresented: $showRouteGenius) {
                 RouteGeniusView(
@@ -1131,7 +1137,48 @@ struct DashboardView: View {
         VStack(spacing: AppSpacing.sm) {
             startRunButton
             planRouteButton
+            if let plan = unplannedStrengthPlan {
+                unplannedStrengthButton(plan)
+            }
         }
+    }
+
+    /// The exercises an unplanned strength session would run, or nil when there is none
+    /// to offer (see ``StrengthLibrary/unplannedPlan(weekStrengthPlan:isPregnancyPlan:equipment:focus:phase:)``).
+    private var unplannedStrengthPlan: StrengthWorkoutPlan? {
+        let week = activePlan?.currentWeek
+        let profile = profiles.first
+        return StrengthLibrary.unplannedPlan(
+            weekStrengthPlan: (week?.workouts ?? [])
+                .sorted { $0.scheduledDate < $1.scheduledDate }
+                .first { $0.workoutType == .strength }?
+                .strengthPlan,
+            isPregnancyPlan: activePlan?.isPregnancyPlan == true,
+            equipment: profile?.selectedEquipment ?? [],
+            focus: profile?.strengthFocus ?? .runningSpecific,
+            phase: week?.phase
+        )
+    }
+
+    /// A strength session the plan didn't schedule: a gym day, a rainy day, an extra one.
+    /// Quiet, under "Plan a route", so the run stays the day's action.
+    private func unplannedStrengthButton(_ plan: StrengthWorkoutPlan) -> some View {
+        Button {
+            unplannedStrength = UnplannedStrengthSession(plan: plan)
+        } label: {
+            HStack(spacing: 8) {
+                StrideIcon(name: .dumbbell, size: 16, color: .brandText, strokeWeight: 2.2)
+                Text("Start a strength session")
+            }
+        }
+        .buttonStyle(.strideButton(.quiet))
+        .accessibilityIdentifier("dashboard.startUnplannedStrength")
+        .accessibilityHint(
+            String(
+                localized: "Starts a strength session that isn't in your plan, about \(plan.estimatedDurationMinutes) minutes",
+                comment: "Hint on Home's unplanned strength button"
+            )
+        )
     }
 
     @ViewBuilder
@@ -1443,4 +1490,13 @@ private struct ProgressRingView: View {
         .frame(width: size, height: size)
         .onAppear { hasAppeared = true }
     }
+}
+
+// MARK: - UnplannedStrengthSession
+
+/// What `fullScreenCover(item:)` needs to present an unplanned strength session: the
+/// exercises, captured when the button was tapped, under an identity of their own.
+private struct UnplannedStrengthSession: Identifiable {
+    let id = UUID()
+    let plan: StrengthWorkoutPlan
 }

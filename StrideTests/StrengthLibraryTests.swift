@@ -217,4 +217,35 @@ struct StrengthLibraryTests {
             #expect((exercise.durationSeconds ?? 0) > 0)
         }
     }
+
+    // MARK: - Unplanned sessions
+
+    @Test("An unplanned session copies the week's own strength session")
+    func unplannedCopiesTheWeek() {
+        let week = StrengthLibrary.plan(for: [.dumbbells], focus: .generalStrength, phase: .build)
+        let plan = StrengthLibrary.unplannedPlan(
+            weekStrengthPlan: week, isPregnancyPlan: true,
+            equipment: [.barbell], focus: .runningSpecific, phase: .peak
+        )
+        #expect(plan == week)
+    }
+
+    @Test("Without a week session, an unplanned session comes from the library, bodyweight by default")
+    func unplannedFallsBackToTheLibrary() {
+        let plan = StrengthLibrary.unplannedPlan(
+            weekStrengthPlan: nil, isPregnancyPlan: false,
+            equipment: [], focus: .runningSpecific, phase: nil
+        )
+        #expect(plan == StrengthLibrary.plan(for: [.bodyweight], focus: .runningSpecific, phase: .base))
+        #expect(plan?.exercises.isEmpty == false)
+    }
+
+    @Test("A pregnancy plan with no session to copy offers no unplanned session")
+    func unplannedRefusesPregnancyWithoutASession() {
+        let plan = StrengthLibrary.unplannedPlan(
+            weekStrengthPlan: nil, isPregnancyPlan: true,
+            equipment: [.dumbbells], focus: .runningSpecific, phase: .base
+        )
+        #expect(plan == nil)
+    }
 }
