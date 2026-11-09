@@ -12,9 +12,8 @@ struct TrainingPlanListView: View {
 
     @Query private var profiles: [UserProfile]
 
-    @State private var showNewPlanSheet = false
-    @State private var showPregnancyPlanSheet = false
-    @State private var showStartRunningPlanSheet = false
+    /// The new-plan flow open as a sheet, if any. See `NewPlanFlow`.
+    @State private var newPlanFlow: NewPlanFlow?
     /// Plans the runner has swiped away, held until the confirmation is answered (U6).
     @State private var pendingDeletion: [TrainingPlan] = []
 
@@ -42,19 +41,11 @@ struct TrainingPlanListView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 // The Plan tab's own "+", so a plan started here is built the same way.
-                NewPlanMenu(
-                    showsTrainingPlan: $showNewPlanSheet,
-                    showsStartRunningPlan: $showStartRunningPlanSheet,
-                    showsPregnancyPlan: $showPregnancyPlanSheet
-                )
+                NewPlanMenu(selection: $newPlanFlow)
                 .disabled(profiles.isEmpty)
             }
         }
-        .newPlanSheets(
-            training: $showNewPlanSheet,
-            startRunning: $showStartRunningPlanSheet,
-            pregnancy: $showPregnancyPlanSheet
-        )
+        .newPlanSheets($newPlanFlow)
         // Deleting a plan from its detail screen asks first; deleting the same plan by
         // swiping here did not, even though the swipe cascades to every scheduled
         // workout, Watch entry and reminder the plan owns (U6).

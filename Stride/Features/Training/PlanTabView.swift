@@ -38,9 +38,8 @@ struct PlanTabView: View {
         return calendar.date(byAdding: .day, value: -7 * historyWeeks, to: today) ?? .distantPast
     }
 
-    @State private var showNewPlanSheet = false
-    @State private var showPregnancyPlanSheet = false
-    @State private var showStartRunningPlanSheet = false
+    /// The new-plan flow open as a sheet, if any. See `NewPlanFlow`.
+    @State private var newPlanFlow: NewPlanFlow?
     /// Idle, running with its progress, or finished with the outcome on the card. See
     /// `SmartAdaptState`.
     @State private var smartAdapt: SmartAdaptState = .idle
@@ -323,19 +322,11 @@ struct PlanTabView: View {
                 }
             }
             ToolbarItem(placement: .primaryAction) {
-                NewPlanMenu(
-                    showsTrainingPlan: $showNewPlanSheet,
-                    showsStartRunningPlan: $showStartRunningPlanSheet,
-                    showsPregnancyPlan: $showPregnancyPlanSheet
-                )
+                NewPlanMenu(selection: $newPlanFlow)
                 .disabled(profiles.isEmpty)
             }
         }
-        .newPlanSheets(
-            training: $showNewPlanSheet,
-            startRunning: $showStartRunningPlanSheet,
-            pregnancy: $showPregnancyPlanSheet
-        )
+        .newPlanSheets($newPlanFlow)
     }
 
     // MARK: Detail column
@@ -557,28 +548,37 @@ struct PlanTabView: View {
 
 // MARK: - New Plan Menu
 
+/// Which plan-building flow is open. One optional instead of a `Bool` per flow
+/// (`showNewPlanSheet`, `showStartRunningPlanSheet`, `showPregnancyPlanSheet`), so two
+/// can never be asked for at once.
+enum NewPlanFlow: String, Identifiable, CaseIterable {
+    case training
+    case startRunning
+    case pregnancy
+
+    var id: String { rawValue }
+}
+
 /// The "+" that starts a plan, on the Plan tab and in Plan History alike, so both build
 /// a plan through the same flow. The sheets stay with the screen (`newPlanSheets`) rather
 /// than inside the toolbar item, which can be rebuilt while a sheet is up.
 struct NewPlanMenu: View {
-    @Binding var showsTrainingPlan: Bool
-    @Binding var showsStartRunningPlan: Bool
-    @Binding var showsPregnancyPlan: Bool
+    @Binding var selection: NewPlanFlow?
 
     var body: some View {
         Menu {
             Button {
-                showsTrainingPlan = true
+                selection = .training
             } label: {
                 Label("Training plan", systemImage: "figure.run")
             }
             Button {
-                showsStartRunningPlan = true
+                selection = .startRunning
             } label: {
                 Label("Start Running (run/walk)", systemImage: "figure.walk")
             }
             Button {
-                showsPregnancyPlan = true
+                selection = .pregnancy
             } label: {
                 Label("Pregnancy plan", systemImage: "heart.text.square")
             }
@@ -590,22 +590,19 @@ struct NewPlanMenu: View {
 
 extension View {
     /// The three flows `NewPlanMenu` opens.
-    func newPlanSheets(
-        training: Binding<Bool>,
-        startRunning: Binding<Bool>,
-        pregnancy: Binding<Bool>
-    ) -> some View {
-        sheet(isPresented: training) {
-            NewPlanOnboardingView()
-                .strideSheet()
-        }
-        .sheet(isPresented: startRunning) {
-            StartRunningPlanSetupView()
-                .strideSheet()
-        }
-        .sheet(isPresented: pregnancy) {
-            PregnancyPlanSetupView()
-                .strideSheet()
+    func newPlanSheets(_ flow: Binding<NewPlanFlow?>) -> some View {
+        sheet(item: flow) { flow in
+            switch flow {
+            case .training:
+                NewPlanOnboardingView()
+                    .strideSheet()
+            case .startRunning:
+                StartRunningPlanSetupView()
+                    .strideSheet()
+            case .pregnancy:
+                PregnancyPlanSetupView()
+                    .strideSheet()
+            }
         }
     }
 }
