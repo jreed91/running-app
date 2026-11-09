@@ -12,6 +12,9 @@ struct ProgressDashboardView: View {
     @Query private var profiles: [UserProfile]
     private var profile: UserProfile? { profiles.first }
 
+    /// Strength sessions over the same window as the runs, for the strength card.
+    @Query private var strengthSessions: [StrengthWorkout]
+
     @Environment(AppSettings.self) private var appSettings
     @Environment(AppContainer.self) private var container
     @Environment(\.modelContext) private var context
@@ -74,6 +77,10 @@ struct ProgressDashboardView: View {
             },
             sort: [SortDescriptor(\RunWorkout.date)]
         )
+        _strengthSessions = Query(
+            filter: #Predicate<StrengthWorkout> { $0.date >= cutoff },
+            sort: [SortDescriptor(\StrengthWorkout.date)]
+        )
     }
 
     // The period arithmetic — which runs are in range, what they total, how they bucket
@@ -132,6 +139,10 @@ struct ProgressDashboardView: View {
                                     .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 5)
                             } trailing: {
                                 vo2MaxTrendChart
+                                    .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 6)
+                            }
+                            if showsStrengthCard {
+                                strengthCard
                                     .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 6)
                             }
                             periodSummaryCard
@@ -262,6 +273,92 @@ struct ProgressDashboardView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .strideCard()
         }
+    }
+
+    // MARK: - Strength
+
+    private var strengthStats: StrengthPeriodStats {
+        StrengthPeriodStats.make(
+            from: strengthSessions.map { $0.sessionLog(unit: appSettings.unitPreference) },
+            withinDays: selectedRange.days
+        )
+    }
+
+    /// For a runner who does strength at all: sessions in the window, or equipment chosen
+    /// so the plan schedules them. A runner who never lifts doesn't get an empty card.
+    private var showsStrengthCard: Bool {
+        !strengthSessions.isEmpty || !(profile?.selectedEquipment.isEmpty ?? true)
+    }
+
+    private var strengthCard: some View {
+        let stats = strengthStats
+        let unit = appSettings.unitPreference
+        return chartCard("STRENGTH") {
+            if stats.sessions == 0 {
+                emptyDataPlaceholder("No strength sessions in this period")
+            } else {
+                VStack(alignment: .leading, spacing: AppSpacing.md) {
+                    HStack(alignment: .firstTextBaseline, spacing: AppSpacing.sm) {
+                        Text(verbatim: "\(stats.sessions)")
+                            .font(.dsTitle3.weight(.bold))
+                            .monospacedDigit()
+                        Text(stats.sessions == 1 ? LocalizedStringKey("session") : "sessions")
+                            .font(.dsFootnote).foregroundStyle(.secondary)
+                        Text(verbatim: "·").foregroundStyle(.tertiary)
+                        Text("\(stats.sessionsPerWeek, format: .number.precision(.fractionLength(1))) a week")
+                            .font(.dsFootnote).foregroundStyle(.secondary)
+                        Text(verbatim: "·").foregroundStyle(.tertiary)
+                        Text("\(stats.workingSets) sets")
+                            .font(.dsFootnote).foregroundStyle(.secondary)
+                    }
+
+                    if stats.lifts.isEmpty {
+                        Text("Log a weight on your sets to see your lifts here.")
+                            .font(.dsCaption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        VStack(spacing: 10) {
+                            ForEach(stats.lifts, id: \.exerciseName) { lift in
+                                strengthLiftRow(lift, unit: unit)
+                            }
+                        }
+                        Text("Change is in estimated one-rep max, first session in this period to the latest.")
+                            .font(.dsCaption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+    }
+
+    private func strengthLiftRow(_ lift: StrengthPeriodStats.LiftTrend, unit: UnitPreference) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(verbatim: lift.exerciseName)
+                    .font(.dsSubhead.weight(.semibold))
+                Text("\(StrengthProgression.weightText(lift.latestWeightKilograms, unit: unit)) × \(lift.latestReps)")
+                    .font(.dsCaption)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: AppSpacing.sm)
+            if let change = lift.change {
+                let percent = Int((change * 100).rounded())
+                if percent > 0 {
+                    Text("+\(percent)%")
+                        .font(.dsSubhead.weight(.bold)).monospacedDigit()
+                        .foregroundStyle(Color.success)
+                } else if percent < 0 {
+                    Text("\(percent)%")
+                        .font(.dsSubhead.weight(.bold)).monospacedDigit()
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("Holding")
+                        .font(.dsFootnote).foregroundStyle(.secondary)
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Weekly volume chart
