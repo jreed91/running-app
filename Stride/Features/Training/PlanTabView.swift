@@ -41,8 +41,9 @@ struct PlanTabView: View {
     @State private var showNewPlanSheet = false
     @State private var showPregnancyPlanSheet = false
     @State private var showStartRunningPlanSheet = false
-    @State private var isAdaptingPlan = false
-    @State private var smartAdaptProgress = SmartAdaptProgress.idle
+    /// Idle, running with its progress, or finished with the outcome on the card. See
+    /// `SmartAdaptState`.
+    @State private var smartAdapt: SmartAdaptState = .idle
     @State private var adaptTask: Task<Void, Never>?
     /// The session a week row's tap opens. One destination for the whole tab rather than a
     /// `NavigationLink` per row: a link inside the reorder container would claim the drag.
@@ -221,8 +222,7 @@ struct PlanTabView: View {
                         } else {
                             SmartAdaptPlanCard(
                                 workoutCount: remainingAdaptableWorkouts(in: plan).count,
-                                isAdapting: isAdaptingPlan,
-                                progress: smartAdaptProgress,
+                                state: smartAdapt,
                                 unavailableReason: smartAdaptUnavailableReason(for: plan)
                             ) {
                                 adaptTask?.cancel()
@@ -440,18 +440,16 @@ struct PlanTabView: View {
 
     @MainActor
     private func adaptRemainingWorkouts(in plan: TrainingPlan) async {
-        guard !isAdaptingPlan,
+        guard !smartAdapt.isRunning,
               smartAdaptUnavailableReason(for: plan) == nil,
               let profile = profiles.first else {
             return
         }
 
-        isAdaptingPlan = true
-        smartAdaptProgress = .starting
-        defer {
-            isAdaptingPlan = false
-            smartAdaptProgress.finishIfNeeded()
-        }
+        smartAdapt.start()
+        // Leaving the tab or losing the plan returns below without an outcome; that
+        // clears the card. An outcome is kept on it by `finish(message:)`.
+        defer { smartAdapt.stopIfRunning() }
 
         // Smart Adapt no longer prunes the plan first (N29). The pruning existed to
         // clean up phantom workouts that H1/H10 auto-inserted by relating an unmanaged
@@ -459,7 +457,7 @@ struct PlanTabView: View {
         // was delete real sessions during an ordinary AI operation. A day that genuinely
         // holds two sessions now simply shows both (N12).
         let workoutsToAdapt = remainingAdaptableWorkouts(in: plan)
-        smartAdaptProgress = SmartAdaptProgress(
+        smartAdapt.progress = SmartAdaptProgress(
             currentMessage: "Preparing \(workoutsToAdapt.count) workout\(workoutsToAdapt.count == 1 ? "" : "s") for adaptation.",
             completedCount: 0,
             totalCount: workoutsToAdapt.count,
@@ -472,7 +470,7 @@ struct PlanTabView: View {
         // returned below with every planned workout gone from the Watch until the next
         // launch. `syncWorkoutPlans` at the end replaces each one it schedules anyway.
 
-        smartAdaptProgress.currentMessage = "Streaming coach response..."
+        smartAdapt.progress.currentMessage = "Streaming coach response..."
         let adaptedByID = await container.adaptedWorkouts(
             scheduled: workoutsToAdapt,
             history: Array(recentWorkouts.prefix(50)),
@@ -492,47 +490,47 @@ struct PlanTabView: View {
         guard !Task.isCancelled, isPlanAdaptable(plan) else { return }
 
         guard !adaptedByID.isEmpty else {
-            smartAdaptProgress.currentMessage = "The coach response could not be applied. Make sure Apple Intelligence is enabled on this device, then try again."
+            smartAdapt.finish(message: "The coach response could not be applied. Make sure Apple Intelligence is enabled on this device, then try again.")
             return
         }
 
         for (index, workout) in workoutsToAdapt.enumerated() {
             guard !Task.isCancelled, isPlanAdaptable(plan) else { break }
             guard let adapted = adaptedByID[workout.id] else {
-                smartAdaptProgress.updates.insert(
+                smartAdapt.progress.updates.insert(
                     SmartAdaptProgress.Update(
                         title: workoutLabel(workout),
                         message: "No adaptation was returned for this workout, so it was left unchanged."
                     ),
                     at: 0
                 )
-                smartAdaptProgress.completedCount = index + 1
+                smartAdapt.progress.completedCount = index + 1
                 continue
             }
 
             workout.applyAdaptation(from: adapted)
 
             let response = adapted.notes?.trimmingCharacters(in: .whitespacesAndNewlines)
-            smartAdaptProgress.completedCount = index + 1
+            smartAdapt.progress.completedCount = index + 1
             if let r = response, !r.isEmpty {
-                smartAdaptProgress.currentMessage = r
+                smartAdapt.progress.currentMessage = r
             } else {
-                smartAdaptProgress.currentMessage = "Updated \(workoutLabel(workout))."
+                smartAdapt.progress.currentMessage = "Updated \(workoutLabel(workout))."
             }
-            smartAdaptProgress.updates.insert(
+            smartAdapt.progress.updates.insert(
                 SmartAdaptProgress.Update(
                     title: workoutLabel(workout),
-                    message: smartAdaptProgress.currentMessage
+                    message: smartAdapt.progress.currentMessage
                 ),
                 at: 0
             )
-            smartAdaptProgress.updates = Array(smartAdaptProgress.updates.prefix(4))
+            smartAdapt.progress.updates = Array(smartAdapt.progress.updates.prefix(4))
             context.saveOrLog("a Smart Adapt workout update")
         }
 
         guard !Task.isCancelled, isPlanAdaptable(plan) else { return }
         try? await container.healthKitRepository.syncWorkoutPlans(for: plan, unitPreference: appSettings.unitPreference)
-        smartAdaptProgress.currentMessage = "Plan updated and synced."
+        smartAdapt.finish(message: "Plan updated and synced.")
     }
 
     /// The coach's finished explanations so far, which replace what was shown before.
@@ -544,12 +542,12 @@ struct PlanTabView: View {
     private func showSmartAdaptSummaries(_ text: String) {
         let summaries = SmartAdaptSummaryStream.summaries(in: text)
         guard !summaries.isEmpty else {
-            smartAdaptProgress.currentMessage = "Reading coach summary..."
+            smartAdapt.progress.currentMessage = "Reading coach summary..."
             return
         }
 
-        smartAdaptProgress.streamingSummaries = Array(summaries.prefix(SmartAdaptSummaryStream.displayLimit))
-        smartAdaptProgress.currentMessage = summaries.last ?? "Reviewing plan changes..."
+        smartAdapt.progress.streamingSummaries = Array(summaries.prefix(SmartAdaptSummaryStream.displayLimit))
+        smartAdapt.progress.currentMessage = summaries.last ?? "Reviewing plan changes..."
     }
 
     private func workoutLabel(_ workout: ScheduledWorkout) -> String {
@@ -614,44 +612,14 @@ extension View {
 
 // MARK: - Smart Adapt Card
 
-private struct SmartAdaptProgress: Equatable {
-    struct Update: Identifiable, Equatable {
-        let id = UUID()
-        let title: String
-        let message: String
-    }
-
-    var currentMessage: String
-    var completedCount: Int
-    var totalCount: Int
-    var updates: [Update]
-    var streamingSummaries: [String] = []
-
-    static let idle = SmartAdaptProgress(currentMessage: "", completedCount: 0, totalCount: 0, updates: [])
-    static let starting = SmartAdaptProgress(currentMessage: "Preparing plan...", completedCount: 0, totalCount: 0, updates: [])
-
-    var fractionCompleted: Double? {
-        guard totalCount > 0 else { return nil }
-        return Double(completedCount) / Double(totalCount)
-    }
-
-    mutating func finishIfNeeded() {
-        guard totalCount > 0 else {
-            self = .idle
-            return
-        }
-        if completedCount >= totalCount {
-            currentMessage = "Plan updated."
-        }
-    }
-}
-
 private struct SmartAdaptPlanCard: View {
     let workoutCount: Int
-    let isAdapting: Bool
-    let progress: SmartAdaptProgress
+    let state: SmartAdaptState
     let unavailableReason: String?
     let action: () -> Void
+
+    private var isAdapting: Bool { state.isRunning }
+    private var progress: SmartAdaptProgress { state.progress }
 
     private var isEnabled: Bool {
         workoutCount > 0 && unavailableReason == nil && !isAdapting
@@ -702,13 +670,17 @@ private struct SmartAdaptPlanCard: View {
             .grayscale(isEnabled ? 0 : 1)
             .opacity(isEnabled ? 1 : 0.9)
 
-            if isAdapting {
+            // While running, and after: the outcome ("Plan updated and synced.", or why
+            // it could not be applied) stays here until the next run (`SmartAdaptState`).
+            if state.showsProgress {
                 VStack(alignment: .leading, spacing: 8) {
-                    if let value = progress.fractionCompleted {
-                        StrideProgressBar(value: value)
-                    } else {
-                        ProgressView()
-                            .controlSize(.small)
+                    if isAdapting {
+                        if let value = progress.fractionCompleted {
+                            StrideProgressBar(value: value)
+                        } else {
+                            ProgressView()
+                                .controlSize(.small)
+                        }
                     }
 
                     Text(progress.currentMessage)
