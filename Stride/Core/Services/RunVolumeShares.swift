@@ -14,10 +14,15 @@ import Foundation
 /// longest run is well short of a third of their week (`RecentRunningVolume`). A capped
 /// long run caps the easy runs under it in turn, and no quality session is longer than it.
 ///
-/// With one or two run days there is no easy run at all, and the remainder folds into the
-/// long run so the week still adds up to its trend (M32), unless `longCap` stops it.
+/// With one or two run days there is no easy run at all, and the long run keeps its usual
+/// share: the rest of the week's trend is not run. It used to fold into the long run so the
+/// week still added up to its trend (M32), which on one run day made the long run the whole
+/// week: a runner with an 8 mile goal was asked for a single 26 mile run.
+///
+/// ``longRunMaxKm(raceDistanceKm:)`` is the long run's ceiling from the goal itself, applied
+/// through `longCap` with the runner's own (`RecentRunningVolume`).
 struct RunVolumeShares: Equatable, Sendable {
-    /// The long run's share of the week before any remainder is folded into it.
+    /// The long run's share of the week.
     static let longBase = 0.35
     /// Each quality session's share of the week, before the long run caps it.
     static let qualityBase = 0.15
@@ -45,7 +50,7 @@ struct RunVolumeShares: Equatable, Sendable {
         let remainder = max(0.0, 1.0 - Self.longBase - Self.qualityBase * Double(quality))
         let cap = max(0, longCap)
         if easySlots == 0 {
-            long = min(Self.longBase + remainder, cap)
+            long = min(Self.longBase, cap)
             easyEach = 0
         } else {
             let capped = min(Self.longBase, cap)
@@ -57,8 +62,15 @@ struct RunVolumeShares: Equatable, Sendable {
         self.qualitySlots = quality
     }
 
+    /// The longest a long run should ever be for a goal of `raceDistanceKm`, in km: 10 km
+    /// plus 60% of the race. 13 km for a 5K, 16 km for a 10K, about 11 miles for an 8 mile
+    /// race, 23 km for a half and 35 km for a marathon, in line with common plans' peaks.
+    static func longRunMaxKm(raceDistanceKm: Double) -> Double {
+        10 + 0.6 * max(0, raceDistanceKm)
+    }
+
     /// What the week's runs add up to, as a fraction of its trend volume. 1 except where a
-    /// cap held volume back.
+    /// cap held volume back, or there are too few run days to hold it.
     var scheduledFraction: Double {
         long + easyEach * Double(easySlots) + qualityEach * Double(qualitySlots)
     }

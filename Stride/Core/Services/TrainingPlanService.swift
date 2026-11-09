@@ -106,6 +106,7 @@ struct TrainingPlanService {
         let volumes = weekVolumes(
             fitnessLevel: profile.fitnessLevel,
             style: style,
+            raceDistanceMeters: raceDistanceMeters,
             numberOfWeeks: numberOfWeeks,
             runDays: effectiveDayOffsets?.count ?? runDayOffsets(count: profile.weeklyRunDays).count,
             recentVolume: recentVolume
