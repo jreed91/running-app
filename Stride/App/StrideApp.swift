@@ -220,8 +220,14 @@ struct ContentView: View {
     // Tracks that we entered the app via a reinstall/restore flow and need to
     // re-register WorkoutKit plans once CloudKit delivers them.
     @State private var needsWorkoutKitSync = false
-    @State private var hasRunRestorePermissionCheck = false
-    @State private var isRunningRestorePermissionCheck = false
+    /// The post-restore permission prompt runs once per launch: not yet, in flight (so a
+    /// second trigger stands down), then done. Was two Bools whose fourth combination
+    /// meant nothing.
+    @State private var restorePermissionCheck: RestorePermissionCheck = .notStarted
+
+    private enum RestorePermissionCheck {
+        case notStarted, running, done
+    }
 
     /// Store-recovery notice taken from the container once and cleared there, so the
     /// alert is driven by local state and can't reappear if the root is rebuilt.
@@ -450,13 +456,10 @@ struct ContentView: View {
 
     private func requestMissingPermissionsAfterRestoreIfNeeded() async {
         guard needsWorkoutKitSync, !profiles.isEmpty else { return }
-        guard !hasRunRestorePermissionCheck, !isRunningRestorePermissionCheck else { return }
+        guard restorePermissionCheck == .notStarted else { return }
 
-        isRunningRestorePermissionCheck = true
-        defer {
-            isRunningRestorePermissionCheck = false
-            hasRunRestorePermissionCheck = true
-        }
+        restorePermissionCheck = .running
+        defer { restorePermissionCheck = .done }
 
         let locationStatus = restoreLocationManager.authorizationStatus
         if locationStatus != .authorizedAlways, locationStatus != .authorizedWhenInUse {
