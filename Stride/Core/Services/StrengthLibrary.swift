@@ -63,6 +63,28 @@ struct StrengthLibrary: Sendable {
         return Array(result.prefix(maxExercises))
     }
 
+    // MARK: - Unplanned sessions
+
+    /// The exercises for a strength session the plan didn't schedule.
+    ///
+    /// The week's own strength session when it has one, so an extra session is the same
+    /// work the plan already chose for this phase (and, on a pregnancy plan, already
+    /// adapted for the trimester). Otherwise the library's plan for the runner's
+    /// equipment, focus and phase, with bodyweight when no equipment was ever chosen.
+    /// Nil on a pregnancy plan with no session to copy: the library knows nothing about
+    /// pregnancy, so it must not write one.
+    static func unplannedPlan(
+        weekStrengthPlan: StrengthWorkoutPlan?,
+        isPregnancyPlan: Bool,
+        equipment: [StrengthEquipment],
+        focus: StrengthFocus,
+        phase: TrainingPhase?
+    ) -> StrengthWorkoutPlan? {
+        if let weekStrengthPlan, !weekStrengthPlan.exercises.isEmpty { return weekStrengthPlan }
+        guard !isPregnancyPlan else { return nil }
+        return plan(for: equipment.isEmpty ? [.bodyweight] : equipment, focus: focus, phase: phase ?? .base)
+    }
+
     // MARK: - Equipment lookup
 
     /// What a library exercise is done with, by name, for plans saved before
