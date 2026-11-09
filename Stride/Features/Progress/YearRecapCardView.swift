@@ -7,8 +7,26 @@ import SwiftUI
 /// with the map grid, which Route Loop allows on the share card) and uses the `onInk`
 /// colours, which don't change with appearance, so the exported PNG looks the same from
 /// any device. Rendered at ×3 it is 1080×1920, the size Instagram and TikTok stories use.
+///
+/// Motion: in the pager (`isLive`), a card plays its entrance once, when it first comes on
+/// screen (`revealed` turns true). The text fades and rises (`strideEntrance`), the big
+/// figure rolls up from zeros (`strideNumericTransition`), the start pin lands and the route
+/// draws out of it, and the month bars grow. Under Reduce Motion it all cross-fades in.
+/// The shared image is rendered with the defaults (`revealed: true`, `isLive: false`), so
+/// it is always the finished card.
 struct YearRecapCardView: View {
     let card: YearRecapCard
+    /// Whether the card's entrance has played. `false` holds everything at its start.
+    var revealed = true
+    /// On screen in the pager rather than rendered to an image: lets the cover's app mark
+    /// draw itself in.
+    var isLive = false
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Whether shapes are at their final size. Under Reduce Motion they never grow; the
+    /// section around them fades in instead.
+    private var isDrawn: Bool { revealed || reduceMotion }
 
     /// Design size in points. ×3 → 1080×1920 (9:16).
     static let size = CGSize(width: 360, height: 640)
@@ -61,48 +79,43 @@ struct YearRecapCardView: View {
     /// The first card: the year, huge, over the app mark's loop.
     private var cover: some View {
         VStack(alignment: .leading, spacing: AppSpacing.md) {
-            StrideAppMark(size: 96)
+            StrideAppMark(size: 96, drawsOn: isLive)
                 .padding(.bottom, AppSpacing.lg)
-            Text(card.headline)
-                .font(.system(size: 110, weight: .heavy, design: .rounded))
-                .monospacedDigit()
-                .foregroundStyle(primaryText)
-                .minimumScaleFactor(0.5)
-                .lineLimit(1)
+            headline(size: 110, minimumScale: 0.5, delay: 0.5)
             Text(card.caption)
                 .font(.system(size: 24, weight: .bold, design: .rounded))
                 .foregroundStyle(primaryText)
-            routeRule
+                .strideEntrance(revealed, delay: 0.5 + AppAnimation.stagger)
+            routeRule(delay: 0.5 + AppAnimation.stagger * 2)
         }
     }
 
     private var content: some View {
         VStack(alignment: .leading, spacing: 0) {
             eyebrow
-            Text(card.headline)
-                .font(.system(size: 64, weight: .heavy, design: .rounded))
-                .monospacedDigit()
-                .foregroundStyle(primaryText)
-                .minimumScaleFactor(0.45)
-                .lineLimit(1)
+                .strideEntrance(revealed)
+            headline(size: 64, minimumScale: 0.45, delay: AppAnimation.stagger)
                 .padding(.top, AppSpacing.sm)
             Text(card.caption)
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, AppSpacing.sm)
-            routeRule
+                .strideEntrance(revealed, delay: AppAnimation.stagger * 2)
+            routeRule(delay: AppAnimation.stagger * 3)
                 .padding(.top, AppSpacing.xl)
 
             if !card.months.isEmpty {
                 monthBars
                     .padding(.top, AppSpacing.xxl)
+                    .strideEntrance(revealed, delay: AppAnimation.stagger * 4)
             } else if !card.efforts.isEmpty {
                 effortRows
                     .padding(.top, AppSpacing.xl)
             } else if !card.stats.isEmpty {
                 statRow
                     .padding(.top, AppSpacing.xl)
+                    .strideEntrance(revealed, delay: AppAnimation.stagger * 4)
             }
         }
     }
@@ -114,14 +127,39 @@ struct YearRecapCardView: View {
             .foregroundStyle(Color.brandGlow)
     }
 
+    /// The card's big figure. In the pager it starts as zeros ("0,000 km") and rolls up to
+    /// the real figure as the card enters; phrases with no digits ("March") just rise in.
+    private func headline(size: CGFloat, minimumScale: CGFloat, delay: Double) -> some View {
+        Text(isDrawn ? card.headline : Self.zeroed(card.headline))
+            .font(.system(size: size, weight: .heavy, design: .rounded))
+            .monospacedDigit()
+            .foregroundStyle(primaryText)
+            .minimumScaleFactor(minimumScale)
+            .lineLimit(1)
+            .strideNumericTransition()
+            .animation(reduceMotion ? AppAnimation.reduced : AppAnimation.gentle.delay(delay + 0.1), value: revealed)
+            .strideEntrance(revealed, delay: delay)
+    }
+
+    /// `text` with every digit replaced by 0, so the digits have somewhere to roll from.
+    static func zeroed(_ text: String) -> String {
+        String(text.map { $0.isNumber ? "0" : $0 })
+    }
+
     /// A short route stroke with the start pin: the Route Loop signature under the figure.
-    private var routeRule: some View {
+    /// As the card enters, the pin lands (`pinDrop`) and then the route draws out of it.
+    private func routeRule(delay: Double) -> some View {
         HStack(spacing: 0) {
             StartPin(diameter: 14)
+                .scaleEffect(isDrawn ? 1 : 0.01)
+                .animation(reduceMotion ? nil : AppAnimation.pinDrop.delay(delay), value: revealed)
             Capsule()
                 .fill(.route)
                 .frame(width: 72, height: 5)
+                .scaleEffect(x: isDrawn ? 1 : 0, anchor: .leading)
+                .animation(reduceMotion ? nil : AppAnimation.gentle.delay(delay + 0.15), value: revealed)
         }
+        .strideEntrance(revealed, delay: delay, rise: 0)
     }
 
     private var statRow: some View {
@@ -150,6 +188,13 @@ struct YearRecapCardView: View {
                     RoundedRectangle(cornerRadius: AppRadius.micro, style: .continuous)
                         .fill(bar.isBiggest ? AnyShapeStyle(LinearGradient.routeBar) : AnyShapeStyle(Color.onInk.opacity(0.24)))
                         .frame(height: max(3, CGFloat(bar.height) * 150))
+                        // The bars grow up from the baseline together, as a progress bar
+                        // draws in (`gentle`); twelve staggered would outlast the entrance.
+                        .scaleEffect(y: isDrawn ? 1 : 0.02, anchor: .bottom)
+                        .animation(
+                            reduceMotion ? nil : AppAnimation.gentle.delay(AppAnimation.stagger * 4),
+                            value: revealed
+                        )
                     Text(bar.label)
                         .font(.system(size: 11, weight: bar.isBiggest ? .bold : .semibold))
                         .foregroundStyle(bar.isBiggest ? primaryText : secondaryText)
@@ -162,7 +207,7 @@ struct YearRecapCardView: View {
 
     private var effortRows: some View {
         VStack(spacing: AppSpacing.md) {
-            ForEach(card.efforts) { effort in
+            ForEach(Array(card.efforts.enumerated()), id: \.element.id) { index, effort in
                 HStack(alignment: .firstTextBaseline) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(effort.distance)
@@ -190,6 +235,8 @@ struct YearRecapCardView: View {
                 .padding(.horizontal, AppSpacing.md)
                 .padding(.vertical, 10)
                 .background(Color.onInk.opacity(0.06), in: RoundedRectangle(cornerRadius: AppRadius.md, style: .continuous))
+                // At most four rows, one stagger step each after the route.
+                .strideEntrance(revealed, delay: AppAnimation.stagger * Double(4 + index))
             }
         }
     }

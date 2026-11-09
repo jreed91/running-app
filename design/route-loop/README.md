@@ -99,6 +99,7 @@ spins, and nothing moves under Reduce Motion except a short cross-fade.
 | `StartPin(pulses: true)` | One slow ripple outwards, repeated | No ripple |
 | Coach skeleton and typing dots | Breathe with `thinking` while the coach writes | Still |
 | A disclosure row (Plan weeks) | The chevron turns with `quick` | Same |
+| A year-in-running recap card (`YearRecapCardView`) | Once per card, as it first comes on screen: text rises in (`.strideEntrance`, staggered), the big figure rolls up from zeros (`.strideNumericTransition()`), the start pin lands then the route draws out of it, month bars grow from the baseline (`gentle`). The cover's app mark draws itself in. The shared image is always the finished card | Cross-fade only |
 
 ### Rules
 
