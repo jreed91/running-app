@@ -28,7 +28,7 @@ struct RaceInviteTests {
         ))
 
         #expect(invite.webURL.absoluteString
-            == "https://jacobreed.dev/stride/race?name=Chicago%20Marathon&date=2027-10-10&distance=marathon")
+            == "https://www.jacobreed.dev/stride/race?name=Chicago%20Marathon&date=2027-10-10&distance=marathon")
 
         let read = try #require(RaceInvite(url: invite.webURL))
         #expect(read == invite)
