@@ -110,8 +110,12 @@ struct RaceSplit: Identifiable, Equatable, Sendable {
     /// True for the short final segment a race distance leaves over — the marathon's last
     /// 195 m, a half's last 97.5 m. It is drawn as the finish rather than as a marker.
     let isPartial: Bool
-    /// Cumulative elapsed time at this marker, at the goal's even pace.
+    /// Cumulative elapsed time at this marker: at the goal's even pace, or at the
+    /// grade-adjusted pace when the split table is drawn for a course (``CoursePacing``).
     let elapsedSeconds: TimeInterval
+    /// How far the course rises (positive) or falls since the previous marker, in metres.
+    /// Nil on an even-pace table, which knows nothing of the course.
+    var elevationChangeMeters: Double? = nil
 
     var id: Int { marker }
 }
