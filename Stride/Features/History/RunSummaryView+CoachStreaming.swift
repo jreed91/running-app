@@ -153,23 +153,21 @@ extension RunSummaryView {
 
     @MainActor
     func applyNextSessionFeedback(_ insight: AICoachInsight) async {
-        guard !isApplyingNextSessionFeedback else { return }
+        guard !nextSessionUpdate.isApplying else { return }
         guard hasAIKey else {
-            nextSessionUpdateMessage = "Turn on AI Coach in Settings to update the plan."
+            nextSessionUpdate = .unavailable("Turn on AI Coach in Settings to update the plan.")
             return
         }
         guard let profile = profiles.first else {
-            nextSessionUpdateMessage = "Create a runner profile before updating planned workouts."
+            nextSessionUpdate = .unavailable("Create a runner profile before updating planned workouts.")
             return
         }
         guard let nextWorkout = nextWorkoutForFeedback() else {
-            nextSessionUpdateMessage = "No upcoming planned run is available to update."
+            nextSessionUpdate = .unavailable("No upcoming planned run is available to update.")
             return
         }
 
-        isApplyingNextSessionFeedback = true
-        nextSessionUpdateMessage = "Updating \(workoutLabel(nextWorkout))..."
-        defer { isApplyingNextSessionFeedback = false }
+        nextSessionUpdate = .applying(label: workoutLabel(nextWorkout))
 
         guard let adapted = await container.aiCoachService.adaptScheduledWorkoutWithProvider(
             scheduled: nextWorkout,
@@ -183,7 +181,7 @@ extension RunSummaryView {
                 completedOn: workout.date
             )
         ) else {
-            nextSessionUpdateMessage = "The coach feedback could not be applied. Try refreshing the AI analysis."
+            nextSessionUpdate = .failed
             return
         }
 
@@ -196,8 +194,7 @@ extension RunSummaryView {
 
         // The plan is updated the moment it is saved; Plan and Home read the store, so
         // they already show it. Say so now rather than after the Watch is caught up.
-        nextSessionUpdateMessage = "Updated \(workoutLabel(nextWorkout)) in your plan."
-        updatedNextSessionID = nextWorkout.id
+        nextSessionUpdate = .updated(id: nextWorkout.id, label: workoutLabel(nextWorkout))
 
         // Then bring along the copies that live outside the store. Only this session
         // changed, so only its Watch workout is replaced: this used to remove and

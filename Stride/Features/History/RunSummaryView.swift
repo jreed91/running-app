@@ -73,11 +73,10 @@ struct RunSummaryView: View {
     /// `CoachReplyStream`.
     @State var aiReadStream: CoachReplyStream = .idle
     @State var showFullAIAnalysis = false
-    @State var isApplyingNextSessionFeedback = false
-    @State var nextSessionUpdateMessage: String?
-    /// The session the coach's feedback was last applied to, so its button stands down
-    /// instead of offering to rewrite the same session again.
-    @State var updatedNextSessionID: UUID?
+    /// The "Update <next session>" button: applying, applied (its button stands down
+    /// instead of offering to rewrite the same session again), or why not. See
+    /// `NextSessionUpdate`.
+    @State var nextSessionUpdate: NextSessionUpdate = .idle
     @State var coachChatRequest: AICoachChatRequest?
     @State var zoneSlices: [HRZoneSlice] = []
     /// The Breakdown page shown in place of the summary, if one is open.
