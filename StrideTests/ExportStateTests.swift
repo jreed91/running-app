@@ -72,4 +72,22 @@ struct ExportStateTests {
         ready.abandon()
         #expect(ready == .ready("card.png"))
     }
+
+    @Test("The sheet and alert bindings dismiss when they close")
+    func presentationBindings() {
+        var ready = State.ready("a.gpx")
+        #expect(ready.shareItem == "a.gpx")
+        ready.shareItem = nil
+        #expect(ready == .idle)
+
+        var failed = State.failed("Disk full")
+        #expect(failed.isShowingError)
+        failed.isShowingError = false
+        #expect(failed == .idle)
+
+        var working = State.working
+        working.shareItem = nil
+        working.isShowingError = false
+        #expect(working.isWorking)
+    }
 }

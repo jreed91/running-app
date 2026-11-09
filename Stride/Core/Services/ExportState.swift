@@ -43,6 +43,23 @@ enum ExportState<Output> {
         return message
     }
 
+    // MARK: Presentation bindings
+
+    /// For `.sheet(item: $state.shareItem)`: the output while ready; the sheet closing
+    /// writes nil, which dismisses. A key path rather than a `Binding(get:set:)` built in
+    /// the body: two of those inline pushed `RunSummaryView.body` past the type checker's
+    /// time limit.
+    var shareItem: Output? {
+        get { output }
+        set { if newValue == nil { dismiss() } }
+    }
+
+    /// For `.alert(isPresented: $state.isShowingError)`: the alert closing dismisses.
+    var isShowingError: Bool {
+        get { errorMessage != nil }
+        set { if !newValue { dismiss() } }
+    }
+
     // MARK: Transitions
 
     mutating func begin() {
