@@ -1157,13 +1157,14 @@ private struct StrengthSessionEditor: View {
             List {
                 Section {
                     ForEach($exercises, id: \.name) { $exercise in
-                        VStack(alignment: .leading, spacing: 6) {
+                        VStack(alignment: .leading, spacing: 10) {
                             Text(exercise.name)
                                 .font(.dsHeadline)
                             Stepper(value: $exercise.sets, in: 1...6) {
                                 Text("\(exercise.sets) sets")
                                     .font(.dsBody.monospacedDigit())
                             }
+                            .frame(minHeight: 44)
                             if exercise.durationSeconds != nil {
                                 Stepper(
                                     value: Binding(
@@ -1176,11 +1177,13 @@ private struct StrengthSessionEditor: View {
                                     Text("\(exercise.durationSeconds ?? 30) s hold")
                                         .font(.dsBody.monospacedDigit())
                                 }
+                                .frame(minHeight: 44)
                             } else {
                                 Stepper(value: $exercise.reps, in: 1...30) {
                                     Text("\(exercise.reps) reps")
                                         .font(.dsBody.monospacedDigit())
                                 }
+                                .frame(minHeight: 44)
                             }
                         }
                         .padding(.vertical, 2)
@@ -1188,7 +1191,7 @@ private struct StrengthSessionEditor: View {
                     .onDelete { exercises.remove(atOffsets: $0) }
                     .onMove { exercises.move(fromOffsets: $0, toOffset: $1) }
                 } footer: {
-                    Text("About \(StrengthLibrary.estimatedMinutes(of: exercises)) min. Changes apply to today's session only.")
+                    Text("About \(StrengthLibrary.estimatedMinutes(of: exercises)) min. Swipe left to remove an exercise, or touch and hold to drag it. Changes apply to today's session only.")
                 }
 
                 Section {
@@ -1212,9 +1215,6 @@ private struct StrengthSessionEditor: View {
                         dismiss()
                     }
                     .disabled(exercises.isEmpty)
-                }
-                ToolbarItem(placement: .topBarLeading) {
-                    EditButton()
                 }
             }
             .sheet(isPresented: $showAdd) {
