@@ -199,14 +199,16 @@ struct RaceDayHubView: View {
 
     /// The saved briefing, when it was written from exactly these facts in this unit.
     private func currentBriefing(_ racePlan: RaceDayPlan) -> RaceBriefingWording? {
-        guard let briefing, briefing.source == RaceBriefing.prompt(for: racePlan, unit: unit) else { return nil }
+        guard let briefing,
+              briefing.source == RaceBriefing.prompt(for: racePlan, unit: unit, course: course(for: racePlan)?.course)
+        else { return nil }
         return briefing
     }
 
     /// Moves with the facts, the unit, the AI Coach switch and the model choice only.
     private func briefingRequestKey(_ racePlan: RaceDayPlan) -> String {
         [
-            RaceBriefing.prompt(for: racePlan, unit: unit),
+            RaceBriefing.prompt(for: racePlan, unit: unit, course: course(for: racePlan)?.course),
             briefingEnabled(racePlan) ? "on" : "off",
             appSettings.aiProvider.rawValue,
         ].joined(separator: "\n")
@@ -218,6 +220,7 @@ struct RaceDayHubView: View {
         let fresh = await container.aiCoachService.writeRaceBriefing(
             for: racePlan,
             unit: unit,
+            course: course(for: racePlan)?.course,
             provider: appSettings.aiProvider
         )
         // A newer set of facts (or setting) has already started its own request.

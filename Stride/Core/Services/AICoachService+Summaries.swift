@@ -51,11 +51,12 @@ extension AICoachService {
     func writeRaceBriefing(
         for plan: RaceDayPlan,
         unit: UnitPreference,
+        course: RaceCourse? = nil,
         provider: AIProvider
     ) async -> RaceBriefingWording? {
         guard RaceBriefing.applies(to: plan),
               let backend = onDeviceBackend, await backend.isAvailable() else { return nil }
-        let prompt = RaceBriefing.prompt(for: plan, unit: unit)
+        let prompt = RaceBriefing.prompt(for: plan, unit: unit, course: course)
         do {
             let draft: RaceBriefingDraft
             do {
@@ -71,7 +72,7 @@ extension AICoachService {
                     useServerModel: false
                 )
             }
-            return RaceBriefing.validated(draft, for: plan, unit: unit)
+            return RaceBriefing.validated(draft, for: plan, unit: unit, course: course)
         } catch {
             return nil
         }
