@@ -446,6 +446,9 @@ struct DashboardView: View {
     /// An unplanned strength session to present ("Strength session" under the run
     /// buttons), captured at tap time like `strengthWorkout`.
     @State private var unplannedStrength: UnplannedStrengthSession?
+    /// An unplanned strength session was cut off mid-way (app closed, crash) and can be
+    /// picked up again. Read on appear and when the session screen closes.
+    @State private var canResumeUnplannedStrength = false
     @State private var selectedDate = Date()
     /// Timestamp of the last time the rearrange-workouts prompt was flagged
     /// (dismissed or acted on). Used to limit the prompt to once per week.
@@ -609,7 +612,7 @@ struct DashboardView: View {
             .fullScreenCover(item: $strengthWorkout) { workout in
                 StrengthActiveView(scheduledWorkout: workout)
             }
-            .fullScreenCover(item: $unplannedStrength) { session in
+            .fullScreenCover(item: $unplannedStrength, onDismiss: refreshStrengthResume) { session in
                 StrengthActiveView(scheduledWorkout: nil, unplannedPlan: session.plan)
             }
             .sheet(isPresented: $showRouteGenius) {
@@ -1160,6 +1163,10 @@ struct DashboardView: View {
         )
     }
 
+    private func refreshStrengthResume() {
+        canResumeUnplannedStrength = StrengthSessionCheckpoint.load()?.resumes(scheduledWorkoutID: nil) == true
+    }
+
     /// A strength session the plan didn't schedule: a gym day, a rainy day, an extra one.
     /// Quiet, under "Plan a route", so the run stays the day's action.
     private func unplannedStrengthButton(_ plan: StrengthWorkoutPlan) -> some View {
@@ -1168,10 +1175,12 @@ struct DashboardView: View {
         } label: {
             HStack(spacing: 8) {
                 StrideIcon(name: .dumbbell, size: 16, color: .brandText, strokeWeight: 2.2)
-                Text("Start a strength session")
+                // The session screen restores an interrupted session from its checkpoint.
+                Text(canResumeUnplannedStrength ? "Resume strength session" : "Start a strength session")
             }
         }
         .buttonStyle(.strideButton(.quiet))
+        .onAppear(perform: refreshStrengthResume)
         .accessibilityIdentifier("dashboard.startUnplannedStrength")
         .accessibilityHint(
             String(
