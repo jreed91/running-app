@@ -437,6 +437,8 @@ struct DashboardView: View {
     @Environment(AppContainer.self) private var container
     @Environment(\.modelContext) private var context
     @Query private var profiles: [UserProfile]
+    /// The recap year the runner closed the Home recap card for (`YearRecapSeason`).
+    @AppStorage(YearRecapSeason.homeDismissedYearKey) private var yearRecapDismissedYear: Int = 0
     /// The strength workout to present. Captured at tap time and driven through
     /// `fullScreenCover(item:)` so the cover can never open onto an empty,
     /// undismissable screen when the selected day changes mid-presentation.
@@ -558,6 +560,12 @@ struct DashboardView: View {
                     } trailing: {
                         weekSummaryRow
                             .strideEntrance(dashboardAppeared, delay: AppAnimation.stagger * 5)
+                        if let recapYear = homeYearRecapYear {
+                            YearRecapEntryCard(year: recapYear) {
+                                yearRecapDismissedYear = recapYear
+                            }
+                            .strideEntrance(dashboardAppeared, delay: AppAnimation.stagger * 5)
+                        }
                         if !coachCards.isEmpty {
                             SmartCoachCardsSection(cards: CoachTipRewriter.apply(coachTipWording, to: coachCards))
                                 .strideEntrance(dashboardAppeared, delay: AppAnimation.stagger * 6)
@@ -758,6 +766,29 @@ struct DashboardView: View {
             // Draws nothing unless a pair is due for replacement.
             ShoeReplacementCard()
         }
+    }
+
+    // MARK: - Year in running
+
+    /// The recap year Home offers a card for, or `nil`: only in December and January
+    /// (`YearRecapSeason.isHomeSeason`), not after the runner closed it for that year, and
+    /// only when that year has enough runs for a recap. Counted, not fetched: Home's own
+    /// query holds just the newest 60 runs.
+    private var homeYearRecapYear: Int? {
+        guard YearRecapSeason.isHomeSeason() else { return nil }
+        let year = YearRecapSeason.recapYear()
+        guard yearRecapDismissedYear != year,
+              let interval = YearRecapSeason.interval(of: year) else { return nil }
+        let start = interval.start
+        let end = interval.end
+        let walkRaw = WorkoutType.walk.rawValue
+        let crossTrainingRaw = WorkoutType.crossTraining.rawValue
+        let descriptor = FetchDescriptor<RunWorkout>(predicate: #Predicate {
+            $0.date >= start && $0.date < end
+                && $0.workoutTypeRaw != walkRaw && $0.workoutTypeRaw != crossTrainingRaw
+        })
+        let count = (try? context.fetchCount(descriptor)) ?? 0
+        return count >= YearInRunning.minimumRunsForRecap ? year : nil
     }
 
     // MARK: - Week Summary
