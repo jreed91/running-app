@@ -14,7 +14,7 @@ extension RunSummaryView {
     @ViewBuilder
     var coachSummaryCard: some View {
         if appSettings.aiInsightsEnabled {
-            if aiInsight != nil || isLoadingAIInsight {
+            if aiInsight != nil || aiReadStream.isActive {
                 Button {
                     openPage = .coach
                 } label: {
@@ -47,7 +47,7 @@ extension RunSummaryView {
                 }
             }
 
-            if isLoadingAIInsight {
+            if aiReadStream.isActive {
                 // The headline and the "Next" line, still being written.
                 VStack(alignment: .leading, spacing: 8) {
                     CoachSkeletonLine().frame(maxWidth: 240, minHeight: 20, maxHeight: 20)

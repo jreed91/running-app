@@ -11,7 +11,7 @@ extension RunSummaryView {
 
     /// The partial coaching text as it streams in.
     ///
-    /// `aiStreamBuffer` was accumulated and never rendered (N22), so the runner watched a
+    /// The stream buffer was accumulated and never rendered (N22), so the runner watched a
     /// shimmering skeleton while the analysis was already in memory. The full card still
     /// replaces this once the structured insight is decoded.
     var aiStreamingPreviewCard: some View {
@@ -26,7 +26,7 @@ extension RunSummaryView {
                 Spacer()
                 CoachTypingDots(dotSize: 5)
             }
-            CoachText(aiStreamBuffer)
+            CoachText(aiReadStream.partialText)
                 .font(.dsSubhead)
                 .lineSpacing(3)
         }
@@ -74,17 +74,13 @@ extension RunSummaryView {
 
     @MainActor
     func loadAIInsight() async {
-        guard !isLoadingAIInsight else { return }
+        guard !aiReadStream.isActive else { return }
         guard hasAIKey else {
             aiInsight = nil
             return
         }
-        isLoadingAIInsight = true
-        aiStreamBuffer = ""
-        defer {
-            isLoadingAIInsight = false
-            aiStreamBuffer = ""
-        }
+        aiReadStream.begin()
+        defer { aiReadStream.finish() }
 
         // The coach cites the zone breakdown, so make sure it exists before asking. Normally
         // the on-open task has already filled it; this covers a tap that lands first, and a
@@ -108,7 +104,7 @@ extension RunSummaryView {
             onPartialText: { text in
                 // Direct assignment on the main actor; see `OnDeviceCoachGenerating` for
                 // why this is not wrapped in a `Task`.
-                aiStreamBuffer = text
+                aiReadStream.receive(text)
             }
         )
         aiInsight = result
@@ -147,7 +143,7 @@ extension RunSummaryView {
               hasAIKey,
               aiInsight == nil,
               workout.cachedAIInsight == nil,
-              !isLoadingAIInsight else { return }
+              !aiReadStream.isActive else { return }
         Task { await loadAIInsight() }
     }
 
