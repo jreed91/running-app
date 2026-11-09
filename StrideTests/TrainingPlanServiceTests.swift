@@ -540,6 +540,46 @@ struct TrainingPlanServiceTests {
         #expect(future.map(\.notes) == notesAfterFirst)
     }
 
+    @Test("No easy run is longer than the same week's long run, for 3–6 run days")
+    func easyRunNeverOutrunsLongRun() {
+        for runDays in 3...6 {
+            for race in [RaceType.fiveK, .tenK, .halfMarathon] {
+                let profile = makeProfile(race: race, runDays: runDays)
+                let plan = service.generatePlan(profile: profile, startDate: .now, numberOfWeeks: 12)
+                for week in weeks(in: plan) {
+                    let ws = workouts(in: week)
+                    let longRun = ws.first { $0.workoutType == .longRun }
+                    guard let long = longRun?.targetDistanceMeters else { continue }
+                    for easy in ws where easy.workoutType == .easy {
+                        let easyMeters = easy.targetDistanceMeters ?? 0
+                        #expect(
+                            easyMeters < long,
+                            "\(race) \(runDays)d wk \(week.weekNumber): easy \(easyMeters), long \(long)"
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    @Test("A week's target distance is what its runs add up to, for 1–6 run days")
+    func weekTargetMatchesScheduledRuns() {
+        for runDays in 1...6 {
+            let profile = makeProfile(race: .tenK, runDays: runDays)
+            let plan = service.generatePlan(profile: profile, startDate: .now, numberOfWeeks: 10)
+            for week in weeks(in: plan) {
+                let scheduledKm = workouts(in: week)
+                    .filter { $0.workoutType.isRunType }
+                    .reduce(0.0) { $0 + ($1.targetDistanceMeters ?? 0) / 1_000 }
+                let tolerance = max(0.5, week.targetDistanceKm * 0.02)
+                #expect(
+                    abs(scheduledKm - week.targetDistanceKm) < tolerance,
+                    "\(runDays)d wk \(week.weekNumber): scheduled \(scheduledKm), target \(week.targetDistanceKm)"
+                )
+            }
+        }
+    }
+
     // MARK: Target distance
 
     @Test("Target distance decreases in taper week vs peak week")
