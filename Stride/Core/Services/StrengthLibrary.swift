@@ -238,6 +238,11 @@ struct StrengthLibrary: Sendable {
         return kept
     }
 
+    /// A session's estimated minutes, for a session edited by hand.
+    static func estimatedMinutes(of exercises: [StrengthExercise]) -> Int {
+        estimatedDuration(exercises: exercises, phase: .base)
+    }
+
     private static func estimatedDuration(exercises: [StrengthExercise], phase: TrainingPhase) -> Int {
         let restBetweenSets = 60
         let secsPerRep = 4
