@@ -65,14 +65,11 @@ struct StrengthActiveView: View {
     @State private var suggestion: LoadSuggestion?
 
     // Rest timer
-    @State private var restTimerActive: Bool = false
-    @State private var restTimeRemaining: Int = 0
-    @State private var restDeadline: Date?
+    /// Idle, or resting toward a deadline. See `RestTimerState` for the transitions.
+    @State private var restTimer: RestTimerState = .idle
     @State private var restTimerTask: Task<Void, Never>?
     /// This exercise's rest, from ``StrengthProgression/restSeconds(for:)``.
     @State private var restSeconds: Int = 60
-    /// The running rest's full length, which the +/− buttons move, for the ring.
-    @State private var restTotalSeconds: Int = 60
 
     // Session timing
     @State private var startTime: Date = Date()
@@ -138,7 +135,7 @@ struct StrengthActiveView: View {
                     VStack(spacing: 0) {
                         ScrollView {
                             Group {
-                                if restTimerActive {
+                                if restTimer.isResting {
                                     restTimerCard
                                 } else {
                                     logSetCard(exercise: exercise)
@@ -202,7 +199,7 @@ struct StrengthActiveView: View {
         // Haptics (U4). Logging a set and the rest timer expiring are both moments
         // the lifter is mid-movement and not looking at the phone.
         .sensoryFeedback(.selection, trigger: completedSets.count) { old, new in new > old }
-        .sensoryFeedback(.success, trigger: restTimeRemaining) { old, new in old == 1 && new == 0 }
+        .sensoryFeedback(.success, trigger: restTimer.remainingSeconds) { old, new in old == 1 && new == 0 }
     }
 
     /// The session as it has always been laid out: everything in one scroll.
@@ -218,7 +215,7 @@ struct StrengthActiveView: View {
                     VStack(spacing: 20) {
                         progressHeader
                         exerciseCard(exercise: exercise)
-                        if restTimerActive {
+                        if restTimer.isResting {
                             restTimerCard
                         } else {
                             logSetCard(exercise: exercise)
@@ -519,9 +516,9 @@ struct StrengthActiveView: View {
                     .stroke(.route, style: StrokeStyle(lineWidth: 6, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                     .frame(width: 100, height: 100)
-                    .animation(AppAnimation.countdown, value: restTimeRemaining)
+                    .animation(AppAnimation.countdown, value: restTimer.remainingSeconds)
                 VStack(spacing: 2) {
-                    Text("\(restTimeRemaining)")
+                    Text("\(restTimer.remainingSeconds)")
                         .font(.dsTitle1.monospacedDigit())
                     Text("sec")
                         .font(.dsCaption2)
@@ -558,11 +555,7 @@ struct StrengthActiveView: View {
         .strideCard(cornerRadius: AppRadius.lg)
     }
 
-    private var restProgress: Double {
-        guard restTotalSeconds > 0 else { return 1 }
-        let elapsed = Double(restTotalSeconds - restTimeRemaining)
-        return min(1, max(0, elapsed / Double(restTotalSeconds)))
-    }
+    private var restProgress: Double { restTimer.progress }
 
     // MARK: - Completed Sets History
 
@@ -862,23 +855,19 @@ struct StrengthActiveView: View {
 
     private func startRestTimer() {
         restTimerTask?.cancel()
-        let deadline = Date().addingTimeInterval(TimeInterval(restSeconds))
-        restDeadline = deadline
-        restTimeRemaining = restSeconds
-        restTotalSeconds = restSeconds
-        restTimerActive = true
+        restTimer = .start(seconds: restSeconds, now: Date())
         restTimerTask = Task { @MainActor in
             // Derive the remaining time from the deadline each tick so a suspended app
             // resumes with the correct countdown (M27) rather than freezing at whatever
             // value it held when it went to the background. Read from state, not
-            // captured, so the +/− buttons move it.
-            while restTimerActive, let deadline = restDeadline {
-                restTimeRemaining = RestCountdown.secondsRemaining(deadline: deadline, now: Date())
-                if restTimeRemaining <= 0 { break }
+            // captured, so the +/− buttons move it. A tick that reaches 0 ends the rest.
+            while restTimer.isResting {
+                restTimer.tick(now: Date())
+                guard restTimer.isResting else { break }
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
                 guard !Task.isCancelled else { return }
             }
-            if restTimerActive { endRestTimer() }
+            restTimerTask = nil
         }
     }
 
@@ -886,23 +875,16 @@ struct StrengthActiveView: View {
     /// keeps the change for the rest of this exercise's sets: a lifter who wanted longer
     /// after set one will want it after set two.
     private func adjustRest(by seconds: Int) {
-        guard let deadline = restDeadline else { return }
-        let remaining = RestCountdown.secondsRemaining(deadline: deadline, now: Date())
-        let newRemaining = max(0, remaining + seconds)
-        restDeadline = Date().addingTimeInterval(TimeInterval(newRemaining))
-        restTimeRemaining = newRemaining
-        restTotalSeconds = max(1, restTotalSeconds + seconds)
+        guard restTimer.adjust(by: seconds, now: Date()) else { return }
         restSeconds = min(StrengthProgression.restRange.upperBound,
                           max(StrengthProgression.restRange.lowerBound, restSeconds + seconds))
-        if newRemaining == 0 { endRestTimer() }
+        if !restTimer.isResting { endRestTimer() }
     }
 
     private func endRestTimer() {
         restTimerTask?.cancel()
         restTimerTask = nil
-        restTimerActive = false
-        restTimeRemaining = 0
-        restDeadline = nil
+        restTimer.end()
     }
 
     /// Leave without persisting anything — the scheduled day stays open (H5).
