@@ -26,10 +26,10 @@ struct SettingsView: View {
     @State private var showSignOutConfirmation = false
     @State private var showPulseConsole = false
     /// The full-history archive (B6), non-nil only while its share sheet is up.
-    @State private var dataExportFile: ExportedFile?
-    @State private var isExportingData = false
-    /// Shown when the archive could not be written, rather than the tap doing nothing.
-    @State private var dataExportErrorMessage: String?
+    /// The full-data export: writing, ready for the share sheet, or the error shown when
+    /// the archive could not be written, rather than the tap doing nothing. See
+    /// `ExportState`.
+    @State private var dataExport: ExportState<ExportedFile> = .idle
     @State private var notificationTestStatus: String?
     /// Whether iOS has notifications switched off for Stride. Re-read on every return to
     /// the foreground, since the place the runner fixes it is the Settings app.
@@ -114,16 +114,19 @@ struct SettingsView: View {
             } message: {
                 Text("Your runs, plan and settings stay on this iPhone.")
             }
-            .sheet(item: $dataExportFile) { file in
+            .sheet(item: Binding(
+                get: { dataExport.output },
+                set: { if $0 == nil { dataExport.dismiss() } }
+            )) { file in
                 ShareSheet(items: [file.url])
             }
             .alert("Couldn't export your data", isPresented: Binding(
-                get: { dataExportErrorMessage != nil },
-                set: { if !$0 { dataExportErrorMessage = nil } }
+                get: { dataExport.errorMessage != nil },
+                set: { if !$0 { dataExport.dismiss() } }
             )) {
                 Button("OK", role: .cancel) {}
             } message: {
-                Text(dataExportErrorMessage ?? "")
+                Text(dataExport.errorMessage ?? "")
             }
         }
     }
@@ -651,7 +654,7 @@ struct SettingsView: View {
                 exportAllData()
             } label: {
                 settingsRow(icon: .export, iconColor: .brand, title: "Export all data") {
-                    if isExportingData {
+                    if dataExport.isWorking {
                         ProgressView()
                     } else {
                         rowChevron
@@ -660,7 +663,7 @@ struct SettingsView: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(.primary)
-            .disabled(isExportingData)
+            .disabled(dataExport.isWorking)
             .accessibilityIdentifier("settings.exportAllData")
             footnote(Text("One ZIP with every workout, strength session and shoe as spreadsheets, and each route as a GPX file."))
         }
@@ -1137,7 +1140,7 @@ struct SettingsView: View {
     /// task that writes and zips them, which is the part that can take a moment on a long
     /// history.
     private func exportAllData() {
-        guard !isExportingData else { return }
+        guard !dataExport.isWorking else { return }
         let exportedAt = Date()
         let entries: [DataExport.Entry]
         do {
@@ -1149,21 +1152,20 @@ struct SettingsView: View {
             )
         } catch {
             AppLogger.log("Data export fetch failed: \(error.localizedDescription)", label: "Export", level: .error)
-            dataExportErrorMessage = error.localizedDescription
+            dataExport.fail(error.localizedDescription)
             return
         }
         let name = DataExport.archiveName(exportedAt: exportedAt)
-        isExportingData = true
+        dataExport.begin()
         Task {
             let result = await Task.detached(priority: .userInitiated) {
                 Result { try DataExportWriter.writeArchive(entries: entries, name: name) }
             }.value
-            isExportingData = false
             switch result {
             case .success(let url):
-                dataExportFile = ExportedFile(url: url)
+                dataExport.succeed(ExportedFile(url: url))
             case .failure(let error):
-                dataExportErrorMessage = error.localizedDescription
+                dataExport.fail(error.localizedDescription)
             }
         }
     }
