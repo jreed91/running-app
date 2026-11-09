@@ -875,6 +875,12 @@ Strict concurrency is enabled. Key patterns:
   anything a runner reads, and `displayName` for anything a machine reads — AI prompts,
   logs, and the seeded race names in onboarding, which are compared and persisted and so
   must not move with the device language.
+- **Lifecycles are enums, not clusters of flags.** When a new `Bool` or optional only
+  means something in some values of another (`isLoading` beside `result` beside
+  `errorMessage`), write one enum with pure, clock-free transitions in
+  `Stride/Core/Services/` and a test per transition. `RestTimerState`, `CoachReplyStream`
+  and `SyncPassQueue` are the pattern; [`docs/STATE_MACHINES.md`](docs/STATE_MACHINES.md)
+  has the rule and the ranked list of ones still implicit.
 - Do not introduce new third-party packages without an explicit reason and a `project.yml` update.
 - For frontend/UI work, match the existing theme primitives in `Stride/Shared/Theme/` and reusable components in `Stride/Shared/Components/`.
   The visual identity is Route Loop (route gradient, start pin, night-map ink); its rules
@@ -893,6 +899,7 @@ issue is usually already written up, with a recommended fix:
 | [`docs/FEATURE_IMPROVEMENTS_2026-07.md`](docs/FEATURE_IMPROVEMENTS_2026-07.md) | Product/feature roadmap with shipped-status tracking. **The live one** — the two bug audits and the UX audit are closed bar items blocked on CI or a device, so this is where the remaining work is. Its header lists what is genuinely open. |
 | [`docs/PREGNANCY_RUNNING_EVIDENCE.md`](docs/PREGNANCY_RUNNING_EVIDENCE.md) | The published guidelines and studies behind every number in `PregnancyRunningPolicy`, with each row mapped to the code rule it drives. **Read before changing any of those numbers** — and update the row in the same change. |
 | [`docs/HEAT_ADAPTATION_EVIDENCE.md`](docs/HEAT_ADAPTATION_EVIDENCE.md) | The dew-point, temperature-sum and ACSM sources behind every number in `HeatAdaptationPolicy` — the tier scales, the pace-adjustment bands, what changes about a session, and why heat acclimatisation is deliberately not modelled. **Read before changing any of those numbers** — and update the row in the same change. |
+| [`docs/STATE_MACHINES.md`](docs/STATE_MACHINES.md) | Every implicit state machine (flags that move together) found on 2026-11-09: the ones made explicit, the rule for new ones, and a ranked list still to convert, plus two latent bugs found on the way. **Read before adding a second flag beside an existing one.** |
 | [`docs/REPO_ANALYSIS.md`](docs/REPO_ANALYSIS.md) | Operational review: CI, secrets hygiene, test depth. |
 | [`docs/CLOUDKIT_VALIDATION.md`](docs/CLOUDKIT_VALIDATION.md) | CloudKit sync validation steps. |
 | [`docs/CLOUDKIT_ANALYSIS_2026-07-28.md`](docs/CLOUDKIT_ANALYSIS_2026-07-28.md) | CloudKit setup audited against Apple's published requirements, every claim source-linked. **Read before touching `ModelConfiguration`, the store-fallback tiers, or any `@Model`'s stored properties.** All six findings fixed in code; the §6 device validation is still owed. The reasoning is kept in full because it is what stops F1 returning via the next config that omits an argument. |
