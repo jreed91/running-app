@@ -95,6 +95,32 @@ seconds.", "10 seconds. Get ready to run.", and after the last run "Running done
 finish. 5 minutes." The last run goes straight into that walk; there is no 90 second walk in
 front of it, on the phone or on the Watch.
 
+## Repeating a week
+
+"Repeat this week" on the Plan tab runs the current stage again next week. The weeks after it,
+their sessions and the plan's end all move back seven days; this week stays as it is, and the
+stage after the repeat is the one that would have come next. It can be repeated again, since
+some steps take a runner three weeks.
+
+It isn't offered:
+
+- on the last week, which ends the plan (a 5K plan follows it instead);
+- outside the plan's dates, where there is no "this week";
+- when a later week already has a completed session, which the move would put on a day it
+  wasn't run.
+
+Nothing about a repeat is stored. The guidance card sees next week's stage equal this week's
+and says "Next week: the same again, then the next step."
+
+## After the last week
+
+Once the last run of the last week is done, or that week is over with at least one of its runs
+done, the guidance card reads "Start Running complete" and offers **Start a 5K plan**. That
+opens New Plan on a 5K at "New to running", twelve weeks out, with 35:00 as the 5K time when
+none is on file: roughly what 30 minutes at a talking pace covers 5 km in. The runner can change
+any of it. A plan that ran out without a run in its last week isn't called finished; the card
+asks for the 30 minutes first.
+
 ## Safety wording
 
 Every session note and the Plan tab card carry: "Stop and get checked if you have chest pain,

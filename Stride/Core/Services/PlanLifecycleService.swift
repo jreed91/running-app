@@ -175,6 +175,44 @@ final class PlanLifecycleService {
         return outcome
     }
 
+    // MARK: - Start Running
+
+    /// Runs this week's Start Running stage again next week
+    /// (``StartRunningPlanService/repeatWeek(in:profile:now:)``), then re-files the plan
+    /// with the Watch and re-schedules the morning reminders, both of which hold the dates
+    /// the later weeks just moved off.
+    ///
+    /// - Returns: False, having changed nothing, when the week can't be repeated.
+    /// - Throws: Whatever the save throws, after putting the plan back as it was.
+    @discardableResult
+    func repeatStartRunningWeek(
+        plan: TrainingPlan,
+        profile: UserProfile,
+        context: ModelContext,
+        morningRemindersEnabled: Bool,
+        unitPreference: UnitPreference = .metric
+    ) throws -> Bool {
+        guard let repeated = StartRunningPlanService().repeatWeek(in: plan, profile: profile) else {
+            return false
+        }
+        context.insert(repeated)
+        do {
+            try context.save()
+        } catch {
+            context.rollback()
+            throw error
+        }
+
+        Task { @MainActor [healthKitRepository, notificationService] in
+            if morningRemindersEnabled {
+                await notificationService.scheduleMorningReminders(for: plan)
+            }
+            try? await healthKitRepository.syncWorkoutPlans(for: plan, unitPreference: unitPreference)
+            context.saveOrLog("the repeated week's WorkoutKit ids")
+        }
+        return true
+    }
+
     // MARK: - Activation
 
     /// Commits a freshly generated plan as *the* active plan, and hands its off-store

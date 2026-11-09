@@ -311,6 +311,122 @@ struct StartRunningPlanServiceTests {
         #expect(weeks(in: rebuilt).count == 7)
     }
 
+    // MARK: - Repeating a week
+
+    @Test("Repeating a week runs its stage again next week and moves the rest back a week")
+    func repeatWeek() throws {
+        let profile = makeProfile()
+        let plan = service.generatePlan(profile: profile, startDate: start)
+        let originalEnd = plan.endDate
+        let original = weeks(in: plan)
+        let laterStarts = original.dropFirst().map(\.startDate)
+        let laterRunDates = original.dropFirst().flatMap { runs(in: $0) }.map(\.scheduledDate)
+        let now = start.adding(days: 1)
+
+        // This week's runs done: the repeat is a fresh copy, and this week stays as it was.
+        runs(in: original[0]).forEach { $0.isCompleted = true }
+
+        #expect(StartRunningPlanService.canRepeatWeek(in: plan, now: now))
+        let repeated = try #require(service.repeatWeek(in: plan, profile: profile, now: now))
+
+        let after = weeks(in: plan)
+        #expect(after.map(\.weekNumber) == Array(1...11))
+        let stages = after.compactMap { StartRunningPlanService.stage(of: $0)?.number }
+        #expect(stages == [1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+        #expect(after[1] === repeated)
+        #expect(repeated.startDate == laterStarts[0])
+        let repeatedDays = runs(in: repeated).map { weekday(of: $0.scheduledDate, from: repeated.startDate) }
+        #expect(repeatedDays == [0, 2, 4])
+        #expect(runs(in: repeated).allSatisfy { !$0.isCompleted })
+        #expect(runs(in: after[0]).allSatisfy(\.isCompleted))
+
+        #expect(after.dropFirst(2).map(\.startDate) == laterStarts.map { $0.adding(days: 7) })
+        let movedRunDates = after.dropFirst(2).flatMap { runs(in: $0) }.map(\.scheduledDate)
+        #expect(movedRunDates == laterRunDates.map { $0.adding(days: 7) })
+        #expect(plan.endDate == originalEnd.adding(days: 7))
+    }
+
+    @Test("A week can't be repeated outside the plan, on its last week, or past a run already done")
+    func repeatWeekLimits() throws {
+        let profile = makeProfile()
+        let plan = service.generatePlan(profile: profile, startDate: start)
+        let planWeeks = weeks(in: plan)
+        let inFirstWeek = start.adding(days: 1)
+
+        let beforeStart = start.adding(days: -2)
+        let afterEnd = plan.endDate.adding(weeks: 2)
+        let inLastWeek = try #require(planWeeks.last).startDate.adding(days: 1)
+        #expect(!StartRunningPlanService.canRepeatWeek(in: plan, now: beforeStart), "before the plan starts")
+        #expect(!StartRunningPlanService.canRepeatWeek(in: plan, now: afterEnd), "after it ends")
+        #expect(!StartRunningPlanService.canRepeatWeek(in: plan, now: inLastWeek), "the last week")
+
+        // A run already done in a later week would land a week after the day it was run.
+        let thirdWeekRun = try #require(runs(in: planWeeks[2]).first)
+        thirdWeekRun.isCompleted = true
+        #expect(!StartRunningPlanService.canRepeatWeek(in: plan, now: inFirstWeek))
+        #expect(service.repeatWeek(in: plan, profile: profile, now: inFirstWeek) == nil)
+        #expect(weeks(in: plan).count == 10, "a refused repeat changes nothing")
+        thirdWeekRun.isCompleted = false
+
+        plan.planKind = .standard
+        #expect(!StartRunningPlanService.canRepeatWeek(in: plan, now: inFirstWeek), "only Start Running plans")
+    }
+
+    @Test("After a repeat, guidance says next week is the same again, then names the step after it")
+    func guidanceAfterRepeat() throws {
+        let profile = makeProfile()
+        let plan = service.generatePlan(profile: profile, startDate: start, firstStage: 4)
+        let inFirstWeek = start.adding(days: 1)
+        let inSecondWeek = start.adding(weeks: 1).adding(days: 1)
+        _ = try #require(service.repeatWeek(in: plan, profile: profile, now: inFirstWeek))
+
+        let thisWeek = try #require(StartRunningPlanService.guidance(for: plan, now: inFirstWeek))
+        #expect(thisWeek.stage.number == 4)
+        #expect(thisWeek.next == "Next week: the same again, then the next step.")
+
+        let secondWeek = try #require(StartRunningPlanService.guidance(for: plan, now: inSecondWeek))
+        #expect(secondWeek.stage.number == 4)
+        #expect(secondWeek.next == "Next week: \(StartRunningProgram.stage(5).summary).")
+
+        // Repeating the repeat is allowed: some steps take a runner three weeks.
+        #expect(StartRunningPlanService.canRepeatWeek(in: plan, now: inSecondWeek))
+    }
+
+    // MARK: - Finishing
+
+    @Test("The program is finished once its last run is done, not just because its last week began")
+    func finished() throws {
+        let plan = service.generatePlan(profile: makeProfile(), startDate: start, firstStage: 6)
+        let lastWeek = try #require(weeks(in: plan).last)
+        let inLastWeek = lastWeek.startDate.adding(days: 1)
+
+        let started = try #require(StartRunningPlanService.guidance(for: plan, now: inLastWeek))
+        #expect(started.stage.isGraduation)
+        #expect(!started.isFinished)
+
+        let lastRun = try #require(runs(in: lastWeek).last)
+        lastRun.isCompleted = true
+        let done = try #require(StartRunningPlanService.guidance(for: plan, now: inLastWeek))
+        #expect(done.isFinished)
+        #expect(!StartRunningPlanService.canRepeatWeek(in: plan, now: inLastWeek))
+    }
+
+    @Test("After the plan ends it reads as finished only if a run of its last week was done")
+    func finishedAfterTheEnd() throws {
+        let plan = service.generatePlan(profile: makeProfile(), startDate: start, firstStage: 6)
+        let lastWeek = try #require(weeks(in: plan).last)
+        let afterEnd = plan.endDate.adding(weeks: 1)
+
+        let notRun = try #require(StartRunningPlanService.guidance(for: plan, now: afterEnd))
+        #expect(!notRun.isFinished, "no congratulations for 30 minutes nobody ran")
+        #expect(notRun.next.hasPrefix("When you can run 30 minutes without stopping"))
+
+        let firstLastWeekRun = try #require(runs(in: lastWeek).first)
+        firstLastWeekRun.isCompleted = true
+        let ranSome = try #require(StartRunningPlanService.guidance(for: plan, now: afterEnd))
+        #expect(ranSome.isFinished)
+    }
+
     // MARK: - Nothing else may rewrite it
 
     @Test("The AI coach is offered no workouts from a Start Running plan")
