@@ -23,12 +23,13 @@ final class WorkoutSyncService {
     private let weatherService: WeatherService
     private let context: ModelContext
     private var isObserving = false
-    private var isSyncing = false
+    /// Idle, or a pass running with at most one follow-up queued (M1). See `SyncPassQueue`.
+    private var syncQueue: SyncPassQueue = .idle
 
     /// Source label of a sync trigger that arrived while another sync was in
     /// flight. The in-flight pass replays it when it finishes instead of
-    /// dropping the trigger (M1). `private(set)` so tests can observe queueing.
-    private(set) var pendingSyncSource: String?
+    /// dropping the trigger (M1). Read-only so tests can observe queueing.
+    var pendingSyncSource: String? { syncQueue.queuedSource }
 
     /// Called on MainActor after each batch of new workouts is imported and auto-linked.
     var onWorkoutsSynced: (([RunWorkout]) -> Void)?
@@ -124,8 +125,7 @@ final class WorkoutSyncService {
         // snapshotted its existing-ID set before the workout that fired this
         // trigger existed, so it can miss it. Queue exactly one follow-up pass
         // and let the in-flight caller replay it (M1).
-        guard !isSyncing else {
-            pendingSyncSource = source
+        guard syncQueue.request(source) else {
             AppLogger.log(
                 "Sync already in progress; queued follow-up \(source) sync.",
                 label: "HealthKit",
@@ -133,14 +133,12 @@ final class WorkoutSyncService {
             )
             return
         }
-        isSyncing = true
-        defer { isSyncing = false }
-
+        // The queue is now `.syncing`; `next()` hands back the follow-up owed, or
+        // returns it to `.idle` when there is none.
         var currentSource: String? = source
         while let source = currentSource {
             await runSyncPass(source: source, lookbackDays: lookbackDays)
-            currentSource = pendingSyncSource
-            pendingSyncSource = nil
+            currentSource = syncQueue.next()
         }
     }
 

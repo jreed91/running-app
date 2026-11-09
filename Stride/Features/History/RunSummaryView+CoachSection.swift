@@ -14,10 +14,10 @@ extension RunSummaryView {
     var aiCoachSection: some View {
         if appSettings.aiInsightsEnabled {
             VStack(alignment: .leading, spacing: AppSpacing.xl) {
-                if isLoadingAIInsight {
+                if aiReadStream.isActive {
                     // Show the coach's text the moment it arrives instead of a skeleton
                     // over an already-populated buffer (N22).
-                    if aiStreamBuffer.isEmpty {
+                    if aiReadStream == .waiting {
                         aiCoachSkeletonSection
                     } else {
                         aiStreamingPreviewCard
@@ -332,7 +332,7 @@ extension RunSummaryView {
             Text("Rewrite")
         }
         .buttonStyle(.strideButton(.quiet, compact: true, fullWidth: false))
-        .disabled(isLoadingAIInsight || !hasAIKey)
+        .disabled(aiReadStream.isActive || !hasAIKey)
         .accessibilityHint(
             String(localized: "Writes a new analysis of this run", comment: "Hint on the coach's Rewrite button")
         )

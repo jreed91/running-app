@@ -55,11 +55,10 @@ struct AICoachChatView: View {
 
     @State private var messages: [AICoachChatMessage] = []
     @State private var draft = ""
-    @State private var isWaitingForCoach = false
     /// The coach's reply as it is written, shown in a live bubble until the finished
-    /// message is appended to `messages`. Empty while the model has produced nothing yet,
-    /// which is the only stretch the typing dots still cover.
-    @State private var streamingReply = ""
+    /// message is appended to `messages`. `.waiting` while the model has produced nothing
+    /// yet, which is the only stretch the typing dots still cover. See `CoachReplyStream`.
+    @State private var replyStream: CoachReplyStream = .idle
     @State private var didSendInitialPrompt = false
     /// This morning's readiness (B7), so "should I rest tomorrow?" is answered from the
     /// runner's HRV, resting heart rate and sleep, not only from their run log. `nil`
@@ -84,12 +83,13 @@ struct AICoachChatView: View {
                         ForEach(messages) { message in
                             messageRow(message)
                         }
-                        if isWaitingForCoach {
-                            if streamingReply.isEmpty {
-                                typingRow
-                            } else {
-                                streamingReplyRow
-                            }
+                        switch replyStream {
+                        case .idle:
+                            EmptyView()
+                        case .waiting:
+                            typingRow
+                        case .streaming(let text):
+                            streamingReplyRow(text)
                         }
                     }
                     .padding(.horizontal, AppSpacing.lg)
@@ -125,7 +125,7 @@ struct AICoachChatView: View {
                         // On-device generation can take a few seconds with no other sign
                         // that anything is happening; the glyph that represents the coach
                         // is the natural place to say "thinking".
-                        .symbolEffect(.variableColor.iterative, isActive: isWaitingForCoach)
+                        .symbolEffect(.variableColor.iterative, isActive: replyStream.isActive)
                         .frame(width: 36, height: 36)
                         .background(.surfaceSecondary, in: Circle())
                         // Decoration, not a control — it reads as "sparkles" otherwise.
@@ -227,7 +227,7 @@ struct AICoachChatView: View {
                     }
             }
             .buttonStyle(.plain)
-            .disabled(!canSendDraft || isWaitingForCoach)
+            .disabled(!canSendDraft || replyStream.isActive)
             .accessibilityLabel("Send message")
         }
         .padding(.leading, AppSpacing.lg)
@@ -304,11 +304,11 @@ struct AICoachChatView: View {
     /// stops growing. The metrics and status badge are left off here and applied when the
     /// message is appended, because whether this is the opening reply is not known until
     /// it is.
-    private var streamingReplyRow: some View {
+    private func streamingReplyRow(_ text: String) -> some View {
         messageRow(
             AICoachChatMessage(
                 sender: .coach,
-                text: streamingReply,
+                text: text,
                 metrics: [],
                 status: nil
             )
@@ -402,7 +402,7 @@ struct AICoachChatView: View {
     @MainActor
     private func send(_ text: String) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !isWaitingForCoach else { return }
+        guard !trimmed.isEmpty, !replyStream.isActive else { return }
 
         withAnimation(AppAnimation.snappy) {
             messages.append(
@@ -429,12 +429,8 @@ struct AICoachChatView: View {
             return
         }
 
-        isWaitingForCoach = true
-        streamingReply = ""
-        defer {
-            isWaitingForCoach = false
-            streamingReply = ""
-        }
+        replyStream.begin()
+        defer { replyStream.finish() }
 
         // The metric chips and status badge summarize the run the conversation
         // opened on. They belong to the first coach reply only — repeating them on
@@ -466,7 +462,7 @@ struct AICoachChatView: View {
                     // Assigned directly: the closure is `@MainActor` and the backend
                     // awaits it, so this is a step of the stream rather than a task
                     // racing it.
-                    streamingReply = text
+                    replyStream.receive(text)
                 }
             )
             withAnimation(AppAnimation.snappy) {

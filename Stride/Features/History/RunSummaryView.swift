@@ -68,8 +68,10 @@ struct RunSummaryView: View {
     @ScaledMetric(relativeTo: .largeTitle) var heroMetricSize: CGFloat = 56
     @State var showAssociateSheet = false
     @State var aiInsight: AICoachInsight?
-    @State var isLoadingAIInsight = false
-    @State var aiStreamBuffer = ""
+    /// The coach's read while it is being written: `.waiting` for the first words, then
+    /// the text so far. `.idle` otherwise, when `aiInsight` is what shows. See
+    /// `CoachReplyStream`.
+    @State var aiReadStream: CoachReplyStream = .idle
     @State var showFullAIAnalysis = false
     @State var isApplyingNextSessionFeedback = false
     @State var nextSessionUpdateMessage: String?
