@@ -218,6 +218,11 @@ struct StrengthExercise: Codable, Hashable, Sendable {
     var equipment: StrengthEquipment? = nil
 }
 
+/// Identified by name, which is unique within the library and within any one plan.
+extension StrengthExercise: Identifiable {
+    var id: String { name }
+}
+
 struct StrengthWorkoutPlan: Codable, Hashable, Sendable {
     var focus: StrengthFocus
     var exercises: [StrengthExercise]

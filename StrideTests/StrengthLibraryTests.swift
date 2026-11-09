@@ -248,4 +248,41 @@ struct StrengthLibraryTests {
         )
         #expect(plan == nil)
     }
+
+    // MARK: - How-to and swaps
+
+    @Test("Every exercise the library can produce has three cues")
+    func everyExerciseHasCues() {
+        #expect(!StrengthLibrary.catalog.isEmpty)
+        for exercise in StrengthLibrary.catalog {
+            #expect(StrengthLibrary.cues(forExerciseNamed: exercise.name)?.count == 3, "\(exercise.name)")
+        }
+    }
+
+    @Test("Swaps share a muscle group, use what you own, and keep the session's size")
+    func swapsUseOwnedEquipment() throws {
+        let squat = try #require(StrengthLibrary.catalog.first { $0.name == "Back Squat" })
+        var prescribed = squat
+        prescribed.sets = 4
+        prescribed.reps = 6
+        let swaps = StrengthLibrary.alternatives(to: prescribed, equipment: [.dumbbells])
+        #expect(!swaps.isEmpty)
+        #expect(swaps.count <= 4)
+        for swap in swaps {
+            #expect(swap.name != "Back Squat")
+            #expect(swap.equipment == .dumbbells || swap.equipment == .bodyweight)
+            #expect(!Set(swap.muscleGroups).isDisjoint(with: squat.muscleGroups))
+            #expect(swap.sets == 4)
+        }
+        // Closest first: same main muscle group.
+        #expect(swaps.first?.muscleGroups.first == squat.muscleGroups.first)
+        #expect(swaps.first(where: { $0.durationSeconds == nil })?.reps == 6)
+    }
+
+    @Test("A swap never offers equipment you don't have")
+    func swapsSkipMissingEquipment() throws {
+        let row = try #require(StrengthLibrary.catalog.first { $0.name == "DB Bent-Over Row" })
+        let swaps = StrengthLibrary.alternatives(to: row, equipment: [])
+        #expect(swaps.allSatisfy { $0.equipment == .bodyweight })
+    }
 }
