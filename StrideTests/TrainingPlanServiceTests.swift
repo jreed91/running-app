@@ -580,6 +580,41 @@ struct TrainingPlanServiceTests {
         }
     }
 
+    // MARK: Recent running (returning runners)
+
+    @Test("A runner coming back from a break starts from what they have been running, not the table")
+    func returningRunnerStartsFromRecentVolume() {
+        // The case that prompted this: 15K, three days, Recreational, barely running for six weeks.
+        let profile = makeProfile(race: .custom, runDays: 3)
+        profile.customDistanceMeters = 15_000
+        let recent = RecentRunningVolume(averageWeeklyKm: 8)
+        let plan = service.generatePlan(profile: profile, startDate: .now, numberOfWeeks: 12, recentVolume: recent)
+        let usual = service.generatePlan(profile: profile, startDate: .now, numberOfWeeks: 12)
+        let ws = weeks(in: plan)
+
+        // Week one: 12 km floor (8 km + 10% is under it), 78% of which is scheduled on three days.
+        #expect(abs(ws[0].targetDistanceKm - 12 * 0.78) < 0.1, "Week 1 is \(ws[0].targetDistanceKm) km")
+        let longRun = workouts(in: ws[0]).first { $0.workoutType == .longRun }?.targetDistanceMeters ?? 0
+        #expect(longRun < 5_000, "Week 1 long run is \(longRun) m")
+        #expect(ws[0].targetDistanceKm < weeks(in: usual)[0].targetDistanceKm)
+
+        // It still builds: no week grows more than 10% on the week before, cutbacks aside.
+        for i in 1..<ws.count where ws[i].phase == .base || ws[i].phase == .build {
+            #expect(ws[i].targetDistanceKm <= ws[i - 1].targetDistanceKm * 1.1 / 0.8 + 0.01)
+        }
+        let peakKm = ws.first { $0.phase == .peak }?.targetDistanceKm ?? 0
+        #expect(peakKm > ws[0].targetDistanceKm * 1.5, "Peak is \(peakKm) km")
+    }
+
+    @Test("A runner already doing more than the plan asks gets the usual plan")
+    func busyRunnerIsUnaffected() {
+        let profile = makeProfile(race: .tenK, runDays: 4)
+        let recent = RecentRunningVolume(averageWeeklyKm: 80)
+        let plan = service.generatePlan(profile: profile, startDate: .now, numberOfWeeks: 10, recentVolume: recent)
+        let usual = service.generatePlan(profile: profile, startDate: .now, numberOfWeeks: 10)
+        #expect(weeks(in: plan).map(\.targetDistanceKm) == weeks(in: usual).map(\.targetDistanceKm))
+    }
+
     // MARK: Target distance
 
     @Test("Target distance decreases in taper week vs peak week")

@@ -21,6 +21,7 @@ struct TrainingPlanService {
         startDate: Date,
         numberOfWeeks: Int,
         runDayIndices: [Int] = [],
+        recentVolume: RecentRunningVolume? = nil,
         unitPreference: UnitPreference = .metric
     ) -> TrainingPlan {
         generatePlan(
@@ -31,6 +32,7 @@ struct TrainingPlanService {
             raceName: nil,
             raceDate: nil,
             runDayIndices: runDayIndices,
+            recentVolume: recentVolume,
             unitPreference: unitPreference
         )
     }
@@ -42,6 +44,7 @@ struct TrainingPlanService {
         raceDate: Date,
         raceName: String,
         runDayIndices: [Int] = [],
+        recentVolume: RecentRunningVolume? = nil,
         unitPreference: UnitPreference = .metric
     ) -> TrainingPlan {
         guard profile.goalRace.isGoalRace else {
@@ -50,6 +53,7 @@ struct TrainingPlanService {
                 startDate: startDate,
                 numberOfWeeks: profile.goalRace.typicalWeeks.lowerBound,
                 runDayIndices: runDayIndices,
+                recentVolume: recentVolume,
                 unitPreference: unitPreference
             )
         }
@@ -62,6 +66,7 @@ struct TrainingPlanService {
             raceName: raceName,
             raceDate: raceDate.startOfDay,
             runDayIndices: runDayIndices,
+            recentVolume: recentVolume,
             unitPreference: unitPreference
         )
     }
@@ -74,6 +79,7 @@ struct TrainingPlanService {
         raceName: String?,
         raceDate: Date?,
         runDayIndices: [Int],
+        recentVolume: RecentRunningVolume?,
         unitPreference: UnitPreference
     ) -> TrainingPlan {
         // Resolve the goal distance and the training archetype it maps to. Custom
@@ -107,7 +113,8 @@ struct TrainingPlanService {
                 weekIndex: index,
                 totalWeeks: numberOfWeeks,
                 phase: phase,
-                raceType: style
+                raceType: style,
+                ceilingKm: recentVolume?.ceilingKm(weekIndex: index)
             )
             let runDayCount = effectiveDayOffsets?.count ?? runDayOffsets(count: profile.weeklyRunDays).count
             let shares = RunVolumeShares(
@@ -390,14 +397,19 @@ struct TrainingPlanService {
         weekIndex: Int,
         totalWeeks: Int,
         phase: TrainingPhase,
-        raceType: RaceType
+        raceType: RaceType,
+        ceilingKm: Double? = nil
     ) -> Double {
         let peakMultiplier = raceType == .maintainFitness ? 1.2 : 1.5
+        // What the runner's recent running allows this week (`RecentRunningVolume`). It
+        // only ever lowers a week, and the cutback and taper reductions apply on top of it
+        // so those weeks stay lighter than the ones around them.
+        let ceiling = ceilingKm ?? .infinity
         switch phase {
         case .taper:
-            return base * 0.55
+            return min(base, ceiling) * 0.55
         case .peak:
-            return base * peakMultiplier
+            return min(base * peakMultiplier, ceiling)
         case .build, .base:
             // Progressive overload: ramp ~8% per week toward peak volume, with a
             // cutback every 4th week that drops ~20% below the surrounding trend.
@@ -409,8 +421,7 @@ struct TrainingPlanService {
             // 30 → 32 → 35 → 30 (cut) → 41 → 44 → 45 → 36 (cut) → 45 …
             let isCutback = (weekIndex + 1) % 4 == 0
             let trend = min(pow(1.08, Double(weekIndex)), peakMultiplier)
-            let multiplier = isCutback ? trend * 0.8 : trend
-            return base * multiplier
+            return min(base * trend, ceiling) * (isCutback ? 0.8 : 1)
         }
     }
 
