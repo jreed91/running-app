@@ -431,4 +431,31 @@ struct RaceDayPlanTests {
         #expect(resolve(profile: makeProfile(in: context, raceIn: -3))?.deservesDashboardPlacement == true)
         #expect(resolve(profile: makeProfile(in: context, raceIn: -9))?.deservesDashboardPlacement == false)
     }
+
+    // MARK: - Course splits
+
+    @Test("A course for this race paces the hills; one for another distance is ignored")
+    func courseSplitsOnlyForAMatchingCourse() throws {
+        let context = TestStore.makeContext()
+        let profile = makeProfile(in: context, race: .fiveK, raceIn: 10, goalSeconds: 1_500)
+        let plan = try #require(resolve(profile: profile))
+        let goal = try #require(plan.goal)
+        let even = plan.splits(for: goal, unit: .metric)
+
+        func course(lengthMeters: Double, climb: Double) -> RaceCourse {
+            let samples = stride(from: 0.0, through: lengthMeters, by: 50).map {
+                RaceCourse.Sample(distanceMeters: $0, elevationMeters: $0 / lengthMeters * climb)
+            }
+            return RaceCourse(name: nil, samples: samples, climbMeters: climb, descentMeters: 0)
+        }
+
+        let uphill = plan.splits(for: goal, unit: .metric, course: course(lengthMeters: 5_000, climb: 50))
+        #expect(uphill.count == even.count)
+        #expect(uphill.last?.elapsedSeconds == goal.finishSeconds)
+        #expect(uphill.allSatisfy { $0.elevationChangeMeters != nil })
+
+        let wrongDistance = plan.splits(for: goal, unit: .metric, course: course(lengthMeters: 10_000, climb: 50))
+        #expect(wrongDistance == even)
+        #expect(plan.splits(for: goal, unit: .metric, course: nil) == even)
+    }
 }

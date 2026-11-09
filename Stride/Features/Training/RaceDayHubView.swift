@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UniformTypeIdentifiers
 
 // MARK: - RaceDayHubView
 
@@ -36,6 +37,11 @@ struct RaceDayHubView: View {
     /// on an unchanged day shows it at once. Only drawn once it matches today's facts.
     @State private var briefing: RaceBriefingWording? = RaceBriefingStore.load()
     @State private var isWritingBriefing = false
+
+    /// The course added for the goal race, if any; read from the device on open.
+    @State private var storedCourse: StoredRaceCourse? = RaceCourseStore.load()
+    @State private var isImportingCourse = false
+    @State private var courseError: String?
 
     private var unit: UnitPreference { appSettings.unitPreference }
 
@@ -94,14 +100,85 @@ struct RaceDayHubView: View {
                     RaceWeatherCard(racePlan: racePlan, runs: recentRuns, unit: unit)
                 }
 
+                if showsSplits(racePlan) {
+                    RaceCourseCard(
+                        stored: course(for: racePlan),
+                        unit: unit,
+                        errorMessage: courseError,
+                        onAdd: {
+                            courseError = nil
+                            isImportingCourse = true
+                        },
+                        onRemove: removeCourse
+                    )
+                }
+
                 if showsSplits(racePlan), let goal = selectedGoal(racePlan) {
-                    RaceSplitsTable(splits: racePlan.splits(for: goal, unit: unit), goal: goal, unit: unit)
+                    let raceCourse = course(for: racePlan)?.course
+                    RaceSplitsTable(
+                        splits: racePlan.splits(for: goal, unit: unit, course: raceCourse),
+                        goal: goal,
+                        unit: unit,
+                        pacedForCourse: raceCourse != nil
+                    )
                 }
             }
             .padding()
             .strideReadableWidth(hasColumns: true)
         }
         .task(id: briefingRequestKey(racePlan)) { await refreshBriefing(racePlan) }
+        .fileImporter(
+            isPresented: $isImportingCourse,
+            allowedContentTypes: Self.courseFileTypes
+        ) { result in
+            importCourse(result, for: racePlan)
+        }
+    }
+
+    // MARK: - Course
+
+    /// A `.gpx` file whichever app on the device declares the type, plus plain XML for
+    /// files saved with another extension.
+    private static var courseFileTypes: [UTType] {
+        [UTType(filenameExtension: "gpx"), .xml].compactMap { $0 }
+    }
+
+    /// The saved course when it was added for this race: same day, same distance.
+    private func course(for racePlan: RaceDayPlan) -> StoredRaceCourse? {
+        guard let storedCourse,
+              storedCourse.applies(toRaceOn: racePlan.raceDate, distanceMeters: racePlan.distanceMeters)
+        else { return nil }
+        return storedCourse
+    }
+
+    private func importCourse(_ result: Result<URL, Error>, for racePlan: RaceDayPlan) {
+        do {
+            let url = try result.get()
+            let imported = try RaceCourseStore.importCourse(from: url, raceDate: racePlan.raceDate)
+            guard CoursePacing.matches(imported.course, distanceMeters: racePlan.distanceMeters) else {
+                courseError = String(
+                    localized: "That course is \(imported.course.lengthMeters.distanceString(unit: unit)), but your race is \(racePlan.distanceMeters.distanceString(unit: unit)).",
+                    comment: "Race hub: the imported course is a different length from the goal race"
+                )
+                return
+            }
+            try RaceCourseStore.save(imported)
+            courseError = nil
+            withAnimation(AppAnimation.gentle) { storedCourse = imported }
+        } catch let error as RaceCourseImportError {
+            courseError = error.errorDescription
+        } catch {
+            // Cancelling the picker is not an error worth a line on the card.
+            if (error as NSError).code != NSUserCancelledError {
+                courseError = RaceCourseImportError.unreadable.errorDescription
+            }
+        }
+    }
+
+    private func removeCourse() {
+        RaceCourseStore.remove()
+        courseError = nil
+        withAnimation(AppAnimation.gentle) { storedCourse = nil }
     }
 
     // MARK: - Race plan (Apple Intelligence)
@@ -332,6 +409,8 @@ private struct RaceSplitsTable: View {
     let splits: [RaceSplit]
     let goal: RaceGoal
     let unit: UnitPreference
+    /// True when the rows are grade-adjusted over the race's course.
+    var pacedForCourse = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -343,6 +422,13 @@ private struct RaceSplitsTable: View {
                     .foregroundStyle(.brandText)
             }
             .foregroundStyle(.secondary)
+
+            if pacedForCourse && !splits.isEmpty {
+                Text("Paced for the course at even effort: slower up the hills, quicker down them.")
+                    .font(.dsCaption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             if splits.isEmpty {
                 Text("No splits to show for this distance.")
@@ -370,7 +456,19 @@ private struct RaceSplitsTable: View {
             Text(verbatim: markerLabel(split))
                 .font(.dsSubhead)
                 .foregroundStyle(split.isPartial ? .secondary : .primary)
+            if let change = elevationLabel(split) {
+                Text(verbatim: change)
+                    .font(.dsCaption)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
             Spacer(minLength: AppSpacing.sm)
+            if pacedForCourse, let pace = segmentPace(split) {
+                Text(verbatim: pace.paceString(unit: unit))
+                    .font(.dsCaption)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
             Text(verbatim: split.elapsedSeconds.durationString)
                 .font(.dsSubhead)
                 .monospacedDigit()
@@ -378,6 +476,26 @@ private struct RaceSplitsTable: View {
         .padding(.horizontal, AppSpacing.md)
         .padding(.vertical, AppSpacing.sm)
         .accessibilityElement(children: .combine)
+    }
+
+    /// The rise or fall since the previous marker, when the table is paced for a course
+    /// and the change is big enough to read as a hill rather than rounding.
+    private func elevationLabel(_ split: RaceSplit) -> String? {
+        guard let change = split.elevationChangeMeters, abs(change) >= 2 else { return nil }
+        let amount = abs(change).elevationString(unit: unit)
+        return change > 0
+            ? String(localized: "↑ \(amount)", comment: "Race splits table: climb since the last marker")
+            : String(localized: "↓ \(amount)", comment: "Race splits table: descent since the last marker")
+    }
+
+    /// This stretch's own pace, in seconds per kilometre.
+    private func segmentPace(_ split: RaceSplit) -> Double? {
+        guard let index = splits.firstIndex(where: { $0.id == split.id }) else { return nil }
+        let startDistance = index == 0 ? 0 : splits[index - 1].distanceMeters
+        let startTime = index == 0 ? 0 : splits[index - 1].elapsedSeconds
+        let meters = split.distanceMeters - startDistance
+        guard meters > 0 else { return nil }
+        return (split.elapsedSeconds - startTime) / (meters / 1_000)
     }
 
     /// Full markers are numbered in the runner's unit; the leftover final segment is the

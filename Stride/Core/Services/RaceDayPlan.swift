@@ -424,10 +424,9 @@ extension RaceDayPlan {
 
     /// The goal-pace split table for one rung, in the runner's own distance unit.
     ///
-    /// Even pace, and only even pace. A negative-split table would be the better race
-    /// plan for most runners, but it needs a start time and a course to be worth
-    /// printing — the app stores neither — and an invented split pattern read off a
-    /// screen at 6 a.m. is worse than an honest one. The race workout's own note already
+    /// Even pace. With the race's course added, ``splits(for:unit:course:)`` paces the
+    /// hills instead; without one, an invented split pattern read off a screen at 6 a.m.
+    /// is worse than an honest even one. The race workout's own note already
     /// says to start controlled and race the final third; this is the clock to check
     /// against, not a prescription to run to the second.
     func splits(for goal: RaceGoal, unit: UnitPreference) -> [RaceSplit] {
@@ -436,6 +435,22 @@ extension RaceDayPlan {
             paceSecondsPerKm: goal.paceSecondsPerKm,
             unit: unit
         )
+    }
+
+    /// The split table for one rung over the race's own course: grade-adjusted through
+    /// ``CoursePacing`` when a course is given and is this race's length, else the
+    /// even-pace table.
+    func splits(for goal: RaceGoal, unit: UnitPreference, course: RaceCourse?) -> [RaceSplit] {
+        if let course, CoursePacing.matches(course, distanceMeters: distanceMeters) {
+            let paced = CoursePacing.splits(
+                course: course,
+                distanceMeters: distanceMeters,
+                finishSeconds: goal.finishSeconds,
+                unit: unit
+            )
+            if !paced.isEmpty { return paced }
+        }
+        return splits(for: goal, unit: unit)
     }
 
     static func splits(

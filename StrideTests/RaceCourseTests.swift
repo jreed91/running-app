@@ -192,4 +192,37 @@ struct RaceCourseTests {
         let decoded = try JSONDecoder().decode(RaceCourse.self, from: JSONEncoder().encode(course))
         #expect(decoded == course)
     }
+
+    // MARK: Storing
+
+    @Test func savesLoadsAndRemovesTheCourse() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            .appendingPathComponent("course.json")
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+
+        let raceDate = Date(timeIntervalSince1970: 1_700_000_000)
+        let stored = StoredRaceCourse(
+            course: try course(lengthMeters: 5_000) { _ in 10 },
+            raceDay: StoredRaceCourse.dayKey(for: raceDate),
+            fileName: "parkrun.gpx"
+        )
+
+        #expect(RaceCourseStore.load(from: url) == nil)
+        try RaceCourseStore.save(stored, to: url)
+        #expect(RaceCourseStore.load(from: url) == stored)
+        RaceCourseStore.remove(at: url)
+        #expect(RaceCourseStore.load(from: url) == nil)
+    }
+
+    @Test func belongsOnlyToTheRaceItWasAddedFor() throws {
+        let raceDate = Date(timeIntervalSince1970: 1_700_000_000)
+        let unnamed = try RaceCourse.fromGPX(gpx(points(lengthMeters: 5_000) { _ in 10 }, name: nil))
+        let stored = StoredRaceCourse(course: unnamed, raceDay: StoredRaceCourse.dayKey(for: raceDate), fileName: "parkrun.gpx")
+
+        #expect(stored.applies(toRaceOn: raceDate, distanceMeters: 5_000))
+        #expect(!stored.applies(toRaceOn: raceDate.addingTimeInterval(7 * 86_400), distanceMeters: 5_000))
+        #expect(!stored.applies(toRaceOn: raceDate, distanceMeters: 10_000))
+        #expect(stored.displayName == "parkrun")
+    }
 }
