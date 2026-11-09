@@ -27,6 +27,8 @@ struct StrengthActiveView: View {
     private var recentSessions: [StrengthWorkout]
 
     @Query private var profiles: [UserProfile]
+    @Query(filter: #Predicate<TrainingPlan> { $0.isActive == true })
+    private var activePlans: [TrainingPlan]
 
     /// Exercises swapped for this session only, by position in the plan. The plan itself
     /// is left alone: next week's session still has the original, and the logged sets
@@ -93,7 +95,11 @@ struct StrengthActiveView: View {
     /// What the current exercise could be swapped for with the runner's equipment.
     private var swapOptions: [StrengthExercise] {
         guard let exercise = currentExercise else { return [] }
-        return StrengthLibrary.alternatives(to: exercise, equipment: profiles.first?.selectedEquipment ?? [])
+        return StrengthLibrary.alternatives(
+            to: exercise,
+            equipment: profiles.first?.selectedEquipment ?? [],
+            excluding: StrengthPreferences.load().excluded
+        )
     }
     private var currentExercise: StrengthExercise? {
         guard currentExerciseIndex < exercises.count else { return nil }
@@ -181,9 +187,14 @@ struct StrengthActiveView: View {
             ForEach(swapOptions, id: \.name) { option in
                 Button(option.name) { swap(to: option) }
             }
+            if let current = currentExercise, let first = swapOptions.first {
+                Button("Don't suggest \(current.name) again", role: .destructive) {
+                    neverSuggest(current, replacingWith: first)
+                }
+            }
             Button("Cancel", role: .cancel) { }
         } message: {
-            Text("Just for this session. Your plan keeps the original.")
+            Text("A swap is just for this session. \"Don't suggest again\" also takes it out of the sessions ahead; Settings > Strength training puts it back.")
         }
         // Haptics (U4). Logging a set and the rest timer expiring are both moments
         // the lifter is mid-movement and not looking at the phone.
@@ -690,6 +701,25 @@ struct StrengthActiveView: View {
         swaps[currentExerciseIndex] = option
         setupForCurrentExercise()
         saveCheckpoint()
+    }
+
+    /// Takes `exercise` out for good: today it becomes the closest alternative, and the
+    /// sessions still ahead are rebuilt without it (Fitbod's "Exclude", in Stride's terms).
+    private func neverSuggest(_ exercise: StrengthExercise, replacingWith replacement: StrengthExercise) {
+        var preferences = StrengthPreferences.load()
+        preferences.exclude(exercise.name)
+        preferences.save()
+        swap(to: replacement)
+        guard let profile = profiles.first, let activePlan = activePlans.first else { return }
+        StrengthPlanRefresher.refresh(
+            activePlan,
+            equipment: profile.selectedEquipment,
+            focus: profile.strengthFocus,
+            minutes: preferences.sessionMinutes,
+            excluding: preferences.excluded,
+            except: scheduledWorkout?.id
+        )
+        context.saveOrLog("the sessions ahead without an excluded exercise")
     }
 
     // MARK: - Checkpoint

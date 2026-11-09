@@ -224,6 +224,7 @@ extension StrengthLibrary {
     static func alternatives(
         to exercise: StrengthExercise,
         equipment: [StrengthEquipment],
+        excluding excluded: Set<String> = [],
         limit: Int = 4
     ) -> [StrengthExercise] {
         let available = Set(equipment).union([.bodyweight])
@@ -232,6 +233,7 @@ extension StrengthLibrary {
 
         let candidates = catalog.filter { candidate in
             candidate.name != exercise.name
+                && !excluded.contains(candidate.name)
                 && candidate.equipment.map(available.contains) == true
                 && !groups.isDisjoint(with: candidate.muscleGroups)
         }

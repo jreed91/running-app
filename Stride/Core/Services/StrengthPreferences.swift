@@ -16,6 +16,36 @@ struct StrengthPreferences: Codable, Equatable, Sendable {
     /// Target minutes per session, one of ``sessionLengthOptions``. Nil: the phase's full
     /// session.
     var sessionMinutes: Int?
+    /// Library exercises the runner never wants suggested, by name. New sessions leave
+    /// them out (the next exercise in line takes the place), and Swap doesn't offer them.
+    var excludedExercises: [String] = []
+
+    init(daysPerWeek: Int? = nil, sessionMinutes: Int? = nil, excludedExercises: [String] = []) {
+        self.daysPerWeek = daysPerWeek
+        self.sessionMinutes = sessionMinutes
+        self.excludedExercises = excludedExercises
+    }
+
+    // Written out so preferences saved before a field existed still load.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        daysPerWeek = try container.decodeIfPresent(Int.self, forKey: .daysPerWeek)
+        sessionMinutes = try container.decodeIfPresent(Int.self, forKey: .sessionMinutes)
+        excludedExercises = try container.decodeIfPresent([String].self, forKey: .excludedExercises) ?? []
+    }
+
+    /// ``excludedExercises`` as a set, for the library.
+    var excluded: Set<String> { Set(excludedExercises) }
+
+    /// Adds `name` to the exclusions, once, keeping them in the order chosen.
+    mutating func exclude(_ name: String) {
+        guard !excludedExercises.contains(name) else { return }
+        excludedExercises.append(name)
+    }
+
+    mutating func include(_ name: String) {
+        excludedExercises.removeAll { $0 == name }
+    }
 
     static let daysPerWeekRange = 0...3
     static let sessionLengthOptions = [25, 35, 45]

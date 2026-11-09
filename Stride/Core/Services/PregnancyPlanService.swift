@@ -274,7 +274,8 @@ struct PregnancyPlanService {
         // trimester's (PregnancyRunningPolicy), not the runner's choice.
         let basePlan = StrengthLibrary.plan(
             for: equipment, focus: strengthFocus, phase: phase,
-            minutes: StrengthPreferences.load().sessionMinutes
+            minutes: StrengthPreferences.load().sessionMinutes,
+            excluding: StrengthPreferences.load().excluded
         )
         let adaptedPlan = PregnancyStrengthAdapter.adapt(basePlan, atGestationalWeek: ga.weeks)
         if !adaptedPlan.exercises.isEmpty {

@@ -54,6 +54,10 @@ struct StrengthSettingsView: View {
 
                 amountCard
 
+                if !preferences.excludedExercises.isEmpty {
+                    excludedCard
+                }
+
                 Text(footnote)
                     .font(.dsFootnote)
                     .foregroundStyle(.secondary)
@@ -124,6 +128,40 @@ struct StrengthSettingsView: View {
         }
     }
 
+    // MARK: - Never suggested
+
+    /// Exercises taken out with "Don't suggest again" on the session screen. Putting one
+    /// back makes it eligible again from the next Save.
+    private var excludedCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Never suggested")
+                .strideEyebrow()
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, AppSpacing.xs)
+            VStack(spacing: 0) {
+                ForEach(Array(preferences.excludedExercises.enumerated()), id: \.element) { index, name in
+                    if index > 0 { Divider() }
+                    HStack {
+                        Text(name)
+                            .font(.dsBody)
+                        Spacer()
+                        Button("Put back") { preferences.include(name) }
+                            .buttonStyle(.strideButton(.quiet, compact: true, fullWidth: false))
+                            .accessibilityLabel("Put back \(name)")
+                    }
+                    .padding(.vertical, AppSpacing.sm)
+                }
+            }
+            .padding(.horizontal, AppSpacing.md)
+            .strideCard(cornerRadius: AppRadius.md)
+            Text("Sessions leave these out and Swap won't offer them. The next exercise in line takes their place.")
+                .font(.dsFootnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, AppSpacing.xs)
+        }
+    }
+
     private var footnote: LocalizedStringKey {
         activePlan == nil
             ? "Used for the strength sessions in your next plan."
@@ -148,7 +186,10 @@ struct StrengthSettingsView: View {
         profile.updatedAt = Date()
         preferences.save()
         if let activePlan {
-            StrengthPlanRefresher.refresh(activePlan, equipment: chosen, focus: focus, minutes: preferences.sessionMinutes)
+            StrengthPlanRefresher.refresh(
+                activePlan, equipment: chosen, focus: focus,
+                minutes: preferences.sessionMinutes, excluding: preferences.excluded
+            )
             // Days move only when the number of sessions changed, so sessions moved by
             // hand stay where they were after an equipment or length change.
             if preferences.daysPerWeek != savedPreferences.daysPerWeek {

@@ -16,9 +16,10 @@ struct StrengthLibrary: Sendable {
         for equipment: [StrengthEquipment],
         focus: StrengthFocus,
         phase: TrainingPhase,
-        minutes: Int? = nil
+        minutes: Int? = nil,
+        excluding excluded: Set<String> = []
     ) -> StrengthWorkoutPlan {
-        var exercises = self.exercises(for: equipment, focus: focus, phase: phase)
+        var exercises = self.exercises(for: equipment, focus: focus, phase: phase, excluding: excluded)
         if let minutes {
             exercises = fitted(exercises, toMinutes: minutes, phase: phase)
         }
@@ -34,10 +35,13 @@ struct StrengthLibrary: Sendable {
         )
     }
 
+    /// `excluded` names are left out before the list is capped, so the next exercise in
+    /// line takes an excluded one's place.
     static func exercises(
         for equipment: [StrengthEquipment],
         focus: StrengthFocus,
-        phase: TrainingPhase
+        phase: TrainingPhase,
+        excluding excluded: Set<String> = []
     ) -> [StrengthExercise] {
         guard !equipment.isEmpty else { return [] }
         let (sets, reps) = volumeForPhase(phase)
@@ -65,7 +69,7 @@ struct StrengthLibrary: Sendable {
 
         // Deduplicate by name (equipment may overlap) and cap total
         var seen = Set<String>()
-        result = result.filter { seen.insert($0.name).inserted }
+        result = result.filter { !excluded.contains($0.name) && seen.insert($0.name).inserted }
 
         let maxExercises = maxExerciseCount(phase: phase, focus: focus)
         return Array(result.prefix(maxExercises))
@@ -86,11 +90,15 @@ struct StrengthLibrary: Sendable {
         isPregnancyPlan: Bool,
         equipment: [StrengthEquipment],
         focus: StrengthFocus,
-        phase: TrainingPhase?
+        phase: TrainingPhase?,
+        preferences: StrengthPreferences = StrengthPreferences()
     ) -> StrengthWorkoutPlan? {
         if let weekStrengthPlan, !weekStrengthPlan.exercises.isEmpty { return weekStrengthPlan }
         guard !isPregnancyPlan else { return nil }
-        return plan(for: equipment.isEmpty ? [.bodyweight] : equipment, focus: focus, phase: phase ?? .base)
+        return plan(
+            for: equipment.isEmpty ? [.bodyweight] : equipment, focus: focus, phase: phase ?? .base,
+            minutes: preferences.sessionMinutes, excluding: preferences.excluded
+        )
     }
 
     // MARK: - Equipment lookup

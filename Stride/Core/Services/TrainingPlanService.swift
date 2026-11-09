@@ -221,7 +221,8 @@ struct TrainingPlanService {
 
         let plan = StrengthLibrary.plan(
             for: equipment, focus: focus, phase: phase,
-            minutes: strengthPreferences.sessionMinutes
+            minutes: strengthPreferences.sessionMinutes,
+            excluding: strengthPreferences.excluded
         )
         var result: [ScheduledWorkout] = []
         for offset in offsets {
