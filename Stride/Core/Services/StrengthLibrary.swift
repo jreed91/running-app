@@ -8,12 +8,20 @@ struct StrengthLibrary: Sendable {
 
     // MARK: - Public API
 
+    ///
+    /// `minutes`, when the runner chose a session length, drops exercises from the end of
+    /// the list (the least relevant, given how it is ordered) until the session fits,
+    /// keeping at least ``minimumExercisesForLength``. Nil keeps the phase's full session.
     static func plan(
         for equipment: [StrengthEquipment],
         focus: StrengthFocus,
-        phase: TrainingPhase
+        phase: TrainingPhase,
+        minutes: Int? = nil
     ) -> StrengthWorkoutPlan {
-        let exercises = self.exercises(for: equipment, focus: focus, phase: phase)
+        var exercises = self.exercises(for: equipment, focus: focus, phase: phase)
+        if let minutes {
+            exercises = fitted(exercises, toMinutes: minutes, phase: phase)
+        }
         let duration = estimatedDuration(exercises: exercises, phase: phase)
         let focusNote = focus == .runningSpecific
             ? "Focus on controlled movement and single-leg stability."
@@ -172,6 +180,19 @@ struct StrengthLibrary: Sendable {
         case .peak:  return focus == .runningSpecific ? 6 : 7
         case .taper: return 5
         }
+    }
+
+    /// The fewest exercises a chosen session length cuts a session to: below this it is
+    /// a warm-up, not a session.
+    static let minimumExercisesForLength = 3
+
+    private static func fitted(_ exercises: [StrengthExercise], toMinutes minutes: Int, phase: TrainingPhase) -> [StrengthExercise] {
+        var kept = exercises
+        while kept.count > minimumExercisesForLength,
+              estimatedDuration(exercises: kept, phase: phase) > minutes {
+            kept.removeLast()
+        }
+        return kept
     }
 
     private static func estimatedDuration(exercises: [StrengthExercise], phase: TrainingPhase) -> Int {

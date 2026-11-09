@@ -85,4 +85,30 @@ struct StrengthPlanRefresherTests {
         #expect(session.strengthPlan == expected)
         #expect(session.notes == "Pelvic floor first")
     }
+
+    @Test("Changing sessions a week re-places only the strength days still ahead")
+    func reschedulesDaysAhead() {
+        let profile = UserProfile(name: "Test", goalRace: .halfMarathon, goalFinishTime: 6_000, weeklyRunDays: 4, fitnessLevel: .intermediate)
+        profile.selectedEquipment = [.dumbbells]
+        profile.strengthFocus = .runningSpecific
+        let plan = TrainingPlan(targetRace: .halfMarathon, goalTimeSeconds: 6_000, startDate: day(7), endDate: day(60))
+        let week = TrainingWeek(weekNumber: 1, startDate: day(7), phase: .build, targetDistanceKm: 30)
+        let tempo = ScheduledWorkout(scheduledDate: day(9), workoutType: .tempo)
+        let long = ScheduledWorkout(scheduledDate: day(13), workoutType: .longRun)
+        let oldStrength = strengthDay(7)
+        week.workouts = [tempo, long, oldStrength]
+        plan.weeks = [week]
+
+        let removed = StrengthPlanRefresher.reschedule(
+            plan, profile: profile,
+            preferences: StrengthPreferences(daysPerWeek: 1, sessionMinutes: 25),
+            now: now, calendar: calendar
+        )
+
+        let strength = (week.workouts ?? []).filter { $0.workoutType == .strength }
+        #expect(removed.map(\.id) == [oldStrength.id])
+        #expect(strength.count == 1)
+        #expect((week.workouts ?? []).contains { $0.id == tempo.id })
+        #expect(strength.first?.strengthPlan?.exercises.count == StrengthLibrary.minimumExercisesForLength)
+    }
 }

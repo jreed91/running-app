@@ -270,7 +270,12 @@ struct PregnancyPlanService {
 
         // Strength, with the pelvic floor block on the front of it (§6).
         let strengthCount = PregnancyRunningPolicy.strengthSessionsPerWeek(for: trimester)
-        let basePlan = StrengthLibrary.plan(for: equipment, focus: strengthFocus, phase: phase)
+        // The session length from Settings applies; the number of sessions stays the
+        // trimester's (PregnancyRunningPolicy), not the runner's choice.
+        let basePlan = StrengthLibrary.plan(
+            for: equipment, focus: strengthFocus, phase: phase,
+            minutes: StrengthPreferences.load().sessionMinutes
+        )
         let adaptedPlan = PregnancyStrengthAdapter.adapt(basePlan, atGestationalWeek: ga.weeks)
         if !adaptedPlan.exercises.isEmpty {
             for offset in Self.evenlyPicked(

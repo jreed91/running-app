@@ -1,0 +1,69 @@
+import Foundation
+import Testing
+@testable import Stride
+
+/// Covers the runner's own strength amount: sessions a week, where they go, and how a
+/// chosen session length trims the session.
+struct StrengthPreferencesTests {
+
+    @Test("Without a choice the plan's long-standing rule holds")
+    func automaticMatchesTheOldRule() {
+        let auto = StrengthPreferences()
+        #expect(auto.strengthDays(phase: .base, focus: .runningSpecific, isBeginner: false) == 2)
+        #expect(auto.strengthDays(phase: .build, focus: .generalStrength, isBeginner: false) == 1)
+        #expect(auto.strengthDays(phase: .peak, focus: .runningSpecific, isBeginner: false) == 1)
+        #expect(auto.strengthDays(phase: .taper, focus: .runningSpecific, isBeginner: true) == 0)
+        #expect(auto.strengthDays(phase: .taper, focus: .runningSpecific, isBeginner: false) == 1)
+    }
+
+    @Test("A chosen number wins, clamped to 0–3, and a taper still gets at most one")
+    func chosenNumber() {
+        #expect(StrengthPreferences(daysPerWeek: 3).strengthDays(phase: .build, focus: .generalStrength, isBeginner: false) == 3)
+        #expect(StrengthPreferences(daysPerWeek: 0).strengthDays(phase: .base, focus: .runningSpecific, isBeginner: false) == 0)
+        #expect(StrengthPreferences(daysPerWeek: 9).strengthDays(phase: .peak, focus: .runningSpecific, isBeginner: false) == 3)
+        #expect(StrengthPreferences(daysPerWeek: 3).strengthDays(phase: .taper, focus: .runningSpecific, isBeginner: false) == 1)
+    }
+
+    @Test("Strength days avoid run days, the days around hard sessions, and race eve")
+    func dayPlacement() {
+        // Runs Tue (1), Thu (3, tempo), Sun (6, long run).
+        let days = StrengthPreferences.strengthDayOffsets(
+            count: 3, occupied: [1, 3, 6], hardDays: [3, 6], raceDay: nil
+        )
+        // Mon (0) is free and next to nothing hard; Wed, Fri, Sat sit beside a hard day.
+        #expect(days == [0])
+
+        let easyWeek = StrengthPreferences.strengthDayOffsets(
+            count: 3, occupied: [1, 3], hardDays: [], raceDay: nil
+        )
+        #expect(easyWeek == [0, 2, 4])
+
+        let raceWeek = StrengthPreferences.strengthDayOffsets(
+            count: 2, occupied: [], hardDays: [], raceDay: 3
+        )
+        #expect(raceWeek == [0, 1])
+        #expect(StrengthPreferences.strengthDayOffsets(count: 0, occupied: [], hardDays: [], raceDay: nil).isEmpty)
+    }
+
+    @Test("A shorter session drops exercises from the end, keeping at least three")
+    func sessionLength() {
+        let full = StrengthLibrary.plan(for: [.dumbbells], focus: .runningSpecific, phase: .base)
+        let medium = StrengthLibrary.plan(for: [.dumbbells], focus: .runningSpecific, phase: .base, minutes: 35)
+        let short = StrengthLibrary.plan(for: [.dumbbells], focus: .runningSpecific, phase: .build, minutes: 25)
+
+        #expect(medium.exercises.count < full.exercises.count)
+        #expect(medium.estimatedDurationMinutes <= 35)
+        #expect(Array(full.exercises.prefix(medium.exercises.count)) == medium.exercises)
+        #expect(short.exercises.count == StrengthLibrary.minimumExercisesForLength)
+        #expect(StrengthLibrary.plan(for: [.dumbbells], focus: .runningSpecific, phase: .base, minutes: nil) == full)
+    }
+
+    @Test("Preferences round-trip through defaults, and nothing stored means automatic")
+    func storage() throws {
+        let defaults = try #require(UserDefaults(suiteName: "StrengthPreferencesTests-\(UUID().uuidString)"))
+        #expect(StrengthPreferences.load(from: defaults) == StrengthPreferences())
+        let chosen = StrengthPreferences(daysPerWeek: 3, sessionMinutes: 25)
+        chosen.save(to: defaults)
+        #expect(StrengthPreferences.load(from: defaults) == chosen)
+    }
+}
