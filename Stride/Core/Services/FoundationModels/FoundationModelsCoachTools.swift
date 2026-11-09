@@ -230,13 +230,131 @@ struct RacePredictionsTool: Tool {
     }
 }
 
+// MARK: - Plan change
+
+/// What the runner asked to do to their plan.
+@available(iOS 26.0, *)
+@Generable
+enum CoachPlanAction: String, Sendable {
+    case addRun
+    case changeRun
+    case restDay
+}
+
+/// The day a plan change is for. `bestDay` lets the app choose.
+@available(iOS 26.0, *)
+@Generable
+enum CoachPlanDay: String, Sendable {
+    case bestDay
+    case today
+    case tomorrow
+    case monday
+    case tuesday
+    case wednesday
+    case thursday
+    case friday
+    case saturday
+    case sunday
+}
+
+/// The kinds of run the coach may put in the plan. No race, no strength.
+@available(iOS 26.0, *)
+@Generable
+enum CoachPlanRunKind: String, Sendable {
+    case easy
+    case tempo
+    case interval
+    case longRun
+}
+
+@available(iOS 26.0, *)
+@Generable
+enum CoachDistanceUnit: String, Sendable {
+    case kilometers
+    case miles
+}
+
+@available(iOS 26.0, *)
+extension CoachPlanDay {
+    var day: PlanChangeRequest.Day {
+        switch self {
+        case .bestDay:   return .best
+        case .today:     return .today
+        case .tomorrow:  return .tomorrow
+        // `Calendar` numbers weekdays from Sunday = 1.
+        case .sunday:    return .weekday(1)
+        case .monday:    return .weekday(2)
+        case .tuesday:   return .weekday(3)
+        case .wednesday: return .weekday(4)
+        case .thursday:  return .weekday(5)
+        case .friday:    return .weekday(6)
+        case .saturday:  return .weekday(7)
+        }
+    }
+}
+
+@available(iOS 26.0, *)
+extension CoachPlanRunKind {
+    var workoutType: WorkoutType {
+        switch self {
+        case .easy:     return .easy
+        case .tempo:    return .tempo
+        case .interval: return .interval
+        case .longRun:  return .longRun
+        }
+    }
+}
+
+/// Proposes a change to the plan for the runner to confirm. Never writes: the change
+/// waits on the ``CoachPlanChangeDesk`` until the runner taps the card under the reply.
+@available(iOS 26.0, *)
+struct ProposePlanChangeTool: Tool {
+    let desk: CoachPlanChangeDesk
+
+    let name = "proposePlanChange"
+    let description = "Proposes a change to the runner's plan in the coming week, which they confirm: add a run, change a run's type or distance, or make a day a rest day."
+
+    @Generable
+    struct Arguments {
+        @Guide(description: "addRun for a new run, changeRun to change the run already on a day, restDay to take a run off")
+        let action: CoachPlanAction
+        @Guide(description: "The day the runner named; bestDay when they named none")
+        let day: CoachPlanDay
+        @Guide(description: "The kind of run to add or change to; ignored for restDay")
+        let kind: CoachPlanRunKind
+        @Guide(description: "A distance the runner asked for, as they said it; leave out when they gave none")
+        let distance: Double?
+        @Guide(description: "The unit of that distance")
+        let distanceUnit: CoachDistanceUnit
+    }
+
+    func call(arguments: Arguments) async throws -> String {
+        let meters = arguments.distance.map { value in
+            arguments.distanceUnit == .miles ? value * 1_609.344 : value * 1_000
+        }
+        let action: PlanChangeRequest.Action = switch arguments.action {
+        case .addRun:    .add
+        case .changeRun: .changeType
+        case .restDay:   .makeRest
+        }
+        return desk.propose(PlanChangeRequest(
+            action: action,
+            day: arguments.day.day,
+            type: arguments.kind.workoutType,
+            distanceMeters: meters
+        ))
+    }
+}
+
 @available(iOS 26.0, *)
 extension CoachLookup {
     /// The tools a session gets for this lookup. Built once per request, so the tools of
-    /// one answer share one ``CoachToolBudget``.
+    /// one answer share one ``CoachToolBudget``. The plan-change tool is outside that
+    /// budget: a runner who asked for a change should get one even after the coach
+    /// looked things up first.
     var tools: [any Tool] {
         let budget = CoachToolBudget(calls: Self.maximumToolCalls)
-        return [
+        var tools: [any Tool] = [
             FindRunsTool(lookup: self, budget: budget),
             RankRunsTool(lookup: self, budget: budget),
             WeeklyTotalsTool(lookup: self, budget: budget),
@@ -244,6 +362,10 @@ extension CoachLookup {
             PlanSessionsTool(lookup: self, budget: budget),
             RacePredictionsTool(lookup: self, budget: budget),
         ]
+        if let planChanges {
+            tools.append(ProposePlanChangeTool(desk: planChanges))
+        }
+        return tools
     }
 }
 #endif

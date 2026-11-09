@@ -156,7 +156,7 @@ struct AICoachChatView: View {
                 readinessBadge
             }
 
-            Text("Ask follow-ups about your last run, training plan, recovery, or pacing. Stride keeps the answers grounded in your recent data.")
+            Text("Ask about your last run, your plan, recovery or pacing, or ask the coach to change this week's plan, like adding an interval run. Answers stay grounded in your recent data.")
                 .font(.dsSubhead)
                 .foregroundStyle(.secondary)
                 .lineSpacing(2)
@@ -263,6 +263,10 @@ struct AICoachChatView: View {
 
                 if !message.metrics.isEmpty {
                     metricGrid(message.metrics)
+                }
+
+                if let planChange = message.planChange {
+                    CoachPlanChangeCard(change: planChange)
                 }
 
                 // The setup and fallback replies both send the runner to Settings; take
@@ -437,6 +441,18 @@ struct AICoachChatView: View {
         // every answer implies each reply is freshly grounded in that same data.
         let isOpeningReply = !messages.contains { $0.sender == .coach }
 
+        // Where the coach leaves a plan change the runner asked for. Only with a plan to
+        // change: without one the tool could only ever say no, and costs tokens to say it.
+        let planChanges = activePlan.map {
+            CoachPlanChangeDesk(plan: PlanChangeApplier.snapshot(of: $0), unit: appSettings.unitPreference)
+        }
+        var lookup = CoachLookup.make(
+            context: modelContext,
+            plan: activePlan,
+            unit: appSettings.unitPreference
+        )
+        lookup.planChanges = planChanges
+
         do {
             let reply = try await container.aiCoachService.chatWithProvider(
                 provider: appSettings.aiProvider,
@@ -445,11 +461,7 @@ struct AICoachChatView: View {
                 fitnessLevel: profiles.first?.fitnessLevel,
                 // The eight runs in `coachContext` answer most questions; the lookup lets
                 // the coach fetch the rest ("my last five easy runs") when one needs it.
-                lookup: CoachLookup.make(
-                    context: modelContext,
-                    plan: activePlan,
-                    unit: appSettings.unitPreference
-                ),
+                lookup: lookup,
                 onPartialText: { text in
                     // Assigned directly: the closure is `@MainActor` and the backend
                     // awaits it, so this is a step of the stream rather than a task
@@ -463,7 +475,8 @@ struct AICoachChatView: View {
                         sender: .coach,
                         text: reply,
                         metrics: isOpeningReply ? openingMetrics : [],
-                        status: isOpeningReply ? openingStatus : nil
+                        status: isOpeningReply ? openingStatus : nil,
+                        planChange: planChanges?.takeProposal()
                     )
                 )
             }
@@ -562,6 +575,7 @@ struct AICoachChatView: View {
 
     private var quickReplyPrompts: [String] {
         [
+            "Add an interval run this week",
             "Adjust this week",
             "Why was effort high?",
             "Show last 5 easy runs",
@@ -704,6 +718,8 @@ private struct AICoachChatMessage: Identifiable {
     let text: String
     let metrics: [AICoachMiniMetric]
     let status: AICoachCoachStatus?
+    /// A change to the plan this reply proposed, shown as a card the runner confirms.
+    var planChange: PlanChangePlanner.Change?
 }
 
 private struct AICoachMiniMetric: Identifiable {

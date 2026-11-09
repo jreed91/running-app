@@ -51,6 +51,10 @@ struct CoachLookup: Sendable, Equatable {
     /// the same one number behind the race hub's prediction and the plan's paces, so a
     /// race time the coach quotes matches the one the app shows. Nil when there is none.
     let fitnessVDOT: Double?
+    /// Where the chat's `proposePlanChange` tool leaves a change for the runner to
+    /// confirm. Nil everywhere but the coach chat, which is the one place a runner asks
+    /// for a change and can confirm it; the run read never proposes one.
+    var planChanges: CoachPlanChangeDesk?
     /// The most lookups one answer may make. A tool called past this answers that there
     /// are no more lookups, so the model writes with what it has rather than chaining
     /// calls while the runner waits: each call is a full model turn, a server round trip
@@ -253,8 +257,18 @@ struct CoachLookup: Sendable, Equatable {
     /// to turn "this month" or "since September" into a number of days.
     static func instructions(_ base: String, withToolsFor lookup: CoachLookup?, today: Date = Date()) -> String {
         guard let lookup else { return base }
-        return base + "\n\n" + instructionsNote + "\n" + anchorLine(for: lookup, today: today)
+        let planChange = lookup.planChanges == nil ? "" : "\n" + planChangeNote
+        return base + "\n\n" + instructionsNote + planChange + "\n" + anchorLine(for: lookup, today: today)
     }
+
+    /// Added when the request can propose a plan change (the coach chat).
+    static let planChangeNote = """
+    When the runner asks you to change their plan in the coming week (add a run, \
+    change a run's type or distance, or take a run off), call proposePlanChange once \
+    with what they asked for. If they don't name a day, let the app pick the best one. \
+    The runner confirms the change on a card below your reply, so never say the plan \
+    has already changed. If the tool says it can't be done, say why and offer another way.
+    """
 
     /// Added to a request's instructions only when tools come with it.
     static let instructionsNote = """
