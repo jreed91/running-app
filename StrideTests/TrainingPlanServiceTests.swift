@@ -219,7 +219,9 @@ struct TrainingPlanServiceTests {
         #expect(RaceType.custom.trainingStyle(forDistanceMeters: 7_999) == .fiveK)
         #expect(RaceType.custom.trainingStyle(forDistanceMeters: 10_000) == .tenK)
         #expect(RaceType.custom.trainingStyle(forDistanceMeters: 14_999) == .tenK)
-        #expect(RaceType.custom.trainingStyle(forDistanceMeters: 15_000) == .halfMarathon)
+        // 15K trains like a 10K, not like a half: anything longer is half style.
+        #expect(RaceType.custom.trainingStyle(forDistanceMeters: 15_000) == .tenK)
+        #expect(RaceType.custom.trainingStyle(forDistanceMeters: 15_001) == .halfMarathon)
         #expect(RaceType.custom.trainingStyle(forDistanceMeters: 21_097.5) == .halfMarathon)
         #expect(RaceType.custom.trainingStyle(forDistanceMeters: 42_195) == .marathon)
         // Standard race types always resolve to themselves.
