@@ -11,7 +11,7 @@ import Foundation
 ///
 /// Two spellings of one link:
 ///
-/// - ``webURL``, `https://jacobreed.dev/stride/race?…`, the one that is shared. A phone
+/// - ``webURL``, `https://www.jacobreed.dev/stride/race?…`, the one that is shared. A phone
 ///   with Stride opens it in the app (once the site serves the app-site association);
 ///   one without it gets a page with the race and the App Store button.
 /// - ``appURL``, `stride://race?…`, the same query on the app's own scheme, for the web
@@ -53,7 +53,10 @@ struct RaceInvite: Equatable, Sendable {
     // MARK: Wire format
 
     static let webScheme = "https"
-    static let webHosts: Set<String> = ["jacobreed.dev", "www.jacobreed.dev"]
+    /// `www.`, because the bare domain answers with a redirect to it, and iOS neither opens
+    /// the app for a link that redirects nor fetches the app-site association through one.
+    static let webHost = "www.jacobreed.dev"
+    static let webHosts: Set<String> = [webHost, "jacobreed.dev"]
     static let webPath = "/stride/race"
     static let appHost = "race"
 
@@ -183,11 +186,11 @@ struct RaceInvite: Equatable, Sendable {
         return calendar.startOfDay(for: raceDate) < calendar.startOfDay(for: now)
     }
 
-    /// The link that is shared: `https://jacobreed.dev/stride/race?…`.
+    /// The link that is shared: `https://www.jacobreed.dev/stride/race?…`.
     var webURL: URL {
         var components = URLComponents()
         components.scheme = Self.webScheme
-        components.host = "jacobreed.dev"
+        components.host = Self.webHost
         components.path = Self.webPath
         components.percentEncodedQuery = percentEncodedQuery
         // Built from fixed parts and percent-encoded values, so it always forms a URL.
