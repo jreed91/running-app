@@ -125,7 +125,8 @@ final class WorkoutSyncService {
         // snapshotted its existing-ID set before the workout that fired this
         // trigger existed, so it can miss it. Queue exactly one follow-up pass
         // and let the in-flight caller replay it (M1).
-        guard syncQueue.request(source) else {
+        let first = SyncPassQueue.Request(source: source, lookbackDays: lookbackDays)
+        guard syncQueue.request(first) else {
             AppLogger.log(
                 "Sync already in progress; queued follow-up \(source) sync.",
                 label: "HealthKit",
@@ -133,12 +134,12 @@ final class WorkoutSyncService {
             )
             return
         }
-        // The queue is now `.syncing`; `next()` hands back the follow-up owed, or
-        // returns it to `.idle` when there is none.
-        var currentSource: String? = source
-        while let source = currentSource {
-            await runSyncPass(source: source, lookbackDays: lookbackDays)
-            currentSource = syncQueue.next()
+        // The queue is now `.syncing`; `next()` hands back the follow-up owed, with the
+        // widest window its triggers asked for, or returns to `.idle` when there is none.
+        var current: SyncPassQueue.Request? = first
+        while let request = current {
+            await runSyncPass(source: request.source, lookbackDays: request.lookbackDays)
+            current = syncQueue.next()
         }
     }
 
