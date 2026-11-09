@@ -13,7 +13,8 @@ struct OnboardingView: View {
     @Environment(AuthService.self) private var authService
 
     // Navigation
-    @State private var step = 0
+    /// Which screen is showing. See `OnboardingStep` for the order.
+    @State private var step: OnboardingStep = .welcome
     @State private var goingForward = true
 
     // Step data
@@ -81,7 +82,7 @@ struct OnboardingView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let locationManager = CLLocationManager()
-    private let totalSteps = 8
+    private let totalSteps = OnboardingStep.countedSteps
 
     private enum LongRunDay: String, CaseIterable {
         case saturday = "Sat"
@@ -246,14 +247,14 @@ struct OnboardingView: View {
     @ViewBuilder
     private var currentStep: some View {
         switch step {
-        case 0:
+        case .welcome:
             if authService.welcomeBackPending {
                 OBWelcomeBack(onStartFresh: handleStartFresh)
             } else {
                 OBWelcome(onStart: advance, onSignIn: handleSignIn)
             }
-        case 1:
-            OBShell(stepIndex: 1, total: totalSteps, kicker: "Your goal",
+        case .goal:
+            OBShell(stepIndex: step.rawValue, total: totalSteps, kicker: "Your goal",
                     title: "What are you training for?",
                     subtitle: "Pick a race distance, keep running strong without one, or start from run/walk.",
                     ctaLabel: "Continue",
@@ -261,8 +262,8 @@ struct OnboardingView: View {
                     onCTA: advance) {
                 goalContent
             }
-        case 2 where isPregnancyPlan:
-            OBShell(stepIndex: 2, total: totalSteps, kicker: "Timing",
+        case .timing where isPregnancyPlan:
+            OBShell(stepIndex: step.rawValue, total: totalSteps, kicker: "Timing",
                     title: "When are you due?",
                     subtitle: "Your plan runs from the start date through the week you're due, easing off as it goes.",
                     ctaLabel: "Continue",
@@ -271,8 +272,8 @@ struct OnboardingView: View {
                     onCTA: advance) {
                 pregnancyTimingContent
             }
-        case 2:
-            OBShell(stepIndex: 2, total: totalSteps, kicker: "Timing",
+        case .timing:
+            OBShell(stepIndex: step.rawValue, total: totalSteps, kicker: "Timing",
                     title: goalRace.isGoalRace ? "When's the big day?" : "When do you want to start?",
                     subtitle: goalRace.isGoalRace
                         ? "Pick your race date and when training begins."
@@ -287,8 +288,8 @@ struct OnboardingView: View {
         // knows (`UnitPreference.localeDefault`) — so nine steps stood between a new
         // runner and a usable app, one of them a fork with a right answer (U10). It is a
         // control on this step now, pre-set and there to be corrected rather than asked.
-        case 3:
-            OBShell(stepIndex: 3, total: totalSteps, kicker: "About you",
+        case .level:
+            OBShell(stepIndex: step.rawValue, total: totalSteps, kicker: "About you",
                     title: "How would you describe your running?",
                     subtitle: levelSubtitle,
                     ctaLabel: "Continue", onBack: retreat, onCTA: advance) {
@@ -297,8 +298,8 @@ struct OnboardingView: View {
         // A 5K time buys a pregnancy plan nothing — it prescribes no paces — so the
         // calibration slot asks the two things that plan is actually built from, and carries
         // the screening gate that decides whether it gets built at all.
-        case 4 where isPregnancyPlan:
-            OBShell(stepIndex: 4, total: totalSteps, kicker: "Health check",
+        case .calibrate where isPregnancyPlan:
+            OBShell(stepIndex: step.rawValue, total: totalSteps, kicker: "Health check",
                     title: "A couple of checks first.",
                     subtitle: "Stride won't build a pregnancy plan until you've read this and confirmed it.",
                     ctaLabel: "Continue",
@@ -309,8 +310,8 @@ struct OnboardingView: View {
             }
         // A runner who can't yet run five minutes has no 5K time to give. What places a
         // Start Running plan is how long they can run today.
-        case 4 where isStartRunningPlan:
-            OBShell(stepIndex: 4, total: totalSteps, kicker: "Starting point",
+        case .calibrate where isStartRunningPlan:
+            OBShell(stepIndex: step.rawValue, total: totalSteps, kicker: "Starting point",
                     title: "How long can you run without stopping?",
                     subtitle: "Your plan starts from here. Starting a little easy costs you nothing.",
                     ctaLabel: "Continue",
@@ -318,8 +319,8 @@ struct OnboardingView: View {
                     onCTA: { didEnter5KTime = false; advance() }) {
                 OBStartingPointPicker(selection: $startingPoint)
             }
-        case 4:
-            OBShell(stepIndex: 4, total: totalSteps, kicker: "Calibrate",
+        case .calibrate:
+            OBShell(stepIndex: step.rawValue, total: totalSteps, kicker: "Calibrate",
                     title: "Your recent 5K time?", subtitle: "Used to compute your VDOT and pace zones. You can skip or update this later.",
                     ctaLabel: "Continue",
                     secondaryLabel: "I don't know my 5K time",
@@ -328,8 +329,8 @@ struct OnboardingView: View {
                     onCTA: { didEnter5KTime = true; advance() }) {
                 timeContent
             }
-        case 5:
-            OBShell(stepIndex: 5, total: totalSteps, kicker: "Schedule",
+        case .schedule:
+            OBShell(stepIndex: step.rawValue, total: totalSteps, kicker: "Schedule",
                     title: "Which days can you run?",
                     subtitle: isStartRunningPlan
                         ? "Three runs a week, with a day between. Pick more and we'll use the three most spread out."
@@ -337,11 +338,11 @@ struct OnboardingView: View {
                     ctaLabel: "Continue", onBack: retreat, onCTA: advance) {
                 scheduleContent
             }
-        case 6:
+        case .strength:
             // A pregnancy plan cannot skip strength outright: the daily pelvic floor
             // prescription rides on that session, so clearing the equipment falls back to
             // bodyweight rather than to nothing. The secondary label says which it is.
-            OBShell(stepIndex: 6, total: totalSteps, kicker: "Strength training",
+            OBShell(stepIndex: step.rawValue, total: totalSteps, kicker: "Strength training",
                     title: "What equipment do you have?",
                     subtitle: isPregnancyPlan
                         ? "We'll add 1–2 sessions per week, each opening with pelvic floor work."
@@ -355,8 +356,8 @@ struct OnboardingView: View {
                     onCTA: advance) {
                 strengthContent
             }
-        case 7:
-            OBShell(stepIndex: 7, total: totalSteps, kicker: "Permissions",
+        case .permissions:
+            OBShell(stepIndex: step.rawValue, total: totalSteps, kicker: "Permissions",
                     title: "A few things to set up.", subtitle: "Each is optional — you can always change these in Settings.",
                     ctaLabel: isRequestingPermissions ? "Requesting…" : "Build my plan",
                     secondaryLabel: "Skip — I'll do this later",
@@ -370,7 +371,7 @@ struct OnboardingView: View {
                     }) {
                 permissionsContent
             }
-        default:
+        case .ready:
             if isStartRunningPlan {
                 OBStartRunningReady(
                     startingPoint: startingPoint,
@@ -406,11 +407,11 @@ struct OnboardingView: View {
 
     private func advance() {
         goingForward = true
-        withAnimation(reduceMotion ? AppAnimation.reduced : AppAnimation.bouncy) { step += 1 }
+        withAnimation(reduceMotion ? AppAnimation.reduced : AppAnimation.bouncy) { step = step.next }
     }
     private func retreat() {
         goingForward = false
-        withAnimation(reduceMotion ? AppAnimation.reduced : AppAnimation.bouncy) { step -= 1 }
+        withAnimation(reduceMotion ? AppAnimation.reduced : AppAnimation.bouncy) { step = step.previous }
     }
 
     // MARK: - Goal content
@@ -947,7 +948,7 @@ struct OnboardingView: View {
         // Skip past OBWelcome — the user has already authenticated, and
         // returning them to the sign-in screen would just risk a loop back
         // into OBWelcomeBack if they tap Sign in with Apple again.
-        if step == 0 { advance() }
+        if step == .welcome { advance() }
     }
 
     // MARK: - Create profile and plan
