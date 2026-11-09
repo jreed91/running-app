@@ -17,9 +17,13 @@ struct StrengthLibrary: Sendable {
         focus: StrengthFocus,
         phase: TrainingPhase,
         minutes: Int? = nil,
-        excluding excluded: Set<String> = []
+        excluding excluded: Set<String> = [],
+        replacing replacements: [String: String] = [:]
     ) -> StrengthWorkoutPlan {
-        var exercises = self.exercises(for: equipment, focus: focus, phase: phase, excluding: excluded)
+        var exercises = self.exercises(
+            for: equipment, focus: focus, phase: phase,
+            excluding: excluded, replacing: replacements
+        )
         if let minutes {
             exercises = fitted(exercises, toMinutes: minutes, phase: phase)
         }
@@ -35,13 +39,16 @@ struct StrengthLibrary: Sendable {
         )
     }
 
-    /// `excluded` names are left out before the list is capped, so the next exercise in
-    /// line takes an excluded one's place.
+    /// `replacements` (original name → stand-in name) put the runner's standing swaps in,
+    /// where the stand-in's equipment is at hand, with the original's sets and reps.
+    /// `excluded` names are then left out before the list is capped, so the next exercise
+    /// in line takes an excluded one's place.
     static func exercises(
         for equipment: [StrengthEquipment],
         focus: StrengthFocus,
         phase: TrainingPhase,
-        excluding excluded: Set<String> = []
+        excluding excluded: Set<String> = [],
+        replacing replacements: [String: String] = [:]
     ) -> [StrengthExercise] {
         guard !equipment.isEmpty else { return [] }
         let (sets, reps) = volumeForPhase(phase)
@@ -67,12 +74,40 @@ struct StrengthLibrary: Sendable {
             }
         }
 
+        // Standing swaps from the session screen.
+        if !replacements.isEmpty {
+            let available = Set(equipment).union([.bodyweight])
+            result = result.map { exercise in
+                guard let name = replacements[exercise.name],
+                      let standIn = catalog.first(where: { $0.name == name }),
+                      standIn.equipment.map(available.contains) == true
+                else { return exercise }
+                return Self.standIn(standIn, for: exercise)
+            }
+        }
+
         // Deduplicate by name (equipment may overlap) and cap total
         var seen = Set<String>()
         result = result.filter { !excluded.contains($0.name) && seen.insert($0.name).inserted }
 
         let maxExercises = maxExerciseCount(phase: phase, focus: focus)
         return Array(result.prefix(maxExercises))
+    }
+
+    /// ``plan(for:focus:phase:minutes:excluding:replacing:)`` with the runner's
+    /// session length, excluded exercises and standing swaps from Settings.
+    static func plan(
+        for equipment: [StrengthEquipment],
+        focus: StrengthFocus,
+        phase: TrainingPhase,
+        preferences: StrengthPreferences
+    ) -> StrengthWorkoutPlan {
+        plan(
+            for: equipment, focus: focus, phase: phase,
+            minutes: preferences.sessionMinutes,
+            excluding: preferences.excluded,
+            replacing: preferences.replacements
+        )
     }
 
     // MARK: - Unplanned sessions
@@ -97,7 +132,7 @@ struct StrengthLibrary: Sendable {
         guard !isPregnancyPlan else { return nil }
         return plan(
             for: equipment.isEmpty ? [.bodyweight] : equipment, focus: focus, phase: phase ?? .base,
-            minutes: preferences.sessionMinutes, excluding: preferences.excluded
+            preferences: preferences
         )
     }
 

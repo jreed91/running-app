@@ -54,6 +54,10 @@ struct StrengthSettingsView: View {
 
                 amountCard
 
+                if !preferences.replacements.isEmpty {
+                    replacementsCard
+                }
+
                 if !preferences.excludedExercises.isEmpty {
                     excludedCard
                 }
@@ -128,6 +132,39 @@ struct StrengthSettingsView: View {
         }
     }
 
+    // MARK: - Always swapped
+
+    /// Standing swaps made with "Every session" on the session screen.
+    private var replacementsCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Always swapped")
+                .strideEyebrow()
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, AppSpacing.xs)
+            VStack(spacing: 0) {
+                ForEach(Array(preferences.replacements.keys.sorted().enumerated()), id: \.element) { index, original in
+                    if index > 0 { Divider() }
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(preferences.replacements[original] ?? "")
+                                .font(.dsBody)
+                            Text("instead of \(original)")
+                                .font(.dsFootnote)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button("Undo") { preferences.replacements[original] = nil }
+                            .buttonStyle(.strideButton(.quiet, compact: true, fullWidth: false))
+                            .accessibilityLabel("Stop swapping \(original)")
+                    }
+                    .padding(.vertical, AppSpacing.sm)
+                }
+            }
+            .padding(.horizontal, AppSpacing.md)
+            .strideCard(cornerRadius: AppRadius.md)
+        }
+    }
+
     // MARK: - Never suggested
 
     /// Exercises taken out with "Don't suggest again" on the session screen. Putting one
@@ -188,7 +225,7 @@ struct StrengthSettingsView: View {
         if let activePlan {
             StrengthPlanRefresher.refresh(
                 activePlan, equipment: chosen, focus: focus,
-                minutes: preferences.sessionMinutes, excluding: preferences.excluded
+                preferences: preferences
             )
             // Days move only when the number of sessions changed, so sessions moved by
             // hand stay where they were after an equipment or length change.

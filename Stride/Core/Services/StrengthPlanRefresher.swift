@@ -11,7 +11,7 @@ import Foundation
 /// trimester adaptation the pregnancy generator applies, so a Settings change can never
 /// put a supine exercise back into the third trimester.
 ///
-/// ``refresh(_:equipment:focus:minutes:now:calendar:)`` changes exercises, never days.
+/// ``refresh(_:equipment:focus:preferences:except:now:calendar:)`` changes exercises, never days.
 /// ``reschedule(_:profile:preferences:now:calendar:)`` changes days, and only when the
 /// runner changed how many sessions a week they want.
 @MainActor
@@ -23,8 +23,7 @@ enum StrengthPlanRefresher {
         _ plan: TrainingPlan,
         equipment: [StrengthEquipment],
         focus: StrengthFocus,
-        minutes: Int? = nil,
-        excluding excluded: Set<String> = [],
+        preferences: StrengthPreferences = StrengthPreferences(),
         except inProgressID: UUID? = nil,
         now: Date = Date(),
         calendar: Calendar = .current
@@ -44,7 +43,7 @@ enum StrengthPlanRefresher {
                       calendar.startOfDay(for: workout.scheduledDate) >= today
                 else { continue }
 
-                var next = StrengthLibrary.plan(for: effective, focus: focus, phase: week.phase, minutes: minutes, excluding: excluded)
+                var next = StrengthLibrary.plan(for: effective, focus: focus, phase: week.phase, preferences: preferences)
                 if plan.isPregnancyPlan, let dueDate = plan.dueDate {
                     let gestationalWeek = GestationalAge.on(week.startDate, dueDate: dueDate, calendar: calendar).weeks
                     next = PregnancyStrengthAdapter.adapt(next, atGestationalWeek: gestationalWeek)
@@ -135,8 +134,7 @@ enum StrengthPlanRefresher {
             )
             let session = StrengthLibrary.plan(
                 for: profile.selectedEquipment, focus: focus, phase: week.phase,
-                minutes: preferences.sessionMinutes,
-                excluding: preferences.excluded
+                preferences: preferences
             )
             var added: [ScheduledWorkout] = []
             for day in days {

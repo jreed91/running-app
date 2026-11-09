@@ -179,22 +179,17 @@ struct StrengthActiveView: View {
             StrengthExerciseGuide(exercise: exercise)
                 .presentationDetents([.medium, .large])
         }
-        .confirmationDialog(
-            "Swap \(currentExercise?.name ?? "exercise") for",
-            isPresented: $showSwapOptions,
-            titleVisibility: .visible
-        ) {
-            ForEach(swapOptions, id: \.name) { option in
-                Button(option.name) { swap(to: option) }
+        .sheet(isPresented: $showSwapOptions) {
+            if let current = currentExercise {
+                StrengthSwapSheet(
+                    exercise: current,
+                    options: swapOptions,
+                    onToday: { swap(to: $0) },
+                    onEverySession: { alwaysSwap(current, to: $0) },
+                    onNeverSuggest: { first in neverSuggest(current, replacingWith: first) }
+                )
+                .presentationDetents([.medium, .large])
             }
-            if let current = currentExercise, let first = swapOptions.first {
-                Button("Don't suggest \(current.name) again", role: .destructive) {
-                    neverSuggest(current, replacingWith: first)
-                }
-            }
-            Button("Cancel", role: .cancel) { }
-        } message: {
-            Text("A swap is just for this session. \"Don't suggest again\" also takes it out of the sessions ahead; Settings > Strength training puts it back.")
         }
         // Haptics (U4). Logging a set and the rest timer expiring are both moments
         // the lifter is mid-movement and not looking at the phone.
@@ -703,6 +698,32 @@ struct StrengthActiveView: View {
         saveCheckpoint()
     }
 
+    /// Swaps `exercise` for `standIn` today and in every session from now on. The sessions
+    /// still ahead are rebuilt with it; the one on screen keeps its plan.
+    private func alwaysSwap(_ exercise: StrengthExercise, to standIn: StrengthExercise) {
+        var preferences = StrengthPreferences.load()
+        // A swapped-in exercise's rule is keyed by what the plan originally had there.
+        let original = plan?.exercises.indices.contains(currentExerciseIndex) == true
+            ? plan?.exercises[currentExerciseIndex].name ?? exercise.name
+            : exercise.name
+        preferences.replace(original, with: standIn.name)
+        preferences.save()
+        swap(to: standIn)
+        refreshSessionsAhead(with: preferences)
+    }
+
+    private func refreshSessionsAhead(with preferences: StrengthPreferences) {
+        guard let profile = profiles.first, let activePlan = activePlans.first else { return }
+        StrengthPlanRefresher.refresh(
+            activePlan,
+            equipment: profile.selectedEquipment,
+            focus: profile.strengthFocus,
+            preferences: preferences,
+            except: scheduledWorkout?.id
+        )
+        context.saveOrLog("the strength sessions ahead after a swap or exclusion")
+    }
+
     /// Takes `exercise` out for good: today it becomes the closest alternative, and the
     /// sessions still ahead are rebuilt without it (Fitbod's "Exclude", in Stride's terms).
     private func neverSuggest(_ exercise: StrengthExercise, replacingWith replacement: StrengthExercise) {
@@ -710,16 +731,7 @@ struct StrengthActiveView: View {
         preferences.exclude(exercise.name)
         preferences.save()
         swap(to: replacement)
-        guard let profile = profiles.first, let activePlan = activePlans.first else { return }
-        StrengthPlanRefresher.refresh(
-            activePlan,
-            equipment: profile.selectedEquipment,
-            focus: profile.strengthFocus,
-            minutes: preferences.sessionMinutes,
-            excluding: preferences.excluded,
-            except: scheduledWorkout?.id
-        )
-        context.saveOrLog("the sessions ahead without an excluded exercise")
+        refreshSessionsAhead(with: preferences)
     }
 
     // MARK: - Checkpoint
@@ -1003,5 +1015,79 @@ private struct StrengthExerciseGuide: View {
             }
         }
         .strideSheet()
+    }
+}
+
+// MARK: - StrengthSwapSheet
+
+/// What the current exercise could become, each for today or for every session, and
+/// "Don't suggest again" to take it out for good.
+private struct StrengthSwapSheet: View {
+    let exercise: StrengthExercise
+    let options: [StrengthExercise]
+    let onToday: (StrengthExercise) -> Void
+    let onEverySession: (StrengthExercise) -> Void
+    let onNeverSuggest: (StrengthExercise) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: AppSpacing.md) {
+                    ForEach(options, id: \.name) { option in
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text(option.name)
+                                .font(.dsHeadline)
+                            if !option.muscleGroups.isEmpty {
+                                Text(option.muscleGroups.prefix(3).joined(separator: ", "))
+                                    .font(.dsFootnote)
+                                    .foregroundStyle(.secondary)
+                            }
+                            HStack(spacing: AppSpacing.sm) {
+                                Button("Today") { choose { onToday(option) } }
+                                    .buttonStyle(.strideButton(.secondary, compact: true))
+                                    .accessibilityLabel("Swap for \(option.name) today")
+                                Button("Every session") { choose { onEverySession(option) } }
+                                    .buttonStyle(.strideButton(.quiet, compact: true))
+                                    .accessibilityLabel("Swap for \(option.name) in every session")
+                            }
+                        }
+                        .padding(AppSpacing.md)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .strideCard(cornerRadius: AppRadius.md)
+                    }
+
+                    if let first = options.first {
+                        Button(role: .destructive) {
+                            choose { onNeverSuggest(first) }
+                        } label: {
+                            Text("Don't suggest \(exercise.name) again")
+                        }
+                        .buttonStyle(.strideButton(.destructive))
+                    }
+
+                    Text("\"Today\" changes only this session. \"Every session\" and \"Don't suggest again\" also change the sessions ahead, keeping their sets and reps. Settings > Strength training undoes either.")
+                        .font(.dsFootnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(AppSpacing.lg)
+            }
+            .background(Color.surfacePrimary)
+            .navigationTitle("Swap \(exercise.name)")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+        }
+        .strideSheet()
+    }
+
+    private func choose(_ action: () -> Void) {
+        action()
+        dismiss()
     }
 }

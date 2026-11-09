@@ -19,11 +19,20 @@ struct StrengthPreferences: Codable, Equatable, Sendable {
     /// Library exercises the runner never wants suggested, by name. New sessions leave
     /// them out (the next exercise in line takes the place), and Swap doesn't offer them.
     var excludedExercises: [String] = []
+    /// Standing swaps, original name → stand-in name: "Swap in every session" on the
+    /// session screen. New sessions use the stand-in wherever the original would go.
+    var replacements: [String: String] = [:]
 
-    init(daysPerWeek: Int? = nil, sessionMinutes: Int? = nil, excludedExercises: [String] = []) {
+    init(
+        daysPerWeek: Int? = nil,
+        sessionMinutes: Int? = nil,
+        excludedExercises: [String] = [],
+        replacements: [String: String] = [:]
+    ) {
         self.daysPerWeek = daysPerWeek
         self.sessionMinutes = sessionMinutes
         self.excludedExercises = excludedExercises
+        self.replacements = replacements
     }
 
     // Written out so preferences saved before a field existed still load.
@@ -32,6 +41,18 @@ struct StrengthPreferences: Codable, Equatable, Sendable {
         daysPerWeek = try container.decodeIfPresent(Int.self, forKey: .daysPerWeek)
         sessionMinutes = try container.decodeIfPresent(Int.self, forKey: .sessionMinutes)
         excludedExercises = try container.decodeIfPresent([String].self, forKey: .excludedExercises) ?? []
+        replacements = try container.decodeIfPresent([String: String].self, forKey: .replacements) ?? [:]
+    }
+
+    /// Always use `standIn` where `original` would go. A swap back to the original drops
+    /// the rule; a stand-in that was itself swapped follows to the newest choice.
+    mutating func replace(_ original: String, with standIn: String) {
+        let root = replacements.first { $0.value == original }?.key ?? original
+        if standIn == root {
+            replacements[root] = nil
+        } else {
+            replacements[root] = standIn
+        }
     }
 
     /// ``excludedExercises`` as a set, for the library.

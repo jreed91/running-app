@@ -246,16 +246,20 @@ extension StrengthLibrary {
             if lhsShared != rhsShared { return lhsShared > rhsShared }
             return lhs.name < rhs.name
         }
-        return ranked.prefix(limit).map { candidate in
-            var swapped = candidate
-            swapped.sets = exercise.sets
-            if candidate.durationSeconds != nil {
-                // A hold keeps its own time: twelve "reps" of a plank means nothing.
-                swapped.reps = 0
-            } else {
-                swapped.reps = exercise.durationSeconds != nil ? max(candidate.reps, 8) : exercise.reps
-            }
-            return swapped
+        return ranked.prefix(limit).map { standIn($0, for: exercise) }
+    }
+
+    /// `candidate` doing `exercise`'s job: the plan's sets, and its reps unless one of the
+    /// two is a timed hold. A swap changes the movement, not the session's size.
+    static func standIn(_ candidate: StrengthExercise, for exercise: StrengthExercise) -> StrengthExercise {
+        var swapped = candidate
+        swapped.sets = exercise.sets
+        if candidate.durationSeconds != nil {
+            // A hold keeps its own time: twelve "reps" of a plank means nothing.
+            swapped.reps = 0
+        } else {
+            swapped.reps = exercise.durationSeconds != nil ? max(candidate.reps, 8) : exercise.reps
         }
+        return swapped
     }
 }

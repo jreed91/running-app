@@ -155,8 +155,7 @@ struct StartRunningPlanService {
                 ? nil
                 : StrengthLibrary.plan(
                     for: profile.selectedEquipment, focus: profile.strengthFocus, phase: .base,
-                    minutes: StrengthPreferences.load().sessionMinutes,
-                    excluding: StrengthPreferences.load().excluded
+                    preferences: StrengthPreferences.load()
                 )
             self.strengthOffset = StartRunningPlanService.strengthOffset(runOffsets: runOffsets)
         }
