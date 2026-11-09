@@ -21,6 +21,7 @@ struct TrainingPlanService {
         startDate: Date,
         numberOfWeeks: Int,
         runDayIndices: [Int] = [],
+        recentVolume: RecentRunningVolume? = nil,
         unitPreference: UnitPreference = .metric
     ) -> TrainingPlan {
         generatePlan(
@@ -31,6 +32,7 @@ struct TrainingPlanService {
             raceName: nil,
             raceDate: nil,
             runDayIndices: runDayIndices,
+            recentVolume: recentVolume,
             unitPreference: unitPreference
         )
     }
@@ -42,6 +44,7 @@ struct TrainingPlanService {
         raceDate: Date,
         raceName: String,
         runDayIndices: [Int] = [],
+        recentVolume: RecentRunningVolume? = nil,
         unitPreference: UnitPreference = .metric
     ) -> TrainingPlan {
         guard profile.goalRace.isGoalRace else {
@@ -50,6 +53,7 @@ struct TrainingPlanService {
                 startDate: startDate,
                 numberOfWeeks: profile.goalRace.typicalWeeks.lowerBound,
                 runDayIndices: runDayIndices,
+                recentVolume: recentVolume,
                 unitPreference: unitPreference
             )
         }
@@ -62,6 +66,7 @@ struct TrainingPlanService {
             raceName: raceName,
             raceDate: raceDate.startOfDay,
             runDayIndices: runDayIndices,
+            recentVolume: recentVolume,
             unitPreference: unitPreference
         )
     }
@@ -74,6 +79,7 @@ struct TrainingPlanService {
         raceName: String?,
         raceDate: Date?,
         runDayIndices: [Int],
+        recentVolume: RecentRunningVolume?,
         unitPreference: UnitPreference
     ) -> TrainingPlan {
         // Resolve the goal distance and the training archetype it maps to. Custom
@@ -107,13 +113,21 @@ struct TrainingPlanService {
                 weekIndex: index,
                 totalWeeks: numberOfWeeks,
                 phase: phase,
-                raceType: style
+                raceType: style,
+                ceilingKm: recentVolume?.ceilingKm(weekIndex: index)
+            )
+            let runDayCount = effectiveDayOffsets?.count ?? runDayOffsets(count: profile.weeklyRunDays).count
+            let shares = RunVolumeShares(
+                runDays: runDayCount,
+                qualitySlots: qualitySlotCount(runDays: runDayCount, phase: phase, raceType: style)
             )
             let week = TrainingWeek(
                 weekNumber: index + 1,
                 startDate: weekStart,
                 phase: phase,
-                targetDistanceKm: targetKm
+                // What the week's runs actually add up to: on three days the easy run is
+                // held under the long run, so a week can schedule less than the trend.
+                targetDistanceKm: targetKm * shares.scheduledFraction
             )
             let workouts = buildWorkouts(
                 weekStart: weekStart,
@@ -383,14 +397,19 @@ struct TrainingPlanService {
         weekIndex: Int,
         totalWeeks: Int,
         phase: TrainingPhase,
-        raceType: RaceType
+        raceType: RaceType,
+        ceilingKm: Double? = nil
     ) -> Double {
         let peakMultiplier = raceType == .maintainFitness ? 1.2 : 1.5
+        // What the runner's recent running allows this week (`RecentRunningVolume`). It
+        // only ever lowers a week, and the cutback and taper reductions apply on top of it
+        // so those weeks stay lighter than the ones around them.
+        let ceiling = ceilingKm ?? .infinity
         switch phase {
         case .taper:
-            return base * 0.55
+            return min(base, ceiling) * 0.55
         case .peak:
-            return base * peakMultiplier
+            return min(base * peakMultiplier, ceiling)
         case .build, .base:
             // Progressive overload: ramp ~8% per week toward peak volume, with a
             // cutback every 4th week that drops ~20% below the surrounding trend.
@@ -402,8 +421,7 @@ struct TrainingPlanService {
             // 30 → 32 → 35 → 30 (cut) → 41 → 44 → 45 → 36 (cut) → 45 …
             let isCutback = (weekIndex + 1) % 4 == 0
             let trend = min(pow(1.08, Double(weekIndex)), peakMultiplier)
-            let multiplier = isCutback ? trend * 0.8 : trend
-            return base * multiplier
+            return min(base * trend, ceiling) * (isCutback ? 0.8 : 1)
         }
     }
 
@@ -488,18 +506,10 @@ struct TrainingPlanService {
         // whatever weekly km remains after the long run and quality sessions are budgeted.
         // qualitySlots: quality sessions that fit (all slots except the long-run slot)
         // easySlots:    remaining slots after quality + long run
-        let qualityCap = qualitySessionCap(runDays: days.count, phase: phase, raceType: raceType)
-        let qualitySlots = min(qualityTypes.count, min(max(0, days.count - 1), qualityCap))
-        let easySlots    = max(0, days.count - qualitySlots - 1)
-        let totalQualityFraction = 0.15 * Double(qualitySlots)
-        let longBaseFraction = 0.35
-        // Volume left over after the long run and quality sessions are budgeted.
-        let remainderFraction = max(0.0, 1.0 - longBaseFraction - totalQualityFraction)
-        let easyFractionEach = easySlots > 0 ? remainderFraction / Double(easySlots) : 0.0
-        let easyKmEach = targetKm * easyFractionEach
-        // With 1–2 run days there are no easy slots to absorb the remainder; fold it into
-        // the long run so the week's scheduled volume still sums to targetKm (M32).
-        let longFraction = longBaseFraction + (easySlots == 0 ? remainderFraction : 0.0)
+        let qualitySlots = qualitySlotCount(runDays: days.count, phase: phase, raceType: raceType)
+        let shares = RunVolumeShares(runDays: days.count, qualitySlots: qualitySlots)
+        let easyKmEach = targetKm * shares.easyEach
+        let longFraction = shares.long
 
         for (slotIndex, dayOffset) in days.enumerated() {
             let date = weekStart.adding(days: dayOffset)
@@ -516,7 +526,7 @@ struct TrainingPlanService {
                 workouts.append(qualityWorkout(
                     date: date,
                     type: qualityTypes[slotIndex],
-                    targetKm: targetKm * 0.15,
+                    targetKm: targetKm * RunVolumeShares.qualityEach,
                     paces: paces,
                     raceType: raceType,
                     unitPreference: unitPreference
@@ -601,6 +611,14 @@ struct TrainingPlanService {
     /// Normalizes run-day offsets into unique Mon-Sun indices.
     private func sanitizeDayOffsets(_ offsets: [Int]) -> [Int] {
         Array(Set(offsets.filter { (0...6).contains($0) })).sorted()
+    }
+
+    /// How many of the week's run days get a quality session: the phase's quality types,
+    /// capped by ``qualitySessionCap(runDays:phase:raceType:)``, and never the long-run day.
+    private func qualitySlotCount(runDays: Int, phase: TrainingPhase, raceType: RaceType) -> Int {
+        let qualityTypes = weekQualityTypes(phase: phase, raceType: raceType)
+        let cap = qualitySessionCap(runDays: runDays, phase: phase, raceType: raceType)
+        return min(qualityTypes.count, min(max(0, runDays - 1), cap))
     }
 
     /// Caps weekly quality frequency to keep plans sustainable at lower run-day counts.

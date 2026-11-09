@@ -246,7 +246,12 @@ struct NewPlanOnboardingView: View {
                 onViewPlan: {
                     guard !isCreatingPlan else { return }
                     isCreatingPlan = true
-                    generatePlan()
+                    // Health first, so a runner coming back from a break starts from what
+                    // they have actually been running (`RecentRunningVolume`).
+                    Task {
+                        let recentVolume = await container.healthKitRepository.recentRunningVolume()
+                        generatePlan(recentVolume: recentVolume)
+                    }
                 }
             )
         }
@@ -602,7 +607,7 @@ struct NewPlanOnboardingView: View {
 
     // MARK: - Plan generation
 
-    private func generatePlan() {
+    private func generatePlan(recentVolume: RecentRunningVolume?) {
         // Without a profile there is nothing to build a plan from. Clear the spinner
         // and tell the user instead of leaving "Build my plan" wedged forever.
         guard let profile else {
@@ -634,6 +639,7 @@ struct NewPlanOnboardingView: View {
                 raceDate: raceDate,
                 raceName: raceName.trimmingCharacters(in: .whitespacesAndNewlines),
                 runDayIndices: sortedDays,
+                recentVolume: recentVolume,
                 unitPreference: appSettings.unitPreference
             )
         } else {
@@ -642,6 +648,7 @@ struct NewPlanOnboardingView: View {
                 startDate: startDate,
                 numberOfWeeks: effectiveWeeks,
                 runDayIndices: sortedDays,
+                recentVolume: recentVolume,
                 unitPreference: appSettings.unitPreference
             )
         }

@@ -80,8 +80,11 @@ enum RaceType: String, Codable, CaseIterable, Sendable {
         guard self == .custom else { return self }
         switch meters {
         case ..<8_000:   return .fiveK          // 5K-and-under: speed focused
-        case ..<15_000:  return .tenK           // 8K–15K: tempo and intervals in balance
-        case ..<32_000:  return .halfMarathon   // 15K–30K: threshold/tempo focused
+        // 15K itself trains 10K style. It is a common race (and the first quick pick on the
+        // custom-distance card), and half-marathon style gave it a half's starting volume:
+        // a "Recreational" 15K runner on three days got an 8.7 mile long run in week one.
+        case ...15_000:  return .tenK           // 8K–15K: tempo and intervals in balance
+        case ..<32_000:  return .halfMarathon   // over 15K up to 30K: threshold/tempo focused
         default:         return .marathon       // 30K+: long-run focused
         }
     }

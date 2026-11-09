@@ -925,7 +925,17 @@ struct OnboardingView: View {
 
     // MARK: - Create profile and plan
 
+    /// Reads the runner's recent running from Health, then builds the profile and plan, so
+    /// someone coming back from a break starts from what they have actually been running
+    /// rather than from the fitness level alone (`RecentRunningVolume`).
     private func createProfileAndPlan() {
+        Task {
+            let recentVolume = await container.healthKitRepository.recentRunningVolume()
+            createProfileAndPlan(recentVolume: recentVolume)
+        }
+    }
+
+    private func createProfileAndPlan(recentVolume: RecentRunningVolume?) {
         // CloudKit may have delivered the user's existing profile while they were
         // going through onboarding. If so, skip creation entirely — ContentView's
         // @Query will detect the non-empty profile list and switch to MainTabView.
@@ -1007,6 +1017,7 @@ struct OnboardingView: View {
                 raceDate: raceDate,
                 raceName: raceName.trimmingCharacters(in: .whitespacesAndNewlines),
                 runDayIndices: selectedDays.sorted(),
+                recentVolume: recentVolume,
                 unitPreference: appSettings.unitPreference
             )
         } else {
@@ -1015,6 +1026,7 @@ struct OnboardingView: View {
                 startDate: planStartDate,
                 numberOfWeeks: planWeeks,
                 runDayIndices: selectedDays.sorted(),
+                recentVolume: recentVolume,
                 unitPreference: appSettings.unitPreference
             )
         }

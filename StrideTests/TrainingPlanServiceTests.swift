@@ -219,7 +219,9 @@ struct TrainingPlanServiceTests {
         #expect(RaceType.custom.trainingStyle(forDistanceMeters: 7_999) == .fiveK)
         #expect(RaceType.custom.trainingStyle(forDistanceMeters: 10_000) == .tenK)
         #expect(RaceType.custom.trainingStyle(forDistanceMeters: 14_999) == .tenK)
-        #expect(RaceType.custom.trainingStyle(forDistanceMeters: 15_000) == .halfMarathon)
+        // 15K trains like a 10K, not like a half: anything longer is half style.
+        #expect(RaceType.custom.trainingStyle(forDistanceMeters: 15_000) == .tenK)
+        #expect(RaceType.custom.trainingStyle(forDistanceMeters: 15_001) == .halfMarathon)
         #expect(RaceType.custom.trainingStyle(forDistanceMeters: 21_097.5) == .halfMarathon)
         #expect(RaceType.custom.trainingStyle(forDistanceMeters: 42_195) == .marathon)
         // Standard race types always resolve to themselves.
@@ -536,6 +538,81 @@ struct TrainingPlanServiceTests {
         #expect(longRuns.map(\.targetDistanceMeters) == longRunDistancesBefore)
         #expect(future.map { [$0.targetPaceLowerBound, $0.targetPaceUpperBound] } == pacesAfterFirst)
         #expect(future.map(\.notes) == notesAfterFirst)
+    }
+
+    @Test("No easy run is longer than the same week's long run, for 3–6 run days")
+    func easyRunNeverOutrunsLongRun() {
+        for runDays in 3...6 {
+            for race in [RaceType.fiveK, .tenK, .halfMarathon] {
+                let profile = makeProfile(race: race, runDays: runDays)
+                let plan = service.generatePlan(profile: profile, startDate: .now, numberOfWeeks: 12)
+                for week in weeks(in: plan) {
+                    let ws = workouts(in: week)
+                    let longRun = ws.first { $0.workoutType == .longRun }
+                    guard let long = longRun?.targetDistanceMeters else { continue }
+                    for easy in ws where easy.workoutType == .easy {
+                        let easyMeters = easy.targetDistanceMeters ?? 0
+                        #expect(
+                            easyMeters < long,
+                            "\(race) \(runDays)d wk \(week.weekNumber): easy \(easyMeters), long \(long)"
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    @Test("A week's target distance is what its runs add up to, for 1–6 run days")
+    func weekTargetMatchesScheduledRuns() {
+        for runDays in 1...6 {
+            let profile = makeProfile(race: .tenK, runDays: runDays)
+            let plan = service.generatePlan(profile: profile, startDate: .now, numberOfWeeks: 10)
+            for week in weeks(in: plan) {
+                let scheduledKm = workouts(in: week)
+                    .filter { $0.workoutType.isRunType }
+                    .reduce(0.0) { $0 + ($1.targetDistanceMeters ?? 0) / 1_000 }
+                let tolerance = max(0.5, week.targetDistanceKm * 0.02)
+                #expect(
+                    abs(scheduledKm - week.targetDistanceKm) < tolerance,
+                    "\(runDays)d wk \(week.weekNumber): scheduled \(scheduledKm), target \(week.targetDistanceKm)"
+                )
+            }
+        }
+    }
+
+    // MARK: Recent running (returning runners)
+
+    @Test("A runner coming back from a break starts from what they have been running, not the table")
+    func returningRunnerStartsFromRecentVolume() {
+        // The case that prompted this: 15K, three days, Recreational, barely running for six weeks.
+        let profile = makeProfile(race: .custom, runDays: 3)
+        profile.customDistanceMeters = 15_000
+        let recent = RecentRunningVolume(averageWeeklyKm: 8)
+        let plan = service.generatePlan(profile: profile, startDate: .now, numberOfWeeks: 12, recentVolume: recent)
+        let usual = service.generatePlan(profile: profile, startDate: .now, numberOfWeeks: 12)
+        let ws = weeks(in: plan)
+
+        // Week one: 12 km floor (8 km + 10% is under it), 78% of which is scheduled on three days.
+        #expect(abs(ws[0].targetDistanceKm - 12 * 0.78) < 0.1, "Week 1 is \(ws[0].targetDistanceKm) km")
+        let longRun = workouts(in: ws[0]).first { $0.workoutType == .longRun }?.targetDistanceMeters ?? 0
+        #expect(longRun < 5_000, "Week 1 long run is \(longRun) m")
+        #expect(ws[0].targetDistanceKm < weeks(in: usual)[0].targetDistanceKm)
+
+        // It still builds: no week grows more than 10% on the week before, cutbacks aside.
+        for i in 1..<ws.count where ws[i].phase == .base || ws[i].phase == .build {
+            #expect(ws[i].targetDistanceKm <= ws[i - 1].targetDistanceKm * 1.1 / 0.8 + 0.01)
+        }
+        let peakKm = ws.first { $0.phase == .peak }?.targetDistanceKm ?? 0
+        #expect(peakKm > ws[0].targetDistanceKm * 1.5, "Peak is \(peakKm) km")
+    }
+
+    @Test("A runner already doing more than the plan asks gets the usual plan")
+    func busyRunnerIsUnaffected() {
+        let profile = makeProfile(race: .tenK, runDays: 4)
+        let recent = RecentRunningVolume(averageWeeklyKm: 80)
+        let plan = service.generatePlan(profile: profile, startDate: .now, numberOfWeeks: 10, recentVolume: recent)
+        let usual = service.generatePlan(profile: profile, startDate: .now, numberOfWeeks: 10)
+        #expect(weeks(in: plan).map(\.targetDistanceKm) == weeks(in: usual).map(\.targetDistanceKm))
     }
 
     // MARK: Target distance
