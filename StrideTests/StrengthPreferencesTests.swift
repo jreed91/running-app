@@ -141,4 +141,30 @@ struct StrengthPreferencesTests {
         preferences.replace("KB Goblet Squat", with: "Back Squat")
         #expect(preferences.replacements.isEmpty)
     }
+
+    // MARK: Editing a session
+
+    @Test("Exercises to add use owned equipment and skip what's in the session or excluded")
+    func addableExercises() {
+        let session = StrengthLibrary.plan(for: [.dumbbells], focus: .runningSpecific, phase: .base).exercises
+        let addable = StrengthLibrary.addable(to: session, equipment: [.dumbbells], excluding: ["Plank"])
+        #expect(!addable.isEmpty)
+        #expect(addable.allSatisfy { $0.equipment == .dumbbells || $0.equipment == .bodyweight })
+        #expect(!addable.contains { candidate in session.contains { $0.name == candidate.name } })
+        #expect(!addable.contains { $0.name == "Plank" })
+        #expect(addable.map(\.name) == addable.map(\.name).sorted())
+    }
+
+    @Test("An added exercise takes the session's sets and reps; a hold keeps its time")
+    func addedMatchesTheSession() throws {
+        let session = StrengthLibrary.plan(for: [.dumbbells], focus: .generalStrength, phase: .peak).exercises
+        let template = try #require(session.first { $0.durationSeconds == nil })
+        let row = try #require(StrengthLibrary.catalog.first { $0.name == "DB Bent-Over Row" })
+        let added = StrengthLibrary.added(row, to: session)
+        #expect(added.sets == template.sets)
+        #expect(added.reps == template.reps)
+
+        let plank = try #require(StrengthLibrary.catalog.first { $0.name == "Plank" })
+        #expect(StrengthLibrary.added(plank, to: session).durationSeconds == plank.durationSeconds)
+    }
 }

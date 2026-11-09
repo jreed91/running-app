@@ -40,6 +40,7 @@ struct StrengthActiveView: View {
     @State private var restoredPlan: StrengthWorkoutPlan?
     @State private var hasRestored = false
     @State private var showSwapOptions = false
+    @State private var showSessionEditor = false
 
     static var recentSessionsDescriptor: FetchDescriptor<StrengthWorkout> {
         var descriptor = FetchDescriptor<StrengthWorkout>(sortBy: [SortDescriptor(\.date, order: .reverse)])
@@ -179,6 +180,13 @@ struct StrengthActiveView: View {
             StrengthExerciseGuide(exercise: exercise)
                 .presentationDetents([.medium, .large])
         }
+        .sheet(isPresented: $showSessionEditor) {
+            StrengthSessionEditor(
+                exercises: exercises,
+                equipment: profiles.first?.selectedEquipment ?? [],
+                onSave: applyEdit
+            )
+        }
         .sheet(isPresented: $showSwapOptions) {
             if let current = currentExercise {
                 StrengthSwapSheet(
@@ -259,8 +267,17 @@ struct StrengthActiveView: View {
 
             Spacer()
 
-            // Placeholder to balance the X button
-            Color.clear.frame(width: 44, height: 44)
+            // Before the first set, the session can be changed: sets, reps, exercises.
+            // Afterwards the logged sets point into it, so it stays as it is.
+            if !hasLoggedWork && !exercises.isEmpty {
+                Button("Edit") { showSessionEditor = true }
+                    .font(.dsSubhead.weight(.semibold))
+                    .frame(minWidth: 44, minHeight: 44)
+                    .accessibilityHint("Change this session's exercises, sets and reps before you start.")
+            } else {
+                // Placeholder to balance the X button
+                Color.clear.frame(width: 44, height: 44)
+            }
         }
         .padding(.horizontal, AppSpacing.lg)
         .padding(.top, AppSpacing.sm)
@@ -698,6 +715,27 @@ struct StrengthActiveView: View {
         saveCheckpoint()
     }
 
+    /// Puts the edited exercises in place of the session's, before anything is logged.
+    /// A scheduled session keeps the edit (it is that day's session, and leaving and
+    /// coming back should show it); an unplanned one holds it like a restored plan.
+    private func applyEdit(_ edited: [StrengthExercise]) {
+        guard !hasLoggedWork, let current = plan, !edited.isEmpty else { return }
+        var next = current
+        next.exercises = edited
+        next.estimatedDurationMinutes = StrengthLibrary.estimatedMinutes(of: edited)
+        if let scheduledWorkout {
+            scheduledWorkout.strengthPlan = next
+            context.saveOrLog("the edited strength session")
+        } else {
+            restoredPlan = next
+        }
+        // The edit already has today's swaps in it.
+        swaps = [:]
+        currentExerciseIndex = 0
+        currentSetIndex = 0
+        setupForCurrentExercise()
+    }
+
     /// Swaps `exercise` for `standIn` today and in every session from now on. The sessions
     /// still ahead are rebuilt with it; the one on screen keeps its plan.
     private func alwaysSwap(_ exercise: StrengthExercise, to standIn: StrengthExercise) {
@@ -1089,5 +1127,123 @@ private struct StrengthSwapSheet: View {
     private func choose(_ action: () -> Void) {
         action()
         dismiss()
+    }
+}
+
+// MARK: - StrengthSessionEditor
+
+/// Today's session before it starts: sets and reps per exercise, reorder, remove, and
+/// add from the library with the equipment at hand. Edits stay on a copy until Save.
+private struct StrengthSessionEditor: View {
+    let equipment: [StrengthEquipment]
+    let onSave: ([StrengthExercise]) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var exercises: [StrengthExercise]
+    @State private var showAdd = false
+
+    init(exercises: [StrengthExercise], equipment: [StrengthEquipment], onSave: @escaping ([StrengthExercise]) -> Void) {
+        self.equipment = equipment
+        self.onSave = onSave
+        _exercises = State(initialValue: exercises)
+    }
+
+    private var addable: [StrengthExercise] {
+        StrengthLibrary.addable(to: exercises, equipment: equipment, excluding: StrengthPreferences.load().excluded)
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach($exercises, id: \.name) { $exercise in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(exercise.name)
+                                .font(.dsHeadline)
+                            Stepper(value: $exercise.sets, in: 1...6) {
+                                Text("\(exercise.sets) sets")
+                                    .font(.dsBody.monospacedDigit())
+                            }
+                            if exercise.durationSeconds != nil {
+                                Stepper(
+                                    value: Binding(
+                                        get: { exercise.durationSeconds ?? 30 },
+                                        set: { exercise.durationSeconds = $0 }
+                                    ),
+                                    in: 10...180,
+                                    step: 5
+                                ) {
+                                    Text("\(exercise.durationSeconds ?? 30) s hold")
+                                        .font(.dsBody.monospacedDigit())
+                                }
+                            } else {
+                                Stepper(value: $exercise.reps, in: 1...30) {
+                                    Text("\(exercise.reps) reps")
+                                        .font(.dsBody.monospacedDigit())
+                                }
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    }
+                    .onDelete { exercises.remove(atOffsets: $0) }
+                    .onMove { exercises.move(fromOffsets: $0, toOffset: $1) }
+                } footer: {
+                    Text("About \(StrengthLibrary.estimatedMinutes(of: exercises)) min. Changes apply to today's session only.")
+                }
+
+                Section {
+                    Button {
+                        showAdd = true
+                    } label: {
+                        Label("Add exercise", systemImage: "plus")
+                    }
+                    .disabled(addable.isEmpty)
+                }
+            }
+            .navigationTitle("Edit session")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        onSave(exercises)
+                        dismiss()
+                    }
+                    .disabled(exercises.isEmpty)
+                }
+                ToolbarItem(placement: .topBarLeading) {
+                    EditButton()
+                }
+            }
+            .sheet(isPresented: $showAdd) {
+                NavigationStack {
+                    List(addable, id: \.name) { candidate in
+                        Button {
+                            exercises.append(StrengthLibrary.added(candidate, to: exercises))
+                            showAdd = false
+                        } label: {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(candidate.name)
+                                    .font(.dsBody)
+                                    .foregroundStyle(.primary)
+                                Text(candidate.muscleGroups.prefix(3).joined(separator: ", "))
+                                    .font(.dsFootnote)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .navigationTitle("Add exercise")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Cancel") { showAdd = false }
+                        }
+                    }
+                }
+            }
+        }
+        .strideSheet()
     }
 }

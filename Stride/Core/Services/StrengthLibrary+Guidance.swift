@@ -262,4 +262,35 @@ extension StrengthLibrary {
         }
         return swapped
     }
+
+    // MARK: - Editing a session
+
+    /// Library exercises that could be added to a session: done with equipment at hand
+    /// (bodyweight always), not already in it, not excluded. Grouped by nothing, sorted
+    /// by name, for a picker.
+    static func addable(
+        to exercises: [StrengthExercise],
+        equipment: [StrengthEquipment],
+        excluding excluded: Set<String> = []
+    ) -> [StrengthExercise] {
+        let available = Set(equipment).union([.bodyweight])
+        let present = Set(exercises.map(\.name))
+        return catalog
+            .filter { candidate in
+                !present.contains(candidate.name)
+                    && !excluded.contains(candidate.name)
+                    && candidate.equipment.map(available.contains) == true
+            }
+            .sorted { $0.name < $1.name }
+    }
+
+    /// `candidate` ready to add to a session: the session's own sets and reps (from its
+    /// first exercise done for reps), so an added move matches the day's volume. A timed
+    /// hold keeps its time.
+    static func added(_ candidate: StrengthExercise, to exercises: [StrengthExercise]) -> StrengthExercise {
+        guard let template = exercises.first(where: { $0.durationSeconds == nil }) ?? exercises.first else {
+            return candidate
+        }
+        return standIn(candidate, for: template)
+    }
 }
