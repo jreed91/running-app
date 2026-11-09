@@ -654,6 +654,28 @@ struct TrainingPlanServiceTests {
         }
     }
 
+    @Test("One run a week toward an 8 mile goal is never a marathon, at any fitness level")
+    func oneRunDayNeverRunsTheWholeWeek() {
+        // Jacob's plan: one run a week, 8 mile goal, and it asked for a single 26 mile run.
+        let goalMeters = 12_875.0
+        let maxKm = RunVolumeShares.longRunMaxKm(raceDistanceKm: goalMeters / 1_000)
+        for level in FitnessLevel.allCases {
+            let profile = makeProfile(race: .custom, fitnessLevel: level, runDays: 1)
+            profile.customDistanceMeters = goalMeters
+            let plan = service.generatePlan(profile: profile, startDate: .now, numberOfWeeks: 12)
+            for week in weeks(in: plan) {
+                for run in workouts(in: week) where run.workoutType.isRunType {
+                    let km = (run.targetDistanceMeters ?? 0) / 1_000
+                    #expect(km <= maxKm + 0.01, "\(level) week \(week.weekNumber): \(km) km")
+                }
+            }
+            // Week one is what a long run on a fuller week would be, not the whole week.
+            let firstKm = (workouts(in: weeks(in: plan)[0]).first?.targetDistanceMeters ?? 0) / 1_000
+            let usualWeek = level.startingWeeklyKm(for: .tenK)
+            #expect(firstKm <= usualWeek * RunVolumeShares.longBase + 0.01, "\(level) week 1: \(firstKm) km")
+        }
+    }
+
     // MARK: Target distance
 
     @Test("Target distance decreases in taper week vs peak week")
@@ -747,7 +769,7 @@ struct TrainingPlanServiceTests {
 
     // MARK: Volume conservation & run-day changes (M29–M32)
 
-    @Test("Weekly running volume is conserved for 1 and 2 run-day weeks (M32)", arguments: [1, 2])
+    @Test("1 and 2 run-day weeks' target is what they schedule (M32)", arguments: [1, 2])
     func volumeConservedForFewRunDays(runDays: Int) {
         let profile = makeProfile(race: .maintainFitness, runDays: runDays)
         let plan = service.generatePlan(profile: profile, startDate: .now, numberOfWeeks: 8)
