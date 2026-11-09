@@ -8,8 +8,21 @@ struct StrengthActiveView: View {
     @Environment(AppContainer.self) private var container
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(AppSettings.self) private var appSettings
 
     let scheduledWorkout: ScheduledWorkout?
+
+    /// Recent sessions, newest first, for "last time" and the next-load suggestion. Sixty
+    /// sessions is over a year at a typical one or two a week, far more than any one
+    /// exercise's last outing needs, without loading a lifetime of history.
+    @Query(StrengthActiveView.recentSessionsDescriptor)
+    private var recentSessions: [StrengthWorkout]
+
+    static var recentSessionsDescriptor: FetchDescriptor<StrengthWorkout> {
+        var descriptor = FetchDescriptor<StrengthWorkout>(sortBy: [SortDescriptor(\.date, order: .reverse)])
+        descriptor.fetchLimit = 60
+        return descriptor
+    }
 
     // Exercise progression
     @State private var currentExerciseIndex: Int = 0
@@ -18,14 +31,24 @@ struct StrengthActiveView: View {
 
     // Logging inputs
     @State private var repInput: Int = 10
-    @State private var weightInput: String = ""
+    /// The load in the runner's unit (kg or lb), for exercises done with a weight.
+    @State private var weightInput: Double?
+    /// Free text for unloaded work: the band's colour, a harder variation.
+    @State private var noteInput: String = ""
+
+    // What happened last time, and what to try now, for the current exercise.
+    @State private var lastPerformance: ExercisePerformance?
+    @State private var suggestion: LoadSuggestion?
 
     // Rest timer
     @State private var restTimerActive: Bool = false
     @State private var restTimeRemaining: Int = 0
     @State private var restDeadline: Date?
     @State private var restTimerTask: Task<Void, Never>?
-    private let defaultRestSeconds = 60
+    /// This exercise's rest, from ``StrengthProgression/restSeconds(for:)``.
+    @State private var restSeconds: Int = 60
+    /// The running rest's full length, which the +/− buttons move, for the ring.
+    @State private var restTotalSeconds: Int = 60
 
     // Session timing
     @State private var startTime: Date = Date()
@@ -38,6 +61,8 @@ struct StrengthActiveView: View {
     // Confirmation
     @State private var showFinishConfirmation: Bool = false
     @State private var showSkipConfirmation: Bool = false
+
+    private var unit: UnitPreference { appSettings.unitPreference }
 
     private var plan: StrengthWorkoutPlan? { scheduledWorkout?.strengthPlan }
     private var exercises: [StrengthExercise] { plan?.exercises ?? [] }
@@ -255,11 +280,15 @@ struct StrengthActiveView: View {
 
             HStack(spacing: 24) {
                 statPill(label: "TARGET", value: targetRepsLabel(exercise))
-                if let weight = exercise.targetWeight {
+                if let weight = suggestion?.weightKilograms {
+                    statPill(label: "WEIGHT", value: StrengthProgression.weightText(weight, unit: unit))
+                } else if let weight = exercise.targetWeight {
                     statPill(label: "WEIGHT", value: weight)
                 }
                 statPill(label: "SETS LEFT", value: "\(exercise.sets - currentSetIndex)")
             }
+
+            lastTimeLine
 
             if let notes = exercise.notes {
                 Text(notes)
@@ -270,6 +299,29 @@ struct StrengthActiveView: View {
         }
         .padding(AppSpacing.lg)
         .strideCard(cornerRadius: AppRadius.lg)
+    }
+
+    /// What was done last time and why the suggested load is what it is. Nothing the
+    /// first time an exercise comes up.
+    @ViewBuilder
+    private var lastTimeLine: some View {
+        if let lastPerformance {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    StrideIcon(name: .history, size: 13, color: .secondary, strokeWeight: 2)
+                    Text("Last time: \(StrengthProgression.summary(of: lastPerformance, unit: unit)), \(lastPerformance.date.formatted(.relative(presentation: .named)))")
+                        .font(.dsFootnote)
+                        .foregroundStyle(.secondary)
+                }
+                if let suggestion, let explanation = StrengthProgression.explanation(of: suggestion, unit: unit) {
+                    Text(verbatim: explanation)
+                        .font(.dsFootnote.weight(.semibold))
+                        .foregroundStyle(.brandText)
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityElement(children: .combine)
+        }
     }
 
     // MARK: - Log Set Card
@@ -306,15 +358,32 @@ struct StrengthActiveView: View {
                             .frame(minWidth: 40, alignment: .center)
                     }
 
-                    HStack {
-                        Text("Weight / resistance")
-                            .font(.dsSubhead)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        TextField(exercise.targetWeight ?? "Optional", text: $weightInput)
-                            .font(.dsSubhead)
-                            .multilineTextAlignment(.trailing)
-                            .frame(maxWidth: 120)
+                    if takesLoad(exercise) {
+                        HStack {
+                            Text("Weight")
+                                .font(.dsSubhead)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            StrengthWeightField(
+                                value: $weightInput,
+                                step: StrengthProgression.displayValue(
+                                    StrengthProgression.stepKilograms(for: StrengthProgression.equipment(for: exercise), unit: unit),
+                                    unit: unit
+                                ),
+                                unitLabel: unit == .metric ? "kg" : "lb"
+                            )
+                        }
+                    } else {
+                        HStack {
+                            Text("Band or variation")
+                                .font(.dsSubhead)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            TextField(exercise.targetWeight ?? "Optional", text: $noteInput)
+                                .font(.dsSubhead)
+                                .multilineTextAlignment(.trailing)
+                                .frame(maxWidth: 140)
+                        }
                     }
                 }
             }
@@ -365,6 +434,24 @@ struct StrengthActiveView: View {
                 }
             }
 
+            HStack(spacing: 12) {
+                Button {
+                    adjustRest(by: -StrengthProgression.restAdjustSeconds)
+                } label: {
+                    Text("−\(StrengthProgression.restAdjustSeconds)s")
+                }
+                .buttonStyle(.strideButton(.quiet, compact: true))
+                .accessibilityLabel("Take \(StrengthProgression.restAdjustSeconds) seconds off the rest")
+
+                Button {
+                    adjustRest(by: StrengthProgression.restAdjustSeconds)
+                } label: {
+                    Text("+\(StrengthProgression.restAdjustSeconds)s")
+                }
+                .buttonStyle(.strideButton(.quiet, compact: true))
+                .accessibilityLabel("Add \(StrengthProgression.restAdjustSeconds) seconds to the rest")
+            }
+
             Button {
                 endRestTimer()
             } label: {
@@ -377,8 +464,9 @@ struct StrengthActiveView: View {
     }
 
     private var restProgress: Double {
-        let elapsed = Double(defaultRestSeconds - restTimeRemaining)
-        return elapsed / Double(defaultRestSeconds)
+        guard restTotalSeconds > 0 else { return 1 }
+        let elapsed = Double(restTotalSeconds - restTimeRemaining)
+        return min(1, max(0, elapsed / Double(restTotalSeconds)))
     }
 
     // MARK: - Completed Sets History
@@ -512,20 +600,41 @@ struct StrengthActiveView: View {
 
     private func setupForCurrentExercise() {
         guard let exercise = currentExercise else { return }
+        let sessions = recentSessions.map { $0.sessionLog(unit: unit) }
+        let last = StrengthProgression.lastPerformance(of: exercise.name, in: sessions, before: startTime)
+        let next = StrengthProgression.suggestion(for: exercise, last: last, unit: unit)
+        lastPerformance = last
+        suggestion = next
         repInput = exercise.reps > 0 ? exercise.reps : 10
-        weightInput = ""
+        // The suggestion when there is one; else last time's top load, so the field starts
+        // somewhere real; else empty for the lifter to fill in.
+        weightInput = (next.weightKilograms ?? last?.topWeightKilograms)
+            .map { StrengthProgression.displayValue($0, unit: unit) }
+        noteInput = ""
+        restSeconds = StrengthProgression.restSeconds(for: exercise)
+    }
+
+    private func takesLoad(_ exercise: StrengthExercise) -> Bool {
+        exercise.durationSeconds == nil && StrengthProgression.takesLoad(StrengthProgression.equipment(for: exercise))
     }
 
     private func logSet(exercise: StrengthExercise) {
         let reps = exercise.durationSeconds != nil ? 1 : repInput
-        let weight = weightInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        let kilograms = takesLoad(exercise)
+            ? weightInput.flatMap { $0 > 0 ? StrengthProgression.kilograms(fromDisplay: $0, unit: unit) : nil }
+            : nil
+        let note = noteInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        // The load is also written as text: a device still on an older version shows
+        // `actualWeight` and nothing else, and would otherwise show the set unweighted.
+        let text = kilograms.map { StrengthProgression.weightText($0, unit: unit) } ?? (note.isEmpty ? nil : note)
         let set = CompletedStrengthSet(
             exerciseIndex: currentExerciseIndex,
             setIndex: currentSetIndex,
             completedReps: reps,
-            actualWeight: weight.isEmpty ? nil : weight,
+            actualWeight: text,
             skipped: false,
-            exerciseName: exercise.name
+            exerciseName: exercise.name,
+            weightKilograms: kilograms
         )
         completedSets.append(set)
         advanceAfterSet(exercise: exercise)
@@ -560,15 +669,17 @@ struct StrengthActiveView: View {
 
     private func startRestTimer() {
         restTimerTask?.cancel()
-        let deadline = Date().addingTimeInterval(TimeInterval(defaultRestSeconds))
+        let deadline = Date().addingTimeInterval(TimeInterval(restSeconds))
         restDeadline = deadline
-        restTimeRemaining = defaultRestSeconds
+        restTimeRemaining = restSeconds
+        restTotalSeconds = restSeconds
         restTimerActive = true
         restTimerTask = Task { @MainActor in
-            // Derive the remaining time from a fixed deadline each tick so a
-            // suspended app resumes with the correct countdown (M27) rather than
-            // freezing at whatever value it held when it went to the background.
-            while restTimerActive {
+            // Derive the remaining time from the deadline each tick so a suspended app
+            // resumes with the correct countdown (M27) rather than freezing at whatever
+            // value it held when it went to the background. Read from state, not
+            // captured, so the +/− buttons move it.
+            while restTimerActive, let deadline = restDeadline {
                 restTimeRemaining = RestCountdown.secondsRemaining(deadline: deadline, now: Date())
                 if restTimeRemaining <= 0 { break }
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
@@ -576,6 +687,21 @@ struct StrengthActiveView: View {
             }
             if restTimerActive { endRestTimer() }
         }
+    }
+
+    /// Moves the running rest by `seconds`, within ``StrengthProgression/restRange``, and
+    /// keeps the change for the rest of this exercise's sets: a lifter who wanted longer
+    /// after set one will want it after set two.
+    private func adjustRest(by seconds: Int) {
+        guard let deadline = restDeadline else { return }
+        let remaining = RestCountdown.secondsRemaining(deadline: deadline, now: Date())
+        let newRemaining = max(0, remaining + seconds)
+        restDeadline = Date().addingTimeInterval(TimeInterval(newRemaining))
+        restTimeRemaining = newRemaining
+        restTotalSeconds = max(1, restTotalSeconds + seconds)
+        restSeconds = min(StrengthProgression.restRange.upperBound,
+                          max(StrengthProgression.restRange.lowerBound, restSeconds + seconds))
+        if newRemaining == 0 { endRestTimer() }
     }
 
     private func endRestTimer() {
@@ -627,6 +753,52 @@ struct StrengthActiveView: View {
                 AppLogger.log("Failed to export strength workout to HealthKit: \(error)",
                               label: "HealthKit", level: .error)
             }
+        }
+    }
+}
+
+// MARK: - StrengthWeightField
+
+/// A load in the runner's unit: a number to type, with − and + that move it one plate
+/// step. Empty until there is something to put in it.
+private struct StrengthWeightField: View {
+    @Binding var value: Double?
+    /// One step in the runner's unit (2.5 kg on a bar, 5 lb...).
+    let step: Double
+    let unitLabel: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Button {
+                value = max(0, (value ?? 0) - step)
+            } label: {
+                Text(verbatim: "−")
+                    .font(.dsTitle3)
+                    .frame(width: 36, height: 36)
+            }
+            .buttonStyle(.strideButton(.quiet, compact: true, fullWidth: false))
+            .accessibilityLabel("Lighter")
+
+            HStack(spacing: 3) {
+                TextField("0", value: $value, format: .number.precision(.fractionLength(0...1)))
+                    .font(.dsTitle3.monospacedDigit())
+                    .keyboardType(.decimalPad)
+                    .multilineTextAlignment(.trailing)
+                    .frame(minWidth: 44, maxWidth: 72)
+                    .accessibilityLabel("Weight in \(unitLabel)")
+                Text(verbatim: unitLabel)
+                    .font(.dsFootnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Button {
+                value = (value ?? 0) + step
+            } label: {
+                StrideIcon(name: .plus, size: 14, color: .primary, strokeWeight: 2.4)
+                    .frame(width: 36, height: 36)
+            }
+            .buttonStyle(.strideButton(.quiet, compact: true, fullWidth: false))
+            .accessibilityLabel("Heavier")
         }
     }
 }

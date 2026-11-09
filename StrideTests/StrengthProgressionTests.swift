@@ -237,4 +237,37 @@ struct StrengthProgressionTests {
             #expect(StrengthProgression.legacyWeightKilograms(from: text, unit: .metric) == nil, "\(String(describing: text))")
         }
     }
+
+    // MARK: Rest
+
+    @Test func restFollowsTheWork() {
+        #expect(StrengthProgression.restSeconds(for: exercise("Back Squat", reps: 5, equipment: .barbell)) == 120)
+        #expect(StrengthProgression.restSeconds(for: exercise("Row", reps: 12)) == 90)
+        #expect(StrengthProgression.restSeconds(for: exercise("Swing", reps: 0, equipment: .kettlebell)) == 90)
+        #expect(StrengthProgression.restSeconds(for: exercise("Glute Bridge", reps: 8, equipment: .bodyweight)) == 60)
+        #expect(StrengthProgression.restSeconds(for: exercise("Plank", equipment: .bodyweight, seconds: 30)) == 60)
+    }
+
+    // MARK: Words
+
+    @Test func summaryOfEvenSets() {
+        let perf = performance([set("Row", 10, 20), set("Row", 10, 20), set("Row", 10, 20)])
+        #expect(StrengthProgression.summary(of: perf, unit: .metric) == "3 × 10 at 20 kg")
+    }
+
+    @Test func summaryOfUnevenSetsLeavesOutTheWarmUp() {
+        let perf = performance([set("Row", 12, 15), set("Row", 10, 20), set("Row", 8, 20)])
+        #expect(StrengthProgression.summary(of: perf, unit: .metric) == "10, 8 at 20 kg")
+    }
+
+    @Test func summaryWithoutALoad() {
+        let perf = performance([set("Push-Up", 12, nil), set("Push-Up", 12, nil)])
+        #expect(StrengthProgression.summary(of: perf, unit: .metric) == "2 × 12")
+    }
+
+    @Test func explanationNamesTheLoad() {
+        let up = LoadSuggestion(weightKilograms: 22, reps: 10, reason: .increase)
+        #expect(StrengthProgression.explanation(of: up, unit: .metric)?.contains("22 kg") == true)
+        #expect(StrengthProgression.explanation(of: LoadSuggestion(weightKilograms: nil, reps: 10, reason: .firstTime), unit: .metric) == nil)
+    }
 }

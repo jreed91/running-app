@@ -254,6 +254,60 @@ enum StrengthProgression {
         return "\(number) \(unit == .metric ? "kg" : "lb")"
     }
 
+    // MARK: Rest
+
+    /// Rest between sets: two minutes after a heavy set (a load for eight reps or fewer),
+    /// ninety seconds after a loaded set, a minute after bodyweight, band or timed work.
+    /// The runner can still add or take off time on the rest card.
+    static func restSeconds(for exercise: StrengthExercise) -> Int {
+        guard exercise.durationSeconds == nil, takesLoad(equipment(for: exercise)) else { return 60 }
+        return (1...8).contains(exercise.reps) ? 120 : 90
+    }
+
+    /// How far one tap on the rest card moves the timer, and its bounds.
+    static let restAdjustSeconds = 15
+    static let restRange: ClosedRange<Int> = 15...300
+
+    // MARK: Words
+
+    /// Last time's working sets in a line: "3 × 10 at 20 kg", "10, 10, 8 at 20 kg",
+    /// "3 × 12" with no load. Sets at a lighter warm-up load are left out when a heavier
+    /// load was used, because the top sets are what the suggestion is about.
+    static func summary(of performance: ExercisePerformance, unit: UnitPreference) -> String {
+        let sets = performance.topSets
+        let reps = sets.map(\.reps)
+        let repsText: String
+        if let first = reps.first, reps.allSatisfy({ $0 == first }) {
+            repsText = "\(reps.count) × \(first)"
+        } else {
+            repsText = reps.map(String.init).joined(separator: ", ")
+        }
+        guard let top = performance.topWeightKilograms else { return repsText }
+        return String(
+            localized: "\(repsText) at \(weightText(top, unit: unit))",
+            comment: "Strength session: last time's sets, e.g. '3 × 10 at 20 kg'"
+        )
+    }
+
+    /// Why the suggested load is what it is, in a short line under it. Nil when there is
+    /// nothing to explain (first time, unloaded work).
+    static func explanation(of suggestion: LoadSuggestion, unit: UnitPreference) -> String? {
+        guard let weight = suggestion.weightKilograms else { return nil }
+        let text = weightText(weight, unit: unit)
+        switch suggestion.reason {
+        case .increase:
+            return String(localized: "Every set reached the target last time, so try \(text).", comment: "Strength session: suggestion to add weight")
+        case .repeatLoad:
+            return String(localized: "Stay at \(text) until every set reaches the target.", comment: "Strength session: suggestion to keep the weight")
+        case .decrease:
+            return String(localized: "Last time was a grind. Drop to \(text) and get the reps back.", comment: "Strength session: suggestion to reduce the weight")
+        case .returning:
+            return String(localized: "It's been a while. Ease back in at \(text).", comment: "Strength session: suggestion after a long break")
+        case .firstTime, .unloaded:
+            return nil
+        }
+    }
+
     // MARK: Strength estimate
 
     /// Epley's one-rep-max estimate, `w × (1 + r/30)`, or nil past ``oneRepMaxRepLimit``
