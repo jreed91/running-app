@@ -65,6 +65,14 @@ struct AchievementsView: View {
             VStack(alignment: .leading, spacing: AppSpacing.lg) {
                 // One stagger step per section, capped at six so a long list of
                 // categories arrives together rather than trickling in.
+                // The year-in-running recap lives here all year: Achievements is where the
+                // runner looks back, and it keeps the recap reachable outside the Home
+                // season (and for App Review).
+                if !workouts.isEmpty {
+                    YearRecapEntryCard(year: YearRecapSeason.recapYear())
+                        .strideEntrance(appeared)
+                }
+
                 streakCard(streak)
                     .strideEntrance(appeared)
 
