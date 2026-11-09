@@ -20,6 +20,9 @@ struct YearRecapView: View {
 
     @State private var selection: YearRecapCard.Kind = .cover
     @State private var shareImage: ShareCardImage?
+    /// Cards whose entrance has played. A card animates in the first time it comes on
+    /// screen and stays finished after that, so swiping back doesn't replay it.
+    @State private var revealedCards: Set<YearRecapCard.Kind> = []
 
     var body: some View {
         let cards = YearRecapCards.make(
@@ -36,12 +39,16 @@ struct YearRecapView: View {
                 VStack(spacing: AppSpacing.lg) {
                     TabView(selection: $selection) {
                         ForEach(cards) { card in
-                            ScaledCard(card: card)
+                            ScaledCard(card: card, revealed: revealedCards.contains(card.kind))
                                 .tag(card.kind)
                                 .padding(.horizontal, AppSpacing.lg)
                         }
                     }
                     .tabViewStyle(.page(indexDisplayMode: .always))
+                    // The first card plays once the cover is up; each later one as the
+                    // swipe lands on it.
+                    .task { revealedCards.insert(selection) }
+                    .onChange(of: selection) { revealedCards.insert(selection) }
 
                     Button {
                         share(cards.first { $0.kind == selection } ?? cards[0])
@@ -100,12 +107,13 @@ struct YearRecapView: View {
 /// a new size) keeps the on-screen card identical to the shared image.
 private struct ScaledCard: View {
     let card: YearRecapCard
+    let revealed: Bool
 
     var body: some View {
         GeometryReader { proxy in
             let size = YearRecapCardView.size
             let scale = min(proxy.size.width / size.width, proxy.size.height / size.height)
-            YearRecapCardView(card: card)
+            YearRecapCardView(card: card, revealed: revealed, isLive: true)
                 .clipShape(RoundedRectangle(cornerRadius: AppRadius.lg / max(scale, 0.01), style: .continuous))
                 .scaleEffect(scale)
                 .frame(width: size.width * scale, height: size.height * scale)
