@@ -114,16 +114,10 @@ struct SettingsView: View {
             } message: {
                 Text("Your runs, plan and settings stay on this iPhone.")
             }
-            .sheet(item: Binding(
-                get: { dataExport.output },
-                set: { if $0 == nil { dataExport.dismiss() } }
-            )) { file in
+            .sheet(item: $dataExport.shareItem) { file in
                 ShareSheet(items: [file.url])
             }
-            .alert("Couldn't export your data", isPresented: Binding(
-                get: { dataExport.errorMessage != nil },
-                set: { if !$0 { dataExport.dismiss() } }
-            )) {
+            .alert("Couldn't export your data", isPresented: $dataExport.isShowingError) {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(dataExport.errorMessage ?? "")

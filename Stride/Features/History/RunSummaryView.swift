@@ -506,22 +506,13 @@ struct RunSummaryView: View {
             AssociateWorkoutSheet(workout: workout)
                 .strideSheet()
         }
-        .sheet(item: Binding(
-            get: { shareCardExport.output },
-            set: { if $0 == nil { shareCardExport.dismiss() } }
-        )) { card in
+        .sheet(item: $shareCardExport.shareItem) { card in
             ShareSheet(image: card.image)
         }
-        .sheet(item: Binding(
-            get: { gpxExport.output },
-            set: { if $0 == nil { gpxExport.dismiss() } }
-        )) { file in
+        .sheet(item: $gpxExport.shareItem) { file in
             ShareSheet(items: [file.url])
         }
-        .alert("Couldn't export this route", isPresented: Binding(
-            get: { gpxExport.errorMessage != nil },
-            set: { if !$0 { gpxExport.dismiss() } }
-        )) {
+        .alert("Couldn't export this route", isPresented: $gpxExport.isShowingError) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(gpxExport.errorMessage ?? "")
