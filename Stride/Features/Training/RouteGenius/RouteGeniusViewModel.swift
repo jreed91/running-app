@@ -76,14 +76,20 @@ final class RouteGeniusViewModel {
 
     // MARK: Init
 
+    /// - Parameter initialDistanceMeters: a distance to start the field with, such as a
+    ///   planned workout's, so the runner opens Route Genius with it already filled in.
     init(
         service: RouteGeniusService,
         repository: RouteRepositoryProtocol,
-        appSettings: AppSettings
+        appSettings: AppSettings,
+        initialDistanceMeters: Double? = nil
     ) {
         self.service = service
         self.repository = repository
         self.appSettings = appSettings
+        if let meters = initialDistanceMeters {
+            distanceInput = Self.distanceInputText(meters: meters, unit: appSettings.unitPreference)
+        }
         loadSavedRoutes()
         startLocationUpdates()
     }
@@ -163,6 +169,21 @@ final class RouteGeniusViewModel {
         case .currentLocation: return currentCoordinate
         case .address:         return selectedMapItem?.placemark.coordinate
         }
+    }
+
+    /// `meters` as the distance field's text in the runner's unit: one decimal, with a
+    /// whole number written without it ("5", "6.2"). Empty for no distance.
+    ///
+    /// The field is parsed with `Double(_:)`, which only reads a "." separator, so this
+    /// formats without the locale on purpose.
+    static func distanceInputText(meters: Double, unit: UnitPreference) -> String {
+        guard meters.isFinite, meters > 0 else { return "" }
+        let tenths = (meters.distanceValue(unit: unit) * 10).rounded()
+        guard tenths > 0 else { return "" }
+        if tenths.truncatingRemainder(dividingBy: 10) == 0 {
+            return String(Int(tenths / 10))
+        }
+        return String(format: "%.1f", tenths / 10)
     }
 
     /// Distance in metres parsed from `distanceInput` (which is in the user's unit).

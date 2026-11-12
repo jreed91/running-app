@@ -22,6 +22,7 @@ struct WorkoutDetailView: View {
     /// Strength has no minimised form, so it is presented here rather than through
     /// `ActiveRunPresentation`, the same way Home does.
     @State private var strengthWorkout: ScheduledWorkout?
+    @State private var showRouteGenius = false
 
     private var unit: UnitPreference { appSettings.unitPreference }
 
@@ -103,6 +104,15 @@ struct WorkoutDetailView: View {
                 .fullScreenCover(item: $strengthWorkout) { session in
                     StrengthActiveView(scheduledWorkout: session)
                 }
+                .sheet(isPresented: $showRouteGenius) {
+                    RouteGeniusView(
+                        viewModel: container.makeRouteGeniusViewModel(
+                            appSettings: appSettings,
+                            initialDistanceMeters: plannedDistanceMeters
+                        )
+                    )
+                    .strideSheet()
+                }
             }
         }
     }
@@ -154,6 +164,10 @@ struct WorkoutDetailView: View {
 
             if canStart {
                 startButton
+            }
+
+            if canPlanRoute {
+                planRouteButton
             }
         }
         .padding(AppSpacing.lg)
@@ -303,6 +317,38 @@ struct WorkoutDetailView: View {
             return isStrength ? "Start strength workout" : "Start this workout"
         }
         return isStrength ? "Start yesterday's strength workout" : "Start yesterday's workout"
+    }
+
+    // MARK: - Route
+
+    /// An outdoor run still ahead, with a distance to build the route around. Not tied to
+    /// `canStart`: planning Saturday's long run on Thursday is the point.
+    private var canPlanRoute: Bool {
+        !workout.isCompleted
+            && workout.workoutType.sessionKind == .run
+            && workout.workoutLocation == .outdoor
+            && plannedDistanceMeters != nil
+    }
+
+    /// Route Genius with this session's distance already in the field. Quiet, as on Home:
+    /// the start button stays the screen's one primary action.
+    private var planRouteButton: some View {
+        Button {
+            showRouteGenius = true
+        } label: {
+            HStack(spacing: 8) {
+                StrideIcon(name: .bolt, size: 16, color: .brandText, strokeWeight: 2.2)
+                Text("Plan a route")
+            }
+        }
+        .buttonStyle(.strideButton(.quiet))
+        .accessibilityHint(
+            String(
+                localized: "Builds a route matched to this workout's distance",
+                comment: "Hint on the planned workout screen's route button"
+            )
+        )
+        .accessibilityIdentifier("workoutDetail.planRoute")
     }
 
     // MARK: - Location toggle

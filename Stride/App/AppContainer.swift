@@ -757,11 +757,15 @@ final class AppContainer {
     // MARK: - Route Genius
 
     /// Creates a fresh ``RouteGeniusViewModel`` wired to the container's service and repository.
-    func makeRouteGeniusViewModel(appSettings: AppSettings) -> RouteGeniusViewModel {
+    func makeRouteGeniusViewModel(
+        appSettings: AppSettings,
+        initialDistanceMeters: Double? = nil
+    ) -> RouteGeniusViewModel {
         RouteGeniusViewModel(
             service: routeGeniusService,
             repository: routeRepository,
-            appSettings: appSettings
+            appSettings: appSettings,
+            initialDistanceMeters: initialDistanceMeters
         )
     }
 
