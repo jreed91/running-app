@@ -25,6 +25,11 @@ final class WorkoutSyncService {
     private var isObserving = false
     /// Idle, or a pass running with at most one follow-up queued (M1). See `SyncPassQueue`.
     private var syncQueue: SyncPassQueue = .idle
+    /// Route queries made this launch, by HealthKit id. A run is retried on later passes
+    /// (its route may still be on its way from the Watch) up to
+    /// ``maximumRouteBackfillAttempts`` times, then left to the run screen's own retry.
+    private var routeBackfillAttempts: [String: Int] = [:]
+    static let maximumRouteBackfillAttempts = 3
 
     /// Source label of a sync trigger that arrived while another sync was in
     /// flight. The in-flight pass replays it when it finishes instead of
@@ -267,9 +272,73 @@ final class WorkoutSyncService {
             )
         }
 
+        // Runs imported by this very pass are skipped: their route was just read, and a
+        // Watch route that wasn't there a moment ago won't be now. The next pass gets them.
+        await backfillLateRoutes(
+            skipping: Set(newWorkouts.compactMap(\.healthKitWorkoutID)),
+            source: source
+        )
+
         await syncWalkingWorkouts(source: source, lookbackCutoff: cutoff, existingIDs: existingIDs)
         await syncCrossTrainingWorkouts(source: source, lookbackCutoff: cutoff, existingIDs: existingIDs)
         await syncStrengthWorkouts(source: source, lookbackCutoff: cutoff)
+    }
+
+    // MARK: - Late route backfill
+
+    /// Fills in the route of recent runs that were imported without one (see
+    /// `RouteBackfill`): a Watch workout reaches HealthKit before its GPS route does, so
+    /// the pass the workout triggered often read an empty route, and the run's id being
+    /// "existing" kept every later pass from looking again.
+    private func backfillLateRoutes(skipping justImported: Set<String>, source: String) async {
+        let cutoff = Calendar.current.date(
+            byAdding: .day, value: -RouteBackfill.syncLookbackDays, to: Date()
+        ) ?? Date()
+        let descriptor = FetchDescriptor<RunWorkout>(predicate: #Predicate { $0.date >= cutoff })
+        guard let recent = try? context.fetch(descriptor) else { return }
+
+        let exhausted = routeBackfillAttempts
+            .filter { $0.value >= Self.maximumRouteBackfillAttempts }
+            .keys
+        let candidates = RouteBackfill.runsNeedingRoute(
+            in: recent,
+            alreadyAttempted: justImported.union(exhausted)
+        )
+        guard !candidates.isEmpty else { return }
+
+        var filled: [RunWorkout] = []
+        for run in candidates {
+            guard let hkID = run.healthKitWorkoutID else { continue }
+            routeBackfillAttempts[hkID, default: 0] += 1
+            let coordinates = await healthKitRepository.fetchRouteCoordinates(forWorkoutID: hkID)
+            // Re-checked after the await: the run screen may have filled it meanwhile.
+            guard !coordinates.isEmpty, run.routeCoordinates.isEmpty else { continue }
+            run.routeCoordinates = coordinates
+            filled.append(run)
+        }
+        guard !filled.isEmpty else { return }
+
+        do {
+            try context.save()
+        } catch {
+            AppLogger.log(
+                "Failed to save backfilled routes (\(source)): \(error.localizedDescription)",
+                label: "HealthKit",
+                level: .error
+            )
+        }
+        AppLogger.log(
+            "Backfilled late routes for \(filled.count) run(s) during \(source) sync.",
+            label: "HealthKit",
+            level: .info
+        )
+
+        // The import skipped weather for these, since it is keyed off the first point.
+        for run in filled where run.weather == nil {
+            if let coordinate = run.routeCoordinates.first {
+                await attachWeather(to: run, coordinate: coordinate)
+            }
+        }
     }
 
     // MARK: - Walking workout sync

@@ -101,6 +101,11 @@ protocol HealthKitRepositoryProtocol: Sendable {
     /// `fetchHeartRateSamples(forWorkoutID:)` backfills heart rate. Returns `[]` if the
     /// workout or its samples can't be found.
     func fetchDistanceSeries(forWorkoutID id: String) async -> [SplitBucketing.DistancePoint]
+    /// Fetches the GPS route for a previously-imported workout, identified by its
+    /// HealthKit UUID string. Used to backfill a run imported before its route had synced
+    /// from the Watch (see `RouteBackfill`). Returns `[]` if the workout has no route yet,
+    /// or it can't be found.
+    func fetchRouteCoordinates(forWorkoutID id: String) async -> [Coordinate]
     /// The most recent body-mass sample in kilograms, or `nil` when there is none, the
     /// type is unauthorized, or HealthKit is unavailable.
     ///
@@ -1154,8 +1159,21 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
                 sampleType: HKSeriesType.workoutRoute(),
                 predicate: predicate,
                 limit: HKObjectQueryNoLimit,
-                sortDescriptors: nil
-            ) { _, samples, _ in
+                // Oldest segment first: the segments are concatenated below, and in
+                // HealthKit's unspecified order a paused run drew a line from the end of
+                // a later segment back to the start of an earlier one.
+                sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]
+            ) { _, samples, error in
+                // Still "no route", but said out loud: a locked phone (protected Health
+                // data) or a revoked read permission is otherwise indistinguishable from
+                // a run that never had GPS. `RouteBackfill` retries either way.
+                if let error {
+                    AppLogger.log(
+                        "Route sample query failed for workout \(workout.uuid.uuidString.prefix(8)): \(error.localizedDescription)",
+                        label: "HealthKit",
+                        level: .warning
+                    )
+                }
                 continuation.resume(returning: (samples as? [HKWorkoutRoute]) ?? [])
             }
             store.execute(query)
@@ -1292,6 +1310,11 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
     func fetchDistanceSeries(forWorkoutID id: String) async -> [SplitBucketing.DistancePoint] {
         guard let workout = await hkWorkout(withID: id) else { return [] }
         return (try? await fetchDistanceSeries(for: workout)) ?? []
+    }
+
+    func fetchRouteCoordinates(forWorkoutID id: String) async -> [Coordinate] {
+        guard let workout = await hkWorkout(withID: id) else { return [] }
+        return await fetchRouteCoordinates(for: workout)
     }
 
     func fetchLatestBodyMassKilograms() async -> Double? {

@@ -184,6 +184,22 @@ struct RunSummaryView: View {
         )
     }
 
+    /// Fetches the route of an outdoor run imported without one, most often a Watch run
+    /// whose GPS series reached the phone after the workout did (see `RouteBackfill`).
+    /// Same lazy shape as the heart-rate load: one query on open, cached onto the run. A
+    /// run that truly has no route asks again on each open, which is two cheap queries.
+    private func backfillRoute() async {
+        guard RouteBackfill.needsRoute(workout), let hkID = workout.healthKitWorkoutID else { return }
+        let coordinates = await container.healthKitRepository.fetchRouteCoordinates(forWorkoutID: hkID)
+        guard !coordinates.isEmpty, workout.routeCoordinates.isEmpty else { return }
+        workout.routeCoordinates = coordinates
+        context.saveOrLog("backfilled route")
+        // The weather load on open found no route to key off, so it did nothing.
+        if workout.weather == nil, let first = coordinates.first {
+            await container.attachWeather(to: workout, coordinate: first)
+        }
+    }
+
     /// Buckets splits onto a run that was imported before the importer built them (N9).
     ///
     /// Imports have carried real splits since that fix, but older imported runs have none,
@@ -428,6 +444,7 @@ struct RunSummaryView: View {
             await loadHeartRateZones()
             await backfillSplits()
             resolveSplitChartSeries()
+            await backfillRoute()
         }
         .background(Color.surfacePrimary.ignoresSafeArea())
         // Onscreen context: with a run open, "send this run to Sam" or "how does this
