@@ -84,11 +84,9 @@ struct RunSummaryView: View {
     /// Whether the feel rating changed after a coach read was requested — the cue for the
     /// feel card to point at Refresh, since that read was written without it.
     @State var feelChangedSinceInsight = false
-    /// The rendered share card (B5), non-nil only while the share sheet is up. Rendering
-    /// is deferred until the user taps Share (N21) — the map snapshot plus a ×3
-    /// `ImageRenderer` pass is far too expensive to run on every run-detail open.
-    /// The share card (B5): rendering, then ready for the share sheet. See `ExportState`.
-    @State private var shareCardExport: ExportState<ShareCardImage> = .idle
+    /// Whether the share studio (pick a card format, then share or copy) is up. The card
+    /// and its map are made there, on demand (N21), not on every run-detail open.
+    @State private var showShareStudio = false
     /// The run's route written out as GPX (B6), ready only while its share sheet is up,
     /// or the error shown when the export could not be written — a full disk or a
     /// sandbox refusal is rare, but silently doing nothing when the runner taps Export
@@ -254,37 +252,6 @@ struct RunSummaryView: View {
         }
     }
 
-    /// Renders the shareable run card (B5) and presents the share sheet.
-    ///
-    /// A map snapshot (`MKMapSnapshotter`) plus a ×3 `ImageRenderer` pass (~1080×1350)
-    /// used to run on every open of this screen, ahead of the heart-rate zones the user
-    /// actually looks at, for a card most opens never share (N21). It now runs only when
-    /// Share is tapped.
-    private func renderShareCard() async {
-        guard !shareCardExport.isWorking else { return }
-        shareCardExport.begin()
-        // A render that comes back empty is logged below and leaves nothing to show.
-        defer { shareCardExport.abandon() }
-
-        let model = ShareCardModel.make(from: workout, unit: appSettings.unitPreference)
-        let mapImage = await RouteSnapshotService.routeSnapshot(
-            coordinates: workout.routeCoordinates,
-            size: RunShareCardView.routePanelSize,
-            scale: 3,
-            lineColor: UIColor(.brand),
-            lineWidth: 3
-        )
-        let renderer = ImageRenderer(
-            content: RunShareCardView(model: model, routeMapImage: mapImage)
-        )
-        renderer.scale = 3
-        guard let uiImage = renderer.uiImage else {
-            AppLogger.log("Share card render produced no image", label: "Share", level: .error)
-            return
-        }
-        shareCardExport.succeed(ShareCardImage(image: uiImage))
-    }
-
     /// Writes this run's route out as GPX and presents the share sheet (B6).
     ///
     /// The file goes to the temporary directory because it exists only to be handed to
@@ -293,7 +260,14 @@ struct RunSummaryView: View {
     /// growing pile of duplicated GPS traces for no benefit. Overwriting a same-named
     /// leftover from an earlier export of the same run is deliberate.
     private func exportGPX() {
-        guard let document = GPXExport.document(for: workout) else { return }
+        // A shared file is trimmed like the card. A route privacy hides completely (a short
+        // run round the block from home) leaves nothing to send, and the runner is told so
+        // rather than handed an empty file or nothing at all.
+        guard !workout.routeCoordinates.isEmpty else { return }
+        guard let document = GPXExport.document(for: workout, privacy: RoutePrivacy.load()) else {
+            gpxExport.fail("Route privacy hides all of this run, so there's no route to export. You can change what's hidden in Settings, Route privacy.")
+            return
+        }
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent(GPXExport.fileName(for: workout))
         do {
@@ -486,7 +460,7 @@ struct RunSummaryView: View {
                     // can one thumb-width from Share.
                     Menu {
                         Button {
-                            Task { await renderShareCard() }
+                            showShareStudio = true
                         } label: {
                             Label("Share run card", systemImage: "photo")
                         }
@@ -508,13 +482,8 @@ struct RunSummaryView: View {
                     } label: {
                         // A `Label`, not a bare image: a toolbar shows the icon, and an
                         // overflow menu (iPhone Duo's side bar runs out of room) shows both.
-                        if shareCardExport.isWorking {
-                            ProgressView()
-                        } else {
-                            Label("Run actions", systemImage: "ellipsis")
-                        }
+                        Label("Run actions", systemImage: "ellipsis")
                     }
-                    .disabled(shareCardExport.isWorking)
                     .accessibilityLabel("Run actions")
                 }
             }
@@ -523,8 +492,8 @@ struct RunSummaryView: View {
             AssociateWorkoutSheet(workout: workout)
                 .strideSheet()
         }
-        .sheet(item: $shareCardExport.shareItem) { card in
-            ShareSheet(image: card.image)
+        .sheet(isPresented: $showShareStudio) {
+            RunShareStudioView(workout: workout)
         }
         .sheet(item: $gpxExport.shareItem) { file in
             ShareSheet(items: [file.url])
