@@ -16,6 +16,12 @@ struct ProgressDashboardView: View {
     @Environment(AppSettings.self) private var appSettings
     @Environment(AppContainer.self) private var container
     @Environment(\.modelContext) private var context
+    @Environment(\.dynamicTypeSize) private var typeSize
+    /// Chart heights grow with the text size, so bigger axis labels don't squeeze the
+    /// plot flat. 180 and 140 points at the default size.
+    @ScaledMetric(relativeTo: .caption) private var mainChartHeight: CGFloat = 180
+    @ScaledMetric(relativeTo: .caption) private var trendChartHeight: CGFloat = 140
+    @ScaledMetric(relativeTo: .caption) private var zoneChartHeight: CGFloat = 150
     /// The one filter every card follows, pinned at the top of the page.
     @State private var period: ProgressFilter.Period = .threeMonths
     @State private var runType: ProgressFilter.RunType = .all
@@ -312,7 +318,11 @@ struct ProgressDashboardView: View {
                 .strideEyebrow()
                 .foregroundStyle(Color.brandText)
             LazyVGrid(
-                columns: [GridItem(.flexible(), spacing: AppSpacing.sm), GridItem(.flexible())],
+                // Two by two; one column at the accessibility text sizes, where a
+                // half-width tile can't fit "1,240 ft" at all.
+                columns: typeSize.isAccessibilitySize
+                    ? [GridItem(.flexible())]
+                    : [GridItem(.flexible(), spacing: AppSpacing.sm), GridItem(.flexible())],
                 alignment: .leading,
                 spacing: AppSpacing.xs
             ) {
@@ -424,7 +434,7 @@ struct ProgressDashboardView: View {
                                 .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
                         }
                     }
-                    .frame(height: 180)
+                    .frame(height: mainChartHeight)
                     .chartXAxis {
                         AxisMarks(values: .stride(by: .month, count: monthLabelStride(dashboard.buckets))) {
                             AxisValueLabel(format: .dateTime.month(.abbreviated))
@@ -914,7 +924,7 @@ struct ProgressDashboardView: View {
                 }
             }
         }
-        .frame(height: 140)
+        .frame(height: trendChartHeight)
         // Pace never approaches zero, so a zero-anchored domain pushed every point into one
         // band and flattened the trend; bracket the data instead. Reversed so a faster pace
         // sits higher and the line climbs as the runner improves.
@@ -990,7 +1000,7 @@ struct ProgressDashboardView: View {
                         }
                     }
                 }
-                .frame(height: 140)
+                .frame(height: trendChartHeight)
                 .chartXAxis {
                     AxisMarks(values: .stride(by: .month)) {
                         AxisValueLabel(format: .dateTime.month(.abbreviated))
@@ -1084,7 +1094,7 @@ struct ProgressDashboardView: View {
                     }
                     .chartYScale(domain: HRZone.allCases.reversed().map(\.shortName))
                     .chartXAxisLabel("minutes")
-                    .frame(height: 150)
+                    .frame(height: zoneChartHeight)
                     .chartAccessibility("Time in heart-rate zones chart", zoneSeries(slices))
                     ForEach(slices.reversed()) { slice in
                         let pct = total > 0 ? slice.seconds / total : 0
@@ -1095,7 +1105,7 @@ struct ProgressDashboardView: View {
                             Text(slice.seconds.durationString).font(.dsCaption).monospacedDigit()
                             Text("\(Int((pct * 100).rounded()))%")
                                 .font(.dsCaption2).foregroundStyle(.secondary)
-                                .frame(width: 38, alignment: .trailing)
+                                .frame(minWidth: 38, alignment: .trailing)
                         }
                     }
                 }
@@ -1139,7 +1149,7 @@ struct ProgressDashboardView: View {
                         }
                     }
                 }
-                .frame(height: 140)
+                .frame(height: trendChartHeight)
                 .chartXAxis {
                     AxisMarks(values: .stride(by: .month)) {
                         AxisValueLabel(format: .dateTime.month(.abbreviated))
@@ -1194,7 +1204,7 @@ struct ProgressDashboardView: View {
                         }
                     }
                 }
-                .frame(height: 140)
+                .frame(height: trendChartHeight)
                 // Same reason as the pace chart: VDOT sits in the 30s–50s for most
                 // runners, so a zero-anchored domain spends half the plot on numbers
                 // nobody will record and flattens the trend the card exists to show.
