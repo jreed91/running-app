@@ -442,6 +442,19 @@ struct SettingsView: View {
 
             rowDivider
             NavigationLink {
+                RoutePrivacySettingsView()
+            } label: {
+                settingsRow(icon: .lock, iconColor: .brand, title: "Route privacy") {
+                    rowChevron
+                }
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.primary)
+            .accessibilityIdentifier("settings.routePrivacy")
+            footnote(Text("Hides the start and finish of runs, and places like home, on run cards and GPX files you share."))
+
+            rowDivider
+            NavigationLink {
                 ShoesView()
             } label: {
                 settingsRow(icon: .run, iconColor: .brand, title: "My shoes") {

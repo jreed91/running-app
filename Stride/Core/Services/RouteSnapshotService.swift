@@ -19,10 +19,31 @@ enum RouteSnapshotService {
         lineColor: UIColor,
         lineWidth: CGFloat
     ) async -> UIImage? {
-        guard coordinates.count >= 2 else { return nil }
+        await routeSnapshot(
+            segments: [coordinates],
+            size: size,
+            scale: scale,
+            lineColor: lineColor,
+            lineWidth: lineWidth
+        )
+    }
+
+    /// The same for a route in pieces — what is left after ``RoutePrivacy`` hides the ends
+    /// and private places. Each piece is stroked on its own, so no line is drawn across a
+    /// hidden stretch, and the map is framed on the visible pieces only: framing on the
+    /// whole route would centre the picture on the part that was hidden.
+    static func routeSnapshot(
+        segments: [[Coordinate]],
+        size: CGSize,
+        scale: CGFloat,
+        lineColor: UIColor,
+        lineWidth: CGFloat
+    ) async -> UIImage? {
+        let pieces = segments.filter { $0.count >= 2 }
+        guard !pieces.isEmpty else { return nil }
 
         let options = MKMapSnapshotter.Options()
-        options.region = mapRegion(for: coordinates)
+        options.region = mapRegion(for: pieces.flatMap { $0 })
         options.size = size
         options.scale = scale
         // A dark map matches the card's dark palette; drop POI clutter for a clean route.
@@ -33,7 +54,7 @@ enum RouteSnapshotService {
         do {
             let snapshot = try await snapshotter.start()
             return drawRoute(
-                coordinates.map(\.clCoordinate),
+                pieces.map { $0.map(\.clCoordinate) },
                 on: snapshot,
                 lineColor: lineColor,
                 lineWidth: lineWidth
@@ -69,10 +90,10 @@ enum RouteSnapshotService {
         return MKCoordinateRegion(center: center, span: span)
     }
 
-    /// Composites the route polyline onto the snapshot image using the snapshot's coordinate→point
+    /// Composites the route's pieces onto the snapshot image using the snapshot's coordinate→point
     /// conversion so it lines up exactly with the rendered tiles.
     private static func drawRoute(
-        _ coordinates: [CLLocationCoordinate2D],
+        _ segments: [[CLLocationCoordinate2D]],
         on snapshot: MKMapSnapshotter.Snapshot,
         lineColor: UIColor,
         lineWidth: CGFloat
@@ -91,12 +112,14 @@ enum RouteSnapshotService {
             cgContext.setLineJoin(.round)
             cgContext.setLineCap(.round)
 
-            for (index, coordinate) in coordinates.enumerated() {
-                let point = snapshot.point(for: coordinate)
-                if index == 0 {
-                    cgContext.move(to: point)
-                } else {
-                    cgContext.addLine(to: point)
+            for coordinates in segments {
+                for (index, coordinate) in coordinates.enumerated() {
+                    let point = snapshot.point(for: coordinate)
+                    if index == 0 {
+                        cgContext.move(to: point)
+                    } else {
+                        cgContext.addLine(to: point)
+                    }
                 }
             }
             cgContext.strokePath()

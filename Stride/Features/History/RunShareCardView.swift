@@ -78,12 +78,20 @@ struct RunShareCardView: View {
                     .scaledToFill()
             } else if model.hasRoute {
                 // Snapshot unavailable (offline): fall back to the self-drawn polyline.
-                RoutePolylineShape(points: model.routePoints)
+                RoutePolylineShape(segments: model.routeSegments)
                     .stroke(
                         .route,
                         style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round)
                     )
                     .padding(AppSpacing.lg)
+            } else if model.isRouteHidden {
+                // Route privacy hid all of it; say so rather than call it indoors.
+                VStack(spacing: 8) {
+                    StrideIcon(name: .lock, size: 34, color: secondaryText, strokeWeight: 2.2)
+                    Text("Route kept private")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(secondaryText)
+                }
             } else {
                 VStack(spacing: 8) {
                     Image(systemName: "figure.run.treadmill")
@@ -203,11 +211,20 @@ struct RunShareCardView: View {
 /// is fit as a centered square inside the (possibly non-square) rect, so the route keeps the true
 /// proportions `ShareCardModel.normalizedRoute` already established.
 struct RoutePolylineShape: Shape {
-    let points: [CGPoint]
+    /// One polyline per visible piece of the route (see ``RoutePrivacy``); no line joins
+    /// one piece to the next.
+    let segments: [[CGPoint]]
+
+    init(segments: [[CGPoint]]) {
+        self.segments = segments
+    }
+
+    init(points: [CGPoint]) {
+        self.segments = [points]
+    }
 
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        guard let first = points.first else { return path }
 
         let side = min(rect.width, rect.height)
         let originX = rect.minX + (rect.width - side) / 2
@@ -216,9 +233,12 @@ struct RoutePolylineShape: Shape {
             CGPoint(x: originX + point.x * side, y: originY + point.y * side)
         }
 
-        path.move(to: place(first))
-        for point in points.dropFirst() {
-            path.addLine(to: place(point))
+        for points in segments {
+            guard let first = points.first else { continue }
+            path.move(to: place(first))
+            for point in points.dropFirst() {
+                path.addLine(to: place(point))
+            }
         }
         return path
     }

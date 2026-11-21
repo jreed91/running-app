@@ -20,9 +20,21 @@ struct ShareCardModel: Equatable {
     /// Polyline points normalized into the unit square `[0,1]×[0,1]`, aspect-fit and centered,
     /// with y already flipped for screen space (north is up → smaller y). Empty when the run
     /// has no usable route (indoor runs, fewer than two distinct fixes, or a single point).
-    let routePoints: [CGPoint]
+    ///
+    /// All the visible pieces joined, in order; ``routeSegments`` keeps them apart for
+    /// drawing.
+    var routePoints: [CGPoint] { routeSegments.flatMap { $0 } }
+
+    /// The route's visible pieces after ``RoutePrivacy``, normalized together into the unit
+    /// square so they keep their places relative to each other. One piece when nothing
+    /// mid-route was hidden.
+    let routeSegments: [[CGPoint]]
 
     var hasRoute: Bool { routePoints.count >= 2 }
+
+    /// An outdoor run whose whole route ``RoutePrivacy`` hides — a short loop from home.
+    /// The card says the route is private rather than calling it an indoor run.
+    let isRouteHidden: Bool
 
     /// One bar per split, tallest for the fastest split (see `SplitBar`).
     let splitBars: [SplitBar]
@@ -51,13 +63,22 @@ extension ShareCardModel {
     /// split is floored here rather than at zero.
     private static let minBarHeight = 0.4
 
-    static func make(from workout: RunWorkout, unit: UnitPreference) -> ShareCardModel {
+    /// `privacy` decides what of the route the card may draw; ``RoutePrivacy/off`` draws
+    /// all of it.
+    static func make(
+        from workout: RunWorkout,
+        unit: UnitPreference,
+        privacy: RoutePrivacy = .off
+    ) -> ShareCardModel {
         let heartRate = workout.averageHeartRate.map { "\(Int($0.rounded())) bpm" }
         let elevation = workout.elevationGainMeters.flatMap { gain in
             gain > 0 ? gain.elevationString(unit: unit) : nil
         }
 
         let (bars, fastest) = splitSummary(from: workout.splits, splitUnit: workout.splitUnit)
+        let routeSegments = normalizedRoute(
+            segments: privacy.visibleSegments(of: workout.routeCoordinates)
+        )
 
         return ShareCardModel(
             distance: workout.distanceMeters.distanceString(unit: unit),
@@ -65,7 +86,9 @@ extension ShareCardModel {
             pace: workout.averagePaceSecondsPerKm.paceString(unit: unit),
             heartRate: heartRate,
             elevation: elevation,
-            routePoints: normalizedRoute(from: workout.routeCoordinates),
+            routeSegments: routeSegments,
+            isRouteHidden: routeSegments.isEmpty
+                && !normalizedRoute(from: workout.routeCoordinates).isEmpty,
             splitBars: bars,
             fastestSplit: fastest,
             splitUnitLabel: workout.splitUnit.splitLabel
@@ -79,6 +102,15 @@ extension ShareCardModel {
     /// flips y so higher latitudes (north) sit toward the top. Returns `[]` for runs with fewer
     /// than two coordinates or where every fix coincides (nothing to draw).
     static func normalizedRoute(from coordinates: [Coordinate]) -> [CGPoint] {
+        normalizedRoute(segments: [coordinates]).first ?? []
+    }
+
+    /// The same projection over several pieces at once: the bounding box is the pieces'
+    /// together, so each keeps its place relative to the others. Pieces under two points
+    /// are dropped; `[]` when nothing is left to draw.
+    static func normalizedRoute(segments: [[Coordinate]]) -> [[CGPoint]] {
+        let pieces = segments.filter { $0.count >= 2 }
+        let coordinates = pieces.flatMap { $0 }
         guard coordinates.count >= 2 else { return [] }
 
         let meanLatRadians = coordinates.map(\.latitude).reduce(0, +)
@@ -100,11 +132,14 @@ extension ShareCardModel {
         let offsetX = (1 - spanX * scale) / 2
         let offsetY = (1 - spanY * scale) / 2
 
-        return projected.map { point in
-            let nx = (point.x - minX) * scale + offsetX
-            let ny = (point.y - minY) * scale + offsetY
+        func place(_ coordinate: Coordinate) -> CGPoint {
+            let x = coordinate.longitude * cosLat
+            let y = coordinate.latitude
+            let nx = (x - minX) * scale + offsetX
+            let ny = (y - minY) * scale + offsetY
             return CGPoint(x: nx, y: 1 - ny)   // flip y: north up
         }
+        return pieces.map { $0.map(place) }
     }
 
     /// Builds the split bars (fastest tallest) and the fastest-split callout. Splits with a

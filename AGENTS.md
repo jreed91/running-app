@@ -508,6 +508,18 @@ judgement (pure, tested in `ShoeTrackingTests`), `ShoeAssignment` the few writes
 - Adding `Shoe` and `RunWorkout.shoeID` is a CloudKit schema change: run
   `--init-cloudkit-schema` and deploy before shipping (see "Persistence and Sync").
 
+## Sharing and route privacy
+
+Anything that sends a route out of the app goes through `RoutePrivacy`
+(`Stride/Core/Services/RoutePrivacy.swift`): it hides the first and last stretch of every run
+(200 m by default) and any private place the runner adds in Settings → Route privacy, and
+splits what is left into pieces so no line is drawn across a hidden stretch. The run card
+(`ShareCardModel`, `RouteSnapshotService.routeSnapshot(segments:)`) and a single run's GPX
+file (`GPXExport.document(for:privacy:)`) apply it. The full-data export does not: it is the
+runner's own backup. A new sharing surface (a recap card with a map, a replay video) must
+apply it too. Settings live in `UserDefaults` per device, so a home location never reaches
+iCloud key-value storage.
+
 ## Run playlists
 
 Stride builds a playlist shaped like the session and saves it into the runner's Apple

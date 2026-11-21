@@ -15,22 +15,35 @@ enum GPXExport {
     /// The GPX document for a run, or `nil` when the run has no route to export — indoor
     /// runs and any outdoor run that never got a usable fix. Those runs offer no export
     /// rather than exporting an empty track.
-    static func document(for workout: RunWorkout, creator: String = "Stride") -> String? {
+    ///
+    /// `privacy` trims what the runner's ``RoutePrivacy`` hides, leaving one `<trkseg>` per
+    /// visible piece; `nil` (the full-data export, a backup) keeps every point. A run whose
+    /// whole route is hidden has nothing to export and returns `nil` too.
+    static func document(
+        for workout: RunWorkout,
+        privacy: RoutePrivacy? = nil,
+        creator: String = "Stride"
+    ) -> String? {
         let coordinates = workout.routeCoordinates
         guard !coordinates.isEmpty else { return nil }
 
         let start = workout.date
         let end = start.addingTimeInterval(max(0, workout.durationSeconds))
+        // The route is stored as a bare ordered coordinate array with no timestamps of
+        // its own, so points are laid back onto the run's timeline evenly — the same
+        // assumption `HealthKitRepository.saveRoute` already makes when it writes this
+        // very trace to HealthKit. Reused rather than restated, so an exported file and
+        // the Health copy of the same run agree about when the runner was where. Times are
+        // laid over the whole route before trimming, so a trimmed file keeps true times.
+        let timestamps = HealthKitRepository.sampleTimestamps(
+            count: coordinates.count, start: start, end: end
+        )
+        let ranges = privacy.map { $0.visibleRanges(of: coordinates) }
+            ?? [coordinates.startIndex..<coordinates.endIndex]
         return document(
-            coordinates: coordinates,
-            // The route is stored as a bare ordered coordinate array with no timestamps of
-            // its own, so points are laid back onto the run's timeline evenly — the same
-            // assumption `HealthKitRepository.saveRoute` already makes when it writes this
-            // very trace to HealthKit. Reused rather than restated, so an exported file and
-            // the Health copy of the same run agree about when the runner was where.
-            timestamps: HealthKitRepository.sampleTimestamps(
-                count: coordinates.count, start: start, end: end
-            ),
+            segments: ranges.map { range in
+                zip(coordinates[range], timestamps[range]).map { ($0, $1) }
+            },
             name: trackName(for: workout),
             startedAt: start,
             creator: creator
@@ -50,15 +63,36 @@ enum GPXExport {
         creator: String = "Stride"
     ) -> String? {
         guard !coordinates.isEmpty, timestamps.count == coordinates.count else { return nil }
+        return document(
+            segments: [Array(zip(coordinates, timestamps))],
+            name: name,
+            startedAt: startedAt,
+            creator: creator
+        )
+    }
 
-        let trackPoints = zip(coordinates, timestamps).map { coordinate, timestamp -> String in
-            let lat = coordinateString(coordinate.latitude)
-            let lon = coordinateString(coordinate.longitude)
-            return "      <trkpt lat=\"\(lat)\" lon=\"\(lon)\">\n"
-                + "        <time>\(timestampString(timestamp))</time>\n"
-                + "      </trkpt>"
+    /// The document for a route in one or more pieces, each a `<trkseg>` of points and the
+    /// times they were reached. `nil` when there are no points at all.
+    static func document(
+        segments: [[(Coordinate, Date)]],
+        name: String,
+        startedAt: Date,
+        creator: String = "Stride"
+    ) -> String? {
+        let pieces = segments.filter { !$0.isEmpty }
+        guard !pieces.isEmpty else { return nil }
+
+        let trackSegments = pieces.map { piece -> String in
+            let trackPoints = piece.map { coordinate, timestamp -> String in
+                let lat = coordinateString(coordinate.latitude)
+                let lon = coordinateString(coordinate.longitude)
+                return "      <trkpt lat=\"\(lat)\" lon=\"\(lon)\">\n"
+                    + "        <time>\(timestampString(timestamp))</time>\n"
+                    + "      </trkpt>"
+            }
+            return "    <trkseg>\n" + trackPoints.joined(separator: "\n") + "\n    </trkseg>"
         }
-        let points = trackPoints.joined(separator: "\n")
+        let segmentsXML = trackSegments.joined(separator: "\n")
 
         return """
         <?xml version="1.0" encoding="UTF-8"?>
@@ -72,9 +106,7 @@ enum GPXExport {
           <trk>
             <name>\(escaped(name))</name>
             <type>running</type>
-            <trkseg>
-        \(points)
-            </trkseg>
+        \(segmentsXML)
           </trk>
         </gpx>
         """

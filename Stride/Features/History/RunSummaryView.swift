@@ -266,9 +266,16 @@ struct RunSummaryView: View {
         // A render that comes back empty is logged below and leaves nothing to show.
         defer { shareCardExport.abandon() }
 
-        let model = ShareCardModel.make(from: workout, unit: appSettings.unitPreference)
+        // What the runner's route privacy hides never reaches the card: not the drawn
+        // line, and not the map either, which is framed on the visible pieces only.
+        let privacy = RoutePrivacy.load()
+        let model = ShareCardModel.make(
+            from: workout,
+            unit: appSettings.unitPreference,
+            privacy: privacy
+        )
         let mapImage = await RouteSnapshotService.routeSnapshot(
-            coordinates: workout.routeCoordinates,
+            segments: privacy.visibleSegments(of: workout.routeCoordinates),
             size: RunShareCardView.routePanelSize,
             scale: 3,
             lineColor: UIColor(.brand),
@@ -293,7 +300,14 @@ struct RunSummaryView: View {
     /// growing pile of duplicated GPS traces for no benefit. Overwriting a same-named
     /// leftover from an earlier export of the same run is deliberate.
     private func exportGPX() {
-        guard let document = GPXExport.document(for: workout) else { return }
+        // A shared file is trimmed like the card. A route privacy hides completely (a short
+        // run round the block from home) leaves nothing to send, and the runner is told so
+        // rather than handed an empty file or nothing at all.
+        guard !workout.routeCoordinates.isEmpty else { return }
+        guard let document = GPXExport.document(for: workout, privacy: RoutePrivacy.load()) else {
+            gpxExport.fail("Route privacy hides all of this run, so there's no route to export. You can change what's hidden in Settings, Route privacy.")
+            return
+        }
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent(GPXExport.fileName(for: workout))
         do {
