@@ -56,13 +56,26 @@ struct ProgressDashboardView: View {
             }
         }
 
-        /// The explorer opens on the range Progress is showing.
+        /// An explorer opens on the range Progress is showing.
         var explorerWindow: VolumeExplorer.Window {
             switch self {
             case .month: return .month
             case .threeMonths: return .threeMonths
             case .sixMonths: return .sixMonths
             case .year: return .year
+            }
+        }
+    }
+
+    /// The full page a card's "Explore" link opens.
+    enum ExploreDestination {
+        case volume(VolumeExplorer.Metric)
+        case trend(TrendExplorer.Metric)
+
+        var title: String {
+            switch self {
+            case .volume(let metric): return metric.title
+            case .trend(let metric): return metric.title
             }
         }
     }
@@ -151,6 +164,14 @@ struct ProgressDashboardView: View {
                                 vo2MaxTrendChart
                                     .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 6)
                             }
+                            // All time, not the picked range: a record set two years ago is
+                            // still the record. Its own view, with its own query and loading.
+                            BestEffortsCard()
+                                .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 6)
+                            FitnessFreshnessCard()
+                                .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 6)
+                            ActivityCalendarCard()
+                                .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 6)
                             if showsStrengthCard {
                                 strengthCard
                                     .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 6)
@@ -273,7 +294,7 @@ struct ProgressDashboardView: View {
 
     private func chartCard<Content: View>(
         _ title: String,
-        explore metric: VolumeExplorer.Metric? = nil,
+        explore destination: ExploreDestination? = nil,
         @ViewBuilder content: () -> Content
     ) -> some View {
         // The title sits above the card, as section headers do on every other screen.
@@ -283,11 +304,16 @@ struct ProgressDashboardView: View {
                     .strideEyebrow()
                     .foregroundStyle(.secondary)
                 Spacer(minLength: AppSpacing.sm)
-                if let metric {
+                if let destination {
                     // A link in the header rather than a tap on the card: the chart
-                    // already uses taps and drags to read a bar.
+                    // already uses taps and drags to read a bar or a dot.
                     NavigationLink {
-                        VolumeExplorerView(metric: metric, window: selectedRange.explorerWindow)
+                        switch destination {
+                        case .volume(let metric):
+                            VolumeExplorerView(metric: metric, window: selectedRange.explorerWindow)
+                        case .trend(let metric):
+                            TrendExplorerView(metric: metric, window: selectedRange.explorerWindow)
+                        }
                     } label: {
                         HStack(spacing: 2) {
                             Text("Explore")
@@ -296,7 +322,7 @@ struct ProgressDashboardView: View {
                         .font(.captionStrong)
                         .foregroundStyle(Color.brandText)
                     }
-                    .accessibilityLabel("Explore \(metric.title.lowercased())")
+                    .accessibilityLabel("Explore \(destination.title.lowercased())")
                 }
             }
             .padding(.horizontal, AppSpacing.xs)
@@ -396,7 +422,7 @@ struct ProgressDashboardView: View {
     // MARK: - Weekly volume chart
 
     private var weeklyVolumeChart: some View {
-        chartCard("WEEKLY VOLUME", explore: .distance) {
+        chartCard("WEEKLY VOLUME", explore: .volume(.distance)) {
             // Every other chart on this tab says why it is empty; this one drew an
             // unexplained 160pt of blank card instead.
             if weeklyBuckets.isEmpty {
@@ -530,7 +556,7 @@ struct ProgressDashboardView: View {
     /// with that answer and the chart shows the evidence for it.
     private var paceProgressChart: some View {
         let trend = easyPaceTrend
-        return chartCard("EASY PACE") {
+        return chartCard("EASY PACE", explore: .trend(.easyPace)) {
             if trend.runs.isEmpty {
                 emptyDataPlaceholder("No easy or long runs in this period")
             } else {
@@ -655,7 +681,7 @@ struct ProgressDashboardView: View {
 
     private var heartRateTrendChart: some View {
         let withHR = filteredWorkouts.filter { $0.averageHeartRate != nil }
-        return chartCard("AVERAGE HEART RATE") {
+        return chartCard("AVERAGE HEART RATE", explore: .trend(.easyHeartRate)) {
             if withHR.isEmpty {
                 emptyDataPlaceholder("No heart rate data in this period")
             } else {
@@ -809,7 +835,7 @@ struct ProgressDashboardView: View {
 
     private var elevationTrendChart: some View {
         let withElev = filteredWorkouts.filter { ($0.elevationGainMeters ?? 0) > 0 }
-        return chartCard("ELEVATION GAIN", explore: .climb) {
+        return chartCard("ELEVATION GAIN", explore: .volume(.climb)) {
             if withElev.isEmpty {
                 emptyDataPlaceholder("No elevation data in this period")
             } else {
@@ -857,7 +883,7 @@ struct ProgressDashboardView: View {
 
     private var vo2MaxTrendChart: some View {
         // Named VDOT, as the hero above names the same number.
-        chartCard("VDOT") {
+        chartCard("VDOT", explore: .trend(.vdot)) {
             if vo2Points.isEmpty {
                 emptyDataPlaceholder("Not enough run data in this period")
             } else {

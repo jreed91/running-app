@@ -68,7 +68,7 @@ struct VolumeExplorerView: View {
     }
 
     private func makeSnapshot(now: Date = .now) -> Snapshot {
-        let runs = runs
+        let runs = self.runs
         let start = VolumeExplorer.windowStart(
             window, now: now, earliestRun: runs.first?.date, calendar: calendar
         )

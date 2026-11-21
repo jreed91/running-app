@@ -8,6 +8,7 @@ import SwiftUI
 
 /// A page opened from the run summary's breakdown list.
 enum RunSummaryPage: Hashable {
+    case analysis
     case plannedWorkout
     case splits
     case heartRateZones
@@ -17,6 +18,8 @@ enum RunSummaryPage: Hashable {
 
     var title: String {
         switch self {
+        case .analysis:
+            return String(localized: "Run analysis", comment: "Run detail page title")
         case .plannedWorkout:
             return String(localized: "Planned workout", comment: "Run detail page title")
         case .splits:
@@ -36,6 +39,7 @@ enum RunSummaryPage: Hashable {
     /// sparkles), which falls back to `systemImage`.
     var strideIcon: StrideIconName? {
         switch self {
+        case .analysis: return .location
         case .plannedWorkout: return .calendar
         case .splits: return .chart
         case .heartRateZones: return .heart
@@ -47,6 +51,7 @@ enum RunSummaryPage: Hashable {
 
     var systemImage: String {
         switch self {
+        case .analysis: return "point.topleft.down.to.point.bottomright.curvepath"
         case .plannedWorkout: return "calendar"
         case .splits: return "chart.bar.xaxis"
         case .heartRateZones: return "heart"
@@ -70,6 +75,16 @@ extension RunSummaryView {
     /// used to apply inline, so a run never offers an empty page.
     var breakdownRows: [BreakdownRow] {
         var rows: [BreakdownRow] = []
+        // First: the whole run on one scrubbable timeline, when it recorded the detail.
+        if RunAnalysisView.isAvailable(for: workout) {
+            rows.append(BreakdownRow(
+                page: .analysis,
+                summary: String(
+                    localized: "Pace, heart rate and elevation along the route",
+                    comment: "Run breakdown row preview"
+                )
+            ))
+        }
         if let scheduled = matchedScheduled {
             rows.append(BreakdownRow(
                 page: .plannedWorkout,
@@ -204,6 +219,9 @@ extension RunSummaryView {
     @ViewBuilder
     func detailPageContent(_ page: RunSummaryPage) -> some View {
         switch page {
+        case .analysis:
+            // Its own view with its own state: scrubbing writes nothing of this view's.
+            RunAnalysisView(workout: workout)
         case .plannedWorkout:
             plannedWorkoutSection
         case .splits:

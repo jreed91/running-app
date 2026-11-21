@@ -138,7 +138,7 @@ final class StrideUITests: XCTestCase {
         // so a hang there should not hide whether the others open.
         let pages = [
             ("laps", "Laps"), ("paceInsights", "Pace insights"), ("plannedWorkout", "Planned workout"),
-            ("heartRateZones", "Heart-rate zones"), ("splits", "Splits")
+            ("heartRateZones", "Heart-rate zones"), ("splits", "Splits"), ("analysis", "Run analysis")
         ]
         // Every row, not just the first: each page reads different state, and the first
         // fix only made the first one open.
