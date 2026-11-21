@@ -28,7 +28,7 @@ struct RaceInviteTests {
         ))
 
         #expect(invite.webURL.absoluteString
-            == "https://www.jacobreed.dev/stride/race?name=Chicago%20Marathon&date=2027-10-10&distance=marathon")
+            == "https://runwithstride.app/race?name=Chicago%20Marathon&date=2027-10-10&distance=marathon")
 
         let read = try #require(RaceInvite(url: invite.webURL))
         #expect(read == invite)
@@ -102,7 +102,7 @@ struct RaceInviteTests {
 
     @Test func friendElsewhereGetsTheSameDay() throws {
         let invite = try #require(RaceInvite(url: URL(string:
-            "https://jacobreed.dev/stride/race?name=Tokyo&date=2027-03-07&distance=marathon")!))
+            "https://runwithstride.app/race?name=Tokyo&date=2027-03-07&distance=marathon")!))
 
         for zone in ["Asia/Tokyo", "America/Los_Angeles", "Europe/London", "Pacific/Auckland"] {
             let local = calendar(zone)
@@ -136,11 +136,11 @@ struct RaceInviteTests {
 
     @Test func missingNameFallsBackToTheDistance() throws {
         let read = try #require(RaceInvite(url: URL(string:
-            "https://jacobreed.dev/stride/race?date=2027-06-01&distance=half")!))
+            "https://runwithstride.app/race?date=2027-06-01&distance=half")!))
         #expect(read.name == RaceType.halfMarathon.displayName)
 
         let blank = try #require(RaceInvite(url: URL(string:
-            "https://jacobreed.dev/stride/race?name=%20%20&date=2027-06-01&distance=half")!))
+            "https://runwithstride.app/race?name=%20%20&date=2027-06-01&distance=half")!))
         #expect(blank.name == RaceType.halfMarathon.displayName)
     }
 
@@ -170,16 +170,16 @@ struct RaceInviteTests {
 
     @Test func recognisesBothSpellingsAndNothingElse() {
         let yes = [
-            "https://jacobreed.dev/stride/race?date=2027-06-01&distance=5k",
-            "https://www.jacobreed.dev/stride/race/?date=2027-06-01&distance=5k",
-            "HTTPS://JacobReed.dev/stride/race?date=2027-06-01&distance=5k",
+            "https://runwithstride.app/race?date=2027-06-01&distance=5k",
+            "https://www.runwithstride.app/race/?date=2027-06-01&distance=5k",
+            "HTTPS://RunWithStride.app/race?date=2027-06-01&distance=5k",
             "stride://race?date=2027-06-01&distance=5k",
         ]
         let no = [
-            "https://jacobreed.dev/stride?date=2027-06-01&distance=5k",
-            "https://jacobreed.dev/stride/race/extra?date=2027-06-01&distance=5k",
-            "http://jacobreed.dev/stride/race?date=2027-06-01&distance=5k",
-            "https://example.com/stride/race?date=2027-06-01&distance=5k",
+            "https://runwithstride.app/?date=2027-06-01&distance=5k",
+            "https://runwithstride.app/race/extra?date=2027-06-01&distance=5k",
+            "http://runwithstride.app/race?date=2027-06-01&distance=5k",
+            "https://jacobreed.dev/stride/race?date=2027-06-01&distance=5k",
             "stride://active-run",
             "stride://plan",
         ]

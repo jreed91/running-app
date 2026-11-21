@@ -91,9 +91,9 @@ enum ShareCardFormat: String, CaseIterable, Identifiable, Sendable {
 /// Where a shared card sends people who want the app.
 enum StrideLinks {
     /// The landing page, short enough to read off a card and type.
-    static let landingPageDisplay = "jacobreed.dev/stride"
-    /// The landing page itself. `www` because the bare domain redirects there.
-    static let landingPage = URL(string: "https://www.jacobreed.dev/stride")
+    static let landingPageDisplay = "runwithstride.app"
+    /// The landing page itself. The bare domain, because `www.` redirects there.
+    static let landingPage = URL(string: "https://runwithstride.app")
     /// The App Store listing (id 6763807505).
     static let appStore = URL(string: "https://apps.apple.com/app/id6763807505")
 }

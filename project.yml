@@ -164,16 +164,17 @@ targets:
           - group.com.running.stride
         com.apple.developer.applesignin:
           - Default
-        # Race invites (`RaceInvite`): a shared https://www.jacobreed.dev/stride/race link
-        # opens Stride when it is installed. `www` because the bare domain redirects, and
-        # iOS follows no redirect for app links. The site serves the association file at
-        # /.well-known/apple-app-site-association (jacobreed.dev repo).
+        # Race invites (`RaceInvite`): a shared https://runwithstride.app/race link
+        # opens Stride when it is installed. The bare domain because `www.` redirects, and
+        # iOS follows no redirect for app links. The site's Worker serves the association
+        # file at /.well-known/apple-app-site-association (jacobreed.dev repo,
+        # cloudflare/stride/).
         #
         # REQUIRES the Associated Domains capability on the `com.running.stride` App ID,
         # turned on in the developer portal before this ships: Xcode Cloud's signing
         # proxy is read-only, so without it the archive exports with a signing error.
         com.apple.developer.associated-domains:
-          - applinks:www.jacobreed.dev
+          - applinks:runwithstride.app
         com.apple.developer.healthkit: true
         com.apple.developer.healthkit.background-delivery: true
         com.apple.developer.icloud-container-identifiers:

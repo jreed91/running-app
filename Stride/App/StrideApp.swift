@@ -125,7 +125,7 @@ struct StrideApp: App {
     /// rather than merely foregrounding the app onto whatever was open last.
     ///
     /// Also a friend's race invite, in either spelling: the shared
-    /// `https://www.jacobreed.dev/stride/race?…` link (a universal link, once the site
+    /// `https://runwithstride.app/race?…` link (a universal link, once the site
     /// serves the app-site association) and the web page's `stride://race?…` button.
     private func handleDeepLink(_ url: URL) {
         if let invite = RaceInvite(url: url) {

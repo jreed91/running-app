@@ -11,7 +11,7 @@ import Foundation
 ///
 /// Two spellings of one link:
 ///
-/// - ``webURL``, `https://www.jacobreed.dev/stride/race?…`, the one that is shared. A phone
+/// - ``webURL``, `https://runwithstride.app/race?…`, the one that is shared. A phone
 ///   with Stride opens it in the app (once the site serves the app-site association);
 ///   one without it gets a page with the race and the App Store button.
 /// - ``appURL``, `stride://race?…`, the same query on the app's own scheme, for the web
@@ -53,11 +53,12 @@ struct RaceInvite: Equatable, Sendable {
     // MARK: Wire format
 
     static let webScheme = "https"
-    /// `www.`, because the bare domain answers with a redirect to it, and iOS neither opens
+    /// The bare domain, because `www.` answers with a redirect to it, and iOS neither opens
     /// the app for a link that redirects nor fetches the app-site association through one.
-    static let webHost = "www.jacobreed.dev"
-    static let webHosts: Set<String> = [webHost, "jacobreed.dev"]
-    static let webPath = "/stride/race"
+    /// The site's Worker (jacobreed.dev repo, `cloudflare/stride/`) serves both.
+    static let webHost = "runwithstride.app"
+    static let webHosts: Set<String> = [webHost, "www.runwithstride.app"]
+    static let webPath = "/race"
     static let appHost = "race"
 
     private enum Key {
@@ -186,7 +187,7 @@ struct RaceInvite: Equatable, Sendable {
         return calendar.startOfDay(for: raceDate) < calendar.startOfDay(for: now)
     }
 
-    /// The link that is shared: `https://www.jacobreed.dev/stride/race?…`.
+    /// The link that is shared: `https://runwithstride.app/race?…`.
     var webURL: URL {
         var components = URLComponents()
         components.scheme = Self.webScheme

@@ -6,7 +6,7 @@ import SwiftUI
 ///
 /// The link carries the race's name, day and distance and nothing about the runner
 /// (see ``RaceInvite``). A friend with Stride gets a plan to the same day at their own
-/// paces; one without it gets the race and the App Store button on jacobreed.dev.
+/// paces; one without it gets the race and the App Store button on runwithstride.app.
 struct RaceInviteCard: View {
 
     let invite: RaceInvite
