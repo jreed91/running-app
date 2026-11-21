@@ -32,7 +32,6 @@ struct ProgressDashboardView: View {
     @State private var attemptedBackfillIDs: Set<String> = []
     @State private var isBackfillingHeartRate = false
 
-    @State private var selectedVolumeDate: Date? = nil
     @State private var selectedPaceDate: Date? = nil
     @State private var selectedHRDate: Date? = nil
     @State private var selectedElevationDate: Date? = nil
@@ -164,6 +163,10 @@ struct ProgressDashboardView: View {
                         }
                         .padding()
                         .strideReadableWidth(hasColumns: true)
+                        // A tap on the page outside any control undoes the drill-in. Buttons,
+                        // links and the charts' own gestures sit inside and win over this one.
+                        .contentShape(Rectangle())
+                        .onTapGesture { clearDrill() }
                         .task { progressAppeared = true }
                         .task(id: period) { await backfillHeartRateSamples() }
                     }
@@ -176,18 +179,6 @@ struct ProgressDashboardView: View {
         }
         .onChange(of: period) { filterChanged() }
         .onChange(of: runType) { filterChanged() }
-        .onChange(of: selectedVolumeDate) {
-            // A tap or a drag on the chart drills into the bar under the finger. It stays
-            // drilled when the finger lifts; the chip in the filter bar undoes it.
-            guard let selectedVolumeDate,
-                  let bucket = ProgressFilter.bucket(at: selectedVolumeDate, in: dashboard.buckets)
-            else { return }
-            let picked = ProgressFilter.drill(for: bucket)
-            if drill != picked {
-                withAnimation(AppAnimation.quick) { drill = picked }
-                UISelectionFeedbackGenerator().selectionChanged()
-            }
-        }
         .onChange(of: selectedTab) {
             if selectedTab == .stats {
                 progressAppeared = false
@@ -201,7 +192,6 @@ struct ProgressDashboardView: View {
     private func filterChanged() {
         drill = nil
         showsAllRuns = false
-        selectedVolumeDate = nil
         selectedPaceDate = nil
         selectedHRDate = nil
         selectedElevationDate = nil
@@ -407,7 +397,7 @@ struct ProgressDashboardView: View {
                     .foregroundStyle(.secondary)
                 Spacer(minLength: AppSpacing.sm)
                 if !isEmpty {
-                    Text("Tap a bar to drill in")
+                    Text(drill == nil ? LocalizedStringKey("Tap a bar to drill in") : "Tap again to see all")
                         .font(.dsCaption)
                         .foregroundStyle(.secondary)
                 }
@@ -450,7 +440,16 @@ struct ProgressDashboardView: View {
                             }
                         }
                     }
-                    .chartXSelection(value: $selectedVolumeDate)
+                    .chartOverlay { proxy in
+                        GeometryReader { geometry in
+                            Rectangle()
+                                .fill(.clear)
+                                .contentShape(Rectangle())
+                                .onTapGesture { location in
+                                    tapVolumeChart(at: location, proxy: proxy, geometry: geometry, buckets: dashboard.buckets)
+                                }
+                        }
+                    }
                     .chartAccessibility("\(measure.title) by \(noun)", volumeSeries(dashboard.buckets, units: units))
                     if let best = summary?.best {
                         Text("Biggest \(noun): \(bucketTitle(best)), \(units.text(best.value(measure))). Dashed line: \(units.text(summary?.averagePerBucket ?? 0)) a \(noun) on average.")
@@ -598,6 +597,41 @@ struct ProgressDashboardView: View {
 
     /// The last moment of the drill-in, so fitness reads as of that day; `nil` is today.
     private var fitnessAsOf: Date? { drill.map { $0.end.addingTimeInterval(-1) } }
+
+    /// A tap on the main chart drills into the bar under the finger. A tap on the bar
+    /// already drilled into, or beside the bars, undoes it.
+    private func tapVolumeChart(
+        at location: CGPoint,
+        proxy: ChartProxy,
+        geometry: GeometryProxy,
+        buckets: [VolumeExplorer.Bucket]
+    ) {
+        guard let plotFrame = proxy.plotFrame else { return }
+        let plot = geometry[plotFrame]
+        let x = location.x - plot.minX
+        guard x >= 0, x <= plot.width,
+              let date: Date = proxy.value(atX: x),
+              let bucket = ProgressFilter.bucket(at: date, in: buckets)
+        else {
+            clearDrill()
+            return
+        }
+        let picked = ProgressFilter.drill(for: bucket)
+        withAnimation(AppAnimation.quick) {
+            drill = drill == picked ? nil : picked
+            showsAllRuns = false
+        }
+        UISelectionFeedbackGenerator().selectionChanged()
+    }
+
+    /// Back to the whole period.
+    private func clearDrill() {
+        guard drill != nil else { return }
+        withAnimation(AppAnimation.quick) {
+            drill = nil
+            showsAllRuns = false
+        }
+    }
 
     /// A tap on a running day drills into it; a second tap on the same day undoes it.
     private func pickDay(_ day: DateInterval) {
