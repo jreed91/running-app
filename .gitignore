@@ -35,3 +35,6 @@ TestFlight/
 
 # Local secrets (never commit)
 Stride/Resources/Secrets.plist
+
+# Cloudflare Wrangler local state (website/)
+.wrangler/

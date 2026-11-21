@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Train for this race with Stride</title>
+<meta name="description" content="A friend invited you to train for the same race with Stride, a running coach for iPhone and Apple Watch.">
+<!-- Every invite is its own query string; none of them belong in search results. -->
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" href="/img/icon-64.png">
+<link rel="apple-touch-icon" href="/img/icon-180.png">
+<meta name="theme-color" content="#0d1018" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f3f4f8" media="(prefers-color-scheme: light)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Stride">
+<meta property="og:title" content="Train for this race with me on Stride">
+<meta property="og:description" content="Stride builds you a plan to the same race day at your own paces.">
+<meta property="og:image" content="https://runwithstride.app/img/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://runwithstride.app/img/og.jpg">
+<meta name="apple-itunes-app" content="app-id=6763807505">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&display=swap" rel="stylesheet">
+<style>
+  /* Route Loop tokens, as on /stride (running-app design/route-loop/README.md). */
+  :root {
+    --brand: #ff5a1a;
+    --brand-glow: #ffb36b;
+    --brand-text: #c2410c;
+    --on-fill: #17120e;
+    --page: #f3f4f8;
+    --card: #ffffff;
+    --inset: #e9ebf1;
+    --text: #1f2433;
+    --text-soft: #4a5063;
+    --stroke: rgba(31, 36, 51, 0.08);
+    --grid: rgba(31, 36, 51, 0.06);
+    --hero-top: #ffede1;
+    --hero-bottom: #ffffff;
+    --route: linear-gradient(45deg, var(--brand-glow), var(--brand));
+    --display: ui-rounded, "SF Pro Rounded", "Nunito", system-ui, sans-serif;
+    --body: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --brand: #ff7438;
+      --brand-glow: #ffbe7d;
+      --brand-text: #ff7438;
+      --page: #0d1018;
+      --card: #171b26;
+      --inset: #232838;
+      --text: #f5f6fa;
+      --text-soft: #a9afc2;
+      --stroke: rgba(255, 255, 255, 0.08);
+      --grid: rgba(255, 255, 255, 0.05);
+      --hero-top: #232a3c;
+      --hero-bottom: #171b26;
+    }
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; min-height: 100vh;
+    background:
+      radial-gradient(ellipse 70% 45% at 70% 0%, color-mix(in srgb, var(--brand) 18%, transparent), transparent 70%),
+      linear-gradient(var(--hero-top), var(--page) 420px);
+    color: var(--text);
+    font: 400 17px/1.55 var(--body);
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--brand-text); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+  :focus-visible { outline: 3px solid var(--brand); outline-offset: 3px; border-radius: 8px; }
+  h1, h2 { font-family: var(--display); font-weight: 800; letter-spacing: -0.02em; line-height: 1.05; margin: 0; text-wrap: balance; }
+  p { margin: 0; }
+
+  .wrap { width: 100%; max-width: 640px; margin: 0 auto; padding: 0 16px; }
+
+  .top .wrap { display: flex; align-items: center; height: 72px; }
+  .brand { display: inline-flex; align-items: center; gap: 12px; color: var(--text); text-decoration: none; font: 800 22px/1 var(--display); }
+  .brand img { width: 36px; height: 36px; border-radius: 9px; box-shadow: 0 0 0 1px var(--stroke); }
+
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 10px;
+    font: 700 13px/1 var(--body); letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--brand-text);
+  }
+  .pin { width: 16px; height: 16px; border-radius: 50%; background: #fff; display: grid; place-items: center; flex: none; box-shadow: 0 0 0 1px var(--stroke); }
+  .pin::after { content: ""; width: 45%; height: 45%; border-radius: 50%; background: var(--brand); }
+
+  /* The race: the hero card, on the map grid. */
+  .race {
+    position: relative; overflow: hidden; margin-top: 16px;
+    border: 1px solid var(--stroke); border-radius: 26px;
+    background: linear-gradient(var(--hero-top), var(--hero-bottom));
+    padding: 32px 28px;
+  }
+  .race .map {
+    position: absolute; inset: 0; pointer-events: none;
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 34px 34px;
+    mask-image: radial-gradient(ellipse at 85% 0%, #000, transparent 75%);
+    -webkit-mask-image: radial-gradient(ellipse at 85% 0%, #000, transparent 75%);
+  }
+  .race > *:not(.map) { position: relative; }
+  .race h1 { font-size: clamp(34px, 8vw, 52px); margin-top: 16px; overflow-wrap: anywhere; }
+  .race .facts { margin-top: 12px; color: var(--text-soft); font-size: 17px; }
+  .countdown { margin-top: 22px; display: flex; align-items: baseline; gap: 10px; }
+  .countdown b { font: 800 56px/1 var(--display); color: var(--brand-text); font-variant-numeric: tabular-nums; }
+  .countdown span { font: 700 20px/1.2 var(--display); color: var(--text-soft); }
+
+  .lede { margin-top: 28px; font-size: 19px; color: var(--text-soft); }
+
+  .cta { margin-top: 24px; display: grid; gap: 12px; }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+    min-height: 52px; padding: 0 24px; border-radius: 16px;
+    font: 700 17px/1 var(--body); text-decoration: none; text-align: center;
+  }
+  .btn-primary { background: var(--route); color: var(--on-fill); box-shadow: 0 10px 30px -8px color-mix(in srgb, var(--brand) 60%, transparent); }
+  .btn-quiet { background: var(--card); color: var(--text); border: 1px solid var(--stroke); }
+  .btn svg { width: 20px; height: 20px; flex: none; }
+
+  .steps { list-style: none; counter-reset: step; padding: 0; margin: 36px 0 0; display: grid; gap: 12px; }
+  .steps li {
+    counter-increment: step; display: grid; grid-template-columns: 36px 1fr; gap: 14px; align-items: start;
+    background: var(--card); border: 1px solid var(--stroke); border-radius: 20px; padding: 18px 20px;
+    color: var(--text-soft);
+  }
+  .steps li::before {
+    content: counter(step); width: 36px; height: 36px; border-radius: 50%;
+    display: grid; place-items: center; font: 800 17px/1 var(--display);
+    color: var(--brand-text); background: color-mix(in srgb, var(--brand) 13%, transparent);
+  }
+  .steps strong { display: block; color: var(--text); font-weight: 700; }
+
+  .note { margin-top: 28px; font-size: 15px; color: var(--text-soft); }
+
+  footer { padding: 48px 0; color: var(--text-soft); font-size: 15px; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 24px; }
+  footer a { color: var(--text-soft); text-decoration: none; }
+
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/">
+      <img src="/img/icon-64.png" alt="" width="36" height="36">
+      Stride
+    </a>
+  </div>
+</header>
+
+<main class="wrap">
+  <!-- Filled in from the link by the script below; shown when the link reads as a race. -->
+  <div id="invite" hidden>
+    <section class="race" aria-labelledby="race-name">
+      <div class="map"></div>
+      <span class="eyebrow"><span class="pin"></span>You're invited</span>
+      <h1 id="race-name"></h1>
+      <p class="facts" id="race-facts"></p>
+      <p class="countdown" id="countdown" hidden><b id="days"></b><span id="days-label"></span></p>
+    </section>
+
+    <p class="lede" id="lede">A friend is training for this race with Stride and wants you to train for it too. Stride builds you a plan to the same race day, at your own paces.</p>
+
+    <div class="cta" id="cta">
+      <a class="btn btn-primary" href="https://apps.apple.com/us/app/stride-running-coach/id6763807505">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.6c.02 2.6 2.28 3.47 2.3 3.48-.02.06-.36 1.24-1.19 2.45-.72 1.05-1.46 2.09-2.64 2.11-1.15.02-1.52-.68-2.84-.68-1.32 0-1.73.66-2.82.7-1.13.04-2-1.13-2.72-2.18-1.48-2.14-2.6-6.05-1.09-8.69.75-1.31 2.1-2.14 3.56-2.16 1.11-.02 2.16.75 2.84.75.68 0 1.95-.93 3.29-.79.56.02 2.13.23 3.14 1.7-.08.05-1.87 1.1-1.85 3.28M14.2 4.21c.6-.73 1-1.74.89-2.75-.86.03-1.91.58-2.53 1.3-.55.64-1.04 1.67-.91 2.66.96.07 1.95-.49 2.55-1.21"/></svg>
+        <span>Get Stride on the App Store</span>
+      </a>
+      <!-- Not primary: on a phone without Stride, Safari can't open a stride:// link. -->
+      <a class="btn btn-quiet" id="open-app" href="/">I have Stride: open the invite</a>
+    </div>
+
+    <ol class="steps" id="steps">
+      <li><span><strong>Get Stride</strong>Stride is for iPhone, with an Apple Watch app included.</span></li>
+      <li><span><strong>Come back to this page</strong>Tap "I have Stride: open the invite" and the race is filled in for you.</span></li>
+      <li><span><strong>Answer a few questions</strong>How fit you are and which days you run. Your plan is yours: your paces, your schedule, the same race day.</span></li>
+    </ol>
+
+    <p class="note">The link carries the race's name, day and distance, and nothing about the friend who sent it. Stride has no accounts, and your training stays on your iPhone and in your iCloud.</p>
+  </div>
+
+  <!-- Shown when the link is missing a date or a distance, or names an impossible one. -->
+  <section id="broken" hidden>
+    <span class="eyebrow"><span class="pin"></span>Race invite</span>
+    <h1 style="font-size: clamp(32px, 7vw, 46px); margin-top: 16px;">This invite link is incomplete.</h1>
+    <p class="lede">Ask your friend to send it again from the Race Day screen in Stride, or have a look at what Stride does.</p>
+    <div class="cta"><a class="btn btn-primary" href="/">See Stride</a></div>
+  </section>
+
+  <noscript>
+    <p class="lede">This invite needs JavaScript to show the race. <a href="/">See what Stride does</a>.</p>
+  </noscript>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a href="/">About Stride</a>
+    <a href="https://jacobreed.dev/stride/support">Support</a>
+    <a href="https://jacobreed.dev/stride/privacy">Privacy Policy</a>
+  </div>
+</footer>
+
+<script>
+  // Reads the same link the app writes (running-app RaceInvite.swift) and applies the
+  // same rules: a real YYYY-MM-DD day, a named distance or 1-250 km in whole metres.
+  (function () {
+    var NAMED = {
+      "5k": { label: "5K", meters: 5000 },
+      "10k": { label: "10K", meters: 10000 },
+      "half": { label: "Half Marathon", meters: 21097.5 },
+      "marathon": { label: "Marathon", meters: 42195 }
+    };
+    var params = new URLSearchParams(window.location.search);
+
+    function readDay(text) {
+      var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text || "");
+      if (!m) return null;
+      var y = +m[1], mo = +m[2], d = +m[3];
+      if (y < 2000 || y > 2100) return null;
+      var date = new Date(Date.UTC(y, mo - 1, d));
+      if (date.getUTCFullYear() !== y || date.getUTCMonth() !== mo - 1 || date.getUTCDate() !== d) return null;
+      return { y: y, m: mo, d: d, utc: date };
+    }
+
+    function readDistance(text) {
+      var slug = (text || "").trim().toLowerCase();
+      if (NAMED[slug]) return NAMED[slug];
+      if (!/^\d{1,7}$/.test(slug)) return null;
+      var meters = +slug;
+      if (meters < 1000 || meters > 250000) return null;
+      return { label: null, meters: meters };
+    }
+
+    function tidyName(text) {
+      // Control characters and line breaks become spaces, as in the app.
+      var name = (text || "").replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, " ").replace(/\s+/g, " ").trim();
+      return Array.from(name).slice(0, 80).join("").trim();
+    }
+
+    function km(meters) {
+      return (meters / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 }) + " km";
+    }
+    function miles(meters) {
+      return (meters / 1609.344).toLocaleString(undefined, { maximumFractionDigits: 1 }) + " mi";
+    }
+
+    var day = readDay(params.get("date"));
+    var distance = readDistance(params.get("distance"));
+    if (!day || !distance) {
+      document.getElementById("broken").hidden = false;
+      return;
+    }
+
+    var name = tidyName(params.get("name")) || distance.label || "Your race";
+    // textContent, never innerHTML: the name is whatever the link says.
+    document.getElementById("race-name").textContent = name;
+    document.title = name + ": train for it with Stride";
+
+    // The race is on that calendar day wherever this page is read, so format it in UTC,
+    // where it was built, rather than shift it into the reader's time zone.
+    var when = day.utc.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+    var facts = [distance.label, miles(distance.meters) + " / " + km(distance.meters), when].filter(Boolean);
+    document.getElementById("race-facts").textContent = facts.join(" · ");
+
+    var now = new Date();
+    var today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+    var days = Math.round((day.utc.getTime() - today) / 86400000);
+
+    if (days < 0) {
+      document.getElementById("lede").textContent = "This race has already been run. Stride can still build you a plan for your next one.";
+      document.getElementById("open-app").hidden = true;
+      document.getElementById("steps").hidden = true;
+    } else {
+      document.getElementById("countdown").hidden = false;
+      document.getElementById("days").textContent = String(days);
+      document.getElementById("days-label").textContent = days === 0 ? "today is race day" : days === 1 ? "day to go" : "days to go";
+      // The app's own spelling of the same link, for a phone that has Stride.
+      document.getElementById("open-app").href = "stride://race" + window.location.search;
+    }
+
+    document.getElementById("invite").hidden = false;
+  })();
+</script>
+
+</body>
+</html>
