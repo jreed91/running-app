@@ -168,6 +168,8 @@ struct ProgressDashboardView: View {
                             // still the record. Its own view, with its own query and loading.
                             BestEffortsCard()
                                 .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 6)
+                            FitnessFreshnessCard()
+                                .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 6)
                             if showsStrengthCard {
                                 strengthCard
                                     .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 6)
