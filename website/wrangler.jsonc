@@ -2,7 +2,7 @@
 // Deploy: `npx wrangler@4 deploy` from this folder, or Cloudflare Workers Builds
 // with root directory `website` (see README.md).
 {
-  "name": "runwithstride",
+  "name": "running-app",
   "main": "src/index.js",
   "compatibility_date": "2026-11-01",
   "assets": {
