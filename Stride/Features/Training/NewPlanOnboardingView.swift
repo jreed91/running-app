@@ -57,8 +57,12 @@ struct NewPlanOnboardingView: View {
     /// than on the profile's goal, which for that runner is no race at all.
     private let startsAfterStartRunning: Bool
 
-    init(startsAfterStartRunning: Bool = false) {
+    /// Opened from a friend's race invite: starts on their race, day and distance.
+    private let invite: RaceInvite?
+
+    init(startsAfterStartRunning: Bool = false, invite: RaceInvite? = nil) {
         self.startsAfterStartRunning = startsAfterStartRunning
+        self.invite = invite
     }
 
     private var profile: UserProfile? { profiles.first }
@@ -590,8 +594,20 @@ struct NewPlanOnboardingView: View {
         if startsAfterStartRunning {
             applyStartRunningGraduate(hasFiveKTime: (profile.currentEstimated5KTimeSeconds ?? 0) > 0)
         }
+        if let invite {
+            applyInvite(invite)
+        }
         clampWeeks()
         recalibrateRaceName()
+    }
+
+    /// The friend's race replaces whatever goal the profile had. Their pace, days and
+    /// fitness stay this runner's own: only the race travels in the link.
+    private func applyInvite(_ invite: RaceInvite) {
+        goalRace = invite.raceType
+        raceName = invite.name
+        if let date = invite.raceDate() { raceDate = date }
+        if let meters = invite.customDistanceMeters { customDistanceKm = meters / 1_000 }
     }
 
     /// A 5K at "New to running" for someone who has just run 30 minutes without stopping.

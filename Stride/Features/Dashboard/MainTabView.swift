@@ -58,6 +58,22 @@ struct MainTabView: View {
             SettingsView()
                 .strideSheet()
         }
+        // A friend's race invite: the new-plan flow, with their race filled in.
+        .sheet(item: pendingRaceInvite) { invite in
+            NewPlanOnboardingView(invite: invite)
+                .strideSheet()
+        }
+        .alert(
+            "This race has already happened",
+            isPresented: Binding(
+                get: { container.appNavigation.pastRaceInviteName != nil },
+                set: { if !$0 { container.appNavigation.pastRaceInviteName = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("\(container.appNavigation.pastRaceInviteName ?? "The race") is over, so there's nothing left to train for. Ask your friend for their next one.")
+        }
         // A closed split has to be felt whether or not the HUD is on screen, and while the
         // run is minimised this view is the only one left to do it (U4/U7). The HUD carries
         // the same modifier with `isActive: true`, so the two never both fire. Spoken cues
@@ -75,6 +91,13 @@ struct MainTabView: View {
         Binding(
             get: { container.appNavigation.selectedTab },
             set: { container.appNavigation.selectedTab = $0 }
+        )
+    }
+
+    private var pendingRaceInvite: Binding<RaceInvite?> {
+        Binding(
+            get: { container.appNavigation.pendingRaceInvite },
+            set: { container.appNavigation.pendingRaceInvite = $0 }
         )
     }
 

@@ -296,6 +296,13 @@ struct RaceInvite: Equatable, Sendable {
     }
 }
 
+// MARK: - Identifiable
+
+extension RaceInvite: Identifiable {
+    /// The link itself: two invites to the same race on the same day are the same invite.
+    var id: String { webURL.absoluteString }
+}
+
 // MARK: - RaceInviteLink
 
 /// The app's URL scheme as invites spell it. The same `stride` scheme the Live Activity

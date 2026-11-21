@@ -242,6 +242,23 @@ struct OnboardingView: View {
             guard container.healthKitRepository.isAuthorized else { return }
             recentVolume = await container.healthKitRepository.recentRunningVolume()
         }
+        // A friend's race invite opened before onboarding is done: the goal step starts
+        // on their race. Past the goal step it waits, and the new-plan flow offers it
+        // once the tabs are up, rather than changing a goal already chosen.
+        .onAppear { takeRaceInvite() }
+        .onChange(of: container.appNavigation.pendingRaceInvite) { _, _ in takeRaceInvite() }
+    }
+
+    private func takeRaceInvite() {
+        guard let invite = container.appNavigation.pendingRaceInvite,
+              step.rawValue <= OnboardingStep.goal.rawValue
+        else { return }
+        container.appNavigation.pendingRaceInvite = nil
+        planKind = .standard
+        goalRace = invite.raceType
+        raceName = invite.name
+        if let date = invite.raceDate() { raceDate = date }
+        if let meters = invite.customDistanceMeters { customDistanceKm = meters / 1_000 }
     }
 
     @ViewBuilder

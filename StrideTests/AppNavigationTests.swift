@@ -27,4 +27,33 @@ struct AppNavigationTests {
 
         #expect(navigation.requestedScheduledWorkoutID == nil)
     }
+
+    // MARK: Race invites
+
+    private func invite(on date: String) throws -> RaceInvite {
+        let url = try #require(URL(string: "stride://race?name=City%2010K&date=\(date)&distance=10k"))
+        return try #require(RaceInvite(url: url))
+    }
+
+    @Test func raceInviteOpensThePlanTabWithTheInvitePending() throws {
+        let navigation = AppNavigation()
+        let invite = try invite(on: "2099-06-01")
+
+        navigation.openRaceInvite(invite)
+
+        #expect(navigation.selectedTab == .plan)
+        #expect(navigation.pendingRaceInvite == invite)
+        #expect(navigation.pastRaceInviteName == nil)
+    }
+
+    @Test func pastRaceInviteSaysSoInsteadOfOpeningAPlan() throws {
+        let navigation = AppNavigation()
+        let invite = try invite(on: "2001-06-01")
+
+        navigation.openRaceInvite(invite)
+
+        #expect(navigation.pendingRaceInvite == nil)
+        #expect(navigation.pastRaceInviteName == "City 10K")
+        #expect(navigation.selectedTab == .home)
+    }
 }
