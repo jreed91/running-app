@@ -231,8 +231,12 @@ struct FitnessFreshnessReadout: View {
         let rounded = Int(value.rounded())
         return VStack(alignment: .leading, spacing: 2) {
             Text(signed && rounded > 0 ? "+\(rounded)" : "\(rounded)")
-                .font(.metricS)
+                // Scales with the text size, like the hero's totals; the fixed `metric`
+                // sizes are for the run screen.
+                .font(.dsTitle2.monospacedDigit())
                 .strideNumericTransition()
+                .minimumScaleFactor(0.7)
+                .lineLimit(1)
             Text(label)
                 .font(.captionStrong)
                 .foregroundStyle(.secondary)

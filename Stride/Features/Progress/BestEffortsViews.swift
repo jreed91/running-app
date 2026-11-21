@@ -4,31 +4,26 @@ import Charts
 
 // MARK: - Loading
 
-/// Works out every run's best efforts off the main actor.
-///
-/// A long run's distance series is a few thousand readings, and a runner can have
-/// hundreds of runs, so the decoding and the sliding windows run in a detached task. The
-/// views hand over plain `Sendable` inputs read from the models on the main actor.
+/// Reads the runs' series on the main actor and hands them to ``BestEffortsCache``,
+/// which works out only the runs it hasn't seen.
 enum BestEffortsLoader {
-    struct Input: Sendable, Equatable {
-        let id: UUID
-        let date: Date
-        let series: Data
-    }
+    /// The last answer, so a card that appears again (back from a run, a tab switch)
+    /// draws its rows straight away instead of "Finding your fastest stretches…".
+    @MainActor static var latest: [BestEfforts.RunEfforts] = []
 
     /// Runs that carry a distance series. Runs from before the series was stored have
     /// none and can't be searched inside; their whole-run times still count on Progress.
     @MainActor
-    static func inputs(from workouts: [RunWorkout]) -> [Input] {
+    static func inputs(from workouts: [RunWorkout]) -> [BestEffortsCache.Input] {
         workouts.compactMap { run in
             guard run.workoutType.countsAsRunning, let data = run.distanceSeriesData else { return nil }
-            return Input(id: run.id, date: run.date, series: data)
+            return BestEffortsCache.Input(id: run.id, date: run.date, series: data)
         }
     }
 
     /// Changes whenever a run is added, removed or gets a series, so a `.task(id:)`
     /// recomputes exactly then.
-    static func fingerprint(_ inputs: [Input]) -> Int {
+    static func fingerprint(_ inputs: [BestEffortsCache.Input]) -> Int {
         var hasher = Hasher()
         for input in inputs {
             hasher.combine(input.id)
@@ -37,18 +32,11 @@ enum BestEffortsLoader {
         return hasher.finalize()
     }
 
-    static func load(_ inputs: [Input]) async -> [BestEfforts.RunEfforts] {
-        await Task.detached(priority: .utility) {
-            inputs.compactMap { input -> BestEfforts.RunEfforts? in
-                guard let points = input.series.decode([SplitBucketing.DistancePoint].self) else { return nil }
-                let samples = points.map {
-                    BestEfforts.Sample(elapsedSeconds: $0.elapsedSeconds, meters: $0.cumulativeMeters)
-                }
-                let efforts = BestEfforts.efforts(in: samples)
-                guard !efforts.isEmpty else { return nil }
-                return BestEfforts.RunEfforts(id: input.id, date: input.date, efforts: efforts)
-            }
-        }.value
+    @MainActor
+    static func load(_ inputs: [BestEffortsCache.Input]) async -> [BestEfforts.RunEfforts] {
+        let efforts = await BestEffortsCache.shared.efforts(for: inputs)
+        latest = efforts
+        return efforts
     }
 }
 
@@ -65,8 +53,8 @@ struct BestEffortsCard: View {
 
     @Environment(AppSettings.self) private var appSettings
     @Query private var workouts: [RunWorkout]
-    @State private var efforts: [BestEfforts.RunEfforts] = []
-    @State private var hasLoaded = false
+    @State private var efforts: [BestEfforts.RunEfforts] = BestEffortsLoader.latest
+    @State private var hasLoaded = !BestEffortsLoader.latest.isEmpty
 
     init(scope: Set<UUID>) {
         self.scope = scope
@@ -131,7 +119,7 @@ struct BestEffortsCard: View {
 
     private func recordRow(_ distance: BestEfforts.Distance, _ effort: BestEfforts.Effort, isAllTime: Bool) -> some View {
         let unit = appSettings.unitPreference
-        return HStack(alignment: .firstTextBaseline) {
+        return BestEffortRowLayout {
             Text(distance.title)
                 .font(.bodyStrong)
                 .frame(minWidth: 64, alignment: .leading)
@@ -140,7 +128,7 @@ struct BestEffortsCard: View {
             Text((effort.seconds / distance.meters * 1_000).paceString(unit: unit))
                 .font(.dsCaption.monospacedDigit())
                 .foregroundStyle(.secondary)
-            Spacer(minLength: AppSpacing.sm)
+        } trailing: {
             if isAllTime {
                 StrideTag("Record", tone: .brand)
             }
@@ -149,6 +137,34 @@ struct BestEffortsCard: View {
                 .foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .combine)
+    }
+}
+
+// MARK: - Row layout
+
+/// One best-effort row: distance, time and pace on the left, tags and date on the
+/// right. At the accessibility text sizes the right side drops under the left, since a
+/// single line can't hold both.
+private struct BestEffortRowLayout<Leading: View, Trailing: View>: View {
+    @ViewBuilder let leading: Leading
+    @ViewBuilder let trailing: Trailing
+
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        if typeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+                HStack(alignment: .firstTextBaseline) { leading }
+                HStack(alignment: .firstTextBaseline) { trailing }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            HStack(alignment: .firstTextBaseline) {
+                leading
+                Spacer(minLength: AppSpacing.sm)
+                trailing
+            }
+        }
     }
 }
 
@@ -181,7 +197,7 @@ struct RunBestEffortsCard: View {
 
     @Environment(AppSettings.self) private var appSettings
     @Query private var workouts: [RunWorkout]
-    @State private var efforts: [BestEfforts.RunEfforts] = []
+    @State private var efforts: [BestEfforts.RunEfforts] = BestEffortsLoader.latest
 
     init(workout: RunWorkout) {
         self.workout = workout
@@ -225,16 +241,16 @@ struct RunBestEffortsCard: View {
 
     private func row(_ distance: BestEfforts.Distance, seconds: Double) -> some View {
         let rank = BestEfforts.rank(of: workout.id, distance, in: efforts)
-        return HStack(alignment: .firstTextBaseline) {
+        return BestEffortRowLayout {
             Text(distance.title)
                 .font(.bodyStrong)
-                .frame(width: 84, alignment: .leading)
+                .frame(minWidth: 64, alignment: .leading)
             Text(seconds.durationString)
                 .font(.bodyStrong.monospacedDigit())
             Text((seconds / distance.meters * 1_000).paceString(unit: appSettings.unitPreference))
                 .font(.dsCaption.monospacedDigit())
                 .foregroundStyle(.secondary)
-            Spacer(minLength: AppSpacing.sm)
+        } trailing: {
             switch rank ?? 0 {
             case 1: StrideTag("Record", tone: .brand)
             case 2: StrideTag("2nd best")
