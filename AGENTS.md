@@ -520,6 +520,10 @@ runner's own backup. A new sharing surface (a recap card with a map, a replay vi
 apply it too. Settings live in `UserDefaults` per device, so a home location never reaches
 iCloud key-value storage.
 
+The route replay video (`RouteReplay` for timing and geometry, `RouteReplayVideo` to render
+it) draws the share card's already-trimmed `routeSegments`, so it inherits route privacy
+rather than applying it again. It is rendered on the tap from the share studio, never ahead.
+
 ## Run playlists
 
 Stride builds a playlist shaped like the session and saves it into the runner's Apple
