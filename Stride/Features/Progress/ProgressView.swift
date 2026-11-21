@@ -55,6 +55,16 @@ struct ProgressDashboardView: View {
             case .year: return 365
             }
         }
+
+        /// The explorer opens on the range Progress is showing.
+        var explorerWindow: VolumeExplorer.Window {
+            switch self {
+            case .month: return .month
+            case .threeMonths: return .threeMonths
+            case .sixMonths: return .sixMonths
+            case .year: return .year
+            }
+        }
     }
 
     init() {
@@ -261,13 +271,35 @@ struct ProgressDashboardView: View {
 
     // MARK: - Chart card wrapper
 
-    private func chartCard<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+    private func chartCard<Content: View>(
+        _ title: String,
+        explore metric: VolumeExplorer.Metric? = nil,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
         // The title sits above the card, as section headers do on every other screen.
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            Text(title)
-                .strideEyebrow()
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, AppSpacing.xs)
+            HStack(alignment: .firstTextBaseline) {
+                Text(title)
+                    .strideEyebrow()
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: AppSpacing.sm)
+                if let metric {
+                    // A link in the header rather than a tap on the card: the chart
+                    // already uses taps and drags to read a bar.
+                    NavigationLink {
+                        VolumeExplorerView(metric: metric, window: selectedRange.explorerWindow)
+                    } label: {
+                        HStack(spacing: 2) {
+                            Text("Explore")
+                            StrideIcon(name: .chevronRight, size: 10, color: .brandText, strokeWeight: 2.2)
+                        }
+                        .font(.captionStrong)
+                        .foregroundStyle(Color.brandText)
+                    }
+                    .accessibilityLabel("Explore \(metric.title.lowercased())")
+                }
+            }
+            .padding(.horizontal, AppSpacing.xs)
             content()
                 .padding(AppSpacing.lg)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -364,7 +396,7 @@ struct ProgressDashboardView: View {
     // MARK: - Weekly volume chart
 
     private var weeklyVolumeChart: some View {
-        chartCard("WEEKLY VOLUME") {
+        chartCard("WEEKLY VOLUME", explore: .distance) {
             // Every other chart on this tab says why it is empty; this one drew an
             // unexplained 160pt of blank card instead.
             if weeklyBuckets.isEmpty {
@@ -777,7 +809,7 @@ struct ProgressDashboardView: View {
 
     private var elevationTrendChart: some View {
         let withElev = filteredWorkouts.filter { ($0.elevationGainMeters ?? 0) > 0 }
-        return chartCard("ELEVATION GAIN") {
+        return chartCard("ELEVATION GAIN", explore: .climb) {
             if withElev.isEmpty {
                 emptyDataPlaceholder("No elevation data in this period")
             } else {
