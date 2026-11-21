@@ -38,3 +38,6 @@ Stride/Resources/Secrets.plist
 
 # Cloudflare Wrangler local state (website/)
 .wrangler/
+
+# Claude Code local worktrees (never commit them: a stray one breaks Cloudflare builds)
+.claude/worktrees/
