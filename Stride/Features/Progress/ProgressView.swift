@@ -48,17 +48,6 @@ struct ProgressDashboardView: View {
         case medals   = "Achievements"
     }
 
-    /// The full page a card's "Explore" link opens.
-    enum ExploreDestination {
-        case trend(TrendExplorer.Metric)
-
-        var title: String {
-            switch self {
-            case .trend(let metric): return metric.title
-            }
-        }
-    }
-
     init() {
         // Imported walks never reach this screen (N38): every chart on it — volume, pace,
         // heart rate, elevation, VO₂ — is a statement about running. `ProgressPeriodStats`
@@ -96,8 +85,16 @@ struct ProgressDashboardView: View {
         ProgressPeriodStats.vdotSamples(for: filteredWorkouts)
     }
 
+    /// The filtered runs narrowed to the drilled-in week, month or day, if any: what the
+    /// zones, best efforts, summary and run list read. The trend charts keep the whole
+    /// period and shade the drilled-in stretch instead, so the week reads in context.
+    private var scopedWorkouts: [RunWorkout] {
+        guard drill != nil else { return filteredWorkouts }
+        return filteredWorkouts.filter { ProgressFilter.contains(drill, $0.date) }
+    }
+
     private var periodSummary: ProgressPeriodStats.Summary {
-        ProgressPeriodStats.summary(for: filteredWorkouts)
+        ProgressPeriodStats.summary(for: scopedWorkouts)
     }
 
     var body: some View {
@@ -143,19 +140,26 @@ struct ProgressDashboardView: View {
                             }
                             vo2MaxTrendChart
                                 .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 6)
-                            // All time, not the picked range: a record set two years ago is
-                            // still the record. Its own view, with its own query and loading.
-                            BestEffortsCard()
+                            // These three have their own all-time queries (a record is measured
+                            // against every run ever), and take the filter as parameters.
+                            BestEffortsCard(scope: scopedIDs)
                                 .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 6)
-                            FitnessFreshnessCard()
+                            FitnessFreshnessCard(periodDays: period.days, asOf: fitnessAsOf)
                                 .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 6)
-                            ActivityCalendarCard()
-                                .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 6)
+                            ActivityCalendarCard(
+                                runType: runType,
+                                weeks: runningDaysWeeks,
+                                selectedDay: drill,
+                                onPick: pickDay
+                            )
+                            .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 6)
                             if showsStrengthCard {
                                 strengthCard
                                     .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 6)
                             }
                             periodSummaryCard
+                                .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 6)
+                            RouteHeatmapCard(periodDays: period.days, runType: runType)
                                 .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 6)
                         }
                         .padding()
@@ -286,7 +290,7 @@ struct ProgressDashboardView: View {
                     .buttonStyle(.strideChip(selected: false))
                     .accessibilityLabel(drillTitle(drill))
                     .accessibilityHint("Shows the whole period again")
-                    Text("The runs below are from this \(period.grouping.noun)")
+                    Text("Everything below is from this \(drill.duration <= 26 * 3_600 ? String(localized: "day") : period.grouping.noun)")
                         .font(.dsCaption)
                         .foregroundStyle(.secondary)
                 }
@@ -297,6 +301,10 @@ struct ProgressDashboardView: View {
 
     /// "Week of Nov 16", "October 2026".
     private func drillTitle(_ drill: DateInterval) -> String {
+        // A day from the running-days grid.
+        if drill.duration <= 26 * 3_600 {
+            return drill.start.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
+        }
         switch period.grouping {
         case .week:
             return String(localized: "Week of \(drill.start.formatted(.dateTime.month(.abbreviated).day()))")
@@ -418,7 +426,7 @@ struct ProgressDashboardView: View {
                             .foregroundStyle(.routeBar)
                             .cornerRadius(AppRadius.micro)
                             // Only a drilled-in page fades the other bars.
-                            .opacity(drill == nil || drill?.start == bucket.start ? 1 : 0.35)
+                            .opacity(drill.map { $0.start >= bucket.start && $0.start < bucket.end } ?? true ? 1 : 0.35)
                         }
                         if average > 0 {
                             RuleMark(y: .value("Average", average))
@@ -487,7 +495,7 @@ struct ProgressDashboardView: View {
     /// drill-in ends here, one tap from the run.
     private var runList: some View {
         let unit = appSettings.unitPreference
-        let inScope = filteredWorkouts.filter { ProgressFilter.contains(drill, $0.date) }.reversed()
+        let inScope = scopedWorkouts.reversed()
         let all = Array(inScope)
         // A drilled-in week shows every run; the whole period shows the latest few.
         let limit = drill == nil && !showsAllRuns ? 3 : all.count
@@ -505,7 +513,7 @@ struct ProgressDashboardView: View {
             .padding(.horizontal, AppSpacing.xs)
             VStack(spacing: 0) {
                 if shown.isEmpty {
-                    Text(drill == nil ? "No runs in this filter." : "No runs. A \(period.grouping.noun) off.")
+                    Text(drill == nil ? "No runs in this filter." : "No runs. Time off.")
                         .font(.bodyRegular)
                         .foregroundStyle(.secondary)
                         .padding(AppSpacing.lg)
@@ -558,36 +566,14 @@ struct ProgressDashboardView: View {
 
     private func chartCard<Content: View>(
         _ title: String,
-        explore destination: ExploreDestination? = nil,
         @ViewBuilder content: () -> Content
     ) -> some View {
         // The title sits above the card, as section headers do on every other screen.
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(title)
-                    .strideEyebrow()
-                    .foregroundStyle(.secondary)
-                Spacer(minLength: AppSpacing.sm)
-                if let destination {
-                    // A link in the header rather than a tap on the card: the chart
-                    // already uses taps and drags to read a bar or a dot.
-                    NavigationLink {
-                        switch destination {
-                        case .trend(let metric):
-                            TrendExplorerView(metric: metric, window: period.window)
-                        }
-                    } label: {
-                        HStack(spacing: 2) {
-                            Text("Explore")
-                            StrideIcon(name: .chevronRight, size: 10, color: .brandText, strokeWeight: 2.2)
-                        }
-                        .font(.captionStrong)
-                        .foregroundStyle(Color.brandText)
-                    }
-                    .accessibilityLabel("Explore \(destination.title.lowercased())")
-                }
-            }
-            .padding(.horizontal, AppSpacing.xs)
+            Text(title)
+                .strideEyebrow()
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, AppSpacing.xs)
             content()
                 .padding(AppSpacing.lg)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -595,11 +581,46 @@ struct ProgressDashboardView: View {
         }
     }
 
+    /// The drilled-in week, month or day, shaded on a chart that keeps the whole period,
+    /// so the stretch reads in context. Nothing when the page isn't drilled in.
+    @ChartContentBuilder
+    private var drillBand: some ChartContent {
+        if let drill {
+            RectangleMark(
+                xStart: .value("From", drill.start),
+                xEnd: .value("To", drill.end)
+            )
+            .foregroundStyle(Color.brand.opacity(0.1))
+        }
+    }
+
+    private var scopedIDs: Set<UUID> { Set(scopedWorkouts.map(\.id)) }
+
+    /// The last moment of the drill-in, so fitness reads as of that day; `nil` is today.
+    private var fitnessAsOf: Date? { drill.map { $0.end.addingTimeInterval(-1) } }
+
+    /// A tap on a running day drills into it; a second tap on the same day undoes it.
+    private func pickDay(_ day: DateInterval) {
+        withAnimation(AppAnimation.quick) {
+            drill = drill == day ? nil : day
+            showsAllRuns = false
+        }
+    }
+
+    /// Weeks of running days to draw: the period's, capped at half a year so a square
+    /// stays big enough to tap.
+    private var runningDaysWeeks: Int {
+        guard let days = period.days else { return 26 }
+        return min(26, days / 7 + 1)
+    }
+
     // MARK: - Strength
 
     private var strengthStats: StrengthPeriodStats {
         StrengthPeriodStats.make(
-            from: strengthSessions.map { $0.sessionLog(unit: appSettings.unitPreference) },
+            from: strengthSessions
+                .filter { ProgressFilter.contains(drill, $0.date) }
+                .map { $0.sessionLog(unit: appSettings.unitPreference) },
             withinDays: period.days ?? 36_500
         )
     }
@@ -763,7 +784,7 @@ struct ProgressDashboardView: View {
     /// with that answer and the chart shows the evidence for it.
     private var paceProgressChart: some View {
         let trend = easyPaceTrend
-        return chartCard("EASY PACE", explore: .trend(.easyPace)) {
+        return chartCard("EASY PACE") {
             if trend.runs.isEmpty {
                 emptyDataPlaceholder("No easy or long runs in this period")
             } else {
@@ -823,6 +844,7 @@ struct ProgressDashboardView: View {
             factor: paceFactor
         )
         return Chart {
+            drillBand
             ForEach(trend.runs) { run in
                 PointMark(
                     x: .value("Date", run.date),
@@ -896,11 +918,12 @@ struct ProgressDashboardView: View {
 
     private var heartRateTrendChart: some View {
         let withHR = filteredWorkouts.filter { $0.averageHeartRate != nil }
-        return chartCard("AVERAGE HEART RATE", explore: .trend(.easyHeartRate)) {
+        return chartCard("AVERAGE HEART RATE") {
             if withHR.isEmpty {
                 emptyDataPlaceholder("No heart rate data in this period")
             } else {
                 Chart {
+                    drillBand
                     ForEach(withHR) { workout in
                         LineMark(
                             x: .value("Date", workout.date),
@@ -984,7 +1007,7 @@ struct ProgressDashboardView: View {
     /// Aggregate time-in-zone across the selected period, from each run's persisted HR samples.
     private var aggregateZoneSlices: [HRZoneSlice] {
         guard let maxHR = maxHeartRate else { return [] }
-        let perRun = filteredWorkouts.compactMap { run -> [HRZoneSlice]? in
+        let perRun = scopedWorkouts.compactMap { run -> [HRZoneSlice]? in
             let samples = run.heartRateSamples
             guard !samples.isEmpty else { return nil }
             return HeartRateZoneService.timeInZones(
@@ -1055,6 +1078,7 @@ struct ProgressDashboardView: View {
                 emptyDataPlaceholder("No elevation data in this period")
             } else {
                 Chart {
+                    drillBand
                     ForEach(withElev) { workout in
                         BarMark(
                             x: .value("Date", workout.date, unit: .day),
@@ -1098,11 +1122,12 @@ struct ProgressDashboardView: View {
 
     private var vo2MaxTrendChart: some View {
         // Named VDOT, as the hero above names the same number.
-        chartCard("VDOT", explore: .trend(.vdot)) {
+        chartCard("VDOT") {
             if vo2Points.isEmpty {
                 emptyDataPlaceholder("Not enough run data in this period")
             } else {
                 Chart {
+                    drillBand
                     ForEach(vo2Points, id: \.date) { point in
                         LineMark(
                             x: .value("Date", point.date),
