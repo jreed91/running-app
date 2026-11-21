@@ -456,6 +456,8 @@ struct ProgressDashboardView: View {
                         AxisValueLabel(format: .dateTime.month(.abbreviated))
                     }
                 }
+                // The explorer's axis says "mi"; this one said bare numbers.
+                .chartYAxisLabel(appSettings.unitPreference.distanceLabel)
                 .chartXSelection(value: $selectedVolumeDate)
                 .chartAccessibility("Weekly volume chart", weeklyVolumeSeries)
             }
@@ -608,6 +610,13 @@ struct ProgressDashboardView: View {
 
     private func easyPaceChart(_ trend: ProgressPeriodStats.EasyPaceTrend) -> some View {
         let selectedRun = selectedPaceDate.flatMap { closestEasyRun(to: $0, in: trend.runs) }
+        let paceFactor = 1.0.paceSecondsValue(unit: appSettings.unitPreference)
+        let paces = trend.runs.map(\.paceSecondsPerKm)
+        let paceTicks = PaceAxis.ticks(
+            lowerSecondsPerKm: paces.min() ?? 0,
+            upperSecondsPerKm: paces.max() ?? 0,
+            factor: paceFactor
+        )
         return Chart {
             ForEach(trend.runs) { run in
                 PointMark(
@@ -655,13 +664,14 @@ struct ProgressDashboardView: View {
             }
         }
         .chartYAxis {
-            AxisMarks(values: .automatic(desiredCount: 4)) { value in
+            // Whole minutes of the runner's unit (9:00, 10:00), not Charts' round numbers
+            // of seconds per km, which read 8:02, 9:23 in miles.
+            AxisMarks(values: paceTicks) { value in
                 AxisGridLine()
                 AxisValueLabel {
-                    // `paceValueString` is the bare "M:SS" form; the headline carries the
-                    // unit. Guarded because a tick at or below zero formats as "--:--".
+                    // The bare "M:SS" form; the headline carries the unit.
                     if let secs = value.as(Double.self), secs > 0 {
-                        Text(secs.paceValueString(unit: appSettings.unitPreference))
+                        Text(PaceAxis.label(secondsPerKm: secs, factor: paceFactor))
                     }
                 }
             }

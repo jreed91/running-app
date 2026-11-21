@@ -64,7 +64,10 @@ struct VolumeExplorerView: View {
     private struct Snapshot {
         let buckets: [VolumeExplorer.Bucket]
         let summary: VolumeExplorer.Summary
+        /// The bar whose runs are listed: the pinned one, else the latest.
         let selected: VolumeExplorer.Bucket?
+        /// Whether the runner picked `selected`. Only then do the other bars fade.
+        let isPinned: Bool
     }
 
     private func makeSnapshot(now: Date = .now) -> Snapshot {
@@ -76,11 +79,12 @@ struct VolumeExplorerView: View {
             for: runs, grouping: grouping, from: start, through: now, calendar: calendar
         )
         let summary = VolumeExplorer.summary(
-            metric: metric, runs: runs, buckets: buckets, window: window, now: now
+            metric: metric, runs: runs, buckets: buckets, window: window, from: start, now: now
         )
-        let selected = pinnedStart.flatMap { start in buckets.first { $0.start == start } }
-            ?? buckets.last
-        return Snapshot(buckets: buckets, summary: summary, selected: selected)
+        let pinned = pinnedStart.flatMap { start in buckets.first { $0.start == start } }
+        return Snapshot(
+            buckets: buckets, summary: summary, selected: pinned ?? buckets.last, isPinned: pinned != nil
+        )
     }
 
     // MARK: Body
@@ -233,7 +237,9 @@ struct VolumeExplorerView: View {
     }
 
     private func chart(_ snapshot: Snapshot) -> some View {
-        let selectedStart = snapshot.selected?.start
+        // Nothing fades until the runner picks a bar: with the latest bar preselected,
+        // every other bar sat at 35% and the chart opened looking switched off.
+        let selectedStart = snapshot.isPinned ? snapshot.selected?.start : nil
         let average = displayValue(snapshot.summary.averagePerBucket)
         return Chart {
             ForEach(snapshot.buckets) { bucket in

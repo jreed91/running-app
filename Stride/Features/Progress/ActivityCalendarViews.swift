@@ -56,15 +56,16 @@ private struct CalendarCell: View {
 private struct CalendarLegend: View {
     var body: some View {
         HStack(spacing: AppSpacing.xs) {
-            Text("Less")
+            Text("Less").fixedSize()
             ForEach(0..<5, id: \.self) { level in
                 CalendarCell(day: ActivityCalendar.Day(
                     date: .distantPast, meters: 0, runIDs: [], level: level, isFuture: false
                 ))
                 .frame(width: 10, height: 10)
             }
-            Text("More")
+            Text("More").fixedSize()
         }
+        .fixedSize()
         .font(.dsCaption2)
         .foregroundStyle(.secondary)
         .accessibilityHidden(true)
@@ -73,7 +74,7 @@ private struct CalendarLegend: View {
 
 // MARK: - Progress card
 
-/// "Your running year" on Progress: the last half year as a grid, the week streak, and
+/// "Running days" on Progress: the last half year as a grid, the week streak, and
 /// a link to the full year and the route heatmap.
 struct ActivityCalendarCard: View {
     @Query private var workouts: [RunWorkout]
@@ -90,7 +91,8 @@ struct ActivityCalendarCard: View {
 
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
             HStack(alignment: .firstTextBaseline) {
-                Text("YOUR RUNNING YEAR")
+                // The card shows 26 weeks; "Your running year" promised twelve months.
+                Text("RUNNING DAYS · 6 MONTHS")
                     .strideEyebrow()
                     .foregroundStyle(.secondary)
                 Spacer(minLength: AppSpacing.sm)
@@ -123,20 +125,37 @@ struct ActivityCalendarCard: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Running days, last six months")
                 .accessibilityValue("\(activeDays) days with a run")
-                HStack {
-                    Text(streak == 1 ? "1 week in a row" : "\(streak) weeks in a row")
-                        .font(.captionStrong)
-                    Text("· \(activeDays) running days")
-                        .font(.dsCaption)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    CalendarLegend()
+                // The legend moves under the streak when they don't fit on one line,
+                // instead of squeezing to "Le ss" and "Mor e".
+                ViewThatFits(in: .horizontal) {
+                    HStack {
+                        streakLine(streak: streak, activeDays: activeDays)
+                        Spacer(minLength: AppSpacing.sm)
+                        CalendarLegend()
+                    }
+                    VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                        streakLine(streak: streak, activeDays: activeDays)
+                        CalendarLegend()
+                    }
                 }
             }
             .padding(AppSpacing.lg)
             .frame(maxWidth: .infinity, alignment: .leading)
             .strideCard()
         }
+    }
+}
+
+extension ActivityCalendarCard {
+    fileprivate func streakLine(streak: Int, activeDays: Int) -> some View {
+        HStack(spacing: AppSpacing.xs) {
+            Text(streak == 1 ? "1 week in a row" : "\(streak) weeks in a row")
+                .font(.captionStrong)
+            Text("· \(activeDays) running days")
+                .font(.dsCaption)
+                .foregroundStyle(.secondary)
+        }
+        .fixedSize()
     }
 }
 
@@ -216,12 +235,21 @@ struct ActivityYearView: View {
                 .padding(.vertical, AppSpacing.xxs)
             }
             .defaultScrollAnchor(.trailing)
-            HStack {
-                Text("Tap a day to see its runs")
-                    .font(.dsCaption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                CalendarLegend()
+            ViewThatFits(in: .horizontal) {
+                HStack {
+                    Text("Tap a day to see its runs")
+                        .font(.dsCaption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize()
+                    Spacer(minLength: AppSpacing.sm)
+                    CalendarLegend()
+                }
+                VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                    Text("Tap a day to see its runs")
+                        .font(.dsCaption)
+                        .foregroundStyle(.secondary)
+                    CalendarLegend()
+                }
             }
         }
         .padding(AppSpacing.lg)

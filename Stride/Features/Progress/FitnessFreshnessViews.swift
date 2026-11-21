@@ -78,10 +78,13 @@ extension TrainingLoad.FormZone {
         }
     }
 
+    /// Status colours, always beside the zone's name. Not the training-zone colours
+    /// (Route Loop rule 6: those mark intensity only), and not grey: "Balanced" is a
+    /// good place to be, and a grey dot read as switched off.
     var tint: Color {
         switch self {
-        case .fresh: return .zoneEasy
-        case .neutral: return .secondary
+        case .fresh: return .success
+        case .neutral: return .brandGlow
         case .building: return .brand
         case .overreaching: return .warning
         }
@@ -148,6 +151,8 @@ struct FitnessFreshnessCard: View {
                     }
                     .chartYAxis(.hidden)
                     .accessibilityHidden(true)
+                    // Without it the dashed grey line read as noise next to the route.
+                    FitnessFreshnessLegend()
                 } else {
                     Text("Log a few runs to see your fitness build.")
                         .font(.bodyRegular)
@@ -158,6 +163,34 @@ struct FitnessFreshnessCard: View {
             .padding(AppSpacing.lg)
             .frame(maxWidth: .infinity, alignment: .leading)
             .strideCard()
+        }
+    }
+}
+
+/// Which line is which: fitness is the route, fatigue the dashed grey line.
+struct FitnessFreshnessLegend: View {
+    var body: some View {
+        HStack(spacing: AppSpacing.lg) {
+            item(dashed: false, "Fitness")
+            item(dashed: true, "Fatigue")
+        }
+        .accessibilityHidden(true)
+    }
+
+    private func item(dashed: Bool, _ title: LocalizedStringKey) -> some View {
+        HStack(spacing: AppSpacing.xs) {
+            Group {
+                if dashed {
+                    Capsule()
+                        .stroke(Color.secondary, style: StrokeStyle(lineWidth: 2, dash: [3, 3]))
+                } else {
+                    Capsule().fill(.route)
+                }
+            }
+            .frame(width: 18, height: 3)
+            Text(title)
+                .font(.captionStrong)
+                .foregroundStyle(.secondary)
         }
     }
 }
