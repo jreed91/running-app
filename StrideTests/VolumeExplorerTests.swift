@@ -40,8 +40,10 @@ struct VolumeExplorerTests {
         #expect(start == date(2027, 3, 1, hour: 0))
     }
 
-    @Test func windowsCountWholeMonthsBack() {
+    @Test func windowsCountTheSameDaysAsProgress() {
+        // 3M is 90 days, as Progress's range chips count it, not three calendar months.
         let start = VolumeExplorer.windowStart(.threeMonths, now: now, earliestRun: nil, calendar: calendar)
+        #expect(start == now.addingTimeInterval(-90 * 86_400))
         #expect(start == date(2026, 12, 17, hour: 9))
     }
 
@@ -128,10 +130,12 @@ struct VolumeExplorerTests {
             for: runs, grouping: .week, from: date(2027, 3, 1), through: now, calendar: calendar
         )
         let summary = VolumeExplorer.summary(
-            metric: .distance, runs: runs, buckets: buckets, window: .month, now: now
+            metric: .distance, runs: runs, buckets: buckets, window: .month, from: date(2027, 3, 1, hour: 0), now: now
         )
         #expect(summary.total == 30_000)
-        #expect(summary.averagePerBucket == 10_000)
+        // 16 days 9 hours is 2.34 weeks, so the part week counts as part of one.
+        let weeks = now.timeIntervalSince(date(2027, 3, 1, hour: 0)) / (7 * 86_400)
+        #expect(abs(summary.averagePerBucket - 30_000 / weeks) < 0.001)
         #expect(summary.best?.start == date(2027, 3, 1, hour: 0))
     }
 
@@ -147,7 +151,7 @@ struct VolumeExplorerTests {
             for: runs, grouping: .week, from: date(2027, 3, 1), through: now, calendar: calendar
         )
         let summary = VolumeExplorer.summary(
-            metric: .distance, runs: runs, buckets: buckets, window: .month, now: now
+            metric: .distance, runs: runs, buckets: buckets, window: .month, from: date(2027, 3, 1, hour: 0), now: now
         )
         #expect(summary.previousTotal == 10_000)
         #expect(abs((summary.change ?? 0) - 0.2) < 0.000_1)
@@ -159,7 +163,7 @@ struct VolumeExplorerTests {
             for: runs, grouping: .week, from: date(2027, 3, 1), through: now, calendar: calendar
         )
         let summary = VolumeExplorer.summary(
-            metric: .distance, runs: runs, buckets: buckets, window: .month, now: now
+            metric: .distance, runs: runs, buckets: buckets, window: .month, from: date(2027, 3, 1, hour: 0), now: now
         )
         #expect(summary.previousTotal == 0)
         #expect(summary.change == nil)
@@ -171,10 +175,26 @@ struct VolumeExplorerTests {
             for: runs, grouping: .month, from: date(2027, 3, 2), through: now, calendar: calendar
         )
         let summary = VolumeExplorer.summary(
-            metric: .runs, runs: runs, buckets: buckets, window: .all, now: now
+            metric: .runs, runs: runs, buckets: buckets, window: .all, from: date(2027, 3, 2), now: now
         )
         #expect(summary.previousTotal == nil)
         #expect(summary.total == 1)
+    }
+
+    @Test func totalCountsOnlyRunsInsideTheWindow() {
+        // The first bar starts on Monday 1 March, but the window starts on Wednesday the
+        // 3rd: Tuesday's run is drawn in the bar and left out of the headline.
+        let start = date(2027, 3, 3, hour: 9)
+        let runs = [run(date(2027, 3, 2), meters: 5_000), run(date(2027, 3, 4), meters: 8_000)]
+        let buckets = VolumeExplorer.buckets(
+            for: runs, grouping: .week, from: start, through: now, calendar: calendar
+        )
+        let summary = VolumeExplorer.summary(
+            metric: .distance, runs: runs, buckets: buckets, window: .month, from: start, now: now
+        )
+        #expect(buckets.first?.meters == 13_000)
+        #expect(summary.total == 8_000)
+        #expect(summary.previousTotal == 5_000)
     }
 
     @Test func noBestWhenEveryBucketIsEmpty() {
@@ -182,7 +202,7 @@ struct VolumeExplorerTests {
             for: [], grouping: .week, from: date(2027, 3, 1), through: now, calendar: calendar
         )
         let summary = VolumeExplorer.summary(
-            metric: .climb, runs: [], buckets: buckets, window: .month, now: now
+            metric: .climb, runs: [], buckets: buckets, window: .month, from: date(2027, 3, 1, hour: 0), now: now
         )
         #expect(summary.best == nil)
         #expect(summary.averagePerBucket == 0)

@@ -45,13 +45,15 @@ enum VolumeExplorer {
         case year = "1Y"
         case all = "All"
 
-        /// Calendar months the window spans, or `nil` for all time.
-        var months: Int? {
+        /// Days the window spans, or `nil` for all time. The same counts Progress's range
+        /// chips use (`ProgressView.ChartRange.days`), so "3M" totals the same runs on both:
+        /// counting calendar months here gave 58.6 mi where Progress said 55.9 mi.
+        var days: Int? {
             switch self {
-            case .month: return 1
-            case .threeMonths: return 3
-            case .sixMonths: return 6
-            case .year: return 12
+            case .month: return 30
+            case .threeMonths: return 90
+            case .sixMonths: return 180
+            case .year: return 365
             case .all: return nil
             }
         }
@@ -117,18 +119,18 @@ enum VolumeExplorer {
         calendar.dateInterval(of: grouping.component, for: date)?.start ?? date
     }
 
-    /// Where the window begins: whole calendar months back from `now`, or the first run
-    /// for all time. With no runs at all, all time is just the current period.
+    /// Where the window begins: exactly `days` back from `now`, as Progress counts, or the
+    /// first run for all time. With no runs at all, all time is just the current period.
     static func windowStart(
         _ window: Window,
         now: Date,
         earliestRun: Date?,
         calendar: Calendar
     ) -> Date {
-        guard let months = window.months else {
+        guard let days = window.days else {
             return min(earliestRun ?? now, now)
         }
-        return calendar.date(byAdding: .month, value: -months, to: now) ?? now
+        return now.addingTimeInterval(-Double(days) * 86_400)
     }
 
     /// Every week or month from the one holding `start` to the one holding `now`, each
@@ -194,7 +196,8 @@ enum VolumeExplorer {
     struct Summary: Equatable, Sendable {
         /// Sum over the window, in the metric's base unit.
         let total: Double
-        /// Per bucket, empty buckets included, so a week off pulls the average down.
+        /// Per week or month of the window, empty ones included, so a week off pulls the
+        /// average down.
         let averagePerBucket: Double
         /// The biggest bucket, or `nil` when every bucket is empty.
         let best: Bucket?
@@ -210,30 +213,42 @@ enum VolumeExplorer {
         }
     }
 
+    /// The headline for a window that starts at `start`.
+    ///
+    /// The total counts only runs from `start` to `now`, not whole buckets: the first bar
+    /// begins on the Monday (or the 1st) before `start`, and summing the bars added up to
+    /// six days the runner never asked for, so the headline disagreed with Progress.
     static func summary(
         metric: Metric,
         runs: [Run],
         buckets: [Bucket],
         window: Window,
+        from start: Date,
         now: Date
     ) -> Summary {
-        let total = buckets.reduce(0) { $0 + $1.value(metric) }
+        let total = runs
+            .filter { $0.date >= start && $0.date <= now }
+            .reduce(0) { $0 + value(of: $1, metric) }
         let best = buckets.max { $0.value(metric) < $1.value(metric) }
 
         var previousTotal: Double?
-        if window.months != nil, let chartStart = buckets.first?.start, now > chartStart {
-            // The same stretch of time, ending where the charted buckets begin: the chart
-            // starts on a period boundary and ends today, part way through a period, so
-            // the comparison takes that exact length rather than a round number of months.
-            // Ending at the chart's start means the two totals never count a run twice.
-            let previousStart = chartStart.addingTimeInterval(-now.timeIntervalSince(chartStart))
-            let previousRuns = runs.filter { $0.date >= previousStart && $0.date < chartStart }
+        if window.days != nil, now > start {
+            // The same length of time, ending where this window begins, so the two totals
+            // never count a run twice.
+            let previousStart = start.addingTimeInterval(-now.timeIntervalSince(start))
+            let previousRuns = runs.filter { $0.date >= previousStart && $0.date < start }
             previousTotal = previousRuns.reduce(0) { $0 + value(of: $1, metric) }
         }
 
+        // Per period of the window's real length, so a part week at either end doesn't
+        // count as a whole one.
+        let span = max(0, now.timeIntervalSince(start))
+        let periodLength: TimeInterval = buckets.first.map { $0.end.timeIntervalSince($0.start) } ?? 7 * 86_400
+        let periods = max(1, span / max(periodLength, 1))
+
         return Summary(
             total: total,
-            averagePerBucket: buckets.isEmpty ? 0 : total / Double(buckets.count),
+            averagePerBucket: buckets.isEmpty ? 0 : total / periods,
             best: best.flatMap { $0.value(metric) > 0 ? $0 : nil },
             previousTotal: previousTotal
         )

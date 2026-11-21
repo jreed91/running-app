@@ -255,7 +255,7 @@ struct TrendExplorerView: View {
             }
         }
         .chartYAxis {
-            AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
+            AxisMarks(position: .leading, values: axisValues(trend)) { value in
                 AxisGridLine()
                 AxisValueLabel {
                     if let number = value.as(Double.self), number > 0 {
@@ -361,9 +361,21 @@ struct TrendExplorerView: View {
         }
     }
 
+    /// Pace ticks on whole minutes of the runner's unit (`PaceAxis`); the other measures
+    /// are plain numbers, where Charts' own round ticks already read well.
+    private func axisValues(_ trend: TrendExplorer.Trend) -> AxisMarkValues {
+        guard metric == .easyPace else { return .automatic(desiredCount: 4) }
+        let values = trend.points.map(\.value)
+        return .explicit(PaceAxis.ticks(
+            lowerSecondsPerKm: values.min() ?? 0,
+            upperSecondsPerKm: values.max() ?? 0,
+            factor: 1.0.paceSecondsValue(unit: unit)
+        ))
+    }
+
     private func axisLabel(_ value: Double) -> String {
         switch metric {
-        case .easyPace: return value.paceValueString(unit: unit)
+        case .easyPace: return PaceAxis.label(secondsPerKm: value, factor: 1.0.paceSecondsValue(unit: unit))
         case .easyHeartRate, .cadence: return "\(Int(value.rounded()))"
         case .vdot: return String(format: "%.0f", value)
         }
