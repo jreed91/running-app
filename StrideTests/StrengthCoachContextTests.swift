@@ -61,4 +61,19 @@ struct StrengthCoachContextTests {
         #expect(text.contains("D 1 × 10"))
         #expect(!text.contains("E 1 × 10"))
     }
+
+    @Test func describesASessionFromAnotherAppByItsLength() {
+        // A Watch or Fitbod session imported from Apple Health has no sets.
+        let text = StrengthCoachContext.summary(
+            sessions: [
+                StrengthSessionLog(date: daysAgo(6), sets: [set("Row", 10, 18)], durationSeconds: 2_400),
+                StrengthSessionLog(date: daysAgo(2), sets: [], durationSeconds: 2_730),
+            ],
+            plannedThisWeek: 2, doneThisWeek: 1, unit: .metric, now: now, calendar: calendar
+        )
+        #expect(text.contains("Last session: 2 days ago, 46 min, recorded outside Stride (no sets logged)."))
+        #expect(!text.contains("0 sets"))
+        #expect(text.contains("Sessions in the last 28 days: 2."))
+        #expect(text.contains("This week: 1 of 2 planned strength sessions done."))
+    }
 }

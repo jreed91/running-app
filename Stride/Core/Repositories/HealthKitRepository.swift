@@ -106,6 +106,8 @@ protocol HealthKitRepositoryProtocol: Sendable {
     /// from the Watch (see `RouteBackfill`). Returns `[]` if the workout has no route yet,
     /// or it can't be found.
     func fetchRouteCoordinates(forWorkoutID id: String) async -> [Coordinate]
+    /// What Health knows about an imported strength workout: see `ImportedWorkoutDetails`.
+    func fetchImportedWorkoutDetails(forWorkoutID id: String) async -> ImportedWorkoutDetails?
     /// The most recent body-mass sample in kilograms, or `nil` when there is none, the
     /// type is unauthorized, or HealthKit is unavailable.
     ///
@@ -1071,11 +1073,8 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
 
             let workout = StrengthWorkout(date: hkWorkout.startDate, durationSeconds: hkWorkout.duration)
             workout.healthKitWorkoutID = hkID
-            // Stride's own export carries the session's id, so the merge can find the
-            // session it came from even before that session has the export's UUID.
-            if let strideID = Self.strideWorkoutID(from: hkWorkout.metadata) {
-                workout.id = strideID
-            }
+            // Stride's own export carries its session's id, for `StrengthImportMerge`.
+            if let strideID = Self.strideWorkoutID(from: hkWorkout.metadata) { workout.id = strideID }
             result.append(workout)
         }
         AppLogger.log(
@@ -1436,7 +1435,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
     /// Resolves a stored HealthKit UUID string back to its workout, so samples can be
     /// re-read for a run that is already in the store. Returns `nil` once the source
     /// workout is gone (deleted in Health, or written by an app that has been removed).
-    private func hkWorkout(withID id: String) async -> HKWorkout? {
+    func hkWorkout(withID id: String) async -> HKWorkout? {
         guard let uuid = UUID(uuidString: id) else { return nil }
         return try? await withCheckedThrowingContinuation { cont in
             let query = HKSampleQuery(

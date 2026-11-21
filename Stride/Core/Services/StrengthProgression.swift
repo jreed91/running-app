@@ -18,6 +18,9 @@ struct LoggedStrengthSet: Equatable, Sendable {
 struct StrengthSessionLog: Equatable, Sendable {
     let date: Date
     let sets: [LoggedStrengthSet]
+    /// How long the session lasted. The only measure a workout from the Watch or another
+    /// app has: those come in from Apple Health with no sets.
+    var durationSeconds: Double = 0
 }
 
 // MARK: - ExercisePerformance

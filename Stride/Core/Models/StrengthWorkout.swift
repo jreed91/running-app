@@ -64,7 +64,7 @@ extension StrengthWorkout {
                 skipped: set.skipped
             )
         }
-        return StrengthSessionLog(date: date, sets: sets)
+        return StrengthSessionLog(date: date, sets: sets, durationSeconds: durationSeconds)
     }
 }
 
