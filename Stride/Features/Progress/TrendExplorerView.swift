@@ -8,7 +8,7 @@ import Charts
 /// rate, VDOT or cadence, over any window back to the first run. Every run is a dot; the
 /// line is the typical value each week; tapping a dot picks that run and opens it.
 ///
-/// The sibling of ``VolumeExplorerView``, and like it a view with its own query and
+/// The trend explorer: a view with its own query and
 /// state, never built from `ProgressView`'s methods (PR #338).
 struct TrendExplorerView: View {
     @Environment(AppSettings.self) private var appSettings

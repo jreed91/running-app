@@ -3,10 +3,8 @@ import Charts
 import SwiftData
 
 struct ProgressDashboardView: View {
-    /// Bounded to the widest range the picker offers, plus a week of slack for the
-    /// edge bucket. This screen used to fetch every run ever logged and then filter
-    /// in `filteredWorkouts` — on a screen that can never display more than a year,
-    /// and that recomputes derived series over whatever it fetched (U9).
+    /// Every run, oldest first: the filter reaches back to the first run ("All"), so the
+    /// one-year bound this fetch used to have (U9) no longer fits.
     @Query private var workouts: [RunWorkout]
 
     @Query private var profiles: [UserProfile]
@@ -18,7 +16,16 @@ struct ProgressDashboardView: View {
     @Environment(AppSettings.self) private var appSettings
     @Environment(AppContainer.self) private var container
     @Environment(\.modelContext) private var context
-    @State private var selectedRange: ChartRange = .threeMonths
+    /// The one filter every card follows, pinned at the top of the page.
+    @State private var period: ProgressFilter.Period = .threeMonths
+    @State private var runType: ProgressFilter.RunType = .all
+    /// The week, month or day the runner drilled into by tapping a bar. `nil` is the
+    /// whole period.
+    @State private var drill: DateInterval?
+    /// What the main chart measures. The hero's totals pick it.
+    @State private var measure: VolumeExplorer.Metric = .distance
+    /// Whether the run list shows every run rather than the latest few.
+    @State private var showsAllRuns = false
 
     /// HealthKit ids already asked for HR samples this session, so a run whose source
     /// workout is gone isn't re-queried on every period change (N25).
@@ -41,52 +48,18 @@ struct ProgressDashboardView: View {
         case medals   = "Achievements"
     }
 
-    enum ChartRange: String, CaseIterable {
-        case month = "1M"
-        case threeMonths = "3M"
-        case sixMonths = "6M"
-        case year = "1Y"
-
-        var days: Int {
-            switch self {
-            case .month: return 30
-            case .threeMonths: return 90
-            case .sixMonths: return 180
-            case .year: return 365
-            }
-        }
-
-        /// An explorer opens on the range Progress is showing.
-        var explorerWindow: VolumeExplorer.Window {
-            switch self {
-            case .month: return .month
-            case .threeMonths: return .threeMonths
-            case .sixMonths: return .sixMonths
-            case .year: return .year
-            }
-        }
-    }
-
     /// The full page a card's "Explore" link opens.
     enum ExploreDestination {
-        case volume(VolumeExplorer.Metric)
         case trend(TrendExplorer.Metric)
 
         var title: String {
             switch self {
-            case .volume(let metric): return metric.title
             case .trend(let metric): return metric.title
             }
         }
     }
 
     init() {
-        // A `@Query`'s descriptor is fixed at view-initialisation, so this is where the
-        // window has to be set. It is the widest range the picker can ask for plus a
-        // week, which keeps the outermost weekly bucket whole.
-        let windowDays = ChartRange.year.days + 7
-        let cutoff = Calendar.current.date(byAdding: .day, value: -windowDays, to: Date())
-            ?? Date.distantPast
         // Imported walks never reach this screen (N38): every chart on it — volume, pace,
         // heart rate, elevation, VO₂ — is a statement about running. `ProgressPeriodStats`
         // enforces the same rule for callers that hand it an unfiltered list; excluding
@@ -96,14 +69,11 @@ struct ProgressDashboardView: View {
         let crossTrainingRaw = WorkoutType.crossTraining.rawValue
         _workouts = Query(
             filter: #Predicate<RunWorkout> {
-                $0.date >= cutoff && $0.workoutTypeRaw != walkRaw && $0.workoutTypeRaw != crossTrainingRaw
+                $0.workoutTypeRaw != walkRaw && $0.workoutTypeRaw != crossTrainingRaw
             },
             sort: [SortDescriptor(\RunWorkout.date)]
         )
-        _strengthSessions = Query(
-            filter: #Predicate<StrengthWorkout> { $0.date >= cutoff },
-            sort: [SortDescriptor(\StrengthWorkout.date)]
-        )
+        _strengthSessions = Query(sort: [SortDescriptor(\StrengthWorkout.date)])
     }
 
     // The period arithmetic — which runs are in range, what they total, how they bucket
@@ -111,8 +81,15 @@ struct ProgressDashboardView: View {
     // body-evaluated properties (D1). What's left here is the range the runner picked
     // and the unit they read it in.
 
+    /// The runs of the picked type, the whole history.
+    private var typedWorkouts: [RunWorkout] {
+        workouts.filter { $0.countsAsRunning && runType.includes($0.workoutType.progressRunKind) }
+    }
+
+    /// The runs of the picked type in the picked period: what every chart below reads.
     private var filteredWorkouts: [RunWorkout] {
-        ProgressPeriodStats.runs(in: workouts, withinDays: selectedRange.days)
+        guard let days = period.days else { return typedWorkouts }
+        return ProgressPeriodStats.runs(in: typedWorkouts, withinDays: days)
     }
 
     private var vo2Points: [ProgressPeriodStats.VDOTSample] {
@@ -124,46 +101,48 @@ struct ProgressDashboardView: View {
     }
 
     var body: some View {
+        let dashboard = makeDashboard()
         NavigationStack {
             VStack(spacing: 0) {
                 tabPicker
                 if selectedTab == .stats {
-                    // The range sits right under the tabs, above everything it changes,
-                    // the totals hero included. It used to sit under the week card, so
-                    // nothing said it moved the numbers above it.
-                    rangePicker
+                    // The filter sits right under the tabs, above everything it changes,
+                    // and stays there while the page scrolls under it.
+                    filterBar(dashboard)
                         .padding(.horizontal, AppSpacing.lg)
                         .padding(.bottom, AppSpacing.xs)
                     ScrollView {
                         VStack(alignment: .leading, spacing: 16) {
-                            // The week card moved to Plan, which owns the week; this tab is
-                            // only about the period the range picks.
                             // One `stagger` step per card, in reading order, capped at six.
-                            summaryHeader
+                            heroTotals(dashboard)
                                 .strideEntrance(progressAppeared)
-                            // Pairs, so on a wide page (iPhone Duo open, in landscape) the charts
-                            // read as a grid with the gap on the fold. One column keeps the old order.
+                            // The chart and the runs it drills into sit together, so a
+                            // tapped bar's runs are right under it.
                             StrideColumns(spacing: 16) {
-                                weeklyVolumeChart
+                                volumeChart(dashboard)
                                     .strideEntrance(progressAppeared, delay: AppAnimation.stagger)
                             } trailing: {
-                                paceProgressChart
+                                runList
                                     .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 2)
                             }
+                            // Pairs, so on a wide page (iPhone Duo open, in landscape) the charts
+                            // read as a grid with the gap on the fold.
                             StrideColumns(spacing: 16) {
-                                heartRateTrendChart
+                                paceProgressChart
                                     .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 3)
                             } trailing: {
-                                heartRateZoneChart
+                                heartRateTrendChart
                                     .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 4)
                             }
                             StrideColumns(spacing: 16) {
-                                elevationTrendChart
+                                heartRateZoneChart
                                     .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 5)
                             } trailing: {
-                                vo2MaxTrendChart
+                                elevationTrendChart
                                     .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 6)
                             }
+                            vo2MaxTrendChart
+                                .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 6)
                             // All time, not the picked range: a record set two years ago is
                             // still the record. Its own view, with its own query and loading.
                             BestEffortsCard()
@@ -182,7 +161,7 @@ struct ProgressDashboardView: View {
                         .padding()
                         .strideReadableWidth(hasColumns: true)
                         .task { progressAppeared = true }
-                        .task(id: selectedRange) { await backfillHeartRateSamples() }
+                        .task(id: period) { await backfillHeartRateSamples() }
                     }
                 } else {
                     AchievementsView()
@@ -191,12 +170,19 @@ struct ProgressDashboardView: View {
             .background(Color.surfacePrimary)
             .navigationTitle("Progress")
         }
-        .onChange(of: selectedRange) {
-            selectedVolumeDate = nil
-            selectedPaceDate = nil
-            selectedHRDate = nil
-            selectedElevationDate = nil
-            selectedVO2Date = nil
+        .onChange(of: period) { filterChanged() }
+        .onChange(of: runType) { filterChanged() }
+        .onChange(of: selectedVolumeDate) {
+            // A tap or a drag on the chart drills into the bar under the finger. It stays
+            // drilled when the finger lifts; the chip in the filter bar undoes it.
+            guard let selectedVolumeDate,
+                  let bucket = ProgressFilter.bucket(at: selectedVolumeDate, in: dashboard.buckets)
+            else { return }
+            let picked = ProgressFilter.drill(for: bucket)
+            if drill != picked {
+                withAnimation(AppAnimation.quick) { drill = picked }
+                UISelectionFeedbackGenerator().selectionChanged()
+            }
         }
         .onChange(of: selectedTab) {
             if selectedTab == .stats {
@@ -206,75 +192,353 @@ struct ProgressDashboardView: View {
         }
     }
 
-    // MARK: - Summary header
+    /// Undoes everything that belonged to the old filter: a drilled-in bar no longer
+    /// exists, and a chart's picked point may no longer be drawn.
+    private func filterChanged() {
+        drill = nil
+        showsAllRuns = false
+        selectedVolumeDate = nil
+        selectedPaceDate = nil
+        selectedHRDate = nil
+        selectedElevationDate = nil
+        selectedVO2Date = nil
+    }
 
-    private var summaryHeader: some View {
-        let summary = periodSummary
-        return HStack(spacing: 0) {
-            summaryStatCell(
-                value: "\(summary.runCount)",
-                label: "Runs"
-            )
-            Divider().frame(height: 40)
-            summaryStatCell(
-                value: summary.totalDistanceMeters.distanceString(unit: appSettings.unitPreference),
-                label: "Distance"
-            )
-            Divider().frame(height: 40)
-            // Measured VDOT first; the profile's own baseline behind it, labelled as an
-            // estimate so the two are never confused. Falling straight through to "--" hid a
-            // number the app had already computed and shown during onboarding (S8).
-            summaryStatCell(
-                value: (summary.latestVDOT ?? profile?.baselineVDOT)
-                    .map { String(format: "%.0f", $0) } ?? "--",
-                label: summary.latestVDOT == nil && profile?.baselineVDOT != nil
-                    ? "VDOT · est."
-                    : "VDOT"
+    // MARK: - Dashboard: the filter, the totals and the main chart
+
+    /// Everything the hero and the main chart draw, worked out once per body pass.
+    struct DashboardSnapshot {
+        let buckets: [VolumeExplorer.Bucket]
+        let summaries: [VolumeExplorer.Metric: VolumeExplorer.Summary]
+    }
+
+    private func makeDashboard(now: Date = .now) -> DashboardSnapshot {
+        let calendar = VolumeExplorer.calendar()
+        let runs = typedWorkouts.map {
+            VolumeExplorer.Run(
+                id: $0.id,
+                date: $0.date,
+                meters: $0.distanceMeters,
+                seconds: $0.durationSeconds,
+                climbMeters: $0.elevationGainMeters
             )
         }
+        let start = VolumeExplorer.windowStart(
+            period.window, now: now, earliestRun: runs.first?.date, calendar: calendar
+        )
+        let buckets = VolumeExplorer.buckets(
+            for: runs, grouping: period.grouping, from: start, through: now, calendar: calendar
+        )
+        var summaries: [VolumeExplorer.Metric: VolumeExplorer.Summary] = [:]
+        for metric in VolumeExplorer.Metric.allCases {
+            summaries[metric] = VolumeExplorer.summary(
+                metric: metric, runs: runs, buckets: buckets, window: period.window, from: start, now: now
+            )
+        }
+        return DashboardSnapshot(buckets: buckets, summaries: summaries)
+    }
+
+    /// Period and run type as chips, and the drill-in as a chip that undoes it. Chips
+    /// rather than a second segmented control: the tabs above already draw the route
+    /// under their choice, and the route means progress or go.
+    private func filterBar(_ dashboard: DashboardSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            HStack(spacing: AppSpacing.sm) {
+                ForEach(ProgressFilter.Period.allCases, id: \.self) { option in
+                    Button {
+                        withAnimation(AppAnimation.bouncy) { period = option }
+                    } label: {
+                        Text(option.rawValue).monospacedDigit()
+                    }
+                    .buttonStyle(.strideChip(selected: period == option))
+                    .accessibilityLabel(option.title)
+                    .accessibilityAddTraits(period == option ? [.isButton, .isSelected] : .isButton)
+                }
+                Spacer(minLength: 0)
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: AppSpacing.sm) {
+                    ForEach(ProgressFilter.RunType.allCases, id: \.self) { option in
+                        Button {
+                            withAnimation(AppAnimation.bouncy) { runType = option }
+                        } label: {
+                            Text(option.title)
+                        }
+                        .buttonStyle(.strideChip(selected: runType == option))
+                        .accessibilityAddTraits(runType == option ? [.isButton, .isSelected] : .isButton)
+                    }
+                }
+                .padding(.vertical, AppSpacing.xxs)
+            }
+            if let drill {
+                HStack(spacing: AppSpacing.sm) {
+                    Button {
+                        withAnimation(AppAnimation.quick) {
+                            self.drill = nil
+                            showsAllRuns = false
+                        }
+                    } label: {
+                        HStack(spacing: AppSpacing.xs) {
+                            Text(drillTitle(drill))
+                            StrideIcon(name: .close, size: 11, color: .brandText, strokeWeight: 2.4)
+                        }
+                    }
+                    .buttonStyle(.strideChip(selected: false))
+                    .accessibilityLabel(drillTitle(drill))
+                    .accessibilityHint("Shows the whole period again")
+                    Text("The runs below are from this \(period.grouping.noun)")
+                        .font(.dsCaption)
+                        .foregroundStyle(.secondary)
+                }
+                .transition(.opacity)
+            }
+        }
+    }
+
+    /// "Week of Nov 16", "October 2026".
+    private func drillTitle(_ drill: DateInterval) -> String {
+        switch period.grouping {
+        case .week:
+            return String(localized: "Week of \(drill.start.formatted(.dateTime.month(.abbreviated).day()))")
+        case .month:
+            return drill.start.formatted(.dateTime.month(.wide).year())
+        }
+    }
+
+    /// The period's totals are what matters most on Progress, so they are its hero, as
+    /// today's session is on Home and the race is on Plan. Each total picks what the
+    /// chart below measures, which is the job the volume explorer used to do.
+    private func heroTotals(_ dashboard: DashboardSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            Text("\(period.title) · \(runType.title)")
+                .strideEyebrow()
+                .foregroundStyle(Color.brandText)
+            LazyVGrid(
+                columns: [GridItem(.flexible(), spacing: AppSpacing.sm), GridItem(.flexible())],
+                alignment: .leading,
+                spacing: AppSpacing.xs
+            ) {
+                ForEach(VolumeExplorer.Metric.allCases, id: \.self) { metric in
+                    totalTile(metric, summary: dashboard.summaries[metric])
+                }
+            }
+        }
         .padding(AppSpacing.lg)
-        // The period's totals are what matters most on Progress, so they are its hero,
-        // as today's session is on Home and the race is on Plan.
+        .frame(maxWidth: .infinity, alignment: .leading)
         .heroCard()
     }
 
-    private func summaryStatCell(value: String, label: String) -> some View {
-        VStack(spacing: 2) {
-            Text(value)
-                .font(.dsTitle2.monospacedDigit())
-                .foregroundStyle(.primary)
-                // Rolls to the new total when the range picker changes the period.
-                .strideNumericTransition()
-                .minimumScaleFactor(0.7)
-                .lineLimit(1)
-            Text(label)
-                .font(.captionStrong)
-                .foregroundStyle(.secondary)
+    private func totalTile(_ metric: VolumeExplorer.Metric, summary: VolumeExplorer.Summary?) -> some View {
+        let units = VolumeUnits(metric: metric, unit: appSettings.unitPreference)
+        let isOn = measure == metric
+        let change = changeText(summary)
+        return Button {
+            withAnimation(AppAnimation.bouncy) { measure = metric }
+        } label: {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(units.figure(summary?.total ?? 0))
+                    .font(.dsTitle2.monospacedDigit())
+                    .foregroundStyle(.primary)
+                    // Rolls to the new total when the filter changes.
+                    .strideNumericTransition()
+                    .minimumScaleFactor(0.7)
+                    .lineLimit(1)
+                Text(metric.title)
+                    .font(.captionStrong)
+                    .foregroundStyle(isOn ? Color.brandText : .secondary)
+                Text(change)
+                    .font(.dsCaption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                // The route under the total the chart shows: this is the one that's "on".
+                Capsule()
+                    .fill(.route)
+                    .frame(width: 28, height: 3)
+                    .opacity(isOn ? 1 : 0)
+                    .padding(.top, 2)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(AppSpacing.sm)
+            .contentShape(Rectangle())
         }
-        .frame(maxWidth: .infinity)
+        .buttonStyle(BouncyButtonStyle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(label)
-        .accessibilityValue(SpokenMetric.spoken(measurement: value))
+        .accessibilityLabel(metric.title)
+        .accessibilityValue("\(SpokenMetric.spoken(measurement: units.text(summary?.total ?? 0))). \(change)")
+        .accessibilityHint("Charts \(metric.title.lowercased()) below")
+        .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
     }
 
-    // MARK: - Range picker
+    /// Neutral on purpose: more running is not always better, and a down period is often
+    /// the taper or the recovery the plan asked for.
+    private func changeText(_ summary: VolumeExplorer.Summary?) -> String {
+        guard period != .all else { return String(localized: "Since your first run") }
+        guard let summary, let change = summary.change else {
+            return String(localized: "Nothing the \(period.window.spokenLength) before")
+        }
+        let percent = Int((change * 100).rounded())
+        if percent == 0 { return String(localized: "Same as the \(period.window.spokenLength) before") }
+        return percent > 0
+            ? String(localized: "Up \(percent)% on the \(period.window.spokenLength) before")
+            : String(localized: "Down \(abs(percent))% on the \(period.window.spokenLength) before")
+    }
 
-    /// Chips rather than a second segmented control: two stacked controls both drew the
-    /// route under their choice, and the route means progress or go. One segmented control
-    /// (the tabs) picks the page; the chips filter it.
-    private var rangePicker: some View {
-        HStack(spacing: AppSpacing.sm) {
-            ForEach(ChartRange.allCases, id: \.self) { range in
-                Button {
-                    withAnimation(AppAnimation.bouncy) { selectedRange = range }
-                } label: {
-                    Text(range.rawValue)
-                        .monospacedDigit()
+    /// The measure the hero picked, by week or month, every empty period drawn as the gap
+    /// it was. A tap on a bar drills the page into it.
+    private func volumeChart(_ dashboard: DashboardSnapshot) -> some View {
+        let units = VolumeUnits(metric: measure, unit: appSettings.unitPreference)
+        let noun = period.grouping.noun
+        let summary = dashboard.summaries[measure]
+        let average = units.plotted(summary?.averagePerBucket ?? 0)
+        let isEmpty = dashboard.buckets.allSatisfy { $0.value(measure) == 0 }
+        return VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("\(measure.title) by \(noun)")
+                    .strideEyebrow()
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: AppSpacing.sm)
+                if !isEmpty {
+                    Text("Tap a bar to drill in")
+                        .font(.dsCaption)
+                        .foregroundStyle(.secondary)
                 }
-                .buttonStyle(.strideChip(selected: selectedRange == range))
-                .accessibilityAddTraits(selectedRange == range ? [.isButton, .isSelected] : .isButton)
             }
-            Spacer(minLength: 0)
+            .padding(.horizontal, AppSpacing.xs)
+            VStack(alignment: .leading, spacing: AppSpacing.md) {
+                if isEmpty {
+                    emptyDataPlaceholder("No runs in this filter")
+                } else {
+                    Chart {
+                        ForEach(dashboard.buckets) { bucket in
+                            BarMark(
+                                x: .value("Period", bucket.start, unit: period.grouping.component),
+                                y: .value(measure.title, units.plotted(bucket.value(measure)))
+                            )
+                            .foregroundStyle(.routeBar)
+                            .cornerRadius(AppRadius.micro)
+                            // Only a drilled-in page fades the other bars.
+                            .opacity(drill == nil || drill?.start == bucket.start ? 1 : 0.35)
+                        }
+                        if average > 0 {
+                            RuleMark(y: .value("Average", average))
+                                .foregroundStyle(Color.secondary.opacity(0.6))
+                                .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                        }
+                    }
+                    .frame(height: 180)
+                    .chartXAxis {
+                        AxisMarks(values: .stride(by: .month, count: monthLabelStride(dashboard.buckets))) {
+                            AxisValueLabel(format: .dateTime.month(.abbreviated))
+                        }
+                    }
+                    .chartYAxis {
+                        AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
+                            AxisGridLine()
+                            AxisValueLabel {
+                                if let number = value.as(Double.self) {
+                                    Text(units.axis(number))
+                                }
+                            }
+                        }
+                    }
+                    .chartXSelection(value: $selectedVolumeDate)
+                    .chartAccessibility("\(measure.title) by \(noun)", volumeSeries(dashboard.buckets, units: units))
+                    if let best = summary?.best {
+                        Text("Biggest \(noun): \(bucketTitle(best)), \(units.text(best.value(measure))). Dashed line: \(units.text(summary?.averagePerBucket ?? 0)) a \(noun) on average.")
+                            .font(.dsFootnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .padding(AppSpacing.lg)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .strideCard()
+        }
+    }
+
+    /// One label a month up to a year and a half; past that, every few.
+    private func monthLabelStride(_ buckets: [VolumeExplorer.Bucket]) -> Int {
+        guard let first = buckets.first?.start, let last = buckets.last?.end else { return 1 }
+        let months = VolumeExplorer.calendar().dateComponents([.month], from: first, to: last).month ?? 0
+        switch months {
+        case ..<19: return 1
+        case ..<37: return 3
+        default: return 6
+        }
+    }
+
+    private func bucketTitle(_ bucket: VolumeExplorer.Bucket) -> String {
+        drillTitle(ProgressFilter.drill(for: bucket))
+    }
+
+    private func volumeSeries(_ buckets: [VolumeExplorer.Bucket], units: VolumeUnits) -> ChartAccessibility.Series {
+        ChartAccessibility.Series(
+            points: buckets.map {
+                ChartAccessibility.Point(label: bucketTitle($0), value: units.plotted($0.value(measure)))
+            },
+            valueAxisLabel: measure.title
+        ) { SpokenMetric.spoken(measurement: units.axis($0)) }
+    }
+
+    // MARK: - Runs
+
+    /// The runs behind the page: the drilled-in bar's, or the period's latest. Every
+    /// drill-in ends here, one tap from the run.
+    private var runList: some View {
+        let unit = appSettings.unitPreference
+        let inScope = filteredWorkouts.filter { ProgressFilter.contains(drill, $0.date) }.reversed()
+        let all = Array(inScope)
+        // A drilled-in week shows every run; the whole period shows the latest few.
+        let limit = drill == nil && !showsAllRuns ? 3 : all.count
+        let shown = Array(all.prefix(limit))
+        return VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(drill.map { drillTitle($0) } ?? String(localized: "Latest runs"))
+                    .strideEyebrow()
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: AppSpacing.sm)
+                Text(all.count == 1 ? String(localized: "1 run") : String(localized: "\(all.count) runs"))
+                    .font(.captionStrong)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, AppSpacing.xs)
+            VStack(spacing: 0) {
+                if shown.isEmpty {
+                    Text(drill == nil ? "No runs in this filter." : "No runs. A \(period.grouping.noun) off.")
+                        .font(.bodyRegular)
+                        .foregroundStyle(.secondary)
+                        .padding(AppSpacing.lg)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                ForEach(Array(shown.enumerated()), id: \.element.id) { index, workout in
+                    NavigationLink {
+                        RunSummaryView(workout: workout)
+                    } label: {
+                        ProgressRunRow(workout: workout, unit: unit)
+                    }
+                    .buttonStyle(.plain)
+                    if index < shown.count - 1 {
+                        Divider().padding(.leading, AppSpacing.lg)
+                    }
+                }
+                if all.count > shown.count || (showsAllRuns && drill == nil && all.count > 3) {
+                    Divider()
+                    Button {
+                        withAnimation(AppAnimation.quick) { showsAllRuns.toggle() }
+                    } label: {
+                        Text(showsAllRuns ? "Show fewer" : "Show all \(all.count) runs")
+                            .font(.bodyStrong)
+                            .foregroundStyle(Color.brandText)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, AppSpacing.lg)
+                            .padding(.vertical, AppSpacing.md)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .strideCard()
         }
     }
 
@@ -309,10 +573,8 @@ struct ProgressDashboardView: View {
                     // already uses taps and drags to read a bar or a dot.
                     NavigationLink {
                         switch destination {
-                        case .volume(let metric):
-                            VolumeExplorerView(metric: metric, window: selectedRange.explorerWindow)
                         case .trend(let metric):
-                            TrendExplorerView(metric: metric, window: selectedRange.explorerWindow)
+                            TrendExplorerView(metric: metric, window: period.window)
                         }
                     } label: {
                         HStack(spacing: 2) {
@@ -338,7 +600,7 @@ struct ProgressDashboardView: View {
     private var strengthStats: StrengthPeriodStats {
         StrengthPeriodStats.make(
             from: strengthSessions.map { $0.sessionLog(unit: appSettings.unitPreference) },
-            withinDays: selectedRange.days
+            withinDays: period.days ?? 36_500
         )
     }
 
@@ -419,51 +681,6 @@ struct ProgressDashboardView: View {
         .accessibilityElement(children: .combine)
     }
 
-    // MARK: - Weekly volume chart
-
-    private var weeklyVolumeChart: some View {
-        chartCard("WEEKLY VOLUME", explore: .volume(.distance)) {
-            // Every other chart on this tab says why it is empty; this one drew an
-            // unexplained 160pt of blank card instead.
-            if weeklyBuckets.isEmpty {
-                emptyDataPlaceholder("No distance data in this period")
-            } else {
-                Chart {
-                    ForEach(weeklyBuckets, id: \.weekStart) { bucket in
-                        BarMark(
-                            x: .value("Week", bucket.weekStart, unit: .weekOfYear),
-                            y: .value(appSettings.unitPreference.distanceLabel, distanceValue(bucket.meters))
-                        )
-                        .foregroundStyle(.routeBar)
-                        .cornerRadius(AppRadius.xs)
-                    }
-                    if let selected = selectedVolumeDate, let bucket = closestWeekBucket(to: selected) {
-                        selectionRule(x: .value("Week", bucket.weekStart)) {
-                            StrideTooltip {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(bucket.weekStart, format: .dateTime.month(.abbreviated).day())
-                                        .font(.dsCaption2).foregroundStyle(.secondary)
-                                    Text(String(format: "%.1f %@", distanceValue(bucket.meters), appSettings.unitPreference.distanceLabel))
-                                        .font(.dsCaption).bold()
-                                }
-                            }
-                        }
-                    }
-                }
-                .frame(height: 160)
-                .chartXAxis {
-                    AxisMarks(values: .stride(by: .month)) {
-                        AxisValueLabel(format: .dateTime.month(.abbreviated))
-                    }
-                }
-                // The explorer's axis says "mi"; this one said bare numbers.
-                .chartYAxisLabel(appSettings.unitPreference.distanceLabel)
-                .chartXSelection(value: $selectedVolumeDate)
-                .chartAccessibility("Weekly volume chart", weeklyVolumeSeries)
-            }
-        }
-    }
-
     /// Short spoken date label for a chart point, matching what the tooltip shows.
     private func pointLabel(_ date: Date) -> String {
         date.formatted(.dateTime.month(.abbreviated).day())
@@ -477,18 +694,6 @@ struct ProgressDashboardView: View {
     // These return a `ChartAccessibility.Series` rather than a finished summary string, so
     // every chart on this tab is both collapsed into one spoken sentence *and* playable as
     // an Audio Graph from the same numbers (U10).
-
-    private var weeklyVolumeSeries: ChartAccessibility.Series {
-        let unit = appSettings.unitPreference
-        return ChartAccessibility.Series(
-            points: weeklyBuckets.map {
-                ChartAccessibility.Point(label: "week of \(pointLabel($0.weekStart))", value: distanceValue($0.meters))
-            },
-            valueAxisLabel: String(localized: "Distance", comment: "Chart value axis")
-        ) {
-            SpokenMetric.spoken(value: String(format: "%.1f", $0), unit: unit.distanceLabel)
-        }
-    }
 
     /// Spoken as the weekly line, which is the reading the card leads with; a run-by-run
     /// list of easy paces is the noise the line exists to smooth.
@@ -845,7 +1050,7 @@ struct ProgressDashboardView: View {
 
     private var elevationTrendChart: some View {
         let withElev = filteredWorkouts.filter { ($0.elevationGainMeters ?? 0) > 0 }
-        return chartCard("ELEVATION GAIN", explore: .volume(.climb)) {
+        return chartCard("ELEVATION GAIN") {
             if withElev.isEmpty {
                 emptyDataPlaceholder("No elevation data in this period")
             } else {
@@ -1023,11 +1228,6 @@ struct ProgressDashboardView: View {
         list.min(by: { abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date)) })
     }
 
-    private func closestWeekBucket(to date: Date) -> ProgressPeriodStats.WeeklyDistance? {
-        weeklyBuckets.min(by: {
-            abs($0.weekStart.timeIntervalSince(date)) < abs($1.weekStart.timeIntervalSince(date))
-        })
-    }
 
     private func closestVO2Point(to date: Date) -> ProgressPeriodStats.VDOTSample? {
         vo2Points.min(by: { abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date)) })
@@ -1052,15 +1252,4 @@ struct ProgressDashboardView: View {
     }
 
 
-    // MARK: - Weekly buckets
-
-    private var weeklyBuckets: [ProgressPeriodStats.WeeklyDistance] {
-        ProgressPeriodStats.weeklyDistances(for: filteredWorkouts)
-    }
-
-    /// A bucket's distance in the runner's own unit. The bucketing itself stays in
-    /// metres so the maths has nothing display-shaped in it (D1).
-    private func distanceValue(_ meters: Double) -> Double {
-        meters.distanceValue(unit: appSettings.unitPreference)
-    }
 }
