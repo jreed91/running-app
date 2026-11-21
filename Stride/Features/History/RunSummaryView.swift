@@ -366,6 +366,9 @@ struct RunSummaryView: View {
             // about the wrong thing. The same holds for a ride or a swim (B8).
             if workout.countsAsRunning {
                 coachSummaryCard
+                // The fastest stretches inside this run, marked when one is a record.
+                // Draws nothing when the run has none.
+                RunBestEffortsCard(workout: workout)
             }
             breakdownSection
                 .id(Self.breakdownAnchor)

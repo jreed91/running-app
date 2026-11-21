@@ -164,6 +164,10 @@ struct ProgressDashboardView: View {
                                 vo2MaxTrendChart
                                     .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 6)
                             }
+                            // All time, not the picked range: a record set two years ago is
+                            // still the record. Its own view, with its own query and loading.
+                            BestEffortsCard()
+                                .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 6)
                             if showsStrengthCard {
                                 strengthCard
                                     .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 6)
