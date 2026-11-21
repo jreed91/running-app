@@ -55,7 +55,7 @@ struct RaceInvite: Equatable, Sendable {
     static let webScheme = "https"
     /// The bare domain, because `www.` answers with a redirect to it, and iOS neither opens
     /// the app for a link that redirects nor fetches the app-site association through one.
-    /// The site's Worker (jacobreed.dev repo, `cloudflare/stride/`) serves both.
+    /// The site's Worker (`website/` in this repo) serves both.
     static let webHost = "runwithstride.app"
     static let webHosts: Set<String> = [webHost, "www.runwithstride.app"]
     static let webPath = "/race"

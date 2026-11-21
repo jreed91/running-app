@@ -1,15 +1,17 @@
 // Serves https://runwithstride.app: the Stride landing page (public/index.html),
-// race invites (public/race.html) and the app-site association file.
-// Privacy and support stay on jacobreed.dev, because App Store Connect links
-// there. Old /stride/img/* URLs still resolve.
+// race invites (public/race.html), the privacy policy and support pages, and
+// the app-site association file. Old /stride/... paths (from when the site
+// lived at jacobreed.dev/stride) redirect to their new homes.
 
-const MAIN_SITE = 'https://jacobreed.dev';
+// Pages served from public/<name>.html at /<name>.
+const PAGES = new Set(['/race', '/privacy', '/support']);
 
-const OFFSITE = {
-  '/privacy': '/stride/privacy',
-  '/stride/privacy': '/stride/privacy',
-  '/support': '/stride/support',
-  '/stride/support': '/stride/support'
+const LEGACY = {
+  '/stride': '/',
+  '/index.html': '/',
+  '/stride/privacy': '/privacy',
+  '/stride/support': '/support',
+  '/stride/race': '/race'
 };
 
 // iOS reads this to decide which links open Stride: a race invite shared from
@@ -50,20 +52,19 @@ export default {
       return Response.json(APP_SITE_ASSOCIATION);
     }
 
-    if (OFFSITE[path]) {
-      return Response.redirect(MAIN_SITE + OFFSITE[path], 301);
-    }
-    if (path === '/stride' || path === '/index.html') {
-      return Response.redirect(new URL('/', url).toString(), 301);
+    if (LEGACY[path]) {
+      const target = new URL(LEGACY[path], url);
+      target.search = url.search;
+      return Response.redirect(target.toString(), 301);
     }
 
     let assetPath;
     if (path === '/') {
       assetPath = '/';
-    } else if (path === '/race') {
-      // A race invite for someone without the app. The race is in the query
-      // string, which the page reads.
-      assetPath = '/race';
+    } else if (PAGES.has(path)) {
+      // Extensionless, so the assets' html handling doesn't redirect. A race
+      // invite keeps its race in the query string, which the page reads.
+      assetPath = path;
     } else if (url.pathname.startsWith('/stride/img/')) {
       assetPath = url.pathname.slice('/stride'.length);
     } else if (url.pathname.startsWith('/img/')) {
