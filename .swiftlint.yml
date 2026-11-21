@@ -103,6 +103,7 @@ custom_rules:
       - ".*/ActiveRunView\\.swift"
       - ".*/GuidedWorkoutBanner\\.swift"
       - ".*/RunShareCardView\\.swift"
+      - ".*/RouteReplayVideo\\.swift"
       - ".*/StrideIcon\\.swift"
     message: "Use a design-system font token (`.dsBody`, `.dsCaption2`, …) or a `@ScaledMetric` size. A literal point size ignores the user's preferred content size. See Stride/Shared/Theme/AppFonts.swift."
     severity: error

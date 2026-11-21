@@ -23,6 +23,9 @@ struct RunShareStudioView: View {
     @State private var loadingMaps: Set<ShareCardFormat> = []
     @State private var shareItem: SharedCard?
     @State private var copied = false
+    /// How far the route video has rendered, 0 to 1; `nil` when none is being made.
+    @State private var videoProgress: Double?
+    @State private var videoTask: Task<Void, Never>?
 
     private var model: ShareCardModel {
         ShareCardModel.make(from: workout, unit: appSettings.unitPreference, privacy: privacy)
@@ -63,6 +66,7 @@ struct RunShareStudioView: View {
             .sheet(item: $shareItem) { item in
                 ShareSheet(items: [item.payload])
             }
+            .onDisappear { videoTask?.cancel() }
         }
     }
 
@@ -126,6 +130,61 @@ struct RunShareStudioView: View {
                 }
                 .buttonStyle(.strideButton(.secondary))
                 .accessibilityIdentifier("shareStudio.copySticker")
+            }
+
+            if model.hasRoute {
+                routeVideoButton
+            }
+        }
+    }
+
+    /// The route drawn on as a six-second story video. While it renders, the button
+    /// shows how far along it is and cancels on a second tap.
+    @ViewBuilder
+    private var routeVideoButton: some View {
+        if let videoProgress {
+            Button {
+                videoTask?.cancel()
+            } label: {
+                HStack(spacing: AppSpacing.sm) {
+                    ProgressView(value: videoProgress)
+                        .frame(maxWidth: 120)
+                    Text("Making video… Tap to stop")
+                }
+            }
+            .buttonStyle(.strideButton(.quiet))
+            .accessibilityLabel(Text("Making route video, \(Int(videoProgress * 100)) percent. Double tap to stop."))
+        } else {
+            Button {
+                makeRouteVideo()
+            } label: {
+                Text("Share route video")
+            }
+            .buttonStyle(.strideButton(.secondary))
+            .accessibilityIdentifier("shareStudio.routeVideo")
+        }
+    }
+
+    private func makeRouteVideo() {
+        videoProgress = 0
+        let model = model
+        videoTask = Task {
+            defer {
+                videoProgress = nil
+                videoTask = nil
+            }
+            do {
+                let url = try await RouteReplayVideo.render(
+                    model: model,
+                    distanceMeters: workout.distanceMeters,
+                    durationSeconds: workout.durationSeconds,
+                    unit: appSettings.unitPreference
+                ) { videoProgress = $0 }
+                shareItem = SharedCard(payload: url)
+            } catch is CancellationError {
+                return
+            } catch {
+                AppLogger.log("Route video render failed: \(error)", label: "Share", level: .error)
             }
         }
     }
