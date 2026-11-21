@@ -4,58 +4,145 @@ import UIKit
 /// A fixed-size, deterministic run card rendered to an image for sharing (B5).
 ///
 /// It sits on `ink` with the `onInk` text colours, which have the same value in light and
-/// dark, so the exported PNG looks identical no matter the device's appearance. The design
-/// size is small (points) and the caller renders it at ×3 scale to export a ~1080×1350 image.
+/// dark, so the exported PNG looks identical no matter the device's appearance. Each
+/// ``ShareCardFormat`` is designed at a third of its export size and rendered at ×3.
+///
+/// Every format carries the Stride mark and the landing page address: a card on someone's
+/// Strava activity or Instagram story is how most people will first hear of the app.
 struct RunShareCardView: View {
     let model: ShareCardModel
     /// Pre-rendered map snapshot (tiles + route baked in) shown behind the route. Supplied by the
     /// caller because `MKMapSnapshotter` is async; `nil` for indoor runs or when the snapshot
     /// failed (offline), in which case the panel falls back to a drawn polyline.
     var routeMapImage: UIImage?
+    var format: ShareCardFormat = .portrait
 
-    /// Card design size in points. Rendered at ×3 → ~1080×1350 px (Instagram-portrait 4:5).
-    static let size = CGSize(width: 360, height: 450)
+    /// The original 4:5 card's design size in points, rendered at ×3 → 1080×1350 px.
+    static let size = ShareCardFormat.portrait.size
 
-    /// Size (points) of the route panel — the card is `size.width` wide with 20 pt padding each
-    /// side. The caller requests a map snapshot at exactly this size so it maps 1:1 in the panel.
-    static let routePanelSize = CGSize(width: size.width - 40, height: 150)
+    /// The 4:5 card's route panel. Other formats use `ShareCardFormat.routePanelSize`.
+    static let routePanelSize = ShareCardFormat.portrait.routePanelSize
 
     private let accent = Color.brand
     private let primaryText = Color.onInk
     private let secondaryText = Color.onInkMuted
 
     var body: some View {
+        Group {
+            switch format {
+            case .sticker: sticker
+            case .square:  squareCard
+            case .story, .portrait: tallCard
+            }
+        }
+        .frame(width: format.size.width, height: format.size.height)
+        .environment(\.colorScheme, .dark)
+    }
+
+    // MARK: Formats
+
+    /// Story and post: everything, the story with a larger map and more air.
+    private var tallCard: some View {
         VStack(alignment: .leading, spacing: 0) {
-            wordmark
+            header
             routePanel
-                .frame(height: Self.routePanelSize.height)
+                .frame(height: format.routePanelSize.height)
                 .padding(.top, AppSpacing.md)
             distanceHeadline
-                .padding(.top, AppSpacing.lg)
+                .padding(.top, format == .story ? AppSpacing.xxl : AppSpacing.lg)
             primaryStats
                 .padding(.top, AppSpacing.md)
             secondaryChips
                 .padding(.top, 10)
-            if !model.splitBars.isEmpty {
+            if format.showsSplits, !model.splitBars.isEmpty {
                 splitsStrip
-                    .padding(.top, AppSpacing.lg)
+                    .padding(.top, format == .story ? AppSpacing.xxl : AppSpacing.lg)
             }
             Spacer(minLength: 0)
             footer
         }
         .padding(AppSpacing.xl)
-        .frame(width: Self.size.width, height: Self.size.height)
-        // The night map of the Route Loop icon, so a shared run is recognisably Stride's.
-        .background {
-            ZStack {
-                Rectangle().fill(.inkGround)
-                MapGridPattern(pitch: 30, onInk: true)
-            }
+        .background { inkBackground }
+    }
+
+    /// Square: for a Strava activity photo. Map, distance, time and pace, nothing else.
+    private var squareCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            header
+            routePanel
+                .frame(height: format.routePanelSize.height)
+                .padding(.top, AppSpacing.md)
+            distanceHeadline
+                .padding(.top, AppSpacing.md)
+            primaryStats
+                .padding(.top, AppSpacing.sm)
+            Spacer(minLength: 0)
+            footer
         }
-        .environment(\.colorScheme, .dark)
+        .padding(AppSpacing.xl)
+        .background { inkBackground }
+    }
+
+    /// No background: the route line, the numbers and the mark, each with a dark halo so
+    /// they read on a bright photo as well as a dark one.
+    private var sticker: some View {
+        VStack(spacing: AppSpacing.sm) {
+            if model.hasRoute {
+                RoutePolylineShape(segments: model.routeSegments)
+                    .stroke(
+                        Color.onInk,
+                        style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round)
+                    )
+                    .frame(width: format.routePanelSize.width, height: format.routePanelSize.height)
+                    .padding(.bottom, AppSpacing.xs)
+            }
+            Text(model.distance)
+                .font(.system(size: 44, weight: .heavy, design: .rounded))
+                .minimumScaleFactor(0.6)
+                .lineLimit(1)
+            Text("\(model.duration)  ·  \(model.pace)")
+                .font(.system(size: 17, weight: .bold, design: .rounded))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            HStack(spacing: 6) {
+                StrideAppMark(size: 18)
+                Text(model.planContext ?? model.sessionName)
+                    .font(.system(size: 12, weight: .bold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            .padding(.top, AppSpacing.xxs)
+            Text(StrideLinks.landingPageDisplay)
+                .font(.system(size: 10, weight: .semibold))
+                .opacity(0.85)
+        }
+        .foregroundStyle(primaryText)
+        .appGlow(.strong, color: .black)
+        .padding(AppSpacing.md)
+    }
+
+    /// The night map of the Route Loop icon, so a shared run is recognisably Stride's.
+    private var inkBackground: some View {
+        ZStack {
+            Rectangle().fill(.inkGround)
+            MapGridPattern(pitch: 30, onInk: true)
+        }
     }
 
     // MARK: Sections
+
+    /// The mark on the left, what the run was on the right.
+    private var header: some View {
+        HStack(alignment: .center) {
+            wordmark
+            Spacer(minLength: AppSpacing.sm)
+            Text(model.sessionName.uppercased())
+                .font(.system(size: 11, weight: .bold))
+                .tracking(1.5)
+                .foregroundStyle(accent)
+                .lineLimit(1)
+        }
+    }
 
     private var wordmark: some View {
         HStack(spacing: 6) {
@@ -170,12 +257,23 @@ struct RunShareCardView: View {
         }
     }
 
+    /// Where the run sat in the plan, and where to get the app. A run with no plan says
+    /// it was trained with Stride instead.
     private var footer: some View {
-        Text("RECORDED WITH STRIDE")
-            .font(.system(size: 10, weight: .bold))
-            .tracking(2)
-            .foregroundStyle(secondaryText)
-            .padding(.top, AppSpacing.md)
+        HStack(alignment: .firstTextBaseline, spacing: AppSpacing.sm) {
+            Text((model.planContext ?? String(localized: "Trained with Stride", comment: "Share card footer")).uppercased())
+                .font(.system(size: 10, weight: .bold))
+                .tracking(1.5)
+                .foregroundStyle(primaryText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Spacer(minLength: 0)
+            Text(StrideLinks.landingPageDisplay)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(secondaryText)
+                .lineLimit(1)
+        }
+        .padding(.top, AppSpacing.md)
     }
 
     // MARK: Building blocks

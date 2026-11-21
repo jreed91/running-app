@@ -13,6 +13,15 @@ struct ShareCardModel: Equatable {
     let duration: String
     let pace: String
 
+    /// What the run was, e.g. "Tempo run".
+    let sessionName: String
+
+    /// Where the run sat in a plan, e.g. "Week 6 of 16 · Half Marathon". The line a
+    /// Strava post can't show, and the reason a friend asks what app it is. `nil` for a
+    /// run that isn't linked to a plan day, and for pregnancy plans, which a runner may
+    /// not want announced on a public post.
+    let planContext: String?
+
     // Secondary stats — `nil` when the run has no such data (indoor / no-HR runs).
     let heartRate: String?
     let elevation: String?
@@ -81,6 +90,13 @@ extension ShareCardModel {
         )
 
         return ShareCardModel(
+            sessionName: sessionName(for: workout.workoutType),
+            planContext: planContext(
+                weekNumber: workout.scheduledWorkout?.week?.weekNumber,
+                totalWeeks: workout.scheduledWorkout?.week?.plan?.totalWeeks,
+                planTitle: workout.scheduledWorkout?.week?.plan?.displayTitle,
+                isPregnancyPlan: workout.scheduledWorkout?.week?.plan?.isPregnancyPlan ?? false
+            ),
             distance: workout.distanceMeters.distanceString(unit: unit),
             duration: workout.durationSeconds.durationString,
             pace: workout.averagePaceSecondsPerKm.paceString(unit: unit),
@@ -93,6 +109,40 @@ extension ShareCardModel {
             fastestSplit: fastest,
             splitUnitLabel: workout.splitUnit.splitLabel
         )
+    }
+
+    /// "Tempo run", "Long run", "Race". The type's own name, with "run" added where the
+    /// name alone isn't one.
+    static func sessionName(for type: WorkoutType) -> String {
+        switch type {
+        case .easy:          return String(localized: "Easy run", comment: "Share card session name")
+        case .tempo:         return String(localized: "Tempo run", comment: "Share card session name")
+        case .interval:      return String(localized: "Intervals", comment: "Share card session name")
+        case .longRun:       return String(localized: "Long run", comment: "Share card session name")
+        case .race:          return String(localized: "Race", comment: "Share card session name")
+        case .walk:          return String(localized: "Walk", comment: "Share card session name")
+        case .crossTraining, .strength, .rest:
+            return String(localized: "Run", comment: "Share card session name")
+        }
+    }
+
+    /// "Week 6 of 16 · Half Marathon", or `nil` when the run has no plan week, the plan has
+    /// no weeks, or it is a pregnancy plan.
+    static func planContext(
+        weekNumber: Int?,
+        totalWeeks: Int?,
+        planTitle: String?,
+        isPregnancyPlan: Bool
+    ) -> String? {
+        guard !isPregnancyPlan,
+              let weekNumber, weekNumber > 0,
+              let totalWeeks, totalWeeks >= weekNumber
+        else { return nil }
+        let week = String(localized: "Week \(weekNumber) of \(totalWeeks)", comment: "Share card plan week")
+        guard let title = planTitle?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty else {
+            return week
+        }
+        return "\(week) · \(title)"
     }
 
     /// Projects GPS coordinates onto a normalized, undistorted, screen-space polyline.
