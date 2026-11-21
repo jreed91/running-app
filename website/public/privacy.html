@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Stride Privacy Policy</title>
+<meta name="description" content="How the Stride running app handles your training, health and location data.">
+<link rel="canonical" href="https://runwithstride.app/privacy">
+<link rel="icon" type="image/png" href="/img/icon-64.png">
+<link rel="apple-touch-icon" href="/img/icon-180.png">
+<meta name="theme-color" content="#0d1018" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f3f4f8" media="(prefers-color-scheme: light)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Stride">
+<meta property="og:title" content="Stride Privacy Policy">
+<meta property="og:description" content="How the Stride running app handles your training, health and location data.">
+<meta property="og:url" content="https://runwithstride.app/privacy">
+<meta property="og:image" content="https://runwithstride.app/img/og.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="apple-itunes-app" content="app-id=6763807505">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&display=swap" rel="stylesheet">
+<style>
+  /* Route Loop tokens, as on the landing page (running-app design/route-loop/README.md). */
+  :root {
+    --brand: #ff5a1a;
+    --brand-text: #c2410c;
+    --page: #f3f4f8;
+    --card: #ffffff;
+    --text: #1f2433;
+    --text-soft: #4a5063;
+    --stroke: rgba(31, 36, 51, 0.08);
+    --hero-top: #ffede1;
+    --display: ui-rounded, "SF Pro Rounded", "Nunito", system-ui, sans-serif;
+    --body: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --brand: #ff7438;
+      --brand-text: #ff7438;
+      --page: #0d1018;
+      --card: #171b26;
+      --text: #f5f6fa;
+      --text-soft: #a9afc2;
+      --stroke: rgba(255, 255, 255, 0.08);
+      --hero-top: #232a3c;
+    }
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; min-height: 100vh;
+    background:
+      radial-gradient(ellipse 70% 45% at 70% 0%, color-mix(in srgb, var(--brand) 14%, transparent), transparent 70%),
+      linear-gradient(var(--hero-top), var(--page) 360px);
+    color: var(--text);
+    font: 400 17px/1.6 var(--body);
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--brand-text); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+  :focus-visible { outline: 3px solid var(--brand); outline-offset: 3px; border-radius: 8px; }
+  h1, h2 { font-family: var(--display); font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; text-wrap: balance; }
+  h1 { font-size: clamp(34px, 7vw, 48px); margin: 12px 0 8px; }
+  h2 { font-size: 24px; margin: 40px 0 12px; }
+  p, ul { margin: 0 0 16px; }
+  ul { padding-left: 22px; }
+  li { margin-bottom: 10px; color: var(--text-soft); }
+  li strong, p strong { color: var(--text); }
+  article p { color: var(--text-soft); }
+
+  .wrap { width: 100%; max-width: 720px; margin: 0 auto; padding: 0 16px; }
+  .top .wrap { display: flex; align-items: center; justify-content: space-between; height: 72px; }
+  .brand { display: inline-flex; align-items: center; gap: 12px; color: var(--text); text-decoration: none; font: 800 22px/1 var(--display); }
+  .brand img { width: 36px; height: 36px; border-radius: 9px; box-shadow: 0 0 0 1px var(--stroke); }
+  .top nav { display: flex; gap: 20px; font-weight: 600; }
+  .top nav a { color: var(--text-soft); text-decoration: none; }
+  .top nav a[aria-current="page"] { color: var(--text); }
+
+  .eyebrow { font: 700 13px/1 var(--body); letter-spacing: 0.14em; text-transform: uppercase; color: var(--brand-text); margin: 32px 0 0; }
+  .meta { color: var(--text-soft); margin-bottom: 32px; }
+
+  .faq { border-bottom: 1px solid var(--stroke); }
+  .faq details { border-top: 1px solid var(--stroke); padding: 16px 0; }
+  .faq summary { cursor: pointer; font-weight: 700; color: var(--text); }
+  .faq details p { margin: 10px 0 0; }
+
+  footer { padding: 56px 0 48px; color: var(--text-soft); font-size: 15px; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 24px; }
+  footer a { color: var(--text-soft); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/">
+      <img src="/img/icon-64.png" alt="" width="36" height="36">
+      Stride
+    </a>
+    <nav aria-label="Stride">
+      <a href="/support">Support</a>
+      <a href="/privacy" aria-current="page">Privacy</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+<p class="eyebrow">Stride</p>
+<h1>Privacy Policy</h1>
+<p class="meta">Effective 17 October 2026. Updated 21 November 2026.</p>
+<article>
+  <p>
+    Stride is built so that your training data stays yours. I (Jacob Reed, the
+    developer) do not run servers that store your data, I do not sell or share
+    it, and the app contains no advertising, analytics or tracking.
+  </p>
+
+  <h2>What Stride uses, and where it stays</h2>
+  <ul>
+    <li>
+      <strong>Your runs, plan and profile</strong> (age, goal race, paces,
+      workouts, routes, heart rate recorded during runs, strength sessions,
+      shoes) are stored on your iPhone. If iCloud is on, they sync through your
+      own private iCloud database, which Apple encrypts and I cannot access.
+    </li>
+    <li>
+      <strong>Apple Health.</strong> With your permission Stride reads workouts,
+      heart rate, heart-rate variability, resting heart rate, sleep, steps,
+      distance and body weight to import runs and show training and recovery
+      insights. It writes your completed runs and strength sessions as workouts,
+      with their distance, heart rate and route. Health data is never used for
+      advertising and never shared with me or anyone else.
+    </li>
+    <li>
+      <strong>Location</strong> is used while you record a run, including in the
+      background once you start one, to draw your route and measure distance
+      and pace, and to fetch the weather for your run and race.
+    </li>
+    <li><strong>Motion</strong> data measures cadence during runs.</li>
+    <li>
+      <strong>Apple Watch.</strong> The Stride Watch app shows your next session,
+      weekly goal, streak and race, and can start today&rsquo;s workout. Your
+      iPhone sends that to your Watch directly; it does not pass through any
+      server of mine.
+    </li>
+    <li>
+      <strong>Apple Music</strong>, if you choose, lets Stride save a playlist
+      for a run to your library.
+    </li>
+    <li>
+      <strong>Sign in with Apple</strong> is optional. Stride asks for no name or
+      email and keeps only an anonymous identifier on your device.
+    </li>
+    <li>
+      <strong>Notifications</strong> such as workout reminders and your weekly
+      recap are scheduled on your iPhone.
+    </li>
+  </ul>
+
+  <h2>Services Stride talks to</h2>
+  <ul>
+    <li>
+      <strong>Apple Intelligence.</strong> The AI coach, coach tips, week in
+      review and race plan are written by Apple Intelligence, either on your
+      iPhone or on Apple&rsquo;s Private Cloud Compute, where Apple processes the
+      request without keeping it. I never receive these requests or their
+      answers. You can turn them off with the AI Coach switch in Stride&rsquo;s
+      Settings.
+    </li>
+    <li>
+      <strong>Apple Weather (WeatherKit) and Apple Maps</strong> receive a
+      location to return a forecast or a map.
+    </li>
+    <li>
+      <strong>OpenRouteService</strong> receives route coordinates only if you
+      add your own OpenRouteService key in Settings to generate routes. Its
+      handling is covered by
+      <a href="https://openrouteservice.org/privacy-policy/">its own privacy policy</a>.
+    </li>
+  </ul>
+
+  <h2>Sharing and exporting</h2>
+  <p>
+    Nothing leaves the app unless you send it. When you share a run card, a
+    run&rsquo;s GPX route (for example to Strava or Garmin Connect) or a race
+    invite link, or use Export All Data, Stride hands it to the iOS share sheet
+    and you choose where it goes. Once it is there, the receiving app or
+    service&rsquo;s own policy applies.
+  </p>
+
+  <h2>Your choices</h2>
+  <p>
+    You can change any permission in the iOS Settings app at any time.
+    Stride &rarr; Settings &rarr; Export All Data gives you a copy of your runs,
+    strength sessions, shoes and routes. Stride &rarr; Settings &rarr; Reset All
+    Data deletes your data from your iPhone and your iCloud. Runs Stride saved
+    to Apple Health stay there until you delete them in the Health app.
+  </p>
+
+  <h2>Children</h2>
+  <p>Stride is not directed at children under 13.</p>
+
+  <h2>This website</h2>
+  <p>
+    runwithstride.app is hosted on Cloudflare, which keeps standard request
+    logs to serve and protect the site. The site sets no cookies and runs no
+    analytics. A race invite page reads the race from its own link in your
+    browser and stores nothing.
+  </p>
+
+  <h2>Changes and contact</h2>
+  <p>
+    If this policy changes, I&rsquo;ll update the date above and say so in the
+    app&rsquo;s release notes. Questions:
+    <a href="mailto:jreed91@gmail.com">jreed91@gmail.com</a>.
+  </p>
+  <p><a href="/support">Stride support</a></p>
+</article>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Stride is made by <a href="https://jacobreed.dev/">Jacob Reed</a>. Training guidance, not medical advice.</span>
+    <a href="/">Stride</a>
+    <a href="/support">Support</a>
+    <a href="/privacy">Privacy Policy</a>
+  </div>
+</footer>
+
+</body>
+</html>
