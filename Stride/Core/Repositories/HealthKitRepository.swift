@@ -1071,6 +1071,11 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
 
             let workout = StrengthWorkout(date: hkWorkout.startDate, durationSeconds: hkWorkout.duration)
             workout.healthKitWorkoutID = hkID
+            // Stride's own export carries the session's id, so the merge can find the
+            // session it came from even before that session has the export's UUID.
+            if let strideID = Self.strideWorkoutID(from: hkWorkout.metadata) {
+                workout.id = strideID
+            }
             result.append(workout)
         }
         AppLogger.log(

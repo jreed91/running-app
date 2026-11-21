@@ -748,33 +748,58 @@ final class WorkoutSyncService {
 
         guard !hkWorkouts.isEmpty else { return }
 
-        // Merge: if an in-app StrengthWorkout without a HK ID looks like the same
-        // physical session as an imported one, stamp the HK UUID onto it instead
-        // of creating a duplicate. Matching by same-day alone collapsed two
-        // genuinely distinct same-day sessions (e.g. a morning app-log and an
-        // evening Watch workout) into one, discarding the second; require the
-        // start times to be close instead.
-        var unlinked = stored.filter { $0.healthKitWorkoutID == nil }
-        var toInsert: [StrengthWorkout] = []
-        for hkWorkout in hkWorkouts {
-            if let idx = unlinked.firstIndex(where: {
-                Self.isSameStrengthSession($0.date, hkWorkout.date)
-            }) {
-                unlinked[idx].healthKitWorkoutID = hkWorkout.healthKitWorkoutID
-                unlinked.remove(at: idx)
-            } else {
-                toInsert.append(hkWorkout)
-            }
-        }
-
-        for workout in toInsert { context.insert(workout) }
-        linkStrengthToScheduledWorkouts(toInsert)
+        // Fetched again after the HealthKit read, as the run pass does: a session finished
+        // while it was awaited is exactly the one whose export this pass may be holding.
+        let storedNow = (try? context.fetch(FetchDescriptor<StrengthWorkout>())) ?? stored
+        let merge = Self.mergeStrengthImports(hkWorkouts, stored: storedNow, context: context)
+        linkStrengthToScheduledWorkouts(merge.inserted)
         context.saveOrLog("imported strength workouts")
         AppLogger.log(
-            "Strength sync (\(source)): merged=\(hkWorkouts.count - toInsert.count), inserted=\(toInsert.count).",
+            "Strength sync (\(source)): inserted=\(merge.inserted.count), linked=\(merge.linked), "
+                + "duplicates=\(merge.duplicates).",
             label: "HealthKit",
             level: .info
         )
+    }
+
+    /// Puts strength workouts read from Health into the store under
+    /// ``StrengthImportMerge``'s rules: new sessions are inserted, another recording of a
+    /// stored session without a HealthKit id lends it its id, and a recording of one that
+    /// already has its own is tombstoned so the next pass doesn't read it again.
+    ///
+    /// Shared by the background sync and the Settings import, so a session reached from
+    /// either is merged the same way. Leaves saving to the caller.
+    @discardableResult
+    static func mergeStrengthImports(
+        _ imported: [StrengthWorkout],
+        stored: [StrengthWorkout],
+        context: ModelContext
+    ) -> (inserted: [StrengthWorkout], linked: Int, duplicates: Int) {
+        let decisions = StrengthImportMerge.decisions(
+            imported: imported.map(\.mergeSession),
+            stored: stored.map(\.mergeSession)
+        )
+        let storedByID = Dictionary(stored.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var inserted: [StrengthWorkout] = []
+        var linked = 0
+        var duplicates = 0
+        for workout in imported {
+            guard let hkID = workout.healthKitWorkoutID else { continue }
+            switch decisions[hkID] {
+            case .insert:
+                context.insert(workout)
+                inserted.append(workout)
+            case .link(let storedID):
+                storedByID[storedID]?.healthKitWorkoutID = hkID
+                linked += 1
+            case .duplicate:
+                context.insert(DeletedWorkout(healthKitWorkoutID: hkID))
+                duplicates += 1
+            case nil:
+                continue
+            }
+        }
+        return (inserted, linked, duplicates)
     }
 
     /// Whether a scheduled workout is a legitimate link target: it belongs to the
@@ -786,19 +811,6 @@ final class WorkoutSyncService {
     static func belongsToLivePlan(_ scheduled: ScheduledWorkout) -> Bool {
         guard let plan = scheduled.week?.plan else { return true }
         return plan.isActive
-    }
-
-    /// Two strength sessions are treated as the same physical workout — and so
-    /// deduplicated on import — only when their start times fall within this
-    /// window. Generous enough to absorb the lag between finishing a session and
-    /// logging it, but far tighter than "same calendar day", which merged
-    /// unrelated morning/evening sessions.
-    static let strengthMergeToleranceSeconds: TimeInterval = 3 * 60 * 60
-
-    /// Whether two strength-session start dates are close enough to be the same
-    /// workout for dedup purposes.
-    static func isSameStrengthSession(_ lhs: Date, _ rhs: Date) -> Bool {
-        abs(lhs.timeIntervalSince(rhs)) <= strengthMergeToleranceSeconds
     }
 
     private func linkStrengthToScheduledWorkouts(_ workouts: [StrengthWorkout]) {

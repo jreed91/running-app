@@ -1,8 +1,8 @@
 import SwiftUI
 import SwiftData
 
-/// Lets the user retroactively import older workouts from Apple Health — runs, and
-/// walks when walk import is on — that predate the app's automatic 60-day sync window.
+/// Lets the user retroactively import older workouts from Apple Health — runs, strength
+/// workouts, and walks when walk import is on — that predate the app's automatic sync window.
 struct HealthKitImportView: View {
     @Environment(\.modelContext) private var context
     @Environment(AppContainer.self) private var container
@@ -53,9 +53,9 @@ struct HealthKitImportView: View {
             // two string literals infers `String`, not `LocalizedStringKey`, so neither
             // arm would be extracted for translation.
             if appSettings.walkImportEnabled {
-                Text("Runs and walks not already in this app will be imported.")
+                Text("Runs, walks and strength workouts not already in this app will be imported.")
             } else {
-                Text("Only running activities not already in this app will be imported.")
+                Text("Runs and strength workouts not already in this app will be imported.")
             }
         }
         .strideListRow()
@@ -165,13 +165,30 @@ struct HealthKitImportView: View {
                 )
                 : []
 
+            // Strength workouts from the Watch or another app, merged as the background
+            // sync merges them, so a gym session logged here and recorded on the Watch
+            // too stays one session.
+            let strengthExistingIDs = Set(
+                try context.fetch(FetchDescriptor<StrengthWorkout>()).compactMap(\.healthKitWorkoutID)
+            ).union(tombstonedIDs)
+            let importedStrength = try await repo.fetchImportableStrengthWorkouts(
+                from: startDate,
+                to: Date(),
+                existingIDs: strengthExistingIDs
+            )
+            let strength = WorkoutSyncService.mergeStrengthImports(
+                importedStrength,
+                stored: try context.fetch(FetchDescriptor<StrengthWorkout>()),
+                context: context
+            )
+
             for workout in newWorkouts + newWalks {
                 context.insert(workout)
             }
             // Only runs on or after the default pair's start date get it, so reaching
             // back a year does not put this year's shoes on last year's runs.
             ShoeAssignment.assignDefaultShoe(to: newWorkouts, in: context)
-            if !newWorkouts.isEmpty || !newWalks.isEmpty {
+            if !newWorkouts.isEmpty || !newWalks.isEmpty || !importedStrength.isEmpty {
                 try context.save()
                 // Weather is attached to runs only, matching the background sync: it feeds
                 // the coach's per-run analysis, which never reads a walk.
@@ -182,7 +199,10 @@ struct HealthKitImportView: View {
                 }
             }
 
-            importState = .done(imported: newWorkouts.count + newWalks.count, skipped: skipped + relinked)
+            importState = .done(
+                imported: newWorkouts.count + newWalks.count + strength.inserted.count,
+                skipped: skipped + relinked + strength.linked + strength.duplicates
+            )
         } catch {
             importState = .failed(error.localizedDescription)
         }
