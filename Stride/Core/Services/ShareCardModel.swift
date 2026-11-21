@@ -90,6 +90,9 @@ extension ShareCardModel {
         )
 
         return ShareCardModel(
+            distance: workout.distanceMeters.distanceString(unit: unit),
+            duration: workout.durationSeconds.durationString,
+            pace: workout.averagePaceSecondsPerKm.paceString(unit: unit),
             sessionName: sessionName(for: workout.workoutType),
             planContext: planContext(
                 weekNumber: workout.scheduledWorkout?.week?.weekNumber,
@@ -97,9 +100,6 @@ extension ShareCardModel {
                 planTitle: workout.scheduledWorkout?.week?.plan?.displayTitle,
                 isPregnancyPlan: workout.scheduledWorkout?.week?.plan?.isPregnancyPlan ?? false
             ),
-            distance: workout.distanceMeters.distanceString(unit: unit),
-            duration: workout.durationSeconds.durationString,
-            pace: workout.averagePaceSecondsPerKm.paceString(unit: unit),
             heartRate: heartRate,
             elevation: elevation,
             routeSegments: routeSegments,
