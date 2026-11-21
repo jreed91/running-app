@@ -170,6 +170,8 @@ struct ProgressDashboardView: View {
                                 .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 6)
                             FitnessFreshnessCard()
                                 .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 6)
+                            ActivityCalendarCard()
+                                .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 6)
                             if showsStrengthCard {
                                 strengthCard
                                     .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 6)
