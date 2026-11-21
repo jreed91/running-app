@@ -38,6 +38,14 @@ final class AppNavigation {
     /// rather than state: reading it after that returns `nil`.
     var requestedScheduledWorkoutID: UUID?
 
+    /// A race invite a friend sent (`RaceInvite`), waiting to become a plan: the new-plan
+    /// flow opens on it once the tabs are up, and first-run onboarding fills its race in
+    /// from it. Whichever takes it clears it.
+    var pendingRaceInvite: RaceInvite?
+
+    /// The name of an invited race that has already happened, for the "too late" alert.
+    var pastRaceInviteName: String?
+
     /// Sends the app to `tab`. Named rather than assigned at call sites so the deep-link
     /// handler reads as an instruction, and so there is one place to add anything a tab
     /// switch should also do (scroll to top, dismiss a sheet) if that ever becomes true.
@@ -48,6 +56,18 @@ final class AppNavigation {
     /// Opens Settings over whatever tab is showing.
     func openSettings() {
         isSettingsPresented = true
+    }
+
+    /// Opens a friend's race invite: on the Plan tab with the new-plan flow filled in, or
+    /// in onboarding for a runner who hasn't finished it yet. A race already run says so
+    /// rather than building a plan to a day that has gone.
+    func openRaceInvite(_ invite: RaceInvite, now: Date = Date()) {
+        if invite.hasPassed(now: now) {
+            pastRaceInviteName = invite.name
+            return
+        }
+        select(.plan)
+        pendingRaceInvite = invite
     }
 
     /// Sends the app to the Plan tab with `workoutID`'s detail pushed on it.

@@ -17,6 +17,9 @@ struct PlanDetailView: View {
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 16) {
+                if PlanReplay.isAvailable(endDate: plan.endDate, isPregnancyPlan: plan.isPregnancyPlan) {
+                    PlanReplayEntryCard(plan: plan)
+                }
                 PlanSummaryCard(plan: plan)
 
                 Text("TRAINING WEEKS")

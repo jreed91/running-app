@@ -183,6 +183,12 @@ struct PlanTabView: View {
                             .buttonStyle(.plain)
                         }
 
+                        // Once the plan's last day has passed, its replay leads: the
+                        // moment a runner is proudest of the plan is when they'll share it.
+                        if PlanReplay.isAvailable(endDate: plan.endDate, isPregnancyPlan: plan.isPregnancyPlan) {
+                            PlanReplayEntryCard(plan: plan)
+                        }
+
                         // Below the race: when there is one, the countdown is the
                         // screen's hero and leads it, and this card is the progress.
                         // The countdown already names the race and its goal, so the overview

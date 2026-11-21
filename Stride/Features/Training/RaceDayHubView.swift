@@ -87,6 +87,10 @@ struct RaceDayHubView: View {
                 if !racePlan.goals.isEmpty {
                     goalLadder(racePlan)
                 }
+
+                if let invite = invite(for: racePlan) {
+                    RaceInviteCard(invite: invite)
+                }
             } trailing: {
                 if showsBriefing(racePlan) {
                     RaceBriefingCard(wording: currentBriefing(racePlan))
@@ -243,6 +247,17 @@ struct RaceDayHubView: View {
         guard racePlan.result == nil else { return false }
         if case .finished = racePlan.phase { return false }
         return true
+    }
+
+    /// The link "Train with a friend" shares, while there is still time to train for the
+    /// race: not on the day, and not after it.
+    private func invite(for racePlan: RaceDayPlan) -> RaceInvite? {
+        switch racePlan.phase {
+        case .building, .raceWeek:
+            return RaceInvite(racePlan: racePlan)
+        case .raceDay, .finished:
+            return nil
+        }
     }
 
     private func selectedGoal(_ racePlan: RaceDayPlan) -> RaceGoal? {

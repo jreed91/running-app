@@ -123,7 +123,15 @@ struct StrideApp: App {
     /// Handles `stride://` links: the run's Live Activity (U5b/U7) and the Home Screen /
     /// Lock Screen widgets (B1), each of which should land on the surface it was showing
     /// rather than merely foregrounding the app onto whatever was open last.
+    ///
+    /// Also a friend's race invite, in either spelling: the shared
+    /// `https://runwithstride.app/race?…` link (a universal link, once the site
+    /// serves the app-site association) and the web page's `stride://race?…` button.
     private func handleDeepLink(_ url: URL) {
+        if let invite = RaceInvite(url: url) {
+            container.appNavigation.openRaceInvite(invite)
+            return
+        }
         guard url.scheme == RunActivityDeepLink.scheme, let host = url.host else { return }
 
         switch host {
