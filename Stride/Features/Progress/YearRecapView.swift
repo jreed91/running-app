@@ -3,10 +3,7 @@ import SwiftUI
 
 /// The year-in-running recap: a story of cards the runner swipes through and shares.
 ///
-/// Presented full screen. Each card is the exact view that gets rendered to the shared
-/// image (`YearRecapCardView`), scaled to fit the screen, so the share is what they see.
-/// Sharing renders only the card on screen, on the tap, the same on-demand rule as the
-/// run card (N21).
+/// Presented full screen. The pager itself is ``RecapStoryPager``, shared with Plan Replay.
 struct YearRecapView: View {
     let year: Int
 
@@ -16,6 +13,38 @@ struct YearRecapView: View {
     private var workouts: [RunWorkout]
 
     @Environment(AppSettings.self) private var appSettings
+
+    var body: some View {
+        let cards = YearRecapCards.make(
+            from: YearInRunning.make(from: workouts, year: year),
+            unit: appSettings.unitPreference
+        )
+
+        RecapStoryPager(cards: cards, logLabel: "Year recap") {
+            StrideEmptyState(
+                "Your \(String(year)) recap needs a few runs",
+                systemImage: "figure.run",
+                description: Text("Once you've logged \(YearInRunning.minimumRunsForRecap) runs this year, your recap will be here to look back on and share.")
+            )
+            .padding(AppSpacing.xl)
+        }
+    }
+}
+
+// MARK: - RecapStoryPager
+
+/// A story of recap cards the runner swipes through and shares, one at a time.
+///
+/// Each card is the exact view that gets rendered to the shared image
+/// (`YearRecapCardView`), scaled to fit the screen, so the share is what they see.
+/// Sharing renders only the card on screen, on the tap, the same on-demand rule as the
+/// run card (N21).
+struct RecapStoryPager<Empty: View>: View {
+    let cards: [YearRecapCard]
+    /// Names the recap in the log line when a render fails.
+    let logLabel: String
+    @ViewBuilder let empty: () -> Empty
+
     @Environment(\.dismiss) private var dismiss
 
     @State private var selection: YearRecapCard.Kind = .cover
@@ -25,21 +54,16 @@ struct YearRecapView: View {
     @State private var revealedCards: Set<YearRecapCard.Kind> = []
 
     var body: some View {
-        let cards = YearRecapCards.make(
-            from: YearInRunning.make(from: workouts, year: year),
-            unit: appSettings.unitPreference
-        )
-
         ZStack {
             Rectangle().fill(.inkGround).ignoresSafeArea()
 
             if cards.isEmpty {
-                notEnoughRuns
+                empty()
             } else {
                 VStack(spacing: AppSpacing.lg) {
                     TabView(selection: $selection) {
                         ForEach(cards) { card in
-                            ScaledCard(card: card, revealed: revealedCards.contains(card.kind))
+                            RecapScaledCard(card: card, revealed: revealedCards.contains(card.kind))
                                 .tag(card.kind)
                                 .padding(.horizontal, AppSpacing.lg)
                         }
@@ -81,21 +105,12 @@ struct YearRecapView: View {
         }
     }
 
-    private var notEnoughRuns: some View {
-        StrideEmptyState(
-            "Your \(String(year)) recap needs a few runs",
-            systemImage: "figure.run",
-            description: Text("Once you've logged \(YearInRunning.minimumRunsForRecap) runs this year, your recap will be here to look back on and share.")
-        )
-        .padding(AppSpacing.xl)
-    }
-
     /// Renders one card at ×3 (1080×1920) and opens the share sheet.
     private func share(_ card: YearRecapCard) {
         let renderer = ImageRenderer(content: YearRecapCardView(card: card))
         renderer.scale = 3
         guard let image = renderer.uiImage else {
-            AppLogger.log("Year recap card render produced no image", label: "Share", level: .error)
+            AppLogger.log("\(logLabel) card render produced no image", label: "Share", level: .error)
             return
         }
         shareImage = ShareCardImage(image: image)
@@ -105,7 +120,7 @@ struct YearRecapView: View {
 /// A recap card at its design size, scaled down to fit the space it's given and kept at
 /// the card's 9:16 shape. Scaling the fixed-size view (rather than laying it out again at
 /// a new size) keeps the on-screen card identical to the shared image.
-private struct ScaledCard: View {
+struct RecapScaledCard: View {
     let card: YearRecapCard
     let revealed: Bool
 

@@ -241,11 +241,19 @@ struct YearRecapCardView: View {
         }
     }
 
+    /// The app's name and where to get it: a recap posted to a story is how a friend
+    /// first hears of Stride.
     private var footer: some View {
-        Text("RECORDED WITH STRIDE")
-            .font(.system(size: 10, weight: .bold))
-            .tracking(2)
-            .foregroundStyle(secondaryText)
+        HStack(alignment: .firstTextBaseline) {
+            Text("TRAINED WITH STRIDE")
+                .font(.system(size: 10, weight: .bold))
+                .tracking(2)
+                .foregroundStyle(secondaryText)
+            Spacer(minLength: AppSpacing.sm)
+            Text(StrideLinks.landingPageDisplay)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(secondaryText)
+        }
     }
 }
 

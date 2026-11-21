@@ -12,6 +12,8 @@ struct YearRecapCard: Equatable, Identifiable, Sendable {
 
     enum Kind: String, Sendable, CaseIterable {
         case cover, distance, consistency, months, longestRun, bestEfforts, fitness, outro
+        /// Plan Replay only: the goal race's result.
+        case race
     }
 
     struct Stat: Equatable, Sendable {
@@ -288,7 +290,7 @@ enum YearRecapCards {
         count == 1 ? "1 day" : "\(count.formatted()) days"
     }
 
-    private static func dayMonth(_ date: Date, calendar: Calendar) -> String {
+    static func dayMonth(_ date: Date, calendar: Calendar) -> String {
         var style = Date.FormatStyle.dateTime.day().month(.wide)
         style.calendar = calendar
         style.timeZone = calendar.timeZone
