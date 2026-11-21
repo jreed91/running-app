@@ -62,4 +62,27 @@ enum PaceAxis {
         let total = Int((secondsPerKm * factor).rounded())
         return String(format: "%d:%02d", total / 60, total % 60)
     }
+
+    /// Round-number ticks for any other measure (heart rate, VDOT, cadence): steps of
+    /// 1, 2, 5, 10 and so on, three to `maxTicks` of them inside the data where possible.
+    static func roundTicks(lower: Double, upper: Double, maxTicks: Int = 5) -> [Double] {
+        guard lower.isFinite, upper.isFinite, upper >= lower else { return [] }
+        let steps: [Double] = [100, 50, 20, 10, 5, 2, 1, 0.5]
+        func inside(_ step: Double) -> [Double] {
+            var values: [Double] = []
+            var tick = (lower / step).rounded(.up) * step
+            while tick <= upper + 0.000_1 {
+                values.append(tick)
+                tick += step
+            }
+            return values
+        }
+        let candidates = steps.map(inside).filter { $0.count <= maxTicks }
+        if let chosen = candidates.first(where: { $0.count >= 3 })
+            ?? candidates.first(where: { $0.count == 2 })
+            ?? candidates.first(where: { !$0.isEmpty }) {
+            return chosen
+        }
+        return [((lower + upper) / 2).rounded()]
+    }
 }

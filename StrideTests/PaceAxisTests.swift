@@ -40,4 +40,12 @@ struct PaceAxisTests {
     @Test func labelRoundsRatherThanTruncates() {
         #expect(PaceAxis.label(secondsPerKm: 540 / mile, factor: mile) == "9:00")
     }
+
+    @Test func roundTicksForHeartRate() {
+        #expect(PaceAxis.roundTicks(lower: 138, upper: 156) == [140, 145, 150, 155])
+    }
+
+    @Test func roundTicksForANarrowVDOT() {
+        #expect(PaceAxis.roundTicks(lower: 41.2, upper: 42.8) == [41.5, 42, 42.5])
+    }
 }

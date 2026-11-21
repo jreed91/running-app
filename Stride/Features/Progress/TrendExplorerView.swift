@@ -361,16 +361,21 @@ struct TrendExplorerView: View {
         }
     }
 
-    /// Pace ticks on whole minutes of the runner's unit (`PaceAxis`); the other measures
-    /// are plain numbers, where Charts' own round ticks already read well.
-    private func axisValues(_ trend: TrendExplorer.Trend) -> AxisMarkValues {
-        guard metric == .easyPace else { return .automatic(desiredCount: 4) }
+    /// Tick values for the y axis: pace on whole minutes of the runner's unit, the other
+    /// measures on round numbers. An explicit list, because `AxisMarks(values:)` takes
+    /// either `.automatic` or a collection, and one function can't return both.
+    private func axisValues(_ trend: TrendExplorer.Trend) -> [Double] {
         let values = trend.points.map(\.value)
-        return .explicit(PaceAxis.ticks(
-            lowerSecondsPerKm: values.min() ?? 0,
-            upperSecondsPerKm: values.max() ?? 0,
+        let lower = values.min() ?? 0
+        let upper = values.max() ?? 0
+        guard metric == .easyPace else {
+            return PaceAxis.roundTicks(lower: lower, upper: upper)
+        }
+        return PaceAxis.ticks(
+            lowerSecondsPerKm: lower,
+            upperSecondsPerKm: upper,
             factor: 1.0.paceSecondsValue(unit: unit)
-        ))
+        )
     }
 
     private func axisLabel(_ value: Double) -> String {
