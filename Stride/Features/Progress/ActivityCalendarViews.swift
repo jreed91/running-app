@@ -74,57 +74,64 @@ private struct CalendarLegend: View {
 
 // MARK: - Progress card
 
-/// "Running days" on Progress: the last half year as a grid, the week streak, and
-/// a link to the full year and the route heatmap.
+/// "Running days" on Progress: the page's period as a grid of days (up to half a year),
+/// the week streak, and a tap on any day to drill the page into it.
 struct ActivityCalendarCard: View {
+    let runType: ProgressFilter.RunType
+    /// Weeks to draw, the current one included.
+    let weeks: Int
+    /// The page's drill-in, outlined when it is one of these days.
+    let selectedDay: DateInterval?
+    /// Drills the page into a day.
+    let onPick: (DateInterval) -> Void
+
+    @Environment(AppSettings.self) private var appSettings
     @Query private var workouts: [RunWorkout]
 
-    init() {
+    init(
+        runType: ProgressFilter.RunType,
+        weeks: Int,
+        selectedDay: DateInterval?,
+        onPick: @escaping (DateInterval) -> Void
+    ) {
+        self.runType = runType
+        self.weeks = weeks
+        self.selectedDay = selectedDay
+        self.onPick = onPick
         _workouts = ActivityCalendar.query()
     }
 
     var body: some View {
-        let runs = ActivityCalendar.runs(from: workouts)
-        let weeks = ActivityCalendar.weeks(26, runs: runs, now: .now, calendar: .current)
-        let streak = ActivityCalendar.currentWeekStreak(weeks)
-        let activeDays = weeks.reduce(0) { $0 + $1.days.filter { !$0.runIDs.isEmpty }.count }
+        let runs = ActivityCalendar.runs(
+            from: workouts.filter { runType.includes($0.workoutType.progressRunKind) }
+        )
+        let grid = ActivityCalendar.weeks(weeks, runs: runs, now: .now, calendar: .current)
+        let streak = ActivityCalendar.currentWeekStreak(grid)
+        let activeDays = grid.reduce(0) { $0 + $1.days.filter { !$0.runIDs.isEmpty }.count }
 
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
             HStack(alignment: .firstTextBaseline) {
-                // The card shows 26 weeks; "Your running year" promised twelve months.
-                Text("RUNNING DAYS · 6 MONTHS")
+                Text(weeks >= 26 ? "RUNNING DAYS · LAST 26 WEEKS" : "RUNNING DAYS")
                     .strideEyebrow()
                     .foregroundStyle(.secondary)
                 Spacer(minLength: AppSpacing.sm)
-                NavigationLink {
-                    ActivityYearView()
-                } label: {
-                    HStack(spacing: 2) {
-                        Text("Explore")
-                        StrideIcon(name: .chevronRight, size: 10, color: .brandText, strokeWeight: 2.2)
-                    }
-                    .font(.captionStrong)
-                    .foregroundStyle(Color.brandText)
-                }
-                .accessibilityLabel("Explore your running year")
+                Text("Tap a day to drill in")
+                    .font(.dsCaption)
+                    .foregroundStyle(.secondary)
             }
             .padding(.horizontal, AppSpacing.xs)
 
             VStack(alignment: .leading, spacing: AppSpacing.md) {
-                HStack(alignment: .top, spacing: 3) {
-                    ForEach(weeks) { week in
-                        VStack(spacing: 3) {
+                HStack(alignment: .top, spacing: weeks > 16 ? 3 : 5) {
+                    ForEach(grid) { week in
+                        VStack(spacing: weeks > 16 ? 3 : 5) {
                             ForEach(week.days) { day in
-                                CalendarCell(day: day)
-                                    .aspectRatio(1, contentMode: .fit)
+                                dayButton(day)
                             }
                         }
                         .frame(maxWidth: .infinity)
                     }
                 }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Running days, last six months")
-                .accessibilityValue("\(activeDays) days with a run")
                 // The legend moves under the streak when they don't fit on one line,
                 // instead of squeezing to "Le ss" and "Mor e".
                 ViewThatFits(in: .horizontal) {
@@ -144,10 +151,32 @@ struct ActivityCalendarCard: View {
             .strideCard()
         }
     }
-}
 
-extension ActivityCalendarCard {
-    fileprivate func streakLine(streak: Int, activeDays: Int) -> some View {
+    private func dayButton(_ day: ActivityCalendar.Day) -> some View {
+        let isSelected = selectedDay?.start == day.date
+        return Button {
+            guard !day.isFuture else { return }
+            let end = Calendar.current.date(byAdding: .day, value: 1, to: day.date) ?? day.date
+            onPick(DateInterval(start: day.date, end: end))
+            UISelectionFeedbackGenerator().selectionChanged()
+        } label: {
+            CalendarCell(day: day, isSelected: isSelected)
+                .aspectRatio(1, contentMode: .fit)
+        }
+        .buttonStyle(.plain)
+        .disabled(day.isFuture)
+        .accessibilityLabel(dayLabel(day))
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityHint("Shows that day's runs")
+    }
+
+    private func dayLabel(_ day: ActivityCalendar.Day) -> String {
+        let date = day.date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())
+        guard !day.runIDs.isEmpty else { return String(localized: "\(date), no run") }
+        return "\(date), \(day.meters.distanceString(unit: appSettings.unitPreference))"
+    }
+
+    private func streakLine(streak: Int, activeDays: Int) -> some View {
         HStack(spacing: AppSpacing.xs) {
             Text(streak == 1 ? "1 week in a row" : "\(streak) weeks in a row")
                 .font(.captionStrong)
@@ -159,14 +188,17 @@ extension ActivityCalendarCard {
     }
 }
 
-// MARK: - Full page
+// MARK: - Every route
 
-/// A year of running days, tap any day to list its runs, and every route of the year on
-/// one map, brighter where run more often.
-struct ActivityYearView: View {
-    @Environment(AppSettings.self) private var appSettings
+/// Every route in the page's period on one map, each drawn faint so the streets run most
+/// often glow brightest. The map waits for a tap: a few hundred polylines are more work
+/// than the rest of the page together.
+struct RouteHeatmapCard: View {
+    let periodDays: Int?
+    let runType: ProgressFilter.RunType
+
     @Query private var workouts: [RunWorkout]
-    @State private var selectedDay: Date?
+    @State private var showsMap = false
     @State private var routes: [[CLLocationCoordinate2D]] = []
 
     /// Routes drawn at once, newest first, and points kept per route: enough to show the
@@ -174,186 +206,76 @@ struct ActivityYearView: View {
     private static let routeLimit = 400
     private static let pointsPerRoute = 200
 
-    init() {
+    init(periodDays: Int?, runType: ProgressFilter.RunType) {
+        self.periodDays = periodDays
+        self.runType = runType
         _workouts = ActivityCalendar.query()
     }
 
     var body: some View {
-        let runs = ActivityCalendar.runs(from: workouts)
-        let weeks = ActivityCalendar.weeks(53, runs: runs, now: .now, calendar: .current)
-        let selected = selectedDay.flatMap { date in weeks.lazy.flatMap(\.days).first { $0.date == date } }
-
-        ScrollView {
-            VStack(alignment: .leading, spacing: AppSpacing.lg) {
-                yearGrid(weeks, selected: selected)
-                if let selected {
-                    dayRuns(selected)
-                }
-                heatmap
-            }
-            .padding()
-            .strideReadableWidth()
-        }
-        .background(Color.surfacePrimary)
-        .navigationTitle("Your running year")
-        .navigationBarTitleDisplayMode(.inline)
-        .task(id: workouts.count) {
-            routes = Self.heatmapRoutes(from: workouts)
-        }
-    }
-
-    // MARK: Grid
-
-    private func yearGrid(_ weeks: [ActivityCalendar.Week], selected: ActivityCalendar.Day?) -> some View {
-        let total = weeks.reduce(0.0) { $0 + $1.days.reduce(0) { $0 + $1.meters } }
-        let activeDays = weeks.reduce(0) { $0 + $1.days.filter { !$0.runIDs.isEmpty }.count }
-        return VStack(alignment: .leading, spacing: AppSpacing.md) {
-            Text("LAST 12 MONTHS")
-                .strideEyebrow()
-                .foregroundStyle(.secondary)
-            Text("\(activeDays) running days · \(total.distanceString(unit: appSettings.unitPreference))")
-                .font(.dsTitle3)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 3) {
-                    ForEach(weeks) { week in
-                        VStack(spacing: 3) {
-                            ForEach(week.days) { day in
-                                Button {
-                                    guard !day.isFuture else { return }
-                                    selectedDay = selectedDay == day.date ? nil : day.date
-                                    UISelectionFeedbackGenerator().selectionChanged()
-                                } label: {
-                                    CalendarCell(day: day, isSelected: day.date == selected?.date)
-                                        .frame(width: 15, height: 15)
-                                }
-                                .buttonStyle(.plain)
-                                .accessibilityLabel(dayLabel(day))
-                            }
-                        }
-                    }
-                }
-                .padding(.vertical, AppSpacing.xxs)
-            }
-            .defaultScrollAnchor(.trailing)
-            ViewThatFits(in: .horizontal) {
-                HStack {
-                    Text("Tap a day to see its runs")
-                        .font(.dsCaption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize()
-                    Spacer(minLength: AppSpacing.sm)
-                    CalendarLegend()
-                }
-                VStack(alignment: .leading, spacing: AppSpacing.sm) {
-                    Text("Tap a day to see its runs")
-                        .font(.dsCaption)
-                        .foregroundStyle(.secondary)
-                    CalendarLegend()
-                }
-            }
-        }
-        .padding(AppSpacing.lg)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .strideCard()
-    }
-
-    private func dayLabel(_ day: ActivityCalendar.Day) -> String {
-        let date = day.date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())
-        guard !day.runIDs.isEmpty else { return "\(date), no run" }
-        return "\(date), \(day.meters.distanceString(unit: appSettings.unitPreference))"
-    }
-
-    @ViewBuilder
-    private func dayRuns(_ day: ActivityCalendar.Day) -> some View {
-        let listed = day.runIDs.compactMap { id in workouts.first { $0.id == id } }
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            Text(day.date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()).uppercased())
+            Text("EVERY ROUTE")
                 .strideEyebrow()
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, AppSpacing.xs)
-            if listed.isEmpty {
-                Text("A rest day.")
-                    .font(.bodyRegular)
-                    .foregroundStyle(.secondary)
-                    .padding(AppSpacing.lg)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .strideCard()
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(listed) { workout in
-                        NavigationLink {
-                            RunSummaryView(workout: workout)
-                        } label: {
-                            HStack {
-                                Text(workout.workoutType.localizedName)
-                                    .font(.bodyStrong)
-                                Spacer()
-                                Text(workout.distanceMeters.distanceString(unit: appSettings.unitPreference))
-                                    .font(.bodyStrong.monospacedDigit())
-                                Text(workout.averagePaceSecondsPerKm.paceString(unit: appSettings.unitPreference))
-                                    .font(.dsCaption.monospacedDigit())
-                                    .foregroundStyle(.secondary)
-                                StrideIcon(name: .chevronRight, size: 12, color: .secondary, strokeWeight: 2)
-                            }
-                            .padding(.horizontal, AppSpacing.lg)
-                            .padding(.vertical, AppSpacing.md)
-                            .contentShape(Rectangle())
+            if showsMap {
+                if routes.isEmpty {
+                    Text("Outdoor runs with a route show up here.")
+                        .font(.bodyRegular)
+                        .foregroundStyle(.secondary)
+                        .padding(AppSpacing.lg)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .strideCard()
+                } else {
+                    Map(interactionModes: [.zoom, .pan]) {
+                        ForEach(Array(routes.enumerated()), id: \.offset) { _, route in
+                            MapPolyline(coordinates: route)
+                                .stroke(
+                                    Color.brand.opacity(0.28),
+                                    style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round)
+                                )
                         }
-                        .buttonStyle(.plain)
                     }
+                    .mapStyle(.standard(emphasis: .muted))
+                    .frame(height: 320)
+                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.lg))
+                    .accessibilityLabel("Map of \(routes.count) routes")
+                    Text("\(routes.count) routes. Pinch to zoom into the streets you run most.")
+                        .font(.dsFootnote)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, AppSpacing.xs)
                 }
-                .strideCard()
-            }
-        }
-    }
-
-    // MARK: Route heatmap
-
-    private var heatmap: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            Text("EVERY ROUTE, LAST 12 MONTHS")
-                .strideEyebrow()
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, AppSpacing.xs)
-            if routes.isEmpty {
-                Text("Outdoor runs with a route show up here.")
-                    .font(.bodyRegular)
-                    .foregroundStyle(.secondary)
-                    .padding(AppSpacing.lg)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .strideCard()
             } else {
-                // Each route is drawn faint; where they overlap they add up, so the
-                // streets run most often glow brightest.
-                Map(interactionModes: [.zoom, .pan]) {
-                    ForEach(Array(routes.enumerated()), id: \.offset) { _, route in
-                        MapPolyline(coordinates: route)
-                            .stroke(
-                                Color.brand.opacity(0.28),
-                                style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round)
-                            )
-                    }
+                Button {
+                    withAnimation(AppAnimation.quick) { showsMap = true }
+                } label: {
+                    Text("Show the map")
                 }
-                .mapStyle(.standard(emphasis: .muted))
-                .frame(height: 360)
-                .clipShape(RoundedRectangle(cornerRadius: AppRadius.lg))
-                .accessibilityLabel("Map of \(routes.count) routes from the last year")
-                Text("\(routes.count) routes. Pinch to zoom into the streets you run most.")
-                    .font(.dsFootnote)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, AppSpacing.xs)
+                .buttonStyle(.strideButton(.quiet))
             }
+        }
+        .task(id: TaskKey(show: showsMap, days: periodDays, type: runType, count: workouts.count)) {
+            guard showsMap else { return }
+            routes = heatmapRoutes()
         }
     }
 
-    @MainActor
-    private static func heatmapRoutes(from workouts: [RunWorkout]) -> [[CLLocationCoordinate2D]] {
-        let cutoff = Calendar.current.date(byAdding: .year, value: -1, to: .now) ?? .distantPast
+    private struct TaskKey: Equatable {
+        let show: Bool
+        let days: Int?
+        let type: ProgressFilter.RunType
+        let count: Int
+    }
+
+    private func heatmapRoutes() -> [[CLLocationCoordinate2D]] {
+        let cutoff = periodDays.map { Date.now.addingTimeInterval(-Double($0) * 86_400) } ?? .distantPast
         return workouts
-            .filter { $0.date >= cutoff && $0.routeData != nil }
-            .suffix(routeLimit)
+            .filter {
+                $0.date >= cutoff && $0.routeData != nil && runType.includes($0.workoutType.progressRunKind)
+            }
+            .suffix(Self.routeLimit)
             .compactMap { workout in
-                let route = RouteThinning.thinned(workout.routeCoordinates, limit: pointsPerRoute)
+                let route = RouteThinning.thinned(workout.routeCoordinates, limit: Self.pointsPerRoute)
                 return route.count > 1 ? route.map(\.clCoordinate) : nil
             }
     }

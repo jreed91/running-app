@@ -46,7 +46,7 @@ enum VolumeExplorer {
         case all = "All"
 
         /// Days the window spans, or `nil` for all time. The same counts Progress's range
-        /// chips use (`ProgressView.ChartRange.days`), so "3M" totals the same runs on both:
+        /// chips used, so "3M" totals the same runs on both:
         /// counting calendar months here gave 58.6 mi where Progress said 55.9 mi.
         var days: Int? {
             switch self {
