@@ -64,6 +64,18 @@ extension StrengthWorkout {
                 skipped: set.skipped
             )
         }
-        return StrengthSessionLog(date: date, sets: sets)
+        return StrengthSessionLog(date: date, sets: sets, durationSeconds: durationSeconds)
+    }
+}
+
+extension StrengthWorkout {
+    /// The session as ``StrengthImportMerge`` reads it.
+    var mergeSession: StrengthImportMerge.Session {
+        StrengthImportMerge.Session(
+            id: id,
+            healthKitWorkoutID: healthKitWorkoutID,
+            start: date,
+            durationSeconds: durationSeconds
+        )
     }
 }

@@ -381,6 +381,32 @@ cross-training session **completes the plan's cross-training day**.
   leads with its time when it has no distance. The activity (bike vs pool) is not stored:
   that would be a new `RunWorkout` property and so a CloudKit schema deployment.
 
+## Strength workouts from Apple Health
+
+Traditional strength, functional strength and core workouts recorded on the Watch or by
+another app (Fitbod, Strong...) are imported as `StrengthWorkout` rows with no sets, by the
+background sync and by Settings → Import from Apple Health. They count on the Progress
+strength card, in the coach's strength block and in History, and complete a planned
+strength day the way a Stride session does.
+
+- **One session, however many recordings.** Stride exports every session it logs, and a
+  runner who also starts the Workout app puts a second recording of the same hour in
+  Health. `StrengthImportMerge` decides per workout: Stride's own export (its
+  `StrideWorkoutID` metadata becomes the imported row's `id`) links to its session; a
+  workout overlapping a stored session by half the shorter one links to it when it has no
+  HealthKit id yet, and is tombstoned (`DeletedWorkout`) as a duplicate when it has one; of
+  two imports at the same time the longer is kept. Both import paths go through
+  `WorkoutSyncService.mergeStrengthImports`.
+- **No sets means "from Health".** Stride never saves a session without sets, so the
+  History row, the summary and `StrengthCoachContext` read an empty `completedSets` as an
+  imported session. A HealthKit id alone does not mean that: every exported Stride session
+  has one.
+- **Details are read live, not stored.** The summary reads the activity, the recording app
+  and average heart rate from Health when it opens
+  (`fetchImportedWorkoutDetails(forWorkoutID:)` → `ImportedWorkoutDetails`). Storing any of
+  it would be a new `StrengthWorkout` property and so a CloudKit schema deployment. Active
+  energy is left out: Stride does not ask to read it.
+
 ## Weather-tuned workouts
 
 Stride reads tomorrow's forecast where the runner actually runs, and asks — the evening

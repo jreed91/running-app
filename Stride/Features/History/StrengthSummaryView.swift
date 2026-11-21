@@ -4,7 +4,23 @@ import SwiftData
 struct StrengthSummaryView: View {
     let workout: StrengthWorkout
     @Environment(\.modelContext) private var context
+    @Environment(AppContainer.self) private var container
     @State private var isEditing = false
+    /// What Health knows about a session recorded on the Watch or in another app, read
+    /// when the screen opens. Nil for a session logged in Stride, and until it loads.
+    @State private var healthDetails: ImportedWorkoutDetails?
+
+    /// Recorded outside Stride and imported from Health. A session logged here gets a
+    /// HealthKit id too, once it is exported, but always has sets.
+    private var isFromHealth: Bool {
+        workout.healthKitWorkoutID != nil && workout.completedSets.isEmpty
+    }
+
+    private var title: String {
+        workout.scheduledWorkout?.strengthPlan?.focus.localizedName
+            ?? healthDetails?.title
+            ?? String(localized: "Strength Workout", comment: "Strength session title")
+    }
 
     private var durationLabel: String {
         let total = Int(workout.durationSeconds)
@@ -39,6 +55,10 @@ struct StrengthSummaryView: View {
                 }
             }
         }
+        .task(id: workout.healthKitWorkoutID) {
+            guard isFromHealth, let hkID = workout.healthKitWorkoutID else { return }
+            healthDetails = await container.healthKitRepository.fetchImportedWorkoutDetails(forWorkoutID: hkID)
+        }
         .sheet(isPresented: $isEditing) {
             NavigationStack {
                 StrengthSetsEditor(sets: workout.completedSets) { edited in
@@ -62,7 +82,7 @@ struct StrengthSummaryView: View {
                                color: WorkoutType.strength.color, strokeWeight: 2.0)
                 }
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(workout.scheduledWorkout?.strengthPlan?.focus.localizedName ?? "Strength Workout")
+                    Text(title)
                         .font(.dsTitle3.weight(.bold))
                     Text(workout.date.formatted(.dateTime.weekday(.wide).month(.wide).day().year()))
                         .font(.dsSubhead)
@@ -81,6 +101,9 @@ struct StrengthSummaryView: View {
                         value: "\(workout.completedSets.filter { !$0.skipped }.count)",
                         label: "SETS DONE"
                     )
+                } else if let heartRate = healthDetails?.heartRateText {
+                    Divider().frame(height: 36)
+                    statCell(value: heartRate, label: "AVG HEART RATE")
                 }
             }
         }
@@ -178,12 +201,13 @@ struct StrengthSummaryView: View {
 
     private var sourceRow: some View {
         HStack(spacing: 8) {
-            // A session logged here gets a HealthKit id too, once it is exported, so the
-            // id alone would call every Stride session "synced from Apple Health". Sets
-            // are only ever logged in Stride.
-            if workout.healthKitWorkoutID != nil && workout.completedSets.isEmpty {
+            if isFromHealth {
                 StrideIcon(name: .heart, size: 13, color: .destructive, strokeWeight: 2)
-                Text("Synced from Apple Health")
+                if let recordedBy = healthDetails?.recordedByText {
+                    Text("\(recordedBy) · synced from Apple Health")
+                } else {
+                    Text("Synced from Apple Health")
+                }
             } else {
                 Image(systemName: "checkmark.seal.fill")
                     .foregroundStyle(WorkoutType.strength.color)

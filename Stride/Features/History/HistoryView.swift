@@ -697,6 +697,12 @@ struct StrengthWorkoutRowView: View {
         workout.scheduledWorkout?.strengthPlan?.focus.localizedName ?? "Strength Workout"
     }
 
+    /// Recorded on the Watch or in another app. Stride's own sessions are exported to
+    /// Health too, so carry a HealthKit id, but they always have sets.
+    private var isFromHealth: Bool {
+        workout.healthKitWorkoutID != nil && workout.completedSets.isEmpty
+    }
+
     private var durationLabel: String {
         let minutes = Int(workout.durationSeconds) / 60
         return "\(minutes) min"
@@ -713,7 +719,7 @@ struct StrengthWorkoutRowView: View {
         let setCount = workout.completedSets.count
         if setCount > 0 { parts.append("\(setCount) sets") }
         if workout.scheduledWorkout != nil { parts.append("linked to a planned workout") }
-        if workout.healthKitWorkoutID != nil { parts.append("from Apple Health") }
+        if isFromHealth { parts.append("from Apple Health") }
         return parts.joined(separator: ", ")
     }
 
@@ -739,7 +745,7 @@ struct StrengthWorkoutRowView: View {
                             .font(.dsCaption2.weight(.semibold))
                             .foregroundStyle(.brand)
                     }
-                    if workout.healthKitWorkoutID != nil {
+                    if isFromHealth {
                         StrideIcon(name: .heart, size: 11, color: .destructive, strokeWeight: 2)
                     }
                 }
