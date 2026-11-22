@@ -66,4 +66,38 @@ struct BestEffortsCacheTests {
         #expect(await cache.efforts(for: inputs).map(\.id) == ids)
         #expect(await cache.efforts(for: inputs.reversed()).map(\.id) == ids.reversed())
     }
+
+    // MARK: By key
+
+    @Test func onlyUnknownRunsAreMissing() async {
+        let cache = BestEffortsCache()
+        let known = BestEffortsCache.Input(id: UUID(), date: day, series: series(1_100))
+        _ = await cache.efforts(for: [known.key], adding: [known])
+        let newRun = BestEffortsCache.Key(id: UUID(), date: day)
+        let moved = BestEffortsCache.Key(id: known.id, date: day.addingTimeInterval(60))
+        #expect(await cache.missing([known.key, newRun]) == [newRun.id])
+        #expect(await cache.missing([moved]) == [known.id])
+    }
+
+    @Test func askingByKeyNeedsNoSeriesOnceKnown() async {
+        let cache = BestEffortsCache()
+        let run = BestEffortsCache.Input(id: UUID(), date: day, series: series(5_200))
+        _ = await cache.efforts(for: [run.key], adding: [run])
+        let again = await cache.efforts(for: [run.key], adding: [])
+        #expect(again.first?.efforts[.fiveK] != nil)
+        #expect(await cache.computed == 1)
+    }
+
+    @Test func keepsEffortsOnDiskBetweenLaunches() async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("best-efforts-\(UUID()).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let run = BestEffortsCache.Input(id: UUID(), date: day, series: series(5_200))
+        _ = await BestEffortsCache(storeURL: url).efforts(for: [run.key], adding: [run])
+
+        let relaunched = BestEffortsCache(storeURL: url)
+        #expect(await relaunched.missing([run.key]).isEmpty)
+        #expect(await relaunched.efforts(for: [run.key], adding: []).first?.efforts[.fiveK] != nil)
+        #expect(await relaunched.computed == 0)
+    }
 }
+

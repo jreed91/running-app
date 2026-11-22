@@ -295,6 +295,9 @@ private struct HistoryEntryList: View {
             }
         }
         runDescriptor.fetchLimit = limit + 1
+        // Numbers and weather only: a row shows type, date, distance, pace and the
+        // temperature, and a page of runs read every one's route and samples with it.
+        runDescriptor.propertiesToFetch = RunWorkout.summaryProperties + [\.weatherData]
         _runs = Query(runDescriptor)
 
         // The strength side takes the date bound in its predicate and everything else in
