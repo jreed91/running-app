@@ -42,6 +42,9 @@ struct ProgressDashboardView: View {
     @State private var selectedHRDate: Date? = nil
     @State private var selectedElevationDate: Date? = nil
     @State private var selectedVO2Date: Date? = nil
+    /// Time in zones for the runs in scope, worked out off the main actor when the scope
+    /// changes (see `zoneKey`), not on every pass of the page's body.
+    @State private var zoneSlices: [HRZoneSlice] = []
 
     @State private var progressAppeared = false
     @State private var selectedTab: ProgressTab = .stats
@@ -84,10 +87,6 @@ struct ProgressDashboardView: View {
     private var filteredWorkouts: [RunWorkout] {
         guard let days = period.days else { return typedWorkouts }
         return ProgressPeriodStats.runs(in: typedWorkouts, withinDays: days)
-    }
-
-    private var vo2Points: [ProgressPeriodStats.VDOTSample] {
-        ProgressPeriodStats.vdotSamples(for: filteredWorkouts)
     }
 
     /// The filtered runs narrowed to the drilled-in week, month or day, if any: what the
@@ -138,6 +137,7 @@ struct ProgressDashboardView: View {
                             }
                             StrideColumns(spacing: 16) {
                                 heartRateZoneChart
+                                    .task(id: zoneKey) { await loadZoneSlices() }
                                     .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 5)
                             } trailing: {
                                 elevationTrendChart
@@ -435,11 +435,7 @@ struct ProgressDashboardView: View {
                         }
                     }
                     .frame(height: mainChartHeight)
-                    .chartXAxis {
-                        AxisMarks(values: .stride(by: .month, count: monthLabelStride(dashboard.buckets))) {
-                            AxisValueLabel(format: .dateTime.month(.abbreviated))
-                        }
-                    }
+                    .chartXAxis { dateAxisMarks }
                     .chartYAxis {
                         AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
                             AxisGridLine()
@@ -474,14 +470,31 @@ struct ProgressDashboardView: View {
         }
     }
 
-    /// One label a month up to a year and a half; past that, every few.
-    private func monthLabelStride(_ buckets: [VolumeExplorer.Bucket]) -> Int {
-        guard let first = buckets.first?.start, let last = buckets.last?.end else { return 1 }
-        let months = VolumeExplorer.calendar().dateComponents([.month], from: first, to: last).month ?? 0
-        switch months {
-        case ..<19: return 1
-        case ..<37: return 3
-        default: return 6
+    /// The period's time axis, shared by every chart on the page: about six labels
+    /// whatever the span, so "All" over five years reads 2021 … 2026 instead of sixty
+    /// month names piled on each other.
+    private var dateAxis: TrendSeries.DateAxis {
+        let end = Date()
+        let start = period.days.map { end.addingTimeInterval(-Double($0) * 86_400) }
+            ?? filteredWorkouts.lazy.map(\.date).min()
+            ?? end
+        return TrendSeries.dateAxis(from: start, to: end)
+    }
+
+    private var dateAxisMarks: some AxisContent {
+        let axis = dateAxis
+        let component: Calendar.Component = axis.unit == .year ? .year : .month
+        return AxisMarks(values: .stride(by: component, count: axis.count)) {
+            AxisValueLabel(format: axis.dateFormat)
+        }
+    }
+
+    /// "Week of Mar 3" or "March 2025": a trend chart's point, named for its tooltip and
+    /// VoiceOver.
+    private func trendBucketTitle(_ start: Date) -> String {
+        switch period.grouping {
+        case .week: return String(localized: "Week of \(start.formatted(.dateTime.month(.abbreviated).day()))")
+        case .month: return start.formatted(.dateTime.month(.abbreviated).year())
         }
     }
 
@@ -766,7 +779,7 @@ struct ProgressDashboardView: View {
         let unit = appSettings.unitPreference
         let points = trend.weeks.count > 1
             ? trend.weeks.map {
-                ChartAccessibility.Point(label: "week of \(pointLabel($0.weekStart))", value: $0.paceSecondsPerKm)
+                ChartAccessibility.Point(label: trendBucketTitle($0.weekStart), value: $0.paceSecondsPerKm)
             }
             : trend.runs.map { ChartAccessibility.Point(label: pointLabel($0.date), value: $0.paceSecondsPerKm) }
         return ChartAccessibility.Series(
@@ -775,13 +788,17 @@ struct ProgressDashboardView: View {
         ) { SpokenMetric.spoken(measurement: $0.paceString(unit: unit)) }
     }
 
-    private func heartRateSeries(_ runs: [RunWorkout]) -> ChartAccessibility.Series {
+    /// A bucketed trend chart's spoken payload: each week or month and its value.
+    private func trendSeries(
+        _ buckets: [TrendSeries.Bucket],
+        axis: String,
+        spoken: @escaping (Double) -> String
+    ) -> ChartAccessibility.Series {
         ChartAccessibility.Series(
-            points: runs.map {
-                ChartAccessibility.Point(label: pointLabel($0.date), value: $0.averageHeartRate ?? 0)
-            },
-            valueAxisLabel: String(localized: "Heart rate", comment: "Chart value axis")
-        ) { "\(Int($0)) beats per minute" }
+            points: buckets.map { ChartAccessibility.Point(label: trendBucketTitle($0.start), value: $0.value) },
+            valueAxisLabel: axis,
+            format: spoken
+        )
     }
 
     private func zoneSeries(_ slices: [HRZoneSlice]) -> ChartAccessibility.Series {
@@ -791,32 +808,10 @@ struct ProgressDashboardView: View {
         ) { "\(Int(($0 / 60).rounded())) minutes" }
     }
 
-    private func elevationSeries(_ runs: [RunWorkout]) -> ChartAccessibility.Series {
-        let unit = appSettings.unitPreference
-        return ChartAccessibility.Series(
-            points: runs.map {
-                ChartAccessibility.Point(
-                    label: pointLabel($0.date),
-                    value: ($0.elevationGainMeters ?? 0).elevationValue(unit: unit)
-                )
-            },
-            valueAxisLabel: String(localized: "Elevation gain", comment: "Chart value axis")
-        ) {
-            SpokenMetric.spoken(value: "\(Int($0))", unit: unit.elevationLabel)
-        }
-    }
-
-    private var vo2Series: ChartAccessibility.Series {
-        ChartAccessibility.Series(
-            points: vo2Points.map { ChartAccessibility.Point(label: pointLabel($0.date), value: $0.vdot) },
-            valueAxisLabel: String(localized: "VDOT", comment: "Chart value axis")
-        ) { String(format: "%.0f", $0) }
-    }
-
     // MARK: - Pace trend chart
 
     private var easyPaceTrend: ProgressPeriodStats.EasyPaceTrend {
-        ProgressPeriodStats.easyPaceTrend(for: filteredWorkouts)
+        ProgressPeriodStats.easyPaceTrend(for: filteredWorkouts, grouping: period.grouping)
     }
 
     /// Easy and long runs as dots, with each week's typical easy pace as the line.
@@ -835,7 +830,9 @@ struct ProgressDashboardView: View {
                 VStack(alignment: .leading, spacing: AppSpacing.md) {
                     easyPaceHeadline(trend)
                     easyPaceChart(trend)
-                    Text("Easy and long runs only, so the effort is alike. The line is each week's typical pace.")
+                    Text(period.grouping == .week
+                         ? LocalizedStringKey("Easy and long runs only, so the effort is alike. The line is each week's typical pace.")
+                         : "Easy and long runs only, so the effort is alike. The line is each month's typical pace.")
                         .font(.dsCaption)
                         .foregroundStyle(.secondary)
                 }
@@ -852,7 +849,7 @@ struct ProgressDashboardView: View {
                     Text(latest.paceString(unit: unit))
                         .font(.dsTitle3.weight(.bold))
                         .monospacedDigit()
-                    Text("latest week")
+                    Text(period.grouping == .week ? LocalizedStringKey("latest week") : "latest month")
                         .font(.dsFootnote).foregroundStyle(.secondary)
                 }
             }
@@ -879,9 +876,15 @@ struct ProgressDashboardView: View {
     }
 
     private func easyPaceChart(_ trend: ProgressPeriodStats.EasyPaceTrend) -> some View {
-        let selectedRun = selectedPaceDate.flatMap { closestEasyRun(to: $0, in: trend.runs) }
+        // A dot per run up to half a year. Past that, a year or five of runs is hundreds
+        // of dots that hide the line and slow the page, so only the monthly line is drawn.
+        let showsRuns = period.grouping == .week
+        let selectedRun = showsRuns ? selectedPaceDate.flatMap { closestEasyRun(to: $0, in: trend.runs) } : nil
+        let selectedMonth = showsRuns ? nil : selectedPaceDate.flatMap { date in
+            trend.weeks.min { abs($0.plotDate.timeIntervalSince(date)) < abs($1.plotDate.timeIntervalSince(date)) }
+        }
         let paceFactor = 1.0.paceSecondsValue(unit: appSettings.unitPreference)
-        let paces = trend.runs.map(\.paceSecondsPerKm)
+        let paces = showsRuns ? trend.runs.map(\.paceSecondsPerKm) : trend.weeks.map(\.paceSecondsPerKm)
         let paceTicks = PaceAxis.ticks(
             lowerSecondsPerKm: paces.min() ?? 0,
             upperSecondsPerKm: paces.max() ?? 0,
@@ -889,13 +892,15 @@ struct ProgressDashboardView: View {
         )
         return Chart {
             drillBand
-            ForEach(trend.runs) { run in
-                PointMark(
-                    x: .value("Date", run.date),
-                    y: .value("sec/km", run.paceSecondsPerKm)
-                )
-                .foregroundStyle(Color.secondary.opacity(selectedRun?.id == run.id ? 0.9 : 0.35))
-                .symbolSize(selectedRun?.id == run.id ? 70 : 30)
+            if showsRuns {
+                ForEach(trend.runs) { run in
+                    PointMark(
+                        x: .value("Date", run.date),
+                        y: .value("sec/km", run.paceSecondsPerKm)
+                    )
+                    .foregroundStyle(Color.secondary.opacity(selectedRun?.id == run.id ? 0.9 : 0.35))
+                    .symbolSize(selectedRun?.id == run.id ? 70 : 30)
+                }
             }
             // A line needs two weeks to say anything; one week shows only its dots.
             if trend.weeks.count > 1 {
@@ -923,17 +928,25 @@ struct ProgressDashboardView: View {
                     }
                 }
             }
+            if let month = selectedMonth {
+                selectionRule(x: .value("Date", month.plotDate)) {
+                    StrideTooltip {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(trendBucketTitle(month.weekStart))
+                                .font(.dsCaption2).foregroundStyle(.secondary)
+                            Text(month.paceSecondsPerKm.paceString(unit: appSettings.unitPreference))
+                                .font(.dsCaption).bold()
+                        }
+                    }
+                }
+            }
         }
         .frame(height: trendChartHeight)
         // Pace never approaches zero, so a zero-anchored domain pushed every point into one
         // band and flattened the trend; bracket the data instead. Reversed so a faster pace
         // sits higher and the line climbs as the runner improves.
         .chartYScale(domain: .automatic(includesZero: false, reversed: true))
-        .chartXAxis {
-            AxisMarks(values: .stride(by: .month)) {
-                AxisValueLabel(format: .dateTime.month(.abbreviated))
-            }
-        }
+        .chartXAxis { dateAxisMarks }
         .chartYAxis {
             // Whole minutes of the runner's unit (9:00, 10:00), not Charts' round numbers
             // of seconds per km, which read 8:02, 9:23 in miles.
@@ -960,40 +973,49 @@ struct ProgressDashboardView: View {
 
     // MARK: - Heart rate trend chart
 
+    /// Average heart rate, a point per week or month (the period's grouping) rather than
+    /// per run, so a few years of runs is a readable line and not a thousand marks.
+    private var heartRateBuckets: [TrendSeries.Bucket] {
+        let points = filteredWorkouts.compactMap { run -> TrendSeries.Point? in
+            guard let hr = run.averageHeartRate, TrendSeries.plausibleHeartRate.contains(hr) else { return nil }
+            return TrendSeries.Point(date: run.date, value: hr)
+        }
+        return TrendSeries.buckets(points, grouping: period.grouping, statistic: .mean)
+    }
+
     private var heartRateTrendChart: some View {
-        let withHR = filteredWorkouts.filter { $0.averageHeartRate != nil }
+        let buckets = heartRateBuckets
+        // Worked out once, not once per mark: per mark it was a search of every run for
+        // every run, which on a long history held the main thread for seconds.
+        let selected = selectedHRDate.flatMap { TrendSeries.nearest(to: $0, in: buckets) }
         return chartCard("AVERAGE HEART RATE") {
-            if withHR.isEmpty {
+            if buckets.isEmpty {
                 emptyDataPlaceholder("No heart rate data in this period")
             } else {
                 Chart {
                     drillBand
-                    ForEach(withHR) { workout in
+                    ForEach(buckets) { bucket in
                         LineMark(
-                            x: .value("Date", workout.date),
-                            y: .value("bpm", workout.averageHeartRate ?? 0)
+                            x: .value("Date", bucket.plotDate),
+                            y: .value("bpm", bucket.value)
                         )
                         // A trend line, not a zone: zone colours mark training intensity only.
                         .foregroundStyle(Color.brand)
-                        .interpolationMethod(.catmullRom)
+                        .interpolationMethod(.monotone)
                         PointMark(
-                            x: .value("Date", workout.date),
-                            y: .value("bpm", workout.averageHeartRate ?? 0)
+                            x: .value("Date", bucket.plotDate),
+                            y: .value("bpm", bucket.value)
                         )
                         .foregroundStyle(Color.brand)
-                        .symbolSize(
-                            selectedHRDate.flatMap { closestWorkout(to: $0, in: withHR) }?.id == workout.id ? 80 : 36
-                        )
+                        .symbolSize(selected?.id == bucket.id ? 80 : 30)
                     }
-                    if let selected = selectedHRDate,
-                       let workout = closestWorkout(to: selected, in: withHR),
-                       let hr = workout.averageHeartRate {
-                        selectionRule(x: .value("Date", workout.date)) {
+                    if let selected {
+                        selectionRule(x: .value("Date", selected.plotDate)) {
                             StrideTooltip {
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(workout.date, format: .dateTime.month(.abbreviated).day())
+                                    Text(trendBucketTitle(selected.start))
                                         .font(.dsCaption2).foregroundStyle(.secondary)
-                                    Text("\(Int(hr)) bpm")
+                                    Text("\(Int(selected.value.rounded())) bpm · \(selected.count) \(selected.count == 1 ? String(localized: "run") : String(localized: "runs"))")
                                         .font(.dsCaption).bold()
                                 }
                             }
@@ -1001,14 +1023,11 @@ struct ProgressDashboardView: View {
                     }
                 }
                 .frame(height: trendChartHeight)
-                .chartXAxis {
-                    AxisMarks(values: .stride(by: .month)) {
-                        AxisValueLabel(format: .dateTime.month(.abbreviated))
-                    }
-                }
+                .chartXAxis { dateAxisMarks }
+                .chartYScale(domain: .automatic(includesZero: false))
                 .chartYAxisLabel("bpm")
                 .chartXSelection(value: $selectedHRDate)
-                .chartAccessibility("Average heart rate chart", heartRateSeries(withHR))
+                .chartAccessibility("Average heart rate chart", trendSeries(buckets, axis: String(localized: "Heart rate", comment: "Chart value axis")) { "\(Int($0)) beats per minute" })
             }
         }
     }
@@ -1048,21 +1067,46 @@ struct ProgressDashboardView: View {
         if didChange { context.saveOrLog("backfilled heart-rate samples") }
     }
 
-    /// Aggregate time-in-zone across the selected period, from each run's persisted HR samples.
-    private var aggregateZoneSlices: [HRZoneSlice] {
-        guard let maxHR = maxHeartRate else { return [] }
-        let perRun = scopedWorkouts.compactMap { run -> [HRZoneSlice]? in
-            let samples = run.heartRateSamples
-            guard !samples.isEmpty else { return nil }
-            return HeartRateZoneService.timeInZones(
-                bpmSamples: samples, totalSeconds: run.durationSeconds, maxHR: maxHR
-            )
+    /// Changes when the runs in scope, their heart-rate samples or the max HR change, so
+    /// the zones are worked out again exactly then.
+    private var zoneKey: Int {
+        var hasher = Hasher()
+        hasher.combine(maxHeartRate)
+        for run in scopedWorkouts {
+            hasher.combine(run.id)
+            hasher.combine(run.heartRateSamplesData?.count ?? 0)
         }
-        return perRun.isEmpty ? [] : HeartRateZoneService.aggregate(perRun)
+        return hasher.finalize()
+    }
+
+    /// Aggregate time-in-zone across the runs in scope, from each run's persisted HR
+    /// samples.
+    ///
+    /// This decoded every run's samples on every pass of the page's body, including each
+    /// frame of a drag on any chart. A month of runs hid that; "All" after a five-year
+    /// import held the main thread long enough for the system to kill the app. The
+    /// samples are now read once per scope change and decoded off the main actor.
+    private func loadZoneSlices() async {
+        guard let maxHR = maxHeartRate else {
+            zoneSlices = []
+            return
+        }
+        let inputs = scopedWorkouts.compactMap { run -> (Data, Double)? in
+            run.heartRateSamplesData.map { ($0, run.durationSeconds) }
+        }
+        zoneSlices = await Task.detached(priority: .userInitiated) {
+            let perRun = inputs.compactMap { data, seconds -> [HRZoneSlice]? in
+                guard let samples = try? JSONDecoder().decode([Double].self, from: data), !samples.isEmpty else {
+                    return nil
+                }
+                return HeartRateZoneService.timeInZones(bpmSamples: samples, totalSeconds: seconds, maxHR: maxHR)
+            }
+            return perRun.isEmpty ? [] : HeartRateZoneService.aggregate(perRun)
+        }.value
     }
 
     private var heartRateZoneChart: some View {
-        let slices = aggregateZoneSlices
+        let slices = zoneSlices
         let total = slices.reduce(0) { $0 + $1.seconds }
         return chartCard("TIME IN HEART-RATE ZONES") {
             if maxHeartRate == nil {
@@ -1115,34 +1159,44 @@ struct ProgressDashboardView: View {
 
     // MARK: - Elevation trend chart
 
+    /// Climb per week or month, the period's grouping.
+    private var elevationBuckets: [TrendSeries.Bucket] {
+        let points = filteredWorkouts.compactMap { run -> TrendSeries.Point? in
+            guard let gain = run.elevationGainMeters, gain > 0 else { return nil }
+            return TrendSeries.Point(date: run.date, value: gain)
+        }
+        return TrendSeries.buckets(points, grouping: period.grouping, statistic: .sum)
+    }
+
     private var elevationTrendChart: some View {
-        let withElev = filteredWorkouts.filter { ($0.elevationGainMeters ?? 0) > 0 }
+        let buckets = elevationBuckets
+        let unit = appSettings.unitPreference
+        let selected = selectedElevationDate.flatMap { date in
+            buckets.min { abs($0.start.timeIntervalSince(date)) < abs($1.start.timeIntervalSince(date)) }
+        }
         return chartCard("ELEVATION GAIN") {
-            if withElev.isEmpty {
+            if buckets.isEmpty {
                 emptyDataPlaceholder("No elevation data in this period")
             } else {
                 Chart {
                     drillBand
-                    ForEach(withElev) { workout in
+                    ForEach(buckets) { bucket in
                         BarMark(
-                            x: .value("Date", workout.date, unit: .day),
-                            y: .value(appSettings.unitPreference.elevationLabel,
-                                      (workout.elevationGainMeters ?? 0).elevationValue(unit: appSettings.unitPreference))
+                            x: .value("Date", bucket.start, unit: period.grouping.component),
+                            y: .value(unit.elevationLabel, bucket.value.elevationValue(unit: unit))
                         )
                         // Bars in the route's bar gradient, as every chart's bars: `success`
                         // is a status colour, and `brandGlow` alone is too light on paper.
                         .foregroundStyle(.routeBar)
-                        .cornerRadius(AppRadius.xs)
+                        .cornerRadius(AppRadius.micro)
                     }
-                    if let selected = selectedElevationDate,
-                       let workout = closestWorkout(to: selected, in: withElev),
-                       let gain = workout.elevationGainMeters {
-                        selectionRule(x: .value("Date", workout.date)) {
+                    if let selected {
+                        selectionRule(x: .value("Date", selected.start, unit: period.grouping.component)) {
                             StrideTooltip {
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(workout.date, format: .dateTime.month(.abbreviated).day())
+                                    Text(trendBucketTitle(selected.start))
                                         .font(.dsCaption2).foregroundStyle(.secondary)
-                                    Text(String(format: "+%.0f %@", gain.elevationValue(unit: appSettings.unitPreference), appSettings.unitPreference.elevationLabel))
+                                    Text(String(format: "+%.0f %@", selected.value.elevationValue(unit: unit), unit.elevationLabel))
                                         .font(.dsCaption).bold()
                                 }
                             }
@@ -1150,54 +1204,60 @@ struct ProgressDashboardView: View {
                     }
                 }
                 .frame(height: trendChartHeight)
-                .chartXAxis {
-                    AxisMarks(values: .stride(by: .month)) {
-                        AxisValueLabel(format: .dateTime.month(.abbreviated))
-                    }
-                }
-                .chartYAxisLabel(appSettings.unitPreference.elevationLabel)
+                .chartXAxis { dateAxisMarks }
+                .chartYAxisLabel(unit.elevationLabel)
                 .chartXSelection(value: $selectedElevationDate)
-                .chartAccessibility("Elevation gain chart", elevationSeries(withElev))
+                .chartAccessibility("Elevation gain chart", trendSeries(buckets, axis: String(localized: "Elevation gain", comment: "Chart value axis")) {
+                    SpokenMetric.spoken(value: "\(Int($0.elevationValue(unit: unit)))", unit: unit.elevationLabel)
+                })
             }
         }
     }
 
     // MARK: - VDOT trend chart
 
+    /// The best VDOT each week or month showed, worked out once per pass. It used to be
+    /// a computed property read once per mark, and each read re-estimated VDOT for every
+    /// run in the period: fine for a month, a hang for years of runs.
+    private var vo2Buckets: [TrendSeries.Bucket] {
+        let points = ProgressPeriodStats.vdotSamples(for: filteredWorkouts)
+            .map { TrendSeries.Point(date: $0.date, value: $0.vdot) }
+        return TrendSeries.buckets(points, grouping: period.grouping, statistic: .max)
+    }
+
     private var vo2MaxTrendChart: some View {
+        let buckets = vo2Buckets
+        let selected = selectedVO2Date.flatMap { TrendSeries.nearest(to: $0, in: buckets) }
         // Named VDOT, as the hero above names the same number.
-        chartCard("VDOT") {
-            if vo2Points.isEmpty {
+        return chartCard("VDOT") {
+            if buckets.isEmpty {
                 emptyDataPlaceholder("Not enough run data in this period")
             } else {
                 Chart {
                     drillBand
-                    ForEach(vo2Points, id: \.date) { point in
+                    ForEach(buckets) { bucket in
                         LineMark(
-                            x: .value("Date", point.date),
-                            y: .value("VDOT", point.vdot)
+                            x: .value("Date", bucket.plotDate),
+                            y: .value("VDOT", bucket.value)
                         )
                         // Fitness over time is progress, so it is the route.
                         .foregroundStyle(.route)
                         .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
-                        .interpolationMethod(.catmullRom)
+                        .interpolationMethod(.monotone)
                         PointMark(
-                            x: .value("Date", point.date),
-                            y: .value("VDOT", point.vdot)
+                            x: .value("Date", bucket.plotDate),
+                            y: .value("VDOT", bucket.value)
                         )
                         .foregroundStyle(Color.brand)
-                        .symbolSize(
-                            selectedVO2Date.flatMap { closestVO2Point(to: $0) } == point ? 80 : 36
-                        )
+                        .symbolSize(selected?.id == bucket.id ? 80 : 30)
                     }
-                    if let selected = selectedVO2Date,
-                       let point = closestVO2Point(to: selected) {
-                        selectionRule(x: .value("Date", point.date)) {
+                    if let selected {
+                        selectionRule(x: .value("Date", selected.plotDate)) {
                             StrideTooltip {
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(point.date, format: .dateTime.month(.abbreviated).day())
+                                    Text(trendBucketTitle(selected.start))
                                         .font(.dsCaption2).foregroundStyle(.secondary)
-                                    Text(String(format: "%.0f VDOT", point.vdot))
+                                    Text(String(format: "%.0f VDOT", selected.value))
                                         .font(.dsCaption).bold()
                                 }
                             }
@@ -1208,15 +1268,11 @@ struct ProgressDashboardView: View {
                 // Same reason as the pace chart: VDOT sits in the 30s–50s for most
                 // runners, so a zero-anchored domain spends half the plot on numbers
                 // nobody will record and flattens the trend the card exists to show.
-                .chartYScale(domain: vo2Domain)
-                .chartXAxis {
-                    AxisMarks(values: .stride(by: .month)) {
-                        AxisValueLabel(format: .dateTime.month(.abbreviated))
-                    }
-                }
+                .chartYScale(domain: vo2Domain(buckets))
+                .chartXAxis { dateAxisMarks }
                 .chartXSelection(value: $selectedVO2Date)
-                .chartAccessibility("VDOT chart", vo2Series)
-                Text("Higher is better fitness")
+                .chartAccessibility("VDOT chart", trendSeries(buckets, axis: String(localized: "VDOT", comment: "Chart value axis")) { String(format: "%.0f", $0) })
+                Text("Higher is better fitness. Each point is the best \(period.grouping.noun).")
                     .font(.dsCaption)
                     .foregroundStyle(.secondary)
             }
@@ -1225,8 +1281,8 @@ struct ProgressDashboardView: View {
 
     /// Brackets the recorded VDOT values, padded by a share of their spread and clamped so
     /// the axis never runs below zero on a very low estimate.
-    private var vo2Domain: ClosedRange<Double> {
-        let values = vo2Points.map(\.vdot)
+    private func vo2Domain(_ buckets: [TrendSeries.Bucket]) -> ClosedRange<Double> {
+        let values = buckets.map(\.value)
         guard let lowest = values.min(), let highest = values.max() else { return 0...1 }
         let padding = max((highest - lowest) * 0.15, 2)
         return max(0, lowest - padding)...(highest + padding)
@@ -1293,14 +1349,7 @@ struct ProgressDashboardView: View {
 
     // MARK: - Selection helpers
 
-    private func closestWorkout(to date: Date, in list: [RunWorkout]) -> RunWorkout? {
-        list.min(by: { abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date)) })
-    }
 
-
-    private func closestVO2Point(to date: Date) -> ProgressPeriodStats.VDOTSample? {
-        vo2Points.min(by: { abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date)) })
-    }
 
     // MARK: - Chart annotation helpers
 

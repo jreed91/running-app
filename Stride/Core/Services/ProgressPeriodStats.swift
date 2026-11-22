@@ -133,11 +133,20 @@ enum ProgressPeriodStats {
         type == .easy || type == .longRun
     }
 
-    static func easyPaceTrend(for runs: [RunWorkout]) -> EasyPaceTrend {
+    /// - Parameter grouping: what the line's points summarise. Weeks by default; the
+    ///   Progress page passes months for a year or more, where a point a week is a few
+    ///   hundred points.
+    static func easyPaceTrend(
+        for runs: [RunWorkout],
+        grouping: VolumeExplorer.Grouping = .week
+    ) -> EasyPaceTrend {
         let easy = runs.runsOnly
             .filter { run in
                 let pace = run.averagePaceSecondsPerKm
-                return countsAsEasyPace(run.workoutType) && pace > 0 && pace.isFinite
+                // A pace no one runs is a recording fault, and one of them (114:00 per mile
+                // on an imported run) stretched the axis until the trend was a flat line.
+                return countsAsEasyPace(run.workoutType) && pace.isFinite
+                    && TrendSeries.plausiblePaceSecondsPerKm.contains(pace)
             }
             .sorted { $0.date < $1.date }
             .map { run in
@@ -149,7 +158,12 @@ enum ProgressPeriodStats {
                 )
             }
 
-        let weeks = Dictionary(grouping: easy) { $0.date.startOfWeek }
+        let calendar = VolumeExplorer.calendar()
+        let weeks = Dictionary(grouping: easy) {
+            grouping == .week
+                ? $0.date.startOfWeek
+                : VolumeExplorer.periodStart(of: $0.date, grouping: .month, calendar: calendar)
+        }
             .compactMap { weekStart, weekRuns -> EasyPaceTrend.Week? in
                 guard let pace = median(of: weekRuns.map(\.paceSecondsPerKm)) else { return nil }
                 let meanTime = weekRuns.reduce(0) { $0 + $1.date.timeIntervalSinceReferenceDate }
