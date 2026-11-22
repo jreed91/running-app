@@ -310,12 +310,15 @@ extension RunWorkout {
     /// the numbers. A blob read off a result still works: SwiftData faults it in for that
     /// one run, which is right for the few runs a screen opens up (the drilled-in week's
     /// heart-rate zones, the heatmap's routes after a tap).
-    static let summaryProperties: [PartialKeyPath<RunWorkout>] = [
+    ///
+    /// Computed rather than stored: an array of key paths isn't `Sendable`, so a stored
+    /// static of it fails Swift 6's concurrency check.
+    static var summaryProperties: [PartialKeyPath<RunWorkout>] { [
         \.id, \.date, \.distanceMeters, \.durationSeconds, \.averagePaceSecondsPerKm,
         \.averageHeartRate, \.maxHeartRate, \.elevationGainMeters, \.averageCadenceStepsPerMinute,
         \.workoutTypeRaw, \.workoutLocationRaw, \.splitUnitRaw, \.notes, \.healthKitWorkoutID,
         \.linkedScheduledWorkoutID, \.shoeID, \.aiCoachReactionRaw, \.feelRaw,
-    ]
+    ] }
 
     /// `descriptor` with only ``summaryProperties`` loaded.
     static func summary(_ descriptor: FetchDescriptor<RunWorkout>) -> FetchDescriptor<RunWorkout> {
