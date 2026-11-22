@@ -9,7 +9,7 @@ struct YearRecapView: View {
 
     /// All-time runs, oldest first: best efforts are checked against earlier years and
     /// the distance against last year, so the query can't be limited to `year`.
-    @Query(RunWorkout.runsOnlyDescriptor(sortBy: [SortDescriptor(\RunWorkout.date)]))
+    @Query(RunWorkout.allRunsSummaryDescriptor)
     private var workouts: [RunWorkout]
 
     @Environment(AppSettings.self) private var appSettings

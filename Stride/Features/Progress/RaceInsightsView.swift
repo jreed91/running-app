@@ -29,12 +29,13 @@ struct RaceInsightsView: View {
         // Runs only — this screen predicts race times (N38, B8).
         let walkRaw = WorkoutType.walk.rawValue
         let crossTrainingRaw = WorkoutType.crossTraining.rawValue
-        _workouts = Query(
-            filter: #Predicate<RunWorkout> {
+        // Numbers only; the snapshot's splits for its last few weeks fault in per run.
+        _workouts = Query(RunWorkout.summary(FetchDescriptor<RunWorkout>(
+            predicate: #Predicate {
                 $0.date >= cutoff && $0.workoutTypeRaw != walkRaw && $0.workoutTypeRaw != crossTrainingRaw
             },
-            sort: [SortDescriptor(\RunWorkout.date)]
-        )
+            sortBy: [SortDescriptor(\RunWorkout.date)]
+        )))
     }
 
     // MARK: - Snapshot

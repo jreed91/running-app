@@ -26,7 +26,7 @@ struct AchievementsView: View {
     /// Runs only, and for the same reason the window is absent: a medal is a running
     /// record, the badges count kilometres run and days run in a row, and an imported
     /// walk would quietly redefine all of them (N38).
-    @Query(RunWorkout.runsOnlyDescriptor(sortBy: [SortDescriptor(\RunWorkout.date)]))
+    @Query(RunWorkout.allRunsSummaryDescriptor)
     private var workouts: [RunWorkout]
 
     @Environment(AppSettings.self) private var appSettings

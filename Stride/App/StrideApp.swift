@@ -555,7 +555,14 @@ enum ProfileRestoreDeduplicator {
     static func applyLegacyFieldsToRelated(in context: ModelContext) {
         var dirty = false
 
-        if let runs = try? context.fetch(FetchDescriptor<RunWorkout>()) {
+        // Only the runs that still carry a legacy value, which after the first launch
+        // with the migration is none. This ran at every launch over every run, reading
+        // each one's route and samples with it, so a long imported history made every
+        // launch slow.
+        let legacyRuns = FetchDescriptor<RunWorkout>(
+            predicate: #Predicate { $0.workoutTypeLegacy != nil || $0.workoutLocationLegacy != nil }
+        )
+        if let runs = try? context.fetch(RunWorkout.summary(legacyRuns)) {
             for run in runs {
                 if run.workoutTypeRaw == WorkoutType.easy.rawValue,
                    let legacy = run.workoutTypeLegacy,
@@ -572,6 +579,9 @@ enum ProfileRestoreDeduplicator {
                     dirty = true
                 }
                 run.workoutLocationLegacy = nil
+                // Clearing the legacy value is itself the change to keep, or the run
+                // would be fetched again next launch.
+                dirty = true
             }
         }
 
@@ -640,11 +650,21 @@ enum ProfileRestoreDeduplicator {
     /// let us repair any gaps without waiting for a second sync cycle.
     @MainActor
     static func repairRelationships(in context: ModelContext) {
-        guard let runs = try? context.fetch(FetchDescriptor<RunWorkout>()),
+        // Runs whose link is missing, and the runs the plan's unlinked sessions name: not
+        // every run ever stored. This runs at every launch, and a fetch of every run read
+        // each one's route and samples along with it.
+        let unlinkedRuns = FetchDescriptor<RunWorkout>(
+            predicate: #Predicate { $0.linkedScheduledWorkoutID != nil && $0.scheduledWorkout == nil }
+        )
+        guard let runs = try? context.fetch(RunWorkout.summary(unlinkedRuns)),
               let scheduled = try? context.fetch(FetchDescriptor<ScheduledWorkout>()) else { return }
 
-        let scheduledByID = Dictionary(uniqueKeysWithValues: scheduled.map { ($0.id, $0) })
-        let runsByID = Dictionary(uniqueKeysWithValues: runs.map { ($0.id, $0) })
+        let scheduledByID = Dictionary(scheduled.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let wantedRunIDs = Array(Set(scheduled.filter { $0.completedWorkout == nil }.compactMap(\.linkedRunWorkoutID)))
+        let namedRuns = wantedRunIDs.isEmpty ? [] : ((try? context.fetch(RunWorkout.summary(FetchDescriptor<RunWorkout>(
+            predicate: #Predicate { wantedRunIDs.contains($0.id) }
+        )))) ?? [])
+        let runsByID = Dictionary(namedRuns.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         var dirty = false
 
         for run in runs where run.scheduledWorkout == nil {

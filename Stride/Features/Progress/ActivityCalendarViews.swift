@@ -13,14 +13,9 @@ extension ActivityCalendar {
 
     /// All-time runs, no walks or cross-training.
     static func query() -> Query<RunWorkout, [RunWorkout]> {
-        let walkRaw = WorkoutType.walk.rawValue
-        let crossTrainingRaw = WorkoutType.crossTraining.rawValue
-        return Query(
-            filter: #Predicate<RunWorkout> {
-                $0.workoutTypeRaw != walkRaw && $0.workoutTypeRaw != crossTrainingRaw
-            },
-            sort: [SortDescriptor(\RunWorkout.date)]
-        )
+        // Numbers only. The heatmap reads routes after its tap, up to its route limit,
+        // and SwiftData faults those in one run at a time.
+        Query(RunWorkout.allRunsSummaryDescriptor)
     }
 }
 

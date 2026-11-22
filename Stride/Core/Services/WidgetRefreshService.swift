@@ -135,9 +135,9 @@ enum WidgetRefreshService {
     /// the same read `AchievementsView` already makes with an unbounded `@Query`, and
     /// walks are excluded here for the same reason they are there (N38).
     private static func runs(in context: ModelContext) -> [RunWorkout] {
-        (try? context.fetch(RunWorkout.runsOnlyDescriptor(
-            sortBy: [SortDescriptor(\.date)]
-        ))) ?? []
+        // Numbers only (`RunWorkout.summaryProperties`): this runs at every foreground
+        // and background, and the widgets never read a route or a sample series.
+        (try? context.fetch(RunWorkout.allRunsSummaryDescriptor)) ?? []
     }
 
     private static func profile(in context: ModelContext) -> UserProfile? {

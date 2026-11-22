@@ -298,4 +298,35 @@ extension RunWorkout {
         descriptor.propertiesToFetch = [\.id, \.healthKitWorkoutID, \.date, \.durationSeconds, \.workoutTypeRaw]
         return descriptor
     }
+
+    /// Every stored column except the JSON blobs: route, splits, laps, heart-rate
+    /// samples, distance series, weather and the cached AI insight.
+    ///
+    /// None of those blobs is external storage, so a plain fetch of every run reads every
+    /// route and sample series with it. With a few weeks of runs nobody noticed; after an
+    /// import of five years, each screen that listed every run (Progress, Achievements,
+    /// the year recap, fitness & freshness, the running-days grid) read hundreds of
+    /// megabytes on every refresh, and the whole app slowed down. Those screens only read
+    /// the numbers. A blob read off a result still works: SwiftData faults it in for that
+    /// one run, which is right for the few runs a screen opens up (the drilled-in week's
+    /// heart-rate zones, the heatmap's routes after a tap).
+    static let summaryProperties: [PartialKeyPath<RunWorkout>] = [
+        \.id, \.date, \.distanceMeters, \.durationSeconds, \.averagePaceSecondsPerKm,
+        \.averageHeartRate, \.maxHeartRate, \.elevationGainMeters, \.averageCadenceStepsPerMinute,
+        \.workoutTypeRaw, \.workoutLocationRaw, \.splitUnitRaw, \.notes, \.healthKitWorkoutID,
+        \.linkedScheduledWorkoutID, \.shoeID, \.aiCoachReactionRaw, \.feelRaw,
+    ]
+
+    /// `descriptor` with only ``summaryProperties`` loaded.
+    static func summary(_ descriptor: FetchDescriptor<RunWorkout>) -> FetchDescriptor<RunWorkout> {
+        var descriptor = descriptor
+        descriptor.propertiesToFetch = summaryProperties
+        return descriptor
+    }
+
+    /// Runs only, oldest first, numbers only: for the screens that chart every run.
+    static var allRunsSummaryDescriptor: FetchDescriptor<RunWorkout> {
+        summary(runsOnlyDescriptor(sortBy: [SortDescriptor(\.date)]))
+    }
+
 }
