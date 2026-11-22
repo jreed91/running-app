@@ -95,12 +95,30 @@ enum CloudKitDiagnostics {
     /// holds the full history.
     static let eventHistoryLimit = 25
 
+    /// How many non-atomic per-record errors one batch expands into log lines.
+    static let partialErrorExpansionLimit = 10
+
+    /// True for a per-record error that only says its batch failed: `batchRequestFailed`,
+    /// or the internal "Atomic failure" (code 2024) that CloudKit sometimes reports directly.
+    static func isAtomicFailure(_ error: NSError) -> Bool {
+        if error.domain == CKError.errorDomain, error.code == CKError.Code.batchRequestFailed.rawValue {
+            return true
+        }
+        return error.domain == "CKInternalErrorDomain" && error.code == 2024
+    }
+
     /// Flattens a CloudKit error — including every partial per-item error and the whole
     /// underlying chain — into loggable lines.
     ///
     /// CloudKit reports a failed batch as one error whose real causes sit in
     /// `CKPartialErrorsByItemIDKey`, so an unwalked `localizedDescription` says only
     /// that something went wrong with some records.
+    ///
+    /// Stride's zone saves each batch atomically, so one bad record fails every other
+    /// record in it with `batchRequestFailed` ("Atomic failure"). Those are counted, not
+    /// expanded: a 400-record batch otherwise logged 800 lines that hid the one real cause,
+    /// and logged them again on every retry. The real causes are expanded up to
+    /// ``partialErrorExpansionLimit``.
     static func errorDiagnosticLines(_ error: Error, path: String) -> [String] {
         let nsError = error as NSError
         var lines = [
@@ -126,22 +144,47 @@ enum CloudKitDiagnostics {
         }
 
         if let partialErrors = nsError.userInfo[CKPartialErrorsByItemIDKey] as? [AnyHashable: Any], !partialErrors.isEmpty {
-            lines.append("\(path): partialErrors.count=\(partialErrors.count)")
-            for (itemID, value) in partialErrors.sorted(by: { "\($0.key)" < "\($1.key)" }) {
-                guard let nestedError = value as? NSError else {
-                    lines.append("\(path): partial[\(itemID)]=\(String(describing: value))")
-                    continue
-                }
-                lines.append(
-                    contentsOf: errorDiagnosticLines(nestedError, path: "\(path).partial[\(itemID)]")
-                )
-            }
+            lines.append(contentsOf: partialErrorLines(partialErrors, path: path))
         }
 
         if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? NSError {
             lines.append(contentsOf: errorDiagnosticLines(underlying, path: "\(path).underlying"))
         }
 
+        return lines
+    }
+
+    /// The per-record errors of one failed batch: real causes expanded (up to the limit),
+    /// atomic failures counted.
+    private static func partialErrorLines(_ partialErrors: [AnyHashable: Any], path: String) -> [String] {
+        var lines = ["\(path): partialErrors.count=\(partialErrors.count)"]
+        var atomicFailures = 0
+        var expanded = 0
+        var notExpanded = 0
+        for (itemID, value) in partialErrors.sorted(by: { "\($0.key)" < "\($1.key)" }) {
+            guard let nestedError = value as? NSError else {
+                lines.append("\(path): partial[\(itemID)]=\(String(describing: value))")
+                continue
+            }
+            if isAtomicFailure(nestedError) {
+                atomicFailures += 1
+            } else if expanded < partialErrorExpansionLimit {
+                expanded += 1
+                lines.append(
+                    contentsOf: errorDiagnosticLines(nestedError, path: "\(path).partial[\(itemID)]")
+                )
+            } else {
+                notExpanded += 1
+            }
+        }
+        if atomicFailures > 0 {
+            lines.append(
+                "\(path): atomicFailures=\(atomicFailures) (rejected only because another record in the batch failed)"
+            )
+        }
+        if notExpanded > 0 {
+            lines.append("\(path): partialErrors.notExpanded=\(notExpanded)")
+        }
         return lines
     }
 }
