@@ -66,7 +66,8 @@ final class PlanLifecycleService {
               let profile = Self.latestProfile(in: context)
         else { return }
         // Runs only: this history re-derives the plan's pace targets (N38).
-        let history = (try? context.fetch(RunWorkout.runsOnlyDescriptor())) ?? []
+        // Numbers only: the pace refresh reads splits of its last few weeks, which fault in per run.
+        let history = (try? context.fetch(RunWorkout.summary(RunWorkout.runsOnlyDescriptor()))) ?? []
         refreshPlanAfterWorkout(plan: plan, history: history, profile: profile, unitPreference: unitPreference)
         context.saveOrLog("training paces refreshed after an imported run")
         Task { @MainActor in

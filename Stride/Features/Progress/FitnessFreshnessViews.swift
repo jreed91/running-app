@@ -52,10 +52,11 @@ enum FitnessFreshnessData {
     /// Everything but walks: a ride or a swim is load too.
     static func query() -> Query<RunWorkout, [RunWorkout]> {
         let walkRaw = WorkoutType.walk.rawValue
-        return Query(
-            filter: #Predicate<RunWorkout> { $0.workoutTypeRaw != walkRaw },
-            sort: [SortDescriptor(\RunWorkout.date)]
-        )
+        // Numbers only: load is worked out from duration, heart rate and feel.
+        return Query(RunWorkout.summary(FetchDescriptor<RunWorkout>(
+            predicate: #Predicate { $0.workoutTypeRaw != walkRaw },
+            sortBy: [SortDescriptor(\RunWorkout.date)]
+        )))
     }
 }
 

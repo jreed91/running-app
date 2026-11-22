@@ -1081,7 +1081,8 @@ struct ActiveRunView: View {
         }
         if let profile = profiles.first, let plan = activePlans.first {
             // Runs only: this history re-derives the plan's pace targets (N38).
-            let allHistory = (try? context.fetch(RunWorkout.runsOnlyDescriptor())) ?? []
+            // Numbers only: the pace refresh reads splits of its last few weeks, which fault in per run.
+            let allHistory = (try? context.fetch(RunWorkout.summary(RunWorkout.runsOnlyDescriptor()))) ?? []
             container.planLifecycle.refreshPlanAfterWorkout(
                 plan: plan,
                 history: allHistory,

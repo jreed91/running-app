@@ -21,6 +21,17 @@ enum BestEffortsLoader {
         }
     }
 
+    /// Every run with only what a search for best efforts reads: its id, date, type and
+    /// distance series. A plain fetch read every route and heart-rate series too.
+    static func descriptor(walkRaw: String, crossTrainingRaw: String) -> FetchDescriptor<RunWorkout> {
+        var descriptor = FetchDescriptor<RunWorkout>(
+            predicate: #Predicate { $0.workoutTypeRaw != walkRaw && $0.workoutTypeRaw != crossTrainingRaw },
+            sortBy: [SortDescriptor(\RunWorkout.date)]
+        )
+        descriptor.propertiesToFetch = [\.id, \.date, \.workoutTypeRaw, \.distanceSeriesData]
+        return descriptor
+    }
+
     /// Changes whenever a run is added, removed or gets a series, so a `.task(id:)`
     /// recomputes exactly then.
     static func fingerprint(_ inputs: [BestEffortsCache.Input]) -> Int {
@@ -60,12 +71,7 @@ struct BestEffortsCard: View {
         self.scope = scope
         let walkRaw = WorkoutType.walk.rawValue
         let crossTrainingRaw = WorkoutType.crossTraining.rawValue
-        _workouts = Query(
-            filter: #Predicate<RunWorkout> {
-                $0.workoutTypeRaw != walkRaw && $0.workoutTypeRaw != crossTrainingRaw
-            },
-            sort: [SortDescriptor(\RunWorkout.date)]
-        )
+        _workouts = Query(BestEffortsLoader.descriptor(walkRaw: walkRaw, crossTrainingRaw: crossTrainingRaw))
     }
 
     /// The distances the card lists: the ones runners race. 400 m is on the full page.
@@ -203,12 +209,7 @@ struct RunBestEffortsCard: View {
         self.workout = workout
         let walkRaw = WorkoutType.walk.rawValue
         let crossTrainingRaw = WorkoutType.crossTraining.rawValue
-        _workouts = Query(
-            filter: #Predicate<RunWorkout> {
-                $0.workoutTypeRaw != walkRaw && $0.workoutTypeRaw != crossTrainingRaw
-            },
-            sort: [SortDescriptor(\RunWorkout.date)]
-        )
+        _workouts = Query(BestEffortsLoader.descriptor(walkRaw: walkRaw, crossTrainingRaw: crossTrainingRaw))
     }
 
     var body: some View {
