@@ -125,4 +125,50 @@ struct CloudKitDiagnosticsTests {
         let lines = CloudKitDiagnostics.errorDiagnosticLines(error, path: "event.error")
         #expect(lines.contains { $0.contains("ckCode=") })
     }
+
+    @Test("Atomic failures are counted, and only the record that broke the batch is expanded")
+    func atomicFailuresAreCounted() {
+        let atomic = NSError(
+            domain: CKError.errorDomain,
+            code: CKError.Code.batchRequestFailed.rawValue,
+            userInfo: [
+                NSLocalizedDescriptionKey: "Atomic failure",
+                NSUnderlyingErrorKey: NSError(domain: "CKInternalErrorDomain", code: 2024, userInfo: [:])
+            ]
+        )
+        let cause = NSError(
+            domain: CKError.errorDomain,
+            code: CKError.Code.limitExceeded.rawValue,
+            userInfo: [NSLocalizedDescriptionKey: "record too large"]
+        )
+        var partials: [String: NSError] = ["broken": cause]
+        for index in 0..<50 { partials["ok\(index)"] = atomic }
+        let batch = NSError(
+            domain: CKError.errorDomain,
+            code: CKError.Code.partialFailure.rawValue,
+            userInfo: [CKPartialErrorsByItemIDKey: partials]
+        )
+
+        let lines = CloudKitDiagnostics.errorDiagnosticLines(batch, path: "event.error")
+        #expect(lines.contains { $0.contains("partial[broken]") && $0.contains("record too large") })
+        #expect(lines.contains { $0.contains("atomicFailures=50") })
+        #expect(!lines.contains { $0.contains("partial[ok") })
+    }
+
+    @Test("Real per-record causes are capped so one export cannot flood the log")
+    func realCausesAreCapped() {
+        let cause = NSError(domain: CKError.errorDomain, code: CKError.Code.limitExceeded.rawValue, userInfo: [:])
+        var partials: [String: NSError] = [:]
+        for index in 0..<15 { partials["r\(index)"] = cause }
+        let batch = NSError(
+            domain: CKError.errorDomain,
+            code: CKError.Code.partialFailure.rawValue,
+            userInfo: [CKPartialErrorsByItemIDKey: partials]
+        )
+
+        let lines = CloudKitDiagnostics.errorDiagnosticLines(batch, path: "event.error")
+        let expanded = lines.filter { $0.contains(".partial[") && $0.contains("domain=") }
+        #expect(expanded.count == CloudKitDiagnostics.partialErrorExpansionLimit)
+        #expect(lines.contains { $0.contains("partialErrors.notExpanded=5") })
+    }
 }
