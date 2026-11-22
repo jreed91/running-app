@@ -80,11 +80,12 @@ final class NotificationRefreshService {
             return
         }
 
+        // Numbers only: a streak reads dates, and this runs at every refresh.
         let runs = (try? context.fetch(
-            RunWorkout.runsOnlyDescriptor(
+            RunWorkout.summary(RunWorkout.runsOnlyDescriptor(
                 sortBy: [SortDescriptor(\RunWorkout.date, order: .reverse)],
                 fetchLimit: TrainingNudgePolicy.streakRunSampleSize
-            )
+            ))
         )) ?? []
 
         let streak = StreakGoalService.streak(for: runs)

@@ -4,50 +4,81 @@ import Charts
 
 // MARK: - Loading
 
-/// Reads the runs' series on the main actor and hands them to ``BestEffortsCache``,
-/// which works out only the runs it hasn't seen.
+/// Asks ``BestEffortsCache`` for every run's efforts, reading from the store the
+/// distance series of only the runs it hasn't worked out yet.
 enum BestEffortsLoader {
     /// The last answer, so a card that appears again (back from a run, a tab switch)
     /// draws its rows straight away instead of "Finding your fastest stretches…".
     @MainActor static var latest: [BestEfforts.RunEfforts] = []
 
-    /// Runs that carry a distance series. Runs from before the series was stored have
-    /// none and can't be searched inside; their whole-run times still count on Progress.
+    /// Every run that counts as running, by id and date. No series: those are read only
+    /// for the runs the cache is missing.
     @MainActor
-    static func inputs(from workouts: [RunWorkout]) -> [BestEffortsCache.Input] {
+    static func keys(from workouts: [RunWorkout]) -> [BestEffortsCache.Key] {
         workouts.compactMap { run in
-            guard run.workoutType.countsAsRunning, let data = run.distanceSeriesData else { return nil }
-            return BestEffortsCache.Input(id: run.id, date: run.date, series: data)
+            run.workoutType.countsAsRunning ? BestEffortsCache.Key(id: run.id, date: run.date) : nil
         }
     }
 
-    /// Every run with only what a search for best efforts reads: its id, date, type and
-    /// distance series. A plain fetch read every route and heart-rate series too.
+    /// Every run with only its id, date and type. The cards used to fetch every run's
+    /// distance series on each appearance, which after a multi-year import was the
+    /// heaviest read in the app.
     static func descriptor(walkRaw: String, crossTrainingRaw: String) -> FetchDescriptor<RunWorkout> {
         var descriptor = FetchDescriptor<RunWorkout>(
             predicate: #Predicate { $0.workoutTypeRaw != walkRaw && $0.workoutTypeRaw != crossTrainingRaw },
             sortBy: [SortDescriptor(\RunWorkout.date)]
         )
-        descriptor.propertiesToFetch = [\.id, \.date, \.workoutTypeRaw, \.distanceSeriesData]
+        descriptor.propertiesToFetch = [\.id, \.date, \.workoutTypeRaw]
         return descriptor
     }
 
-    /// Changes whenever a run is added, removed or gets a series, so a `.task(id:)`
-    /// recomputes exactly then.
-    static func fingerprint(_ inputs: [BestEffortsCache.Input]) -> Int {
+    /// Changes whenever a run is added or removed, so a `.task(id:)` asks again exactly
+    /// then.
+    static func fingerprint(_ keys: [BestEffortsCache.Key]) -> Int {
         var hasher = Hasher()
-        for input in inputs {
-            hasher.combine(input.id)
-            hasher.combine(input.series.count)
+        for key in keys {
+            hasher.combine(key)
         }
         return hasher.finalize()
     }
 
+    /// - Parameter refreshing: a run whose series to work out again whatever the cache
+    ///   holds: the run screen's own run, whose series a backfill may just have added.
     @MainActor
-    static func load(_ inputs: [BestEffortsCache.Input]) async -> [BestEfforts.RunEfforts] {
-        let efforts = await BestEffortsCache.shared.efforts(for: inputs)
+    static func load(
+        _ keys: [BestEffortsCache.Key],
+        refreshing run: RunWorkout? = nil,
+        context: ModelContext
+    ) async -> [BestEfforts.RunEfforts] {
+        let cache = BestEffortsCache.shared
+        let missing = await cache.missing(keys)
+        var inputs = series(of: missing, context: context)
+        if let run, let data = run.distanceSeriesData, !missing.contains(run.id) {
+            inputs.append(BestEffortsCache.Input(id: run.id, date: run.date, series: data))
+        }
+        let efforts = await cache.efforts(for: keys, adding: inputs)
         latest = efforts
         return efforts
+    }
+
+    /// The series of the runs named, a couple of hundred at a time. A run with no series
+    /// is handed over empty, so the cache remembers it has none and doesn't ask again.
+    @MainActor
+    private static func series(of ids: [UUID], context: ModelContext) -> [BestEffortsCache.Input] {
+        guard !ids.isEmpty else { return [] }
+        var inputs: [BestEffortsCache.Input] = []
+        var start = 0
+        while start < ids.count {
+            let chunk = Array(ids[start..<min(start + 200, ids.count)])
+            start += 200
+            var descriptor = FetchDescriptor<RunWorkout>(predicate: #Predicate { chunk.contains($0.id) })
+            descriptor.propertiesToFetch = [\.id, \.date, \.distanceSeriesData]
+            let runs = (try? context.fetch(descriptor)) ?? []
+            inputs += runs.map {
+                BestEffortsCache.Input(id: $0.id, date: $0.date, series: $0.distanceSeriesData ?? Data())
+            }
+        }
+        return inputs
     }
 }
 
@@ -63,6 +94,7 @@ struct BestEffortsCard: View {
     let scope: Set<UUID>
 
     @Environment(AppSettings.self) private var appSettings
+    @Environment(\.modelContext) private var context
     @Query private var workouts: [RunWorkout]
     @State private var efforts: [BestEfforts.RunEfforts] = BestEffortsLoader.latest
     @State private var hasLoaded = !BestEffortsLoader.latest.isEmpty
@@ -78,7 +110,7 @@ struct BestEffortsCard: View {
     private static let shown: [BestEfforts.Distance] = [.oneK, .mile, .fiveK, .tenK, .half, .marathon]
 
     var body: some View {
-        let inputs = BestEffortsLoader.inputs(from: workouts)
+        let keys = BestEffortsLoader.keys(from: workouts)
         let allTime = BestEfforts.records(in: efforts)
         let records = BestEfforts.records(in: efforts.filter { scope.contains($0.id) })
         let rows = Self.shown.compactMap { distance in records[distance].map { (distance, $0) } }
@@ -117,8 +149,8 @@ struct BestEffortsCard: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .strideCard()
         }
-        .task(id: BestEffortsLoader.fingerprint(inputs)) {
-            efforts = await BestEffortsLoader.load(inputs)
+        .task(id: BestEffortsLoader.fingerprint(keys)) {
+            efforts = await BestEffortsLoader.load(keys, context: context)
             hasLoaded = true
         }
     }
@@ -202,6 +234,7 @@ struct RunBestEffortsCard: View {
     let workout: RunWorkout
 
     @Environment(AppSettings.self) private var appSettings
+    @Environment(\.modelContext) private var context
     @Query private var workouts: [RunWorkout]
     @State private var efforts: [BestEfforts.RunEfforts] = BestEffortsLoader.latest
 
@@ -213,7 +246,7 @@ struct RunBestEffortsCard: View {
     }
 
     var body: some View {
-        let inputs = BestEffortsLoader.inputs(from: workouts)
+        let keys = BestEffortsLoader.keys(from: workouts)
         let mine = efforts.first { $0.id == workout.id }
         let rows = (mine?.efforts ?? [:]).keys.sorted()
 
@@ -235,8 +268,8 @@ struct RunBestEffortsCard: View {
                 }
             }
         }
-        .task(id: BestEffortsLoader.fingerprint(inputs)) {
-            efforts = await BestEffortsLoader.load(inputs)
+        .task(id: BestEffortsLoader.fingerprint(keys)) {
+            efforts = await BestEffortsLoader.load(keys, refreshing: workout, context: context)
         }
     }
 
