@@ -284,4 +284,26 @@ struct ProgressPeriodStatsTests {
         #expect(trend.weeks.isEmpty)
         #expect(trend.latestWeekPaceSecondsPerKm == nil)
     }
+
+    @Test("A pace no one runs is left out of the trend")
+    func easyPaceTrendSkipsImplausiblePaces() {
+        // 114:00 per mile over a short distance: a recording left running.
+        let trend = ProgressPeriodStats.easyPaceTrend(for: [
+            run(daysAgo: 1, seconds: 3_000),
+            run(daysAgo: 2, meters: 500, seconds: 2_125),
+        ])
+
+        #expect(trend.runs.count == 1)
+    }
+
+    @Test("Grouped by month, a point per month")
+    func easyPaceTrendByMonth() {
+        let trend = ProgressPeriodStats.easyPaceTrend(
+            for: (0..<60).map { run(daysAgo: $0 * 3) },
+            grouping: .month
+        )
+
+        #expect(trend.runs.count == 60)
+        #expect((6...8).contains(trend.weeks.count))
+    }
 }

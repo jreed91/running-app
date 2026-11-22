@@ -129,6 +129,17 @@ extension VolumeExplorer.Window {
     }
 }
 
+extension TrendSeries.DateAxis {
+    /// "Mar", "Mar 25" or "2025".
+    var dateFormat: Date.FormatStyle {
+        switch label {
+        case .month: return .dateTime.month(.abbreviated)
+        case .monthYear: return .dateTime.month(.abbreviated).year(.twoDigits)
+        case .year: return .dateTime.year()
+        }
+    }
+}
+
 extension ProgressFilter.Period {
     /// The hero's eyebrow: "Last 3 months".
     var title: String {
