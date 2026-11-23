@@ -57,3 +57,14 @@ ordinary plan edits and sync like any other. The record keeps each changed sessi
 was, so **Undo** puts it back exactly, and only if it still looks the way the break left
 it: a session the runner changed again since stays as they made it. While a break is live
 the pace refresh after a run leaves its sessions alone (`TrainingBreakStore.protectedIDs`).
+
+## The coach
+
+- The chat's plan context and the post-run read carry `TrainingBreak.coachNote(on:)`:
+  what the break is, until when, not to suggest hard or extra running, not to read the
+  shorter runs as missed, and the health cautions for illness and injury.
+- The coach chat's plan changes (`PlanChangePlanner`) refuse to add a run or make one
+  harder on a break or easing-back day (`Refusal.duringTrainingBreak`); resting a day or
+  turning a run easy is still allowed.
+- Smart Adapt and "apply coach feedback" skip a live break's sessions
+  (`AdaptableWorkoutSelector`, `excluding:`).

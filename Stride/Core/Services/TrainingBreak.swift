@@ -204,3 +204,58 @@ enum TrainingBreakPolicy {
         return max(gap + 1, 0)
     }
 }
+
+// MARK: - Coach
+
+extension TrainingBreak {
+
+    /// What the AI coach has to know about the break before it says anything about the
+    /// plan or a run: the chat's plan context and the post-run read both carry it. Nil once
+    /// the break is finished. Prompt text, so not localized, like the rest of the coach's
+    /// context.
+    func coachNote(on now: Date, calendar: Calendar = .current) -> String? {
+        let style = Date.FormatStyle(date: .abbreviated, time: .omitted)
+        let end = endDate.formatted(style)
+        let why: String
+        switch reason {
+        case .ill: why = "ill"
+        case .injured: why = "injured"
+        case .travelling: why = "travelling"
+        }
+        let what = mode == .pause
+            ? "the plan is paused (rest days, no running)"
+            : "the plan is eased off to short easy runs only"
+        let ramp = rampEndDate.map {
+            " After it, runs stay deliberately shorter and easier until \($0.formatted(style)) to ease them back in."
+        } ?? ""
+
+        switch phase(on: now, calendar: calendar) {
+        case .upcoming:
+            return "The runner has a break booked from \(startDate.formatted(style)) to \(end) "
+                + "(\(why)): \(what).\(ramp) Plan around it; don't move training into those days."
+        case .onBreak:
+            var note = "The runner is on a break because they're \(why): \(what) through \(end).\(ramp) "
+                + "Don't suggest tempo, intervals, long runs or extra running before then, and don't "
+                + "treat skipped or shorter runs as missed. Ask how they feel rather than about pace. "
+                + "If they're better, they can tap \"I'm back\" on the Plan tab to end the break early."
+            switch reason {
+            case .ill:
+                note += " With a fever, chest symptoms or aching all over they should rest, not run, "
+                    + "and see a doctor if they aren't improving."
+            case .injured:
+                note += " Never encourage running through pain; if it hurts to walk or changes how "
+                    + "they run, suggest seeing a physio or doctor."
+            case .travelling:
+                break
+            }
+            return note
+        case .easingBack:
+            let rampEnd = (rampEndDate ?? endDate).formatted(style)
+            return "The runner is easing back in after a break (\(why), \(length(calendar: calendar)) days) "
+                + "until \(rampEnd): runs are deliberately shorter and easier than the plan was. Don't push "
+                + "volume or pace up before then, and don't treat the shorter runs as missed targets."
+        case .finished:
+            return nil
+        }
+    }
+}

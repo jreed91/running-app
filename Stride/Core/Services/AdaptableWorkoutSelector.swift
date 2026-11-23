@@ -20,6 +20,9 @@ import Foundation
 /// - **Never a completed session.** Rewriting a workout the runner already did would
 ///   change the record of what they ran.
 /// - **Today or later**, so adaptation edits the plan ahead rather than its history.
+/// - **Not a training break's session.** A run a break shortened or turned into rest
+///   (`TrainingBreakStore`) is the runner's choice; Smart Adapt would hand the tempo back
+///   to someone who is ill.
 enum AdaptableWorkoutSelector {
 
     /// Every session in `plan` the coach may adapt, earliest first.
@@ -31,11 +34,13 @@ enum AdaptableWorkoutSelector {
     ///     be a candidate for its own feedback, and neither must anything else scheduled
     ///     at or before it.
     ///   - now: The reference date; only its calendar day is used.
+    ///   - excluding: Sessions a live training break changed.
     static func adaptableWorkouts(
         in plan: TrainingPlan?,
         after: Date? = nil,
         now: Date = Date(),
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        excluding: Set<UUID> = TrainingBreakStore.protectedIDs()
     ) -> [ScheduledWorkout] {
         guard let plan else { return [] }
 
@@ -55,6 +60,7 @@ enum AdaptableWorkoutSelector {
             .filter { workout in
                 guard isAdaptableType(workout.workoutType) else { return false }
                 guard !workout.isCompleted else { return false }
+                guard !excluding.contains(workout.id) else { return false }
                 guard workout.scheduledDate >= today else { return false }
                 if let after, workout.scheduledDate <= after { return false }
                 return true

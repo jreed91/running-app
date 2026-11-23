@@ -323,4 +323,53 @@ struct TrainingBreakPlannerTests {
         TrainingBreakStore.remove(id: live.id, in: defaults)
         #expect(TrainingBreakStore.current(forPlan: planID, now: monday, calendar: calendar, in: defaults) == nil)
     }
+
+    // MARK: Coach
+
+    @Test("The coach is told about the break in each phase, and nothing once it's over")
+    func coachNote() {
+        let trainingBreak = record(start: 2, end: 4, rampEnd: 11)
+        #expect(trainingBreak.coachNote(on: day(0), calendar: calendar)?.contains("break booked") == true)
+        let during = trainingBreak.coachNote(on: day(3), calendar: calendar) ?? ""
+        #expect(during.contains("ill"))
+        #expect(during.contains("Don't suggest tempo"))
+        #expect(during.contains("I'm back"))
+        #expect(trainingBreak.coachNote(on: day(6), calendar: calendar)?.contains("easing back in") == true)
+        #expect(trainingBreak.coachNote(on: day(12), calendar: calendar) == nil)
+    }
+
+    @Test("The coach chat can rest a day or keep it easy during a break, never add or harden one")
+    func coachChangesDuringBreak() {
+        let tempoID = UUID()
+        let easyID = UUID()
+        let plan = PlanChangePlanner.Plan(
+            sessions: [
+                Session(id: tempoID, date: day(3), type: .tempo, targetDistanceMeters: 6_000),
+                Session(id: easyID, date: day(1), type: .easy, targetDistanceMeters: 3_000),
+            ],
+            startDate: day(-7),
+            endDate: day(40),
+            breakDays: day(0)...day(4)
+        )
+        func weekday(_ offset: Int) -> PlanChangeRequest.Day {
+            .weekday(calendar.component(.weekday, from: day(offset)))
+        }
+        func planned(_ request: PlanChangeRequest) -> Result<PlanChangePlanner.Change, PlanChangePlanner.Refusal> {
+            PlanChangePlanner.plan(request, in: plan, now: monday, calendar: calendar)
+        }
+
+        #expect(planned(.init(action: .add, day: weekday(2), type: .easy)) == .failure(.duringTrainingBreak(day(2))))
+        #expect(planned(.init(action: .changeType, day: weekday(1), type: .interval)) == .failure(.duringTrainingBreak(day(1))))
+        #expect(planned(.init(action: .changeType, day: weekday(1), type: .easy, distanceMeters: 8_000))
+                == .failure(.duringTrainingBreak(day(1))))
+        #expect(planned(.init(action: .makeRest, day: weekday(1))) == .success(.makeRest(sessionID: easyID, date: day(1), type: .easy)))
+        if case .success(.changeType(_, _, .tempo, .easy, _)) = planned(.init(action: .changeType, day: weekday(3), type: .easy)) {
+        } else {
+            Issue.record("Turning a tempo easy during a break is fine")
+        }
+        // After the break, the planner's own rules apply again.
+        if case .failure(.duringTrainingBreak) = planned(.init(action: .add, day: weekday(5), type: .easy)) {
+            Issue.record("Day 5 is after the break")
+        }
+    }
 }

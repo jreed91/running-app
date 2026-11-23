@@ -40,7 +40,8 @@ enum PlanChangeApplier {
             startDate: plan.startDate,
             endDate: plan.endDate,
             raceDate: plan.raceDate,
-            prescribesByTime: plan.prescribesByTime
+            prescribesByTime: plan.prescribesByTime,
+            breakDays: TrainingBreakStore.current(forPlan: plan.id).map { $0.startDate...($0.rampEndDate ?? $0.endDate) }
         )
     }
 

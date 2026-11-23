@@ -281,6 +281,8 @@ update it in the same change as `TrainingBreakPolicy`.
   change. While a break is live, `refreshPaces` leaves its sessions alone
   (`TrainingBreakStore.protectedIDs`), alongside `AdaptedSessions`.
 - Time-prescribed plans can pause but not ease off, and get no ramp.
+- **The coach knows.** Its plan context and post-run read carry `TrainingBreak.coachNote(on:)`;
+  the chat's plan changes can't add or harden a run on a break day; Smart Adapt skips break sessions.
 
 ## Persistence and Sync
 

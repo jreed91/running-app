@@ -101,13 +101,24 @@ enum PlanChangePlanner {
         let endDate: Date
         let raceDate: Date?
         let prescribesByTime: Bool
+        /// The days of a live training break, its easing-back days included: no run is
+        /// added there and no run made harder (``Refusal/duringTrainingBreak(_:)``).
+        let breakDays: ClosedRange<Date>?
 
-        init(sessions: [Session], startDate: Date, endDate: Date, raceDate: Date? = nil, prescribesByTime: Bool = false) {
+        init(
+            sessions: [Session],
+            startDate: Date,
+            endDate: Date,
+            raceDate: Date? = nil,
+            prescribesByTime: Bool = false,
+            breakDays: ClosedRange<Date>? = nil
+        ) {
             self.sessions = sessions
             self.startDate = startDate
             self.endDate = endDate
             self.raceDate = raceDate
             self.prescribesByTime = prescribesByTime
+            self.breakDays = breakDays
         }
     }
 
@@ -143,6 +154,9 @@ enum PlanChangePlanner {
         case tooCloseToRace(Date)
         case noFreeDay(WorkoutType)
         case nothingToChange
+        /// The runner told the plan they're ill, injured or away, or is easing back in
+        /// after it: nothing is added, and nothing made harder, on those days.
+        case duringTrainingBreak(Date)
     }
 
     /// How many days a change may reach, today included.
@@ -166,16 +180,36 @@ enum PlanChangePlanner {
         guard !plan.prescribesByTime else { return .failure(.planPrescribesByTime) }
         let context = Context(plan: plan, today: calendar.startOfDay(for: now), calendar: calendar)
 
+        let result: Result<Change, Refusal>
         switch request.action {
         case .add:
             guard let type = request.type, plannableTypes.contains(type) else { return .failure(.unsupportedType) }
-            return context.add(type: type, on: request.day, distance: request.distanceMeters)
+            result = context.add(type: type, on: request.day, distance: request.distanceMeters)
         case .changeType:
             guard let type = request.type, plannableTypes.contains(type) else { return .failure(.unsupportedType) }
-            return context.change(on: request.day, to: type, distance: request.distanceMeters)
+            result = context.change(on: request.day, to: type, distance: request.distanceMeters)
         case .makeRest:
             return context.rest(on: request.day)
         }
+        // A break is the runner's own call about their body: the coach can rest a day or
+        // keep a run easy, never add running or make it harder.
+        if case .success(let change) = result, let breakDays = plan.breakDays {
+            let day = calendar.startOfDay(for: change.date)
+            let inBreak = day >= calendar.startOfDay(for: breakDays.lowerBound)
+                && day <= calendar.startOfDay(for: breakDays.upperBound)
+            if inBreak {
+                switch change {
+                case .add:
+                    return .failure(.duringTrainingBreak(day))
+                case let .changeType(_, _, from, to, _):
+                    // Easy is fine, but not a longer easy run than the break left.
+                    if to != .easy || from == .easy { return .failure(.duringTrainingBreak(day)) }
+                case .makeRest:
+                    break
+                }
+            }
+        }
+        return result
     }
 
     /// Whether a type is a hard day for spacing: quality, the long run, the race.

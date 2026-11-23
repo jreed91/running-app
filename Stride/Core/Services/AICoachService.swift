@@ -1011,6 +1011,14 @@ extension AICoachService {
             return "Not a planned session. Judge it by what this kind of run (\(type)) is for."
         }
         var lines = ["Planned: " + plannedTargetsDescription(planned, unitPreference: unitPreference)]
+        // A run on a break or while easing back in was shortened on purpose; the coach
+        // must not read it as a missed target.
+        if let plan = planned.week?.plan,
+           let trainingBreak = TrainingBreakStore.current(forPlan: plan.id, now: workout.date),
+           trainingBreak.changes.contains(where: { $0.sessionID == planned.id }),
+           let note = trainingBreak.coachNote(on: workout.date) {
+            lines.append(note)
+        }
 
         // A session prescribed by the clock has no pace target, and its distance is only an
         // estimate from the minutes: "2.1 of 2.6 km planned" would read as a miss for a
@@ -1055,7 +1063,10 @@ extension AICoachService {
     /// A pregnancy or Start Running plan carries `.maintainFitness` only because it has no
     /// race, so it is described by its kind; "Race: Maintain Fitness, goal time 0:00" had
     /// the coach talking about a race and a pace the plan does not have.
-    static func planContext(for plan: TrainingPlan) -> String {
+    static func planContext(for plan: TrainingPlan, now: Date = Date()) -> String {
+        // A break the runner set ("Not feeling your best?") changes what the coach may
+        // suggest: nothing hard while they're ill, nothing more while they ease back in.
+        let breakNote = TrainingBreakStore.current(forPlan: plan.id, now: now)?.coachNote(on: now)
         guard plan.planKind == .standard else {
             var lines = [
                 "Active plan:",
@@ -1066,15 +1077,18 @@ extension AICoachService {
             if let stage = StartRunningPlanService.guidance(for: plan)?.stage {
                 lines.append("This week: stage \(stage.number) of \(StartRunningProgram.stageCount), \(stage.summary).")
             }
+            if let breakNote { lines.append(breakNote) }
             return lines.joined(separator: "\n")
         }
-        return """
+        let context = """
             Active plan:
             Race: \(plan.targetRace.displayName)
             Race date: \(plan.raceDate?.formatted(date: .abbreviated, time: .omitted) ?? "none")
             Goal time: \(plan.goalTimeSeconds.durationString)
             Current week: \(plan.currentWeek?.weekNumber ?? 0) of \(plan.totalWeeks)
             """
+        guard let breakNote else { return context }
+        return context + "\n" + breakNote
     }
 
     /// What the coach has to know about a plan prescribed by time before it says anything
