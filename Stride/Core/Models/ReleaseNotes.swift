@@ -106,7 +106,7 @@ enum ReleaseNotes {
             ReleaseFeature(
                 id: "heatmap",
                 title: "Every route on one map",
-                body: "A heatmap of everywhere you run. Open it full screen, filter by year or run type, and tap a street to see the runs that went along it.",
+                body: "A heatmap of everywhere you run. Open it full screen, filter by year or run type, tap a street to see the runs that went along it, and spot the new ground you broke.",
                 icon: .location,
                 hasScreenshot: true
             ),
