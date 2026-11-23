@@ -58,6 +58,66 @@ enum RouteHeatmap {
 
         var isEmpty: Bool { cells.isEmpty }
 
+        /// The trace with the runner's private parts taken out: cells within
+        /// `hideEndsMeters` of the start or finish (along the route) and cells near a
+        /// private place. Segments split where cells were hidden, so nothing is drawn
+        /// across a gap.
+        func trimmed(_ privacy: Privacy) -> Trace {
+            guard privacy.hidesAnything, !isEmpty else { return self }
+            // How far along the route each step of each segment is.
+            var along: [[Double]] = []
+            var total = 0.0
+            var previous: Point?
+            for segment in segments {
+                var distances: [Double] = []
+                for index in segment {
+                    let point = centers[Int(index)]
+                    if let previous { total += RouteHeatmap.distance(previous, point) }
+                    distances.append(total)
+                    previous = point
+                }
+                along.append(distances)
+            }
+            let ends = max(0, privacy.hideEndsMeters)
+
+            func isHidden(_ index: Int32, at distance: Double) -> Bool {
+                if ends > 0, distance < ends || total - distance < ends { return true }
+                let point = centers[Int(index)]
+                // A cell's centre can sit up to a cell from where the run went.
+                return privacy.zones.contains {
+                    RouteHeatmap.distance($0.center, point) <= $0.radiusMeters + RouteHeatmap.cellMeters
+                }
+            }
+
+            var kept: [[Int32]] = []
+            for (segment, distances) in zip(segments, along) {
+                var piece: [Int32] = []
+                for (index, distance) in zip(segment, distances) {
+                    if isHidden(index, at: distance) {
+                        if piece.count > 1 { kept.append(piece) }
+                        piece = []
+                    } else {
+                        piece.append(index)
+                    }
+                }
+                if piece.count > 1 { kept.append(piece) }
+            }
+
+            var remap: [Int32: Int32] = [:]
+            var keptCells: [Cell] = []
+            var keptCenters: [Point] = []
+            for index in kept.joined() where remap[index] == nil {
+                remap[index] = Int32(keptCells.count)
+                keptCells.append(cells[Int(index)])
+                keptCenters.append(centers[Int(index)])
+            }
+            return Trace(
+                cells: keptCells,
+                centers: keptCenters,
+                segments: kept.map { $0.compactMap { remap[$0] } }
+            )
+        }
+
         /// Whether the route went through any of `area`'s cells.
         func passes(through area: Set<Cell>) -> Bool {
             cells.contains { area.contains($0) }
@@ -439,6 +499,24 @@ enum RouteHeatmap {
             for cell in trace.cells { known.formUnion(neighbourhood(of: cell)) }
         }
         return meters
+    }
+
+    // MARK: Privacy
+
+    /// What a shared heatmap leaves out, from the runner's ``RoutePrivacy``: the first and
+    /// last stretch of every run, and anything near a private place.
+    struct Privacy: Sendable, Equatable {
+        struct Zone: Sendable, Equatable {
+            var center: Point
+            var radiusMeters: Double
+        }
+
+        var hideEndsMeters: Double
+        var zones: [Zone]
+
+        static let off = Privacy(hideEndsMeters: 0, zones: [])
+
+        var hidesAnything: Bool { hideEndsMeters > 0 || !zones.isEmpty }
     }
 
     // MARK: New ground
