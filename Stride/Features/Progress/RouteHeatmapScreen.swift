@@ -50,11 +50,10 @@ struct RouteHeatmapScreen: View {
                     style: style,
                     recenter: recenter,
                     selection: spot,
+                    onTap: { point, radius in pick(point, radiusMeters: radius) },
                     newGround: showsNewGround ? newGround : nil
-                ) { point, radius in
-                    pick(point, radiusMeters: radius)
-                }
-                    .ignoresSafeArea()
+                )
+                .ignoresSafeArea()
             } else {
                 Color.inkDeep.ignoresSafeArea()
             }
