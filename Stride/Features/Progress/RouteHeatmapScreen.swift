@@ -25,6 +25,8 @@ struct RouteHeatmapScreen: View {
     @State private var spot: RouteHeatmap.Point?
     @State private var spotRuns: [RunWorkout] = []
     @State private var showsNewGround = false
+    @State private var shareImage: ShareCardImage?
+    @State private var isSharing = false
     @State private var newGround: RouteHeatmap.NewGround?
 
     init(period: HeatmapPeriod, runType: ProgressFilter.RunType) {
@@ -76,6 +78,9 @@ struct RouteHeatmapScreen: View {
                 .tint(Color.onInk)
             }
         }
+        .sheet(item: $shareImage) { card in
+            ShareSheet(image: card.image)
+        }
         .task(id: LoadKey(period: period, type: runType, count: workouts.count)) {
             isLoading = true
             let all = RouteHeatmapLoader.keys(from: workouts)
@@ -85,6 +90,53 @@ struct RouteHeatmapScreen: View {
             isLoading = false
             clearSpot()
         }
+    }
+
+    // MARK: Share
+
+    /// Renders the poster from every shown run trimmed by the runner's privacy settings,
+    /// then opens the share sheet. The map on screen stays untrimmed: it never leaves the
+    /// phone.
+    private func share() async {
+        isSharing = true
+        defer { isSharing = false }
+        let privacy = RoutePrivacy.load()
+        let trimmed = await RouteHeatmapCache.shared.sharedHeatmap(
+            for: shownKeys(),
+            privacy: RouteHeatmap.Privacy(
+                hideEndsMeters: privacy.hideEndsMeters,
+                zones: privacy.places.map {
+                    .init(
+                        center: RouteHeatmap.Point(latitude: $0.center.latitude, longitude: $0.center.longitude),
+                        radiusMeters: $0.radiusMeters
+                    )
+                }
+            )
+        )
+        guard !trimmed.isEmpty else {
+            AppLogger.log("Heatmap poster: nothing left after privacy trim", label: "Share", level: .info)
+            return
+        }
+        // The heat itself is drawn off the main actor, like the Progress card's picture.
+        let colors = HeatDots.heatColors()
+        let background = HeatDots.rgba(Color.inkDeep)
+        let size = HeatmapPosterView.heatSize
+        let heatImage = await Task.detached(priority: .userInitiated) {
+            HeatDots(trimmed, colors: colors).preview(size: size, background: background, pixelScale: 3)
+        }.value
+        let renderer = ImageRenderer(content: HeatmapPosterView(
+            heatmap: trimmed,
+            heatImage: heatImage,
+            title: Self.title(of: period),
+            subtitle: runType == .all ? nil : runType.title,
+            unit: appSettings.unitPreference
+        ))
+        renderer.scale = 3
+        guard let image = renderer.uiImage else {
+            AppLogger.log("Heatmap poster render produced no image", label: "Share", level: .error)
+            return
+        }
+        shareImage = ShareCardImage(image: image)
     }
 
     // MARK: New ground
@@ -211,6 +263,24 @@ struct RouteHeatmapScreen: View {
                     .font(.dsTitle2.weight(.bold))
                     .foregroundStyle(Color.onInk)
                 Spacer()
+                Button {
+                    Task { await share() }
+                } label: {
+                    Group {
+                        if isSharing {
+                            ProgressView().tint(Color.onInk)
+                        } else {
+                            Image(systemName: "square.and.arrow.up")
+                                .font(.dsSubhead.weight(.bold))
+                        }
+                    }
+                    .foregroundStyle(Color.onInk)
+                    .frame(width: 36, height: 36)
+                    .background(Color.inkDeep.opacity(0.7), in: Circle())
+                }
+                .disabled(isSharing || (heatmap?.isEmpty ?? true))
+                .accessibilityLabel("Share heatmap")
+                .accessibilityHint("Makes a poster of this heatmap, with your private places and run starts left out")
                 Button {
                     dismiss()
                 } label: {

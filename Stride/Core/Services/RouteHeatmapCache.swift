@@ -106,6 +106,13 @@ actor RouteHeatmapCache {
         }
     }
 
+    /// The map of the runs in `keys` with the runner's privacy applied to every run,
+    /// for an image that leaves the phone. Not kept: it is built once per share.
+    func sharedHeatmap(for keys: [Key], privacy: RouteHeatmap.Privacy) -> RouteHeatmap.Heatmap {
+        loadIfNeeded()
+        return RouteHeatmap.build(traces(keys).map { $0.trimmed(privacy) })
+    }
+
     /// The streets the runs in `keys` went along that no run in `earlier` had.
     func newGround(for keys: [Key], before earlier: [Key]) -> RouteHeatmap.NewGround {
         loadIfNeeded()

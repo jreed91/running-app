@@ -357,7 +357,7 @@ extension HeatDots {
     /// The heatmap drawn on its own, no map, framed on ``focus``. For the Progress card,
     /// which shows this picture instead of a live map: a live map on a scrolling page
     /// redraws as the page moves. Safe off the main thread.
-    func preview(size: CGSize, background: RGBA) -> UIImage? {
+    func preview(size: CGSize, background: RGBA, pixelScale: CGFloat = 2) -> UIImage? {
         guard let focus, size.width > 0, size.height > 0 else { return nil }
         // Square up the focus to the picture's shape, with a margin.
         var frame = focus
@@ -372,7 +372,7 @@ extension HeatDots {
         frame = frame.insetBy(dx: -frame.width * 0.05, dy: -frame.height * 0.05)
         let scale = size.width / frame.width
         let format = UIGraphicsImageRendererFormat()
-        format.scale = 2
+        format.scale = pixelScale
         return UIGraphicsImageRenderer(size: size, format: format).image { rendering in
             let context = rendering.cgContext
             context.setFillColor(CGColor(

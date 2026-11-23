@@ -350,3 +350,60 @@ struct RouteHeatmapNewGroundTests {
         #expect((450...550).contains(ground.meters))
     }
 }
+
+/// Covers what a shared heatmap leaves out (`Trace.trimmed`).
+struct RouteHeatmapPosterTests {
+    typealias Point = RouteHeatmap.Point
+
+    private let home = Point(latitude: 41.88, longitude: -87.63)
+
+    private func north(from start: Point, meters: Double) -> [Point] {
+        stride(from: 0.0, through: meters, by: 5).map {
+            Point(latitude: start.latitude + $0 / 111_320, longitude: start.longitude)
+        }
+    }
+
+    private func ground(_ trace: RouteHeatmap.Trace) -> Double {
+        RouteHeatmap.build([trace]).uniqueMeters
+    }
+
+    @Test func offHidesNothing() {
+        let trace = RouteHeatmap.trace(north(from: home, meters: 1_000))
+        #expect(trace.trimmed(.off) == trace)
+    }
+
+    @Test func theEndsOfEveryRunAreHidden() {
+        let trace = RouteHeatmap.trace(north(from: home, meters: 2_000))
+        let trimmed = trace.trimmed(.init(hideEndsMeters: 200, zones: []))
+        #expect((1_500...1_650).contains(ground(trimmed)))
+        // Nothing left within 200 m of the start.
+        let startRow = RouteHeatmap.cell(of: home).y
+        #expect(trimmed.cells.allSatisfy { $0.y - startRow >= 9 })
+    }
+
+    @Test func aShortRunIsHiddenWhole() {
+        let trace = RouteHeatmap.trace(north(from: home, meters: 300))
+        #expect(trace.trimmed(.init(hideEndsMeters: 200, zones: [])).isEmpty)
+    }
+
+    @Test func aPrivatePlaceSplitsARunPassingIt() {
+        let trace = RouteHeatmap.trace(north(from: home, meters: 2_000))
+        let middle = Point(latitude: home.latitude + 1_000 / 111_320, longitude: home.longitude)
+        let trimmed = trace.trimmed(.init(hideEndsMeters: 0, zones: [.init(center: middle, radiusMeters: 200)]))
+        #expect(trimmed.segments.count == 2)
+        for (cell, center) in zip(trimmed.cells, trimmed.centers) {
+            _ = cell
+            #expect(RouteHeatmap.distance(center, middle) > 200)
+        }
+    }
+
+    @Test func aSharedMapHasNoCellNearAPrivatePlace() {
+        let trace = RouteHeatmap.trace(north(from: home, meters: 2_000))
+        let middle = Point(latitude: home.latitude + 1_000 / 111_320, longitude: home.longitude)
+        let privacy = RouteHeatmap.Privacy(hideEndsMeters: 200, zones: [.init(center: middle, radiusMeters: 200)])
+        let heatmap = RouteHeatmap.build([trace.trimmed(privacy)])
+        #expect(!heatmap.isEmpty)
+        #expect(heatmap.cells.allSatisfy { RouteHeatmap.distance($0.center, middle) > 200 })
+        #expect(heatmap.cells.allSatisfy { RouteHeatmap.distance($0.center, home) > 180 })
+    }
+}
