@@ -361,6 +361,10 @@ struct RouteHeatmapMap: UIViewRepresentable {
     var style: Style = .map
     /// Changing it moves the map back onto the streets run most.
     var recenter = 0
+    /// Where the runner last tapped, marked on the map.
+    var selection: RouteHeatmap.Point?
+    /// A tap on the map: where, and how many metres a fingertip covers at this zoom.
+    var onTap: ((RouteHeatmap.Point, Double) -> Void)?
 
     /// The base map under the heat.
     enum Style: String, CaseIterable, Identifiable, Sendable {
@@ -387,11 +391,24 @@ struct RouteHeatmapMap: UIViewRepresentable {
         map.pointOfInterestFilter = .excludingAll
         map.delegate = context.coordinator
         map.isAccessibilityElement = true
+        let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.tapped(_:)))
+        map.addGestureRecognizer(tap)
         return map
     }
 
     func updateUIView(_ map: MKMapView, context: Context) {
         let coordinator = context.coordinator
+        coordinator.onTap = onTap
+        if coordinator.marker.map({ RouteHeatmap.Point(latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude) }) != selection {
+            if let marker = coordinator.marker { map.removeAnnotation(marker) }
+            coordinator.marker = nil
+            if let selection {
+                let marker = MKPointAnnotation()
+                marker.coordinate = CLLocationCoordinate2D(latitude: selection.latitude, longitude: selection.longitude)
+                map.addAnnotation(marker)
+                coordinator.marker = marker
+            }
+        }
         map.accessibilityLabel = String(
             localized: "Heatmap of \(heatmap.runCount) runs. Brighter, thicker lines are streets you run more often."
         )
@@ -484,6 +501,20 @@ struct RouteHeatmapMap: UIViewRepresentable {
         var overlays: [LevelPolyline] = []
         var style: Style?
         var recentered = 0
+        var onTap: ((RouteHeatmap.Point, Double) -> Void)?
+        var marker: MKPointAnnotation?
+
+        /// Hands the tap on as a map point, with the metres 22 points cover at this zoom
+        /// (about a fingertip), so a zoomed-out tap still finds the street under it.
+        @objc func tapped(_ gesture: UITapGestureRecognizer) {
+            guard let onTap, let map = gesture.view as? MKMapView, gesture.state == .ended else { return }
+            let spot = gesture.location(in: map)
+            let here = map.convert(spot, toCoordinateFrom: map)
+            let reach = map.convert(CGPoint(x: spot.x + 22, y: spot.y), toCoordinateFrom: map)
+            let point = RouteHeatmap.Point(latitude: here.latitude, longitude: here.longitude)
+            let radius = RouteHeatmap.distance(point, RouteHeatmap.Point(latitude: reach.latitude, longitude: reach.longitude))
+            onTap(point, min(max(radius, 20), 400))
+        }
 
         func mapView(_ mapView: MKMapView, rendererFor overlay: any MKOverlay) -> MKOverlayRenderer {
             guard let overlay = overlay as? LevelPolyline else { return MKOverlayRenderer(overlay: overlay) }

@@ -226,3 +226,45 @@ struct RouteHeatmapTests {
         #expect(await relaunched.traced == 0)
     }
 }
+
+/// Covers "which runs went here?": `RouteHeatmap.cells(around:)` and
+/// `RouteHeatmapCache.runs(near:)`.
+struct RouteHeatmapSpotTests {
+    typealias Point = RouteHeatmap.Point
+
+    private let home = Point(latitude: 41.88, longitude: -87.63)
+    private let day = Date(timeIntervalSince1970: 1_800_000_000)
+
+    private func north(from start: Point, meters: Double) -> [Point] {
+        stride(from: 0.0, through: meters, by: 5).map {
+            Point(latitude: start.latitude + $0 / 111_320, longitude: start.longitude)
+        }
+    }
+
+    private func east(of point: Point, meters: Double) -> Point {
+        Point(latitude: point.latitude, longitude: point.longitude + meters / (111_320 * cos(point.latitude * .pi / 180)))
+    }
+
+    @Test func theAreaGrowsWithTheRadius() {
+        #expect(RouteHeatmap.cells(around: home, radiusMeters: 0).count == 1)
+        #expect(RouteHeatmap.cells(around: home, radiusMeters: 20).count == 9)
+        #expect(RouteHeatmap.cells(around: home, radiusMeters: 40).count == 25)
+        #expect(RouteHeatmap.cells(around: home, radiusMeters: 20).contains(RouteHeatmap.cell(of: home)))
+    }
+
+    @Test func findsTheRunsThatWentThroughATap() async {
+        let cache = RouteHeatmapCache()
+        let onStreet = RouteHeatmapCache.Input(id: UUID(), date: day, route: try! JSONEncoder().encode(north(from: home, meters: 500)))
+        let blockOver = RouteHeatmapCache.Input(
+            id: UUID(), date: day, route: try! JSONEncoder().encode(north(from: east(of: home, meters: 200), meters: 500))
+        )
+        await cache.add([onStreet, blockOver])
+        let keys = [onStreet.key, blockOver.key]
+        let tap = east(of: Point(latitude: home.latitude + 250 / 111_320, longitude: home.longitude), meters: 15)
+        #expect(await cache.runs(near: tap, radiusMeters: 30, among: keys) == [onStreet.id])
+        // A run not on the map isn't listed even if it went there.
+        #expect(await cache.runs(near: tap, radiusMeters: 30, among: [blockOver.key]).isEmpty)
+        // A wide tap takes in both streets.
+        #expect(await cache.runs(near: east(of: tap, meters: 85), radiusMeters: 120, among: keys).count == 2)
+    }
+}
