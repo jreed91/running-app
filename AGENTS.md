@@ -264,6 +264,24 @@ Update that doc in the same change as the table.
   "Start a 5K plan" button, which opens `NewPlanOnboardingView(startsAfterStartRunning: true)`
   set to a 5K at "New to running".
 
+### Training breaks ("not feeling your best" and holiday mode)
+
+The runner tells the plan they're ill, injured or travelling (Plan tab, `TrainingBreakCard`
+→ `TrainingBreakSheet`). The plan eases off (short easy runs) or pauses (rest days), then
+eases them back in. Rules and numbers: [`docs/TRAINING_BREAKS.md`](docs/TRAINING_BREAKS.md);
+update it in the same change as `TrainingBreakPolicy`.
+
+- **Proposed, shown, then written.** `TrainingBreakPlanner` (pure) lists every change from
+  `PlanChangeApplier.snapshot(of:)`; the sheet shows that list; `TrainingBreakApplier` writes
+  the same proposal. Runs are rebuilt by `adaptWorkout` from a stub, like the coach's plan changes.
+- **Never the race.** A break over race day is refused; the ramp stops the day before.
+- **Undo is exact and polite.** `TrainingBreak` keeps each session as it was; undo and "I'm
+  back" put back only sessions still the way the break left them.
+- **Device-local record** in `UserDefaults` (`TrainingBreakStore`), so no CloudKit schema
+  change. While a break is live, `refreshPaces` leaves its sessions alone
+  (`TrainingBreakStore.protectedIDs`), alongside `AdaptedSessions`.
+- Time-prescribed plans can pause but not ease off, and get no ramp.
+
 ## Persistence and Sync
 
 - SwiftData is the local persistence layer.

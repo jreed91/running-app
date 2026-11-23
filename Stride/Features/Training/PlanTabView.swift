@@ -195,6 +195,10 @@ struct PlanTabView: View {
                         // then only says what the plan is.
                         PlanOverviewCard(plan: plan, isHero: racePlan == nil)
 
+                        // Ill, injured or away: ease off or pause, then ease back in. Once
+                        // a break is set this is its status, with "I'm back" and "Undo".
+                        TrainingBreakCard(plan: plan)
+
                         // This week comes straight after the overview, opened up: it is
                         // what the runner acts on. The rest of the season sits below it,
                         // collapsed, rather than leading with a list of every week.
