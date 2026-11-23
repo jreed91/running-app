@@ -20,6 +20,8 @@ struct RouteHeatmapMap: UIViewRepresentable {
     var selection: RouteHeatmap.Point?
     /// A tap on the map: where, and how many metres a fingertip covers at this zoom.
     var onTap: ((RouteHeatmap.Point, Double) -> Void)?
+    /// Streets first run in the period, drawn bright over a dimmed heatmap. `nil` hides it.
+    var newGround: RouteHeatmap.NewGround?
 
     /// The base map under the heat.
     enum Style: String, CaseIterable, Identifiable, Sendable {
@@ -95,6 +97,20 @@ struct RouteHeatmapMap: UIViewRepresentable {
                 Self.moveToFocus(map, overlay, animated: false)
             }
         }
+        if coordinator.newGround != newGround {
+            coordinator.newGround = newGround
+            if let old = coordinator.newOverlay { map.removeOverlay(old) }
+            coordinator.newOverlay = nil
+            if let newGround, !newGround.cells.isEmpty {
+                let overlay = HeatCellOverlay(dots: HeatDots(newGround, color: HeatDots.rgba(Self.newGroundColor)))
+                map.addOverlay(overlay, level: .aboveRoads)
+                coordinator.newOverlay = overlay
+            }
+            // Dim the heat under new ground so the new streets stand out.
+            if let heat = coordinator.overlay {
+                map.renderer(for: heat)?.alpha = coordinator.heatAlpha
+            }
+        }
         if coordinator.recentered != recenter {
             coordinator.recentered = recenter
             if let overlay = coordinator.overlay { Self.moveToFocus(map, overlay, animated: true) }
@@ -119,10 +135,17 @@ struct RouteHeatmapMap: UIViewRepresentable {
         }
     }
 
+    /// New ground's colour: away from the orange heat, so the two never mix up.
+    static let newGroundColor = Color.success
+
     @MainActor
     final class Coordinator: NSObject, MKMapViewDelegate {
         var shown: RouteHeatmap.Heatmap?
         var overlay: HeatCellOverlay?
+        var newGround: RouteHeatmap.NewGround?
+        var newOverlay: HeatCellOverlay?
+
+        var heatAlpha: CGFloat { newGround == nil ? 1 : 0.3 }
         var style: Style?
         var recentered = 0
         var onTap: ((RouteHeatmap.Point, Double) -> Void)?
@@ -143,7 +166,9 @@ struct RouteHeatmapMap: UIViewRepresentable {
 
         func mapView(_ mapView: MKMapView, rendererFor overlay: any MKOverlay) -> MKOverlayRenderer {
             if let overlay = overlay as? HeatCellOverlay {
-                return HeatCellRenderer(heat: overlay)
+                let renderer = HeatCellRenderer(heat: overlay)
+                if overlay !== newOverlay { renderer.alpha = heatAlpha }
+                return renderer
             }
             return MKOverlayRenderer(overlay: overlay)
         }
@@ -187,22 +212,39 @@ final class HeatDots: Sendable {
     /// colours resolve there), for building ``HeatDots`` anywhere.
     @MainActor
     static func heatColors() -> [RGBA] {
-        (0...RouteHeatmap.levels).map { level in
-            var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
-            UIColor(RouteHeatmapMap.color(level: max(level, 1)))
-                .resolvedColor(with: UITraitCollection(userInterfaceStyle: .dark))
-                .getRed(&red, green: &green, blue: &blue, alpha: &alpha)
-            return RGBA(red: red, green: green, blue: blue, alpha: alpha)
-        }
+        (0...RouteHeatmap.levels).map { rgba(RouteHeatmapMap.color(level: max($0, 1))) }
     }
 
-    init(_ heatmap: RouteHeatmap.Heatmap, colors: [RGBA]) {
+    /// A SwiftUI colour as plain numbers, resolved for the dark map.
+    @MainActor
+    static func rgba(_ color: Color) -> RGBA {
+        var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
+        UIColor(color)
+            .resolvedColor(with: UITraitCollection(userInterfaceStyle: .dark))
+            .getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+        return RGBA(red: red, green: green, blue: blue, alpha: alpha)
+    }
+
+    convenience init(_ heatmap: RouteHeatmap.Heatmap, colors: [RGBA]) {
+        self.init(cells: heatmap.cells.map { ($0.center, $0.level) }, colors: colors)
+    }
+
+    /// New ground: every cell at level 1, in `color`.
+    convenience init(_ newGround: RouteHeatmap.NewGround, color: RGBA) {
+        self.init(
+            cells: newGround.cells.map { ($0, 1) },
+            colors: [RGBA](repeating: color, count: RouteHeatmap.levels + 1)
+        )
+    }
+
+    /// - Parameter cells: centres and levels, coolest first, so each bucket draws its
+    ///   hottest last.
+    init(cells: [(center: RouteHeatmap.Point, level: Int)], colors: [RGBA]) {
         var buckets: [Int64: [Dot]] = [:]
         var focusRect: MKMapRect?
         var anyRect: MKMapRect?
         var latitudeSum = 0.0
-        // Cells come coolest first, so each bucket draws its hottest last.
-        for cell in heatmap.cells {
+        for cell in cells {
             let point = MKMapPoint(CLLocationCoordinate2D(latitude: cell.center.latitude, longitude: cell.center.longitude))
             buckets[Self.key(x: point.x, y: point.y), default: []].append(Dot(x: point.x, y: point.y, level: cell.level))
             let spot = MKMapRect(origin: point, size: MKMapSize(width: 0, height: 0))
@@ -211,8 +253,8 @@ final class HeatDots: Sendable {
             latitudeSum += cell.center.latitude
         }
         self.buckets = buckets
-        count = heatmap.cells.count
-        let latitude = heatmap.cells.isEmpty ? 0 : latitudeSum / Double(heatmap.cells.count)
+        count = cells.count
+        let latitude = cells.isEmpty ? 0 : latitudeSum / Double(cells.count)
         let half = RouteHeatmap.cellMeters * MKMapPointsPerMeterAtLatitude(latitude) * 0.6
         halfSide = half
         focusBox = (focusRect ?? anyRect).map {

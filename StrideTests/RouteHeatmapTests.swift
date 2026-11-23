@@ -300,3 +300,53 @@ struct SeededGenerator: RandomNumberGenerator {
         return z ^ (z >> 31)
     }
 }
+
+/// Covers `RouteHeatmap.newGround(in:before:)`: streets first run in a period.
+struct RouteHeatmapNewGroundTests {
+    typealias Point = RouteHeatmap.Point
+
+    private let home = Point(latitude: 41.88, longitude: -87.63)
+
+    private func north(from start: Point, meters: Double) -> [Point] {
+        stride(from: 0.0, through: meters, by: 5).map {
+            Point(latitude: start.latitude + $0 / 111_320, longitude: start.longitude)
+        }
+    }
+
+    @Test func aStreetRunBeforeIsNotNew() {
+        let street = RouteHeatmap.trace(north(from: home, meters: 500))
+        #expect(RouteHeatmap.newGround(in: [street], before: [street]) == .none)
+    }
+
+    @Test func gpsWanderOnAKnownStreetIsNotNew() {
+        let street = RouteHeatmap.trace(north(from: home, meters: 500))
+        // The same street, 12 m to the east.
+        let wandered = RouteHeatmap.trace(north(
+            from: Point(latitude: home.latitude, longitude: home.longitude + 12 / 82_900),
+            meters: 500
+        ))
+        #expect(RouteHeatmap.newGround(in: [wandered], before: [street]).cells.isEmpty)
+    }
+
+    @Test func everythingIsNewWithNothingBefore() {
+        let street = RouteHeatmap.trace(north(from: home, meters: 500))
+        let ground = RouteHeatmap.newGround(in: [street], before: [])
+        #expect(ground.cells.count == street.cells.count)
+        #expect((450...550).contains(ground.meters))
+    }
+
+    @Test func onlyTheExtensionIsNew() {
+        let usual = RouteHeatmap.trace(north(from: home, meters: 500))
+        let longer = RouteHeatmap.trace(north(from: home, meters: 1_000))
+        let ground = RouteHeatmap.newGround(in: [longer], before: [usual])
+        #expect((440...540).contains(ground.meters))
+        // Every new cell is past where the usual street ends.
+        #expect(ground.cells.allSatisfy { $0.latitude > home.latitude + 500 / 111_320 })
+    }
+
+    @Test func aNewStreetRunTwiceInThePeriodCountsOnce() {
+        let fresh = RouteHeatmap.trace(north(from: home, meters: 500))
+        let ground = RouteHeatmap.newGround(in: [fresh, fresh], before: [])
+        #expect((450...550).contains(ground.meters))
+    }
+}

@@ -369,10 +369,7 @@ struct RouteHeatmapCard: View {
     private static func renderPreview(_ heatmap: RouteHeatmap.Heatmap) async -> UIImage? {
         guard !heatmap.isEmpty else { return nil }
         let colors = HeatDots.heatColors()
-        var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
-        UIColor(Color.inkDeep).resolvedColor(with: UITraitCollection(userInterfaceStyle: .dark))
-            .getRed(&red, green: &green, blue: &blue, alpha: &alpha)
-        let background = HeatDots.RGBA(red: red, green: green, blue: blue, alpha: 1)
+        let background = HeatDots.rgba(Color.inkDeep)
         let size = previewSize
         return await Task.detached(priority: .userInitiated) {
             HeatDots(heatmap, colors: colors).preview(size: size, background: background)

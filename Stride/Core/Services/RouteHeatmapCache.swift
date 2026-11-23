@@ -89,11 +89,7 @@ actor RouteHeatmapCache {
     func heatmap(for keys: [Key]) -> RouteHeatmap.Heatmap {
         loadIfNeeded()
         if let lastBuilt, lastBuilt.keys == keys { return lastBuilt.heatmap }
-        let traces = keys.compactMap { key -> RouteHeatmap.Trace? in
-            guard let entry = entries[key.id], entry.date == key.date else { return nil }
-            return entry.trace
-        }
-        let heatmap = RouteHeatmap.build(traces)
+        let heatmap = RouteHeatmap.build(traces(keys))
         lastBuilt = (keys, heatmap)
         return heatmap
     }
@@ -107,6 +103,19 @@ actor RouteHeatmapCache {
             guard let entry = entries[key.id], entry.date == key.date,
                   let trace = entry.trace, trace.passes(through: area) else { return nil }
             return key.id
+        }
+    }
+
+    /// The streets the runs in `keys` went along that no run in `earlier` had.
+    func newGround(for keys: [Key], before earlier: [Key]) -> RouteHeatmap.NewGround {
+        loadIfNeeded()
+        return RouteHeatmap.newGround(in: traces(keys), before: traces(earlier))
+    }
+
+    private func traces(_ keys: [Key]) -> [RouteHeatmap.Trace] {
+        keys.compactMap { key in
+            guard let entry = entries[key.id], entry.date == key.date else { return nil }
+            return entry.trace
         }
     }
 
