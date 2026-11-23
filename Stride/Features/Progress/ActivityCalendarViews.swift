@@ -371,7 +371,7 @@ struct RouteHeatmapMap: UIViewRepresentable {
         let overlays = Self.overlays(for: heatmap)
         // Coolest first, so the hottest draw on top.
         for overlay in overlays.sorted(by: { $0.level < $1.level }) {
-            map.addOverlay(overlay.polyline, level: .aboveRoads)
+            map.addOverlay(overlay, level: .aboveRoads)
         }
         if isFirst, let focus = Self.focus(overlays) {
             map.setVisibleMapRect(focus, edgePadding: UIEdgeInsets(top: 24, left: 24, bottom: 24, right: 24), animated: false)
