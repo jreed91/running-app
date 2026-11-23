@@ -98,6 +98,18 @@ actor RouteHeatmapCache {
         return heatmap
     }
 
+    /// The runs among `keys` whose route went within about `radiusMeters` of `point`, in
+    /// the order given.
+    func runs(near point: RouteHeatmap.Point, radiusMeters: Double, among keys: [Key]) -> [UUID] {
+        loadIfNeeded()
+        let area = RouteHeatmap.cells(around: point, radiusMeters: radiusMeters)
+        return keys.compactMap { key in
+            guard let entry = entries[key.id], entry.date == key.date,
+                  let trace = entry.trace, trace.passes(through: area) else { return nil }
+            return key.id
+        }
+    }
+
     // MARK: Disk
 
     /// In Caches: traces can always be worked out again, so the system may clear it.

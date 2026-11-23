@@ -21,6 +21,9 @@ struct RouteHeatmapScreen: View {
     @State private var heatmap: RouteHeatmap.Heatmap?
     @State private var isLoading = false
     @State private var recenter = 0
+    /// The spot tapped, and the runs that went through it, newest first.
+    @State private var spot: RouteHeatmap.Point?
+    @State private var spotRuns: [RunWorkout] = []
 
     init(period: HeatmapPeriod, runType: ProgressFilter.RunType) {
         _period = State(initialValue: period)
@@ -29,16 +32,31 @@ struct RouteHeatmapScreen: View {
     }
 
     var body: some View {
+        NavigationStack {
+            content
+                .toolbar(.hidden, for: .navigationBar)
+        }
+    }
+
+    private var content: some View {
         ZStack {
             if let heatmap {
-                RouteHeatmapMap(heatmap: heatmap, style: style, recenter: recenter)
+                RouteHeatmapMap(heatmap: heatmap, style: style, recenter: recenter, selection: spot) { point, radius in
+                    pick(point, radiusMeters: radius)
+                }
                     .ignoresSafeArea()
             } else {
                 Color.inkDeep.ignoresSafeArea()
             }
         }
         .overlay(alignment: .top) { topBar }
-        .overlay(alignment: .bottom) { statsPanel }
+        .overlay(alignment: .bottom) {
+            if spot != nil {
+                spotPanel
+            } else {
+                statsPanel
+            }
+        }
         .overlay {
             if heatmap == nil {
                 VStack(spacing: AppSpacing.sm) {
@@ -56,6 +74,82 @@ struct RouteHeatmapScreen: View {
             let shown = shownKeys()
             heatmap = await RouteHeatmapLoader.load(all: all, shown: shown, context: context)
             isLoading = false
+            clearSpot()
+        }
+    }
+
+    // MARK: Tap a spot
+
+    private func pick(_ point: RouteHeatmap.Point, radiusMeters: Double) {
+        let shown = shownKeys()
+        Task {
+            let ids = await RouteHeatmapCache.shared.runs(near: point, radiusMeters: radiusMeters, among: shown)
+            let byID = Dictionary(workouts.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+            withAnimation(AppAnimation.quick) {
+                spot = point
+                spotRuns = ids.compactMap { byID[$0] }.sorted { $0.date > $1.date }
+            }
+        }
+    }
+
+    private func clearSpot() {
+        spot = nil
+        spotRuns = []
+    }
+
+    private var spotPanel: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.md) {
+            HStack {
+                Text(spotTitle)
+                    .font(.dsHeadline)
+                Spacer()
+                Button {
+                    withAnimation(AppAnimation.quick) { clearSpot() }
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Back to the totals")
+            }
+            if spotRuns.isEmpty {
+                Text("Tap a coloured street to see the runs that went along it.")
+                    .font(.bodyRegular)
+                    .foregroundStyle(.secondary)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: AppSpacing.sm) {
+                        ForEach(spotRuns) { workout in
+                            NavigationLink {
+                                RunSummaryView(workout: workout)
+                            } label: {
+                                ProgressRunRow(workout: workout, unit: appSettings.unitPreference)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                .frame(maxHeight: 280)
+                .scrollBounceBehavior(.basedOnSize)
+            }
+        }
+        .padding(AppSpacing.lg)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .strideCard()
+        .padding(.horizontal, AppSpacing.lg)
+        .padding(.bottom, AppSpacing.sm)
+        .strideReadableWidth()
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+
+    private var spotTitle: String {
+        switch spotRuns.count {
+        case 0: return String(localized: "No runs here")
+        case 1: return String(localized: "1 run went here")
+        default: return String(localized: "\(spotRuns.count) runs went here")
         }
     }
 

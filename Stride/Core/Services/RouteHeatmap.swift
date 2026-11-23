@@ -58,6 +58,11 @@ enum RouteHeatmap {
 
         var isEmpty: Bool { cells.isEmpty }
 
+        /// Whether the route went through any of `area`'s cells.
+        func passes(through area: Set<Cell>) -> Bool {
+            cells.contains { area.contains($0) }
+        }
+
         init(cells: [Cell], centers: [Point], segments: [[Int32]]) {
             self.cells = cells
             self.centers = centers
@@ -196,6 +201,24 @@ enum RouteHeatmap {
             latitude: Double(cell.y) * rowHeight,
             longitude: Double(cell.x) * columnWidth(row: Double(cell.y))
         )
+    }
+
+    /// Every cell within about `radiusMeters` of a point: a square of cells around the
+    /// one it falls in. For "which runs went here?", where a tap is never exact.
+    static func cells(around point: Point, radiusMeters: Double) -> Set<Cell> {
+        let center = cell(of: point)
+        let reach = max(0, Int((radiusMeters / cellMeters).rounded(.up)))
+        var cells = Set<Cell>()
+        for dy in -reach...reach {
+            let y = Int(center.y) + dy
+            // Rows differ in width a little, so find the centre column again in each row.
+            let rowPoint = Point(latitude: (Double(y) + 0.5) * rowHeight, longitude: point.longitude)
+            let column = Int(cell(of: rowPoint).x)
+            for dx in -reach...reach {
+                cells.insert(Cell(x: Int32(clamping: column + dx), y: Int32(clamping: y)))
+            }
+        }
+        return cells
     }
 
     /// Metres between two points: flat-earth, which is exact enough across a few hundred metres.
