@@ -63,6 +63,12 @@ struct MainTabView: View {
             NewPlanOnboardingView(invite: invite)
                 .strideSheet()
         }
+        // What's new in this release, once, after an update (`WhatsNewPolicy`; the
+        // launch check is `ContentView.checkWhatsNew()`).
+        .sheet(item: whatsNewRelease) { release in
+            WhatsNewView(release: release)
+                .strideSheet()
+        }
         .alert(
             "This race has already happened",
             isPresented: Binding(
@@ -98,6 +104,13 @@ struct MainTabView: View {
         Binding(
             get: { container.appNavigation.pendingRaceInvite },
             set: { container.appNavigation.pendingRaceInvite = $0 }
+        )
+    }
+
+    private var whatsNewRelease: Binding<Release?> {
+        Binding(
+            get: { container.appNavigation.whatsNewRelease },
+            set: { container.appNavigation.whatsNewRelease = $0 }
         )
     }
 

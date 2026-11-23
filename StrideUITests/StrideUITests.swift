@@ -168,6 +168,34 @@ final class StrideUITests: XCTestCase {
         XCTAssertEqual(app.state, .runningForeground)
     }
 
+    /// The What's New sheet pages through to its last feature and closes, and "All
+    /// releases" reaches the changelog. Opened with `--show-whats-new`, since UI tests
+    /// otherwise never see it (`ContentView.checkWhatsNew()`).
+    func testWhatsNewPagesThroughAndOpensTheChangelog() throws {
+        app.terminate()
+        app.launchArguments = ["--uitesting", "--show-whats-new"]
+        app.launch()
+        completeOnboarding()
+
+        let next = app.buttons["whatsNew.next"]
+        XCTAssertTrue(next.waitForExistence(timeout: 10), "The What's New sheet did not open")
+
+        app.buttons["whatsNew.allReleases"].tap()
+        XCTAssertTrue(app.buttons["releaseHistory.1.1"].waitForExistence(timeout: 5), "No changelog")
+        app.buttons["releaseHistory.1.1"].tap()
+        XCTAssertTrue(app.navigationBars["Stride 1.1"].waitForExistence(timeout: 5))
+        app.navigationBars["Stride 1.1"].buttons.element(boundBy: 0).tap()
+        app.navigationBars["What's new"].buttons.element(boundBy: 0).tap()
+
+        for _ in 0..<10 where next.exists && next.label != "Start running" {
+            next.tap()
+        }
+        XCTAssertEqual(next.label, "Start running")
+        next.tap()
+        XCTAssertFalse(next.waitForExistence(timeout: 2), "The sheet did not close")
+        XCTAssertTrue(tabBar.exists)
+    }
+
     private func completeOnboarding() {
         if tabBar.waitForExistence(timeout: 1) {
             return

@@ -46,6 +46,10 @@ struct SettingsView: View {
     /// Release, so a debug-only declaration compiles in Debug and then fails the archive
     /// with "Cannot find 'pccStatus' in scope".
     @State private var pccStatus: ServerModelStatus?
+    /// The What's New sheet opened from the TestFlight card. Outside `#if DEBUG` for the
+    /// same reason as `pccStatus`: the TestFlight card ships in Release builds.
+    @State private var whatsNewPreview: Release?
+    @State private var whatsNewResetDone = false
     #if DEBUG
     @State private var seedWeeks = 8
     @State private var completionCutoff = Date()
@@ -767,6 +771,40 @@ struct SettingsView: View {
             } else {
                 footnote(Text("Sends each local notification now, to check copy, sound and what a tap opens."))
             }
+            rowDivider
+            Button {
+                whatsNewPreview = ReleaseNotes.release(forMarketingVersion: WhatsNewStore.currentMarketingVersion)
+                    ?? ReleaseNotes.all.first
+            } label: {
+                settingsRow(icon: .history, iconColor: .secondary, title: "Show What's New") {
+                    StrideIcon(name: .play, size: 12,
+                               color: Color.secondary.opacity(0.7), strokeWeight: 2)
+                }
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.primary)
+            .accessibilityIdentifier("settings.testFlight.showWhatsNew")
+            rowDivider
+            Button {
+                WhatsNewStore().reset()
+                whatsNewResetDone = true
+            } label: {
+                settingsRow(icon: .history, iconColor: .secondary, title: "Show What's New on next launch") {
+                    if whatsNewResetDone {
+                        StrideIcon(name: .check, size: 12, color: .success, strokeWeight: 2.2)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.primary)
+            .accessibilityIdentifier("settings.testFlight.resetWhatsNew")
+            footnote(Text(whatsNewResetDone
+                ? "Quit Stride from the app switcher and open it again to see it as an updated runner would."
+                : "Opens this release's What's New now, or forgets it was seen so it opens at the next launch."))
+        }
+        .sheet(item: $whatsNewPreview) { release in
+            WhatsNewView(release: release)
+                .strideSheet()
         }
         #if canImport(PulseUI)
         .sheet(isPresented: $showPulseConsole) { NavigationStack { ConsoleView() } }
@@ -780,6 +818,17 @@ struct SettingsView: View {
         let version = info?["CFBundleShortVersionString"] as? String ?? "—"
         let build = info?["CFBundleVersion"] as? String
         return settingsSection("About") {
+            NavigationLink {
+                ReleaseHistoryView()
+            } label: {
+                settingsRow(icon: .history, iconColor: .brand, title: "What's new in Stride") {
+                    rowChevron
+                }
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.primary)
+            .accessibilityIdentifier("settings.whatsNew")
+            rowDivider
             settingsRow(icon: .gear, iconColor: Color.secondary, title: "Version") {
                 Text(build.map { "\(version) (\($0))" } ?? version)
                     .font(.dsSubhead.weight(.medium).monospacedDigit())

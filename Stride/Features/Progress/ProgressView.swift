@@ -143,8 +143,10 @@ struct ProgressDashboardView: View {
                             // These three have their own all-time queries (a record is measured
                             // against every run ever), and take the filter as parameters.
                             BestEffortsCard(scope: scopedIDs)
+                                .accessibilityIdentifier("progress.bestEfforts")
                                 .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 6)
                             FitnessFreshnessCard(periodDays: period.days, asOf: fitnessAsOf)
+                                .accessibilityIdentifier("progress.fitnessFreshness")
                                 .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 6)
                             ActivityCalendarCard(
                                 runType: runType,

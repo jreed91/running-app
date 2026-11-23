@@ -1,0 +1,143 @@
+name: What's New screenshots
+
+# Captures the screenshots on the in-app What's New sheet (StrideUITests/
+# WhatsNewScreenshotTests.swift) from the demo history, scales them down, and commits
+# them into Stride/Resources/WhatsNew.xcassets as whatsnew-<version>-<feature id>, where
+# <version> is MARKETING_VERSION's major.minor from ci_scripts/Version.xcconfig.
+#
+# Not part of CI: it runs when a pull request carries the `whats-new-screenshots` label,
+# or by hand from the Actions tab on a branch. Run it once a release's features are
+# settled (after adding them to Stride/Core/Models/ReleaseNotes.swift), before archiving.
+# The raw captures, and the sheet itself for review, are in the `whats-new-screenshots`
+# artifact either way.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [labeled, synchronize]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  screenshots:
+    name: What's New screenshots
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'whats-new-screenshots')
+    runs-on: xcode-27
+    timeout-minutes: 60
+    env:
+      IPHONE: iPhone 17 Pro Max
+      RAW: ${{ github.workspace }}/WhatsNew/raw
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The branch itself, not the PR's merge commit, so the commit below lands on it.
+          ref: ${{ github.event.pull_request.head.ref || github.ref }}
+
+      - name: Select Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_27*.app 2>/dev/null | sort -V | tail -1)
+          [[ -n "$XCODE" ]] || { echo "::error::No Xcode 27 on this runner"; exit 1; }
+          sudo xcode-select -switch "$XCODE"
+
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen xcbeautify
+          xcodegen generate
+          mkdir -p Stride.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
+          cp ci_scripts/Package.resolved Stride.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+
+      - name: Boot the iPhone simulator at 9:41, in dark appearance
+        run: |
+          UDID=$(xcrun simctl list devices available -j \
+            | jq -r --arg name "$IPHONE" '[.devices | to_entries[] | select(.key | contains("iOS")) | .value[] | select(.name == $name)] | .[0].udid // empty')
+          if [[ -z "$UDID" ]]; then
+            echo "::warning::No '$IPHONE' simulator; using the largest available iPhone."
+            UDID=$(xcrun simctl list devices available -j \
+              | jq -r '[.devices | to_entries[] | select(.key | contains("iOS")) | .value[] | select(.name | test("Pro Max"))] | .[0].udid // empty')
+          fi
+          [[ -n "$UDID" ]] || { echo "::error::No iPhone simulator found"; exit 1; }
+          echo "IPHONE_UDID=$UDID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          # Dark, like the App Store screenshots (design/route-loop/README.md).
+          xcrun simctl ui "$UDID" appearance dark
+          xcrun simctl status_bar "$UDID" override --time "9:41" --dataNetwork wifi --wifiMode active \
+            --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
+
+      - name: Capture the feature screens
+        # A failed capture still leaves the others to bundle.
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          mkdir -p "$RAW"
+          TEST_RUNNER_WHATS_NEW_CAPTURE_DIR="$RAW" xcodebuild test \
+            -scheme Stride \
+            -destination "platform=iOS Simulator,id=$IPHONE_UDID" \
+            -derivedDataPath DerivedData \
+            -only-testing:StrideUITests/WhatsNewScreenshotTests \
+            -resultBundlePath WhatsNew/whats-new.xcresult \
+            -skipMacroValidation -skipPackagePluginValidation \
+            COMPILER_INDEX_STORE_ENABLE=NO CODE_SIGNING_ALLOWED=NO \
+            | xcbeautify --renderer github-actions
+
+      - name: Write the image sets
+        run: |
+          VERSION=$(sed -n 's/^MARKETING_VERSION *= *//p' ci_scripts/Version.xcconfig | tr -d '[:space:]')
+          KEY=$(echo "$VERSION" | awk -F. '{ printf "%s.%s", $1, ($2 == "" ? 0 : $2) }')
+          CATALOG=Stride/Resources/WhatsNew.xcassets
+          shopt -s nullglob
+          COUNT=0
+          for PNG in "$RAW"/*.png; do
+            ID=$(basename "$PNG" .png)
+            [[ "$ID" == "whats-new-sheet" ]] && continue
+            SET="$CATALOG/whatsnew-$KEY-$ID.imageset"
+            rm -rf "$SET" && mkdir -p "$SET"
+            # 660 px wide: sharp at 3x on the sheet's ~200 pt frame, about 100 KB each.
+            sips --resampleWidth 660 -s format jpeg -s formatOptions 82 "$PNG" --out "$SET/screenshot.jpg" >/dev/null
+            cat > "$SET/Contents.json" <<'JSON'
+          {
+            "images" : [
+              {
+                "filename" : "screenshot.jpg",
+                "idiom" : "universal",
+                "scale" : "2x"
+              }
+            ],
+            "info" : {
+              "author" : "xcode",
+              "version" : 1
+            }
+          }
+          JSON
+            COUNT=$((COUNT + 1))
+          done
+          echo "Wrote $COUNT image sets for $KEY"
+          ls -la "$CATALOG"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: whats-new-screenshots
+          path: |
+            WhatsNew/raw
+            Stride/Resources/WhatsNew.xcassets
+
+      - name: Commit the screenshots to the branch
+        # Fails harmlessly on a protected branch or a fork; the artifact has them.
+        continue-on-error: true
+        run: |
+          git add Stride/Resources/WhatsNew.xcassets
+          if git diff --cached --quiet; then
+            echo "No screenshot changes."
+            exit 0
+          fi
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -m "What's New: update the feature screenshots"
+          git push origin HEAD

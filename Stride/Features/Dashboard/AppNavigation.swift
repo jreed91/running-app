@@ -46,6 +46,10 @@ final class AppNavigation {
     /// The name of an invited race that has already happened, for the "too late" alert.
     var pastRaceInviteName: String?
 
+    /// The release whose What's New sheet is open over the tabs, set once at launch after
+    /// an update (`WhatsNewPolicy`). The sheet clears it when dismissed.
+    var whatsNewRelease: Release?
+
     /// Sends the app to `tab`. Named rather than assigned at call sites so the deep-link
     /// handler reads as an instruction, and so there is one place to add anything a tab
     /// switch should also do (scroll to top, dismiss a sheet) if that ever becomes true.
