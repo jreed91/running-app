@@ -249,6 +249,7 @@ struct RouteHeatmapCard: View {
     @Query private var workouts: [RunWorkout]
     @State private var showsMap = false
     @State private var heatmap: RouteHeatmap.Heatmap?
+    @State private var showsFullScreen = false
 
     init(periodDays: Int?, runType: ProgressFilter.RunType) {
         self.periodDays = periodDays
@@ -258,10 +259,17 @@ struct RouteHeatmapCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            Text("EVERY ROUTE")
-                .strideEyebrow()
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, AppSpacing.xs)
+            HStack {
+                Text("EVERY ROUTE")
+                    .strideEyebrow()
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Full screen") { showsFullScreen = true }
+                    .font(.dsFootnote.weight(.semibold))
+                    .foregroundStyle(Color.brandText)
+                    .accessibilityHint("Opens the heatmap with its own filters")
+            }
+            .padding(.horizontal, AppSpacing.xs)
             if showsMap {
                 if let heatmap {
                     if heatmap.lines.isEmpty {
@@ -299,6 +307,10 @@ struct RouteHeatmapCard: View {
                 }
                 .buttonStyle(.strideButton(.quiet))
             }
+        }
+        .fullScreenCover(isPresented: $showsFullScreen) {
+            RouteHeatmapScreen(period: HeatmapPeriod(progressDays: periodDays), runType: runType)
+                .environment(appSettings)
         }
         .onAppear {
             // Shown before this session: open straight onto the last map.
@@ -346,10 +358,29 @@ struct RouteHeatmapCard: View {
 /// many runs there are.
 struct RouteHeatmapMap: UIViewRepresentable {
     let heatmap: RouteHeatmap.Heatmap
+    var style: Style = .map
+    /// Changing it moves the map back onto the streets run most.
+    var recenter = 0
+
+    /// The base map under the heat.
+    enum Style: String, CaseIterable, Identifiable, Sendable {
+        case map
+        case dark
+        case satellite
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .map: return String(localized: "Map")
+            case .dark: return String(localized: "Dark")
+            case .satellite: return String(localized: "Satellite")
+            }
+        }
+    }
 
     func makeUIView(context: Context) -> MKMapView {
         let map = MKMapView()
-        map.preferredConfiguration = MKStandardMapConfiguration(emphasisStyle: .muted)
         map.isRotateEnabled = false
         map.isPitchEnabled = false
         map.showsCompass = false
@@ -360,22 +391,45 @@ struct RouteHeatmapMap: UIViewRepresentable {
     }
 
     func updateUIView(_ map: MKMapView, context: Context) {
+        let coordinator = context.coordinator
         map.accessibilityLabel = String(
             localized: "Heatmap of \(heatmap.runCount) runs. Brighter, thicker lines are streets you run more often."
         )
-        guard context.coordinator.shown != heatmap else { return }
-        let isFirst = context.coordinator.shown == nil
-        context.coordinator.shown = heatmap
-        map.removeOverlays(map.overlays)
+        if coordinator.style != style {
+            coordinator.style = style
+            switch style {
+            case .map:
+                map.preferredConfiguration = MKStandardMapConfiguration(emphasisStyle: .muted)
+                map.overrideUserInterfaceStyle = .unspecified
+            case .dark:
+                map.preferredConfiguration = MKStandardMapConfiguration(emphasisStyle: .muted)
+                map.overrideUserInterfaceStyle = .dark
+            case .satellite:
+                map.preferredConfiguration = MKImageryMapConfiguration()
+                map.overrideUserInterfaceStyle = .dark
+            }
+        }
+        if coordinator.shown != heatmap {
+            let isFirst = coordinator.shown == nil
+            coordinator.shown = heatmap
+            map.removeOverlays(map.overlays)
+            coordinator.overlays = Self.overlays(for: heatmap)
+            // Coolest first, so the hottest draw on top.
+            for overlay in coordinator.overlays.sorted(by: { $0.level < $1.level }) {
+                map.addOverlay(overlay, level: .aboveRoads)
+            }
+            if isFirst { coordinator.recentered = recenter }
+            if isFirst { Self.moveToFocus(map, coordinator.overlays, animated: false) }
+        }
+        if coordinator.recentered != recenter {
+            coordinator.recentered = recenter
+            Self.moveToFocus(map, coordinator.overlays, animated: true)
+        }
+    }
 
-        let overlays = Self.overlays(for: heatmap)
-        // Coolest first, so the hottest draw on top.
-        for overlay in overlays.sorted(by: { $0.level < $1.level }) {
-            map.addOverlay(overlay, level: .aboveRoads)
-        }
-        if isFirst, let focus = Self.focus(overlays) {
-            map.setVisibleMapRect(focus, edgePadding: UIEdgeInsets(top: 24, left: 24, bottom: 24, right: 24), animated: false)
-        }
+    private static func moveToFocus(_ map: MKMapView, _ overlays: [LevelPolyline], animated: Bool) {
+        guard let focus = focus(overlays) else { return }
+        map.setVisibleMapRect(focus, edgePadding: UIEdgeInsets(top: 32, left: 24, bottom: 32, right: 24), animated: animated)
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -427,6 +481,9 @@ struct RouteHeatmapMap: UIViewRepresentable {
     @MainActor
     final class Coordinator: NSObject, MKMapViewDelegate {
         var shown: RouteHeatmap.Heatmap?
+        var overlays: [LevelPolyline] = []
+        var style: Style?
+        var recentered = 0
 
         func mapView(_ mapView: MKMapView, rendererFor overlay: any MKOverlay) -> MKOverlayRenderer {
             guard let overlay = overlay as? LevelPolyline else { return MKOverlayRenderer(overlay: overlay) }
