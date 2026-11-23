@@ -338,7 +338,7 @@ struct StartRunningPlanServiceTests {
         let repeatedDays = runs(in: repeated).map { weekday(of: $0.scheduledDate, from: repeated.startDate) }
         #expect(repeatedDays == [0, 2, 4])
         #expect(runs(in: repeated).allSatisfy { !$0.isCompleted })
-        #expect(runs(in: after[0]).allSatisfy(\.isCompleted))
+        #expect(runs(in: after[0]).allSatisfy { $0.isCompleted })
 
         #expect(after.dropFirst(2).map(\.startDate) == laterStarts.map { $0.adding(days: 7) })
         let movedRunDates = after.dropFirst(2).flatMap { runs(in: $0) }.map(\.scheduledDate)
