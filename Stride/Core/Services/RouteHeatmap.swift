@@ -423,8 +423,8 @@ enum RouteHeatmap {
     /// own cells are added to what's known once it is done, so a run counts in full, and a
     /// step into a cell it already went through this run (the way back of an
     /// out-and-back) doesn't count again.
-    static func groundMeters(_ traces: [Trace]) -> Double {
-        var known = Set<Cell>()
+    static func groundMeters(_ traces: [Trace], alreadyKnown: Set<Cell> = []) -> Double {
+        var known = alreadyKnown
         var meters = 0.0
         for trace in traces where !trace.isEmpty {
             var visited = Set<Int32>()
@@ -436,15 +436,61 @@ enum RouteHeatmap {
                     meters += distance(trace.centers[Int(from)], trace.centers[Int(to)])
                 }
             }
-            for cell in trace.cells {
-                for dy in -1...1 {
-                    for dx in -1...1 {
-                        known.insert(Cell(x: cell.x &+ Int32(dx), y: cell.y &+ Int32(dy)))
-                    }
-                }
-            }
+            for cell in trace.cells { known.formUnion(neighbourhood(of: cell)) }
         }
         return meters
+    }
+
+    // MARK: New ground
+
+    /// Streets run for the first time in a period.
+    struct NewGround: Equatable, Sendable {
+        /// The new cells' centres.
+        var cells: [Point]
+        /// Length of the new streets.
+        var meters: Double
+        /// Which result this is; equal only to itself, like ``Heatmap``.
+        var id = UUID()
+
+        static func == (lhs: NewGround, rhs: NewGround) -> Bool { lhs.id == rhs.id }
+
+        static let none = NewGround(cells: [], meters: 0, id: UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1)))
+    }
+
+    /// The cells the period's runs went through that no earlier run came within a cell
+    /// of: where the period broke new ground. "Within a cell" so GPS wander on a familiar
+    /// street doesn't show up as new.
+    static func newGround(in traces: [Trace], before earlier: [Trace]) -> NewGround {
+        var known = Set<Cell>()
+        for trace in earlier {
+            for cell in trace.cells { known.formUnion(neighbourhood(of: cell)) }
+        }
+        var fresh: [Cell: (latitude: Double, longitude: Double, count: Double)] = [:]
+        for trace in traces {
+            for (cell, center) in zip(trace.cells, trace.centers) where !known.contains(cell) {
+                var sum = fresh[cell] ?? (0, 0, 0)
+                sum.latitude += center.latitude
+                sum.longitude += center.longitude
+                sum.count += 1
+                fresh[cell] = sum
+            }
+        }
+        guard !fresh.isEmpty else { return .none }
+        // Ground over the period's runs, starting from what the earlier runs knew.
+        let meters = groundMeters(traces, alreadyKnown: known)
+        return NewGround(cells: fresh.values.map(center), meters: meters)
+    }
+
+    /// A cell and its eight neighbours.
+    static func neighbourhood(of cell: Cell) -> [Cell] {
+        var cells: [Cell] = []
+        cells.reserveCapacity(9)
+        for dy in -1...1 {
+            for dx in -1...1 {
+                cells.append(Cell(x: cell.x &+ Int32(dx), y: cell.y &+ Int32(dy)))
+            }
+        }
+        return cells
     }
 
     /// Every pair of neighbouring cells a trace went between.

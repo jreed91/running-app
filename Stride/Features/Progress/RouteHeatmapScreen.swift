@@ -24,6 +24,8 @@ struct RouteHeatmapScreen: View {
     /// The spot tapped, and the runs that went through it, newest first.
     @State private var spot: RouteHeatmap.Point?
     @State private var spotRuns: [RunWorkout] = []
+    @State private var showsNewGround = false
+    @State private var newGround: RouteHeatmap.NewGround?
 
     init(period: HeatmapPeriod, runType: ProgressFilter.RunType) {
         _period = State(initialValue: period)
@@ -41,7 +43,13 @@ struct RouteHeatmapScreen: View {
     private var content: some View {
         ZStack {
             if let heatmap {
-                RouteHeatmapMap(heatmap: heatmap, style: style, recenter: recenter, selection: spot) { point, radius in
+                RouteHeatmapMap(
+                    heatmap: heatmap,
+                    style: style,
+                    recenter: recenter,
+                    selection: spot,
+                    newGround: showsNewGround ? newGround : nil
+                ) { point, radius in
                     pick(point, radiusMeters: radius)
                 }
                     .ignoresSafeArea()
@@ -73,9 +81,35 @@ struct RouteHeatmapScreen: View {
             let all = RouteHeatmapLoader.keys(from: workouts)
             let shown = shownKeys()
             heatmap = await RouteHeatmapLoader.load(all: all, shown: shown, context: context)
+            newGround = await loadNewGround(shown: shown)
             isLoading = false
             clearSpot()
         }
+    }
+
+    // MARK: New ground
+
+    /// The period's new streets: compared against every earlier run of any kind, since a
+    /// street first run on an easy day isn't new on a long run. All time has none.
+    private func loadNewGround(shown: [RouteHeatmapCache.Key]) async -> RouteHeatmap.NewGround? {
+        guard let start = period.interval(now: .now, calendar: .current)?.start else { return nil }
+        let earlier = RouteHeatmapLoader.keys(from: workouts.filter { $0.date < start })
+        return await RouteHeatmapCache.shared.newGround(for: shown, before: earlier)
+    }
+
+    private var newGroundChip: some View {
+        Button {
+            withAnimation(AppAnimation.quick) { showsNewGround.toggle() }
+        } label: {
+            Label("New ground", systemImage: "sparkles")
+        }
+        .buttonStyle(.strideChip(selected: showsNewGround))
+        .disabled(newGround == nil)
+        .accessibilityHint(
+            newGround == nil
+                ? "Pick a period to see the streets you ran for the first time in it"
+                : "Shows the streets you ran for the first time in this period"
+        )
     }
 
     // MARK: Tap a spot
@@ -192,6 +226,7 @@ struct RouteHeatmapScreen: View {
                 HStack(spacing: AppSpacing.sm) {
                     periodMenu
                     runTypeMenu
+                    newGroundChip
                     styleMenu
                     Button {
                         recenter += 1
@@ -282,6 +317,9 @@ struct RouteHeatmapScreen: View {
                         .font(.bodyRegular)
                         .foregroundStyle(.secondary)
                 } else {
+                    if showsNewGround, let newGround {
+                        newGroundSummary(newGround)
+                    }
                     HStack(alignment: .top, spacing: AppSpacing.lg) {
                         stat(
                             value: "\(heatmap.runCount)",
@@ -307,6 +345,19 @@ struct RouteHeatmapScreen: View {
             .padding(.bottom, AppSpacing.sm)
             .strideReadableWidth()
         }
+    }
+
+    private func newGroundSummary(_ ground: RouteHeatmap.NewGround) -> some View {
+        HStack(spacing: AppSpacing.sm) {
+            Rectangle()
+                .fill(RouteHeatmapMap.newGroundColor)
+                .frame(width: 12, height: 12)
+            Text(ground.meters > 0
+                ? "\(ground.meters.distanceString(unit: appSettings.unitPreference)) of streets new to you"
+                : "No new streets in this period")
+                .font(.dsFootnote.weight(.semibold))
+        }
+        .accessibilityElement(children: .combine)
     }
 
     private func stat(value: String, label: String) -> some View {
