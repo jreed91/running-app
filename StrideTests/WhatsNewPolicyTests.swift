@@ -138,9 +138,9 @@ struct WhatsNewPolicyTests {
     }
 
     @Test func screenshotNamesMatchTheWorkflow() {
-        let feature = ReleaseNotes.v1_2.features.first { $0.id == "heatmap" }
-        #expect(feature?.screenshotName(in: ReleaseNotes.v1_2) == "whatsnew-1.2-heatmap")
-        #expect(ReleaseNotes.v1_1.features.allSatisfy { $0.screenshotName(in: ReleaseNotes.v1_1) == nil })
+        let feature = ReleaseNotes.v1point2.features.first { $0.id == "heatmap" }
+        #expect(feature?.screenshotName(in: ReleaseNotes.v1point2) == "whatsnew-1.2-heatmap")
+        #expect(ReleaseNotes.v1point1.features.allSatisfy { $0.screenshotName(in: ReleaseNotes.v1point1) == nil })
     }
 
     /// Bump `MARKETING_VERSION` and this fails until the release has notes, so a release
