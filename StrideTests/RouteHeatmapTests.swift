@@ -186,7 +186,7 @@ struct RouteHeatmapTests {
     // MARK: Cache
 
     private func blob(_ points: [Point]) -> Data {
-        try! JSONEncoder().encode(points)
+        (try? JSONEncoder().encode(points)) ?? Data()
     }
 
     private let day = Date(timeIntervalSince1970: 1_800_000_000)
@@ -264,6 +264,10 @@ struct RouteHeatmapSpotTests {
         Point(latitude: point.latitude, longitude: point.longitude + meters / (111_320 * cos(point.latitude * .pi / 180)))
     }
 
+    private func encoded(_ points: [Point]) -> Data {
+        (try? JSONEncoder().encode(points)) ?? Data()
+    }
+
     @Test func theAreaGrowsWithTheRadius() {
         #expect(RouteHeatmap.cells(around: home, radiusMeters: 0).count == 1)
         #expect(RouteHeatmap.cells(around: home, radiusMeters: 20).count == 9)
@@ -273,9 +277,9 @@ struct RouteHeatmapSpotTests {
 
     @Test func findsTheRunsThatWentThroughATap() async {
         let cache = RouteHeatmapCache()
-        let onStreet = RouteHeatmapCache.Input(id: UUID(), date: day, route: try! JSONEncoder().encode(north(from: home, meters: 500)))
+        let onStreet = RouteHeatmapCache.Input(id: UUID(), date: day, route: encoded(north(from: home, meters: 500)))
         let blockOver = RouteHeatmapCache.Input(
-            id: UUID(), date: day, route: try! JSONEncoder().encode(north(from: east(of: home, meters: 200), meters: 500))
+            id: UUID(), date: day, route: encoded(north(from: east(of: home, meters: 200), meters: 500))
         )
         await cache.add([onStreet, blockOver])
         let keys = [onStreet.key, blockOver.key]
