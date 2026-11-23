@@ -77,7 +77,7 @@ struct ActiveRunPresentationTests {
     func cueStyleFollowsThePlan() {
         let context = TestStore.makeContext()
         func session(_ kind: PlanKind, _ type: WorkoutType) -> ScheduledWorkout {
-            let plan = TrainingPlan(targetRace: .maintainFitness, startDate: Date(), endDate: Date().adding(weeks: 10))
+            let plan = TrainingPlan(targetRace: .maintainFitness, goalTimeSeconds: 0, startDate: Date(), endDate: Date().adding(weeks: 10))
             plan.planKind = kind
             context.insert(plan)
             let week = TrainingWeek(weekNumber: 1, startDate: Date(), phase: .base, targetDistanceKm: 0)

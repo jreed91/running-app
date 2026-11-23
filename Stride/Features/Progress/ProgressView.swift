@@ -1341,13 +1341,11 @@ struct ProgressDashboardView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: 60)
     }
+}
 
-    // MARK: - Selection helpers
+// MARK: - Chart annotation helpers
 
-
-
-    // MARK: - Chart annotation helpers
-
+extension ProgressDashboardView {
     @ChartContentBuilder
     private func selectionRule<X: Plottable, Label: View>(
         x: PlottableValue<X>,
@@ -1363,6 +1361,4 @@ struct ProgressDashboardView: View {
                 content: label
             )
     }
-
-
 }

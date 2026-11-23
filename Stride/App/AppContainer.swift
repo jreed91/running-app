@@ -229,6 +229,7 @@ final class AppContainer {
 
     // MARK: Init
 
+    // swiftlint:disable:next function_body_length
     init(
         inMemory: Bool = false,
         syncEnabledOverride: Bool? = nil,

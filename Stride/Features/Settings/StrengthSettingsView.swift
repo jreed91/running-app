@@ -124,6 +124,7 @@ struct StrengthSettingsView: View {
             }
             .padding(.horizontal, AppSpacing.md)
             .strideCard(cornerRadius: AppRadius.md)
+            // swiftlint:disable:next line_length
             Text("Automatic gives two sessions a week in base and build (one with a general strength focus), one in peak, and one or none in a taper. A taper never gets more than one, whatever you choose. Changing the number puts the sessions still ahead back on the plan's own days. A shorter session drops the least important exercises, keeping at least three.")
                 .font(.dsFootnote)
                 .foregroundStyle(.secondary)
