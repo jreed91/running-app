@@ -830,6 +830,7 @@ final class AppContainer {
         // protected-edit notes name sessions that are.
         ShoeNudgeDismissals.removeAll()
         AdaptedSessions.removeAll()
+        TrainingBreakStore.removeAll()
         await planLifecycle.resetAllData(context: context)
         // The App Group container is outside the store `PlanLifecycleService` just tore
         // down, so without this the Home Screen would be the one place the deleted plan

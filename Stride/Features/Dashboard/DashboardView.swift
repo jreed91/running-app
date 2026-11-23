@@ -548,6 +548,13 @@ struct DashboardView: View {
                             runButtons
                                 .strideEntrance(dashboardAppeared, delay: AppAnimation.stagger)
                         }
+                        // A break the runner set on the Plan tab ("Not feeling your best?"):
+                        // why today's session is a rest day or a short easy run. Draws
+                        // nothing without one.
+                        if let plan = activePlan {
+                            TrainingBreakCard(plan: plan, offersEntry: false)
+                                .strideEntrance(dashboardAppeared, delay: AppAnimation.stagger * 2)
+                        }
                         alertSlot
                             .strideEntrance(dashboardAppeared, delay: AppAnimation.stagger * 2)
                         if let racePlan = racePlan {
