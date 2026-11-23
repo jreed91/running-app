@@ -100,6 +100,8 @@ final class CoachPlanChangeDesk: Sendable {
             reason = "No free day in the coming week fits \(withArticle(type)) without sitting next to another hard day. Suggest changing an easy run into it instead."
         case .nothingToChange:
             reason = "There is no upcoming run in the coming week to change."
+        case .duringTrainingBreak(let day):
+            reason = "\(CoachLookup.dayLabel(day)) is in a break the runner set because they're unwell, injured or away, or in the easy days after it. Don't add running or make it harder; a rest day or an easy run is fine. If they feel ready, they can tap \"I'm back\" on the Plan tab."
         }
         return "Not proposed. \(reason) Nothing changed, so don't say it did."
     }
