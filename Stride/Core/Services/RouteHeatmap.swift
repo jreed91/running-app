@@ -155,25 +155,51 @@ enum RouteHeatmap {
         }
     }
 
-    /// One stretch of street at one heat level, ready to draw.
-    struct Line: Equatable, Sendable {
+    /// One square of the map and how many runs went through it, ready to draw.
+    struct HeatCell: Equatable, Sendable {
+        /// Where the runs went inside the cell, on average.
+        var center: Point
+        var runs: Int
         /// 1 (run once) to ``RouteHeatmap/levels`` (run most).
         var level: Int
-        var points: [Point]
     }
 
     /// What a set of runs adds up to on the map.
     struct Heatmap: Equatable, Sendable {
-        /// Coolest first, so the hottest streets draw on top.
-        var lines: [Line]
+        /// Every cell any run went through, coolest first, so the hottest draw on top.
+        ///
+        /// Cells rather than lines: GPS wanders a few metres either side of the street,
+        /// so years of runs on one street are a band of neighbouring cells. Joining those
+        /// into lines made a mesh of tens of thousands of tiny lines, which MapKit drew on
+        /// every frame. Cells are drawn by a tiled renderer that only looks at the ones on
+        /// screen, off the main thread.
+        var cells: [HeatCell]
         /// Runs that had a route.
         var runCount: Int
-        /// The most runs that went along any one stretch.
+        /// The most runs that went through any one cell.
         var maxRuns: Int
-        /// The length of ground covered, each stretch counted once however often it was run.
+        /// The length of ground covered, each street counted once however often it was run.
         var uniqueMeters: Double
+        /// Which build this is. Two maps are equal when they are the same build, so
+        /// SwiftUI and the map view never compare every cell on the main actor.
+        var id: UUID
 
-        static let empty = Heatmap(lines: [], runCount: 0, maxRuns: 0, uniqueMeters: 0)
+        init(cells: [HeatCell], runCount: Int, maxRuns: Int, uniqueMeters: Double, id: UUID = UUID()) {
+            self.cells = cells
+            self.runCount = runCount
+            self.maxRuns = maxRuns
+            self.uniqueMeters = uniqueMeters
+            self.id = id
+        }
+
+        static func == (lhs: Heatmap, rhs: Heatmap) -> Bool { lhs.id == rhs.id }
+
+        static let empty = Heatmap(
+            cells: [], runCount: 0, maxRuns: 0, uniqueMeters: 0,
+            id: UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
+        )
+
+        var isEmpty: Bool { cells.isEmpty }
     }
 
     // MARK: Grid
@@ -339,35 +365,29 @@ enum RouteHeatmap {
         }
     }
 
-    /// The heat level of a stretch run `runs` times when the busiest was run `maxRuns`
-    /// times. Logarithmic, because a home street run 400 times would otherwise leave every
-    /// other street in the coolest colour.
+    /// The heat level of a cell run `runs` times when the busiest was run `maxRuns` times.
+    /// Logarithmic, because a home street run 400 times would otherwise leave every other
+    /// street in the coolest colour.
     static func level(runs: Int, maxRuns: Int) -> Int {
         guard runs > 0 else { return 0 }
         guard maxRuns > 1 else { return 1 }
-        // A stretch run once is always the coolest colour, the busiest always the hottest.
+        // A cell run once is always the coolest colour, the busiest always the hottest.
         let share = log(Double(min(runs, maxRuns))) / log(Double(maxRuns))
         return min(levels, 1 + Int((share * Double(levels - 1)).rounded(.down)))
     }
 
-    /// Every trace folded into one map. A run counts once on a stretch however many
-    /// times it went along it, so an out-and-back is one run, not two.
+    /// Every trace folded into one map. A run counts once in a cell however many times it
+    /// went through it, so an out-and-back is one run, not two.
     static func build(_ traces: [Trace]) -> Heatmap {
-        var edgeRuns: [Edge: Int] = [:]
+        var cellRuns: [Cell: Int] = [:]
         var centerSums: [Cell: (latitude: Double, longitude: Double, count: Double)] = [:]
         var runCount = 0
 
-        for trace in traces where !trace.isEmpty {
-            var edges = Set<Edge>()
-            for segment in trace.segments {
-                for (from, to) in zip(segment, segment.dropFirst()) {
-                    edges.insert(Edge(trace.cells[Int(from)], trace.cells[Int(to)]))
-                }
-            }
-            guard !edges.isEmpty else { continue }
+        for trace in traces where !trace.isEmpty && !trace.segments.isEmpty {
             runCount += 1
-            for edge in edges { edgeRuns[edge, default: 0] += 1 }
+            // `cells` holds each cell of the trace once already.
             for (cell, center) in zip(trace.cells, trace.centers) {
+                cellRuns[cell, default: 0] += 1
                 var sum = centerSums[cell] ?? (0, 0, 0)
                 sum.latitude += center.latitude
                 sum.longitude += center.longitude
@@ -375,71 +395,66 @@ enum RouteHeatmap {
                 centerSums[cell] = sum
             }
         }
+        guard let maxRuns = cellRuns.values.max() else { return .empty }
 
-        guard let maxRuns = edgeRuns.values.max() else { return .empty }
-        let centers = centerSums.mapValues(center)
-
-        var byLevel: [Int: [Edge]] = [:]
-        var uniqueMeters = 0.0
-        for (edge, runs) in edgeRuns {
-            byLevel[level(runs: runs, maxRuns: maxRuns), default: []].append(edge)
-            if let a = centers[edge.a], let b = centers[edge.b] { uniqueMeters += distance(a, b) }
-        }
-
-        var lines: [Line] = []
-        for level in byLevel.keys.sorted() {
-            for chain in chains(byLevel[level] ?? []) {
-                let points = chain.compactMap { centers[$0] }
-                if points.count > 1 { lines.append(Line(level: level, points: points)) }
+        let cells = cellRuns
+            .compactMap { cell, runs -> HeatCell? in
+                guard let sum = centerSums[cell] else { return nil }
+                return HeatCell(center: center(sum), runs: runs, level: level(runs: runs, maxRuns: maxRuns))
             }
-        }
-        return Heatmap(lines: lines, runCount: runCount, maxRuns: maxRuns, uniqueMeters: uniqueMeters)
+            .sorted { first, second in
+                // Fewest runs first; ties in a fixed order so a rebuild draws the same.
+                guard first.runs == second.runs else { return first.runs < second.runs }
+                return (first.center.latitude, first.center.longitude) < (second.center.latitude, second.center.longitude)
+            }
+        return Heatmap(
+            cells: cells,
+            runCount: runCount,
+            maxRuns: maxRuns,
+            uniqueMeters: groundMeters(traces)
+        )
     }
 
-    /// Edges joined into as few long paths as walking them allows: a path runs on through
-    /// a cell with exactly two edges and stops at ends and junctions. Fewer, longer lines
-    /// are much less work for the map than one line per edge.
-    static func chains(_ edges: [Edge]) -> [[Cell]] {
-        var neighbours: [Cell: [Cell]] = [:]
-        for edge in edges {
-            neighbours[edge.a, default: []].append(edge.b)
-            neighbours[edge.b, default: []].append(edge.a)
-        }
-        for key in neighbours.keys { neighbours[key]?.sort() }
-
-        var walked = Set<Edge>()
-        var chains: [[Cell]] = []
-
-        func walk(from start: Cell, to first: Cell) -> [Cell] {
-            var chain = [start, first]
-            walked.insert(Edge(start, first))
-            var previous = start
-            var current = first
-            while let next = neighbours[current], next.count == 2 {
-                let onward = next[0] == previous ? next[1] : next[0]
-                let edge = Edge(current, onward)
-                guard !walked.contains(edge) else { break }
-                walked.insert(edge)
-                chain.append(onward)
-                previous = current
-                current = onward
+    /// The length of street the traces cover, each street once.
+    ///
+    /// GPS wanders a cell either side of the street, so a street run often is a band of
+    /// cells, and counting cells (or steps between them) counts it again on every run.
+    /// Instead a run's steps count only where no earlier run went within a cell; a run's
+    /// own cells are added to what's known once it is done, so a run counts in full, and a
+    /// step into a cell it already went through this run (the way back of an
+    /// out-and-back) doesn't count again.
+    static func groundMeters(_ traces: [Trace]) -> Double {
+        var known = Set<Cell>()
+        var meters = 0.0
+        for trace in traces where !trace.isEmpty {
+            var visited = Set<Int32>()
+            for segment in trace.segments {
+                if let first = segment.first { visited.insert(first) }
+                for (from, to) in zip(segment, segment.dropFirst()) {
+                    defer { visited.insert(to) }
+                    guard !visited.contains(to), !known.contains(trace.cells[Int(to)]) else { continue }
+                    meters += distance(trace.centers[Int(from)], trace.centers[Int(to)])
+                }
             }
-            return chain
-        }
-
-        let nodes = neighbours.keys.sorted()
-        // Ends and junctions first, so paths start where streets do.
-        for node in nodes where neighbours[node]?.count != 2 {
-            for neighbour in neighbours[node] ?? [] where !walked.contains(Edge(node, neighbour)) {
-                chains.append(walk(from: node, to: neighbour))
+            for cell in trace.cells {
+                for dy in -1...1 {
+                    for dx in -1...1 {
+                        known.insert(Cell(x: cell.x &+ Int32(dx), y: cell.y &+ Int32(dy)))
+                    }
+                }
             }
         }
-        // Whatever is left is closed loops.
-        for node in nodes {
-            for neighbour in neighbours[node] ?? [] where !walked.contains(Edge(node, neighbour)) {
-                chains.append(walk(from: node, to: neighbour))
+        return meters
+    }
+
+    /// Every pair of neighbouring cells a trace went between.
+    static func edges(of trace: Trace) -> Set<Edge> {
+        var edges = Set<Edge>()
+        for segment in trace.segments {
+            for (from, to) in zip(segment, segment.dropFirst()) {
+                edges.insert(Edge(trace.cells[Int(from)], trace.cells[Int(to)]))
             }
         }
-        return chains
+        return edges
     }
 }

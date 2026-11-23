@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Stride
 
-/// Covers `RouteHeatmap` (routes on the grid, folded into heat lines) and
+/// Covers `RouteHeatmap` (routes on the grid, folded into heat cells) and
 /// `RouteHeatmapCache` (each route traced once, deleted runs dropped).
 struct RouteHeatmapTests {
     typealias Point = RouteHeatmap.Point
@@ -94,58 +94,77 @@ struct RouteHeatmapTests {
         let heatmap = RouteHeatmap.build(traces)
         #expect(heatmap.runCount == 11)
         #expect(heatmap.maxRuns == 10)
-        let hottest = heatmap.lines.filter { $0.level == RouteHeatmap.levels }
-        let coolest = heatmap.lines.filter { $0.level == 1 }
-        #expect(hottest.count == 1)
-        #expect(coolest.count == 1)
+        #expect(heatmap.cells.filter { $0.level == RouteHeatmap.levels }.count == heatmap.cells.filter { $0.runs == 10 }.count)
+        #expect(heatmap.cells.filter { $0.level == 1 }.allSatisfy { $0.runs == 1 })
         // Hottest drawn last, on top.
-        #expect(heatmap.lines.last?.level == RouteHeatmap.levels)
+        #expect(heatmap.cells.last?.level == RouteHeatmap.levels)
+        #expect(heatmap.cells.map(\.runs) == heatmap.cells.map(\.runs).sorted())
         // Each street counted once: about a kilometre of ground, not 5.5.
         #expect((900...1_100).contains(heatmap.uniqueMeters))
     }
 
     @Test func anOutAndBackCountsOnce() {
         let out = north(from: home, meters: 500)
-        let trace = RouteHeatmap.trace(out + out.reversed())
-        let heatmap = RouteHeatmap.build([trace])
+        let heatmap = RouteHeatmap.build([RouteHeatmap.trace(out + out.reversed())])
         #expect(heatmap.maxRuns == 1)
-        #expect(heatmap.lines.count == 1)
+        #expect((450...550).contains(heatmap.uniqueMeters))
     }
 
-    @Test func aStreetBecomesOneLineNotOnePerRun() {
-        let street = north(from: home, meters: 2_000)
-        let heatmap = RouteHeatmap.build(Array(repeating: RouteHeatmap.trace(street), count: 300))
-        #expect(heatmap.lines.count == 1)
-        #expect(heatmap.runCount == 300)
+    @Test func oneCellPerSquareHoweverManyRuns() {
+        let street = RouteHeatmap.trace(north(from: home, meters: 2_000))
+        let once = RouteHeatmap.build([street])
+        let often = RouteHeatmap.build(Array(repeating: street, count: 300))
+        #expect(often.cells.count == once.cells.count)
+        #expect(often.runCount == 300)
+        #expect(often.maxRuns == 300)
     }
 
-    @Test func aLoopIsOneClosedLine() {
-        // A square, 200 m a side, back to the start.
-        let side = 200.0 / 111_320
-        let corners = [
-            home,
-            Point(latitude: home.latitude + side, longitude: home.longitude),
-            Point(latitude: home.latitude + side, longitude: home.longitude + side * 1.35),
-            Point(latitude: home.latitude, longitude: home.longitude + side * 1.35),
-            home,
-        ]
-        let heatmap = RouteHeatmap.build([RouteHeatmap.trace(corners)])
-        #expect(heatmap.lines.count == 1)
-        #expect(heatmap.lines.first?.points.first == heatmap.lines.first?.points.last)
+    /// A street run many times with GPS wandering a few metres either side: a band of
+    /// cells, but still one street's worth of ground.
+    @Test func gpsWanderDoesNotMultiplyTheGround() {
+        var generator = SeededGenerator(seed: 7)
+        let traces = (0..<60).map { _ in
+            RouteHeatmap.trace(north(from: home, meters: 2_000).map {
+                Point(
+                    latitude: $0.latitude + Double.random(in: -4...4, using: &generator) / 111_320,
+                    longitude: $0.longitude + Double.random(in: -4...4, using: &generator) / 82_900
+                )
+            })
+        }
+        let heatmap = RouteHeatmap.build(traces)
+        #expect((1_800...2_600).contains(heatmap.uniqueMeters))
     }
 
-    @Test func aJunctionSplitsLines() {
-        // A T: a street north, and a branch east from its middle.
+    @Test func aDiagonalStreetIsMeasuredAlongItsLength() {
+        // 1 km north-east.
+        let route = stride(from: 0.0, through: 1_000, by: 5).map {
+            Point(
+                latitude: home.latitude + $0 * 0.7071 / 111_320,
+                longitude: home.longitude + $0 * 0.7071 / (111_320 * cos(41.88 * Double.pi / 180))
+            )
+        }
+        let heatmap = RouteHeatmap.build([RouteHeatmap.trace(route)])
+        #expect((900...1_250).contains(heatmap.uniqueMeters))
+    }
+
+    @Test func aJunctionCountsBothStreets() {
         let stem = north(from: home, meters: 400)
         let middle = Point(latitude: home.latitude + 200 / 111_320, longitude: home.longitude)
         let branch = stride(from: 0.0, through: 300, by: 5).map {
             Point(latitude: middle.latitude, longitude: middle.longitude + $0 / (111_320 * cos(41.88 * Double.pi / 180)))
         }
         let heatmap = RouteHeatmap.build([RouteHeatmap.trace(stem), RouteHeatmap.trace(branch)])
-        let lengths = heatmap.lines.map { $0.points.count }
-        #expect(heatmap.lines.count >= 3)
-        // Every cell is still drawn.
-        #expect(lengths.reduce(0, +) >= 20 + 15)
+        #expect((600...800).contains(heatmap.uniqueMeters))
+    }
+
+    @Test func eachBuildIsItsOwnMap() {
+        let traces = [RouteHeatmap.trace(north(from: home, meters: 800))]
+        let first = RouteHeatmap.build(traces)
+        let second = RouteHeatmap.build(traces)
+        // Equal only to itself, so views redraw for a new build without comparing cells.
+        #expect(first != second)
+        #expect(first == first)
+        #expect(first.cells == second.cells)
     }
 
     @Test func noRoutesIsAnEmptyMap() {
@@ -266,5 +285,18 @@ struct RouteHeatmapSpotTests {
         #expect(await cache.runs(near: tap, radiusMeters: 30, among: [blockOver.key]).isEmpty)
         // A wide tap takes in both streets.
         #expect(await cache.runs(near: east(of: tap, meters: 85), radiusMeters: 120, among: keys).count == 2)
+    }
+}
+
+/// A small repeatable random source, so the GPS-wander test draws the same wander each run.
+struct SeededGenerator: RandomNumberGenerator {
+    private var state: UInt64
+    init(seed: UInt64) { state = seed &+ 0x9E37_79B9_7F4A_7C15 }
+    mutating func next() -> UInt64 {
+        state &+= 0x9E37_79B9_7F4A_7C15
+        var z = state
+        z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
+        z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
+        return z ^ (z >> 31)
     }
 }
