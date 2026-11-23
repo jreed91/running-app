@@ -185,8 +185,25 @@ struct ActivityCalendarCard: View {
 
 // MARK: - Every route
 
+/// Reads route blobs off the main thread, in its own context.
+@ModelActor
+actor RouteHeatmapReader {
+    /// The route blobs of the runs named. A run with no route is handed over empty, so
+    /// the cache remembers it has none. Each call's objects are let go when it returns.
+    func routes(of ids: [UUID]) -> [RouteHeatmapCache.Input] {
+        var descriptor = FetchDescriptor<RunWorkout>(predicate: #Predicate { ids.contains($0.id) })
+        descriptor.propertiesToFetch = [\.id, \.date, \.routeData]
+        // A context per batch, on this actor's thread, so each batch's blobs are let go
+        // when it returns rather than piling up in one long-lived context.
+        let context = ModelContext(modelContainer)
+        let runs = (try? context.fetch(descriptor)) ?? []
+        return runs.map { RouteHeatmapCache.Input(id: $0.id, date: $0.date, route: $0.routeData ?? Data()) }
+    }
+}
+
 /// Reads routes from the store for ``RouteHeatmapCache``: only the runs it hasn't traced,
-/// a few at a time, each batch in its own short-lived context so the blobs are let go.
+/// a few at a time, on ``RouteHeatmapReader``'s background context. Reading them on the
+/// main actor, as the first version did, stalled the app while years of routes loaded.
 enum RouteHeatmapLoader {
     /// Route blobs read at once. A long run's route is a few hundred kilobytes of JSON.
     private static let batchSize = 25
@@ -213,33 +230,31 @@ enum RouteHeatmapLoader {
     ) async -> RouteHeatmap.Heatmap {
         let cache = RouteHeatmapCache.shared
         let missing = await cache.missing(all)
-        var start = 0
-        while start < missing.count, !Task.isCancelled {
-            let batch = Array(missing[start..<min(start + batchSize, missing.count)])
-            start += batchSize
-            await cache.add(routes(of: batch, container: context.container))
+        if !missing.isEmpty {
+            let container = context.container
+            // Made off the main actor: a model actor made on the main thread runs there.
+            let reader = await Task.detached { RouteHeatmapReader(modelContainer: container) }.value
+            var start = 0
+            while start < missing.count, !Task.isCancelled {
+                let batch = Array(missing[start..<min(start + batchSize, missing.count)])
+                start += batchSize
+                await cache.add(await reader.routes(of: batch))
+            }
         }
         await cache.keep(only: Set(all.map(\.id)))
         let heatmap = await cache.heatmap(for: shown)
         latest = heatmap
         return heatmap
     }
-
-    /// The route blobs of the runs named. A run with no route is handed over empty, so
-    /// the cache remembers it has none.
-    @MainActor
-    private static func routes(of ids: [UUID], container: ModelContainer) -> [RouteHeatmapCache.Input] {
-        let context = ModelContext(container)
-        var descriptor = FetchDescriptor<RunWorkout>(predicate: #Predicate { ids.contains($0.id) })
-        descriptor.propertiesToFetch = [\.id, \.date, \.routeData]
-        let runs = (try? context.fetch(descriptor)) ?? []
-        return runs.map { RouteHeatmapCache.Input(id: $0.id, date: $0.date, route: $0.routeData ?? Data()) }
-    }
 }
 
-/// Every route in the page's period on one map, each stretch of street coloured by how
-/// many runs went along it. The map waits for a tap the first time: tracing years of
-/// routes is a few seconds' work once, and nothing after that.
+/// Every route in the page's period as a still picture of the heat, each street coloured
+/// by how many runs went along it. A tap opens the live, full-screen map.
+///
+/// A picture rather than a live map: an `MKMapView` on a scrolling page redraws as the
+/// page moves, and with years of runs that made the whole Progress page slow. The first
+/// time waits for a tap: tracing years of routes is a few seconds' work once, and
+/// nothing after that.
 struct RouteHeatmapCard: View {
     let periodDays: Int?
     let runType: ProgressFilter.RunType
@@ -249,7 +264,10 @@ struct RouteHeatmapCard: View {
     @Query private var workouts: [RunWorkout]
     @State private var showsMap = false
     @State private var heatmap: RouteHeatmap.Heatmap?
+    @State private var preview: UIImage?
     @State private var showsFullScreen = false
+
+    private static let previewSize = CGSize(width: 360, height: 240)
 
     init(periodDays: Int?, runType: ProgressFilter.RunType) {
         self.periodDays = periodDays
@@ -272,7 +290,7 @@ struct RouteHeatmapCard: View {
             .padding(.horizontal, AppSpacing.xs)
             if showsMap {
                 if let heatmap {
-                    if heatmap.lines.isEmpty {
+                    if heatmap.isEmpty {
                         Text("Outdoor runs with a route show up here.")
                             .font(.bodyRegular)
                             .foregroundStyle(.secondary)
@@ -280,9 +298,26 @@ struct RouteHeatmapCard: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .strideCard()
                     } else {
-                        RouteHeatmapMap(heatmap: heatmap)
-                            .frame(height: 320)
+                        Button {
+                            showsFullScreen = true
+                        } label: {
+                            ZStack {
+                                Color.inkDeep
+                                if let preview {
+                                    Image(uiImage: preview)
+                                        .resizable()
+                                        .scaledToFill()
+                                } else {
+                                    ProgressView().tint(Color.onInk)
+                                }
+                            }
+                            .frame(height: 240)
+                            .frame(maxWidth: .infinity)
                             .clipShape(RoundedRectangle(cornerRadius: AppRadius.lg))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Heatmap of \(heatmap.runCount) runs")
+                        .accessibilityHint("Opens the map full screen")
                         Text(summary(heatmap))
                             .font(.dsFootnote)
                             .foregroundStyle(.secondary)
@@ -323,8 +358,25 @@ struct RouteHeatmapCard: View {
             guard showsMap else { return }
             let all = RouteHeatmapLoader.keys(from: workouts)
             let shown = shownKeys()
-            heatmap = await RouteHeatmapLoader.load(all: all, shown: shown, context: context)
+            let loaded = await RouteHeatmapLoader.load(all: all, shown: shown, context: context)
+            guard loaded != heatmap || preview == nil else { return }
+            heatmap = loaded
+            preview = await Self.renderPreview(loaded)
         }
+    }
+
+    /// The still picture, drawn off the main actor.
+    private static func renderPreview(_ heatmap: RouteHeatmap.Heatmap) async -> UIImage? {
+        guard !heatmap.isEmpty else { return nil }
+        let colors = HeatDots.heatColors()
+        var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
+        UIColor(Color.inkDeep).resolvedColor(with: UITraitCollection(userInterfaceStyle: .dark))
+            .getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+        let background = HeatDots.RGBA(red: red, green: green, blue: blue, alpha: 1)
+        let size = previewSize
+        return await Task.detached(priority: .userInitiated) {
+            HeatDots(heatmap, colors: colors).preview(size: size, background: background)
+        }.value
     }
 
     private struct TaskKey: Equatable {
@@ -347,183 +399,5 @@ struct RouteHeatmapCard: View {
         let runs = heatmap.runCount == 1 ? "1 run" : "\(heatmap.runCount) runs"
         let busiest = heatmap.maxRuns > 1 ? " Your busiest stretch: \(heatmap.maxRuns) runs." : ""
         return "\(runs) over \(ground) of ground.\(busiest)"
-    }
-}
-
-/// The heat lines on a muted map, coolest underneath.
-///
-/// MapKit through UIKit rather than SwiftUI's `Map`: years of runs are thousands of
-/// separate stretches of street, and SwiftUI draws each `MapPolyline` as its own overlay.
-/// Here each heat level is one `MKMultiPolyline`, so the map holds five overlays however
-/// many runs there are.
-struct RouteHeatmapMap: UIViewRepresentable {
-    let heatmap: RouteHeatmap.Heatmap
-    var style: Style = .map
-    /// Changing it moves the map back onto the streets run most.
-    var recenter = 0
-    /// Where the runner last tapped, marked on the map.
-    var selection: RouteHeatmap.Point?
-    /// A tap on the map: where, and how many metres a fingertip covers at this zoom.
-    var onTap: ((RouteHeatmap.Point, Double) -> Void)?
-
-    /// The base map under the heat.
-    enum Style: String, CaseIterable, Identifiable, Sendable {
-        case map
-        case dark
-        case satellite
-
-        var id: String { rawValue }
-
-        var title: String {
-            switch self {
-            case .map: return String(localized: "Map")
-            case .dark: return String(localized: "Dark")
-            case .satellite: return String(localized: "Satellite")
-            }
-        }
-    }
-
-    func makeUIView(context: Context) -> MKMapView {
-        let map = MKMapView()
-        map.isRotateEnabled = false
-        map.isPitchEnabled = false
-        map.showsCompass = false
-        map.pointOfInterestFilter = .excludingAll
-        map.delegate = context.coordinator
-        map.isAccessibilityElement = true
-        let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.tapped(_:)))
-        map.addGestureRecognizer(tap)
-        return map
-    }
-
-    func updateUIView(_ map: MKMapView, context: Context) {
-        let coordinator = context.coordinator
-        coordinator.onTap = onTap
-        if coordinator.marker.map({ RouteHeatmap.Point(latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude) }) != selection {
-            if let marker = coordinator.marker { map.removeAnnotation(marker) }
-            coordinator.marker = nil
-            if let selection {
-                let marker = MKPointAnnotation()
-                marker.coordinate = CLLocationCoordinate2D(latitude: selection.latitude, longitude: selection.longitude)
-                map.addAnnotation(marker)
-                coordinator.marker = marker
-            }
-        }
-        map.accessibilityLabel = String(
-            localized: "Heatmap of \(heatmap.runCount) runs. Brighter, thicker lines are streets you run more often."
-        )
-        if coordinator.style != style {
-            coordinator.style = style
-            switch style {
-            case .map:
-                map.preferredConfiguration = MKStandardMapConfiguration(emphasisStyle: .muted)
-                map.overrideUserInterfaceStyle = .unspecified
-            case .dark:
-                map.preferredConfiguration = MKStandardMapConfiguration(emphasisStyle: .muted)
-                map.overrideUserInterfaceStyle = .dark
-            case .satellite:
-                map.preferredConfiguration = MKImageryMapConfiguration()
-                map.overrideUserInterfaceStyle = .dark
-            }
-        }
-        if coordinator.shown != heatmap {
-            let isFirst = coordinator.shown == nil
-            coordinator.shown = heatmap
-            map.removeOverlays(map.overlays)
-            coordinator.overlays = Self.overlays(for: heatmap)
-            // Coolest first, so the hottest draw on top.
-            for overlay in coordinator.overlays.sorted(by: { $0.level < $1.level }) {
-                map.addOverlay(overlay, level: .aboveRoads)
-            }
-            if isFirst { coordinator.recentered = recenter }
-            if isFirst { Self.moveToFocus(map, coordinator.overlays, animated: false) }
-        }
-        if coordinator.recentered != recenter {
-            coordinator.recentered = recenter
-            Self.moveToFocus(map, coordinator.overlays, animated: true)
-        }
-    }
-
-    private static func moveToFocus(_ map: MKMapView, _ overlays: [LevelPolyline], animated: Bool) {
-        guard let focus = focus(overlays) else { return }
-        map.setVisibleMapRect(focus, edgePadding: UIEdgeInsets(top: 32, left: 24, bottom: 32, right: 24), animated: animated)
-    }
-
-    func makeCoordinator() -> Coordinator { Coordinator() }
-
-    /// One multi-polyline per heat level, tagged with its level.
-    private static func overlays(for heatmap: RouteHeatmap.Heatmap) -> [LevelPolyline] {
-        Dictionary(grouping: heatmap.lines, by: \.level).map { level, lines in
-            let polylines = lines.map { line in
-                var coordinates = line.points.map {
-                    CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude)
-                }
-                return MKPolyline(coordinates: &coordinates, count: coordinates.count)
-            }
-            let overlay = LevelPolyline(polylines)
-            overlay.level = level
-            return overlay
-        }
-    }
-
-    /// Where to open: the streets run more than once, which is where the runner lives,
-    /// rather than a box stretched to take in one race abroad.
-    private static func focus(_ overlays: [LevelPolyline]) -> MKMapRect? {
-        let regular = overlays.filter { $0.level >= 2 }
-        let chosen = regular.isEmpty ? overlays : regular
-        guard let first = chosen.first else { return nil }
-        return chosen.dropFirst().reduce(first.boundingMapRect) { $0.union($1.boundingMapRect) }
-    }
-
-    /// Brand orange from faint (run once) to full, then the glow for the most run.
-    static func color(level: Int) -> Color {
-        switch level {
-        case ...1: return Color.brand.opacity(0.35)
-        case 2: return Color.brand.opacity(0.55)
-        case 3: return Color.brand.opacity(0.75)
-        case 4: return Color.brand
-        default: return Color.brandGlow
-        }
-    }
-
-    static func width(level: Int) -> CGFloat {
-        2 + CGFloat(min(max(level, 1), RouteHeatmap.levels)) * 0.6
-    }
-
-    /// An `MKMultiPolyline` that knows its heat level, for the renderer.
-    final class LevelPolyline: MKMultiPolyline {
-        var level = 1
-    }
-
-    @MainActor
-    final class Coordinator: NSObject, MKMapViewDelegate {
-        var shown: RouteHeatmap.Heatmap?
-        var overlays: [LevelPolyline] = []
-        var style: Style?
-        var recentered = 0
-        var onTap: ((RouteHeatmap.Point, Double) -> Void)?
-        var marker: MKPointAnnotation?
-
-        /// Hands the tap on as a map point, with the metres 22 points cover at this zoom
-        /// (about a fingertip), so a zoomed-out tap still finds the street under it.
-        @objc func tapped(_ gesture: UITapGestureRecognizer) {
-            guard let onTap, let map = gesture.view as? MKMapView, gesture.state == .ended else { return }
-            let spot = gesture.location(in: map)
-            let here = map.convert(spot, toCoordinateFrom: map)
-            let reach = map.convert(CGPoint(x: spot.x + 22, y: spot.y), toCoordinateFrom: map)
-            let point = RouteHeatmap.Point(latitude: here.latitude, longitude: here.longitude)
-            let radius = RouteHeatmap.distance(point, RouteHeatmap.Point(latitude: reach.latitude, longitude: reach.longitude))
-            onTap(point, min(max(radius, 20), 400))
-        }
-
-        func mapView(_ mapView: MKMapView, rendererFor overlay: any MKOverlay) -> MKOverlayRenderer {
-            guard let overlay = overlay as? LevelPolyline else { return MKOverlayRenderer(overlay: overlay) }
-            let renderer = MKMultiPolylineRenderer(multiPolyline: overlay)
-            renderer.strokeColor = UIColor(RouteHeatmapMap.color(level: overlay.level))
-            renderer.lineWidth = RouteHeatmapMap.width(level: overlay.level)
-            renderer.lineCap = .round
-            renderer.lineJoin = .round
-            return renderer
-        }
     }
 }

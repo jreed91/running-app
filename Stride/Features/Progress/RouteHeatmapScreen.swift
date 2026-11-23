@@ -107,7 +107,7 @@ struct RouteHeatmapScreen: View {
                     withAnimation(AppAnimation.quick) { clearSpot() }
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 13, weight: .bold))
+                        .font(.dsFootnote.weight(.bold))
                         .foregroundStyle(.secondary)
                         .frame(width: 32, height: 32)
                         .contentShape(Rectangle())
@@ -181,7 +181,7 @@ struct RouteHeatmapScreen: View {
                     dismiss()
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 15, weight: .bold))
+                        .font(.dsSubhead.weight(.bold))
                         .foregroundStyle(Color.onInk)
                         .frame(width: 36, height: 36)
                         .background(Color.inkDeep.opacity(0.7), in: Circle())
@@ -277,7 +277,7 @@ struct RouteHeatmapScreen: View {
     private var statsPanel: some View {
         if let heatmap {
             VStack(alignment: .leading, spacing: AppSpacing.md) {
-                if heatmap.lines.isEmpty {
+                if heatmap.isEmpty {
                     Text("No outdoor runs with a route in this period.")
                         .font(.bodyRegular)
                         .foregroundStyle(.secondary)
@@ -330,9 +330,9 @@ private struct HeatLegend: View {
             Text("Once")
             HStack(spacing: 3) {
                 ForEach(1...RouteHeatmap.levels, id: \.self) { level in
-                    Capsule()
+                    Rectangle()
                         .fill(RouteHeatmapMap.color(level: level))
-                        .frame(height: RouteHeatmapMap.width(level: level))
+                        .frame(height: 8)
                 }
             }
             .frame(maxWidth: 160)
@@ -341,6 +341,6 @@ private struct HeatLegend: View {
         .font(.dsCaption2)
         .foregroundStyle(.secondary)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Brighter, thicker lines are streets you run more often")
+        .accessibilityLabel("Brighter squares are streets you run more often")
     }
 }
