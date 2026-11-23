@@ -71,6 +71,7 @@ struct TrainingPlanService {
         )
     }
 
+    // swiftlint:disable:next function_parameter_count
     private func generatePlan(
         profile: UserProfile,
         startDate: Date,
@@ -480,6 +481,7 @@ struct TrainingPlanService {
 
     // MARK: Workout builder
 
+    // swiftlint:disable:next function_parameter_count
     private func buildWorkouts(
         weekStart: Date,
         runDays: Int,

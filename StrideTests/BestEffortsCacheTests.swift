@@ -11,7 +11,7 @@ struct BestEffortsCacheTests {
         let points = stride(from: 0.0, through: meters, by: 10).map {
             SplitBucketing.DistancePoint(elapsedSeconds: $0 / 1_000 * secondsPerKm, cumulativeMeters: $0)
         }
-        return try! JSONEncoder().encode(points)
+        return (try? JSONEncoder().encode(points)) ?? Data()
     }
 
     private let day = Date(timeIntervalSince1970: 1_800_000_000)
