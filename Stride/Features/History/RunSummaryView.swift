@@ -467,6 +467,7 @@ struct RunSummaryView: View {
                         } label: {
                             Label("Share run card", systemImage: "photo")
                         }
+                        .accessibilityIdentifier("runSummary.shareCard")
                         // Only for runs that have a route — an indoor run has nothing to put in
                         // a GPX, so the option is absent rather than disabled and unexplained.
                         if !workout.routeCoordinates.isEmpty {
@@ -488,6 +489,7 @@ struct RunSummaryView: View {
                         Label("Run actions", systemImage: "ellipsis")
                     }
                     .accessibilityLabel("Run actions")
+                    .accessibilityIdentifier("runSummary.actions")
                 }
             }
         }

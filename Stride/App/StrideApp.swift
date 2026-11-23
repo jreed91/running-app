@@ -258,6 +258,12 @@ struct ContentView: View {
     /// mounted. Presented at the root, it reaches the user in both branches (N5).
     @State private var recoveryNotice: AppContainer.StoreRecoveryNotice?
 
+    /// Whether onboarding was on screen during this launch: a fresh install (or a restore
+    /// through welcome-back), for which there is nothing "new" to show (`WhatsNewPolicy`).
+    @State private var onboardedThisLaunch = false
+    /// The What's New check runs once per launch, when the tabs first come up.
+    @State private var whatsNewChecked = false
+
     @Environment(\.scenePhase) private var scenePhase
 
     private let restoreLocationManager = CLLocationManager()
@@ -266,9 +272,14 @@ struct ContentView: View {
         Group {
             if profiles.isEmpty {
                 OnboardingView()
+                    .onAppear { onboardedThisLaunch = true }
             } else {
                 MainTabView()
             }
+        }
+        .task(id: profiles.isEmpty) {
+            guard !profiles.isEmpty else { return }
+            await checkWhatsNew()
         }
         .task {
             guard let notice = container.storeRecoveryNotice else { return }
@@ -402,6 +413,43 @@ struct ContentView: View {
     /// Removes duplicate profiles and active plans, and applies the one-time
     /// legacy-field migration that recovers enum values corrupted by the
     /// field-rename commit running without @Attribute(originalName:).
+    /// Opens the What's New sheet once after an update (`WhatsNewPolicy`).
+    ///
+    /// Waits a moment first, so a run recovered or waiting for review at launch gets its
+    /// sheet; if anything else is already open over the tabs, it stands down without
+    /// marking the release seen, and the sheet waits for the next launch instead of
+    /// stacking on top.
+    private func checkWhatsNew() async {
+        guard !whatsNewChecked else { return }
+        whatsNewChecked = true
+        let store = WhatsNewStore()
+
+        if UITestingSupport.isEnabled {
+            // UI tests start from wiped preferences, so the sheet would cover every test.
+            // `--show-whats-new` opens it on purpose (`StrideUITests`, the screenshots).
+            guard ProcessInfo.processInfo.arguments.contains("--show-whats-new") else { return }
+            container.appNavigation.whatsNewRelease =
+                ReleaseNotes.release(forMarketingVersion: WhatsNewStore.currentMarketingVersion)
+                ?? ReleaseNotes.all.first
+            return
+        }
+
+        try? await Task.sleep(for: .seconds(1.5))
+        guard !Task.isCancelled else { return }
+        let navigation = container.appNavigation
+        let somethingOpen = container.pendingReviewWorkout != nil
+            || container.activeRunPresentation.isPresented
+            || navigation.isSettingsPresented
+            || navigation.pendingRaceInvite != nil
+        let decision = WhatsNewPolicy.decide(
+            marketingVersion: WhatsNewStore.currentMarketingVersion,
+            lastSeen: store.lastSeen,
+            onboardedThisLaunch: onboardedThisLaunch
+        )
+        if case .show = decision, somethingOpen { return }
+        navigation.whatsNewRelease = store.apply(decision)
+    }
+
     private func deduplicate() {
         ProfileRestoreDeduplicator.applyLegacyFields(profiles, in: context)
         ProfileRestoreDeduplicator.applyLegacyFieldsToRelated(in: context)

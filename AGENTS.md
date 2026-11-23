@@ -880,6 +880,34 @@ matters for suite runtime:
 
 Current unit coverage includes pace calculations, training plan structure/progression, route generation, AI coach behavior, strength library behavior, persistence graph, restore/deduplication, missed-workout detection, and app-container behavior. Add focused tests when changing shared services, repositories, SwiftData models, or cross-feature workflows.
 
+## What's New and release notes
+
+Every App Store release has an entry in `ReleaseNotes.all` (`Stride/Core/Models/ReleaseNotes.swift`),
+newest first, keyed by `major.minor` of `MARKETING_VERSION`. Two surfaces read it:
+
+- **The What's New sheet** (`Stride/Features/WhatsNew/WhatsNewView.swift`): the release's
+  headline `features`, one page each with a screenshot. `WhatsNewPolicy` opens it once per
+  release after an update (`ContentView.checkWhatsNew()`), never on a launch that showed
+  onboarding (a fresh install or a restore), never for an older build than the one seen,
+  and stands down for the launch if a run review or another sheet is already up. The release
+  seen lives in this device's `UserDefaults` (`whatsNew.lastSeenRelease`). UI tests never see
+  it unless launched with `--show-whats-new`.
+- **The changelog**: Settings → About → What's new in Stride (`ReleaseHistoryView`), every
+  release in full, improvements and fixes included.
+
+The TestFlight card in Settings has "Show What's New" (opens it now) and "Show What's New on
+next launch" (forgets it was seen).
+
+When bumping `MARKETING_VERSION` to a new minor version: add the release at the top of
+`ReleaseNotes.all` (`WhatsNewPolicyTests.theRunningVersionHasNotes` fails until you do), set
+the previous release's `releaseDate`, and mark features with a screenshot `hasScreenshot: true`.
+Each such feature needs a capture with the same `id` in `StrideUITests/WhatsNewScreenshotTests.swift`;
+then run the **What's New screenshots** workflow (label a PR `whats-new-screenshots`, or run it
+from the Actions tab), which writes `whatsnew-<version>-<id>` image sets into
+`Stride/Resources/WhatsNew.xcassets` and commits them. A feature with no bundled screenshot
+shows its icon on the night map instead. That catalog is app-only; don't add it to the widget
+or Watch targets.
+
 ## Navigation
 
 Primary tab structure:

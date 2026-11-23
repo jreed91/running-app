@@ -286,6 +286,7 @@ struct RouteHeatmapCard: View {
                     .font(.dsFootnote.weight(.semibold))
                     .foregroundStyle(Color.brandText)
                     .accessibilityHint("Opens the heatmap with its own filters")
+                    .accessibilityIdentifier("progress.heatmap.fullScreen")
             }
             .padding(.horizontal, AppSpacing.xs)
             if showsMap {
