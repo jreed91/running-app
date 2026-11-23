@@ -355,7 +355,7 @@ enum ReleaseNotesFormat {
 #Preview("What's New") {
     Color.surfacePrimary
         .sheet(isPresented: .constant(true)) {
-            WhatsNewView(release: ReleaseNotes.v1_2)
+            WhatsNewView(release: ReleaseNotes.v1point2)
                 .strideSheet()
         }
 }

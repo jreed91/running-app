@@ -123,6 +123,8 @@ struct FitnessFreshnessCard: View {
                 Text("FITNESS & FRESHNESS")
                     .strideEyebrow()
                     .foregroundStyle(.secondary)
+                    // `WhatsNewScreenshotTests` scrolls to this card by it.
+                    .accessibilityIdentifier("progress.fitnessFreshness")
                 Spacer(minLength: AppSpacing.sm)
                 Text("All training")
                     .font(.dsCaption)

@@ -74,7 +74,7 @@ struct ReleaseFeature: Identifiable, Hashable, Sendable {
 /// can't ship without one by accident.
 enum ReleaseNotes {
 
-    static let all: [Release] = [v1_2, v1_1, v1_0]
+    static let all: [Release] = [v1point2, v1point1, v1point0]
 
     /// The notes for a marketing version ("1.2.1" finds 1.2), or `nil` if it has none.
     static func release(forMarketingVersion version: String) -> Release? {
@@ -84,7 +84,7 @@ enum ReleaseNotes {
 
     // MARK: 1.2
 
-    static let v1_2 = Release(
+    static let v1point2 = Release(
         version: "1.2",
         releaseDate: nil,
         headline: "See your running like never before, and share it your way.",
@@ -149,7 +149,7 @@ enum ReleaseNotes {
 
     // MARK: 1.1
 
-    static let v1_1 = Release(
+    static let v1point1 = Release(
         version: "1.1",
         releaseDate: DateComponents(year: 2026, month: 11, day: 10),
         headline: "Our biggest update yet.",
@@ -205,7 +205,7 @@ enum ReleaseNotes {
 
     // MARK: 1.0
 
-    static let v1_0 = Release(
+    static let v1point0 = Release(
         version: "1.0",
         releaseDate: DateComponents(year: 2026, month: 11, day: 4),
         headline: "Stride's first release.",

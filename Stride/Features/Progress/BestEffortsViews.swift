@@ -120,6 +120,8 @@ struct BestEffortsCard: View {
                 Text("BEST EFFORTS")
                     .strideEyebrow()
                     .foregroundStyle(.secondary)
+                    // `WhatsNewScreenshotTests` scrolls to this card by it.
+                    .accessibilityIdentifier("progress.bestEfforts")
                 Spacer(minLength: AppSpacing.sm)
                 Text("In this filter")
                     .font(.dsCaption)
