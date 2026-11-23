@@ -41,7 +41,7 @@ enum TrainingBreakStore {
         Set(live(now: now, in: defaults).flatMap { $0.changes.map(\.sessionID) })
     }
 
-    /// Called from `PlanLifecycleService.resetAllData`.
+    /// Called from `AppContainer.resetAllData`.
     static func removeAll(from defaults: UserDefaults = .standard) {
         defaults.removeObject(forKey: key)
     }

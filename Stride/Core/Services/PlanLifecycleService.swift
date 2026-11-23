@@ -50,7 +50,9 @@ final class PlanLifecycleService {
             history: history,
             profile: profile,
             unitPreference: unitPreference,
-            protectedSessionIDs: AdaptedSessions.protectedIDs()
+            // A training break's sessions too: the refresh would rewrite the note that
+            // says why they're shorter, and a break outlasts the week an edit is kept.
+            protectedSessionIDs: AdaptedSessions.protectedIDs().union(TrainingBreakStore.protectedIDs())
         )
     }
 
@@ -89,7 +91,7 @@ final class PlanLifecycleService {
     /// that was never filed stays out, and nothing here asks for WorkoutKit authorization.
     func refileRepacedSessions(in plan: TrainingPlan, unitPreference: UnitPreference, context: ModelContext) async {
         // A protected session was not re-paced, so its filed copy is already current.
-        let unchanged = AdaptedSessions.protectedIDs()
+        let unchanged = AdaptedSessions.protectedIDs().union(TrainingBreakStore.protectedIDs())
         let sessions = Self.repacedSessionsOnTheWatch(in: plan, now: Date())
             .filter { !unchanged.contains($0.id) }
         guard !sessions.isEmpty else { return }
@@ -212,6 +214,92 @@ final class PlanLifecycleService {
             context.saveOrLog("the repeated week's WorkoutKit ids")
         }
         return true
+    }
+
+    // MARK: - Training breaks
+
+    /// Writes a training break into the plan (``TrainingBreakApplier/start``), then
+    /// re-files the changed sessions with the Watch and re-schedules the morning reminders.
+    /// The whole set of reminders, not one: a run turned into a rest day has to lose its
+    /// reminder, and a single re-schedule never removes one.
+    @discardableResult
+    func startTrainingBreak(
+        _ proposal: TrainingBreakPlanner.Proposal,
+        plan: TrainingPlan,
+        history: [RunWorkout],
+        profile: UserProfile,
+        context: ModelContext,
+        morningRemindersEnabled: Bool,
+        unitPreference: UnitPreference = .metric
+    ) throws -> TrainingBreak {
+        let (record, changed) = try TrainingBreakApplier.start(
+            proposal,
+            in: plan,
+            context: context,
+            history: history,
+            profile: profile,
+            unitPreference: unitPreference,
+            service: trainingPlanService
+        )
+        refile(changed, in: plan, context: context, morningRemindersEnabled: morningRemindersEnabled, unitPreference: unitPreference)
+        return record
+    }
+
+    /// Puts the plan back the way it was before the break.
+    func undoTrainingBreak(
+        _ trainingBreak: TrainingBreak,
+        plan: TrainingPlan,
+        context: ModelContext,
+        morningRemindersEnabled: Bool,
+        unitPreference: UnitPreference = .metric
+    ) {
+        let changed = TrainingBreakApplier.undo(trainingBreak, in: plan, context: context)
+        refile(changed, in: plan, context: context, morningRemindersEnabled: morningRemindersEnabled, unitPreference: unitPreference)
+    }
+
+    /// "I'm back": the rest of the break goes back as planned and the runner eases in
+    /// from today.
+    func endTrainingBreakEarly(
+        _ trainingBreak: TrainingBreak,
+        plan: TrainingPlan,
+        history: [RunWorkout],
+        profile: UserProfile,
+        context: ModelContext,
+        morningRemindersEnabled: Bool,
+        unitPreference: UnitPreference = .metric
+    ) {
+        let changed = TrainingBreakApplier.endEarly(
+            trainingBreak,
+            in: plan,
+            context: context,
+            history: history,
+            profile: profile,
+            unitPreference: unitPreference,
+            service: trainingPlanService
+        )
+        refile(changed, in: plan, context: context, morningRemindersEnabled: morningRemindersEnabled, unitPreference: unitPreference)
+    }
+
+    /// Left running rather than awaited, like ``repeatStartRunningWeek``: the plan is
+    /// saved, and a slow or unauthorized scheduler must not hold up the screen.
+    private func refile(
+        _ sessions: [ScheduledWorkout],
+        in plan: TrainingPlan,
+        context: ModelContext,
+        morningRemindersEnabled: Bool,
+        unitPreference: UnitPreference
+    ) {
+        guard !sessions.isEmpty else { return }
+        let soonestFirst = sessions.sorted { $0.scheduledDate < $1.scheduledDate }
+        Task { @MainActor [healthKitRepository, notificationService] in
+            if morningRemindersEnabled {
+                await notificationService.scheduleMorningReminders(for: plan)
+            }
+            for session in soonestFirst {
+                try? await healthKitRepository.syncWorkoutPlan(for: session, unitPreference: unitPreference)
+            }
+            context.saveOrLog("the training break's Watch workout ids")
+        }
     }
 
     // MARK: - Activation
