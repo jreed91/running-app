@@ -34,6 +34,12 @@ actor RouteHeatmapCache {
         /// `nil` for a run with no route (indoor, or recorded without location), so it
         /// isn't read again.
         let trace: RouteHeatmap.Trace?
+        /// The same run moved onto the streets by ``RouteSnapper``, once it has been.
+        /// Drawn in place of `trace`. `nil` until then.
+        var snapped: RouteHeatmap.Trace?
+
+        /// What the map draws for this run.
+        var drawn: RouteHeatmap.Trace? { snapped ?? trace }
     }
 
     private let storeURL: URL?
@@ -65,7 +71,7 @@ actor RouteHeatmapCache {
         loadIfNeeded()
         guard !inputs.isEmpty else { return }
         for input in inputs {
-            entries[input.id] = Entry(date: input.date, trace: RouteHeatmap.trace(routeData: input.route))
+            entries[input.id] = Entry(date: input.date, trace: RouteHeatmap.trace(routeData: input.route), snapped: nil)
             traced += 1
         }
         isDirty = true
@@ -101,7 +107,7 @@ actor RouteHeatmapCache {
         let area = RouteHeatmap.cells(around: point, radiusMeters: radiusMeters)
         return keys.compactMap { key in
             guard let entry = entries[key.id], entry.date == key.date,
-                  let trace = entry.trace, trace.passes(through: area) else { return nil }
+                  let trace = entry.drawn, trace.passes(through: area) else { return nil }
             return key.id
         }
     }
@@ -122,8 +128,38 @@ actor RouteHeatmapCache {
     private func traces(_ keys: [Key]) -> [RouteHeatmap.Trace] {
         keys.compactMap { key in
             guard let entry = entries[key.id], entry.date == key.date else { return nil }
-            return entry.trace
+            return entry.drawn
         }
+    }
+
+    // MARK: Snapping to streets
+
+    /// The runs among `keys` with a route that hasn't been snapped to the streets yet,
+    /// newest first, with their GPS traces.
+    func unsnapped(_ keys: [Key]) -> [(key: Key, trace: RouteHeatmap.Trace)] {
+        loadIfNeeded()
+        return keys
+            .compactMap { key -> (key: Key, trace: RouteHeatmap.Trace)? in
+                guard let entry = entries[key.id], entry.date == key.date, entry.snapped == nil,
+                      let trace = entry.trace, !trace.isEmpty else { return nil }
+                return (key, trace)
+            }
+            .sorted { $0.key.date > $1.key.date }
+    }
+
+    /// Keeps a run's snapped trace, to draw from now on.
+    func setSnapped(_ trace: RouteHeatmap.Trace, for key: Key) {
+        loadIfNeeded()
+        guard var entry = entries[key.id], entry.date == key.date else { return }
+        entry.snapped = trace
+        entries[key.id] = entry
+        isDirty = true
+        lastBuilt = nil
+    }
+
+    /// Writes the cache to disk if anything changed.
+    func saveIfNeeded() {
+        if isDirty { save() }
     }
 
     // MARK: Disk
