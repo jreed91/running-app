@@ -28,6 +28,10 @@ struct RouteHeatmapScreen: View {
     @State private var shareImage: ShareCardImage?
     @State private var isSharing = false
     @State private var newGround: RouteHeatmap.NewGround?
+    /// What the streets are coloured by, and that layer's map once worked out.
+    @State private var layer: HeatmapLayer = .runs
+    @State private var statMap: RouteHeatmap.StatMap?
+    @State private var isLoadingLayer = false
 
     init(period: HeatmapPeriod, runType: ProgressFilter.RunType) {
         _period = State(initialValue: period)
@@ -45,13 +49,17 @@ struct RouteHeatmapScreen: View {
     private var content: some View {
         ZStack {
             if let heatmap {
+                // A stat layer replaces the heat once it is worked out; until then the
+                // heat stays, so the map never goes blank.
+                let layerMap = layer == .runs ? nil : statMap
                 RouteHeatmapMap(
-                    heatmap: heatmap,
+                    heatmap: layerMap?.heatmap ?? heatmap,
                     style: style,
                     recenter: recenter,
                     selection: spot,
                     onTap: { point, radius in pick(point, radiusMeters: radius) },
-                    newGround: showsNewGround ? newGround : nil
+                    newGround: layer == .runs && showsNewGround ? newGround : nil,
+                    palette: layerMap == nil ? .runs : .stat
                 )
                 .ignoresSafeArea()
             } else {
@@ -88,6 +96,20 @@ struct RouteHeatmapScreen: View {
             newGround = await loadNewGround(shown: shown)
             isLoading = false
             clearSpot()
+        }
+        .task(id: LayerKey(layer: layer, period: period, type: runType, count: workouts.count)) {
+            guard let stat = layer.stat else {
+                statMap = nil
+                return
+            }
+            isLoadingLayer = true
+            defer { isLoadingLayer = false }
+            statMap = await RouteHeatmapLoader.loadStats(
+                all: RouteHeatmapLoader.keys(from: workouts),
+                shown: shownKeys(),
+                stat: stat,
+                context: context
+            )
         }
     }
 
@@ -244,6 +266,13 @@ struct RouteHeatmapScreen: View {
         }
     }
 
+    private struct LayerKey: Equatable {
+        let layer: HeatmapLayer
+        let period: HeatmapPeriod
+        let type: ProgressFilter.RunType
+        let count: Int
+    }
+
     private struct LoadKey: Equatable {
         let period: HeatmapPeriod
         let type: ProgressFilter.RunType
@@ -300,8 +329,9 @@ struct RouteHeatmapScreen: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: AppSpacing.sm) {
                     periodMenu
+                    layerMenu
                     runTypeMenu
-                    newGroundChip
+                    if layer == .runs { newGroundChip }
                     styleMenu
                     Button {
                         recenter += 1
@@ -343,6 +373,20 @@ struct RouteHeatmapScreen: View {
             Label(Self.title(of: period), systemImage: "calendar")
         }
         .buttonStyle(.strideChip(selected: true))
+    }
+
+    private var layerMenu: some View {
+        Menu {
+            Picker("Colour by", selection: $layer) {
+                ForEach(HeatmapLayer.allCases) { layer in
+                    Text(layer.title).tag(layer)
+                }
+            }
+        } label: {
+            Label(layer.title, systemImage: "paintpalette")
+        }
+        .buttonStyle(.strideChip(selected: layer != .runs))
+        .accessibilityLabel("Colour streets by \(layer.title)")
     }
 
     private var runTypeMenu: some View {
@@ -391,6 +435,8 @@ struct RouteHeatmapScreen: View {
                     Text("No outdoor runs with a route in this period.")
                         .font(.bodyRegular)
                         .foregroundStyle(.secondary)
+                } else if layer != .runs {
+                    layerSummary
                 } else {
                     if showsNewGround, let newGround {
                         newGroundSummary(newGround)
@@ -422,6 +468,55 @@ struct RouteHeatmapScreen: View {
         }
     }
 
+    // MARK: Stat layers
+
+    @ViewBuilder
+    private var layerSummary: some View {
+        if let statMap, !isLoadingLayer {
+            if statMap.isEmpty {
+                Text(emptyLayerText)
+                    .font(.bodyRegular)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text(layerHeadline(statMap))
+                    .font(.dsFootnote.weight(.semibold))
+                StatLegend(low: format(statMap.low, statMap.stat), high: format(statMap.high, statMap.stat))
+            }
+        } else {
+            HStack(spacing: AppSpacing.sm) {
+                ProgressView()
+                Text("Placing \(layer.title.lowercased()) on your streets…")
+                    .font(.bodyRegular)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var emptyLayerText: String {
+        switch layer {
+        case .heartRate: return String(localized: "None of these runs has heart rate along its route.")
+        case .hills: return String(localized: "None of these runs has altitude along its route.")
+        default: return String(localized: "None of these runs has pace along its route.")
+        }
+    }
+
+    private func layerHeadline(_ map: RouteHeatmap.StatMap) -> String {
+        let runs = map.heatmap.runCount == 1 ? "1 run" : "\(map.heatmap.runCount) runs"
+        switch map.stat {
+        case .heartRate: return String(localized: "Average heart rate on each street, from \(runs)")
+        case .pace: return String(localized: "Average pace on each street, from \(runs)")
+        case .grade: return String(localized: "How steep each street is, from \(runs)")
+        }
+    }
+
+    private func format(_ value: Double, _ stat: RouteHeatmap.Stat) -> String {
+        switch stat {
+        case .heartRate: return "\(Int(value.rounded())) bpm"
+        case .pace: return value.paceString(unit: appSettings.unitPreference)
+        case .grade: return "\(Int(value.rounded()))%"
+        }
+    }
+
     private func newGroundSummary(_ ground: RouteHeatmap.NewGround) -> some View {
         HStack(spacing: AppSpacing.sm) {
             Rectangle()
@@ -446,6 +541,32 @@ struct RouteHeatmapScreen: View {
                 .foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// A stat layer's colours from coolest to hottest, with the values at each end.
+private struct StatLegend: View {
+    let low: String
+    let high: String
+
+    var body: some View {
+        HStack(spacing: AppSpacing.sm) {
+            Text(low)
+            HStack(spacing: 3) {
+                ForEach(1...RouteHeatmap.levels, id: \.self) { level in
+                    Rectangle()
+                        .fill(RouteHeatmapMap.statColor(level: level))
+                        .frame(height: 8)
+                }
+            }
+            .frame(maxWidth: 160)
+            Text(high)
+        }
+        .font(.dsCaption2)
+        .monospacedDigit()
+        .foregroundStyle(.secondary)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Blue streets are around \(low), red streets around \(high)")
     }
 }
 

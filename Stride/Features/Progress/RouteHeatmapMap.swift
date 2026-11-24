@@ -22,6 +22,13 @@ struct RouteHeatmapMap: UIViewRepresentable {
     var onTap: ((RouteHeatmap.Point, Double) -> Void)?
     /// Streets first run in the period, drawn bright over a dimmed heatmap. `nil` hides it.
     var newGround: RouteHeatmap.NewGround?
+    /// The colours: orange for how often, or cool-to-hot for a stat layer.
+    var palette: Palette = .runs
+
+    enum Palette: Sendable {
+        case runs
+        case stat
+    }
 
     /// The base map under the heat.
     enum Style: String, CaseIterable, Identifiable, Sendable {
@@ -89,14 +96,24 @@ struct RouteHeatmapMap: UIViewRepresentable {
             let isFirst = coordinator.shown == nil
             coordinator.shown = heatmap
             if let old = coordinator.overlay { map.removeOverlay(old) }
-            let overlay = HeatCellOverlay(dots: HeatDots(heatmap, colors: HeatDots.heatColors()))
+            let colors = palette == .runs ? HeatDots.heatColors() : HeatDots.statColors()
+            let overlay = HeatCellOverlay(dots: HeatDots(heatmap, colors: colors))
+            // Known before MapKit asks for the renderer, which can happen inside addOverlay.
+            coordinator.overlay = overlay
+            // The first map draws itself in, spreading out from the home streets.
+            if isFirst, !UIAccessibility.isReduceMotionEnabled, let focus = overlay.dots.focus {
+                coordinator.pendingReveal = HeatDots.Reveal(
+                    x: focus.midX,
+                    y: focus.midY,
+                    radius: hypot(focus.width, focus.height) * 0.75
+                )
+            }
             // Under new ground, if it is showing, so a new period's heat can't cover it.
             if let newOverlay = coordinator.newOverlay {
                 map.insertOverlay(overlay, below: newOverlay)
             } else {
                 map.addOverlay(overlay, level: .aboveRoads)
             }
-            coordinator.overlay = overlay
             if isFirst {
                 coordinator.recentered = recenter
                 Self.moveToFocus(map, overlay, animated: false)
@@ -144,6 +161,18 @@ struct RouteHeatmapMap: UIViewRepresentable {
         }
     }
 
+    /// A stat layer's colours, coolest (easy heart rate, slow pace, flat) to hottest: the
+    /// heart-rate zone colours, so "red" means hard everywhere in the app.
+    static func statColor(level: Int) -> Color {
+        switch level {
+        case ...1: return Color.zoneEasy
+        case 2: return Color.zoneMarathon
+        case 3: return Color.zoneTempo
+        case 4: return Color.zoneInterval
+        default: return Color.zoneMax
+        }
+    }
+
     /// New ground's colour: away from the orange heat, so the two never mix up.
     static let newGroundColor = Color.success
 
@@ -160,6 +189,32 @@ struct RouteHeatmapMap: UIViewRepresentable {
         var onTap: ((RouteHeatmap.Point, Double) -> Void)?
         var selection: RouteHeatmap.Point?
         var marker: MKPointAnnotation?
+        /// The draw-in waiting for the first heat renderer.
+        var pendingReveal: HeatDots.Reveal?
+
+        /// How long the first map takes to draw itself in.
+        static let revealSeconds = 1.6
+
+        /// Grows the drawn circle from nothing to `reveal`'s radius, easing out, redrawing
+        /// the tiles about 20 times a second, then draws everything.
+        func startReveal(_ reveal: HeatDots.Reveal, on renderer: HeatCellRenderer) {
+            renderer.reveal.set(HeatDots.Reveal(x: reveal.x, y: reveal.y, radius: 0))
+            Task { @MainActor in
+                let start = CACurrentMediaTime()
+                while true {
+                    let progress = min(1, (CACurrentMediaTime() - start) / Self.revealSeconds)
+                    if progress >= 1 {
+                        renderer.reveal.set(nil)
+                        renderer.setNeedsDisplay()
+                        return
+                    }
+                    let eased = 1 - pow(1 - progress, 3)
+                    renderer.reveal.set(HeatDots.Reveal(x: reveal.x, y: reveal.y, radius: reveal.radius * eased))
+                    renderer.setNeedsDisplay()
+                    try? await Task.sleep(for: .milliseconds(50))
+                }
+            }
+        }
 
         /// Hands the tap on as a map point, with the metres 22 points cover at this zoom
         /// (about a fingertip), so a zoomed-out tap still finds the street under it.
@@ -177,6 +232,10 @@ struct RouteHeatmapMap: UIViewRepresentable {
             if let overlay = overlay as? HeatCellOverlay {
                 let renderer = HeatCellRenderer(heat: overlay)
                 if overlay !== newOverlay { renderer.alpha = heatAlpha }
+                if overlay === self.overlay, let reveal = pendingReveal {
+                    pendingReveal = nil
+                    startReveal(reveal, on: renderer)
+                }
                 return renderer
             }
             return MKOverlayRenderer(overlay: overlay)
@@ -197,6 +256,37 @@ final class HeatDots: Sendable {
         /// Its square on the heatmap grid, to find the squares next to it.
         let cellX: Int32
         let cellY: Int32
+    }
+
+    /// A circle, in map points, outside which nothing is drawn yet: the map drawing itself in.
+    struct Reveal: Sendable {
+        let x: Double
+        let y: Double
+        let radius: Double
+
+        func contains(_ dot: Dot) -> Bool {
+            let dx = dot.x - x, dy = dot.y - y
+            return dx * dx + dy * dy <= radius * radius
+        }
+    }
+
+    /// The renderer's current ``Reveal``, set on the main thread and read by the tile
+    /// threads, behind a lock.
+    final class RevealState: @unchecked Sendable {
+        private let lock = NSLock()
+        private var value: Reveal?
+
+        var current: Reveal? {
+            lock.lock()
+            defer { lock.unlock() }
+            return value
+        }
+
+        func set(_ reveal: Reveal?) {
+            lock.lock()
+            value = reveal
+            lock.unlock()
+        }
     }
 
     /// RGBA per level, index 0 unused.
@@ -227,6 +317,12 @@ final class HeatDots: Sendable {
     @MainActor
     static func heatColors() -> [RGBA] {
         (0...RouteHeatmap.levels).map { rgba(RouteHeatmapMap.color(level: max($0, 1))) }
+    }
+
+    /// A stat layer's colours, like ``heatColors()``.
+    @MainActor
+    static func statColors() -> [RGBA] {
+        (0...RouteHeatmap.levels).map { rgba(RouteHeatmapMap.statColor(level: max($0, 1))) }
     }
 
     /// A SwiftUI colour as plain numbers, resolved for the dark map.
@@ -298,8 +394,14 @@ final class HeatDots: Sendable {
     /// to it, in the square's own heat colour, so a street reads as a street instead of a
     /// row of blocks. A diagonal step is drawn only where no straight step joins the two,
     /// so a corner doesn't become a triangle. A square with no neighbour is a round dot.
-    func stroke(in context: CGContext, rect: MKMapRect, width: Double, place: (Dot) -> CGPoint) {
-        let byLevel = dots(in: rect.insetBy(dx: -cellSide * 2, dy: -cellSide * 2))
+    func stroke(
+        in context: CGContext,
+        rect: MKMapRect,
+        width: Double,
+        reveal: Reveal? = nil,
+        place: (Dot) -> CGPoint
+    ) {
+        let byLevel = dots(in: rect.insetBy(dx: -cellSide * 2, dy: -cellSide * 2), reveal: reveal)
         context.setLineCap(.round)
         context.setLineJoin(.round)
         context.setLineWidth(width)
@@ -347,14 +449,14 @@ final class HeatDots: Sendable {
     }
 
     /// The cells inside `rect`, by level.
-    func dots(in rect: MKMapRect) -> [[Dot]] {
+    func dots(in rect: MKMapRect, reveal: Reveal? = nil) -> [[Dot]] {
         var byLevel = [[Dot]](repeating: [], count: RouteHeatmap.levels + 1)
         let minX = Int64(max(rect.minX, 0) / Self.bucketSide)
         let maxX = Int64(max(rect.maxX, 0) / Self.bucketSide)
         let minY = Int64(max(rect.minY, 0) / Self.bucketSide)
         let maxY = Int64(max(rect.maxY, 0) / Self.bucketSide)
         func take(_ dots: [Dot]) {
-            for dot in dots where rect.contains(MKMapPoint(x: dot.x, y: dot.y)) {
+            for dot in dots where rect.contains(MKMapPoint(x: dot.x, y: dot.y)) && (reveal?.contains(dot) ?? true) {
                 byLevel[min(max(dot.level, 1), RouteHeatmap.levels)].append(dot)
             }
         }
@@ -378,11 +480,12 @@ final class HeatDots: Sendable {
         rect: MKMapRect,
         minimumSide: Double,
         alphaScale: Double = 1,
+        reveal: Reveal? = nil,
         place: (Dot) -> CGPoint,
         scale: Double
     ) {
         let half = max(halfSide * scale, minimumSide / 2)
-        let byLevel = dots(in: rect.insetBy(dx: -half / scale, dy: -half / scale))
+        let byLevel = dots(in: rect.insetBy(dx: -half / scale, dy: -half / scale), reveal: reveal)
         for level in 1...RouteHeatmap.levels where !byLevel[level].isEmpty {
             let color = colors[level]
             context.setFillColor(CGColor(
@@ -413,6 +516,8 @@ final class HeatCellOverlay: NSObject, MKOverlay {
 /// threads, several at once; it reads only the immutable ``HeatDots``.
 final class HeatCellRenderer: MKOverlayRenderer {
     private let heat: HeatDots
+    /// While the map draws itself in, how far it has got.
+    let reveal = HeatDots.RevealState()
     /// How big a square must be on screen, in points, before streets are drawn as lines.
     static let linesFromPoints = 10.0
 
@@ -431,9 +536,16 @@ final class HeatCellRenderer: MKOverlayRenderer {
         let cellOnScreen = heat.cellSide * zoomScale
         if cellOnScreen >= Self.linesFromPoints {
             let width = min(max(cellOnScreen * 0.45, 4), 9) / zoomScale
-            heat.stroke(in: context, rect: mapRect, width: width, place: place)
+            heat.stroke(in: context, rect: mapRect, width: width, reveal: reveal.current, place: place)
         } else {
-            heat.fill(in: context, rect: mapRect, minimumSide: minimumSide, place: place, scale: 1)
+            heat.fill(
+                in: context,
+                rect: mapRect,
+                minimumSide: minimumSide,
+                reveal: reveal.current,
+                place: place,
+                scale: 1
+            )
         }
     }
 }

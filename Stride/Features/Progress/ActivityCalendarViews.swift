@@ -199,6 +199,26 @@ actor RouteHeatmapReader {
         let runs = (try? context.fetch(descriptor)) ?? []
         return runs.map { RouteHeatmapCache.Input(id: $0.id, date: $0.date, route: $0.routeData ?? Data()) }
     }
+
+    /// What a stat layer needs of the runs named: route, distance series, heart rate.
+    func statInputs(of ids: [UUID]) -> [RouteStatsCache.Input] {
+        var descriptor = FetchDescriptor<RunWorkout>(predicate: #Predicate { ids.contains($0.id) })
+        descriptor.propertiesToFetch = [
+            \.id, \.date, \.durationSeconds, \.routeData, \.distanceSeriesData, \.heartRateSamplesData
+        ]
+        let context = ModelContext(modelContainer)
+        let runs = (try? context.fetch(descriptor)) ?? []
+        return runs.map {
+            RouteStatsCache.Input(
+                id: $0.id,
+                date: $0.date,
+                route: $0.routeData ?? Data(),
+                series: $0.distanceSeriesData ?? Data(),
+                heartRate: $0.heartRateSamplesData ?? Data(),
+                durationSeconds: $0.durationSeconds
+            )
+        }
+    }
 }
 
 /// Reads routes from the store for ``RouteHeatmapCache``: only the runs it hasn't traced,
@@ -246,6 +266,31 @@ enum RouteHeatmapLoader {
         latest = heatmap
         return heatmap
     }
+
+    /// A stat layer of the runs in `shown`, reading the blobs of runs not worked out yet
+    /// a few at a time, like ``load(all:shown:context:)``.
+    @MainActor
+    static func loadStats(
+        all: [RouteHeatmapCache.Key],
+        shown: [RouteHeatmapCache.Key],
+        stat: RouteHeatmap.Stat,
+        context: ModelContext
+    ) async -> RouteHeatmap.StatMap {
+        let cache = RouteStatsCache.shared
+        let missing = await cache.missing(all)
+        if !missing.isEmpty {
+            let container = context.container
+            let reader = await Task.detached { RouteHeatmapReader(modelContainer: container) }.value
+            var start = 0
+            while start < missing.count, !Task.isCancelled {
+                let batch = Array(missing[start..<min(start + batchSize, missing.count)])
+                start += batchSize
+                await cache.add(await reader.statInputs(of: batch))
+            }
+        }
+        await cache.keep(only: Set(all.map(\.id)))
+        return await cache.statMap(for: shown, stat: stat)
+    }
 }
 
 /// Every route in the page's period as a still picture of the heat, each street coloured
@@ -266,6 +311,9 @@ struct RouteHeatmapCard: View {
     @State private var heatmap: RouteHeatmap.Heatmap?
     @State private var preview: UIImage?
     @State private var showsFullScreen = false
+    /// The picture draws itself in from the middle the first time it shows.
+    @State private var previewRevealed = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let previewSize = CGSize(width: 360, height: 300)
 
@@ -308,6 +356,13 @@ struct RouteHeatmapCard: View {
                                     Image(uiImage: preview)
                                         .resizable()
                                         .scaledToFill()
+                                        .mask {
+                                            Circle()
+                                                .scaleEffect(previewRevealed || reduceMotion ? 2.4 : 0.01)
+                                        }
+                                        .onAppear {
+                                            withAnimation(AppAnimation.routeDraw) { previewRevealed = true }
+                                        }
                                 } else {
                                     ProgressView().tint(Color.onInk)
                                 }
