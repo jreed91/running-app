@@ -41,7 +41,6 @@ final class WhatsNewScreenshotTests: XCTestCase {
 
         let bestEfforts = app.descendants(matching: .any)["progress.bestEfforts"]
         if scrollTo(bestEfforts) {
-            app.swipeUp(velocity: .slow)
             capture("best-efforts")
         } else {
             XCTFail("No best efforts card on Progress")
