@@ -34,26 +34,40 @@ final class WhatsNewScreenshotTests: XCTestCase {
 
     // MARK: - Captures
 
+    /// Progress with its route map drawn, then the map full screen. The heatmap card sits
+    /// near the top of Progress, under the totals.
     func testCaptureProgressFeatures() throws {
         launchToHome()
         selectTab("Progress")
+
+        // The card holds the map back until asked, unless it was shown before.
+        let showMap = app.buttons["Show the map"]
+        if showMap.waitForExistence(timeout: 5) {
+            showMap.tap()
+        }
+        // Tracing every demo route, then the picture's 1.6 s draw-in.
+        sleep(6)
         capture("progress")
 
+        let fullScreen = app.buttons["progress.heatmap.fullScreen"]
+        if scrollTo(fullScreen) {
+            fullScreen.tap()
+            sleep(6)
+            capture("heatmap")
+        } else {
+            XCTFail("No heatmap card on Progress")
+        }
+    }
+
+    /// Its own launch: the best efforts card is far down Progress, below the heatmap.
+    func testCaptureBestEfforts() throws {
+        launchToHome()
+        selectTab("Progress")
         let bestEfforts = app.descendants(matching: .any)["progress.bestEfforts"]
         if scrollTo(bestEfforts) {
             capture("best-efforts")
         } else {
             XCTFail("No best efforts card on Progress")
-        }
-
-        let fullScreen = app.buttons["progress.heatmap.fullScreen"]
-        if scrollTo(fullScreen) {
-            fullScreen.tap()
-            // Tracing every demo route the first time takes a moment.
-            sleep(6)
-            capture("heatmap")
-        } else {
-            XCTFail("No heatmap card on Progress")
         }
     }
 
