@@ -175,6 +175,13 @@ enum DemoDataSeed {
             // or an imported one whose HealthKit route came across.
             if (weeksAgo + index) % 4 != 1 {
                 run.routeCoordinates = route(distanceMeters: distance, seed: weeksAgo * 4 + index)
+                // The GPS distance trace a recorded run keeps, so Run analysis and best
+                // efforts have something to read on the demo history too.
+                run.distanceSeries = distanceSeries(
+                    distanceMeters: distance,
+                    durationSeconds: duration,
+                    seed: weeksAgo * 4 + index
+                )
             }
         }
 
@@ -191,6 +198,26 @@ enum DemoDataSeed {
         }
 
         return run
+    }
+
+    /// A reading every 10 s: pace surging a little and easing back three times over the run
+    /// (always moving forward), over two gentle hills.
+    private static func distanceSeries(
+        distanceMeters: Double,
+        durationSeconds: Double,
+        seed: Int
+    ) -> [SplitBucketing.DistancePoint] {
+        guard durationSeconds > 0 else { return [] }
+        let phase = Double(seed % 7)
+        return stride(from: 0.0, through: durationSeconds, by: 10).map { elapsed in
+            let progress = elapsed / durationSeconds
+            let surge = 0.02 * sin(2 * .pi * 3 * progress) / (2 * .pi * 3)
+            return SplitBucketing.DistancePoint(
+                elapsedSeconds: elapsed,
+                cumulativeMeters: distanceMeters * (progress + surge),
+                altitudeMeters: 240 + 14 * sin(2 * .pi * 2 * progress + phase)
+            )
+        }
     }
 
     /// A plausible bpm trace: a warm-up ramp onto the run's average, then drift upward

@@ -137,6 +137,11 @@ final class WhatsNewScreenshotTests: XCTestCase {
         app.terminate()
         app.launchArguments = ["--uitesting", "--seed-demo-data"] + extraArguments
         app.launch()
+        // The first launch on a freshly booted simulator can fail ("Failed to launch");
+        // one more try, so a cold simulator doesn't cost the capture.
+        if app.state != .runningForeground {
+            app.launch()
+        }
 
         let getStarted = app.buttons["onboarding.getStarted"]
         XCTAssertTrue(getStarted.waitForExistence(timeout: 15), "Onboarding never appeared")
