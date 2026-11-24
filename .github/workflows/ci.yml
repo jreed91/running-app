@@ -86,6 +86,7 @@ jobs:
               - 'project.yml'
               - 'ci_scripts/**'
               - '.github/workflows/ci.yml'
+              - '.github/actions/**'
 
   # ── Lint ────────────────────────────────────────────────────────────────────
   lint:
@@ -144,44 +145,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history, so the setup can give each file its last commit's mtime.
+          fetch-depth: 0
 
-      - name: Select Xcode
-        run: |
-          XCODE=$(ls -d /Applications/Xcode_27*.app 2>/dev/null | sort -V | tail -1)
-          if [[ -z "$XCODE" ]]; then
-            echo "::error::No Xcode 27 toolchain found on this runner. Installed Xcodes:"
-            ls -d /Applications/Xcode_*.app 2>/dev/null || true
-            exit 1
-          fi
-          echo "Using $XCODE"
-          sudo xcode-select -switch "$XCODE"
-
-      - name: Print Xcode version
-        run: xcodebuild -version
-
-      - name: Install XcodeGen and xcbeautify
-        run: |
-          brew install xcodegen xcbeautify
-          xcodegen_installed=$(xcodegen --version | awk '{print $NF}')
-          xcbeautify_installed=$(xcbeautify --version)
-          echo "xcodegen $xcodegen_installed"
-          echo "xcbeautify $xcbeautify_installed"
-          if [[ -n "$XCODEGEN_VERSION" && "$xcodegen_installed" != "$XCODEGEN_VERSION" ]]; then
-            echo "::error::XcodeGen $xcodegen_installed does not match the pinned XCODEGEN_VERSION=$XCODEGEN_VERSION."
-            exit 1
-          fi
-          if [[ -n "$XCBEAUTIFY_VERSION" && "$xcbeautify_installed" != "$XCBEAUTIFY_VERSION" ]]; then
-            echo "::error::xcbeautify $xcbeautify_installed does not match the pinned XCBEAUTIFY_VERSION=$XCBEAUTIFY_VERSION."
-            exit 1
-          fi
-
-      - name: Generate Xcode project
-        run: xcodegen generate
-
-      - name: Install Swift package pins
-        run: |
-          mkdir -p Stride.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
-          cp ci_scripts/Package.resolved Stride.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+      - uses: ./.github/actions/xcode-setup
 
       - name: Cache DerivedData
         uses: actions/cache@v4
@@ -279,6 +247,11 @@ jobs:
 
       - name: Run UI tests
         continue-on-error: true
+        # Two simulator clones, one test class each. The scheme keeps StrideUITests
+        # serial for local runs; here the two classes overlap, so the run takes about
+        # as long as StrideUITests alone (246 s in run 41554674880) instead of that
+        # plus UXCaptureTests (131 s). xcodebuild splits work by class, so a third
+        # worker would have nothing to do.
         run: |
           mkdir -p TestResults
           set -o pipefail
@@ -288,6 +261,8 @@ jobs:
             -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
             -derivedDataPath ~/Library/Developer/Xcode/DerivedData \
             -only-testing:StrideUITests \
+            -parallel-testing-enabled YES \
+            -parallel-testing-worker-count 2 \
             -resultBundlePath TestResults/ui.xcresult \
             CODE_SIGNING_ALLOWED=NO \
             | xcbeautify --renderer github-actions
@@ -368,41 +343,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history, so the setup can give each file its last commit's mtime.
+          fetch-depth: 0
 
-      - name: Select Xcode
-        run: |
-          XCODE=$(ls -d /Applications/Xcode_27*.app 2>/dev/null | sort -V | tail -1)
-          if [[ -z "$XCODE" ]]; then
-            echo "::error::No Xcode 27 toolchain found on this runner. Installed Xcodes:"
-            ls -d /Applications/Xcode_*.app 2>/dev/null || true
-            exit 1
-          fi
-          echo "Using $XCODE"
-          sudo xcode-select -switch "$XCODE"
-
-      - name: Install XcodeGen and xcbeautify
-        run: |
-          brew install xcodegen xcbeautify
-          xcodegen_installed=$(xcodegen --version | awk '{print $NF}')
-          xcbeautify_installed=$(xcbeautify --version)
-          echo "xcodegen $xcodegen_installed"
-          echo "xcbeautify $xcbeautify_installed"
-          if [[ -n "$XCODEGEN_VERSION" && "$xcodegen_installed" != "$XCODEGEN_VERSION" ]]; then
-            echo "::error::XcodeGen $xcodegen_installed does not match the pinned XCODEGEN_VERSION=$XCODEGEN_VERSION."
-            exit 1
-          fi
-          if [[ -n "$XCBEAUTIFY_VERSION" && "$xcbeautify_installed" != "$XCBEAUTIFY_VERSION" ]]; then
-            echo "::error::xcbeautify $xcbeautify_installed does not match the pinned XCBEAUTIFY_VERSION=$XCBEAUTIFY_VERSION."
-            exit 1
-          fi
-
-      - name: Generate Xcode project
-        run: xcodegen generate
-
-      - name: Install Swift package pins
-        run: |
-          mkdir -p Stride.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
-          cp ci_scripts/Package.resolved Stride.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+      - uses: ./.github/actions/xcode-setup
 
       - name: Cache DerivedData
         uses: actions/cache@v4
@@ -446,41 +391,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history, so the setup can give each file its last commit's mtime.
+          fetch-depth: 0
 
-      - name: Select Xcode
-        run: |
-          XCODE=$(ls -d /Applications/Xcode_27*.app 2>/dev/null | sort -V | tail -1)
-          if [[ -z "$XCODE" ]]; then
-            echo "::error::No Xcode 27 toolchain found on this runner. Installed Xcodes:"
-            ls -d /Applications/Xcode_*.app 2>/dev/null || true
-            exit 1
-          fi
-          echo "Using $XCODE"
-          sudo xcode-select -switch "$XCODE"
-
-      - name: Install XcodeGen and xcbeautify
-        run: |
-          brew install xcodegen xcbeautify
-          xcodegen_installed=$(xcodegen --version | awk '{print $NF}')
-          xcbeautify_installed=$(xcbeautify --version)
-          echo "xcodegen $xcodegen_installed"
-          echo "xcbeautify $xcbeautify_installed"
-          if [[ -n "$XCODEGEN_VERSION" && "$xcodegen_installed" != "$XCODEGEN_VERSION" ]]; then
-            echo "::error::XcodeGen $xcodegen_installed does not match the pinned XCODEGEN_VERSION=$XCODEGEN_VERSION."
-            exit 1
-          fi
-          if [[ -n "$XCBEAUTIFY_VERSION" && "$xcbeautify_installed" != "$XCBEAUTIFY_VERSION" ]]; then
-            echo "::error::xcbeautify $xcbeautify_installed does not match the pinned XCBEAUTIFY_VERSION=$XCBEAUTIFY_VERSION."
-            exit 1
-          fi
-
-      - name: Generate Xcode project
-        run: xcodegen generate
-
-      - name: Install Swift package pins
-        run: |
-          mkdir -p Stride.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
-          cp ci_scripts/Package.resolved Stride.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+      - uses: ./.github/actions/xcode-setup
 
       - name: Cache DerivedData
         uses: actions/cache@v4
