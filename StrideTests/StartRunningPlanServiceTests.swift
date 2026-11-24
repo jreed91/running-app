@@ -180,7 +180,7 @@ struct StartRunningPlanServiceTests {
         let structure = try #require(runs(in: plan).first?.workoutStructure)
         let set = try #require(structure.mainSets.first)
         #expect(set.repetitions == 1)
-        #expect(set.workSegment.durationSeconds == 18 * 60)
+        #expect(set.workSegment.durationSeconds == Double(18 * 60))
         #expect(set.recoverySegment.durationSeconds == nil)
 
         let steps = GuidedWorkoutState.flatten(structure)

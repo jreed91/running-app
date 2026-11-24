@@ -239,8 +239,12 @@ struct OnboardingView: View {
         .adaptiveAnimation(AppAnimation.bouncy, value: step)
         .ignoresSafeArea()
         .task(id: step) {
-            guard container.healthKitRepository.isAuthorized else { return }
-            recentVolume = await container.healthKitRepository.recentRunningVolume()
+            // `isAuthorized` is a synchronous call into healthd. On the main actor it held
+            // the first onboarding screen until healthd answered (over a minute on CI).
+            let repository = container.healthKitRepository
+            let authorized = await Task.detached { repository.isAuthorized }.value
+            guard authorized else { return }
+            recentVolume = await repository.recentRunningVolume()
         }
         // A friend's race invite opened before onboarding is done: the goal step starts
         // on their race. Past the goal step it waits, and the new-plan flow offers it
