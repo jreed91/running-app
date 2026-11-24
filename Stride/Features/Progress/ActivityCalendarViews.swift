@@ -311,6 +311,9 @@ struct RouteHeatmapCard: View {
     @State private var heatmap: RouteHeatmap.Heatmap?
     @State private var preview: UIImage?
     @State private var showsFullScreen = false
+    /// The picture draws itself in from the middle the first time it shows.
+    @State private var previewRevealed = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let previewSize = CGSize(width: 360, height: 300)
 
@@ -353,6 +356,13 @@ struct RouteHeatmapCard: View {
                                     Image(uiImage: preview)
                                         .resizable()
                                         .scaledToFill()
+                                        .mask {
+                                            Circle()
+                                                .scaleEffect(previewRevealed || reduceMotion ? 2.4 : 0.01)
+                                        }
+                                        .onAppear {
+                                            withAnimation(AppAnimation.routeDraw) { previewRevealed = true }
+                                        }
                                 } else {
                                     ProgressView().tint(Color.onInk)
                                 }
