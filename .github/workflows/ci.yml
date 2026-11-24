@@ -151,8 +151,8 @@ jobs:
 
       - uses: ./.github/actions/xcode-setup
 
-      - name: Cache DerivedData
-        uses: actions/cache@v4
+      - name: Restore DerivedData
+        uses: actions/cache/restore@v4
         with:
           path: ~/Library/Developer/Xcode/DerivedData
           # Keyed on the commit, not on `project.yml`. A key that only moves when
@@ -205,6 +205,7 @@ jobs:
           xcrun simctl boot "$UDID" || true
 
       - name: Build for testing
+        id: build
         # `-skipMacroValidation` / `-skipPackagePluginValidation`: both are interactive
         #   trust prompts for package plugins, which on a non-interactive runner are
         #   answered by a default rather than by anyone.
@@ -226,6 +227,17 @@ jobs:
             COMPILER_INDEX_STORE_ENABLE=NO \
             CODE_SIGNING_ALLOWED=NO \
             | xcbeautify --renderer github-actions
+
+      # Saved as soon as the build succeeds, not at the end of the job. A combined
+      # actions/cache step only saves when the whole job passes, so while any test
+      # failed, no build was ever cached and every run started cold (14-19 min on
+      # 2026-11-24, against 4.4 min warm).
+      - name: Save DerivedData
+        if: steps.build.outcome == 'success'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/Library/Developer/Xcode/DerivedData
+          key: deriveddata-ios-${{ github.sha }}
 
       - name: Run unit tests
         continue-on-error: true
