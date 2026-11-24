@@ -32,8 +32,6 @@ struct RouteHeatmapScreen: View {
     @State private var layer: HeatmapLayer = .runs
     @State private var statMap: RouteHeatmap.StatMap?
     @State private var isLoadingLayer = false
-    /// Runs moved onto the streets so far this visit, and how many were waiting.
-    @State private var snapping: (done: Int, total: Int)?
 
     init(period: HeatmapPeriod, runType: ProgressFilter.RunType) {
         _period = State(initialValue: period)
@@ -98,7 +96,6 @@ struct RouteHeatmapScreen: View {
             newGround = await loadNewGround(shown: shown)
             isLoading = false
             clearSpot()
-            await snapToStreets(shown: shown)
         }
         .task(id: LayerKey(layer: layer, period: period, type: runType, count: workouts.count)) {
             guard let stat = layer.stat else {
@@ -193,36 +190,6 @@ struct RouteHeatmapScreen: View {
 
     /// The period New ground moves to from All time.
     static let newGroundPeriod = HeatmapPeriod.lastDays(90)
-
-    // MARK: Snapping to streets
-
-    /// Moves the shown runs not done yet onto the streets with Apple Maps, newest first,
-    /// redrawing the map every few runs. Stops when the filters change or the screen
-    /// closes; what was done is kept, so the next visit picks up from there.
-    private func snapToStreets(shown: [RouteHeatmapCache.Key]) async {
-        let cache = RouteHeatmapCache.shared
-        let waiting = await cache.unsnapped(shown)
-        guard !waiting.isEmpty else {
-            snapping = nil
-            return
-        }
-        snapping = (0, waiting.count)
-        defer {
-            RouteSnapper.shared.save()
-            Task { await cache.saveIfNeeded() }
-        }
-        for (index, run) in waiting.enumerated() {
-            guard !Task.isCancelled, let snapped = await RouteSnapper.shared.snap(run.trace) else { break }
-            await cache.setSnapped(snapped, for: run.key)
-            let done = index + 1
-            snapping = (done, waiting.count)
-            if done % 3 == 0 || done == waiting.count {
-                heatmap = await cache.heatmap(for: shown)
-                newGround = await loadNewGround(shown: shown)
-            }
-        }
-        if snapping?.done == snapping?.total { snapping = nil }
-    }
 
     // MARK: Tap a spot
 
@@ -487,12 +454,6 @@ struct RouteHeatmapScreen: View {
                         )
                     }
                     HeatLegend()
-                    if let snapping {
-                        Text("Moving runs onto the streets: \(snapping.done) of \(snapping.total)")
-                            .font(.dsCaption2)
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                    }
                 }
             }
             .padding(AppSpacing.lg)
