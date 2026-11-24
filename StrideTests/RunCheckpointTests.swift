@@ -17,8 +17,8 @@ struct RunCheckpointTests {
             elapsedSeconds: elapsed,
             distanceMeters: distance,
             coordinates: [
-                Coordinate(.init(latitude: 41.88, longitude: -87.63)),
-                Coordinate(.init(latitude: 41.89, longitude: -87.62))
+                Coordinate(CLLocationCoordinate2D(latitude: 41.88, longitude: -87.63)),
+                Coordinate(CLLocationCoordinate2D(latitude: 41.89, longitude: -87.62))
             ],
             splits: [
                 Split(

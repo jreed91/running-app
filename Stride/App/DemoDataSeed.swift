@@ -1,4 +1,5 @@
 import Foundation
+import CoreLocation
 import SwiftData
 
 /// Seeds a realistic training history for UI tests that need populated screens.
@@ -330,7 +331,7 @@ enum DemoDataSeed {
             let jitter = 0.000_03
             let noiseLat = sin(Double(step * 12_989 + seed * 78_233)) * jitter
             let noiseLon = cos(Double(step * 39_346 + seed * 11_731)) * jitter
-            points.append(Coordinate(.init(latitude: lat + noiseLat, longitude: lon + noiseLon)))
+            points.append(Coordinate(CLLocationCoordinate2D(latitude: lat + noiseLat, longitude: lon + noiseLon)))
             step += 1
         }
         add()
