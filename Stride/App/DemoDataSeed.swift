@@ -273,25 +273,63 @@ enum DemoDataSeed {
         }
     }
 
-    /// A closed loop near Des Moines, sized roughly to the run's distance. Enough points
-    /// that the route map and its snapshot have a real shape to draw.
+    /// A loop (or out-and-back) from home along Des Moines' street grid, sized roughly to
+    /// the run's distance. Two points a block, so maps and the heatmap have a real shape.
     private static func route(distanceMeters: Double, seed: Int) -> [Coordinate] {
-        let centreLat = 41.5868 + Double(seed % 5) * 0.004
-        let centreLon = -93.6250 - Double(seed % 7) * 0.004
-        // ~111km per degree of latitude; a loop's radius is its circumference over 2π.
-        let radiusDegrees = (distanceMeters / (2 * .pi)) / 111_000
-        let points = 60
-        return (0..<points).map { step in
-            let angle = (Double(step) / Double(points)) * 2 * .pi
-            // Squashed and wobbled so it reads as a route rather than a perfect circle.
-            let wobble = 1 + sin(angle * 3 + Double(seed)) * 0.18
-            return Coordinate(
-                .init(
-                    latitude: centreLat + sin(angle) * radiusDegrees * wobble,
-                    longitude: centreLon + cos(angle) * radiusDegrees * 1.3 * wobble
-                )
-            )
+        // Runs start from home and follow the street grid, the way a runner's week does:
+        // a handful of favourite loops and one out-and-back, run again and again, so the
+        // heatmap has real corridors rather than a tangle. Des Moines' west-side blocks are
+        // about 160 m each way.
+        let home = (lat: 41.6005, lon: -93.6520)
+        let block = (lat: 160.0 / 111_000, lon: 160.0 / 83_000)
+        let blocks = max(Int((distanceMeters / 160).rounded()), 4)
+
+        // (east, north) unit steps of one block, walked in order and back home.
+        var legs: [(dx: Int, dy: Int, count: Int)]
+        switch seed % 5 {
+        case 0, 1, 2, 3:
+            // A loop in one of four directions from home, each its own shape.
+            let shapes: [(east: Double, signX: Int, signY: Int)] = [
+                (0.5, 1, 1), (0.66, -1, 1), (0.4, 1, -1), (0.55, -1, -1)
+            ]
+            let shape = shapes[seed % 5]
+            let half = blocks / 2
+            let across = max(Int((Double(half) * shape.east).rounded()), 1)
+            let up = max(half - across, 1)
+            legs = [
+                (0, shape.signY, up), (shape.signX, 0, across),
+                (0, -shape.signY, up), (-shape.signX, 0, across)
+            ]
+        default:
+            // Out along one street and back.
+            let out = max(blocks / 2, 2)
+            legs = [(1, 0, out), (-1, 0, out)]
         }
+
+        var lat = home.lat
+        var lon = home.lon
+        var points: [Coordinate] = []
+        var step = 0
+        func add() {
+            // A few metres of GPS wander, the same for a given run every time.
+            let jitter = 0.000_03
+            let noiseLat = sin(Double(step * 12_989 + seed * 78_233)) * jitter
+            let noiseLon = cos(Double(step * 39_346 + seed * 11_731)) * jitter
+            points.append(Coordinate(.init(latitude: lat + noiseLat, longitude: lon + noiseLon)))
+            step += 1
+        }
+        add()
+        for leg in legs {
+            for _ in 0..<leg.count {
+                // Two fixes per block, so the line follows the street between corners.
+                for _ in 0..<2 {
+                    lat += Double(leg.dy) * block.lat / 2
+                    lon += Double(leg.dx) * block.lon / 2
+                    add()
+                }
+            }
+        }
+        return points
     }
 
     private static func weather(weeksAgo: Int, index: Int) -> WorkoutWeather {
