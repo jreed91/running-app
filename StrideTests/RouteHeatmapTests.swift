@@ -36,11 +36,37 @@ struct RouteHeatmapTests {
 
     // MARK: Tracing
 
-    @Test func aSparseRouteStillTouchesEveryCellAlongTheWay() {
-        // Fixes 100 m apart: the trace fills in the cells between them.
-        let trace = RouteHeatmap.trace(north(from: home, meters: 1_000, step: 100))
+    @Test func shortGapsAreFilledIn() {
+        // Fixes 40 m apart: the trace fills in the cells between them.
+        let trace = RouteHeatmap.trace(north(from: home, meters: 1_000, step: 40))
         #expect(trace.segments.count == 1)
         #expect((49...52).contains(trace.cells.count))
+    }
+
+    @Test func aLongGapIsNotDrawnAcross() {
+        // Fixes 100 m apart: a straight line between them would cut every corner, so each
+        // fix stands alone, as a dot, and the run is still on the map.
+        let trace = RouteHeatmap.trace(north(from: home, meters: 1_000, step: 100))
+        #expect(trace.cells.count == 11)
+        #expect(trace.segments.count == 11)
+        #expect(RouteHeatmap.edges(of: trace).isEmpty)
+    }
+
+    @Test func theMapKeepsOnlyTheStepsRunsTook() {
+        // Two runs up parallel streets a cell apart: their squares sit side by side, but
+        // no run stepped across between them.
+        let east = Point(latitude: home.latitude, longitude: home.longitude + 25 / (111_320 * cos(home.latitude * .pi / 180)))
+        let west = RouteHeatmap.trace(north(from: home, meters: 200))
+        let eastTrace = RouteHeatmap.trace(north(from: east, meters: 200))
+        let map = RouteHeatmap.build([west, eastTrace])
+        let westCells = Set(west.cells)
+        let eastCells = Set(eastTrace.cells)
+        #expect(westCells.isDisjoint(with: eastCells))
+        #expect(!map.edges.isEmpty)
+        #expect(map.edges.allSatisfy { edge in
+            westCells.contains(edge.a) == westCells.contains(edge.b)
+        })
+        #expect(map.cells.allSatisfy { $0.cell != nil })
     }
 
     @Test func aGPSGapBreaksTheLine() {

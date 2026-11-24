@@ -129,9 +129,10 @@ actor RouteHeatmapCache {
     // MARK: Disk
 
     /// In Caches: traces can always be worked out again, so the system may clear it.
+    /// v2: traces no longer fill gaps over ``RouteHeatmap/fillMeters`` with a straight line.
     static var defaultStoreURL: URL? {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
-            .appendingPathComponent("route-heatmap-v1.plist")
+            .appendingPathComponent("route-heatmap-v2.plist")
     }
 
     private func loadIfNeeded() {

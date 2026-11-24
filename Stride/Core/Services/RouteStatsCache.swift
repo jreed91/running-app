@@ -101,9 +101,10 @@ actor RouteStatsCache {
     // MARK: Disk
 
     /// In Caches: the stats can always be worked out again.
+    /// v2: traces no longer fill gaps over ``RouteHeatmap/fillMeters`` with a straight line.
     static var defaultStoreURL: URL? {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
-            .appendingPathComponent("route-stats-v1.plist")
+            .appendingPathComponent("route-stats-v2.plist")
     }
 
     private func loadIfNeeded() {

@@ -321,6 +321,8 @@ final class HeatDots: Sendable {
     let buckets: [Int64: [Dot]]
     /// Every dot by its grid square, for drawing streets as lines up close.
     let byCell: [Int64: Dot]
+    /// Which squares a run went between, by square; `nil` to join every neighbour.
+    private let links: [Int64: [Int64]]?
     let count: Int
     /// Half the side of a cell's square, in map points, at the cells' latitude.
     let halfSide: Double
@@ -357,28 +359,48 @@ final class HeatDots: Sendable {
     }
 
     convenience init(_ heatmap: RouteHeatmap.Heatmap, colors: [RGBA]) {
-        self.init(cells: heatmap.cells.map { ($0.center, $0.level) }, colors: colors)
+        self.init(
+            cells: heatmap.cells.map { ($0.center, $0.level, $0.cell) },
+            edges: heatmap.edges,
+            colors: colors
+        )
     }
 
     /// New ground: every cell at level 1, in `color`.
     convenience init(_ newGround: RouteHeatmap.NewGround, color: RGBA) {
         self.init(
-            cells: newGround.cells.map { ($0, 1) },
+            cells: newGround.cells.map { ($0, 1, nil) },
+            edges: [],
             colors: [RGBA](repeating: color, count: RouteHeatmap.levels + 1)
         )
     }
 
     /// - Parameter cells: centres and levels, coolest first, so each bucket draws its
     ///   hottest last.
-    init(cells: [(center: RouteHeatmap.Point, level: Int)], colors: [RGBA]) {
+    ///   - edges: the steps runs took between squares, which the street lines follow.
+    ///     Empty for a map without them (new ground, a stat layer): then neighbouring
+    ///     squares are joined.
+    init(
+        cells: [(center: RouteHeatmap.Point, level: Int, cell: RouteHeatmap.Cell?)],
+        edges: [RouteHeatmap.Edge],
+        colors: [RGBA]
+    ) {
         var buckets: [Int64: [Dot]] = [:]
         var byCell: [Int64: Dot] = [:]
+        var links: [Int64: [Int64]] = [:]
+        for edge in edges {
+            let a = Self.cellKey(edge.a.x, edge.a.y)
+            let b = Self.cellKey(edge.b.x, edge.b.y)
+            links[a, default: []].append(b)
+            links[b, default: []].append(a)
+        }
+        self.links = edges.isEmpty ? nil : links
         var focusRect: MKMapRect?
         var anyRect: MKMapRect?
         var latitudeSum = 0.0
         for cell in cells {
             let point = MKMapPoint(CLLocationCoordinate2D(latitude: cell.center.latitude, longitude: cell.center.longitude))
-            let square = RouteHeatmap.cell(of: cell.center)
+            let square = cell.cell ?? RouteHeatmap.cell(of: cell.center)
             let dot = Dot(x: point.x, y: point.y, level: cell.level, cellX: square.x, cellY: square.y)
             buckets[Self.key(x: point.x, y: point.y), default: []].append(dot)
             byCell[Self.cellKey(square.x, square.y)] = dot
@@ -411,10 +433,9 @@ final class HeatDots: Sendable {
     /// The distance between neighbouring squares' centres, in map points.
     var cellSide: Double { halfSide / 0.6 }
 
-    /// Up close, the squares as streets: a line from each square towards each square next
-    /// to it, in the square's own heat colour, so a street reads as a street instead of a
-    /// row of blocks. A diagonal step is drawn only where no straight step joins the two,
-    /// so a corner doesn't become a triangle. A square with no neighbour is a round dot.
+    /// Up close, the squares as streets: a line from each square towards each square a
+    /// run went to from it, in the square's own heat colour, so a street reads as a street
+    /// instead of a row of blocks. A square with nothing joined is a round dot.
     func stroke(
         in context: CGContext,
         rect: MKMapRect,
@@ -436,13 +457,8 @@ final class HeatDots: Sendable {
             for dot in byLevel[level] {
                 let start = place(dot)
                 var joined = false
-                for (dx, dy) in Self.steps {
-                    guard let other = neighbour(of: dot, dx: dx, dy: dy) else { continue }
-                    if dx != 0, dy != 0,
-                       neighbour(of: dot, dx: dx, dy: 0) != nil || neighbour(of: dot, dx: 0, dy: dy) != nil {
-                        continue
-                    }
-                    // Halfway: the neighbour draws the other half in its own colour.
+                for other in joinedDots(of: dot) {
+                    // Halfway: the other square draws the other half in its own colour.
                     let end = place(other)
                     lines.move(to: start)
                     lines.addLine(to: CGPoint(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2))
@@ -464,6 +480,23 @@ final class HeatDots: Sendable {
     private static let steps: [(Int32, Int32)] = [
         (1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)
     ]
+
+    /// The squares a line runs to from `dot`: the ones a run stepped to from it, or, on
+    /// a map without steps, its neighbours (a diagonal only where no straight step joins
+    /// the two, so a corner doesn't become a triangle).
+    private func joinedDots(of dot: Dot) -> [Dot] {
+        if let links {
+            return (links[Self.cellKey(dot.cellX, dot.cellY)] ?? []).compactMap { byCell[$0] }
+        }
+        return Self.steps.compactMap { dx, dy -> Dot? in
+            guard let other = neighbour(of: dot, dx: dx, dy: dy) else { return nil }
+            if dx != 0, dy != 0,
+               neighbour(of: dot, dx: dx, dy: 0) != nil || neighbour(of: dot, dx: 0, dy: dy) != nil {
+                return nil
+            }
+            return other
+        }
+    }
 
     private func neighbour(of dot: Dot, dx: Int32, dy: Int32) -> Dot? {
         byCell[Self.cellKey(dot.cellX &+ dx, dot.cellY &+ dy)]
