@@ -63,9 +63,9 @@ struct ShareCardModelTests {
     @Test("Route points normalize into the unit square")
     func routeWithinUnitSquare() {
         let coords = [
-            Coordinate(.init(latitude: 51.500, longitude: -0.120)),
-            Coordinate(.init(latitude: 51.505, longitude: -0.110)),
-            Coordinate(.init(latitude: 51.503, longitude: -0.100))
+            Coordinate(CLLocationCoordinate2D(latitude: 51.500, longitude: -0.120)),
+            Coordinate(CLLocationCoordinate2D(latitude: 51.505, longitude: -0.110)),
+            Coordinate(CLLocationCoordinate2D(latitude: 51.503, longitude: -0.100))
         ]
         let points = ShareCardModel.normalizedRoute(from: coords)
         #expect(points.count == 3)
@@ -78,8 +78,8 @@ struct ShareCardModelTests {
     @Test("North maps to a smaller y (screen up)")
     func northIsUp() {
         // Two points differing only in latitude; the more-northern one should have smaller y.
-        let south = Coordinate(.init(latitude: 40.000, longitude: -105.0))
-        let north = Coordinate(.init(latitude: 40.010, longitude: -105.0))
+        let south = Coordinate(CLLocationCoordinate2D(latitude: 40.000, longitude: -105.0))
+        let north = Coordinate(CLLocationCoordinate2D(latitude: 40.010, longitude: -105.0))
         let points = ShareCardModel.normalizedRoute(from: [south, north])
         #expect(points.count == 2)
         #expect(points[1].y < points[0].y)   // north (index 1) is higher on screen
@@ -89,8 +89,8 @@ struct ShareCardModelTests {
     func aspectPreserved() {
         // ~10x wider in longitude than tall in latitude → x-span should dominate, y-span small.
         let coords = [
-            Coordinate(.init(latitude: 40.000, longitude: -105.000)),
-            Coordinate(.init(latitude: 40.001, longitude: -104.900))
+            Coordinate(CLLocationCoordinate2D(latitude: 40.000, longitude: -105.000)),
+            Coordinate(CLLocationCoordinate2D(latitude: 40.001, longitude: -104.900))
         ]
         let points = ShareCardModel.normalizedRoute(from: coords)
         let xs = points.map(\.x)
@@ -105,13 +105,13 @@ struct ShareCardModelTests {
     func tooFewCoordinates() {
         #expect(ShareCardModel.normalizedRoute(from: []).isEmpty)
         #expect(ShareCardModel.normalizedRoute(
-            from: [Coordinate(.init(latitude: 1, longitude: 1))]
+            from: [Coordinate(CLLocationCoordinate2D(latitude: 1, longitude: 1))]
         ).isEmpty)
     }
 
     @Test("Coincident coordinates yield no route (nothing to draw)")
     func coincidentCoordinates() {
-        let same = Coordinate(.init(latitude: 45.0, longitude: 9.0))
+        let same = Coordinate(CLLocationCoordinate2D(latitude: 45.0, longitude: 9.0))
         #expect(ShareCardModel.normalizedRoute(from: [same, same, same]).isEmpty)
     }
 
