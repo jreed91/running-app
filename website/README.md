@@ -23,5 +23,10 @@ dashboard: Workers & Pages → `running-app` → Settings → Build, repository
 `npx wrangler@4 deploy`. The two custom domains in `wrangler.jsonc` attach on
 deploy.
 
+Pull requests get a preview build, which runs `npx wrangler preview`. That
+command needs the `previews` block in `wrangler.jsonc` (empty is fine), so keep
+it there. For the pull request comment to show a link, turn on Preview URLs
+(Worker → Domains → Worker URL → Preview) or add `"preview_urls": true`.
+
 By hand, from this folder: `npx wrangler@4 deploy` (logs in to Cloudflare the
 first time). Preview locally: `npx wrangler@4 dev`.

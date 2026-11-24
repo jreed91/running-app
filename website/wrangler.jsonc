@@ -14,5 +14,9 @@
     { "pattern": "runwithstride.app", "custom_domain": true },
     { "pattern": "www.runwithstride.app", "custom_domain": true }
   ],
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+  // Pull request builds run `npx wrangler preview`, which stops with "missing a
+  // `previews` block" unless this block exists. Empty is fine: assets and
+  // compatibility settings stay at the top level, and routes stay production-only.
+  "previews": {}
 }
