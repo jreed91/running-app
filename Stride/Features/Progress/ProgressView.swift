@@ -112,6 +112,10 @@ struct ProgressDashboardView: View {
                             // One `stagger` step per card, in reading order, capped at six.
                             heroTotals(dashboard)
                                 .strideEntrance(progressAppeared)
+                            // Where you ran comes right after how much: the heatmap is the
+                            // page's picture, not a footnote under every chart.
+                            RouteHeatmapCard(periodDays: period.days, runType: runType)
+                                .strideEntrance(progressAppeared, delay: AppAnimation.stagger)
                             // The chart and the runs it drills into sit together, so a
                             // tapped bar's runs are right under it.
                             StrideColumns(spacing: 16) {
@@ -158,8 +162,6 @@ struct ProgressDashboardView: View {
                                     .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 6)
                             }
                             periodSummaryCard
-                                .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 6)
-                            RouteHeatmapCard(periodDays: period.days, runType: runType)
                                 .strideEntrance(progressAppeared, delay: AppAnimation.stagger * 6)
                         }
                         .padding()

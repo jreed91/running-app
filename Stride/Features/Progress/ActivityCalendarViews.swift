@@ -267,7 +267,7 @@ struct RouteHeatmapCard: View {
     @State private var preview: UIImage?
     @State private var showsFullScreen = false
 
-    private static let previewSize = CGSize(width: 360, height: 240)
+    private static let previewSize = CGSize(width: 360, height: 300)
 
     init(periodDays: Int?, runType: ProgressFilter.RunType) {
         self.periodDays = periodDays
@@ -312,7 +312,7 @@ struct RouteHeatmapCard: View {
                                     ProgressView().tint(Color.onInk)
                                 }
                             }
-                            .frame(height: 240)
+                            .frame(height: 300)
                             .frame(maxWidth: .infinity)
                             .clipShape(RoundedRectangle(cornerRadius: AppRadius.lg))
                         }

@@ -194,6 +194,9 @@ final class HeatDots: Sendable {
         let x: Double
         let y: Double
         let level: Int
+        /// Its square on the heatmap grid, to find the squares next to it.
+        let cellX: Int32
+        let cellY: Int32
     }
 
     /// RGBA per level, index 0 unused.
@@ -205,6 +208,8 @@ final class HeatDots: Sendable {
     static let bucketSide = MKMapSize.world.width / 16_384
 
     let buckets: [Int64: [Dot]]
+    /// Every dot by its grid square, for drawing streets as lines up close.
+    let byCell: [Int64: Dot]
     let count: Int
     /// Half the side of a cell's square, in map points, at the cells' latitude.
     let halfSide: Double
@@ -250,18 +255,23 @@ final class HeatDots: Sendable {
     ///   hottest last.
     init(cells: [(center: RouteHeatmap.Point, level: Int)], colors: [RGBA]) {
         var buckets: [Int64: [Dot]] = [:]
+        var byCell: [Int64: Dot] = [:]
         var focusRect: MKMapRect?
         var anyRect: MKMapRect?
         var latitudeSum = 0.0
         for cell in cells {
             let point = MKMapPoint(CLLocationCoordinate2D(latitude: cell.center.latitude, longitude: cell.center.longitude))
-            buckets[Self.key(x: point.x, y: point.y), default: []].append(Dot(x: point.x, y: point.y, level: cell.level))
+            let square = RouteHeatmap.cell(of: cell.center)
+            let dot = Dot(x: point.x, y: point.y, level: cell.level, cellX: square.x, cellY: square.y)
+            buckets[Self.key(x: point.x, y: point.y), default: []].append(dot)
+            byCell[Self.cellKey(square.x, square.y)] = dot
             let spot = MKMapRect(origin: point, size: MKMapSize(width: 0, height: 0))
             anyRect = anyRect.map { $0.union(spot) } ?? spot
             if cell.level >= 2 { focusRect = focusRect.map { $0.union(spot) } ?? spot }
             latitudeSum += cell.center.latitude
         }
         self.buckets = buckets
+        self.byCell = byCell
         count = cells.count
         let latitude = cells.isEmpty ? 0 : latitudeSum / Double(cells.count)
         let half = RouteHeatmap.cellMeters * MKMapPointsPerMeterAtLatitude(latitude) * 0.6
@@ -275,6 +285,65 @@ final class HeatDots: Sendable {
 
     static func key(x: Double, y: Double) -> Int64 {
         (Int64(x / bucketSide) << 32) | Int64(y / bucketSide)
+    }
+
+    static func cellKey(_ x: Int32, _ y: Int32) -> Int64 {
+        (Int64(x) << 32) | Int64(UInt32(bitPattern: y))
+    }
+
+    /// The distance between neighbouring squares' centres, in map points.
+    var cellSide: Double { halfSide / 0.6 }
+
+    /// Up close, the squares as streets: a line from each square towards each square next
+    /// to it, in the square's own heat colour, so a street reads as a street instead of a
+    /// row of blocks. A diagonal step is drawn only where no straight step joins the two,
+    /// so a corner doesn't become a triangle. A square with no neighbour is a round dot.
+    func stroke(in context: CGContext, rect: MKMapRect, width: Double, place: (Dot) -> CGPoint) {
+        let byLevel = dots(in: rect.insetBy(dx: -cellSide * 2, dy: -cellSide * 2))
+        context.setLineCap(.round)
+        context.setLineJoin(.round)
+        context.setLineWidth(width)
+        for level in 1...RouteHeatmap.levels where !byLevel[level].isEmpty {
+            let color = colors[level]
+            let cgColor = CGColor(red: color.red, green: color.green, blue: color.blue, alpha: color.alpha)
+            context.setStrokeColor(cgColor)
+            context.setFillColor(cgColor)
+            let lines = CGMutablePath()
+            let ends = CGMutablePath()
+            for dot in byLevel[level] {
+                let start = place(dot)
+                var joined = false
+                for (dx, dy) in Self.steps {
+                    guard let other = neighbour(of: dot, dx: dx, dy: dy) else { continue }
+                    if dx != 0, dy != 0,
+                       neighbour(of: dot, dx: dx, dy: 0) != nil || neighbour(of: dot, dx: 0, dy: dy) != nil {
+                        continue
+                    }
+                    // Halfway: the neighbour draws the other half in its own colour.
+                    let end = place(other)
+                    lines.move(to: start)
+                    lines.addLine(to: CGPoint(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2))
+                    joined = true
+                }
+                // Only lone squares get a dot: a dot over a line would show darker.
+                if !joined {
+                    let half = width / 2
+                    ends.addEllipse(in: CGRect(x: start.x - half, y: start.y - half, width: width, height: width))
+                }
+            }
+            context.addPath(lines)
+            context.strokePath()
+            context.addPath(ends)
+            context.fillPath()
+        }
+    }
+
+    private static let steps: [(Int32, Int32)] = [
+        (1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)
+    ]
+
+    private func neighbour(of dot: Dot, dx: Int32, dy: Int32) -> Dot? {
+        byCell[Self.cellKey(dot.cellX &+ dx, dot.cellY &+ dy)]
     }
 
     /// The cells inside `rect`, by level.
@@ -344,6 +413,8 @@ final class HeatCellOverlay: NSObject, MKOverlay {
 /// threads, several at once; it reads only the immutable ``HeatDots``.
 final class HeatCellRenderer: MKOverlayRenderer {
     private let heat: HeatDots
+    /// How big a square must be on screen, in points, before streets are drawn as lines.
+    static let linesFromPoints = 10.0
 
     init(heat overlay: HeatCellOverlay) {
         heat = overlay.dots
@@ -354,9 +425,16 @@ final class HeatCellRenderer: MKOverlayRenderer {
         // A cell is never drawn smaller than 2.5 screen points across.
         let minimumSide = 2.5 / zoomScale
         // The context is in map points relative to the renderer; `point(for:)` places them.
-        heat.fill(in: context, rect: mapRect, minimumSide: minimumSide, place: { dot in
-            self.point(for: MKMapPoint(x: dot.x, y: dot.y))
-        }, scale: 1)
+        let place = { (dot: HeatDots.Dot) in self.point(for: MKMapPoint(x: dot.x, y: dot.y)) }
+        // Zoomed in to street level a 20 m square is a big block: draw lines along the
+        // streets instead, about as wide as a street on the map.
+        let cellOnScreen = heat.cellSide * zoomScale
+        if cellOnScreen >= Self.linesFromPoints {
+            let width = min(max(cellOnScreen * 0.45, 4), 9) / zoomScale
+            heat.stroke(in: context, rect: mapRect, width: width, place: place)
+        } else {
+            heat.fill(in: context, rect: mapRect, minimumSide: minimumSide, place: place, scale: 1)
+        }
     }
 }
 
