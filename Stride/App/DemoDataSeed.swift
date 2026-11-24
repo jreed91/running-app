@@ -284,26 +284,41 @@ enum DemoDataSeed {
         let block = (lat: 160.0 / 111_000, lon: 160.0 / 83_000)
         let blocks = max(Int((distanceMeters / 160).rounded()), 4)
 
-        // (east, north) unit steps of one block, walked in order and back home.
+        // (east, north) unit steps of one block, walked in order and back home. Four
+        // named loops a runner would actually keep, picked by distance, so most runs
+        // share streets; every fifth run is an out-and-back along the same avenue.
+        let loops: [[(dx: Int, dy: Int, count: Int)]] = [
+            [(0, 1, 4), (1, 0, 3), (0, -1, 2), (1, 0, 2), (0, -1, 2), (-1, 0, 5)],
+            [(0, 1, 4), (1, 0, 6), (0, -1, 1), (-1, 0, 2), (0, -1, 3), (-1, 0, 4)],
+            [(0, 1, 4), (-1, 0, 8), (0, -1, 10), (1, 0, 3), (0, 1, 3), (1, 0, 5), (0, 1, 3)],
+            [(0, 1, 12), (1, 0, 10), (0, -1, 4), (1, 0, 6), (0, -1, 14), (-1, 0, 8), (0, 1, 6), (-1, 0, 8)],
+        ]
+        func scaled(_ loop: [(dx: Int, dy: Int, count: Int)], _ factor: Int) -> [(dx: Int, dy: Int, count: Int)] {
+            loop.map { (dx: $0.dx, dy: $0.dy, count: $0.count * factor) }
+        }
+        // The loops at the sizes this runner uses them: about 6, 6, 10 and 11 km.
+        let options = [scaled(loops[0], 2), loops[2], scaled(loops[1], 3), loops[3]]
         var legs: [(dx: Int, dy: Int, count: Int)]
-        switch seed % 5 {
-        case 0, 1, 2, 3:
-            // A loop in one of four directions from home, each its own shape.
-            let shapes: [(east: Double, signX: Int, signY: Int)] = [
-                (0.5, 1, 1), (0.66, -1, 1), (0.4, 1, -1), (0.55, -1, -1)
-            ]
-            let shape = shapes[seed % 5]
-            let half = blocks / 2
-            let across = max(Int((Double(half) * shape.east).rounded()), 1)
-            let up = max(half - across, 1)
-            legs = [
-                (0, shape.signY, up), (shape.signX, 0, across),
-                (0, -shape.signY, up), (-shape.signX, 0, across)
-            ]
-        default:
-            // Out along one street and back.
+        if seed % 5 == 4 {
             let out = max(blocks / 2, 2)
             legs = [(1, 0, out), (-1, 0, out)]
+        } else {
+            let length = { (route: [(dx: Int, dy: Int, count: Int)]) in route.reduce(0) { $0 + $1.count } }
+            let nearest = options.enumerated().min { lhs, rhs in
+                let left = abs(length(lhs.element) - blocks) * 2 + (lhs.offset + seed) % 2
+                let right = abs(length(rhs.element) - blocks) * 2 + (rhs.offset + seed) % 2
+                return left < right
+            }
+            legs = nearest?.element ?? options[0]
+            // A long run is the longest loop plus the favourite avenue out and back.
+            let extra = (blocks - length(legs)) / 2
+            if extra > 2 {
+                legs += [(1, 0, extra), (-1, 0, extra)]
+            }
+            // Some days the same loop the other way round.
+            if seed % 3 == 0 {
+                legs = legs.reversed().map { (dx: -$0.dx, dy: -$0.dy, count: $0.count) }
+            }
         }
 
         var lat = home.lat
