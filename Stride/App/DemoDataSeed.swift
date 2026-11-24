@@ -175,6 +175,13 @@ enum DemoDataSeed {
             // or an imported one whose HealthKit route came across.
             if (weeksAgo + index) % 4 != 1 {
                 run.routeCoordinates = route(distanceMeters: distance, seed: weeksAgo * 4 + index)
+                // The GPS distance trace a recorded run keeps, so Run analysis and best
+                // efforts have something to read on the demo history too.
+                run.distanceSeries = distanceSeries(
+                    distanceMeters: distance,
+                    durationSeconds: duration,
+                    seed: weeksAgo * 4 + index
+                )
             }
         }
 
@@ -191,6 +198,41 @@ enum DemoDataSeed {
         }
 
         return run
+    }
+
+    /// A reading every 10 s, shaped like a real run: pace drifting with fatigue and a few
+    /// surges, slower up the two hills and quicker down them, then scaled so it ends on
+    /// the run's distance. Deterministic per `seed`.
+    private static func distanceSeries(
+        distanceMeters: Double,
+        durationSeconds: Double,
+        seed: Int
+    ) -> [SplitBucketing.DistancePoint] {
+        guard durationSeconds > 0 else { return [] }
+        let phase = Double(seed % 7)
+        func altitude(_ progress: Double) -> Double {
+            240 + 14 * sin(2 * .pi * 2 * progress + phase) + 4 * sin(2 * .pi * 5 * progress + phase * 2)
+        }
+        let times = Array(stride(from: 0.0, through: durationSeconds, by: 10))
+        var cumulative: [Double] = [0]
+        for (previous, elapsed) in zip(times, times.dropFirst()) {
+            let progress = elapsed / durationSeconds
+            let climbing = (altitude(progress) - altitude(previous / durationSeconds)) / 10
+            let effort = 1
+                + 0.025 * sin(2 * .pi * 1.3 * progress + phase)
+                + 0.012 * sin(2 * .pi * 7.1 * progress + phase * 3)
+                + 0.006 * sin(2 * .pi * 23.0 * progress + phase * 5)
+                - 0.6 * climbing
+            cumulative.append(cumulative[cumulative.count - 1] + max(effort, 0.5) * (elapsed - previous))
+        }
+        let scale = distanceMeters / max(cumulative[cumulative.count - 1], 1)
+        return zip(times, cumulative).map { elapsed, raw in
+            SplitBucketing.DistancePoint(
+                elapsedSeconds: elapsed,
+                cumulativeMeters: raw * scale,
+                altitudeMeters: altitude(elapsed / durationSeconds)
+            )
+        }
     }
 
     /// A plausible bpm trace: a warm-up ramp onto the run's average, then drift upward
