@@ -13,6 +13,7 @@ struct RouteHeatmapScreen: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @Environment(AppSettings.self) private var appSettings
+    @Environment(AppContainer.self) private var container
     @Query private var workouts: [RunWorkout]
 
     @State private var period: HeatmapPeriod
@@ -111,7 +112,8 @@ struct RouteHeatmapScreen: View {
                 all: RouteHeatmapLoader.keys(from: workouts),
                 shown: shownKeys(),
                 stat: stat,
-                context: context
+                context: context,
+                healthKit: container.healthKitRepository
             )
             colourLayer()
         }

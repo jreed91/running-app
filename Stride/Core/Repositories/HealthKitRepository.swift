@@ -1061,7 +1061,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
                 var didResume = false
                 let routeQuery = HKWorkoutRouteQuery(route: route) { _, locations, done, error in
                     if let locations {
-                        collected += locations.map { Coordinate($0.coordinate) }
+                        collected += locations.map { Coordinate($0) }
                     }
                     // Resume exactly once — on completion or on error. Ignoring
                     // the error and resuming only on `done` let a failed callback

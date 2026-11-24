@@ -16,10 +16,29 @@ actor RouteStatsCache {
     struct Input: Sendable, Equatable {
         let id: UUID
         let date: Date
-        let route: Data
+        /// The stored route; may be swapped for Health's copy, which has altitudes.
+        var route: Data
         let series: Data
         let heartRate: Data
         let durationSeconds: Double
+        var healthKitID: String? = nil
+
+        /// Whether Hills has nothing to go on: neither the distance series nor the route
+        /// has an altitude. True of runs imported from Health before routes kept the
+        /// altitude, whose Health route still has it. Looks for the JSON keys rather than
+        /// decoding, since it's asked of every run read.
+        var lacksAltitude: Bool {
+            !route.isEmpty
+                && route.range(of: Data(#""altitude""#.utf8)) == nil
+                && series.range(of: Data(#""a""#.utf8)) == nil
+        }
+    }
+
+    /// A route point as stored: a ``Coordinate``, altitude and all.
+    private struct StoredPoint: Decodable {
+        let latitude: Double
+        let longitude: Double
+        let altitude: Double?
     }
 
     private struct Entry: Codable {
@@ -57,7 +76,8 @@ actor RouteStatsCache {
 
     static func stats(of input: Input) -> RouteHeatmap.RunStats? {
         guard !input.route.isEmpty,
-              let route = try? JSONDecoder().decode([RouteHeatmap.Point].self, from: input.route) else { return nil }
+              let stored = try? JSONDecoder().decode([StoredPoint].self, from: input.route) else { return nil }
+        let route = stored.map { RouteHeatmap.Point(latitude: $0.latitude, longitude: $0.longitude) }
         let series = input.series.isEmpty
             ? []
             : (try? JSONDecoder().decode([SplitBucketing.DistancePoint].self, from: input.series)) ?? []
@@ -68,7 +88,8 @@ actor RouteStatsCache {
             route: route,
             series: series,
             heartRate: heartRate,
-            durationSeconds: input.durationSeconds
+            durationSeconds: input.durationSeconds,
+            altitudes: stored.map(\.altitude)
         )
         return stats.isEmpty ? nil : stats
     }
@@ -102,9 +123,10 @@ actor RouteStatsCache {
 
     /// In Caches: the stats can always be worked out again.
     /// v2: traces no longer fill gaps over ``RouteHeatmap/fillMeters`` with a straight line.
+    /// v3: hills from the route's own altitudes, for runs whose series has none.
     static var defaultStoreURL: URL? {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
-            .appendingPathComponent("route-stats-v2.plist")
+            .appendingPathComponent("route-stats-v3.plist")
     }
 
     private func loadIfNeeded() {

@@ -117,4 +117,88 @@ struct RouteHeatmapStatsTests {
         #expect(await !reloaded.statMap(for: [key], stat: .pace).isEmpty)
         #expect(await reloaded.statMap(for: [key], stat: .heartRate).isEmpty)
     }
+    /// The same series without altitudes, as a run imported from Health has.
+    func flatSeries(meters: Double) -> [SplitBucketing.DistancePoint] {
+        series(meters: meters).map { .init(elapsedSeconds: $0.elapsedSeconds, cumulativeMeters: $0.cumulativeMeters) }
+    }
+
+    /// Flat for the first half, climbing 5% in the second, one altitude per route point.
+    func climb(_ route: [RouteHeatmap.Point], meters: Double) -> [Double?] {
+        route.indices.map { i in
+            let d = Double(i) * 5
+            return d <= meters / 2 ? 10 : 10 + (d - meters / 2) * 0.05
+        }
+    }
+
+    @Test func hillsComeFromTheRouteWhenTheSeriesHasNoAltitude() {
+        let path = route(meters: 2000)
+        let noAltitude = RouteHeatmap.stats(route: path, series: flatSeries(meters: 2000), heartRate: [], durationSeconds: 0)
+        #expect(noAltitude.grade.allSatisfy { $0 < 0 })
+
+        let stats = RouteHeatmap.stats(
+            route: path, series: flatSeries(meters: 2000), heartRate: [], durationSeconds: 0,
+            altitudes: climb(path, meters: 2000)
+        )
+        #expect(Double(stats.grade[2]) < 0.5)
+        #expect(abs(Double(stats.grade[stats.grade.count - 3]) - 5) < 0.5)
+        // Pace still comes from the series.
+        #expect(abs(Double(stats.pace[2]) - 300) < 5)
+    }
+
+    @Test func hillsWorkWithNoSeriesAtAll() {
+        let path = route(meters: 2000)
+        let stats = RouteHeatmap.stats(route: path, series: [], heartRate: [], durationSeconds: 0, altitudes: climb(path, meters: 2000))
+        #expect(!stats.isEmpty)
+        #expect(abs(Double(stats.grade[stats.grade.count - 3]) - 5) < 0.5)
+        #expect(stats.pace.allSatisfy { $0 < 0 })
+    }
+
+    @Test func theSeriesAltitudesWinOverTheRoutes() {
+        let path = route(meters: 2000)
+        let steep: [Double?] = path.indices.map { Double($0) * 5 * 0.2 }
+        let stats = RouteHeatmap.stats(route: path, series: series(meters: 2000), heartRate: [], durationSeconds: 0, altitudes: steep)
+        #expect(Double(stats.grade[2]) < 0.5)
+    }
+
+    @Test func fixesWithoutAltitudeAreSkipped() {
+        let path = route(meters: 2000)
+        var altitudes = climb(path, meters: 2000)
+        for i in stride(from: 0, to: altitudes.count, by: 3) { altitudes[i] = nil }
+        let stats = RouteHeatmap.stats(route: path, series: [], heartRate: [], durationSeconds: 0, altitudes: altitudes)
+        #expect(abs(Double(stats.grade[stats.grade.count - 3]) - 5) < 0.5)
+        // Fewer altitudes than fixes means they can't be matched up: no hills.
+        let mismatched = RouteHeatmap.stats(route: path, series: [], heartRate: [], durationSeconds: 0, altitudes: [1, 2, 3])
+        #expect(mismatched.isEmpty)
+    }
+
+    /// A route stored the way `Coordinate` stores it, with altitudes.
+    struct StoredFix: Encodable {
+        let latitude: Double
+        let longitude: Double
+        let altitude: Double?
+    }
+
+    @Test func theCacheReadsAltitudesFromAStoredRoute() throws {
+        let path = route(meters: 2000)
+        let fixes = zip(path, climb(path, meters: 2000)).map { StoredFix(latitude: $0.latitude, longitude: $0.longitude, altitude: $1) }
+        let withAltitude = RouteStatsCache.Input(
+            id: UUID(), date: Date(), route: try JSONEncoder().encode(fixes),
+            series: try JSONEncoder().encode(flatSeries(meters: 2000)), heartRate: Data(), durationSeconds: 600
+        )
+        #expect(!withAltitude.lacksAltitude)
+        let stats = try #require(RouteStatsCache.stats(of: withAltitude))
+        #expect(abs(Double(stats.grade[stats.grade.count - 3]) - 5) < 0.5)
+
+        let bare = RouteStatsCache.Input(
+            id: UUID(), date: Date(), route: try JSONEncoder().encode(path),
+            series: try JSONEncoder().encode(flatSeries(meters: 2000)), heartRate: Data(), durationSeconds: 600,
+            healthKitID: "hk"
+        )
+        #expect(bare.lacksAltitude)
+        let withSeriesAltitude = RouteStatsCache.Input(
+            id: UUID(), date: Date(), route: try JSONEncoder().encode(path),
+            series: try JSONEncoder().encode(series(meters: 2000)), heartRate: Data(), durationSeconds: 600
+        )
+        #expect(!withSeriesAltitude.lacksAltitude)
+    }
 }
