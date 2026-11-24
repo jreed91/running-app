@@ -31,6 +31,8 @@ struct RouteHeatmapScreen: View {
     /// What the streets are coloured by, and that layer's map once worked out.
     @State private var layer: HeatmapLayer = .runs
     @State private var statMap: RouteHeatmap.StatMap?
+    /// The heatmap's own lines coloured by the stat layer, worked out once per change.
+    @State private var layerHeat: RouteHeatmap.Heatmap?
     @State private var isLoadingLayer = false
 
     init(period: HeatmapPeriod, runType: ProgressFilter.RunType) {
@@ -51,9 +53,9 @@ struct RouteHeatmapScreen: View {
             if let heatmap {
                 // A stat layer replaces the heat once it is worked out; until then the
                 // heat stays, so the map never goes blank.
-                let layerMap = layer == .runs ? nil : statMap
+                let layerMap = layer == .runs ? nil : layerHeat
                 RouteHeatmapMap(
-                    heatmap: layerMap?.heatmap ?? heatmap,
+                    heatmap: layerMap ?? heatmap,
                     style: style,
                     recenter: recenter,
                     selection: spot,
@@ -100,6 +102,7 @@ struct RouteHeatmapScreen: View {
         .task(id: LayerKey(layer: layer, period: period, type: runType, count: workouts.count)) {
             guard let stat = layer.stat else {
                 statMap = nil
+                layerHeat = nil
                 return
             }
             isLoadingLayer = true
@@ -110,7 +113,10 @@ struct RouteHeatmapScreen: View {
                 stat: stat,
                 context: context
             )
+            colourLayer()
         }
+        // The run heatmap may arrive after the stat; colour its lines once it does.
+        .onChange(of: heatmap) { colourLayer() }
     }
 
     // MARK: Share
@@ -467,6 +473,15 @@ struct RouteHeatmapScreen: View {
     }
 
     // MARK: Stat layers
+
+    /// The stat drawn along the heatmap's own lines, so it follows the same streets.
+    private func colourLayer() {
+        guard let statMap, let heatmap, !heatmap.isEmpty else {
+            layerHeat = statMap?.heatmap
+            return
+        }
+        layerHeat = statMap.colouring(heatmap)
+    }
 
     @ViewBuilder
     private var layerSummary: some View {

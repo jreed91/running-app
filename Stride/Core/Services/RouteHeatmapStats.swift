@@ -77,7 +77,10 @@ extension RouteHeatmap {
     static let statStepMeters = 10.0
     /// Pace and steepness are measured over this much road either side of a spot, so GPS
     /// noise on one fix doesn't make a sprint or a cliff.
-    static let statWindowMeters = 50.0
+    static let statWindowMeters = 100.0
+    /// Heart rate is averaged over this many seconds either side of a spot: a beat-to-beat
+    /// reading jumps around more than the effort does.
+    static let heartRateWindowSeconds = 15.0
     /// Paces outside this are standing still or a GPS jump, like ``TrendSeries``.
     static let plausiblePace = 150.0...1200.0
     static let plausibleHeartRate = 70.0...230.0
@@ -115,10 +118,18 @@ extension RouteHeatmap {
                 values[Stat.pace.rawValue] = timeline.pace(at: along)
                 values[Stat.grade.rawValue] = timeline.grade(at: along)
                 if hasHeartRate {
-                    values[Stat.heartRate.rawValue] = sample(heartRate, at: timeline.time(at: along) / durationSeconds)
+                    values[Stat.heartRate.rawValue] = sample(
+                        heartRate,
+                        at: timeline.time(at: along) / durationSeconds,
+                        within: heartRateWindowSeconds / durationSeconds
+                    )
                 }
             } else if hasHeartRate {
-                values[Stat.heartRate.rawValue] = sample(heartRate, at: share)
+                values[Stat.heartRate.rawValue] = sample(
+                    heartRate,
+                    at: share,
+                    within: heartRateWindowSeconds / max(durationSeconds, 1)
+                )
             }
             guard values.contains(where: { $0 != nil }) else { continue }
             let cell = cell(of: spot.point)
@@ -178,12 +189,16 @@ extension RouteHeatmap {
         return spots
     }
 
-    /// The sample `share` of the way through, or `nil` if it isn't a believable heart rate.
-    private static func sample(_ samples: [Double], at share: Double) -> Double? {
-        guard !samples.isEmpty, share.isFinite else { return nil }
-        let i = min(samples.count - 1, max(0, Int(share * Double(samples.count))))
-        let value = samples[i]
-        return plausibleHeartRate.contains(value) ? value : nil
+    /// The believable samples from `share - within` to `share + within` of the way through,
+    /// averaged; `nil` if there are none.
+    private static func sample(_ samples: [Double], at share: Double, within: Double) -> Double? {
+        guard !samples.isEmpty, share.isFinite, within.isFinite else { return nil }
+        let count = Double(samples.count)
+        let first = min(samples.count - 1, max(0, Int((share - within) * count)))
+        let last = min(samples.count - 1, max(first, Int((share + within) * count)))
+        let believable = samples[first...last].filter { plausibleHeartRate.contains($0) }
+        guard !believable.isEmpty else { return nil }
+        return believable.reduce(0, +) / Double(believable.count)
     }
 
     /// A run's distance series, asked for time, pace and altitude at a distance.
@@ -263,7 +278,8 @@ extension RouteHeatmap {
 
     // MARK: The stat map
 
-    /// A stat across many runs: each cell's average, coloured from cool to hot.
+    /// A stat across many runs: each cell's average, smoothed along the street, coloured
+    /// from cool to hot.
     struct StatMap: Equatable, Sendable {
         /// The cells, drawn like the heatmap's. `runs` is how many runs had a reading there.
         var heatmap: Heatmap
@@ -272,16 +288,46 @@ extension RouteHeatmap {
         /// percentile of the cells, so one odd cell doesn't stretch the scale.
         var low: Double
         var high: Double
+        /// Each cell's colour level, to colour the heatmap's own lines with.
+        var levels: [Cell: Int] = [:]
 
         static func == (lhs: StatMap, rhs: StatMap) -> Bool { lhs.heatmap == rhs.heatmap }
 
         var isEmpty: Bool { heatmap.isEmpty }
+
+        /// The run heatmap's own squares and lines, each coloured by this stat, so the stat
+        /// follows the same streets, positions and joins as the heatmap. Squares with no
+        /// reading are left out, with their lines.
+        func colouring(_ base: Heatmap) -> Heatmap {
+            var kept = Set<Cell>()
+            var cells: [HeatCell] = []
+            for heat in base.cells {
+                guard let cell = heat.cell, let level = levels[cell] else { continue }
+                kept.insert(cell)
+                cells.append(HeatCell(center: heat.center, runs: heat.runs, level: level, cell: cell))
+            }
+            // Coolest first, so the hottest draw on top; ties in a fixed order.
+            cells.sort { first, second in
+                guard first.level == second.level else { return first.level < second.level }
+                return (first.center.latitude, first.center.longitude) < (second.center.latitude, second.center.longitude)
+            }
+            return Heatmap(
+                cells: cells,
+                runCount: heatmap.runCount,
+                maxRuns: heatmap.maxRuns,
+                uniqueMeters: base.uniqueMeters,
+                edges: base.edges.filter { kept.contains($0.a) && kept.contains($0.b) }
+            )
+        }
     }
 
-    /// Each cell's stat averaged over the runs that had a reading there, each run once.
-    /// The levels split the cells into five equal groups, so the colours spread over the
-    /// whole map whatever the numbers are; a pace map in summer and in winter both use
-    /// every colour.
+    /// How many cells either way a cell's value is blended with, so one slow crossing or
+    /// one spike doesn't make a block of its own colour: about 40 m.
+    static let statSmoothingCells: Int32 = 2
+
+    /// Each cell's stat averaged over the runs that had a reading there, each run once,
+    /// then blended with the cells around it. Colours run evenly from the 5th to the 95th
+    /// percentile, so a small difference stays a small difference in colour.
     static func statMap(_ runs: [RunStats], stat: Stat) -> StatMap {
         var sums: [Cell: (value: Double, runs: Int)] = [:]
         var runCount = 0
@@ -300,25 +346,43 @@ extension RouteHeatmap {
         guard !sums.isEmpty else {
             return StatMap(heatmap: .empty, stat: stat, low: 0, high: 0)
         }
-        let averages = sums.map { (cell: $0.key, value: $0.value.value / Double($0.value.runs), runs: $0.value.runs) }
-        // Coolest first.
-        let sorted = averages.sorted { first, second in
-            if first.value != second.value {
-                return stat.higherIsHotter ? first.value < second.value : first.value > second.value
+        let reach = statSmoothingCells
+        var smoothed: [Cell: Double] = [:]
+        for cell in sums.keys {
+            var total = 0.0
+            var weight = 0.0
+            for dy in -reach...reach {
+                for dx in -reach...reach {
+                    guard let near = sums[Cell(x: cell.x &+ dx, y: cell.y &+ dy)] else { continue }
+                    let w = Double(near.runs) / Double(1 + dx * dx + dy * dy)
+                    total += near.value / Double(near.runs) * w
+                    weight += w
+                }
             }
-            return first.cell < second.cell
+            smoothed[cell] = total / weight
         }
-        let values = sorted.map(\.value)
+        let values = smoothed.values.sorted()
         func percentile(_ share: Double) -> Double {
             values[min(values.count - 1, Int(share * Double(values.count - 1)))]
         }
-        let cells = sorted.enumerated().map { position, entry in
-            HeatCell(
-                center: center(of: entry.cell),
-                runs: entry.runs,
-                level: min(levels, 1 + position * levels / sorted.count),
-                cell: entry.cell
-            )
+        let bottom = percentile(0.05)
+        let top = percentile(0.95)
+        func level(_ value: Double) -> Int {
+            guard top > bottom else { return 3 }
+            var share = (value - bottom) / (top - bottom)
+            if !stat.higherIsHotter { share = 1 - share }
+            return min(levels, max(1, 1 + Int((min(max(share, 0), 1) * Double(levels)).rounded(.down))))
+        }
+        var cellLevels: [Cell: Int] = [:]
+        var cells: [HeatCell] = []
+        for (cell, value) in smoothed {
+            let cellLevel = level(value)
+            cellLevels[cell] = cellLevel
+            cells.append(HeatCell(center: center(of: cell), runs: sums[cell]?.runs ?? 0, level: cellLevel, cell: cell))
+        }
+        cells.sort { first, second in
+            guard first.level == second.level else { return first.level < second.level }
+            return first.cell.map { cell in second.cell.map { cell < $0 } ?? true } ?? false
         }
         return StatMap(
             heatmap: Heatmap(
@@ -328,8 +392,9 @@ extension RouteHeatmap {
                 uniqueMeters: 0
             ),
             stat: stat,
-            low: percentile(0.05),
-            high: percentile(0.95)
+            low: stat.higherIsHotter ? bottom : top,
+            high: stat.higherIsHotter ? top : bottom,
+            levels: cellLevels
         )
     }
 

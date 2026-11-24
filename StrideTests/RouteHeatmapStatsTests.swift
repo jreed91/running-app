@@ -65,11 +65,37 @@ struct RouteHeatmapStatsTests {
         #expect(map.heatmap.runCount == 2)
         #expect(map.heatmap.maxRuns == 2)
         let levels = Set(map.heatmap.cells.map(\.level))
-        #expect(levels == Set(1...5))
+        #expect(levels.contains(1) && levels.contains(5))
         // Pace: faster is hotter, so the hottest cell is the fast half.
         #expect(map.low > map.high)
         let hottest = map.heatmap.cells.last!
         #expect(hottest.center.latitude > 51.5 + 500 / 111_320.0)
+    }
+
+    @Test func oneSlowSpotIsSmoothedIntoItsStreet() {
+        // Steady 5:00/km with a single 20 m stretch at a standstill pace of 15:00/km.
+        var points: [SplitBucketing.DistancePoint] = []
+        var time = 0.0
+        for d in stride(from: 0.0, through: 1000, by: 10) {
+            points.append(.init(elapsedSeconds: time, cumulativeMeters: d))
+            time += (500...510).contains(d) ? 9 : 3
+        }
+        let run = RouteHeatmap.stats(route: route(meters: 1000), series: points, heartRate: [], durationSeconds: 0)
+        let raw = run.pace.filter { $0 >= 0 }.max() ?? 0
+        let map = RouteHeatmap.statMap([run], stat: .pace)
+        // The legend's slow end is pulled well under the raw spike.
+        #expect(map.low < Double(raw))
+    }
+
+    @Test func theStatFollowsTheHeatmapsOwnLines() {
+        let path = route(meters: 500)
+        let stats = RouteHeatmap.stats(route: path, series: series(meters: 500), heartRate: [], durationSeconds: 0)
+        let base = RouteHeatmap.build([RouteHeatmap.trace(path)])
+        let coloured = RouteHeatmap.statMap([stats], stat: .pace).colouring(base)
+        #expect(!coloured.cells.isEmpty)
+        #expect(coloured.edges.count > 0)
+        let baseCenters = Set(base.cells.map { "\($0.center.latitude),\($0.center.longitude)" })
+        #expect(coloured.cells.allSatisfy { baseCenters.contains("\($0.center.latitude),\($0.center.longitude)") })
     }
 
     @Test func emptyRunsMakeAnEmptyMap() {
