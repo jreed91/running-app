@@ -19,9 +19,10 @@ enum RouteHeatmap {
     /// cell, loose enough that GPS wander on one street stays in one.
     static let cellMeters = 20.0
 
-    /// A jump between two route points longer than this is a GPS gap or a paused run,
-    /// not a street, so the line breaks there instead of cutting across the map.
-    static let gapMeters = 250.0
+    /// The longest gap between two fixes filled with a straight line. A watch or phone
+    /// records a fix every few metres; a longer gap means a lost signal or a sparse
+    /// recording, and a straight line across it cut corners through gardens.
+    static let fillMeters = 50.0
 
     /// How many heat colours the map uses, coolest first.
     static let levels = 5
@@ -222,6 +223,8 @@ enum RouteHeatmap {
         var runs: Int
         /// 1 (run once) to ``RouteHeatmap/levels`` (run most).
         var level: Int
+        /// Its square on the grid, when it came from runs' traces.
+        var cell: Cell?
     }
 
     /// What a set of runs adds up to on the map.
@@ -240,12 +243,24 @@ enum RouteHeatmap {
         var maxRuns: Int
         /// The length of ground covered, each street counted once however often it was run.
         var uniqueMeters: Double
+        /// Every step a run took from one square to the next, so the map joins only the
+        /// squares a run went between, never two squares that just happen to be side by
+        /// side (two runs' GPS a street's width apart).
+        var edges: [Edge]
         /// Which build this is. Two maps are equal when they are the same build, so
         /// SwiftUI and the map view never compare every cell on the main actor.
         var id: UUID
 
-        init(cells: [HeatCell], runCount: Int, maxRuns: Int, uniqueMeters: Double, id: UUID = UUID()) {
+        init(
+            cells: [HeatCell],
+            runCount: Int,
+            maxRuns: Int,
+            uniqueMeters: Double,
+            edges: [Edge] = [],
+            id: UUID = UUID()
+        ) {
             self.cells = cells
+            self.edges = edges
             self.runCount = runCount
             self.maxRuns = maxRuns
             self.uniqueMeters = uniqueMeters
@@ -353,7 +368,7 @@ enum RouteHeatmap {
         }
 
         func closeSegment() {
-            if segment.count > 1 { segments.append(segment) }
+            if !segment.isEmpty { segments.append(segment) }
             segment = []
         }
 
@@ -361,7 +376,7 @@ enum RouteHeatmap {
         for point in points where isPlausible(point) {
             if let previous {
                 let meters = distance(previous, point)
-                if meters > gapMeters {
+                if meters > fillMeters {
                     closeSegment()
                 } else {
                     // A sample every half cell, so no cell along the way is skipped.
@@ -381,6 +396,11 @@ enum RouteHeatmap {
             previous = point
         }
         closeSegment()
+        // A lone fix is a glitch on a run that otherwise has lines; on a sparse recording
+        // (every fix alone) it is all there is, so it stays, if there are at least two.
+        if segments.contains(where: { $0.count > 1 }) || segments.count < 2 {
+            segments.removeAll { $0.count < 2 }
+        }
 
         // A cell only ever seen inside a dropped one-cell segment is noise.
         let used = Set(segments.joined())
@@ -442,9 +462,11 @@ enum RouteHeatmap {
         var cellRuns: [Cell: Int] = [:]
         var centerSums: [Cell: (latitude: Double, longitude: Double, count: Double)] = [:]
         var runCount = 0
+        var edges = Set<Edge>()
 
         for trace in traces where !trace.isEmpty && !trace.segments.isEmpty {
             runCount += 1
+            edges.formUnion(self.edges(of: trace))
             // `cells` holds each cell of the trace once already.
             for (cell, center) in zip(trace.cells, trace.centers) {
                 cellRuns[cell, default: 0] += 1
@@ -460,7 +482,7 @@ enum RouteHeatmap {
         let cells = cellRuns
             .compactMap { cell, runs -> HeatCell? in
                 guard let sum = centerSums[cell] else { return nil }
-                return HeatCell(center: center(sum), runs: runs, level: level(runs: runs, maxRuns: maxRuns))
+                return HeatCell(center: center(sum), runs: runs, level: level(runs: runs, maxRuns: maxRuns), cell: cell)
             }
             .sorted { first, second in
                 // Fewest runs first; ties in a fixed order so a rebuild draws the same.
@@ -471,7 +493,8 @@ enum RouteHeatmap {
             cells: cells,
             runCount: runCount,
             maxRuns: maxRuns,
-            uniqueMeters: groundMeters(traces)
+            uniqueMeters: groundMeters(traces),
+            edges: Array(edges)
         )
     }
 

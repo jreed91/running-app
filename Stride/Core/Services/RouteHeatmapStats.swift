@@ -148,7 +148,7 @@ extension RouteHeatmap {
     }
 
     /// Points every ``statStepMeters`` along the route, with how far along each is. A jump
-    /// longer than ``gapMeters`` (a pause, lost signal) isn't filled in, but its length
+    /// longer than ``fillMeters`` (a pause, lost signal) isn't filled in, but its length
     /// still counts, as it does in the distance series.
     static func walk(_ route: [Point]) -> [(point: Point, meters: Double)] {
         var spots: [(point: Point, meters: Double)] = []
@@ -157,7 +157,7 @@ extension RouteHeatmap {
         for point in route {
             if let previous {
                 let step = distance(previous, point)
-                if step <= gapMeters, step > statStepMeters {
+                if step <= fillMeters, step > statStepMeters {
                     let pieces = Int((step / statStepMeters).rounded(.up))
                     for piece in 1..<pieces {
                         let t = Double(piece) / Double(pieces)
@@ -316,7 +316,8 @@ extension RouteHeatmap {
             HeatCell(
                 center: center(of: entry.cell),
                 runs: entry.runs,
-                level: min(levels, 1 + position * levels / sorted.count)
+                level: min(levels, 1 + position * levels / sorted.count),
+                cell: entry.cell
             )
         }
         return StatMap(
