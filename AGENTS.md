@@ -902,9 +902,13 @@ When bumping `MARKETING_VERSION` to a new minor version: add the release at the 
 `ReleaseNotes.all` (`WhatsNewPolicyTests.theRunningVersionHasNotes` fails until you do), set
 the previous release's `releaseDate`, and mark features with a screenshot `hasScreenshot: true`.
 Each such feature needs a capture with the same `id` in `StrideUITests/WhatsNewScreenshotTests.swift`;
-then run the **What's New screenshots** workflow (label a PR `whats-new-screenshots`, or run it
-from the Actions tab), which writes `whatsnew-<version>-<id>` image sets into
-`Stride/Resources/WhatsNew.xcassets` and commits them. A feature with no bundled screenshot
+the **What's New screenshots** workflow writes `whatsnew-<version>-<id>` image sets into
+`Stride/Resources/WhatsNew.xcassets`. It runs by itself on any PR that changes
+`ci_scripts/Version.xcconfig` or `ReleaseNotes.swift` (committing to that PR's branch), and
+every Monday on main when `Stride/` changed that week, keeping a "Refresh What's New
+screenshots" PR (branch `whats-new/refresh`) up to date: merge that PR before submitting a
+release so the screenshots match the app. The `whats-new-screenshots` label or the Actions
+tab runs it on demand. A feature with no bundled screenshot
 shows its icon on the night map instead. That catalog is app-only; don't add it to the widget
 or Watch targets.
 
