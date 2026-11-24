@@ -362,7 +362,6 @@ struct RouteHeatmapScreen: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: AppSpacing.sm) {
                     periodMenu
-                    layerMenu
                     runTypeMenu
                     if layer == .runs { newGroundChip }
                     styleMenu
@@ -408,18 +407,16 @@ struct RouteHeatmapScreen: View {
         .buttonStyle(.strideChip(selected: true))
     }
 
-    private var layerMenu: some View {
-        Menu {
-            Picker("Colour by", selection: $layer) {
-                ForEach(HeatmapLayer.allCases) { layer in
-                    Text(layer.title).tag(layer)
-                }
+    /// What the streets are coloured by, always in view on the panel: tucked in the
+    /// top bar's scrolling chips, it was easy to miss.
+    private var layerPicker: some View {
+        Picker("Colour by", selection: $layer) {
+            ForEach(HeatmapLayer.allCases) { layer in
+                Text(layer.title).tag(layer)
             }
-        } label: {
-            Label(layer.title, systemImage: "paintpalette")
         }
-        .buttonStyle(.strideChip(selected: layer != .runs))
-        .accessibilityLabel("Colour streets by \(layer.title)")
+        .pickerStyle(.segmented)
+        .accessibilityHint("Colours the streets by how often you run them, or by your heart rate, pace or the hills there")
     }
 
     private var runTypeMenu: some View {
@@ -464,6 +461,7 @@ struct RouteHeatmapScreen: View {
     private var statsPanel: some View {
         if let heatmap {
             VStack(alignment: .leading, spacing: AppSpacing.md) {
+                if !heatmap.isEmpty { layerPicker }
                 if heatmap.isEmpty {
                     Text("No outdoor runs with a route in this period.")
                         .font(.bodyRegular)
