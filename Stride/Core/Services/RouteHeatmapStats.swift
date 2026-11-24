@@ -94,15 +94,24 @@ extension RouteHeatmap {
     /// spread evenly over the run, so heart rate still lands roughly where it was, but
     /// pace and hills are left out rather than made up. Heart-rate samples are taken as
     /// evenly spread over the run, which is how Health records them during a workout.
+    ///
+    /// Hills come from the series' altitudes when it has them. Runs imported from Health
+    /// have none in the series (distance samples carry no altitude), so their route's own
+    /// altitudes are used instead: `altitudes`, one per route point, `nil` where a fix had
+    /// none.
     static func stats(
         route: [Point],
         series: [SplitBucketing.DistancePoint],
         heartRate: [Double],
-        durationSeconds: Double
+        durationSeconds: Double,
+        altitudes: [Double?] = []
     ) -> RunStats {
         let spots = walk(route)
         guard let routeLength = spots.last?.meters, routeLength > 0 else { return .empty }
         let timeline = Timeline(series)
+        let routeProfile = (timeline?.altitudes.count ?? 0) >= 2
+            ? nil
+            : Profile(route: route, altitudes: altitudes)
         let hasHeartRate = !heartRate.isEmpty && durationSeconds > 0
 
         var index: [Cell: Int] = [:]
@@ -130,6 +139,9 @@ extension RouteHeatmap {
                     at: share,
                     within: heartRateWindowSeconds / max(durationSeconds, 1)
                 )
+            }
+            if let routeProfile {
+                values[Stat.grade.rawValue] = routeProfile.grade(at: spot.meters)
             }
             guard values.contains(where: { $0 != nil }) else { continue }
             let cell = cell(of: spot.point)
@@ -245,12 +257,8 @@ extension RouteHeatmap {
         /// How steep the road either side of `distance` is, in percent.
         func grade(at distance: Double) -> Double? {
             guard altitudes.count >= 2 else { return nil }
-            let (from, to) = window(around: distance)
-            guard to - from > 1 else { return nil }
-            let xs = altitudes.map(\.meters)
-            let ys = altitudes.map(\.altitude)
-            let rise = Self.interpolate(xs, ys, at: to) - Self.interpolate(xs, ys, at: from)
-            return min(abs(rise / (to - from) * 100), RouteHeatmap.maxGrade)
+            return Profile(meters: altitudes.map(\.meters), altitudes: altitudes.map(\.altitude), length: length)
+                .grade(at: distance)
         }
 
         private func window(around distance: Double) -> (Double, Double) {
@@ -273,6 +281,50 @@ extension RouteHeatmap {
             let x0 = xs[low - 1], x1 = xs[low]
             let t = x1 > x0 ? (x - x0) / (x1 - x0) : 0
             return ys[low - 1] + (ys[low] - ys[low - 1]) * t
+        }
+    }
+
+    /// Altitude by distance along a run, asked how steep it is at a distance.
+    struct Profile {
+        let meters: [Double]
+        let altitudes: [Double]
+        let length: Double
+
+        init(meters: [Double], altitudes: [Double], length: Double) {
+            self.meters = meters
+            self.altitudes = altitudes
+            self.length = length
+        }
+
+        /// The route's own altitudes, measured along the route the way ``walk(_:)``
+        /// measures it. `nil` with fewer than two fixes that have one.
+        init?(route: [Point], altitudes: [Double?]) {
+            guard altitudes.count == route.count else { return nil }
+            var meters: [Double] = []
+            var heights: [Double] = []
+            var along = 0.0
+            var previous: Point?
+            for (point, altitude) in zip(route, altitudes) {
+                if let previous { along += RouteHeatmap.distance(previous, point) }
+                previous = point
+                guard let altitude, altitude.isFinite else { continue }
+                if let last = meters.last, along <= last { continue }
+                meters.append(along)
+                heights.append(altitude)
+            }
+            guard meters.count >= 2 else { return nil }
+            self.init(meters: meters, altitudes: heights, length: along)
+        }
+
+        /// Percent, uphill or downhill alike, over ``statWindowMeters`` either side.
+        func grade(at distance: Double) -> Double? {
+            let half = RouteHeatmap.statWindowMeters
+            let from = max(0, distance - half)
+            let to = min(length, distance + half)
+            guard to - from > 1 else { return nil }
+            let rise = Timeline.interpolate(meters, altitudes, at: to)
+                - Timeline.interpolate(meters, altitudes, at: from)
+            return min(abs(rise / (to - from) * 100), RouteHeatmap.maxGrade)
         }
     }
 

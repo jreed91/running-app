@@ -744,7 +744,7 @@ final class WorkoutTrackerService {
             return
         }
 
-        let accepted = Coordinate(location.coordinate)
+        let accepted = Coordinate(location)
         coordinates.append(accepted)
         onAcceptedFix?(accepted)
 

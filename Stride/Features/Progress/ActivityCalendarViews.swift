@@ -204,7 +204,8 @@ actor RouteHeatmapReader {
     func statInputs(of ids: [UUID]) -> [RouteStatsCache.Input] {
         var descriptor = FetchDescriptor<RunWorkout>(predicate: #Predicate { ids.contains($0.id) })
         descriptor.propertiesToFetch = [
-            \.id, \.date, \.durationSeconds, \.routeData, \.distanceSeriesData, \.heartRateSamplesData
+            \.id, \.date, \.durationSeconds, \.routeData, \.distanceSeriesData, \.heartRateSamplesData,
+            \.healthKitWorkoutID
         ]
         let context = ModelContext(modelContainer)
         let runs = (try? context.fetch(descriptor)) ?? []
@@ -215,7 +216,8 @@ actor RouteHeatmapReader {
                 route: $0.routeData ?? Data(),
                 series: $0.distanceSeriesData ?? Data(),
                 heartRate: $0.heartRateSamplesData ?? Data(),
-                durationSeconds: $0.durationSeconds
+                durationSeconds: $0.durationSeconds,
+                healthKitID: $0.healthKitWorkoutID
             )
         }
     }
@@ -267,14 +269,23 @@ enum RouteHeatmapLoader {
         return heatmap
     }
 
+    /// Health route reads at once while filling in altitudes.
+    private static let healthRouteReads = 4
+
     /// A stat layer of the runs in `shown`, reading the blobs of runs not worked out yet
     /// a few at a time, like ``load(all:shown:context:)``.
+    ///
+    /// Runs imported from Health kept no altitude (their distance series has none, and
+    /// routes used to drop it), so Hills was empty for them. For those, the route is read
+    /// again from Health, which still has each fix's altitude, and used for the stats only:
+    /// the stored run is left as it is. Once per run, as the result is cached.
     @MainActor
     static func loadStats(
         all: [RouteHeatmapCache.Key],
         shown: [RouteHeatmapCache.Key],
         stat: RouteHeatmap.Stat,
-        context: ModelContext
+        context: ModelContext,
+        healthKit: HealthKitRepositoryProtocol? = nil
     ) async -> RouteHeatmap.StatMap {
         let cache = RouteStatsCache.shared
         let missing = await cache.missing(all)
@@ -285,11 +296,47 @@ enum RouteHeatmapLoader {
             while start < missing.count, !Task.isCancelled {
                 let batch = Array(missing[start..<min(start + batchSize, missing.count)])
                 start += batchSize
-                await cache.add(await reader.statInputs(of: batch))
+                var inputs = await reader.statInputs(of: batch)
+                if let healthKit {
+                    inputs = await withHealthAltitudes(inputs, from: healthKit)
+                }
+                guard !Task.isCancelled else { break }
+                await cache.add(inputs)
             }
         }
         await cache.keep(only: Set(all.map(\.id)))
         return await cache.statMap(for: shown, stat: stat)
+    }
+
+    /// `inputs`, with Health's route (altitudes and all) in place of a stored route that
+    /// has none. A run Health returns no route with altitudes for is left as it was.
+    private static func withHealthAltitudes(
+        _ inputs: [RouteStatsCache.Input],
+        from healthKit: HealthKitRepositoryProtocol
+    ) async -> [RouteStatsCache.Input] {
+        let wanted = inputs.indices.filter { inputs[$0].lacksAltitude && inputs[$0].healthKitID != nil }
+        guard !wanted.isEmpty else { return inputs }
+        var result = inputs
+        var next = 0
+        await withTaskGroup(of: (Int, Data?).self) { group in
+            func addRead() {
+                guard next < wanted.count, !Task.isCancelled else { return }
+                let index = wanted[next]
+                next += 1
+                guard let id = inputs[index].healthKitID else { return }
+                group.addTask {
+                    let route = await healthKit.fetchRouteCoordinates(forWorkoutID: id)
+                    guard route.filter({ $0.altitude != nil }).count >= 2 else { return (index, nil) }
+                    return (index, try? JSONEncoder().encode(route))
+                }
+            }
+            for _ in 0..<healthRouteReads { addRead() }
+            for await (index, route) in group {
+                if let route { result[index].route = route }
+                addRead()
+            }
+        }
+        return result
     }
 }
 

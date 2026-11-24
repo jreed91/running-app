@@ -7,10 +7,22 @@ import CoreLocation
 struct Coordinate: Codable, Hashable, Sendable {
     var latitude: Double
     var longitude: Double
+    /// Metres above sea level, when the fix had a valid one. Older routes, and fixes
+    /// made from a bare coordinate, have none; it is left out of the stored JSON then.
+    var altitude: Double?
 
     init(_ coordinate: CLLocationCoordinate2D) {
         latitude = coordinate.latitude
         longitude = coordinate.longitude
+    }
+
+    /// Keeps the fix's altitude too, for the heatmap's Hills layer. A negative vertical
+    /// accuracy means the altitude is not valid.
+    init(_ location: CLLocation) {
+        self.init(location.coordinate)
+        if location.verticalAccuracy >= 0, location.altitude.isFinite {
+            altitude = location.altitude
+        }
     }
 
     var clCoordinate: CLLocationCoordinate2D {
