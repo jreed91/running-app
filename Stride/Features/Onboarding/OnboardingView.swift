@@ -979,8 +979,25 @@ struct OnboardingView: View {
     /// rather than from the fitness level alone (`RecentRunningVolume`).
     private func createProfileAndPlan() {
         Task {
-            let recentVolume = await container.healthKitRepository.recentRunningVolume()
+            let recentVolume = await recentVolumeForPlan()
             createProfileAndPlan(recentVolume: recentVolume)
+        }
+    }
+
+    /// The recent running the earlier steps already read, or a fresh read that waits at
+    /// most a few seconds. Health can be slow to answer (on CI it took over a minute), and
+    /// the runner has just tapped Start training: a plan from the table beats a spinner.
+    private func recentVolumeForPlan() async -> RecentRunningVolume? {
+        if let recentVolume { return recentVolume }
+        let repository = container.healthKitRepository
+        let first = FirstResult<RecentRunningVolume?>()
+        return await withCheckedContinuation { continuation in
+            first.start(continuation)
+            Task { first.finish(await repository.recentRunningVolume()) }
+            Task {
+                try? await Task.sleep(for: .seconds(3))
+                first.finish(nil)
+            }
         }
     }
 
@@ -1090,5 +1107,30 @@ struct OnboardingView: View {
             context.saveOrLog("the new plan's WorkoutKit ids")
             isCreatingPlan = false
         }
+    }
+}
+
+/// Resumes a continuation with whichever result arrives first, once.
+private final class FirstResult<Value: Sendable>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Value, Never>?
+    private var finished = false
+
+    func start(_ continuation: CheckedContinuation<Value, Never>) {
+        lock.lock()
+        defer { lock.unlock() }
+        self.continuation = continuation
+    }
+
+    func finish(_ value: Value) {
+        lock.lock()
+        guard !finished, let continuation else {
+            lock.unlock()
+            return
+        }
+        finished = true
+        self.continuation = nil
+        lock.unlock()
+        continuation.resume(returning: value)
     }
 }
