@@ -93,30 +93,17 @@ struct RouteHeatmapMap: UIViewRepresentable {
         }
         // Compares build ids, not cells.
         if coordinator.shown != heatmap {
-            let isFirst = coordinator.shown == nil
             coordinator.shown = heatmap
-            if let old = coordinator.overlay { map.removeOverlay(old) }
             let colors = palette == .runs ? HeatDots.heatColors() : HeatDots.statColors()
-            let overlay = HeatCellOverlay(dots: HeatDots(heatmap, colors: colors))
-            // Known before MapKit asks for the renderer, which can happen inside addOverlay.
-            coordinator.overlay = overlay
-            // The first map draws itself in, spreading out from the home streets.
-            if isFirst, !UIAccessibility.isReduceMotionEnabled, let focus = overlay.dots.focus {
-                coordinator.pendingReveal = HeatDots.Reveal(
-                    x: focus.midX,
-                    y: focus.midY,
-                    radius: hypot(focus.width, focus.height) * 0.75
-                )
-            }
-            // Under new ground, if it is showing, so a new period's heat can't cover it.
-            if let newOverlay = coordinator.newOverlay {
-                map.insertOverlay(overlay, below: newOverlay)
-            } else {
-                map.addOverlay(overlay, level: .aboveRoads)
-            }
-            if isFirst {
-                coordinator.recentered = recenter
-                Self.moveToFocus(map, overlay, animated: false)
+            // Years of runs are a few hundred thousand cells: sorting them into buckets
+            // happens off the main actor, and the old heat stays up until the new is ready.
+            coordinator.building?.cancel()
+            coordinator.building = Task { @MainActor [weak map] in
+                let dots = await Task.detached(priority: .userInitiated) {
+                    HeatDots(heatmap, colors: colors)
+                }.value
+                guard !Task.isCancelled, let map, coordinator.shown == heatmap else { return }
+                coordinator.install(HeatCellOverlay(dots: dots), on: map, recenter: recenter)
             }
         }
         if coordinator.newGround != newGround {
@@ -137,13 +124,13 @@ struct RouteHeatmapMap: UIViewRepresentable {
                 renderer.setNeedsDisplay()
             }
         }
-        if coordinator.recentered != recenter {
+        if coordinator.recentered != recenter, let overlay = coordinator.overlay {
             coordinator.recentered = recenter
-            if let overlay = coordinator.overlay { Self.moveToFocus(map, overlay, animated: true) }
+            Self.moveToFocus(map, overlay, animated: true)
         }
     }
 
-    private static func moveToFocus(_ map: MKMapView, _ overlay: HeatCellOverlay, animated: Bool) {
+    fileprivate static func moveToFocus(_ map: MKMapView, _ overlay: HeatCellOverlay, animated: Bool) {
         guard let focus = overlay.dots.focus else { return }
         map.setVisibleMapRect(focus, edgePadding: UIEdgeInsets(top: 32, left: 24, bottom: 32, right: 24), animated: animated)
     }
@@ -191,12 +178,45 @@ struct RouteHeatmapMap: UIViewRepresentable {
         var marker: MKPointAnnotation?
         /// The draw-in waiting for the first heat renderer.
         var pendingReveal: HeatDots.Reveal?
+        /// The heat being sorted for drawing, off the main actor.
+        var building: Task<Void, Never>?
+
+        /// Puts newly built heat on the map in place of the old. The first heat also moves
+        /// the map onto the home streets and draws itself in.
+        func install(_ overlay: HeatCellOverlay, on map: MKMapView, recenter: Int) {
+            let isFirst = self.overlay == nil
+            if let old = self.overlay { map.removeOverlay(old) }
+            // Known before MapKit asks for the renderer, which can happen inside addOverlay.
+            self.overlay = overlay
+            // Only a map small enough to redraw a dozen times in a second and a half.
+            if isFirst, !UIAccessibility.isReduceMotionEnabled, overlay.dots.count <= Self.revealMaxCells,
+               let focus = overlay.dots.focus {
+                pendingReveal = HeatDots.Reveal(
+                    x: focus.midX,
+                    y: focus.midY,
+                    radius: hypot(focus.width, focus.height) * 0.75
+                )
+            }
+            // Under new ground, if it is showing, so a new period's heat can't cover it.
+            if let newOverlay {
+                map.insertOverlay(overlay, below: newOverlay)
+            } else {
+                map.addOverlay(overlay, level: .aboveRoads)
+            }
+            if isFirst {
+                recentered = recenter
+                RouteHeatmapMap.moveToFocus(map, overlay, animated: false)
+            }
+        }
+
+        /// The most cells the draw-in animates; a bigger map just appears.
+        static let revealMaxCells = 60_000
 
         /// How long the first map takes to draw itself in.
         static let revealSeconds = 1.6
 
         /// Grows the drawn circle from nothing to `reveal`'s radius, easing out, redrawing
-        /// the tiles about 20 times a second, then draws everything.
+        /// the tiles about eight times a second, then draws everything.
         func startReveal(_ reveal: HeatDots.Reveal, on renderer: HeatCellRenderer) {
             renderer.reveal.set(HeatDots.Reveal(x: reveal.x, y: reveal.y, radius: 0))
             Task { @MainActor in
@@ -211,7 +231,8 @@ struct RouteHeatmapMap: UIViewRepresentable {
                     let eased = 1 - pow(1 - progress, 3)
                     renderer.reveal.set(HeatDots.Reveal(x: reveal.x, y: reveal.y, radius: reveal.radius * eased))
                     renderer.setNeedsDisplay()
-                    try? await Task.sleep(for: .milliseconds(50))
+                    // About eight frames a second: each one redraws every tile on screen.
+                    try? await Task.sleep(for: .milliseconds(120))
                 }
             }
         }
