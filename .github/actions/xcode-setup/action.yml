@@ -1,0 +1,56 @@
+name: Xcode setup
+description: >-
+  Shared start of every Xcode job in CI: select Xcode 27, install XcodeGen and
+  xcbeautify, generate the project, install the Swift package pins, and make a
+  restored DerivedData cache usable for an incremental build.
+  The job must check out with `fetch-depth: 0` (see restore_mtimes.py).
+
+runs:
+  using: composite
+  steps:
+    - name: Select Xcode
+      shell: bash
+      run: |
+        XCODE=$(ls -d /Applications/Xcode_27*.app 2>/dev/null | sort -V | tail -1)
+        if [[ -z "$XCODE" ]]; then
+          echo "::error::No Xcode 27 toolchain found on this runner. Installed Xcodes:"
+          ls -d /Applications/Xcode_*.app 2>/dev/null || true
+          exit 1
+        fi
+        echo "Using $XCODE"
+        sudo xcode-select -switch "$XCODE"
+        xcodebuild -version
+
+    - name: Install XcodeGen and xcbeautify
+      shell: bash
+      run: |
+        brew install xcodegen xcbeautify
+        xcodegen_installed=$(xcodegen --version | awk '{print $NF}')
+        xcbeautify_installed=$(xcbeautify --version)
+        echo "xcodegen $xcodegen_installed"
+        echo "xcbeautify $xcbeautify_installed"
+        if [[ -n "$XCODEGEN_VERSION" && "$xcodegen_installed" != "$XCODEGEN_VERSION" ]]; then
+          echo "::error::XcodeGen $xcodegen_installed does not match the pinned XCODEGEN_VERSION=$XCODEGEN_VERSION."
+          exit 1
+        fi
+        if [[ -n "$XCBEAUTIFY_VERSION" && "$xcbeautify_installed" != "$XCBEAUTIFY_VERSION" ]]; then
+          echo "::error::xcbeautify $xcbeautify_installed does not match the pinned XCBEAUTIFY_VERSION=$XCBEAUTIFY_VERSION."
+          exit 1
+        fi
+
+    - name: Generate Xcode project and install Swift package pins
+      shell: bash
+      run: |
+        xcodegen generate
+        mkdir -p Stride.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
+        cp ci_scripts/Package.resolved Stride.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+
+    # Without these two, the DerivedData cache restored by each job was a full
+    # rebuild anyway: run 41554674880 restored a 548 MB cache and still compiled
+    # 374 Swift files. A fresh checkout gives every file a new mtime and a new
+    # inode, and Xcode treats either as "changed".
+    - name: Make the DerivedData cache incremental
+      shell: bash
+      run: |
+        python3 "$GITHUB_ACTION_PATH/restore_mtimes.py"
+        defaults write com.apple.dt.XCBuild IgnoreFileSystemDeviceInodeChanges -bool YES
