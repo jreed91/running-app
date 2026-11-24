@@ -22,6 +22,13 @@ struct RouteHeatmapMap: UIViewRepresentable {
     var onTap: ((RouteHeatmap.Point, Double) -> Void)?
     /// Streets first run in the period, drawn bright over a dimmed heatmap. `nil` hides it.
     var newGround: RouteHeatmap.NewGround?
+    /// The colours: orange for how often, or cool-to-hot for a stat layer.
+    var palette: Palette = .runs
+
+    enum Palette: Sendable {
+        case runs
+        case stat
+    }
 
     /// The base map under the heat.
     enum Style: String, CaseIterable, Identifiable, Sendable {
@@ -89,7 +96,8 @@ struct RouteHeatmapMap: UIViewRepresentable {
             let isFirst = coordinator.shown == nil
             coordinator.shown = heatmap
             if let old = coordinator.overlay { map.removeOverlay(old) }
-            let overlay = HeatCellOverlay(dots: HeatDots(heatmap, colors: HeatDots.heatColors()))
+            let colors = palette == .runs ? HeatDots.heatColors() : HeatDots.statColors()
+            let overlay = HeatCellOverlay(dots: HeatDots(heatmap, colors: colors))
             // Under new ground, if it is showing, so a new period's heat can't cover it.
             if let newOverlay = coordinator.newOverlay {
                 map.insertOverlay(overlay, below: newOverlay)
@@ -141,6 +149,18 @@ struct RouteHeatmapMap: UIViewRepresentable {
         case 3: return Color.brand.opacity(0.75)
         case 4: return Color.brand
         default: return Color.brandGlow
+        }
+    }
+
+    /// A stat layer's colours, coolest (easy heart rate, slow pace, flat) to hottest: the
+    /// heart-rate zone colours, so "red" means hard everywhere in the app.
+    static func statColor(level: Int) -> Color {
+        switch level {
+        case ...1: return Color.zoneEasy
+        case 2: return Color.zoneMarathon
+        case 3: return Color.zoneTempo
+        case 4: return Color.zoneInterval
+        default: return Color.zoneMax
         }
     }
 
@@ -227,6 +247,12 @@ final class HeatDots: Sendable {
     @MainActor
     static func heatColors() -> [RGBA] {
         (0...RouteHeatmap.levels).map { rgba(RouteHeatmapMap.color(level: max($0, 1))) }
+    }
+
+    /// A stat layer's colours, like ``heatColors()``.
+    @MainActor
+    static func statColors() -> [RGBA] {
+        (0...RouteHeatmap.levels).map { rgba(RouteHeatmapMap.statColor(level: max($0, 1))) }
     }
 
     /// A SwiftUI colour as plain numbers, resolved for the dark map.

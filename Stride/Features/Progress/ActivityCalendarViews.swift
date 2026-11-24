@@ -199,6 +199,26 @@ actor RouteHeatmapReader {
         let runs = (try? context.fetch(descriptor)) ?? []
         return runs.map { RouteHeatmapCache.Input(id: $0.id, date: $0.date, route: $0.routeData ?? Data()) }
     }
+
+    /// What a stat layer needs of the runs named: route, distance series, heart rate.
+    func statInputs(of ids: [UUID]) -> [RouteStatsCache.Input] {
+        var descriptor = FetchDescriptor<RunWorkout>(predicate: #Predicate { ids.contains($0.id) })
+        descriptor.propertiesToFetch = [
+            \.id, \.date, \.durationSeconds, \.routeData, \.distanceSeriesData, \.heartRateSamplesData
+        ]
+        let context = ModelContext(modelContainer)
+        let runs = (try? context.fetch(descriptor)) ?? []
+        return runs.map {
+            RouteStatsCache.Input(
+                id: $0.id,
+                date: $0.date,
+                route: $0.routeData ?? Data(),
+                series: $0.distanceSeriesData ?? Data(),
+                heartRate: $0.heartRateSamplesData ?? Data(),
+                durationSeconds: $0.durationSeconds
+            )
+        }
+    }
 }
 
 /// Reads routes from the store for ``RouteHeatmapCache``: only the runs it hasn't traced,
@@ -245,6 +265,31 @@ enum RouteHeatmapLoader {
         let heatmap = await cache.heatmap(for: shown)
         latest = heatmap
         return heatmap
+    }
+
+    /// A stat layer of the runs in `shown`, reading the blobs of runs not worked out yet
+    /// a few at a time, like ``load(all:shown:context:)``.
+    @MainActor
+    static func loadStats(
+        all: [RouteHeatmapCache.Key],
+        shown: [RouteHeatmapCache.Key],
+        stat: RouteHeatmap.Stat,
+        context: ModelContext
+    ) async -> RouteHeatmap.StatMap {
+        let cache = RouteStatsCache.shared
+        let missing = await cache.missing(all)
+        if !missing.isEmpty {
+            let container = context.container
+            let reader = await Task.detached { RouteHeatmapReader(modelContainer: container) }.value
+            var start = 0
+            while start < missing.count, !Task.isCancelled {
+                let batch = Array(missing[start..<min(start + batchSize, missing.count)])
+                start += batchSize
+                await cache.add(await reader.statInputs(of: batch))
+            }
+        }
+        await cache.keep(only: Set(all.map(\.id)))
+        return await cache.statMap(for: shown, stat: stat)
     }
 }
 
