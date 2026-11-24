@@ -90,7 +90,7 @@ struct RecapStoryPager<Empty: View>: View {
                 dismiss()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 15, weight: .bold))
+                    .font(.dsSubhead.weight(.bold))
                     .foregroundStyle(Color.onInk)
                     .frame(width: 36, height: 36)
                     .background(Color.onInk.opacity(0.12), in: Circle())
