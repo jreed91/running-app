@@ -142,7 +142,7 @@ struct YearRecapCardView: View {
     }
 
     /// `text` with every digit replaced by 0, so the digits have somewhere to roll from.
-    static func zeroed(_ text: String) -> String {
+    nonisolated static func zeroed(_ text: String) -> String {
         String(text.map { $0.isNumber ? "0" : $0 })
     }
 

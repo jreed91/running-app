@@ -103,6 +103,9 @@ custom_rules:
       - ".*/ActiveRunView\\.swift"
       - ".*/GuidedWorkoutBanner\\.swift"
       - ".*/RunShareCardView\\.swift"
+      # A 360x640 story canvas rendered to a 1080x1920 image and scaled to fit on
+      # screen, like the run share card: its sizes are the design, not body text.
+      - ".*/YearRecapCardView\\.swift"
       - ".*/RouteReplayVideo\\.swift"
       - ".*/StrideIcon\\.swift"
     message: "Use a design-system font token (`.dsBody`, `.dsCaption2`, …) or a `@ScaledMetric` size. A literal point size ignores the user's preferred content size. See Stride/Shared/Theme/AppFonts.swift."
