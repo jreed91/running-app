@@ -90,7 +90,12 @@ struct RouteHeatmapMap: UIViewRepresentable {
             coordinator.shown = heatmap
             if let old = coordinator.overlay { map.removeOverlay(old) }
             let overlay = HeatCellOverlay(dots: HeatDots(heatmap, colors: HeatDots.heatColors()))
-            map.addOverlay(overlay, level: .aboveRoads)
+            // Under new ground, if it is showing, so a new period's heat can't cover it.
+            if let newOverlay = coordinator.newOverlay {
+                map.insertOverlay(overlay, below: newOverlay)
+            } else {
+                map.addOverlay(overlay, level: .aboveRoads)
+            }
             coordinator.overlay = overlay
             if isFirst {
                 coordinator.recentered = recenter
@@ -103,12 +108,16 @@ struct RouteHeatmapMap: UIViewRepresentable {
             coordinator.newOverlay = nil
             if let newGround, !newGround.cells.isEmpty {
                 let overlay = HeatCellOverlay(dots: HeatDots(newGround, color: HeatDots.rgba(Self.newGroundColor)))
-                map.addOverlay(overlay, level: .aboveRoads)
+                // Known before MapKit asks for its renderer, which can happen inside
+                // addOverlay: otherwise new ground was drawn at the dimmed heat's alpha.
                 coordinator.newOverlay = overlay
+                map.addOverlay(overlay, level: .aboveRoads)
             }
-            // Dim the heat under new ground so the new streets stand out.
-            if let heat = coordinator.overlay {
-                map.renderer(for: heat)?.alpha = coordinator.heatAlpha
+            // Dim the heat under new ground so the new streets stand out. A renderer's
+            // alpha only shows once its tiles are drawn again.
+            if let heat = coordinator.overlay, let renderer = map.renderer(for: heat) {
+                renderer.alpha = coordinator.heatAlpha
+                renderer.setNeedsDisplay()
             }
         }
         if coordinator.recentered != recenter {

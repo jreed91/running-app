@@ -150,18 +150,24 @@ struct RouteHeatmapScreen: View {
 
     private var newGroundChip: some View {
         Button {
+            // All time has nothing to compare against, and the map opens on All when the
+            // Progress page is on All: rather than a chip that does nothing, turning it on
+            // there moves to the last 90 days.
+            if !showsNewGround, period == .all { period = Self.newGroundPeriod }
             withAnimation(AppAnimation.quick) { showsNewGround.toggle() }
         } label: {
             Label("New ground", systemImage: "sparkles")
         }
         .buttonStyle(.strideChip(selected: showsNewGround))
-        .disabled(newGround == nil)
         .accessibilityHint(
-            newGround == nil
-                ? "Pick a period to see the streets you ran for the first time in it"
+            period == .all
+                ? "Switches to the last 90 days and shows the streets you ran for the first time in them"
                 : "Shows the streets you ran for the first time in this period"
         )
     }
+
+    /// The period New ground moves to from All time.
+    static let newGroundPeriod = HeatmapPeriod.lastDays(90)
 
     // MARK: Tap a spot
 
