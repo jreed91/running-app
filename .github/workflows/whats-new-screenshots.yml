@@ -5,16 +5,25 @@ name: What's New screenshots
 # them into Stride/Resources/WhatsNew.xcassets as whatsnew-<version>-<feature id>, where
 # <version> is MARKETING_VERSION's major.minor from ci_scripts/Version.xcconfig.
 #
-# Not part of CI: it runs when a pull request carries the `whats-new-screenshots` label,
-# or by hand from the Actions tab on a branch. Run it once a release's features are
-# settled (after adding them to Stride/Core/Models/ReleaseNotes.swift), before archiving.
+# Not part of CI. It runs:
+# - on a pull request that changes the version (ci_scripts/Version.xcconfig) or the release
+#   notes (Stride/Core/Models/ReleaseNotes.swift), or carries the `whats-new-screenshots`
+#   label, and commits the screenshots to that PR's branch;
+# - every Monday on main, if anything under Stride/ changed in the past week, and opens (or
+#   updates) a "Refresh What's New screenshots" PR from the `whats-new/refresh` branch, so the
+#   current release's screenshots never fall far behind the app. Merge that PR before
+#   submitting a release;
+# - by hand from the Actions tab, on any branch (on main it opens the refresh PR too).
 # The raw captures, and the sheet itself for review, are in the `whats-new-screenshots`
 # artifact either way.
 
 on:
   workflow_dispatch:
+  schedule:
+    # Mondays 09:00 UTC.
+    - cron: "0 9 * * 1"
   pull_request:
-    types: [labeled, synchronize]
+    types: [opened, reopened, labeled, synchronize]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -22,13 +31,55 @@ concurrency:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
+  # Cheap check on Linux before booking a macOS runner: does this event need new screenshots?
+  decide:
+    name: Need new screenshots?
+    runs-on: ubuntu-latest
+    outputs:
+      capture: ${{ steps.decide.outputs.capture }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          PR: ${{ github.event.pull_request.number }}
+          LABELLED: ${{ contains(github.event.pull_request.labels.*.name, 'whats-new-screenshots') }}
+        run: |
+          capture=false
+          case "$EVENT" in
+            workflow_dispatch)
+              capture=true ;;
+            schedule)
+              # Skip the week if the app's code didn't change: the screenshots would too.
+              if [[ -n "$(git log --since='7 days ago' --format=%H -- Stride)" ]]; then
+                capture=true
+              else
+                echo "Nothing under Stride/ changed in the past week."
+              fi ;;
+            pull_request)
+              if [[ "$LABELLED" == "true" ]]; then
+                capture=true
+              else
+                FILES=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR/files?per_page=100" --jq '.[].filename')
+                if grep -qxE 'ci_scripts/Version\.xcconfig|Stride/Core/Models/ReleaseNotes\.swift' <<<"$FILES"; then
+                  capture=true
+                else
+                  echo "The PR changes neither the version nor the release notes."
+                fi
+              fi ;;
+          esac
+          echo "capture=$capture" | tee -a "$GITHUB_OUTPUT"
+
   screenshots:
     name: What's New screenshots
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      contains(github.event.pull_request.labels.*.name, 'whats-new-screenshots')
+    needs: decide
+    if: needs.decide.outputs.capture == 'true'
     runs-on: xcode-27
     timeout-minutes: 60
     env:
@@ -128,7 +179,8 @@ jobs:
             WhatsNew/raw
             Stride/Resources/WhatsNew.xcassets
 
-      - name: Commit the screenshots to the branch
+      - name: Commit the screenshots to the PR's branch
+        if: github.event_name == 'pull_request' || github.ref != 'refs/heads/main'
         # Fails harmlessly on a protected branch or a fork; the artifact has them.
         continue-on-error: true
         run: |
@@ -141,3 +193,35 @@ jobs:
               -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
               commit -m "What's New: update the feature screenshots"
           git push origin HEAD
+
+      - name: Open or update the refresh PR
+        # main is never pushed to directly: the screenshots go to whats-new/refresh and a PR.
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: whats-new/refresh
+        run: |
+          git add Stride/Resources/WhatsNew.xcassets
+          if git diff --cached --quiet; then
+            echo "No screenshot changes."
+            exit 0
+          fi
+          git checkout -B "$BRANCH"
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -m "What's New: refresh the feature screenshots"
+          # The branch only ever holds this one bot commit on top of main.
+          git push --force origin "$BRANCH"
+          OWNER=${GITHUB_REPOSITORY%%/*}
+          OPEN=$(gh api "repos/$GITHUB_REPOSITORY/pulls?state=open&head=$OWNER:$BRANCH" --jq 'length')
+          if [[ "$OPEN" == "0" ]]; then
+            KEY=$(sed -n 's/^MARKETING_VERSION *= *//p' ci_scripts/Version.xcconfig | tr -d '[:space:]' \
+              | awk -F. '{ printf "%s.%s", $1, ($2 == "" ? 0 : $2) }')
+            gh api "repos/$GITHUB_REPOSITORY/pulls" \
+              -f title="Refresh What's New screenshots ($KEY)" \
+              -f head="$BRANCH" -f base=main \
+              -f body="New captures of the What's New sheet's screenshots for $KEY from current main (run $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID; the raw captures and the sheet are in its artifact). Merge before submitting the release. Updated weekly while open." \
+              || echo "::warning::Could not open the PR. Allow GitHub Actions to create pull requests in Settings > Actions > General, or open one from $BRANCH by hand."
+          else
+            echo "The refresh PR is already open; its branch is updated."
+          fi
