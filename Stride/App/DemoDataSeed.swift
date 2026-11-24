@@ -283,6 +283,7 @@ enum DemoDataSeed {
         // about 160 m each way.
         let home = (lat: 41.6005, lon: -93.6520)
         let block = (lat: 160.0 / 111_000, lon: 160.0 / 83_000)
+        let fixesPerBlock = 8
         let blocks = max(Int((distanceMeters / 160).rounded()), 4)
 
         // (east, north) unit steps of one block, walked in order and back home. Four
@@ -337,10 +338,12 @@ enum DemoDataSeed {
         add()
         for leg in legs {
             for _ in 0..<leg.count {
-                // Two fixes per block, so the line follows the street between corners.
-                for _ in 0..<2 {
-                    lat += Double(leg.dy) * block.lat / 2
-                    lon += Double(leg.dx) * block.lon / 2
+                // A fix every 20 m, like a phone or Watch recording. The heatmap only joins
+                // fixes under `RouteHeatmap.fillMeters` apart, so sparser fixes would draw as
+                // lone dots with no ground covered.
+                for _ in 0..<fixesPerBlock {
+                    lat += Double(leg.dy) * block.lat / Double(fixesPerBlock)
+                    lon += Double(leg.dx) * block.lon / Double(fixesPerBlock)
                     add()
                 }
             }
