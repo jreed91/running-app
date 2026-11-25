@@ -3,7 +3,8 @@
 //
 //   node design/appstore/compose.mjs <raw-dir> <out-dir> [chromium|webkit] [iphone|duo-inner|duo-outer]
 //
-// Reads captions.json beside this file; writes one PNG per caption whose raw file exists,
+// Reads captions.json beside this file; writes one PNG per caption whose raw file exists
+// (named `out` when the caption has one, so the files sort in listing order),
 // at the App Store Connect size for the device: 1320 x 2868 for the 6.9" iPhone (the
 // default), 2007 x 2853 for the iPhone Duo inner display, 1398 x 2034 for its outer one.
 // WebKit is the default because it renders `ui-rounded` as SF Pro Rounded on macOS, as
@@ -67,10 +68,10 @@ for (const shot of iphone) {
   writeFileSync(tmp, html);
   await page.goto(pathToFileURL(tmp).href);
   await page.waitForLoadState('load');
-  await page.screenshot({ path: join(outDir, shot.file), omitBackground: false });
+  await page.screenshot({ path: join(outDir, shot.out ?? shot.file), omitBackground: false });
   unlinkSync(tmp);
   made += 1;
-  console.log(`framed ${shot.file}`);
+  console.log(`framed ${shot.file} as ${shot.out ?? shot.file}`);
 }
 await browser.close();
 if (made === 0) {
