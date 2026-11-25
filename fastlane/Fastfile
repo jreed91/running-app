@@ -1,0 +1,43 @@
+# App Store listing upload, run by .github/workflows/app-store-listing.yml.
+#
+# Pushes the What's New text and promotional text in fastlane/metadata/en-US, and
+# optionally a framed screenshot set, onto a version in App Store Connect, creating
+# the version if it isn't there yet. It never uploads a binary and never submits for
+# review: picking the build and pressing Submit stay in App Store Connect.
+#
+# Needs an App Store Connect API key (Users and Access > Integrations > App Store
+# Connect API, App Manager role) in three repository secrets: ASC_KEY_ID,
+# ASC_ISSUER_ID and ASC_KEY_P8 (the .p8 file's contents).
+
+default_platform(:ios)
+
+platform :ios do
+  desc "Upload release notes, promotional text and (optionally) screenshots for a version"
+  lane :listing do |options|
+    version = options.fetch(:version)
+    screenshots = options[:screenshots].to_s.strip
+
+    api_key = app_store_connect_api_key(
+      key_id: ENV.fetch("ASC_KEY_ID"),
+      issuer_id: ENV.fetch("ASC_ISSUER_ID"),
+      key_content: ENV.fetch("ASC_KEY_P8"),
+      in_house: false
+    )
+
+    deliver(
+      api_key: api_key,
+      app_identifier: "com.running.stride",
+      platform: "ios",
+      app_version: version,
+      metadata_path: "fastlane/metadata",
+      screenshots_path: screenshots.empty? ? "fastlane/screenshots" : screenshots,
+      skip_screenshots: screenshots.empty?,
+      overwrite_screenshots: !screenshots.empty?,
+      skip_binary_upload: true,
+      submit_for_review: false,
+      automatic_release: false,
+      run_precheck_before_submit: false,
+      force: true
+    )
+  end
+end
