@@ -136,3 +136,30 @@ protocol HealthKitRepositoryProtocol: Sendable {
     /// background queue; callers are responsible for hopping to the appropriate actor.
     func registerObserverQuery(handler: @escaping @Sendable (_ completion: @escaping @Sendable () -> Void) -> Void)
 }
+
+// MARK: - Authorization check off the cooperative pool
+
+/// One serial queue for every off-pool authorization check, so a healthd that never
+/// answers ties up one GCD thread rather than one thread per check.
+private let healthAuthorizationQueue = DispatchQueue(
+    label: "com.running.stride.health-authorization",
+    qos: .userInitiated
+)
+
+extension HealthKitRepositoryProtocol {
+    /// `isAuthorized` without blocking a Swift concurrency thread.
+    ///
+    /// `isAuthorized` is a synchronous call into healthd. On the main actor it froze the
+    /// first onboarding screen; moved to `Task.detached` it parked a thread of the
+    /// cooperative pool instead, which is only as wide as the CPU count. On the CI
+    /// simulator (healthd unresponsive for minutes) each onboarding step parked another
+    /// one, and by the third step every thread was gone and the app stopped answering.
+    /// Running the call on a dispatch queue leaves the pool free whatever healthd does.
+    func isAuthorizedOffCooperativePool() async -> Bool {
+        await withCheckedContinuation { continuation in
+            healthAuthorizationQueue.async {
+                continuation.resume(returning: self.isAuthorized)
+            }
+        }
+    }
+}

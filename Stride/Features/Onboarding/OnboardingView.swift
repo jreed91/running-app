@@ -239,11 +239,13 @@ struct OnboardingView: View {
         .adaptiveAnimation(AppAnimation.bouncy, value: step)
         .ignoresSafeArea()
         .task(id: step) {
-            // `isAuthorized` is a synchronous call into healthd. On the main actor it held
-            // the first onboarding screen until healthd answered (over a minute on CI).
+            // Re-checked per step so a grant on the permissions step is picked up, but
+            // only until the recent running has been read once.
+            guard recentVolume == nil else { return }
+            // `isAuthorized` is a synchronous call into healthd, which on CI can take
+            // minutes. It must block neither the main actor nor the cooperative pool.
             let repository = container.healthKitRepository
-            let authorized = await Task.detached { repository.isAuthorized }.value
-            guard authorized else { return }
+            guard await repository.isAuthorizedOffCooperativePool() else { return }
             recentVolume = await repository.recentRunningVolume()
         }
         // A friend's race invite opened before onboarding is done: the goal step starts
