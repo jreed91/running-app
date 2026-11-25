@@ -1,4 +1,6 @@
-See your running like never before, and share it your way.
+This update fixes a freeze some runners hit on the Apple Health step while setting up Stride.
+
+In case you missed 1.2:
 
 • Progress, all on one page: filter by period and run type, tap a week to see its runs, and drag across any chart for the exact number.
 • Every route on one map: a heatmap of everywhere you run. Filter by year or run type, tap a street to see the runs that went along it, and spot the new ground you broke.
@@ -7,4 +9,4 @@ See your running like never before, and share it your way.
 • Share studio: story, post, square and sticker cards, and a video of your route drawing itself in. Privacy zones hide where you start and finish.
 • Not feeling your best? Ease off or pause your plan, and Stride brings you back gently.
 
-Also new: share your goal race with a friend, Plan Replay, strength workouts from Apple Health, and faster loading for long run histories.
+Also in 1.2: share your goal race with a friend, Plan Replay, strength workouts from Apple Health, and faster loading for long run histories.
