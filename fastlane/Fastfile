@@ -11,10 +11,30 @@ require "deliver"
 # Connect API, App Manager role) in three repository secrets: ASC_KEY_ID,
 # ASC_ISSUER_ID and ASC_KEY_P8 (the .p8 file's contents).
 
+require "base64"
+
 default_platform(:ios)
 
 BUNDLE_ID = "com.running.stride".freeze
 LOCALE = "en-US".freeze
+
+# The .p8 key from the ASC_KEY_P8 secret as a PEM OpenSSL can read. A key pasted into
+# the secrets form often loses its line breaks (or gains literal "\n", CRLFs or
+# indentation), and OpenSSL then fails with "invalid curve name". Rebuild the PEM from
+# the base64 body, whatever happened to the whitespace. A secret holding the whole
+# file base64-encoded is decoded first.
+def normalized_p8(raw)
+  text = raw.to_s.strip
+  unless text.include?("-----BEGIN")
+    decoded = Base64.decode64(text.gsub(/\s+/, "")) rescue ""
+    text = decoded if decoded.include?("-----BEGIN")
+  end
+  body = text.gsub("\\n", "\n")
+             .gsub(/-----(BEGIN|END)[^-]*-----/, "")
+             .gsub(/\s+/, "")
+  UI.user_error!("ASC_KEY_P8 is empty") if body.empty?
+  "-----BEGIN PRIVATE KEY-----\n#{body.scan(/.{1,64}/).join("\n")}\n-----END PRIVATE KEY-----\n"
+end
 
 # Empties the en-US screenshot sets of the given display types on the version being
 # edited, and leaves every other set as it is.
@@ -43,7 +63,7 @@ platform :ios do
     api_key = app_store_connect_api_key(
       key_id: ENV.fetch("ASC_KEY_ID"),
       issuer_id: ENV.fetch("ASC_ISSUER_ID"),
-      key_content: ENV.fetch("ASC_KEY_P8"),
+      key_content: normalized_p8(ENV.fetch("ASC_KEY_P8")),
       in_house: false
     )
 
