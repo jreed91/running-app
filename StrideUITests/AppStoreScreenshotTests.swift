@@ -150,7 +150,7 @@ final class AppStoreScreenshotTests: XCTestCase {
         relaunchToHome()
         selectTab("Progress")
         let bestEfforts = app.descendants(matching: .any)["progress.bestEfforts"]
-        guard scrollTo(bestEfforts) else {
+        guard scrollIntoView(bestEfforts) else {
             return XCTFail("No best efforts card on Progress")
         }
         capture("09-best-efforts")
@@ -204,32 +204,47 @@ final class AppStoreScreenshotTests: XCTestCase {
     }
 
     /// Swipes up until `element` can be tapped. Returns whether it got there.
-    ///
-    /// It doesn't wait for the element to exist first: on the iPhone Duo's short outer
-    /// display a card far down a page (best efforts, under the heatmap and every chart)
-    /// isn't in the accessibility tree until it has been scrolled near.
     @discardableResult
     private func scrollTo(_ element: XCUIElement) -> Bool {
-        _ = element.waitForExistence(timeout: 5)
-        for _ in 0..<16 {
-            if element.exists && element.isHittable { return true }
+        guard element.waitForExistence(timeout: 10) else { return false }
+        for _ in 0..<12 where !element.isHittable {
             app.swipeUp(velocity: .slow)
         }
-        return element.waitForExistence(timeout: 2) && element.isHittable
+        return element.isHittable
     }
 
-    /// Back out of a pushed page. The bar's back button where there is one; on the iPhone
-    /// Duo it isn't always a button inside that bar, so an edge swipe otherwise.
+    /// Swipes up until `element` sits in the upper part of the screen, for a capture
+    /// rather than a tap. Returns whether it got on screen at all.
+    ///
+    /// Not `isHittable`: on the iPhone Duo's outer display the toolbar stacks down the
+    /// side of the screen, over the left edge where a card's title sits, so the title is
+    /// never hittable however far the page scrolls.
+    @discardableResult
+    private func scrollIntoView(_ element: XCUIElement) -> Bool {
+        let screen = app.windows.firstMatch.frame
+        func top() -> CGFloat? {
+            guard element.exists, !element.frame.isEmpty,
+                  screen.intersects(element.frame) else { return nil }
+            return element.frame.minY
+        }
+        for _ in 0..<20 {
+            if let minY = top(), minY < screen.minY + screen.height * 0.4 { return true }
+            app.swipeUp(velocity: .slow)
+        }
+        return top() != nil
+    }
+
+    /// Back from a breakdown page to the run. The page opens in place with its own Back
+    /// button, and on the iPhone Duo that button stacks down the side of the display
+    /// rather than sitting in the navigation bar, so it's found anywhere on screen.
     private func goBack(from title: String) {
-        let bar = app.navigationBars[title]
-        let back = bar.buttons.firstMatch
-        if back.exists && back.isHittable {
+        let back = app.buttons["Back"].firstMatch
+        if back.waitForExistence(timeout: 5) {
             back.tap()
         } else {
-            let edge = app.coordinate(withNormalizedOffset: CGVector(dx: 0.01, dy: 0.5))
-            edge.press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5)))
+            XCTFail("No Back button on \(title)")
         }
-        if !bar.waitForNonExistence(timeout: 5) {
+        if !app.navigationBars[title].waitForNonExistence(timeout: 5) {
             XCTFail("Could not leave \(title)")
         }
     }
