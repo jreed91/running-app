@@ -170,7 +170,7 @@ final class AppStoreScreenshotTests: XCTestCase {
             analysis.tap()
             if app.navigationBars["Run analysis"].waitForExistence(timeout: 8) {
                 capture("10-run-analysis")
-                app.navigationBars["Run analysis"].buttons.element(boundBy: 0).tap()
+                goBack(from: "Run analysis")
             } else {
                 XCTFail("Run analysis did not open")
             }
@@ -204,13 +204,34 @@ final class AppStoreScreenshotTests: XCTestCase {
     }
 
     /// Swipes up until `element` can be tapped. Returns whether it got there.
+    ///
+    /// It doesn't wait for the element to exist first: on the iPhone Duo's short outer
+    /// display a card far down a page (best efforts, under the heatmap and every chart)
+    /// isn't in the accessibility tree until it has been scrolled near.
     @discardableResult
     private func scrollTo(_ element: XCUIElement) -> Bool {
-        guard element.waitForExistence(timeout: 10) else { return false }
-        for _ in 0..<12 where !element.isHittable {
+        _ = element.waitForExistence(timeout: 5)
+        for _ in 0..<16 {
+            if element.exists && element.isHittable { return true }
             app.swipeUp(velocity: .slow)
         }
-        return element.isHittable
+        return element.waitForExistence(timeout: 2) && element.isHittable
+    }
+
+    /// Back out of a pushed page. The bar's back button where there is one; on the iPhone
+    /// Duo it isn't always a button inside that bar, so an edge swipe otherwise.
+    private func goBack(from title: String) {
+        let bar = app.navigationBars[title]
+        let back = bar.buttons.firstMatch
+        if back.exists && back.isHittable {
+            back.tap()
+        } else {
+            let edge = app.coordinate(withNormalizedOffset: CGVector(dx: 0.01, dy: 0.5))
+            edge.press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5)))
+        }
+        if !bar.waitForNonExistence(timeout: 5) {
+            XCTFail("Could not leave \(title)")
+        }
     }
 
     /// The run's AI coach page, from a separate launch so the screens above keep AI Coach

@@ -1,10 +1,12 @@
 name: App Store listing
 
 # Uploads the version's App Store listing by API: What's New and promotional text from
-# fastlane/metadata/en-US, and, when given an App Store screenshots run, its framed
-# 6.9" iPhone set (App Store Connect scales it for the smaller iPhones). Creates the
-# version in App Store Connect if it isn't there. Never uploads a build and never
-# submits for review. Run by hand from the Actions tab.
+# fastlane/metadata/en-US and, when given an App Store screenshots run, its framed
+# screenshots: the 6.9" and 6.3" iPhone sets, the Apple Watch set, and the iPhone Duo
+# set when that run made one. Only the device sets being uploaded are replaced; any
+# other set already on the version stays as it is. Creates the version in App Store
+# Connect if it isn't there. Never uploads a build and never submits for review. Run
+# by hand from the Actions tab.
 #
 # Needs three repository secrets from an App Store Connect API key (App Manager role):
 #   ASC_KEY_ID     the key's ID
@@ -15,9 +17,14 @@ on:
   workflow_dispatch:
     inputs:
       screenshots_run_id:
-        description: "ID of an 'App Store screenshots' run to take the 6.9\" iPhone set from (the number in its URL). Leave empty to keep the current screenshots."
+        description: "ID of an 'App Store screenshots' run to take the screenshots from (the number in its URL). Leave empty to keep the current screenshots."
         required: false
         default: ""
+      duo_display:
+        description: "Which iPhone Duo set to upload. App Store Connect holds one set of up to 10 for the Duo, so it's one display or the other."
+        type: choice
+        options: [outer, inner]
+        default: outer
 
 permissions:
   contents: read
@@ -58,7 +65,7 @@ jobs:
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "Uploading the listing for $VERSION"
 
-      - name: Download the screenshots
+      - name: Download the iPhone and Watch screenshots
         if: inputs.screenshots_run_id != ''
         uses: actions/download-artifact@v4
         with:
@@ -67,15 +74,64 @@ jobs:
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/app-store-screenshots
 
-      - name: Stage the 6.9" iPhone set
+      - name: Download the iPhone Duo screenshots
+        # Optional: without it, the Duo set on App Store Connect is left as it is.
         if: inputs.screenshots_run_id != ''
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: app-store-screenshots-duo
+          run-id: ${{ inputs.screenshots_run_id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/app-store-screenshots
+
+      - name: Stage the screenshots
+        if: inputs.screenshots_run_id != ''
+        env:
+          DUO_DISPLAY: ${{ inputs.duo_display }}
         run: |
-          SRC="$RUNNER_TEMP/app-store-screenshots/iphone-6.9"
-          DEST="$RUNNER_TEMP/screenshots/en-US"
-          ls "$SRC"/*.png >/dev/null 2>&1 || { echo "::error::No iphone-6.9 PNGs in run $RUN_ID's artifact"; exit 1; }
-          mkdir -p "$DEST"
-          cp "$SRC"/*.png "$DEST"/
-          ls -l "$DEST"
+          python3 - <<'PY'
+          import os, shutil, struct, sys
+          from pathlib import Path
+
+          src = Path(os.environ["RUNNER_TEMP"]) / "app-store-screenshots"
+          dest = Path(os.environ["RUNNER_TEMP"]) / "screenshots" / "en-US"
+          dest.mkdir(parents=True, exist_ok=True)
+          duo = f"duo-{os.environ['DUO_DISPLAY']}"
+
+          def size(path):
+              with open(path, "rb") as f:
+                  head = f.read(24)
+              return struct.unpack(">II", head[16:24])
+
+          # Folder in the artifact, prefix that keeps each set's order, the sizes App
+          # Store Connect takes for it, and whether the set has to be there.
+          sets = [
+              ("iphone-6.9", "a-iphone69", {(1320, 2868)}, True),
+              ("iphone-6.3", "b-iphone63", {(1206, 2622)}, True),
+              (duo, "c-duo", {(1398, 2034), (2007, 2853)}, False),
+              ("watch", "d-watch", {(410, 502), (422, 514), (416, 496), (396, 484), (368, 448)}, False),
+          ]
+          for folder, prefix, sizes, required in sets:
+              pngs = sorted((src / folder).glob("*.png"))
+              if not pngs:
+                  if required:
+                      sys.exit(f"::error::No {folder} screenshots in run {os.environ['RUN_ID']}'s artifact")
+                  print(f"::warning::No {folder} screenshots in that run; the {folder} set on App Store Connect stays as it is.")
+                  continue
+              if len(pngs) > 10:
+                  sys.exit(f"::error::{folder} has {len(pngs)} screenshots; App Store Connect takes 10 at most")
+              odd = [f"{p.name} ({w}x{h})" for p in pngs for (w, h) in [size(p)] if (w, h) not in sizes]
+              if odd:
+                  if required:
+                      sys.exit(f"::error::{folder} has screenshots App Store Connect won't take: {', '.join(odd)}")
+                  print(f"::warning::Skipping the {folder} set, its sizes don't fit App Store Connect: {', '.join(odd)}")
+                  continue
+              for p in pngs:
+                  shutil.copy(p, dest / f"{prefix}-{p.name}")
+              print(f"{folder}: {len(pngs)} screenshots")
+          PY
+          ls -l "$RUNNER_TEMP/screenshots/en-US"
           echo "SCREENSHOTS=$RUNNER_TEMP/screenshots" >> "$GITHUB_ENV"
 
       - uses: ruby/setup-ruby@v1
