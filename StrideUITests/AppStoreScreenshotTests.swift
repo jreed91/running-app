@@ -150,7 +150,7 @@ final class AppStoreScreenshotTests: XCTestCase {
         relaunchToHome()
         selectTab("Progress")
         let bestEfforts = app.descendants(matching: .any)["progress.bestEfforts"]
-        guard scrollTo(bestEfforts) else {
+        guard scrollIntoView(bestEfforts) else {
             return XCTFail("No best efforts card on Progress")
         }
         capture("09-best-efforts")
@@ -170,7 +170,7 @@ final class AppStoreScreenshotTests: XCTestCase {
             analysis.tap()
             if app.navigationBars["Run analysis"].waitForExistence(timeout: 8) {
                 capture("10-run-analysis")
-                app.navigationBars["Run analysis"].buttons.element(boundBy: 0).tap()
+                goBack(from: "Run analysis")
             } else {
                 XCTFail("Run analysis did not open")
             }
@@ -211,6 +211,42 @@ final class AppStoreScreenshotTests: XCTestCase {
             app.swipeUp(velocity: .slow)
         }
         return element.isHittable
+    }
+
+    /// Swipes up until `element` sits in the upper part of the screen, for a capture
+    /// rather than a tap. Returns whether it got on screen at all.
+    ///
+    /// Not `isHittable`: on the iPhone Duo's outer display the toolbar stacks down the
+    /// side of the screen, over the left edge where a card's title sits, so the title is
+    /// never hittable however far the page scrolls.
+    @discardableResult
+    private func scrollIntoView(_ element: XCUIElement) -> Bool {
+        let screen = app.windows.firstMatch.frame
+        func top() -> CGFloat? {
+            guard element.exists, !element.frame.isEmpty,
+                  screen.intersects(element.frame) else { return nil }
+            return element.frame.minY
+        }
+        for _ in 0..<20 {
+            if let minY = top(), minY < screen.minY + screen.height * 0.4 { return true }
+            app.swipeUp(velocity: .slow)
+        }
+        return top() != nil
+    }
+
+    /// Back from a breakdown page to the run. The page opens in place with its own Back
+    /// button, and on the iPhone Duo that button stacks down the side of the display
+    /// rather than sitting in the navigation bar, so it's found anywhere on screen.
+    private func goBack(from title: String) {
+        let back = app.buttons["Back"].firstMatch
+        if back.waitForExistence(timeout: 5) {
+            back.tap()
+        } else {
+            XCTFail("No Back button on \(title)")
+        }
+        if !app.navigationBars[title].waitForNonExistence(timeout: 5) {
+            XCTFail("Could not leave \(title)")
+        }
     }
 
     /// The run's AI coach page, from a separate launch so the screens above keep AI Coach

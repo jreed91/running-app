@@ -1,0 +1,83 @@
+require "deliver"
+
+# App Store listing upload, run by .github/workflows/app-store-listing.yml.
+#
+# Pushes the What's New text and promotional text in fastlane/metadata/en-US, and
+# optionally screenshots, onto a version in App Store Connect, creating the version if
+# it isn't there yet. It never uploads a binary and never submits for review: picking
+# the build and pressing Submit stay in App Store Connect.
+#
+# Needs an App Store Connect API key (Users and Access > Integrations > App Store
+# Connect API, App Manager role) in three repository secrets: ASC_KEY_ID,
+# ASC_ISSUER_ID and ASC_KEY_P8 (the .p8 file's contents).
+
+default_platform(:ios)
+
+BUNDLE_ID = "com.running.stride".freeze
+LOCALE = "en-US".freeze
+
+# Empties the en-US screenshot sets of the given display types on the version being
+# edited, and leaves every other set as it is.
+def clear_screenshot_sets(api_key, display_types)
+  Spaceship::ConnectAPI.token = Spaceship::ConnectAPI::Token.from(hash: api_key)
+  app = Spaceship::ConnectAPI::App.find(BUNDLE_ID)
+  UI.user_error!("No app #{BUNDLE_ID} in App Store Connect") unless app
+  version = app.get_edit_app_store_version(platform: Spaceship::ConnectAPI::Platform::IOS)
+  UI.user_error!("No editable iOS version in App Store Connect") unless version
+  localization = version.get_app_store_version_localizations.find { |l| l.locale == LOCALE }
+  return unless localization
+
+  localization.get_app_screenshot_sets.each do |set|
+    next unless display_types.include?(set.screenshot_display_type)
+    UI.message("Deleting the #{set.screenshot_display_type} set (#{(set.app_screenshots || []).count} screenshots)")
+    set.delete!
+  end
+end
+
+platform :ios do
+  desc "Upload release notes, promotional text and (optionally) screenshots for a version"
+  lane :listing do |options|
+    version = options.fetch(:version)
+    screenshots = options[:screenshots].to_s.strip
+
+    api_key = app_store_connect_api_key(
+      key_id: ENV.fetch("ASC_KEY_ID"),
+      issuer_id: ENV.fetch("ASC_ISSUER_ID"),
+      key_content: ENV.fetch("ASC_KEY_P8"),
+      in_house: false
+    )
+
+    common = {
+      api_key: api_key,
+      app_identifier: BUNDLE_ID,
+      platform: "ios",
+      app_version: version,
+      skip_binary_upload: true,
+      submit_for_review: false,
+      automatic_release: false,
+      run_precheck_before_submit: false,
+      force: true
+    }
+
+    # The text first. This also creates the version if it isn't there yet, so the
+    # screenshot step below always has a version to work on.
+    deliver(**common, metadata_path: "fastlane/metadata", skip_screenshots: true)
+    next if screenshots.empty?
+
+    # Then the screenshots, replacing only the device sets being uploaded. deliver's
+    # own `overwrite_screenshots` deletes every set in the language, so a run with only
+    # the iPhone screens would also wipe the iPhone Duo and Apple Watch sets.
+    replacing = Deliver::Loader.load_app_screenshots(screenshots, false)
+                               .map(&:display_type).compact.uniq
+    UI.user_error!("No screenshots App Store Connect accepts in #{screenshots}") if replacing.empty?
+    UI.message("Replacing these screenshot sets: #{replacing.join(', ')}")
+    clear_screenshot_sets(api_key, replacing)
+
+    deliver(
+      **common,
+      skip_metadata: true,
+      screenshots_path: screenshots,
+      overwrite_screenshots: false
+    )
+  end
+end

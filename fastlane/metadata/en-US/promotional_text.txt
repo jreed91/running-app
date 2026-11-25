@@ -1,0 +1,1 @@
+New in 1.2: a heatmap of every route you've run, your best efforts found in every run, and a share studio for your runs.
