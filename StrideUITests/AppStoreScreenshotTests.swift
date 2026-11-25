@@ -125,6 +125,94 @@ final class AppStoreScreenshotTests: XCTestCase {
         }
     }
 
+    /// The 1.2 features for the listing: the heatmap full screen, best efforts, run
+    /// analysis and the share studio. The same paths as `WhatsNewScreenshotTests`, at full
+    /// size for framing. One launch per feature, so a miss in one doesn't cost the rest.
+    func testCaptureHeatmap() throws {
+        relaunchToHome()
+        selectTab("Progress")
+        // The card holds the map back until asked, unless it was shown before.
+        let showMap = app.buttons["Show the map"]
+        if showMap.waitForExistence(timeout: 5) {
+            showMap.tap()
+        }
+        let fullScreen = app.buttons["progress.heatmap.fullScreen"]
+        guard scrollTo(fullScreen) else {
+            return XCTFail("No heatmap card on Progress")
+        }
+        fullScreen.tap()
+        // Tracing every demo route, then the picture's draw-in.
+        sleep(6)
+        capture("08-heatmap")
+    }
+
+    func testCaptureBestEfforts() throws {
+        relaunchToHome()
+        selectTab("Progress")
+        let bestEfforts = app.descendants(matching: .any)["progress.bestEfforts"]
+        guard scrollTo(bestEfforts) else {
+            return XCTFail("No best efforts card on Progress")
+        }
+        capture("09-best-efforts")
+    }
+
+    func testCaptureRunAnalysisAndShareStudio() throws {
+        relaunchToHome()
+        selectTab("History")
+        let newestRun = app.buttons["history.run"].firstMatch
+        guard newestRun.waitForExistence(timeout: 10) else {
+            return XCTFail("No run in History")
+        }
+        newestRun.tap()
+
+        let analysis = app.buttons["runSummary.breakdown.analysis"]
+        if scrollTo(analysis) {
+            analysis.tap()
+            if app.navigationBars["Run analysis"].waitForExistence(timeout: 8) {
+                capture("10-run-analysis")
+                app.navigationBars["Run analysis"].buttons.element(boundBy: 0).tap()
+            } else {
+                XCTFail("Run analysis did not open")
+            }
+        } else {
+            XCTFail("The newest run has no Run analysis row")
+        }
+
+        let actions = app.buttons["runSummary.actions"]
+        guard actions.waitForExistence(timeout: 8) else {
+            return XCTFail("No run actions menu")
+        }
+        actions.tap()
+        let share = app.buttons["runSummary.shareCard"].exists
+            ? app.buttons["runSummary.shareCard"]
+            : app.buttons["Share run card"]
+        guard share.waitForExistence(timeout: 5) else {
+            return XCTFail("No Share run card in the actions menu")
+        }
+        share.tap()
+        // The cards render after the studio opens.
+        sleep(3)
+        capture("11-share-studio")
+    }
+
+    /// A fresh launch on the demo history, through onboarding, to Home.
+    private func relaunchToHome() {
+        app.terminate()
+        app.launchArguments = ["--uitesting", "--seed-demo-data"]
+        app.launch()
+        completeOnboarding(capturingWelcome: false)
+    }
+
+    /// Swipes up until `element` can be tapped. Returns whether it got there.
+    @discardableResult
+    private func scrollTo(_ element: XCUIElement) -> Bool {
+        guard element.waitForExistence(timeout: 10) else { return false }
+        for _ in 0..<12 where !element.isHittable {
+            app.swipeUp(velocity: .slow)
+        }
+        return element.isHittable
+    }
+
     /// The run's AI coach page, from a separate launch so the screens above keep AI Coach
     /// off as before. A CI simulator has no Apple Intelligence, so `--seed-coach-read`
     /// turns the coach on and stores a sample read on the newest run (see

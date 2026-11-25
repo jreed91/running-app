@@ -1,10 +1,14 @@
 {
   "iphone": [
-    { "file": "01-plan.png",     "eyebrow": "Training plans",  "title": "Your plan, built around your race" },
-    { "file": "02-home.png",     "eyebrow": "Every day",       "title": "Know exactly what to run today" },
-    { "file": "03-run.png",      "eyebrow": "On the run",      "title": "Every run, tracked to the step" },
-    { "file": "04-history.png",  "eyebrow": "History",         "title": "See what every run tells you" },
-    { "file": "05-progress.png", "eyebrow": "Progress",        "title": "Progress you can see" },
-    { "file": "06-welcome.png",  "eyebrow": "Stride",          "title": "Coaching that fits your week" }
+    { "file": "08-heatmap.png",       "out": "01-heatmap.png",       "eyebrow": "Heatmap",         "title": "Every route you've run, on one map" },
+    { "file": "01-plan.png",          "out": "02-plan.png",          "eyebrow": "Training plans",  "title": "Your plan, built around your race" },
+    { "file": "02-home.png",          "out": "03-home.png",          "eyebrow": "Every day",       "title": "Know exactly what to run today" },
+    { "file": "10-run-analysis.png",  "out": "04-run-analysis.png",  "eyebrow": "Run analysis",    "title": "See what happened on that hill" },
+    { "file": "05-progress.png",      "out": "05-progress.png",      "eyebrow": "Progress",        "title": "Progress, all on one page" },
+    { "file": "09-best-efforts.png",  "out": "06-best-efforts.png",  "eyebrow": "Best efforts",    "title": "Your fastest times, found in every run" },
+    { "file": "11-share-studio.png",  "out": "07-share-studio.png",  "eyebrow": "Share studio",    "title": "Share every run your way" },
+    { "file": "03-run.png",           "out": "08-run.png",           "eyebrow": "On the run",      "title": "Every run, tracked to the step" },
+    { "file": "04-history.png",       "out": "09-history.png",       "eyebrow": "History",         "title": "See what every run tells you" },
+    { "file": "06-welcome.png",       "out": "10-welcome.png",       "eyebrow": "Stride",          "title": "Coaching that fits your week" }
   ]
 }
