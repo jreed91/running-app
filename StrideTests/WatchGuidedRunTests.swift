@@ -41,6 +41,9 @@ struct WatchGuidedRunTests {
         WatchRunMetrics(elapsedSeconds: seconds, distanceMeters: meters, currentSpeedMetersPerSecond: speed)
     }
 
+    // `#expect` can't call a mutating method on the value it checks, so each step is
+    // taken first and only its result is checked.
+
     @Test("A session with steps becomes a guided run; an easy run does not")
     func onlySessionsWithSteps() {
         #expect(WatchGuidedRun(session: session) != nil)
@@ -52,29 +55,36 @@ struct WatchGuidedRunTests {
     @Test("Steps move on when their distance or time is reached")
     func autoAdvance() throws {
         var run = try #require(WatchGuidedRun(session: session))
-        #expect(run.update(with: at(990, 300)) == 0)
+        let warmup = run.update(with: at(990, 300))
+        #expect(warmup == 0)
         #expect(run.currentStep.kind == .warmup)
 
-        #expect(run.update(with: at(1_000, 302)) == 1)
+        let intoRep = run.update(with: at(1_000, 302))
+        #expect(intoRep == 1)
         #expect(run.currentStep.kind == .work)
         #expect(run.stepTitle == "Rep 1/3")
 
-        #expect(run.update(with: at(1_400, 400)) == 1)
+        let intoJog = run.update(with: at(1_400, 400))
+        #expect(intoJog == 1)
         #expect(run.currentStep.kind == .recovery)
         // A time step: 90 s from the moment it started.
-        #expect(run.update(with: at(1_600, 489)) == 0)
-        #expect(run.update(with: at(1_610, 490)) == 1)
+        let early = run.update(with: at(1_600, 489))
+        let onTime = run.update(with: at(1_610, 490))
+        #expect(early == 0)
+        #expect(onTime == 1)
         #expect(run.stepTitle == "Rep 2/3")
     }
 
     @Test("Next step skips ahead, and does nothing on the last step")
     func skip() throws {
         var run = try #require(WatchGuidedRun(session: session))
-        #expect(run.skip(with: at(200, 60)))
+        let skipped = run.skip(with: at(200, 60))
+        #expect(skipped)
         #expect(run.currentStep.kind == .work)
         while !run.isOnFinalStep { _ = run.skip(with: at(200, 60)) }
         #expect(run.currentStep.kind == .cooldown)
-        #expect(!run.skip(with: at(200, 60)))
+        let skippedLast = run.skip(with: at(200, 60))
+        #expect(!skippedLast)
     }
 
     @Test("Remaining text is distance for a distance step and time for a time step")

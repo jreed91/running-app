@@ -14,6 +14,9 @@ struct WatchRunCuesTests {
         WatchRunMetrics(elapsedSeconds: seconds, distanceMeters: meters)
     }
 
+    // `#expect` can't call a mutating method on the value it checks, so each reading is
+    // taken first and only its phrases are checked.
+
     /// 1 km warm-up, 2 × 400 m with a 60 s jog, 1 km cool-down.
     private var guided: WatchGuidedRun {
         let structure = WorkoutStructure(
@@ -35,25 +38,30 @@ struct WatchRunCuesTests {
     @Test("A split is spoken once, as the kilometre is crossed, with that kilometre's pace")
     func splits() {
         var cues = WatchRunCues(unit: .metric, speaksSplits: true, speaksSteps: false)
-        #expect(cues.phrases(for: at(990, 297), guidedBefore: nil, guidedAfter: nil).isEmpty)
-        #expect(cues.phrases(for: at(1_005, 300), guidedBefore: nil, guidedAfter: nil)
-            == [SplitAnnouncement.phrase(splitNumber: 1, paceSecondsPerKm: 300, unit: .metric)])
-        #expect(cues.phrases(for: at(1_200, 360), guidedBefore: nil, guidedAfter: nil).isEmpty)
-        #expect(cues.phrases(for: at(2_001, 570), guidedBefore: nil, guidedAfter: nil)
-            == [SplitAnnouncement.phrase(splitNumber: 2, paceSecondsPerKm: 270, unit: .metric)])
+        let before = cues.phrases(for: at(990, 297), guidedBefore: nil, guidedAfter: nil)
+        let first = cues.phrases(for: at(1_005, 300), guidedBefore: nil, guidedAfter: nil)
+        let between = cues.phrases(for: at(1_200, 360), guidedBefore: nil, guidedAfter: nil)
+        let second = cues.phrases(for: at(2_001, 570), guidedBefore: nil, guidedAfter: nil)
+        #expect(before.isEmpty)
+        #expect(first == [SplitAnnouncement.phrase(splitNumber: 1, paceSecondsPerKm: 300, unit: .metric)])
+        #expect(between.isEmpty)
+        #expect(second == [SplitAnnouncement.phrase(splitNumber: 2, paceSecondsPerKm: 270, unit: .metric)])
     }
 
     @Test("Miles split every 1,609 m")
     func mileSplits() {
         var cues = WatchRunCues(unit: .imperial, speaksSplits: true, speaksSteps: false)
-        #expect(cues.phrases(for: at(1_500, 450), guidedBefore: nil, guidedAfter: nil).isEmpty)
-        #expect(cues.phrases(for: at(1_610, 480), guidedBefore: nil, guidedAfter: nil).count == 1)
+        let before = cues.phrases(for: at(1_500, 450), guidedBefore: nil, guidedAfter: nil)
+        let mile = cues.phrases(for: at(1_610, 480), guidedBefore: nil, guidedAfter: nil)
+        #expect(before.isEmpty)
+        #expect(mile.count == 1)
     }
 
     @Test("With splits switched off nothing is said, and the next split still counts from here")
     func splitsOff() {
         var cues = WatchRunCues(unit: .metric, speaksSplits: false, speaksSteps: true)
-        #expect(cues.phrases(for: at(1_005, 300), guidedBefore: nil, guidedAfter: nil).isEmpty)
+        let phrases = cues.phrases(for: at(1_005, 300), guidedBefore: nil, guidedAfter: nil)
+        #expect(phrases.isEmpty)
     }
 
     @Test("A new step is announced in the phone's words")
@@ -62,7 +70,8 @@ struct WatchRunCuesTests {
         let before = guided
         var after = before
         _ = cues.phrases(for: at(990, 297), guidedBefore: before, guidedAfter: before)
-        #expect(after.update(with: at(1_000, 300)) == 1)
+        let moved = after.update(with: at(1_000, 300))
+        #expect(moved == 1)
 
         let phrases = cues.phrases(for: at(1_000, 300), guidedBefore: before, guidedAfter: after)
 
