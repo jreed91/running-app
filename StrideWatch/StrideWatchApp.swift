@@ -27,7 +27,10 @@ struct StrideWatchApp: App {
                 .environment(model)
                 .environment(recorder)
                 .tint(Color.strideBrand)
-                .task { model.activate() }
+                .task {
+                    model.activate()
+                    if WatchDemo.isEnabled, WatchDemo.showsRun { recorder.showDemoRun() }
+                }
         }
     }
 }

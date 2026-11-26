@@ -84,10 +84,10 @@ enum ReleaseNotes {
 
     // MARK: 2.0
 
-    /// Draft. 2.0's features are still being built (Watch runs first, then training with
-    /// friends), so this entry exists to satisfy `theRunningVersionHasNotes` after the
-    /// version bump. Rewrite the headline and features, and add screenshots, before 2.0
-    /// is submitted for review.
+    /// Watch runs are written up (Watch runs, PR 6c). Still a draft until training with
+    /// friends lands: add its feature, then the release date when 2.0 goes live. The
+    /// Watch features have no screenshots here, because `WhatsNewScreenshotTests` captures
+    /// the iPhone; the App Store's Watch set shows them instead.
     static let v2point0 = Release(
         version: "2.0",
         releaseDate: nil,
@@ -96,11 +96,27 @@ enum ReleaseNotes {
             ReleaseFeature(
                 id: "watch-runs",
                 title: "Leave your phone at home",
-                body: "Start today's run on Apple Watch and get your pace targets, heart rate and spoken cues on your wrist.",
+                body: "Start today's run in Stride on Apple Watch. Time, distance, pace and heart rate zone on your wrist, saved to Apple Health and ticked off in your plan.",
                 icon: .run
             ),
+            ReleaseFeature(
+                id: "watch-steps",
+                title: "Intervals on your wrist",
+                body: "Your Watch walks you through warm-up, reps, recoveries and cool-down, with a tap at each step and your target pace in green when you're on it.",
+                icon: .timer
+            ),
+            ReleaseFeature(
+                id: "watch-cues",
+                title: "Your coach in your ear",
+                body: "Splits and step changes spoken through your AirPods or the Watch speaker, in the same words as on your iPhone.",
+                icon: .music
+            ),
         ],
-        improvements: [],
+        improvements: [
+            "Runs on the Watch pause when you stop at a crossing and carry on when you do.",
+            "If the Watch restarts mid-run, the run picks up where it left off.",
+            "Water Lock and a low-battery warning while you run.",
+        ],
         fixes: []
     )
 

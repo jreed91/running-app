@@ -149,6 +149,11 @@ jobs:
             sleep 6
             xcrun simctl io "$WATCH" screenshot "AppStore/watch/$2.png"
           done
+          # 2.0's headline: a run recorded in Stride on the Watch, mid-rep (Watch runs).
+          xcrun simctl terminate "$WATCH" com.running.stride.watchkitapp 2>/dev/null || true
+          xcrun simctl launch "$WATCH" com.running.stride.watchkitapp --seed-demo-data --demo-run
+          sleep 6
+          xcrun simctl io "$WATCH" screenshot "AppStore/watch/00-run.png"
           ls -l AppStore/watch
 
       - name: Frame the iPhone screens

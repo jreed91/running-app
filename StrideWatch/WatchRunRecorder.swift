@@ -131,6 +131,28 @@ final class WatchRunRecorder: NSObject {
         }
     }
 
+    // MARK: Screenshots
+
+    /// A run in progress with made-up numbers, for the App Store's Watch screenshots
+    /// (`--demo-run`, PR 6c): ``WatchDemo/sampleRunSession`` 410 m into its first rep, on
+    /// pace. No workout session, so ``refresh(at:)`` leaves the numbers as they are.
+    func showDemoRun() {
+        guard state == .idle else { return }
+        let session = WatchDemo.sampleRunSession
+        runSession = session
+        usesMetricUnits = true
+        var guided = WatchGuidedRun(session: session)
+        _ = guided?.update(with: WatchRunMetrics(elapsedSeconds: 640, distanceMeters: 2_000))
+        self.guided = guided
+        metrics = WatchRunMetrics(
+            elapsedSeconds: 738,
+            distanceMeters: 2_410,
+            currentSpeedMetersPerSecond: 1_000 / 239,
+            heartRateBPM: 168
+        )
+        state = .running
+    }
+
     // MARK: Recovery
 
     /// Carries on the run HealthKit was recording when the app crashed or the Watch
