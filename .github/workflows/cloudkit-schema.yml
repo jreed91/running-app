@@ -38,8 +38,10 @@ permissions:
   contents: read
 
 # Never two imports into the same container at once, and never cancel one halfway.
+# Pull requests only validate, so each gets its own group and a PR run stuck in the
+# queue never holds up an import or export from main.
 concurrency:
-  group: cloudkit-schema
+  group: cloudkit-schema-${{ github.event_name == 'pull_request' && github.ref || 'main' }}
   cancel-in-progress: false
 
 env:
@@ -50,9 +52,10 @@ env:
 jobs:
   schema:
     name: CloudKit schema
-    # cktool ships inside Xcode, so this needs a macOS image. See the runner-label
-    # note in ci.yml for why the label is `xcode-27`.
-    runs-on: xcode-27
+    # cktool ships inside every Xcode since 13, so any macOS image works. `macos-26`,
+    # the one the lint job uses, is the one that reliably gets a runner; the app's
+    # Xcode 27 is not needed to talk to CloudKit.
+    runs-on: macos-26
     timeout-minutes: 15
     env:
       # cktool reads the token from this variable, ahead of the keychain.
@@ -70,11 +73,10 @@ jobs:
             *)                 mode="validate" ;;
           esac
           # Until the first export is checked in there is nothing to validate or
-          # import, so the PR that adds this workflow (and anything before the
-          # baseline lands) passes with a notice instead of failing.
+          # import, so export instead (read-only): its artifact is the file to check in.
           if [ "$mode" != "export" ] && [ ! -f "$SCHEMA_FILE" ]; then
-            echo "::notice::$SCHEMA_FILE is not checked in yet, so there is nothing to $mode. Run this workflow with action 'export' and check in development-before.ckdb from its artifact as $SCHEMA_FILE."
-            mode="skip"
+            echo "::notice::$SCHEMA_FILE is not checked in yet, so this run exports instead. Check in development-before.ckdb from the cloudkit-schemas artifact as $SCHEMA_FILE."
+            mode="export"
           fi
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
           echo "Action: $mode"
@@ -111,13 +113,13 @@ jobs:
           {
             echo "### Development, before → $SCHEMA_FILE"
             echo '```diff'
-            diff -u out/development-before.ckdb "$SCHEMA_FILE" || true
+            diff -uw out/development-before.ckdb "$SCHEMA_FILE" || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           # Importing a file replaces the Development schema. A record type or field
           # that is in Development but not in the file would be dropped, which is
           # almost never meant: the file is edited by adding lines, not rewritten.
-          removed=$(diff out/development-before.ckdb "$SCHEMA_FILE" | grep '^< ' | grep -v 'GRANT' || true)
+          removed=$(diff -w out/development-before.ckdb "$SCHEMA_FILE" | grep '^< ' | grep -v 'GRANT' || true)
           if [ -n "$removed" ]; then
             echo "::warning::$SCHEMA_FILE is missing lines that Development has:"
             echo "$removed"
@@ -146,7 +148,7 @@ jobs:
             echo "### Production → Development"
             echo "This is what **Deploy Schema Changes** in [CloudKit Console](https://icloud.developer.apple.com) would add. Empty means Production is up to date."
             echo '```diff'
-            diff -u out/production-before.ckdb "$dev" || true
+            diff -uw out/production-before.ckdb "$dev" || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
