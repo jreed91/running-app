@@ -211,6 +211,10 @@ final class AppContainer {
     /// root, can drive a `TabView` several levels below it (B1).
     let appNavigation = AppNavigation()
 
+    /// Training groups ("Train with friends"): CloudKit zones shared by link, beside the
+    /// SwiftData store rather than in it.
+    let trainingGroups: any TrainingGroupSyncing = CloudKitTrainingGroupService()
+
     // MARK: Workout Review
 
     /// Listens to `NotificationService.syncedRunTaps` for this container's lifetime. Not

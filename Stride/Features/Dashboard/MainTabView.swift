@@ -63,6 +63,11 @@ struct MainTabView: View {
             NewPlanOnboardingView(invite: invite)
                 .strideSheet()
         }
+        // A friend's training-group link, handed over by `StrideSceneDelegate`.
+        .sheet(item: pendingGroupInvite) { invite in
+            JoinTrainingGroupSheet(invite: invite)
+                .strideSheet()
+        }
         // What's new in this release, once, after an update (`WhatsNewPolicy`; the
         // launch check is `ContentView.checkWhatsNew()`).
         .sheet(item: whatsNewRelease) { release in
@@ -104,6 +109,13 @@ struct MainTabView: View {
         Binding(
             get: { container.appNavigation.pendingRaceInvite },
             set: { container.appNavigation.pendingRaceInvite = $0 }
+        )
+    }
+
+    private var pendingGroupInvite: Binding<TrainingGroupInvite?> {
+        Binding(
+            get: { TrainingGroupInviteInbox.shared.pending },
+            set: { TrainingGroupInviteInbox.shared.pending = $0 }
         )
     }
 

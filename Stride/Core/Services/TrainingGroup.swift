@@ -28,6 +28,10 @@ struct TrainingGroup: Equatable, Hashable, Sendable, Identifiable {
 
     var id: String { ownerName + "/" + zoneName }
 
+    /// `UserDefaults` key of the name this runner shows their groups. Local to the phone:
+    /// it travels only inside their ``FriendWeek``.
+    static let displayNameKey = "friends.displayName"
+
     static let defaultTitle = "Training group"
     static let maxTitleLength = 40
 
