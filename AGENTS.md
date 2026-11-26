@@ -329,9 +329,11 @@ update it in the same change as `TrainingBreakPolicy`.
   `.none` explicitly. See
   [`docs/CLOUDKIT_ANALYSIS_2026-07-28.md`](docs/CLOUDKIT_ANALYSIS_2026-07-28.md) §3 F1.
 - **Changing the schema means redeploying it.** Adding a model type or a stored property —
-  even an optional one — needs a run with `--init-cloudkit-schema` on a device and a
-  **Deploy Schema Changes** in CloudKit Console before the build ships, because App Store
-  builds see only the production environment. The release gate is in
+  even an optional one — needs its field added to `cloudkit/Stride.ckdb` (the
+  `CloudKitSchemaFileTests` failure lists the lines) and a **Deploy Schema Changes** in
+  CloudKit Console before the build ships, because App Store builds see only the
+  production environment. The `CloudKit schema` workflow imports the file into Development
+  on merge; see [`cloudkit/README.md`](cloudkit/README.md). The release gate is in
   [`docs/CLOUDKIT_VALIDATION.md`](docs/CLOUDKIT_VALIDATION.md); deployment is additive-only
   and cannot be undone.
 

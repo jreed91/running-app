@@ -1,0 +1,156 @@
+name: CloudKit schema
+
+# Puts the CloudKit schema into the Development environment from the checked-in
+# file `cloudkit/Stride.ckdb`, so nobody has to run the app with
+# `--init-cloudkit-schema` on a device. Apple's `cktool` does the work with a
+# CloudKit management token. See `cloudkit/README.md`.
+#
+# What runs when:
+#   - pull request that touches the schema file: validate it against Development
+#   - push to main that touches the schema file: validate, then import into Development
+#   - manual run, action "export": save the Development and Production schemas as an
+#     artifact (how the checked-in file was first made)
+#   - manual run, action "import": the same as a push to main
+#
+# Every run ends by listing what "Deploy Schema Changes" in CloudKit Console would add
+# to Production. cktool cannot deploy to Production: that click stays in the Console.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'cloudkit/Stride.ckdb'
+      - '.github/workflows/cloudkit-schema.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'cloudkit/Stride.ckdb'
+      - '.github/workflows/cloudkit-schema.yml'
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "export = save the current schemas as an artifact; import = put cloudkit/Stride.ckdb into Development"
+        type: choice
+        options: [export, import]
+        default: export
+
+permissions:
+  contents: read
+
+# Never two imports into the same container at once, and never cancel one halfway.
+concurrency:
+  group: cloudkit-schema
+  cancel-in-progress: false
+
+env:
+  TEAM_ID: VMNPGK3Q29
+  CONTAINER_ID: iCloud.com.running.stride
+  SCHEMA_FILE: cloudkit/Stride.ckdb
+
+jobs:
+  schema:
+    name: CloudKit schema
+    # cktool ships inside Xcode, so this needs a macOS image. See the runner-label
+    # note in ci.yml for why the label is `xcode-27`.
+    runs-on: xcode-27
+    timeout-minutes: 15
+    env:
+      # cktool reads the token from this variable, ahead of the keychain.
+      CLOUDKIT_MANAGEMENT_TOKEN: ${{ secrets.CLOUDKIT_MANAGEMENT_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pick the action
+        id: mode
+        run: |
+          case "${{ github.event_name }}" in
+            workflow_dispatch) mode="${{ inputs.action }}" ;;
+            push)              mode="import" ;;
+            *)                 mode="validate" ;;
+          esac
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "Action: $mode"
+
+      - name: Check the management token
+        run: |
+          if [ -z "$CLOUDKIT_MANAGEMENT_TOKEN" ]; then
+            echo "::error::The CLOUDKIT_MANAGEMENT_TOKEN repository secret is not set (or this is a fork PR, which gets no secrets). cloudkit/README.md says how to make one."
+            exit 1
+          fi
+          xcrun cktool version || true
+
+      - name: Check the schema file is checked in
+        if: steps.mode.outputs.mode != 'export'
+        run: |
+          if [ ! -f "$SCHEMA_FILE" ]; then
+            echo "::error::$SCHEMA_FILE is missing. Run this workflow with action 'export' first and check in development-before.ckdb from its artifact as $SCHEMA_FILE."
+            exit 1
+          fi
+
+      - name: Export the current schemas
+        run: |
+          mkdir -p out
+          for env in development production; do
+            xcrun cktool export-schema \
+              --team-id "$TEAM_ID" --container-id "$CONTAINER_ID" \
+              --environment "$env" --output-file "out/$env-before.ckdb"
+          done
+
+      - name: Validate against Development
+        if: steps.mode.outputs.mode != 'export'
+        run: |
+          xcrun cktool validate-schema \
+            --team-id "$TEAM_ID" --container-id "$CONTAINER_ID" \
+            --environment development --file "$SCHEMA_FILE"
+
+      - name: Show what the import changes in Development
+        if: steps.mode.outputs.mode != 'export'
+        run: |
+          {
+            echo "### Development, before → $SCHEMA_FILE"
+            echo '```diff'
+            diff -u out/development-before.ckdb "$SCHEMA_FILE" || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          # Importing a file replaces the Development schema. A record type or field
+          # that is in Development but not in the file would be dropped, which is
+          # almost never meant: the file is edited by adding lines, not rewritten.
+          removed=$(diff out/development-before.ckdb "$SCHEMA_FILE" | grep '^< ' | grep -v 'GRANT' || true)
+          if [ -n "$removed" ]; then
+            echo "::warning::$SCHEMA_FILE is missing lines that Development has:"
+            echo "$removed"
+            if [ "${{ steps.mode.outputs.mode }}" = "import" ]; then
+              echo "::error::Refusing to import a file that would remove schema from Development. Add the lines back, or remove them in CloudKit Console on purpose."
+              exit 1
+            fi
+          fi
+
+      - name: Import into Development
+        if: steps.mode.outputs.mode == 'import'
+        run: |
+          xcrun cktool import-schema \
+            --team-id "$TEAM_ID" --container-id "$CONTAINER_ID" \
+            --environment development --file "$SCHEMA_FILE"
+          xcrun cktool export-schema \
+            --team-id "$TEAM_ID" --container-id "$CONTAINER_ID" \
+            --environment development --output-file out/development-after.ckdb
+
+      - name: List what Deploy to Production would add
+        run: |
+          dev=out/development-after.ckdb
+          [ -f "$dev" ] || dev=out/development-before.ckdb
+          {
+            echo "### Production → Development"
+            echo "This is what **Deploy Schema Changes** in [CloudKit Console](https://icloud.developer.apple.com) would add. Empty means Production is up to date."
+            echo '```diff'
+            diff -u out/production-before.ckdb "$dev" || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cloudkit-schemas
+          path: out/
+          if-no-files-found: ignore
