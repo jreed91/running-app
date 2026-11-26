@@ -88,7 +88,8 @@ struct WatchRunMetrics: Equatable, Sendable {
 // MARK: - WatchRunMetadata
 
 /// Keys Stride's Watch app writes into the saved `HKWorkout`'s metadata, so the phone can
-/// tell its own Watch runs apart and, from PR 5, link one to the exact plan session.
+/// tell its own Watch runs apart and link one to the exact plan session
+/// (`HealthKitRepository.watchSessionID(from:)`, `WorkoutSyncService.linkToScheduledWorkouts`).
 enum WatchRunMetadata {
     /// The `ScheduledWorkout` id the run was started for, as a UUID string. Absent on a
     /// free run.

@@ -655,6 +655,12 @@ final class WorkoutSyncService {
     ///
     /// Internal because a run recovered from a checkpoint (P1.2) has no scheduled session
     /// attached either — the screen that knew it went with the process — and is linked here.
+    ///
+    /// A run recorded in Stride on the Watch names the session it was started from
+    /// (``RunWorkout/namedSessionID``, Watch runs PR 5). Those are linked first, to exactly
+    /// that session whatever its day, so a session run a day or two late, or one the plan
+    /// moved while the phone was away, is still the one completed. A named session that is
+    /// no longer available (deleted, retired, already done) falls back to the day match.
     func linkToScheduledWorkouts(_ runWorkouts: [RunWorkout]) {
         let toLink = runWorkouts.runsOnly.filter { $0.scheduledWorkout == nil }
         guard !toLink.isEmpty else { return }
@@ -671,8 +677,19 @@ final class WorkoutSyncService {
             $0.completedWorkout == nil && $0.workoutType.isRunType && Self.belongsToLivePlan($0)
         }
 
-        let calendar = Calendar.current
+        var unmatched: [RunWorkout] = []
         for run in toLink {
+            guard let named = run.namedSessionID,
+                  let match = available.first(where: { $0.id == named }) else {
+                unmatched.append(run)
+                continue
+            }
+            link(run, to: match)
+            available.removeAll { $0.id == match.id }
+        }
+
+        let calendar = Calendar.current
+        for run in unmatched {
             let runDay = calendar.startOfDay(for: run.date)
 
             // Accept scheduled workouts from the same day or up to one day earlier
@@ -695,19 +712,23 @@ final class WorkoutSyncService {
             }
 
             if let match = best {
-                run.scheduledWorkout = match
-                match.completedWorkout = run
-                match.isCompleted = true
-                match.linkedRunWorkoutID = run.id
-                run.linkedScheduledWorkoutID = match.id
-                // A Watch run at 06:30 completes the day before the 08:00 "Workout
-                // today" reminder fires, and nothing else takes that reminder down
-                // while the app stays in the background.
-                notificationService.cancelMorningReminder(for: match)
+                link(run, to: match)
                 // Remove from available pool so it can't be matched twice.
                 available.removeAll { $0.id == match.id }
             }
         }
+    }
+
+    private func link(_ run: RunWorkout, to match: ScheduledWorkout) {
+        run.scheduledWorkout = match
+        match.completedWorkout = run
+        match.isCompleted = true
+        match.linkedRunWorkoutID = run.id
+        run.linkedScheduledWorkoutID = match.id
+        // A Watch run at 06:30 completes the day before the 08:00 "Workout
+        // today" reminder fires, and nothing else takes that reminder down
+        // while the app stays in the background.
+        notificationService.cancelMorningReminder(for: match)
     }
 
     // MARK: - Strength workout sync

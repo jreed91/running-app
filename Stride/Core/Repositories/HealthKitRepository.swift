@@ -123,6 +123,11 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         (metadata?[strideWorkoutIDMetadataKey] as? String).flatMap(UUID.init(uuidString:))
     }
 
+    /// The plan session a run recorded in Stride's watch app names (Watch runs, PR 5).
+    static func watchSessionID(from metadata: [String: Any]?) -> UUID? {
+        (metadata?[WatchRunMetadata.sessionIDKey] as? String).flatMap(UUID.init(uuidString:))
+    }
+
     @MainActor func save(_ workout: RunWorkout) async throws -> String {
         let isIndoor = workout.workoutLocation == .indoor
         let start = workout.date
@@ -872,6 +877,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             if let strideID = Self.strideWorkoutID(from: hkWorkout.metadata) {
                 run.id = strideID
             }
+            run.namedSessionID = Self.watchSessionID(from: hkWorkout.metadata)
             if !coordinates.isEmpty { run.routeCoordinates = coordinates }
             // Kept alongside the splits, not just used to build them: a one-mile import has
             // a single whole-mile split and needs the readings behind it for the summary's

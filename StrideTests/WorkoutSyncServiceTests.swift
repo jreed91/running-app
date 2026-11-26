@@ -360,6 +360,67 @@ struct WorkoutSyncServiceTests {
         UserDefaults.standard.removeObject(forKey: "pendingReviewWorkoutID")
     }
 
+    // MARK: Runs that name their session (Watch runs, PR 5)
+
+    /// A run recorded in Stride on the Watch names its session, and is linked to exactly
+    /// that one even when the day match would have picked another, or none.
+    @Test("A Watch run that names its session completes that session, not today's")
+    func namedSessionWinsOverDayMatch() async throws {
+        let mock = MockHealthKitRepository()
+        let (service, context) = makeService(mock: mock)
+        let today = try makePlanWithTodaysRun(in: context, isActive: true)
+        // Two days overdue: outside the day match's one-day allowance.
+        let overdue = ScheduledWorkout(
+            scheduledDate: Date().startOfDay.adding(days: -2),
+            workoutType: .tempo,
+            targetDistanceMeters: 6_000
+        )
+        context.insert(overdue)
+        overdue.week = today.week
+        try context.save()
+
+        let run = RunWorkout(date: Date(), distanceMeters: 6_000, durationSeconds: 1_800, workoutType: .easy)
+        run.healthKitWorkoutID = UUID().uuidString
+        run.namedSessionID = overdue.id
+        mock.runFetchResults = [[run]]
+
+        await service.syncNow(source: "test")
+
+        #expect(overdue.isCompleted)
+        #expect(run.scheduledWorkout?.id == overdue.id)
+        #expect(run.linkedScheduledWorkoutID == overdue.id)
+        #expect(today.isCompleted == false)
+
+        UserDefaults.standard.removeObject(forKey: "pendingReviewWorkoutID")
+    }
+
+    @Test("A Watch run whose session is gone falls back to the day match")
+    func missingNamedSessionFallsBackToDay() async throws {
+        let mock = MockHealthKitRepository()
+        let (service, context) = makeService(mock: mock)
+        let today = try makePlanWithTodaysRun(in: context, isActive: true)
+
+        let run = RunWorkout(date: Date(), distanceMeters: 5_000, durationSeconds: 1_500, workoutType: .easy)
+        run.healthKitWorkoutID = UUID().uuidString
+        run.namedSessionID = UUID()
+        mock.runFetchResults = [[run]]
+
+        await service.syncNow(source: "test")
+
+        #expect(today.isCompleted)
+        #expect(run.scheduledWorkout?.id == today.id)
+
+        UserDefaults.standard.removeObject(forKey: "pendingReviewWorkoutID")
+    }
+
+    @Test("The session id is read from the Watch run's Health metadata")
+    func watchSessionIDFromMetadata() {
+        let id = UUID()
+        #expect(HealthKitRepository.watchSessionID(from: [WatchRunMetadata.sessionIDKey: id.uuidString]) == id)
+        #expect(HealthKitRepository.watchSessionID(from: [WatchRunMetadata.sessionIDKey: "not-a-uuid"]) == nil)
+        #expect(HealthKitRepository.watchSessionID(from: nil) == nil)
+    }
+
     // MARK: Runner context handed to the importer (N9/N10)
 
     private func insertProfile(

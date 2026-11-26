@@ -74,6 +74,13 @@ final class RunWorkout {
     /// the relationship after reinstall.
     var linkedScheduledWorkoutID: UUID?
 
+    /// The plan session a run recorded in Stride on the Watch says it was (Watch runs,
+    /// PR 5), read from the workout's Health metadata on import so the run links to that
+    /// exact session rather than to whatever the plan has on its day. Not stored: it only
+    /// lives through the import pass that links the run, and the link itself is
+    /// `scheduledWorkout` and `linkedScheduledWorkoutID`.
+    @Transient var namedSessionID: UUID? = nil
+
     /// The `Shoe` this run was run in, by ID rather than relationship for the same
     /// out-of-order-sync reason as `linkedScheduledWorkoutID`. `nil` for every run from
     /// before shoe tracking and every run the runner has not put a pair on.
