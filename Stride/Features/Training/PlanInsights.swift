@@ -6,17 +6,6 @@ import SwiftUI
 
 // MARK: - Pace Insights Card
 
-/// The row on Plan that opens the pace insights page.
-struct PaceInsightsRow: View {
-    var body: some View {
-        PlanPageRow(
-            title: "Pace insights",
-            subtitle: "Estimated finish and training paces",
-            icon: .tempo
-        )
-    }
-}
-
 /// A row that opens one of the plan's reference pages.
 struct PlanPageRow: View {
     let title: LocalizedStringKey
