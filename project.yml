@@ -424,6 +424,13 @@ targets:
       - path: Stride/Core/Models/WatchRunMetrics.swift
       # The plan session's steps on the Watch (PR 3), over the shared GuidedWorkoutEngine.
       - path: Stride/Core/Models/WatchGuidedRun.swift
+      # Spoken cues on the Watch (PR 4), in the phone's own words.
+      - path: Stride/Core/Models/WatchRunCues.swift
+      - path: Stride/Core/Models/UnitPreference.swift
+      - path: Stride/Core/Services/SplitAnnouncement.swift
+      - path: Stride/Core/Services/GuidedStepAnnouncement.swift
+      - path: Stride/Core/Services/SpokenMetric.swift
+      - path: Stride/Shared/Extensions/Double+Extensions.swift
       - path: Stride/Core/Services/LocationQualityFilter.swift
       # The app's colours, for the same reason `StrideWidgets` compiles this catalog. The
       # watch's own icon lives in `StrideWatch/WatchAssets.xcassets` under a different
@@ -457,6 +464,7 @@ targets:
       - sdk: WorkoutKit.framework
       - sdk: HealthKit.framework
       - sdk: CoreLocation.framework
+      - sdk: AVFoundation.framework
 
     # Recording runs on the Watch (Watch runs, PR 2). REQUIRES the HealthKit capability
     # on the `com.running.stride.watchkitapp` App ID (enabled 2026-11-26), or the

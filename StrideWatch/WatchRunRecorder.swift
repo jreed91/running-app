@@ -45,6 +45,8 @@ final class WatchRunRecorder: NSObject {
     /// The plan session's steps, when it has any (PR 3). `nil` on a free run or an easy run.
     private(set) var guided: WatchGuidedRun?
 
+    @ObservationIgnored private var cues = WatchRunCues(unit: .metric, speaksSplits: false, speaksSteps: false)
+    @ObservationIgnored private let voice = WatchRunVoice()
     @ObservationIgnored private let healthStore = HKHealthStore()
     @ObservationIgnored private var session: HKWorkoutSession?
     @ObservationIgnored private var builder: HKLiveWorkoutBuilder?
@@ -77,6 +79,7 @@ final class WatchRunRecorder: NSObject {
         self.runSession = runSession
         usesMetricUnits = runSession?.usesMetricUnits ?? fallbackMetric
         guided = runSession.flatMap(WatchGuidedRun.init(session:))
+        cues = WatchRunCues(session: runSession, fallbackUnit: usesMetricUnits ? .metric : .imperial)
         metrics = .zero
         state = .starting
 
@@ -113,6 +116,7 @@ final class WatchRunRecorder: NSObject {
             }
             startLocationUpdates()
             state = .running
+            if let first = cues.startPhrase(guided: guided) { voice.speak([first]) }
         } catch {
             reset()
             state = .failed(String(localized: "The run couldn't start. Try again."))
@@ -135,6 +139,7 @@ final class WatchRunRecorder: NSObject {
     func end() async {
         guard let session, let builder, state == .running || state == .paused else { return }
         state = .saving
+        voice.stop()
         locationManager.stopUpdatingLocation()
         let end = Date()
         session.end()
@@ -170,20 +175,33 @@ final class WatchRunRecorder: NSObject {
     func skipStep() {
         guard state == .running, var guided else { return }
         refresh()
+        let before = guided
         if guided.skip(with: metrics) {
             self.guided = guided
             Self.playStepHaptic()
+            speakCues(guidedBefore: before)
         }
     }
 
     /// Moves the steps on as the run's numbers arrive. Only while running: elapsed time
     /// does not move while paused, so a time step cannot finish during a pause anyway.
     private func advanceSteps() {
-        guard state == .running, var guided else { return }
-        if guided.update(with: metrics) > 0 {
+        guard state == .running else { return }
+        let before = guided
+        if var guided, guided.update(with: metrics) > 0 {
             self.guided = guided
             Self.playStepHaptic()
         }
+        speakCues(guidedBefore: before)
+    }
+
+    /// Speaks what this reading calls for (PR 4). Splits and steps each follow their own
+    /// switch in the phone's Settings, sent over with the session; a free run speaks
+    /// nothing until a later PR sends the switches without a session.
+    private func speakCues(guidedBefore: WatchGuidedRun?) {
+        guard !cues.isSilent else { return }
+        let phrases = cues.phrases(for: metrics, guidedBefore: guidedBefore, guidedAfter: guided)
+        voice.speak(phrases)
     }
 
     private static func playStepHaptic() {
@@ -268,6 +286,7 @@ final class WatchRunRecorder: NSObject {
     }
 
     private func fail(_ message: String) {
+        voice.stop()
         locationManager.stopUpdatingLocation()
         session?.end()
         reset()

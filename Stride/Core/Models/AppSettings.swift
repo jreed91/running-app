@@ -529,6 +529,20 @@ final class AppSettings {
         return UnitPreference(rawValue: raw) ?? .localeDefault
     }
 
+    /// The spoken-cue switches, read without an `AppSettings`, for the Watch (PR 4): the
+    /// Watch context is published from background syncs too. Off when never set, like the
+    /// properties.
+    static func syncedSpokenCues() -> (splits: Bool, steps: Bool) {
+        let defaults = UserDefaults.standard
+        let ubiquitous = NSUbiquitousKeyValueStore.default
+        func bool(_ key: String) -> Bool {
+            hasStoredValue(forKey: key, defaults: defaults, ubiquitous: ubiquitous)
+                ? readBool(forKey: key, defaults: defaults, ubiquitous: ubiquitous)
+                : false
+        }
+        return (bool(spokenSplitsKey), bool(spokenWorkoutStepsKey))
+    }
+
     /// Whether walking workouts should be imported, read without an `AppSettings`.
     ///
     /// A HealthKit sync can run while the app is in the background, before the observable
