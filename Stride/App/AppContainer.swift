@@ -212,8 +212,12 @@ final class AppContainer {
     let appNavigation = AppNavigation()
 
     /// Training groups ("Train with friends"): CloudKit zones shared by link, beside the
-    /// SwiftData store rather than in it.
-    let trainingGroups: any TrainingGroupSyncing = CloudKitTrainingGroupService()
+    /// SwiftData store rather than in it. Offline under test: an unsigned test build has
+    /// no iCloud entitlement, and making a `CKContainer` there traps.
+    let trainingGroups: any TrainingGroupSyncing =
+        UITestingSupport.isEnabled || UITestingSupport.isHostingUnitTests
+            ? OfflineTrainingGroupService()
+            : CloudKitTrainingGroupService()
 
     // MARK: Workout Review
 
