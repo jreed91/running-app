@@ -96,6 +96,14 @@ struct WatchRunCues: Equatable, Sendable {
         return out
     }
 
+    /// Picks up a run the Watch recovered after a crash (PR 6) at `metrics`, so the splits
+    /// already run are not announced again, all at once, on the next reading.
+    mutating func resume(at metrics: WatchRunMetrics) {
+        splitsAnnounced = Int((max(0, metrics.distanceMeters) / unit.splitLengthMeters).rounded(.down))
+        lastSplitElapsedSeconds = metrics.elapsedSeconds
+        previous = metrics
+    }
+
     /// The first step's cue, spoken as the run starts.
     func startPhrase(guided: WatchGuidedRun?) -> String? {
         guard speaksSteps, let guided else { return nil }
