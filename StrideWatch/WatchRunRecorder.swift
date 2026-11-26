@@ -56,6 +56,10 @@ final class WatchRunRecorder: NSObject {
     @ObservationIgnored private let locationManager = CLLocationManager()
     @ObservationIgnored private var lastAcceptedLocation: CLLocation?
     @ObservationIgnored private var lastBatteryCheck: Date = .distantPast
+    /// Pauses when the runner stops (PR 6b). Off for runs with steps: see ``WatchAutoPause``.
+    @ObservationIgnored private var autoPause = WatchAutoPause()
+    /// The pause on screen was made by auto-pause, so the run view says so.
+    private(set) var isAutoPaused = false
 
     var isActive: Bool {
         switch state {
@@ -172,12 +176,39 @@ final class WatchRunRecorder: NSObject {
 
     func pause() {
         guard state == .running else { return }
+        clearAutoPause()
         session?.pause()
     }
 
     func resume() {
         guard state == .paused else { return }
+        clearAutoPause()
         session?.resume()
+    }
+
+    private func clearAutoPause() {
+        autoPause.reset()
+        isAutoPaused = false
+    }
+
+    /// Pauses or resumes on each fix's speed, on a run without steps.
+    private func applyAutoPause(_ locations: [CLLocation]) {
+        guard guided == nil, state == .running || state == .paused else { return }
+        for location in locations {
+            let action = autoPause.update(speed: location.speed, at: location.timestamp, isRunning: state == .running)
+            switch action {
+            case .pause:
+                isAutoPaused = true
+                WKInterfaceDevice.current().play(.stop)
+                session?.pause()
+            case .resume:
+                isAutoPaused = false
+                WKInterfaceDevice.current().play(.start)
+                session?.resume()
+            case nil:
+                break
+            }
+        }
     }
 
     /// Ends the run and saves it to Apple Health.
@@ -372,6 +403,7 @@ final class WatchRunRecorder: NSObject {
         lastAcceptedLocation = nil
         lowBatteryPercent = nil
         lastBatteryCheck = .distantPast
+        clearAutoPause()
         WatchRunCheckpoint.clear()
     }
 }
@@ -413,7 +445,10 @@ extension WatchRunRecorder: HKLiveWorkoutBuilderDelegate {
 
 extension WatchRunRecorder: CLLocationManagerDelegate {
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        Task { @MainActor in self.record(locations) }
+        Task { @MainActor in
+            self.applyAutoPause(locations)
+            self.record(locations)
+        }
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: any Error) {}

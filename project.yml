@@ -432,6 +432,8 @@ targets:
       - path: Stride/Core/Models/WatchRunCues.swift
       # Carrying on a run after a crash or restart, and the battery warning (PR 6).
       - path: Stride/Core/Models/WatchRunCheckpoint.swift
+      # Auto-pause when the runner stops (PR 6b).
+      - path: Stride/Core/Models/WatchAutoPause.swift
       - path: Stride/Core/Models/UnitPreference.swift
       - path: Stride/Core/Services/SplitAnnouncement.swift
       - path: Stride/Core/Services/GuidedStepAnnouncement.swift

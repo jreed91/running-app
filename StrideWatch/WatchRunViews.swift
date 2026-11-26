@@ -46,7 +46,10 @@ private struct WatchRunMetricsPage: View {
             let metric = recorder.usesMetricUnits
             VStack(alignment: .leading, spacing: 2) {
                 if recorder.state == .paused {
-                    Text("Paused")
+                    Group {
+                        // Two literals, not a ternary, so both are localized.
+                        if recorder.isAutoPaused { Text("Auto-paused") } else { Text("Paused") }
+                    }
                         .font(.caption2.weight(.bold))
                         .textCase(.uppercase)
                         .foregroundStyle(Color.strideBrand)
