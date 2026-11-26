@@ -70,11 +70,10 @@ jobs:
             *)                 mode="validate" ;;
           esac
           # Until the first export is checked in there is nothing to validate or
-          # import, so the PR that adds this workflow (and anything before the
-          # baseline lands) passes with a notice instead of failing.
+          # import, so export instead (read-only): its artifact is the file to check in.
           if [ "$mode" != "export" ] && [ ! -f "$SCHEMA_FILE" ]; then
-            echo "::notice::$SCHEMA_FILE is not checked in yet, so there is nothing to $mode. Run this workflow with action 'export' and check in development-before.ckdb from its artifact as $SCHEMA_FILE."
-            mode="skip"
+            echo "::notice::$SCHEMA_FILE is not checked in yet, so this run exports instead. Check in development-before.ckdb from the cloudkit-schemas artifact as $SCHEMA_FILE."
+            mode="export"
           fi
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
           echo "Action: $mode"
