@@ -4,6 +4,7 @@ import Foundation
 // HealthKit's own async methods, and not every HealthKit class is annotated `Sendable`.
 @preconcurrency import HealthKit
 import Observation
+import WatchKit
 
 // MARK: - WatchRunRecorder
 
@@ -41,6 +42,8 @@ final class WatchRunRecorder: NSObject {
     private(set) var runSession: WatchRunSession?
     /// Display units for this run: the plan's when there is one, else kilometres.
     private(set) var usesMetricUnits = true
+    /// The plan session's steps, when it has any (PR 3). `nil` on a free run or an easy run.
+    private(set) var guided: WatchGuidedRun?
 
     @ObservationIgnored private let healthStore = HKHealthStore()
     @ObservationIgnored private var session: HKWorkoutSession?
@@ -73,6 +76,7 @@ final class WatchRunRecorder: NSObject {
         guard !isActive else { return }
         self.runSession = runSession
         usesMetricUnits = runSession?.usesMetricUnits ?? fallbackMetric
+        guided = runSession.flatMap(WatchGuidedRun.init(session:))
         metrics = .zero
         state = .starting
 
@@ -156,7 +160,34 @@ final class WatchRunRecorder: NSObject {
         guard !isActive else { return }
         state = .idle
         runSession = nil
+        guided = nil
         metrics = .zero
+    }
+
+    // MARK: Steps
+
+    /// The runner's "Next step": ends an open step, or cuts one short.
+    func skipStep() {
+        guard state == .running, var guided else { return }
+        refresh()
+        if guided.skip(with: metrics) {
+            self.guided = guided
+            Self.playStepHaptic()
+        }
+    }
+
+    /// Moves the steps on as the run's numbers arrive. Only while running: elapsed time
+    /// does not move while paused, so a time step cannot finish during a pause anyway.
+    private func advanceSteps() {
+        guard state == .running, var guided else { return }
+        if guided.update(with: metrics) > 0 {
+            self.guided = guided
+            Self.playStepHaptic()
+        }
+    }
+
+    private static func playStepHaptic() {
+        WKInterfaceDevice.current().play(.notification)
     }
 
     // MARK: Live metrics
@@ -166,6 +197,7 @@ final class WatchRunRecorder: NSObject {
     func refresh(at date: Date = Date()) {
         guard builder != nil, isActive else { return }
         metrics = currentMetrics(at: date)
+        advanceSteps()
     }
 
     private func currentMetrics(at date: Date) -> WatchRunMetrics {

@@ -51,8 +51,13 @@ private struct WatchRunMetricsPage: View {
                         .textCase(.uppercase)
                         .foregroundStyle(Color.strideBrand)
                 }
+                if let guided = recorder.guided {
+                    WatchStepBanner(guided: guided, metrics: metrics, metric: metric)
+                }
                 Text(verbatim: WatchRunMetrics.elapsedText(metrics.elapsedSeconds))
-                    .font(.system(.title, design: .rounded).weight(.semibold).monospacedDigit())
+                    // Smaller under a step banner, so the screen still fits on a 40 mm Watch.
+                    .font(.system(recorder.guided == nil ? .title : .title3, design: .rounded)
+                        .weight(.semibold).monospacedDigit())
                     .foregroundStyle(Color.strideBrand)
                 metricRow(
                     WatchRunMetrics.distanceText(metrics.distanceMeters, metric: metric),
@@ -102,6 +107,68 @@ private struct WatchRunMetricsPage: View {
     }
 }
 
+// MARK: - Step banner
+
+/// The plan step in progress (PR 3): what it is, how much is left, a progress bar, and the
+/// target pace coloured by whether the runner is on it.
+private struct WatchStepBanner: View {
+    let guided: WatchGuidedRun
+    let metrics: WatchRunMetrics
+    let metric: Bool
+
+    var body: some View {
+        let progress = guided.progress(with: metrics)
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text(verbatim: guided.stepTitle)
+                    .font(.caption2.weight(.bold))
+                    .textCase(.uppercase)
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                Text(verbatim: guided.stepPosition)
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                if let remaining = guided.remainingText(with: metrics, metric: metric) {
+                    Text("\(remaining) left")
+                        .font(.headline.monospacedDigit())
+                } else {
+                    Text("Tap Next step when done")
+                        .font(.footnote)
+                }
+                Spacer(minLength: 0)
+                if let target = guided.currentStep.targetPaceSecondsPerKm, target > 0 {
+                    Text(verbatim: WatchRunMetrics.paceText(secondsPerKm: target, metric: metric))
+                        .font(.footnote.weight(.semibold).monospacedDigit())
+                        .foregroundStyle(paceColor)
+                        .accessibilityLabel(paceLabel)
+                }
+            }
+            ProgressView(value: guided.currentStep.isOpen ? 0 : progress.fraction)
+                .tint(Color.strideBrand)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var paceColor: Color {
+        switch guided.paceStatus(with: metrics) {
+        case .onPace: return .green
+        case .tooFast, .tooSlow: return .yellow
+        case nil: return .secondary
+        }
+    }
+
+    private var paceLabel: Text {
+        switch guided.paceStatus(with: metrics) {
+        case .onPace: return Text("Target pace, on pace")
+        case .tooFast: return Text("Target pace, running fast")
+        case .tooSlow: return Text("Target pace, running slow")
+        case nil: return Text("Target pace")
+        }
+    }
+}
+
 // MARK: - Controls
 
 private struct WatchRunControls: View {
@@ -122,6 +189,14 @@ private struct WatchRunControls: View {
                     recorder.pause()
                 } label: {
                     Label("Pause", systemImage: "pause.fill")
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            if let guided = recorder.guided, !guided.isOnFinalStep, recorder.state == .running {
+                Button {
+                    recorder.skipStep()
+                } label: {
+                    Label("Next step", systemImage: "forward.end.fill")
                         .frame(maxWidth: .infinity)
                 }
             }
