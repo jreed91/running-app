@@ -67,6 +67,10 @@ final class CloudKitTrainingGroupService: TrainingGroupSyncing {
         let tidiedTitle = TrainingGroup.tidiedTitle(title)
         let share = CKShare(recordZoneID: zone.zoneID)
         share[CKShare.SystemFieldKey.title] = tidiedTitle as CKRecordValue
+        // The Stride mark beside the group's name wherever the link is previewed.
+        if let thumbnail = await TrainingGroupInviteImage.pngData() {
+            share[CKShare.SystemFieldKey.thumbnailImageData] = thumbnail as CKRecordValue
+        }
         share.publicPermission = .readWrite
 
         let (saved, _) = try await database.modifyRecords(saving: [share], deleting: [])
