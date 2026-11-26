@@ -229,65 +229,77 @@ struct PlanTabView: View {
                         // pregnancy or Start Running plan has no pace targets to insight
                         // about and is not the coach's to rewrite (`AdaptableWorkoutSelector`
                         // already returns nothing for one). Showing a permanently-empty
-                        // card instead of the guidance that does apply would be worse than
+                        // tile instead of the guidance that does apply would be worse than
                         // showing neither.
+                        let hasPaceTools = !plan.isPregnancyPlan && !plan.isStartRunningPlan
                         if plan.isPregnancyPlan {
                             PregnancyPlanGuidanceCard(plan: plan)
                         } else if plan.isStartRunningPlan {
                             StartRunningGuidanceCard(plan: plan)
-                        } else {
-                            SmartAdaptPlanCard(
-                                workoutCount: remainingAdaptableWorkouts(in: plan).count,
-                                state: smartAdapt,
-                                unavailableReason: smartAdaptUnavailableReason(for: plan)
-                            ) {
-                                adaptTask?.cancel()
-                                adaptTask = Task { await adaptRemainingWorkouts(in: plan) }
+                        }
+
+                        // The plan's tools, one grid of small tiles rather than a stack of
+                        // full-width cards, so the rest of the season isn't a screen down.
+                        // Route Genius moved to Home, beside the run button, where a
+                        // route is wanted.
+                        sectionEyebrow("PLAN TOOLS")
+                        PlanToolsGrid {
+                            if hasPaceTools {
+                                SmartAdaptTile(
+                                    workoutCount: remainingAdaptableWorkouts(in: plan).count,
+                                    state: smartAdapt,
+                                    unavailableReason: smartAdaptUnavailableReason(for: plan)
+                                ) {
+                                    adaptTask?.cancel()
+                                    adaptTask = Task { await adaptRemainingWorkouts(in: plan) }
+                                }
+
+                                // A value destination, built in this body: the page reads this
+                                // view's `@Query` results, which a closure destination would
+                                // read later, outside the body.
+                                pageLink(to: .paceInsights) {
+                                    paceInsightsPage(plan: plan)
+                                } label: {
+                                    PlanToolTile(
+                                        title: "Pace insights",
+                                        subtitle: "Finish estimate and training paces",
+                                        glyph: .tempo
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("plan.paceInsightsRow")
+
+                                pageLink(to: .raceInsights) {
+                                    raceInsightsPage
+                                } label: {
+                                    PlanToolTile(
+                                        title: "Race insights",
+                                        subtitle: "Predicted pace, zones and trends",
+                                        glyph: .chart
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("plan.raceInsightsRow")
                             }
 
-                            // The finish estimate and training paces used to fill a card
-                            // here on every visit; they are a reference, so one row opens
-                            // them on their own page.
-                            // A value destination, built in this body: the page reads this
-                            // view's `@Query` results, which a closure destination would
-                            // read later, outside the body.
-                            pageLink(to: .paceInsights) {
-                                paceInsightsPage(plan: plan)
+                            // Training groups: friends who see each other's weeks. Any plan
+                            // kind, since the week is what is shared, not its paces.
+                            pageLink(to: .friends) {
+                                TrainingGroupsView()
                             } label: {
-                                PaceInsightsRow()
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("plan.paceInsightsRow")
-
-                            pageLink(to: .raceInsights) {
-                                raceInsightsPage
-                            } label: {
-                                PlanPageRow(
-                                    title: "Race insights",
-                                    subtitle: "Predicted pace, zones and trends",
-                                    icon: .chart
+                                PlanToolTile(
+                                    title: "Train with friends",
+                                    subtitle: "See each other's weeks",
+                                    glyph: .person
                                 )
                             }
                             .buttonStyle(.plain)
-                            .accessibilityIdentifier("plan.raceInsightsRow")
+                            .accessibilityIdentifier("plan.friendsRow")
                         }
-
-                        // Route Genius moved to Home, beside the run button, where a
-                        // route is wanted.
-
-                        // Training groups: friends who see each other's weeks. Any plan
-                        // kind, since the week is what is shared, not its paces.
-                        pageLink(to: .friends) {
-                            TrainingGroupsView()
-                        } label: {
-                            PlanPageRow(
-                                title: "Train with friends",
-                                subtitle: "See each other's training weeks",
-                                icon: .person
-                            )
+                        if hasPaceTools {
+                            // Running, and after: the outcome stays until the next run.
+                            SmartAdaptProgressPanel(state: smartAdapt)
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("plan.friendsRow")
 
                         let otherWeeks = sortedWeeks.filter { $0.id != currentWeekID }
                         if !otherWeeks.isEmpty {
@@ -647,142 +659,6 @@ extension View {
                     .strideSheet()
             }
         }
-    }
-}
-
-// MARK: - Smart Adapt Card
-
-private struct SmartAdaptPlanCard: View {
-    let workoutCount: Int
-    let state: SmartAdaptState
-    let unavailableReason: String?
-    let action: () -> Void
-
-    private var isAdapting: Bool { state.isRunning }
-    private var progress: SmartAdaptProgress { state.progress }
-
-    private var isEnabled: Bool {
-        workoutCount > 0 && unavailableReason == nil && !isAdapting
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Button(action: action) {
-                HStack(spacing: 14) {
-                    ZStack {
-                        Circle()
-                            .fill(Color.brand.opacity(0.12))
-                            .frame(width: 48, height: 48)
-                        if isAdapting {
-                            ProgressView()
-                                .controlSize(.small)
-                        } else {
-                            Image(systemName: "sparkles")
-                                .font(.dsTitle3)
-                                .foregroundStyle(.brand)
-                        }
-                    }
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(isAdapting ? "Adapting plan" : "Smart Adapt")
-                            .font(.dsHeadline)
-
-                        Text(subtitle)
-                            .font(.dsCaption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    Spacer(minLength: 8)
-
-                    StrideIcon(name: .chevronRight, size: 12, color: .brand, strokeWeight: 2.4)
-                }
-                .padding(AppSpacing.lg)
-                .strideCard()
-            }
-            .buttonStyle(.plain)
-            .disabled(!isEnabled)
-            // Not `.opacity(0.55)`: that multiplied into text already carrying alpha —
-            // `.secondary` is ~60%, so the subtitle landed near 33% effective and read as
-            // broken rather than disabled. Desaturating the accent to grey is the part
-            // that actually signals "off"; the copy stays at full contrast so it can
-            // still be read, which is the whole point of the row explaining itself.
-            .grayscale(isEnabled ? 0 : 1)
-            .opacity(isEnabled ? 1 : 0.9)
-
-            // While running, and after: the outcome ("Plan updated and synced.", or why
-            // it could not be applied) stays here until the next run (`SmartAdaptState`).
-            if state.showsProgress {
-                VStack(alignment: .leading, spacing: 8) {
-                    if isAdapting {
-                        if let value = progress.fractionCompleted {
-                            StrideProgressBar(value: value)
-                        } else {
-                            ProgressView()
-                                .controlSize(.small)
-                        }
-                    }
-
-                    Text(progress.currentMessage)
-                        .font(.dsCaption)
-                        .foregroundStyle(.secondary)
-
-                    if !progress.streamingSummaries.isEmpty {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Live summary")
-                                .font(.captionStrong)
-                                .foregroundStyle(.primary)
-
-                            ForEach(progress.streamingSummaries, id: \.self) { summary in
-                                HStack(alignment: .top, spacing: 6) {
-                                    Circle()
-                                        .fill(Color.brand)
-                                        .frame(width: 5, height: 5)
-                                        .padding(.top, 6)
-                                    Text(summary)
-                                        .font(.dsCaption)
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(3)
-                                }
-                            }
-                        }
-                        .padding(AppSpacing.md)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .strideCard(cornerRadius: AppRadius.sm)
-                    }
-
-                    ForEach(progress.updates) { update in
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(update.title)
-                                .font(.captionStrong)
-                                .foregroundStyle(.primary)
-                            Text(update.message)
-                                .font(.dsCaption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(3)
-                        }
-                        .padding(AppSpacing.md)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .strideCard(cornerRadius: AppRadius.sm)
-                    }
-                }
-                .padding(.top, AppSpacing.xs)
-            }
-        }
-    }
-
-    /// When Smart Adapt can't run, the reason is the subtitle, inside the card. It used to
-    /// be a loose caption under it while the card still said "Adapt the remaining…".
-    private var subtitle: String {
-        if let unavailableReason, !isAdapting {
-            return unavailableReason
-        }
-        guard workoutCount > 0 else {
-            return "No remaining run workouts are available."
-        }
-
-        let workoutLabel = workoutCount == 1 ? "workout" : "workouts"
-        return "Adapt the remaining \(workoutCount) \(workoutLabel) in this plan."
     }
 }
 
