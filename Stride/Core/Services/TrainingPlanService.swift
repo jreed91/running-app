@@ -624,7 +624,7 @@ struct TrainingPlanService {
         return 2
     }
 
-    private func weekQualityTypes(phase: TrainingPhase, raceType: RaceType) -> [WorkoutType] {
+    func weekQualityTypes(phase: TrainingPhase, raceType: RaceType) -> [WorkoutType] {
         switch (phase, raceType) {
         case (.base, .maintainFitness):    return [.tempo]
         case (.build, .maintainFitness):   return [.tempo]
@@ -642,7 +642,7 @@ struct TrainingPlanService {
         }
     }
 
-    private func defaultIntervals(raceType: RaceType, paces: TrainingPaces) -> [WorkoutInterval] {
+    func defaultIntervals(raceType: RaceType, paces: TrainingPaces) -> [WorkoutInterval] {
         switch raceType {
         case .maintainFitness:
             // 5 × 3 min @ interval pace, 90 s jog recovery
@@ -798,8 +798,8 @@ struct TrainingPlanService {
         case .struggling: adaptedPace = paces.interval + 3
         }
 
-        let warmupDist: Double   = snap.performanceTrend == .struggling ? 1_500 : 1_000
-        let cooldownDist: Double = snap.performanceTrend == .struggling ?   500 : 1_000
+        let warmupDist: Double   = snap.performanceTrend == .struggling ? 1_500 : Self.intervalWarmupMeters
+        let cooldownDist: Double = snap.performanceTrend == .struggling ?   500 : Self.intervalCooldownMeters
 
         let warmup = WorkoutSegment(
             distanceMeters: warmupDist,
