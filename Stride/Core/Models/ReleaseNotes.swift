@@ -74,13 +74,35 @@ struct ReleaseFeature: Identifiable, Hashable, Sendable {
 /// can't ship without one by accident.
 enum ReleaseNotes {
 
-    static let all: [Release] = [v1point2, v1point1, v1point0]
+    static let all: [Release] = [v2point0, v1point2, v1point1, v1point0]
 
     /// The notes for a marketing version ("1.2.1" finds 1.2), or `nil` if it has none.
     static func release(forMarketingVersion version: String) -> Release? {
         let key = Release.key(forMarketingVersion: version)
         return all.first { $0.version == key }
     }
+
+    // MARK: 2.0
+
+    /// Draft. 2.0's features are still being built (Watch runs first, then training with
+    /// friends), so this entry exists to satisfy `theRunningVersionHasNotes` after the
+    /// version bump. Rewrite the headline and features, and add screenshots, before 2.0
+    /// is submitted for review.
+    static let v2point0 = Release(
+        version: "2.0",
+        releaseDate: nil,
+        headline: "Run with just your Apple Watch.",
+        features: [
+            ReleaseFeature(
+                id: "watch-runs",
+                title: "Leave your phone at home",
+                body: "Start today's run on Apple Watch and get your pace targets, heart rate and spoken cues on your wrist.",
+                icon: .run
+            ),
+        ],
+        improvements: [],
+        fixes: []
+    )
 
     // MARK: 1.2
 
