@@ -416,9 +416,14 @@ struct ContentView: View {
         // the Home Screen — and `.active` covers a snapshot that went stale while the app
         // was away, most often because the date rolled over. Neither costs a WidgetKit
         // reload unless the snapshot actually moved; see `WidgetRefreshService`.
+        //
+        // The runner's week in their training groups rides along (no modifier of its own,
+        // for the type-checker's sake): the same moments are when a friend would want it
+        // current. It throttles itself, and costs nothing for a runner with no groups.
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active || phase == .background else { return }
             WidgetRefreshService.refresh(context: context, appSettings: appSettings)
+            Task { await FriendsWeekPublisher.publishIfDue(context: context, groups: container.trainingGroups) }
         }
     }
 

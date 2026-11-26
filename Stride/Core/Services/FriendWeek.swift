@@ -250,6 +250,40 @@ struct FriendWeek: Codable, Equatable, Sendable {
         return weekStart == Self.dayText(start, calendar: calendar)
     }
 
+    // MARK: Days on a card
+
+    /// How a day of a friend's week is drawn.
+    enum DayState: Equatable, Sendable {
+        /// Something was done: a run, strength, a walk.
+        case done
+        /// The plan asked for something, the day is over, and nothing was done.
+        case missed
+        /// The plan asks for something today or later.
+        case planned
+        /// Nothing planned, nothing done, and the day is over or today.
+        case rest
+        /// Nothing planned and the day hasn't come yet.
+        case upcoming
+    }
+
+    /// The seven days' states, as seen on `today` (`YYYY-MM-DD` in the viewer's calendar).
+    ///
+    /// Days compare as text, which orders `YYYY-MM-DD` correctly. The viewer's today is a
+    /// fair stand-in for the friend's: a friend a few time zones away is at most a day
+    /// apart, and only for a few hours.
+    func dayStates(today: String) -> [DayState] {
+        days.map { day in
+            if !day.done.isEmpty { return .done }
+            if !day.planned.isEmpty { return day.date < today ? .missed : .planned }
+            return day.date > today ? .upcoming : .rest
+        }
+    }
+
+    /// `date` as ``Day/date`` spells it, in `calendar`'s time zone.
+    static func dayString(_ date: Date, calendar: Calendar) -> String {
+        dayText(date, calendar: calendar)
+    }
+
     // MARK: Wire
 
     func encoded() throws -> Data {
