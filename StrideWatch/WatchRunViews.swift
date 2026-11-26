@@ -51,6 +51,15 @@ private struct WatchRunMetricsPage: View {
                         .textCase(.uppercase)
                         .foregroundStyle(Color.strideBrand)
                 }
+                if let battery = recorder.lowBatteryPercent {
+                    Label {
+                        Text("Battery \(battery)%")
+                    } icon: {
+                        Image(systemName: "battery.25percent")
+                    }
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.yellow)
+                }
                 if let guided = recorder.guided {
                     WatchStepBanner(guided: guided, metrics: metrics, metric: metric)
                 }
@@ -175,39 +184,48 @@ private struct WatchRunControls: View {
     @Environment(WatchRunRecorder.self) private var recorder
 
     var body: some View {
-        VStack(spacing: 8) {
-            if recorder.state == .paused {
+        // Scrolls: four buttons don't fit a 40 mm screen.
+        ScrollView {
+            VStack(spacing: 8) {
+                if recorder.state == .paused {
+                    Button {
+                        recorder.resume()
+                    } label: {
+                        Label("Resume", systemImage: "play.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .tint(Color.strideBrand)
+                } else {
+                    Button {
+                        recorder.pause()
+                    } label: {
+                        Label("Pause", systemImage: "pause.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                if let guided = recorder.guided, !guided.isOnFinalStep, recorder.state == .running {
+                    Button {
+                        recorder.skipStep()
+                    } label: {
+                        Label("Next step", systemImage: "forward.end.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                }
                 Button {
-                    recorder.resume()
+                    recorder.enableWaterLock()
                 } label: {
-                    Label("Resume", systemImage: "play.fill")
+                    Label("Water Lock", systemImage: "drop.fill")
                         .frame(maxWidth: .infinity)
                 }
-                .tint(Color.strideBrand)
-            } else {
-                Button {
-                    recorder.pause()
+                Button(role: .destructive) {
+                    Task { await recorder.end() }
                 } label: {
-                    Label("Pause", systemImage: "pause.fill")
+                    Label("End", systemImage: "xmark")
                         .frame(maxWidth: .infinity)
                 }
             }
-            if let guided = recorder.guided, !guided.isOnFinalStep, recorder.state == .running {
-                Button {
-                    recorder.skipStep()
-                } label: {
-                    Label("Next step", systemImage: "forward.end.fill")
-                        .frame(maxWidth: .infinity)
-                }
-            }
-            Button(role: .destructive) {
-                Task { await recorder.end() }
-            } label: {
-                Label("End", systemImage: "xmark")
-                    .frame(maxWidth: .infinity)
-            }
+            .padding(.horizontal, 4)
         }
-        .padding(.horizontal, 4)
     }
 }
 

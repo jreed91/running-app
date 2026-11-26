@@ -44,6 +44,8 @@ final class WatchRunRecorder: NSObject {
     private(set) var usesMetricUnits = true
     /// The plan session's steps, when it has any (PR 3). `nil` on a free run or an easy run.
     private(set) var guided: WatchGuidedRun?
+    /// The battery level, once it is low enough to show on the run screen (PR 6).
+    private(set) var lowBatteryPercent: Int?
 
     @ObservationIgnored private var cues = WatchRunCues(unit: .metric, speaksSplits: false, speaksSteps: false)
     @ObservationIgnored private let voice = WatchRunVoice()
@@ -53,6 +55,7 @@ final class WatchRunRecorder: NSObject {
     @ObservationIgnored private var routeBuilder: HKWorkoutRouteBuilder?
     @ObservationIgnored private let locationManager = CLLocationManager()
     @ObservationIgnored private var lastAcceptedLocation: CLLocation?
+    @ObservationIgnored private var lastBatteryCheck: Date = .distantPast
 
     var isActive: Bool {
         switch state {
@@ -116,11 +119,53 @@ final class WatchRunRecorder: NSObject {
             }
             startLocationUpdates()
             state = .running
+            saveCheckpoint()
             if let first = cues.startPhrase(guided: guided) { voice.speak([first]) }
         } catch {
             reset()
             state = .failed(String(localized: "The run couldn't start. Try again."))
         }
+    }
+
+    // MARK: Recovery
+
+    /// Carries on the run HealthKit was recording when the app crashed or the Watch
+    /// restarted (PR 6). Called from `WKApplicationDelegate.handleActiveWorkoutRecovery()`.
+    ///
+    /// The time, distance and heart rate so far come back with the session's builder; the
+    /// plan session and its steps come from the ``WatchRunCheckpoint`` saved as it ran.
+    /// The route restarts from here: the route builder's points did not survive the crash.
+    func recover() async {
+        guard !isActive, !isRecovering else { return }
+        isRecovering = true
+        defer { isRecovering = false }
+        guard let recovered = try? await healthStore.recoverActiveWorkoutSession() else { return }
+        let checkpoint = WatchRunCheckpoint.load()
+        runSession = checkpoint?.runSession
+        usesMetricUnits = checkpoint?.usesMetricUnits ?? true
+        guided = checkpoint?.guided()
+        cues = WatchRunCues(session: runSession, fallbackUnit: usesMetricUnits ? .metric : .imperial)
+
+        let builder = recovered.associatedWorkoutBuilder()
+        recovered.delegate = self
+        builder.delegate = self
+        session = recovered
+        self.builder = builder
+        routeBuilder = HKWorkoutRouteBuilder(healthStore: healthStore, device: nil)
+        metrics = currentMetrics(at: Date())
+        cues.resume(at: metrics)
+        state = recovered.state == .paused ? .paused : .running
+        startLocationUpdates()
+    }
+
+    @ObservationIgnored private var isRecovering = false
+
+    private func saveCheckpoint() {
+        WatchRunCheckpoint(
+            runSession: runSession,
+            usesMetricUnits: usesMetricUnits,
+            stepStarts: guided?.stepStarts ?? []
+        ).save()
     }
 
     // MARK: Pause, resume, end
@@ -178,6 +223,7 @@ final class WatchRunRecorder: NSObject {
         let before = guided
         if guided.skip(with: metrics) {
             self.guided = guided
+            saveCheckpoint()
             Self.playStepHaptic()
             speakCues(guidedBefore: before)
         }
@@ -190,6 +236,7 @@ final class WatchRunRecorder: NSObject {
         let before = guided
         if var guided, guided.update(with: metrics) > 0 {
             self.guided = guided
+            saveCheckpoint()
             Self.playStepHaptic()
         }
         speakCues(guidedBefore: before)
@@ -216,6 +263,28 @@ final class WatchRunRecorder: NSObject {
         guard builder != nil, isActive else { return }
         metrics = currentMetrics(at: date)
         advanceSteps()
+        checkBattery(at: date)
+    }
+
+    // MARK: Battery
+
+    /// Once a minute: shows the level on the run screen when it drops to
+    /// ``WatchBattery/lowPercent``, with one tap on the wrist the first time.
+    private func checkBattery(at date: Date) {
+        guard date.timeIntervalSince(lastBatteryCheck) >= 60 else { return }
+        lastBatteryCheck = date
+        let device = WKInterfaceDevice.current()
+        device.isBatteryMonitoringEnabled = true
+        let warning = WatchBattery.warningPercent(level: device.batteryLevel)
+        if warning != nil, lowBatteryPercent == nil {
+            device.play(.notification)
+        }
+        lowBatteryPercent = warning
+    }
+
+    /// Locks the screen against rain and sweat; the runner turns the Digital Crown to unlock.
+    func enableWaterLock() {
+        WKInterfaceDevice.current().enableWaterLock()
     }
 
     private func currentMetrics(at date: Date) -> WatchRunMetrics {
@@ -301,6 +370,9 @@ final class WatchRunRecorder: NSObject {
         builder = nil
         routeBuilder = nil
         lastAcceptedLocation = nil
+        lowBatteryPercent = nil
+        lastBatteryCheck = .distantPast
+        WatchRunCheckpoint.clear()
     }
 }
 

@@ -16,6 +16,15 @@ struct WatchGuidedRun: Equatable, Sendable {
 
     private(set) var state: GuidedWorkoutState
 
+    /// Where each step after the first began, in order. Kept so a run the Watch recovers
+    /// after a crash (PR 6) can pick its steps up where they were, by replaying them.
+    private(set) var stepStarts: [StepStart] = []
+
+    struct StepStart: Codable, Equatable, Sendable {
+        var distanceMeters: Double
+        var elapsedSeconds: TimeInterval
+    }
+
     init(state: GuidedWorkoutState) {
         self.state = state
     }
@@ -23,6 +32,19 @@ struct WatchGuidedRun: Equatable, Sendable {
     init?(session: WatchRunSession) {
         guard let state = session.guidedState() else { return nil }
         self.init(state: state)
+    }
+
+    /// The session's steps as they were when `starts` was saved.
+    init?(session: WatchRunSession, replaying starts: [StepStart]) {
+        self.init(session: session)
+        for start in starts where !state.isOnFinalStep {
+            advance(to: start)
+        }
+    }
+
+    private mutating func advance(to start: StepStart) {
+        state.advance(cumulativeDistanceMeters: start.distanceMeters, cumulativeElapsedSeconds: start.elapsedSeconds)
+        stepStarts.append(start)
     }
 
     var currentStep: GuidedStep { state.currentStep }
@@ -41,10 +63,7 @@ struct WatchGuidedRun: Equatable, Sendable {
             cumulativeDistanceMeters: metrics.distanceMeters,
             cumulativeElapsedSeconds: metrics.elapsedSeconds
         ), moved < state.stepCount {
-            state.advance(
-                cumulativeDistanceMeters: metrics.distanceMeters,
-                cumulativeElapsedSeconds: metrics.elapsedSeconds
-            )
+            advance(to: StepStart(distanceMeters: metrics.distanceMeters, elapsedSeconds: metrics.elapsedSeconds))
             moved += 1
         }
         return moved
@@ -54,10 +73,7 @@ struct WatchGuidedRun: Equatable, Sendable {
     @discardableResult
     mutating func skip(with metrics: WatchRunMetrics) -> Bool {
         guard !state.isOnFinalStep else { return false }
-        state.advance(
-            cumulativeDistanceMeters: metrics.distanceMeters,
-            cumulativeElapsedSeconds: metrics.elapsedSeconds
-        )
+        advance(to: StepStart(distanceMeters: metrics.distanceMeters, elapsedSeconds: metrics.elapsedSeconds))
         return true
     }
 

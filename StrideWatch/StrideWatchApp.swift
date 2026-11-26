@@ -1,4 +1,5 @@
 import SwiftUI
+import WatchKit
 
 // MARK: - StrideWatchApp
 
@@ -7,8 +8,10 @@ import SwiftUI
 /// ``WatchGlanceModel`` for where it comes from and ``WatchContext`` for what it is.
 @main
 struct StrideWatchApp: App {
+    @WKApplicationDelegateAdaptor private var appDelegate: WatchAppDelegate
     @State private var model = WatchGlanceModel()
-    @State private var recorder = WatchRunRecorder()
+
+    private var recorder: WatchRunRecorder { appDelegate.recorder }
 
     var body: some Scene {
         WindowGroup {
@@ -26,5 +29,18 @@ struct StrideWatchApp: App {
                 .tint(Color.strideBrand)
                 .task { model.activate() }
         }
+    }
+}
+
+// MARK: - WatchAppDelegate
+
+/// Owns the run recorder, because the system relaunches the app after a crash or a
+/// restart mid-run and asks its delegate to recover the workout (Watch runs, PR 6).
+@MainActor
+final class WatchAppDelegate: NSObject, WKApplicationDelegate {
+    let recorder = WatchRunRecorder()
+
+    func handleActiveWorkoutRecovery() {
+        Task { await recorder.recover() }
     }
 }

@@ -426,6 +426,8 @@ targets:
       - path: Stride/Core/Models/WatchGuidedRun.swift
       # Spoken cues on the Watch (PR 4), in the phone's own words.
       - path: Stride/Core/Models/WatchRunCues.swift
+      # Carrying on a run after a crash or restart, and the battery warning (PR 6).
+      - path: Stride/Core/Models/WatchRunCheckpoint.swift
       - path: Stride/Core/Models/UnitPreference.swift
       - path: Stride/Core/Services/SplitAnnouncement.swift
       - path: Stride/Core/Services/GuidedStepAnnouncement.swift
