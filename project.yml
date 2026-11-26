@@ -422,6 +422,8 @@ targets:
       # Recording on the Watch (PR 2): the live screen's numbers, and the phone's own
       # GPS fix rules for the route.
       - path: Stride/Core/Models/WatchRunMetrics.swift
+      # The plan session's steps on the Watch (PR 3), over the shared GuidedWorkoutEngine.
+      - path: Stride/Core/Models/WatchGuidedRun.swift
       - path: Stride/Core/Services/LocationQualityFilter.swift
       # The app's colours, for the same reason `StrideWidgets` compiles this catalog. The
       # watch's own icon lives in `StrideWatch/WatchAssets.xcassets` under a different
