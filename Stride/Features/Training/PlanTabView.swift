@@ -54,8 +54,12 @@ struct PlanTabView: View {
     @State private var space = PlanSpace()
 
     private enum PlanPage: Hashable {
-        case raceDay, paceInsights, raceInsights, planHistory
+        case raceDay, paceInsights, raceInsights, planHistory, friends
     }
+
+    /// "Train with friends" pushed in a stack because a group link was just joined.
+    /// In a split view the same request opens ``PlanPage/friends`` in the detail column.
+    @State private var showsFriendsPush = false
 
     private struct PlanSpace: Equatable {
         var width: CGFloat = 0
@@ -136,6 +140,9 @@ struct PlanTabView: View {
                     planPage
                         .navigationDestination(item: $selectedWorkout) { workout in
                             WorkoutDetailView(workout: workout)
+                        }
+                        .navigationDestination(isPresented: $showsFriendsPush) {
+                            TrainingGroupsView()
                         }
                 }
             }
@@ -268,6 +275,20 @@ struct PlanTabView: View {
                         // Route Genius moved to Home, beside the run button, where a
                         // route is wanted.
 
+                        // Training groups: friends who see each other's weeks. Any plan
+                        // kind, since the week is what is shared, not its paces.
+                        pageLink(to: .friends) {
+                            TrainingGroupsView()
+                        } label: {
+                            PlanPageRow(
+                                title: "Train with friends",
+                                subtitle: "See each other's training weeks",
+                                icon: .person
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("plan.friendsRow")
+
                         let otherWeeks = sortedWeeks.filter { $0.id != currentWeekID }
                         if !otherWeeks.isEmpty {
                             // "All weeks" once this week is pulled out above; a plan that
@@ -315,6 +336,16 @@ struct PlanTabView: View {
         .navigationTitle("My plan")
         // A morning-reminder tap names the session the banner was about. `initial` covers
         // the cold launch, where this tab is built after the request was made.
+        // A group link was just joined: land on the groups page.
+        .onChange(of: container.appNavigation.requestsTrainingGroups, initial: true) { _, requested in
+            guard requested else { return }
+            container.appNavigation.requestsTrainingGroups = false
+            if showsDetailColumn {
+                openPage = .friends
+            } else {
+                showsFriendsPush = true
+            }
+        }
         .onChange(of: container.appNavigation.requestedScheduledWorkoutID, initial: true) { _, id in
             guard let id else { return }
             container.appNavigation.requestedScheduledWorkoutID = nil
@@ -359,6 +390,8 @@ struct PlanTabView: View {
                 raceInsightsPage
             case .planHistory:
                 TrainingPlanListView()
+            case .friends:
+                TrainingGroupsView()
             }
         } else if let workout = detailWorkout {
             WorkoutDetailView(workout: workout)

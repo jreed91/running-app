@@ -20,6 +20,8 @@ protocol TrainingGroupSyncing: Sendable {
     /// Ends the group for everyone when this runner started it, or leaves it when they
     /// joined it.
     func leave(_ group: TrainingGroup) async throws
+    /// Joins the group behind an invite link the system handed the app.
+    func accept(_ invite: TrainingGroupInvite) async throws -> TrainingGroup
 }
 
 // MARK: - CloudKitTrainingGroupService
@@ -107,6 +109,19 @@ final class CloudKitTrainingGroupService: TrainingGroupSyncing {
         // member's shared database it removes them from the share and leaves the group.
         _ = try await database(for: group).modifyRecordZones(saving: [], deleting: [zoneID(for: group)])
         AppLogger.log("Left training group \(group.zoneName) (owner: \(group.isOwner))", label: "friends")
+    }
+
+    func accept(_ invite: TrainingGroupInvite) async throws -> TrainingGroup {
+        let share = try await container.accept(invite.metadata)
+        let zoneID = share.recordID.zoneID
+        AppLogger.log("Joined training group \(zoneID.zoneName)", label: "friends")
+        return TrainingGroup(
+            zoneName: zoneID.zoneName,
+            ownerName: zoneID.ownerName,
+            title: invite.title,
+            isOwner: false,
+            shareURL: share.url
+        )
     }
 
     // MARK: Weeks

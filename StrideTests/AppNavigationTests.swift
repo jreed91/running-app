@@ -28,6 +28,18 @@ struct AppNavigationTests {
         #expect(navigation.requestedScheduledWorkoutID == nil)
     }
 
+    // MARK: Training groups
+
+    @Test func joiningAGroupOpensThePlanTabsFriendsPage() {
+        let navigation = AppNavigation()
+
+        navigation.openTrainingGroups()
+
+        #expect(navigation.selectedTab == .plan)
+        #expect(navigation.requestsTrainingGroups)
+        #expect(navigation.requestedScheduledWorkoutID == nil)
+    }
+
     // MARK: Race invites
 
     private func invite(on date: String) throws -> RaceInvite {

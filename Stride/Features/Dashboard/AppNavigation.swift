@@ -46,6 +46,10 @@ final class AppNavigation {
     /// The name of an invited race that has already happened, for the "too late" alert.
     var pastRaceInviteName: String?
 
+    /// Asks the Plan tab to open "Train with friends", after a group link is joined. A
+    /// request like `requestedScheduledWorkoutID`: the Plan tab clears it.
+    var requestsTrainingGroups = false
+
     /// The release whose What's New sheet is open over the tabs, set once at launch after
     /// an update (`WhatsNewPolicy`). The sheet clears it when dismissed.
     var whatsNewRelease: Release?
@@ -72,6 +76,12 @@ final class AppNavigation {
         }
         select(.plan)
         pendingRaceInvite = invite
+    }
+
+    /// Sends the app to the Plan tab with "Train with friends" open on it.
+    func openTrainingGroups() {
+        select(.plan)
+        requestsTrainingGroups = true
     }
 
     /// Sends the app to the Plan tab with `workoutID`'s detail pushed on it.

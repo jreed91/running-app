@@ -278,6 +278,10 @@ targets:
           - _pulse._tcp
         UILaunchScreen: {}
         ITSAppUsesNonExemptEncryption: false
+        # Training groups ("Train with friends") are CloudKit shares. With this key a
+        # tapped iCloud share link opens Stride and hands `StrideSceneDelegate` the share's
+        # metadata; without it iOS shows the link in a browser. No Associated Domains.
+        CKSharingSupported: true
 
     postBuildScripts:
       - name: Strip debug-only Info.plist keys
