@@ -226,3 +226,24 @@ final class CloudKitTrainingGroupService: TrainingGroupSyncing {
         CKRecordZone.ID(zoneName: group.zoneName, ownerName: group.ownerName)
     }
 }
+
+// MARK: - OfflineTrainingGroupService
+
+/// ``TrainingGroupSyncing`` for a process that must not touch CloudKit: UI tests and the
+/// unit-test host. Their builds are unsigned (`CODE_SIGNING_ALLOWED=NO`), so they carry
+/// no iCloud entitlement, and `CKContainer(identifier:)` traps the moment it is made.
+/// The scene-phase publish made one at launch, which crashed every UI test before
+/// onboarding appeared. Here there are simply no groups, and anything that would write
+/// fails like a runner who isn't signed in to iCloud.
+struct OfflineTrainingGroupService: TrainingGroupSyncing {
+    private var unavailable: CKError { CKError(.notAuthenticated) }
+
+    func createGroup(title: String) async throws -> TrainingGroup { throw unavailable }
+    func groups() async throws -> [TrainingGroup] { [] }
+    func publish(_ week: FriendWeek, to groups: [TrainingGroup]) async throws {}
+    func contents(of group: TrainingGroup) async throws -> TrainingGroupContents { TrainingGroupContents() }
+    func send(_ cheer: FriendCheer, in group: TrainingGroup) async throws { throw unavailable }
+    func myMemberID() async throws -> String { throw unavailable }
+    func leave(_ group: TrainingGroup) async throws {}
+    func accept(_ invite: TrainingGroupInvite) async throws -> TrainingGroup { throw unavailable }
+}
