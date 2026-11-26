@@ -58,3 +58,15 @@ xcrun cktool validate-schema --team-id VMNPGK3Q29 --container-id iCloud.com.runn
 xcrun cktool import-schema   --team-id VMNPGK3Q29 --container-id iCloud.com.running.stride \
   --environment development --file cloudkit/Stride.ckdb
 ```
+
+## Record types that aren't SwiftData's
+
+`FriendWeek` is written by hand (`CloudKitTrainingGroupService`, "Train with friends"), not
+by `NSPersistentCloudKitContainer`, so it has no `CD_` prefix and `CloudKitSchemaFileTests`
+doesn't check it. Each training group is a custom zone (`TrainingGroup-<UUID>`) in its
+owner's private database, shared with a zone-wide `CKShare`; members reach it through the
+shared database. Reads use zone changes, not queries, so no field needs `QUERYABLE`.
+
+The first time a group is created against Development, CloudKit adds the system
+`cloudkit.share` record type there. Export the Development schema after that and add its
+`cloudkit.share` block to this file, or the next import is refused for missing it.
