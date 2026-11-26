@@ -110,6 +110,16 @@ enum FriendsBoard {
         var id: String { memberID }
     }
 
+    /// The race on `row`'s card that this runner could train for too: the friend's
+    /// goal race, unless it's this runner's own card, the race has passed, or this runner
+    /// already trains for the same race (same day and distance; names are typed by hand
+    /// and may differ).
+    static func raceToJoin(on row: Row, myRace: RaceInvite?, now: Date, calendar: Calendar) -> RaceInvite? {
+        guard !row.isMe, let race = row.week?.race, !race.hasPassed(now: now, calendar: calendar) else { return nil }
+        if let myRace, myRace.day == race.day, myRace.distanceMeters == race.distanceMeters { return nil }
+        return race
+    }
+
     /// One row per member: this runner first, then friends by name. A member with more
     /// than one record (it shouldn't happen, but a hand-made one could) shows their
     /// newest.
