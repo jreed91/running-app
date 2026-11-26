@@ -28,6 +28,7 @@ struct WatchHomeView: View {
                     WatchNextWorkoutPage(
                         workout: snapshot.nextWorkout,
                         canStart: context.canStart(asOf: now),
+                        runSession: context.canStart(asOf: now) ? context.runSession : nil,
                         now: now
                     )
                     .tag(0)
@@ -50,8 +51,11 @@ struct WatchHomeView: View {
 
 private struct WatchNextWorkoutPage: View {
     @Environment(WatchGlanceModel.self) private var model
+    @Environment(WatchRunRecorder.self) private var recorder
     let workout: WidgetSnapshot.NextWorkout?
     let canStart: Bool
+    /// Today's session in Stride's own terms, when the phone sent one (PR 1 onward).
+    let runSession: WatchRunSession?
     let now: Date
 
     var body: some View {
@@ -66,6 +70,8 @@ private struct WatchNextWorkoutPage: View {
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
+                freeRunButton
+                    .padding(.top, 6)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -104,11 +110,32 @@ private struct WatchNextWorkoutPage: View {
         }
 
         if canStart {
+            // Recorded by Stride on the Watch, so it needs no iPhone (Watch runs).
+            if let runSession {
+                Button {
+                    Task { await recorder.start(runSession: runSession) }
+                } label: {
+                    Label("Start", systemImage: "play.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .tint(Color.strideBrand)
+                .padding(.top, 4)
+                .accessibilityHint(Text("Records this run in Stride on your Watch"))
+            }
+            // The path every earlier build took, kept for anyone who prefers it.
             Button {
                 Task { await model.startToday() }
             } label: {
-                Label("Start", systemImage: "play.fill")
-                    .frame(maxWidth: .infinity)
+                // Two `Label`s rather than one over a ternary: a ternary of literals is a
+                // `String`, which does not localize.
+                Group {
+                    if runSession == nil {
+                        Label("Start", systemImage: "play.fill")
+                    } else {
+                        Label("Open in Workout app", systemImage: "arrow.up.forward.app")
+                    }
+                }
+                .frame(maxWidth: .infinity)
             }
             .disabled(model.startState == .opening)
             .padding(.top, 4)
@@ -127,6 +154,17 @@ private struct WatchNextWorkoutPage: View {
                 .foregroundStyle(.secondary)
                 .padding(.top, 2)
         }
+    }
+
+    /// A run with no plan session behind it, recorded by Stride on the Watch.
+    private var freeRunButton: some View {
+        Button {
+            Task { await recorder.start(runSession: nil, fallbackMetric: Locale.current.measurementSystem == .metric) }
+        } label: {
+            Label("Free run", systemImage: "figure.run")
+                .frame(maxWidth: .infinity)
+        }
+        .accessibilityHint(Text("Records a run with no plan session"))
     }
 }
 
