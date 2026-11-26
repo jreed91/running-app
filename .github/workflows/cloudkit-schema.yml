@@ -38,8 +38,10 @@ permissions:
   contents: read
 
 # Never two imports into the same container at once, and never cancel one halfway.
+# Pull requests only validate, so each gets its own group and a PR run stuck in the
+# queue never holds up an import or export from main.
 concurrency:
-  group: cloudkit-schema
+  group: cloudkit-schema-${{ github.event_name == 'pull_request' && github.ref || 'main' }}
   cancel-in-progress: false
 
 env:
@@ -50,9 +52,10 @@ env:
 jobs:
   schema:
     name: CloudKit schema
-    # cktool ships inside Xcode, so this needs a macOS image. See the runner-label
-    # note in ci.yml for why the label is `xcode-27`.
-    runs-on: xcode-27
+    # cktool ships inside every Xcode since 13, so any macOS image works. `macos-26`,
+    # the one the lint job uses, is the one that reliably gets a runner; the app's
+    # Xcode 27 is not needed to talk to CloudKit.
+    runs-on: macos-26
     timeout-minutes: 15
     env:
       # cktool reads the token from this variable, ahead of the keychain.
