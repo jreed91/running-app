@@ -17,11 +17,17 @@ development container.
 Do this after **any** change to `StrideSchema.models` or to a `@Model`'s stored
 properties — including adding an optional field — and before the build ships.
 
-1. Set `--init-cloudkit-schema` in the scheme's *Arguments Passed On Launch* and run once
-   on a device signed into iCloud (`CloudKitSchemaInitializer`, `#if DEBUG` only). This
-   uploads a temporary instance of **every** record type and field, then deletes them.
-   Without it the development schema only contains what someone happened to exercise, so a
-   field nobody used is not on the server and cannot be deployed. Unset the argument after.
+1. Add the new record type or field to `cloudkit/Stride.ckdb`. `CloudKitSchemaFileTests`
+   fails until you do and lists the lines to add. When the change reaches `main`, the
+   **CloudKit schema** GitHub workflow validates the file and imports it into Development
+   with `cktool`; its run summary shows what Deploy would add to Production. No app run is
+   needed. See [`cloudkit/README.md`](../cloudkit/README.md).
+
+   The old way still works if the workflow cannot run: set `--init-cloudkit-schema` in the
+   scheme's *Arguments Passed On Launch* and run once on a device signed into iCloud
+   (`CloudKitSchemaInitializer`, `#if DEBUG` only). It uploads a temporary instance of
+   every record type and field, then deletes them. Unset the argument after, and run the
+   workflow's `export` action so the file catches up with Development.
 2. Sign in to [CloudKit Console](https://icloud.developer.apple.com), choose the
    `iCloud.com.running.stride` container, and confirm the new record types / fields appear
    in **Development**. Record types are prefixed `CD_`.
