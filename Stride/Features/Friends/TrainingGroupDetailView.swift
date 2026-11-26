@@ -45,10 +45,19 @@ struct TrainingGroupDetailView: View {
                             today: today,
                             unit: appSettings.unitPreference,
                             cheerLines: row.isMe ? FriendCheers.lines(cheers, for: row.memberID) : [],
-                            cheer: cheerState(for: row)
-                        ) { workout in
-                            Task { await send(cheerFor: workout, to: row) }
-                        }
+                            cheer: cheerState(for: row),
+                            raceToJoin: FriendsBoard.raceToJoin(
+                                on: row, myRace: myRace(in: rows), now: Date(), calendar: .current
+                            ),
+                            onCheer: { workout in
+                                Task { await send(cheerFor: workout, to: row) }
+                            },
+                            onJoinRace: { race in
+                                // The race invite flow: the new-plan sheet with the race
+                                // filled in, built at this runner's own paces.
+                                container.appNavigation.openRaceInvite(race)
+                            }
+                        )
                     }
                 }
             }
@@ -101,6 +110,11 @@ struct TrainingGroupDetailView: View {
         }
     }
 
+    /// This runner's own race, from their row.
+    private func myRace(in rows: [FriendsBoard.Row]) -> RaceInvite? {
+        rows.first(where: \.isMe)?.week?.race
+    }
+
     // MARK: Cheers
 
     private func cheerState(for row: FriendsBoard.Row) -> FriendWeekCard.CheerState {
@@ -137,7 +151,10 @@ private struct FriendWeekCard: View {
     /// For this runner's own card: who cheered what.
     let cheerLines: [String]
     let cheer: CheerState
+    /// A friend's race this runner could train for too.
+    let raceToJoin: RaceInvite?
     let onCheer: (FriendWeek.Done) -> Void
+    let onJoinRace: (RaceInvite) -> Void
 
     enum CheerState: Equatable {
         case none
@@ -166,9 +183,18 @@ private struct FriendWeekCard: View {
             if let week = row.week {
                 FriendWeekStrip(states: week.dayStates(today: today), days: week.days.map(\.date))
                 if let race = week.race {
-                    Text("Training for \(race.name)")
-                        .font(.dsCaption)
-                        .foregroundStyle(.secondary)
+                    HStack {
+                        Text("Training for \(race.name)")
+                            .font(.dsCaption)
+                            .foregroundStyle(.secondary)
+                        Spacer(minLength: 0)
+                        if let raceToJoin {
+                            Button("Train for this too") { onJoinRace(raceToJoin) }
+                                .font(.dsCaption.weight(.semibold))
+                                .foregroundStyle(Color.brandText)
+                                .accessibilityIdentifier("friends.joinRace")
+                        }
+                    }
                 }
             } else {
                 Text("No update this week yet")

@@ -99,6 +99,39 @@ struct TrainingGroupTests {
         #expect(rows.first?.name == "Ana R")
     }
 
+    // MARK: Same race
+
+    private func row(_ name: String, race: RaceInvite?, isMe: Bool = false) -> FriendsBoard.Row {
+        let week = FriendWeek.make(name: name, planned: [], done: [], race: race, now: now, calendar: calendar)
+        return FriendsBoard.rows([.init(memberID: name, week: week)], myMemberID: isMe ? name : nil,
+                                 now: now, calendar: calendar)[0]
+    }
+
+    private func race(_ name: String, _ type: RaceType, month: Int, day: Int) -> RaceInvite {
+        RaceInvite(name: name, raceType: type,
+                   raceDate: calendar.date(from: DateComponents(year: 2027, month: month, day: day))!,
+                   calendar: calendar)!
+    }
+
+    @Test func aFriendsRaceCanBeJoined() {
+        let valencia = race("Valencia", .marathon, month: 12, day: 5)
+        let joinable = FriendsBoard.raceToJoin(on: row("Ana", race: valencia), myRace: nil, now: now, calendar: calendar)
+        #expect(joinable == valencia)
+    }
+
+    @Test func notMyOwnRaceNorOneIAlreadyTrainFor() {
+        let valencia = race("Valencia", .marathon, month: 12, day: 5)
+        let sameRaceOtherName = race("Valencia Marathon", .marathon, month: 12, day: 5)
+        #expect(FriendsBoard.raceToJoin(on: row("Me", race: valencia, isMe: true), myRace: valencia, now: now, calendar: calendar) == nil)
+        #expect(FriendsBoard.raceToJoin(on: row("Ana", race: valencia), myRace: sameRaceOtherName, now: now, calendar: calendar) == nil)
+        let tenK = race("City 10K", .tenK, month: 12, day: 5)
+        #expect(FriendsBoard.raceToJoin(on: row("Ana", race: valencia), myRace: tenK, now: now, calendar: calendar) == valencia)
+    }
+
+    @Test func noRaceNoOffer() {
+        #expect(FriendsBoard.raceToJoin(on: row("Ana", race: nil), myRace: nil, now: now, calendar: calendar) == nil)
+    }
+
     @Test func sameNamesKeepAStableOrder() {
         let rows = FriendsBoard.rows([
             .init(memberID: "2", week: week("Sam", updated: date(25))),
