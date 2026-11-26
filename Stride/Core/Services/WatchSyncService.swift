@@ -109,6 +109,7 @@ final class WatchSyncService: NSObject {
         for session: ScheduledWorkout?,
         unit: UnitPreference,
         maxHeartRateBPM: Int?,
+        spokenCues: (splits: Bool, steps: Bool) = AppSettings.syncedSpokenCues(),
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> WatchRunSession? {
@@ -123,7 +124,9 @@ final class WatchSyncService: NSObject {
             structure: session.workoutStructure,
             usesRunWalkCues: ActiveRunPresentation.cueStyle(for: session) == .runWalk,
             maxHeartRateBPM: maxHeartRateBPM.flatMap { $0 > 0 ? $0 : nil },
-            usesMetricUnits: unit == .metric
+            usesMetricUnits: unit == .metric,
+            speaksSplits: spokenCues.splits,
+            speaksSteps: spokenCues.steps
         )
     }
 

@@ -32,6 +32,20 @@ struct WatchRunSession: Codable, Equatable, Sendable {
     /// `nil` when the profile has neither a max heart rate nor an age, so no zones.
     var maxHeartRateBPM: Int?
     var usesMetricUnits: Bool
+    /// Speak each kilometre or mile (Settings > Spoken splits). Optional so a context from
+    /// a phone build before PR 4 still decodes; `nil` reads as off.
+    var speaksSplits: Bool?
+    /// Speak each step of a structured session (Settings > Spoken workout steps).
+    var speaksSteps: Bool?
+
+    var unit: UnitPreference { usesMetricUnits ? .metric : .imperial }
+
+    /// The session's pace band, for the split announcement's "on pace" verdict.
+    var targetPaceRange: ClosedRange<Double>? {
+        guard let lower = targetPaceLowerSecondsPerKm, let upper = targetPaceUpperSecondsPerKm,
+              lower > 0, lower <= upper else { return nil }
+        return lower...upper
+    }
 
     /// The guided stepper for this session, or `nil` for a run with no steps.
     func guidedState() -> GuidedWorkoutState? {
