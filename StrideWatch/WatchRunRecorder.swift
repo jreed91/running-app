@@ -240,7 +240,10 @@ final class WatchRunRecorder: NSObject {
         locationManager.delegate = self
         locationManager.activityType = .fitness
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
-        locationManager.allowsBackgroundLocationUpdates = true
+        // No `allowsBackgroundLocationUpdates`: setting it without the `location`
+        // background mode is a CoreLocation assertion, which crashed the app the moment a
+        // run started. The running `HKWorkoutSession` already keeps the app, and its
+        // location updates, going with the wrist down.
         locationManager.requestWhenInUseAuthorization()
         lastAcceptedLocation = nil
         locationManager.startUpdatingLocation()
