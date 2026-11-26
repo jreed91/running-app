@@ -423,6 +423,19 @@ final class NotificationService: NSObject {
         try await center.add(request)
     }
 
+    /// A friend cheered one of the runner's workouts ("Train with friends"). Fires now;
+    /// the identifier is the cheer's record name, so the same cheer never banners twice.
+    func notifyCheer(_ cheer: FriendCheer) async throws {
+        guard await isAuthorized else { return }
+        let content = UNMutableNotificationContent()
+        content.title = String(localized: "Cheers from your group", comment: "Notification title when a training-group friend cheers a workout")
+        content.body = FriendCheers.notificationText(cheer)
+        content.sound = .default
+        Self.style(content, thread: "FRIEND_CHEER", relevance: 0.5, level: .passive)
+        let request = UNNotificationRequest(identifier: cheer.recordName, content: content, trigger: nil)
+        try await center.add(request)
+    }
+
     /// Fires a single summary notification for a multi-run import batch —
     /// a fresh-install recovery can import dozens of runs at once, and one
     /// banner per run is a notification storm (M5). Not tappable-to-review:

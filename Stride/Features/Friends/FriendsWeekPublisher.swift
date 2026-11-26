@@ -22,6 +22,9 @@ enum FriendsWeekPublisher {
     private static let lastPublishKey = "friends.lastPublishAt"
     private static let lastGroupCountKey = "friends.lastGroupCount"
     private static let lastGroupCheckKey = "friends.lastGroupCheckAt"
+    /// Record names of cheers already notified, newest last, capped at ``seenCheersLimit``.
+    private static let seenCheersKey = "friends.notifiedCheers"
+    private static let seenCheersLimit = 300
 
     /// The task in flight, so overlapping calls share it instead of publishing twice.
     private static var running: Task<Void, Never>?
@@ -59,6 +62,7 @@ enum FriendsWeekPublisher {
                 guard !groups.isEmpty else { return }
                 try await service.publish(week, to: groups)
                 defaults.set(now, forKey: lastPublishKey)
+                await notifyNewCheers(in: groups, service: service, defaults: defaults)
             } catch {
                 AppLogger.log("Publishing my week failed: \(String(describing: error))", label: "friends", level: .warning)
             }
@@ -66,6 +70,36 @@ enum FriendsWeekPublisher {
         running = task
         await task.value
         running = nil
+    }
+
+    /// One notification per cheer for this runner that hasn't had one. Cheers ride on the
+    /// publish because there is no server to push them: they arrive when this phone next
+    /// opens or leaves Stride.
+    private static func notifyNewCheers(
+        in groups: [TrainingGroup],
+        service: any TrainingGroupSyncing,
+        defaults: UserDefaults
+    ) async {
+        guard let me = try? await service.myMemberID() else { return }
+        var seenList = defaults.stringArray(forKey: seenCheersKey) ?? []
+        var seen = Set(seenList)
+        for group in groups {
+            guard let contents = try? await service.contents(of: group) else { continue }
+            for cheer in FriendCheers.unseen(contents.cheers, for: me, seen: seen) {
+                try? await NotificationService.shared.notifyCheer(cheer)
+                seen.insert(cheer.recordName)
+                seenList.append(cheer.recordName)
+            }
+        }
+        defaults.set(Array(seenList.suffix(seenCheersLimit)), forKey: seenCheersKey)
+    }
+
+    /// Marks cheers the runner has just seen on their own card, so they don't banner later.
+    static func markCheersSeen(_ cheers: [FriendCheer], defaults: UserDefaults = .standard) {
+        var seenList = defaults.stringArray(forKey: seenCheersKey) ?? []
+        let seen = Set(seenList)
+        seenList += cheers.map(\.recordName).filter { !seen.contains($0) }
+        defaults.set(Array(seenList.suffix(seenCheersLimit)), forKey: seenCheersKey)
     }
 
     /// Notes how many groups the friends page just found, so a runner who has just
