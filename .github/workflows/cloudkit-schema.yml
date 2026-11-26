@@ -69,10 +69,18 @@ jobs:
             push)              mode="import" ;;
             *)                 mode="validate" ;;
           esac
+          # Until the first export is checked in there is nothing to validate or
+          # import, so the PR that adds this workflow (and anything before the
+          # baseline lands) passes with a notice instead of failing.
+          if [ "$mode" != "export" ] && [ ! -f "$SCHEMA_FILE" ]; then
+            echo "::notice::$SCHEMA_FILE is not checked in yet, so there is nothing to $mode. Run this workflow with action 'export' and check in development-before.ckdb from its artifact as $SCHEMA_FILE."
+            mode="skip"
+          fi
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
           echo "Action: $mode"
 
       - name: Check the management token
+        if: steps.mode.outputs.mode != 'skip'
         run: |
           if [ -z "$CLOUDKIT_MANAGEMENT_TOKEN" ]; then
             echo "::error::The CLOUDKIT_MANAGEMENT_TOKEN repository secret is not set (or this is a fork PR, which gets no secrets). cloudkit/README.md says how to make one."
@@ -80,15 +88,8 @@ jobs:
           fi
           xcrun cktool version || true
 
-      - name: Check the schema file is checked in
-        if: steps.mode.outputs.mode != 'export'
-        run: |
-          if [ ! -f "$SCHEMA_FILE" ]; then
-            echo "::error::$SCHEMA_FILE is missing. Run this workflow with action 'export' first and check in development-before.ckdb from its artifact as $SCHEMA_FILE."
-            exit 1
-          fi
-
       - name: Export the current schemas
+        if: steps.mode.outputs.mode != 'skip'
         run: |
           mkdir -p out
           for env in development production; do
@@ -98,14 +99,14 @@ jobs:
           done
 
       - name: Validate against Development
-        if: steps.mode.outputs.mode != 'export'
+        if: steps.mode.outputs.mode == 'validate' || steps.mode.outputs.mode == 'import'
         run: |
           xcrun cktool validate-schema \
             --team-id "$TEAM_ID" --container-id "$CONTAINER_ID" \
             --environment development --file "$SCHEMA_FILE"
 
       - name: Show what the import changes in Development
-        if: steps.mode.outputs.mode != 'export'
+        if: steps.mode.outputs.mode == 'validate' || steps.mode.outputs.mode == 'import'
         run: |
           {
             echo "### Development, before → $SCHEMA_FILE"
@@ -137,6 +138,7 @@ jobs:
             --environment development --output-file out/development-after.ckdb
 
       - name: List what Deploy to Production would add
+        if: steps.mode.outputs.mode != 'skip'
         run: |
           dev=out/development-after.ckdb
           [ -f "$dev" ] || dev=out/development-before.ckdb
