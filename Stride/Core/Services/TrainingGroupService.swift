@@ -13,8 +13,10 @@ protocol TrainingGroupSyncing: Sendable {
     func groups() async throws -> [TrainingGroup]
     /// Writes this runner's week into each group, over their previous one.
     func publish(_ week: FriendWeek, to groups: [TrainingGroup]) async throws
-    /// Every member's latest week in `group`.
-    func weeks(in group: TrainingGroup) async throws -> [FriendsBoard.MemberWeek]
+    /// Every member's latest week in `group`, and the cheers sent there.
+    func contents(of group: TrainingGroup) async throws -> TrainingGroupContents
+    /// Sends `cheer` into `group`. Sending the same cheer again writes the same record.
+    func send(_ cheer: FriendCheer, in group: TrainingGroup) async throws
     /// This runner's member id, the one their week records are named after.
     func myMemberID() async throws -> String
     /// Ends the group for everyone when this runner started it, or leaves it when they
@@ -22,6 +24,12 @@ protocol TrainingGroupSyncing: Sendable {
     func leave(_ group: TrainingGroup) async throws
     /// Joins the group behind an invite link the system handed the app.
     func accept(_ invite: TrainingGroupInvite) async throws -> TrainingGroup
+}
+
+/// What a group's zone holds.
+struct TrainingGroupContents: Sendable {
+    var weeks: [FriendsBoard.MemberWeek] = []
+    var cheers: [FriendCheer] = []
 }
 
 // MARK: - CloudKitTrainingGroupService
@@ -157,28 +165,51 @@ final class CloudKitTrainingGroupService: TrainingGroupSyncing {
         if let firstError { throw firstError }
     }
 
-    func weeks(in group: TrainingGroup) async throws -> [FriendsBoard.MemberWeek] {
+    func contents(of group: TrainingGroup) async throws -> TrainingGroupContents {
         let database = database(for: group)
         let zoneID = zoneID(for: group)
 
-        var result: [FriendsBoard.MemberWeek] = []
+        var result = TrainingGroupContents()
         var token: CKServerChangeToken?
         var moreComing = true
         while moreComing {
             let changes = try await database.recordZoneChanges(inZoneWith: zoneID, since: token)
             for (id, modification) in changes.modificationResultsByID {
-                guard let memberID = TrainingGroupNames.memberID(fromRecordName: id.recordName),
-                      let record = try? modification.get().record,
-                      record.recordType == TrainingGroupNames.weekRecordType,
-                      let payload = record[TrainingGroupNames.payloadField] as? Data,
-                      let week = FriendWeek.decoded(from: payload)
+                guard let record = try? modification.get().record,
+                      let payload = record[TrainingGroupNames.payloadField] as? Data
                 else { continue }
-                result.append(FriendsBoard.MemberWeek(memberID: memberID, week: week))
+                switch record.recordType {
+                case TrainingGroupNames.weekRecordType:
+                    guard let memberID = TrainingGroupNames.memberID(fromRecordName: id.recordName),
+                          let week = FriendWeek.decoded(from: payload)
+                    else { continue }
+                    result.weeks.append(FriendsBoard.MemberWeek(memberID: memberID, week: week))
+                case FriendCheer.recordType:
+                    // The record's own creator is the sender, whatever the payload says,
+                    // so a member can't send a cheer in someone else's name.
+                    guard var cheer = FriendCheer.decoded(from: payload) else { continue }
+                    if let creator = record.creatorUserRecordID?.recordName,
+                       creator != CKCurrentUserDefaultName {
+                        cheer.fromMemberID = creator
+                    }
+                    result.cheers.append(cheer)
+                default:
+                    continue
+                }
             }
             token = changes.changeToken
             moreComing = changes.moreComing
         }
         return result
+    }
+
+    func send(_ cheer: FriendCheer, in group: TrainingGroup) async throws {
+        let record = CKRecord(
+            recordType: FriendCheer.recordType,
+            recordID: CKRecord.ID(recordName: cheer.recordName, zoneID: zoneID(for: group))
+        )
+        record[TrainingGroupNames.payloadField] = try cheer.encoded() as CKRecordValue
+        _ = try await database(for: group).modifyRecords(saving: [record], deleting: [], savePolicy: .allKeys)
     }
 
     // MARK: Helpers

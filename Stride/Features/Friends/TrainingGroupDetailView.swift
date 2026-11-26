@@ -14,6 +14,9 @@ struct TrainingGroupDetailView: View {
     @Environment(\.modelContext) private var context
 
     @State private var phase: Phase = .loading
+    @State private var cheers: [FriendCheer] = []
+    @State private var myMemberID: String?
+    @State private var errorMessage: String?
 
     private enum Phase {
         case loading
@@ -37,7 +40,15 @@ struct TrainingGroupDetailView: View {
                                     comment: "Train with friends: a group with only the runner in it"))
                     }
                     ForEach(rows) { row in
-                        FriendWeekCard(row: row, today: today, unit: appSettings.unitPreference)
+                        FriendWeekCard(
+                            row: row,
+                            today: today,
+                            unit: appSettings.unitPreference,
+                            cheerLines: row.isMe ? FriendCheers.lines(cheers, for: row.memberID) : [],
+                            cheer: cheerState(for: row)
+                        ) { workout in
+                            Task { await send(cheerFor: workout, to: row) }
+                        }
                     }
                 }
             }
@@ -48,6 +59,11 @@ struct TrainingGroupDetailView: View {
         .background(Color.surfacePrimary)
         .navigationTitle(Text(verbatim: group.title))
         .navigationBarTitleDisplayMode(.inline)
+        .alert("Something went wrong", isPresented: isShowingError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "")
+        }
         .task { await load(publishFirst: true) }
         .refreshable { await load(publishFirst: true) }
     }
@@ -71,13 +87,44 @@ struct TrainingGroupDetailView: View {
             await FriendsWeekPublisher.publishIfDue(context: context, groups: container.trainingGroups, force: true)
         }
         do {
-            async let me = container.trainingGroups.myMemberID()
-            async let weeks = container.trainingGroups.weeks(in: group)
-            let rows = FriendsBoard.rows(try await weeks, myMemberID: try? await me, now: Date(), calendar: .current)
-            phase = .loaded(rows)
+            let me = try? await container.trainingGroups.myMemberID()
+            let contents = try await container.trainingGroups.contents(of: group)
+            myMemberID = me
+            cheers = contents.cheers
+            phase = .loaded(FriendsBoard.rows(contents.weeks, myMemberID: me, now: Date(), calendar: .current))
+            // Seen on the card now, so no banner for them later.
+            if let me {
+                FriendsWeekPublisher.markCheersSeen(FriendCheers.unseen(contents.cheers, for: me, seen: []))
+            }
         } catch {
             phase = .failed(TrainingGroupErrorText.message(for: error))
         }
+    }
+
+    // MARK: Cheers
+
+    private func cheerState(for row: FriendsBoard.Row) -> FriendWeekCard.CheerState {
+        guard !row.isMe, let me = myMemberID, let week = row.week,
+              let latest = FriendCheers.latestDone(in: week)
+        else { return .none }
+        return FriendCheers.hasCheered(cheers, from: me, workoutID: latest.id) ? .cheered : .canCheer(latest)
+    }
+
+    private func send(cheerFor workout: FriendWeek.Done, to row: FriendsBoard.Row) async {
+        guard let me = myMemberID else { return }
+        let name = UserDefaults.standard.string(forKey: TrainingGroup.displayNameKey) ?? ""
+        let cheer = FriendCheer(workout: workout, to: row.memberID, from: me, fromName: name, at: Date())
+        cheers.append(cheer) // Shown as sent at once; taken back if iCloud says no.
+        do {
+            try await container.trainingGroups.send(cheer, in: group)
+        } catch {
+            cheers.removeAll { $0.recordName == cheer.recordName }
+            errorMessage = TrainingGroupErrorText.message(for: error)
+        }
+    }
+
+    private var isShowingError: Binding<Bool> {
+        Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })
     }
 }
 
@@ -87,6 +134,16 @@ private struct FriendWeekCard: View {
     let row: FriendsBoard.Row
     let today: String
     let unit: UnitPreference
+    /// For this runner's own card: who cheered what.
+    let cheerLines: [String]
+    let cheer: CheerState
+    let onCheer: (FriendWeek.Done) -> Void
+
+    enum CheerState: Equatable {
+        case none
+        case canCheer(FriendWeek.Done)
+        case cheered
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -118,11 +175,34 @@ private struct FriendWeekCard: View {
                     .font(.dsSubhead)
                     .foregroundStyle(.secondary)
             }
+
+            ForEach(cheerLines, id: \.self) { line in
+                Text(verbatim: "👏 " + line)
+                    .font(.dsCaption)
+                    .foregroundStyle(.secondary)
+            }
+
+            switch cheer {
+            case .none:
+                EmptyView()
+            case .canCheer(let workout):
+                Button {
+                    onCheer(workout)
+                } label: {
+                    Text("Cheer their \(FriendCheers.workoutName(workout.kind))")
+                }
+                .buttonStyle(.strideButton(.secondary, compact: true, fullWidth: false))
+                .accessibilityIdentifier("friends.cheer")
+            case .cheered:
+                Label("Cheered", systemImage: "hands.clap.fill")
+                    .font(.dsCaption.weight(.semibold))
+                    .foregroundStyle(Color.brandText)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(AppSpacing.lg)
         .strideCard()
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
     }
 
     /// "18.2 of 30.0 km", or just the distance without a plan.
