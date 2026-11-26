@@ -178,6 +178,7 @@ struct TrainingGroupsView: View {
     private func load() async {
         do {
             let groups = try await container.trainingGroups.groups()
+            FriendsWeekPublisher.noteGroupCount(groups.count)
             phase = .loaded(groups.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending })
         } catch {
             phase = .failed(TrainingGroupErrorText.message(for: error))
@@ -221,17 +222,13 @@ private struct TrainingGroupRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
-                StrideIcon(name: .person, size: 16, color: .brand, strokeWeight: 2)
-                    .frame(width: 32, height: 32)
-                    .background(Color.brand.opacity(0.13), in: Circle())
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(verbatim: group.title)
-                        .font(.dsSubhead.weight(.semibold))
-                    Text(group.isOwner ? "You started this group" : "You joined this group")
-                        .font(.dsCaption)
-                        .foregroundStyle(.secondary)
+                NavigationLink {
+                    TrainingGroupDetailView(group: group)
+                } label: {
+                    title
                 }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("friends.group")
                 Spacer(minLength: 0)
                 Menu {
                     Button(group.isOwner ? "End group" : "Leave group", role: .destructive, action: onLeave)
@@ -257,6 +254,26 @@ private struct TrainingGroupRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(AppSpacing.lg)
         .strideCard()
+    }
+
+    /// The group's name and role; tapping it opens everyone's weeks.
+    private var title: some View {
+        HStack(spacing: 12) {
+            StrideIcon(name: .person, size: 16, color: .brand, strokeWeight: 2)
+                .frame(width: 32, height: 32)
+                .background(Color.brand.opacity(0.13), in: Circle())
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(verbatim: group.title)
+                    .font(.dsSubhead.weight(.semibold))
+                Text(group.isOwner ? "You started this group" : "You joined this group")
+                    .font(.dsCaption)
+                    .foregroundStyle(.secondary)
+            }
+            StrideIcon(name: .chevronRight, size: 12, color: .secondary, strokeWeight: 2)
+                .accessibilityHidden(true)
+        }
+        .contentShape(Rectangle())
     }
 }
 

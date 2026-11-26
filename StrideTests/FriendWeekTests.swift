@@ -197,6 +197,34 @@ struct FriendWeekTests {
         #expect(!week.isCurrent(now: date(2, month: 12), calendar: calendar()))
     }
 
+    // MARK: Day states
+
+    @Test func dayStatesReadTheWeekAsOfToday() {
+        let week = make(
+            planned: [session(23), session(24), session(26), session(28, .longRun, km: 16)],
+            done: [run(23), run(25, .strength)]
+        )
+        #expect(week.dayStates(today: "2026-11-26") == [
+            .done,      // Mon: planned and done
+            .missed,    // Tue: planned, nothing done, over
+            .done,      // Wed: unplanned strength
+            .planned,   // Thu: today, not yet done
+            .upcoming,  // Fri: nothing planned yet to come
+            .planned,   // Sat: long run
+            .upcoming,  // Sun
+        ])
+    }
+
+    @Test func aDayWithNothingIsRestOnceItHasCome() {
+        let week = make()
+        #expect(week.dayStates(today: "2026-11-25") == [.rest, .rest, .rest, .upcoming, .upcoming, .upcoming, .upcoming])
+    }
+
+    @Test func dayStringMatchesTheWeeksDays() {
+        let week = make()
+        #expect(FriendWeek.dayString(now, calendar: calendar()) == week.days[3].date)
+    }
+
     // MARK: Wire
 
     @Test func roundTripsThroughJSON() throws {
