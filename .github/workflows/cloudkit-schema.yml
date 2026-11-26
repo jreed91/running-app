@@ -113,13 +113,13 @@ jobs:
           {
             echo "### Development, before → $SCHEMA_FILE"
             echo '```diff'
-            diff -u out/development-before.ckdb "$SCHEMA_FILE" || true
+            diff -uw out/development-before.ckdb "$SCHEMA_FILE" || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           # Importing a file replaces the Development schema. A record type or field
           # that is in Development but not in the file would be dropped, which is
           # almost never meant: the file is edited by adding lines, not rewritten.
-          removed=$(diff out/development-before.ckdb "$SCHEMA_FILE" | grep '^< ' | grep -v 'GRANT' || true)
+          removed=$(diff -w out/development-before.ckdb "$SCHEMA_FILE" | grep '^< ' | grep -v 'GRANT' || true)
           if [ -n "$removed" ]; then
             echo "::warning::$SCHEMA_FILE is missing lines that Development has:"
             echo "$removed"
@@ -148,7 +148,7 @@ jobs:
             echo "### Production → Development"
             echo "This is what **Deploy Schema Changes** in [CloudKit Console](https://icloud.developer.apple.com) would add. Empty means Production is up to date."
             echo '```diff'
-            diff -u out/production-before.ckdb "$dev" || true
+            diff -uw out/production-before.ckdb "$dev" || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
