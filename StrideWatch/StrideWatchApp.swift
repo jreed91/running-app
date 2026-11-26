@@ -8,11 +8,21 @@ import SwiftUI
 @main
 struct StrideWatchApp: App {
     @State private var model = WatchGlanceModel()
+    @State private var recorder = WatchRunRecorder()
 
     var body: some Scene {
         WindowGroup {
-            WatchHomeView()
+            Group {
+                // A run in progress (or its summary) replaces the home pages entirely, the
+                // way Apple's Workout app does: nothing else on the wrist matters mid-run.
+                if recorder.state == .idle {
+                    WatchHomeView()
+                } else {
+                    WatchRunView()
+                }
+            }
                 .environment(model)
+                .environment(recorder)
                 .tint(Color.strideBrand)
                 .task { model.activate() }
         }
