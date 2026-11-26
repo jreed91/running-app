@@ -265,6 +265,9 @@ private struct TrainingGroupRow: View {
 /// What a runner reads when iCloud says no.
 enum TrainingGroupErrorText {
     static func message(for error: Error) -> String {
+        // Logged in full every time: the alert can only say so much, and TestFlight
+        // builds keep this in the Pulse log.
+        AppLogger.log("Training group error: \(String(describing: error))", label: "friends", level: .error)
         if let ckError = error as? CKError {
             switch ckError.code {
             case .notAuthenticated:
@@ -286,7 +289,9 @@ enum TrainingGroupErrorText {
                 break
             }
         }
-        return String(localized: "iCloud couldn't finish that. Try again in a moment.",
-                      comment: "Train with friends: any other iCloud error")
+        // The code goes on the end so a screenshot of this alert says which error it was.
+        let code = (error as NSError).code
+        return String(localized: "iCloud couldn't finish that. Try again in a moment. (Error \(code))",
+                      comment: "Train with friends: any other iCloud error, with its numeric code")
     }
 }
