@@ -69,6 +69,7 @@ enum WidgetRefreshService {
             snapshot: snapshot,
             nextSession: WidgetSnapshotBuilder.nextScheduledWorkout(in: activePlan(in: context), now: now),
             unit: unit,
+            maxHeartRateBPM: profile(in: context)?.effectiveMaxHeartRate,
             now: now
         )
 

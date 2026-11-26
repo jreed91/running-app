@@ -412,6 +412,13 @@ targets:
       - path: Stride/Core/Models/WidgetSnapshot.swift
       # The WatchConnectivity envelope around it. Both sides must agree on its keys.
       - path: Stride/Core/Models/WatchContext.swift
+      # Today's session in Stride's own terms, and what the watch needs to run it: the
+      # structure, the guided stepper and the heart-rate zones (Watch runs). All
+      # Foundation only, so the watch steps a session exactly the way the phone does.
+      - path: Stride/Core/Models/WatchRunSession.swift
+      - path: Stride/Core/Models/WorkoutStructure.swift
+      - path: Stride/Core/Services/GuidedWorkoutEngine.swift
+      - path: Stride/Core/Services/HeartRateZoneService.swift
       # The app's colours, for the same reason `StrideWidgets` compiles this catalog. The
       # watch's own icon lives in `StrideWatch/WatchAssets.xcassets` under a different
       # name, because this catalog's `AppIcon` is iOS-only.

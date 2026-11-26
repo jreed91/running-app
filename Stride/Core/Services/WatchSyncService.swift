@@ -48,6 +48,7 @@ final class WatchSyncService: NSObject {
         snapshot: WidgetSnapshot,
         nextSession: ScheduledWorkout?,
         unit: UnitPreference,
+        maxHeartRateBPM: Int? = nil,
         now: Date = Date(),
         calendar: Calendar = .current
     ) {
@@ -56,6 +57,13 @@ final class WatchSyncService: NSObject {
             startableWorkout: Self.startableWorkoutData(
                 for: nextSession,
                 unit: unit,
+                now: now,
+                calendar: calendar
+            ),
+            runSession: Self.runSession(
+                for: nextSession,
+                unit: unit,
+                maxHeartRateBPM: maxHeartRateBPM,
                 now: now,
                 calendar: calendar
             )
@@ -89,14 +97,48 @@ final class WatchSyncService: NSObject {
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> Data? {
+        guard let session = sendable(session, now: now, calendar: calendar) else { return nil }
+        return try? HealthKitRepository
+            .makeWorkoutPlan(for: session, unitPreference: unit)
+            .dataRepresentation
+    }
+
+    /// The next session in Stride's own terms, for the watch app to record itself, under
+    /// the same rules as ``startableWorkoutData(for:unit:now:calendar:)``.
+    static func runSession(
+        for session: ScheduledWorkout?,
+        unit: UnitPreference,
+        maxHeartRateBPM: Int?,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> WatchRunSession? {
+        guard let session = sendable(session, now: now, calendar: calendar) else { return nil }
+        return WatchRunSession(
+            sessionID: session.id,
+            scheduledDate: session.scheduledDate,
+            title: session.workoutType.localizedName,
+            targetDistanceMeters: session.targetDistanceMeters,
+            targetPaceLowerSecondsPerKm: session.targetPaceRange?.lowerBound,
+            targetPaceUpperSecondsPerKm: session.targetPaceRange?.upperBound,
+            structure: session.workoutStructure,
+            usesRunWalkCues: ActiveRunPresentation.cueStyle(for: session) == .runWalk,
+            maxHeartRateBPM: maxHeartRateBPM.flatMap { $0 > 0 ? $0 : nil },
+            usesMetricUnits: unit == .metric
+        )
+    }
+
+    /// `session` when the watch may be sent it: not a rest day, not done, not overdue.
+    private static func sendable(
+        _ session: ScheduledWorkout?,
+        now: Date,
+        calendar: Calendar
+    ) -> ScheduledWorkout? {
         guard let session,
               session.workoutType != .rest,
               !session.isCompleted,
               session.scheduledDate >= calendar.startOfDay(for: now)
         else { return nil }
-        return try? HealthKitRepository
-            .makeWorkoutPlan(for: session, unitPreference: unit)
-            .dataRepresentation
+        return session
     }
 
     // MARK: - Session

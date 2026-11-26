@@ -36,9 +36,15 @@ struct WatchContext: Sendable, Equatable {
     /// ``canStart(asOf:calendar:)`` holds the button back until the day comes.
     var startableWorkout: Data?
 
-    init(snapshot: WidgetSnapshot, startableWorkout: Data? = nil) {
+    /// The same session in Stride's own terms, for Stride's watch app to record itself
+    /// (Watch runs). Sent under the same rules as ``startableWorkout``: never overdue,
+    /// never a rest day or a finished session. A watch build from before this key ignores it.
+    var runSession: WatchRunSession?
+
+    init(snapshot: WidgetSnapshot, startableWorkout: Data? = nil, runSession: WatchRunSession? = nil) {
         self.snapshot = snapshot
         self.startableWorkout = startableWorkout
+        self.runSession = runSession
     }
 
     /// Whether the watch should offer to start ``startableWorkout`` at `now`.
@@ -59,6 +65,7 @@ struct WatchContext: Sendable, Equatable {
     enum Key {
         static let snapshot = "snapshot"
         static let startableWorkout = "startableWorkout"
+        static let runSession = "runSession"
     }
 
     /// The form `WCSession.updateApplicationContext(_:)` takes.
@@ -67,19 +74,26 @@ struct WatchContext: Sendable, Equatable {
         if let startableWorkout {
             context[Key.startableWorkout] = startableWorkout
         }
+        if let runSession {
+            context[Key.runSession] = try Self.encoder.encode(runSession)
+        }
         return context
     }
 
     /// Reads a received application context. `nil` when there is no snapshot in it or it
     /// no longer decodes — the watch then shows its "open Stride on your iPhone" state
-    /// rather than a half-read card.
+    /// rather than a half-read card. A run session that no longer decodes is dropped on
+    /// its own: the glance and the Workout app's Start still work without it.
     init?(applicationContext: [String: Any]) {
         guard let data = applicationContext[Key.snapshot] as? Data,
               let snapshot = try? Self.decoder.decode(WidgetSnapshot.self, from: data)
         else { return nil }
+        let runSession = (applicationContext[Key.runSession] as? Data)
+            .flatMap { try? Self.decoder.decode(WatchRunSession.self, from: $0) }
         self.init(
             snapshot: snapshot,
-            startableWorkout: applicationContext[Key.startableWorkout] as? Data
+            startableWorkout: applicationContext[Key.startableWorkout] as? Data,
+            runSession: runSession
         )
     }
 

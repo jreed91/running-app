@@ -75,6 +75,54 @@ struct WatchContextTests {
         #expect(WatchContext(applicationContext: [WatchContext.Key.snapshot: Data("{}".utf8)]) == nil)
     }
 
+    @Test("The run session rides along in the context and comes back the same")
+    func runSessionRoundTrips() throws {
+        let run = WatchRunSession(
+            sessionID: UUID(),
+            scheduledDate: now,
+            title: "Interval",
+            targetDistanceMeters: 8_000,
+            targetPaceLowerSecondsPerKm: 240,
+            targetPaceUpperSecondsPerKm: 250,
+            structure: intervals,
+            usesRunWalkCues: false,
+            maxHeartRateBPM: 186,
+            usesMetricUnits: true
+        )
+        let original = WatchContext(snapshot: snapshot(nextOn: now), startableWorkout: Data([1]), runSession: run)
+
+        let decoded = try #require(WatchContext(applicationContext: try original.applicationContext()))
+
+        #expect(decoded == original)
+        #expect(decoded.runSession?.guidedState() != nil)
+    }
+
+    @Test("A run session that no longer decodes is dropped, and the glance survives")
+    func unreadableRunSessionIsDropped() throws {
+        var dictionary = try WatchContext(snapshot: snapshot(nextOn: now), startableWorkout: Data([1])).applicationContext()
+        dictionary[WatchContext.Key.runSession] = Data("{}".utf8)
+
+        let decoded = try #require(WatchContext(applicationContext: dictionary))
+
+        #expect(decoded.runSession == nil)
+        #expect(decoded.startableWorkout == Data([1]))
+    }
+
+    private var intervals: WorkoutStructure {
+        WorkoutStructure(
+            warmup: WorkoutSegment(distanceMeters: 2_000, label: "Warm-up"),
+            mainSets: [WorkoutSet(
+                repetitions: 6,
+                workSegment: WorkoutSegment(distanceMeters: 800, targetPaceSecondsPerKm: 240, label: "Rep"),
+                recoverySegment: WorkoutSegment(durationSeconds: 120, label: "Recovery jog"),
+                label: "VO2max Intervals"
+            )],
+            cooldown: WorkoutSegment(distanceMeters: 1_500, label: "Cool-down"),
+            totalEstimatedDistanceMeters: 8_300,
+            totalEstimatedDurationSeconds: 2_700
+        )
+    }
+
     // MARK: Start button
 
     @Test("Start is offered for today's session")
@@ -141,5 +189,46 @@ struct WatchContextTests {
         let watch = WatchContext(snapshot: snapshot(nextOn: offset(1)), startableWorkout: data)
         #expect(!watch.canStart(asOf: now, calendar: calendar))
         #expect(watch.canStart(asOf: offset(1), calendar: calendar))
+    }
+
+    // MARK: Run session (phone side)
+
+    @Test("Today's session becomes a run session with its id, pace band, steps and max HR")
+    func todaysSessionBecomesARunSession() throws {
+        let workout = session(on: now, type: .interval)
+        workout.targetPaceLowerBound = 240
+        workout.targetPaceUpperBound = 250
+        workout.workoutStructure = intervals
+
+        let run = try #require(WatchSyncService.runSession(
+            for: workout, unit: .imperial, maxHeartRateBPM: 186, now: now, calendar: calendar
+        ))
+
+        #expect(run.sessionID == workout.id)
+        #expect(run.targetPaceLowerSecondsPerKm == 240)
+        #expect(run.targetPaceUpperSecondsPerKm == 250)
+        #expect(run.structure == intervals)
+        #expect(run.maxHeartRateBPM == 186)
+        #expect(!run.usesMetricUnits)
+        #expect(run.guidedState() != nil)
+    }
+
+    @Test("No overdue, rest or completed session becomes a run session, and no zero max HR is sent")
+    func runSessionFollowsTheSameRules() throws {
+        let overdue = session(on: offset(-1))
+        let rest = session(on: now, type: .rest)
+        let done = session(on: now)
+        done.isCompleted = true
+
+        for workout in [overdue, rest, done] {
+            #expect(WatchSyncService.runSession(
+                for: workout, unit: .metric, maxHeartRateBPM: 186, now: now, calendar: calendar
+            ) == nil)
+        }
+        let easy = try #require(WatchSyncService.runSession(
+            for: session(on: now), unit: .metric, maxHeartRateBPM: 0, now: now, calendar: calendar
+        ))
+        #expect(easy.maxHeartRateBPM == nil)
+        #expect(easy.guidedState() == nil)
     }
 }
