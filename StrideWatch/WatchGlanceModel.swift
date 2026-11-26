@@ -92,6 +92,43 @@ enum WatchDemo {
               let page = Int(arguments[flag + 1]) else { return 0 }
         return page
     }
+
+    /// `--demo-run`: opens on a run in progress (Watch runs, PR 6c), with ``sampleRunSession``
+    /// on its first rep, for the App Store's Watch screenshots. Nothing is recorded.
+    static var showsRun: Bool {
+        ProcessInfo.processInfo.arguments.contains("--demo-run")
+    }
+
+    /// 2 km warm-up, 5 × 800 m at 4:00/km with 90 s jogs, 1.5 km cool-down.
+    static var sampleRunSession: WatchRunSession {
+        WatchRunSession(
+            sessionID: UUID(),
+            scheduledDate: Date(),
+            title: String(localized: "Intervals"),
+            targetDistanceMeters: 8_500,
+            targetPaceLowerSecondsPerKm: 235,
+            targetPaceUpperSecondsPerKm: 245,
+            structure: WorkoutStructure(
+                warmup: WorkoutSegment(distanceMeters: 2_000, label: String(localized: "Warm-up")),
+                mainSets: [WorkoutSet(
+                    repetitions: 5,
+                    workSegment: WorkoutSegment(
+                        distanceMeters: 800,
+                        targetPaceSecondsPerKm: 240,
+                        label: String(localized: "Rep")
+                    ),
+                    recoverySegment: WorkoutSegment(durationSeconds: 90, label: String(localized: "Jog")),
+                    label: String(localized: "Reps")
+                )],
+                cooldown: WorkoutSegment(distanceMeters: 1_500, label: String(localized: "Cool-down")),
+                totalEstimatedDistanceMeters: 8_500,
+                totalEstimatedDurationSeconds: 2_700
+            ),
+            usesRunWalkCues: false,
+            maxHeartRateBPM: 190,
+            usesMetricUnits: true
+        )
+    }
 }
 
 // MARK: - WatchSessionReceiver
