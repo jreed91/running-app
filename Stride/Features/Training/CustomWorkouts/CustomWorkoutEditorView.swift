@@ -36,9 +36,14 @@ struct CustomWorkoutEditorView: View {
     /// Problems are shown once the runner has tried to save, not while they type.
     @State private var triedToSave = false
 
-    init(target: Target, trainingPaces: TrainingPaces?) {
+    /// Whether an existing workout offers Delete. Off where the screen underneath shows
+    /// the workout itself.
+    let allowsDelete: Bool
+
+    init(target: Target, trainingPaces: TrainingPaces?, allowsDelete: Bool = true) {
         self.target = target
         self.trainingPaces = trainingPaces
+        self.allowsDelete = allowsDelete
         _draft = State(initialValue: Self.draft(for: target))
     }
 
@@ -105,7 +110,7 @@ struct CustomWorkoutEditorView: View {
 
                 summarySection
 
-                if existing != nil {
+                if existing != nil, allowsDelete {
                     Section {
                         Button("Delete workout", role: .destructive) { confirmingDeletion = true }
                             .buttonStyle(.strideButton(.destructive))

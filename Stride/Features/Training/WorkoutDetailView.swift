@@ -783,7 +783,7 @@ struct PlannedStep: Equatable {
 
 /// A step inside the Steps card. The marker is hollow for the warm-up and cool-down and
 /// filled with the brand for the work, so the session's shape reads down the left edge.
-private struct PlannedStepRow: View {
+struct PlannedStepRow: View {
     let step: PlannedStep
 
     var body: some View {

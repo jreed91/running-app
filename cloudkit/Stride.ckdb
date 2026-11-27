@@ -23,6 +23,8 @@ DEFINE SCHEMA
         CD_averagePaceSecondsPerKm      DOUBLE QUERYABLE SORTABLE,
         CD_cachedAIInsightData          BYTES QUERYABLE SORTABLE,
         CD_cachedAIInsightData_ckAsset  ASSET,
+        CD_customWorkoutID              STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_customWorkoutName            STRING QUERYABLE SEARCHABLE SORTABLE,
         CD_date                         TIMESTAMP QUERYABLE SORTABLE,
         CD_distanceMeters               DOUBLE QUERYABLE SORTABLE,
         CD_distanceSeriesData           BYTES QUERYABLE SORTABLE,

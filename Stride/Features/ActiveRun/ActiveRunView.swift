@@ -69,6 +69,10 @@ struct ActiveRunView: View {
         if let scheduledType = scheduledWorkout?.workoutType, scheduledType.isRunType {
             return scheduledType
         }
+        // A custom workout is structured work by definition: reps, a tempo block, strides.
+        if presentation.customRun != nil {
+            return .interval
+        }
         return .easy
     }
 
@@ -1021,6 +1025,10 @@ struct ActiveRunView: View {
     }
 
     private func persistFinishedRun(_ workout: RunWorkout) {
+        if let customRun = presentation.customRun {
+            workout.customWorkoutName = customRun.name
+            workout.customWorkoutID = customRun.id
+        }
         context.insert(workout)
         ShoeAssignment.assignDefaultShoe(to: [workout], in: context)
         // Link the run back to its scheduled day so the plan marks it complete

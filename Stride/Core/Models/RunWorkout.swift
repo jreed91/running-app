@@ -101,7 +101,25 @@ final class RunWorkout {
     /// imported before the question existed reads as unrated rather than as a guess.
     var feelRaw: Int?
 
+    /// The name of the runner's own workout this run followed ("6 × 800 m"), copied at
+    /// the start so renaming or deleting the workout later leaves the run's title alone
+    /// (Custom workouts, PR 3). `nil` for every other run.
+    var customWorkoutName: String?
+
+    /// The ``SavedWorkout`` this run followed, by ID rather than relationship: the library
+    /// entry can be deleted and the run kept, and CloudKit can deliver either first.
+    var customWorkoutID: UUID?
+
     // MARK: Computed helpers (not persisted)
+
+    /// What lists and the run's own screen call it: the custom workout's name when it
+    /// followed one, else the session type ("Tempo").
+    var displayTitle: String {
+        if let name = customWorkoutName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
+            return name
+        }
+        return (scheduledWorkout?.workoutType ?? workoutType).localizedName
+    }
 
     var splits: [Split] {
         get { splitsData?.decode([Split].self) ?? [] }
@@ -324,7 +342,7 @@ extension RunWorkout {
         \.id, \.date, \.distanceMeters, \.durationSeconds, \.averagePaceSecondsPerKm,
         \.averageHeartRate, \.maxHeartRate, \.elevationGainMeters, \.averageCadenceStepsPerMinute,
         \.workoutTypeRaw, \.workoutLocationRaw, \.splitUnitRaw, \.notes, \.healthKitWorkoutID,
-        \.linkedScheduledWorkoutID, \.shoeID, \.aiCoachReactionRaw, \.feelRaw,
+        \.linkedScheduledWorkoutID, \.shoeID, \.aiCoachReactionRaw, \.feelRaw, \.customWorkoutName,
     ] }
 
     /// `descriptor` with only ``summaryProperties`` loaded.

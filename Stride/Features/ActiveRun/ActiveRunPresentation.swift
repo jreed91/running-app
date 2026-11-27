@@ -36,8 +36,21 @@ final class ActiveRunPresentation {
     /// The scheduled workout this run fulfils; `nil` for a free run.
     private(set) var scheduledWorkout: ScheduledWorkout?
 
+    /// The runner's own workout this run follows, when it was started from My workouts
+    /// (Custom workouts, PR 3). A copy of its name and structure rather than the
+    /// `SavedWorkout` itself, so editing or deleting it mid-run changes nothing here.
+    struct CustomRun: Equatable, Sendable {
+        let id: UUID
+        let name: String
+        let structure: WorkoutStructure
+    }
+
+    /// `nil` unless the run was started from My workouts. Never set together with
+    /// ``scheduledWorkout``.
+    private(set) var customRun: CustomRun?
+
     /// Guided structured-workout state, present only when the run fulfils a scheduled
-    /// workout carrying a multi-segment `WorkoutStructure` (A4). `GuidedWorkoutBanner`
+    /// workout carrying a multi-segment `WorkoutStructure` (A4), or follows a custom one. `GuidedWorkoutBanner`
     /// advances it through a binding, so it cannot be `private(set)`.
     var guided: GuidedWorkoutState?
 
@@ -58,9 +71,30 @@ final class ActiveRunPresentation {
         start(scheduledWorkout: scheduledWorkout)
     }
 
+    /// ``startOrReopen(scheduledWorkout:isRunInProgress:)`` for one of the runner's own
+    /// workouts: a run already underway is reopened, never replaced.
+    func startOrReopen(customRun: CustomRun, isRunInProgress: Bool) {
+        guard !isRunInProgress else {
+            reopen()
+            return
+        }
+        start(customRun: customRun)
+    }
+
+    /// Opens the HUD for a run that follows one of the runner's own workouts. It fulfils
+    /// no plan day here; a run on a plan day can still complete it later through the same
+    /// day match every free run gets.
+    func start(customRun: CustomRun) {
+        scheduledWorkout = nil
+        self.customRun = customRun
+        guided = customRun.structure.mainSets.isEmpty ? nil : GuidedWorkoutState(structure: customRun.structure)
+        isPresented = true
+    }
+
     /// Opens the HUD for a new run, replacing whatever the last session left behind.
     func start(scheduledWorkout: ScheduledWorkout?) {
         self.scheduledWorkout = scheduledWorkout
+        customRun = nil
         // Built here rather than in the HUD's `onAppear`, which now runs again on every
         // reopen and would restart the stepper each time.
         if let scheduledWorkout, let structure = scheduledWorkout.workoutStructure, !structure.mainSets.isEmpty {
@@ -102,6 +136,7 @@ final class ActiveRunPresentation {
     func end() {
         isPresented = false
         scheduledWorkout = nil
+        customRun = nil
         guided = nil
     }
 }
