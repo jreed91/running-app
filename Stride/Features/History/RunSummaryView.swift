@@ -428,7 +428,7 @@ struct RunSummaryView: View {
         // compare with last week" lets Siri resolve "this run" to this entity.
         .appEntityIdentifier(EntityIdentifier(for: RunWorkoutEntity.self, identifier: workout.id))
         .task(id: workout.id) { RunDetailsIntent.donateViewing(workout, unit: appSettings.unitPreference) }
-        .navigationTitle(openPage?.title ?? displayType.localizedName)
+        .navigationTitle(openPage?.title ?? workout.displayTitle)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(openPage != nil)
         .toolbar {

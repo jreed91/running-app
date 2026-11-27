@@ -5,8 +5,8 @@ import SwiftUI
 
 /// The runner's own workouts, and the classics to start one from (Custom workouts, PR 2).
 ///
-/// Reached from the "My workouts" tile in Plan tools. Running one and putting one on a
-/// plan day come in the next PRs; for now this is where they are built and kept.
+/// Reached from the "My workouts" tile in Plan tools. A row opens the workout's page,
+/// where it is started (``SavedWorkoutDetailView``).
 struct MyWorkoutsView: View {
     @Environment(\.modelContext) private var context
     @Environment(AppSettings.self) private var appSettings
@@ -109,12 +109,11 @@ struct MyWorkoutsView: View {
     }
 
     private func row(_ workout: SavedWorkout) -> some View {
-        Button {
-            editing = .existing(workout)
+        NavigationLink {
+            SavedWorkoutDetailView(workout: workout, trainingPaces: trainingPaces)
         } label: {
             SavedWorkoutRow(workout: workout, unit: unit)
         }
-        .buttonStyle(.plain)
         .swipeActions(edge: .trailing) {
             Button(role: .destructive) {
                 pendingDeletion = workout
@@ -123,6 +122,7 @@ struct MyWorkoutsView: View {
             }
         }
         .contextMenu {
+            Button("Edit", systemImage: "pencil") { editing = .existing(workout) }
             Button("Duplicate", systemImage: "plus.square.on.square") { duplicate(workout) }
             Button("Delete", systemImage: "trash", role: .destructive) { pendingDeletion = workout }
         }
@@ -171,7 +171,6 @@ private struct SavedWorkoutRow: View {
                 }
             }
             Spacer(minLength: 0)
-            StrideIcon(name: .chevronRight, size: 12, color: .secondary, strokeWeight: 2)
         }
         .contentShape(.rect)
         .accessibilityElement(children: .combine)

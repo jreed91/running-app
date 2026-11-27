@@ -599,7 +599,7 @@ struct WorkoutRowView: View {
     /// strips for space, and the icons are said in words.
     private var rowDescription: String {
         var parts = [
-            displayType.localizedName,
+            workout.displayTitle,
             workout.date.formatted(.dateTime.weekday(.wide).month(.wide).day())
         ]
         if workout.isCrossTraining {
@@ -650,7 +650,7 @@ struct WorkoutRowView: View {
             }
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(displayType.localizedName)
+                Text(workout.displayTitle)
                     .font(.bodyStrong)
                 HStack(spacing: 4) {
                     Text(workout.date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))

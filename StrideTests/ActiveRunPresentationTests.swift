@@ -202,4 +202,59 @@ struct ActiveRunPresentationTests {
         #expect(presentation.scheduledWorkout == nil)
         #expect(presentation.guided == nil)
     }
+
+    // MARK: Custom workouts (PR 3)
+
+    private func customRun() throws -> ActiveRunPresentation.CustomRun {
+        .init(id: UUID(), name: "6 × 800 m", structure: try #require(intervalWorkout().workoutStructure))
+    }
+
+    @Test("A custom workout starts guided, with no plan day")
+    func customRunIsGuided() throws {
+        let presentation = ActiveRunPresentation()
+        let run = try customRun()
+        presentation.start(customRun: run)
+
+        #expect(presentation.isPresented)
+        #expect(presentation.customRun == run)
+        #expect(presentation.scheduledWorkout == nil)
+        let guided = try #require(presentation.guided)
+        #expect(guided.steps.contains { $0.kind == .work })
+    }
+
+    @Test("A custom workout's start reopens a run already recording")
+    func customRunReopens() throws {
+        let presentation = ActiveRunPresentation()
+        presentation.start(scheduledWorkout: intervalWorkout())
+        presentation.minimize()
+
+        presentation.startOrReopen(customRun: try customRun(), isRunInProgress: true)
+
+        #expect(presentation.isPresented)
+        #expect(presentation.customRun == nil, "the recording run keeps its own session")
+        #expect(presentation.scheduledWorkout != nil)
+    }
+
+    @Test("Ending, or starting a plan run, clears the custom workout")
+    func customRunClears() throws {
+        let presentation = ActiveRunPresentation()
+        presentation.start(customRun: try customRun())
+        presentation.end()
+        #expect(presentation.customRun == nil)
+
+        presentation.start(customRun: try customRun())
+        presentation.start(scheduledWorkout: nil)
+        #expect(presentation.customRun == nil)
+        #expect(presentation.guided == nil)
+    }
+
+    @Test("A run that followed a custom workout is titled with its name")
+    func displayTitle() {
+        let run = RunWorkout(distanceMeters: 5_000, durationSeconds: 1_700)
+        #expect(run.displayTitle == run.workoutType.localizedName)
+        run.customWorkoutName = "6 × 800 m"
+        #expect(run.displayTitle == "6 × 800 m")
+        run.customWorkoutName = "  "
+        #expect(run.displayTitle == run.workoutType.localizedName)
+    }
 }
