@@ -23,6 +23,7 @@ struct WorkoutDetailView: View {
     /// `ActiveRunPresentation`, the same way Home does.
     @State private var strengthWorkout: ScheduledWorkout?
     @State private var showRouteGenius = false
+    @State private var showsCustomSwap = false
 
     private var unit: UnitPreference { appSettings.unitPreference }
 
@@ -99,7 +100,7 @@ struct WorkoutDetailView: View {
                     .strideReadableWidth()
                 }
                 .background(Color.surfacePrimary)
-                .navigationTitle(workout.workoutType.localizedName)
+                .navigationTitle(workout.displayTitle)
                 .navigationBarTitleDisplayMode(.inline)
                 .fullScreenCover(item: $strengthWorkout) { session in
                     StrengthActiveView(scheduledWorkout: session)
@@ -141,7 +142,7 @@ struct WorkoutDetailView: View {
                 }
                 .accessibilityElement(children: .combine)
             } else {
-                Text(workout.workoutType.localizedName)
+                Text(workout.displayTitle)
                     .font(.dsTitle1)
             }
 
@@ -168,6 +169,10 @@ struct WorkoutDetailView: View {
 
             if canPlanRoute {
                 planRouteButton
+            }
+
+            if canSwapForCustomWorkout {
+                swapButton
             }
         }
         .padding(AppSpacing.lg)
@@ -332,6 +337,49 @@ struct WorkoutDetailView: View {
 
     /// Route Genius with this session's distance already in the field. Quiet, as on Home:
     /// the start button stays the screen's one primary action.
+    // MARK: - Custom workout swap
+
+    /// A run still to do, in a plan: the day can run one of the runner's own workouts
+    /// instead (Custom workouts, PR 4). Not a race, which is the plan's point.
+    private var canSwapForCustomWorkout: Bool {
+        !workout.isCompleted
+            && workout.workoutType.sessionKind == .run
+            && workout.workoutType != .race
+            && workout.week != nil
+    }
+
+    private var swapButton: some View {
+        Button {
+            showsCustomSwap = true
+        } label: {
+            HStack(spacing: 8) {
+                StrideIcon(name: .timer, size: 16, color: .brandText, strokeWeight: 2.2)
+                Text("Swap for one of my workouts")
+            }
+        }
+        .buttonStyle(.strideButton(.quiet))
+        .accessibilityIdentifier("workoutDetail.swapCustom")
+        .sheet(isPresented: $showsCustomSwap) {
+            SwapForCustomWorkoutSheet(sessionTitle: workout.displayTitle) { saved in
+                Task { await swap(in: saved) }
+            }
+            .strideSheet()
+        }
+    }
+
+    @MainActor
+    private func swap(in saved: SavedWorkout) async {
+        guard let structure = saved.structure, !workout.isCompleted else { return }
+        workout.applyCustomWorkout(name: saved.name, structure: structure, notes: saved.notes)
+        saved.markUsed()
+        context.saveOrLog("a custom workout swapped onto a plan day")
+        // Home's Up Next, the widgets and the Watch show the day's new name and steps.
+        WidgetRefreshService.refresh(context: context, appSettings: appSettings)
+        if let plan = workout.week?.plan {
+            try? await container.healthKitRepository.syncWorkoutPlans(for: plan, unitPreference: unit)
+        }
+    }
+
     private var planRouteButton: some View {
         Button {
             showRouteGenius = true

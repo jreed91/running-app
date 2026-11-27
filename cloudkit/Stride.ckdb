@@ -117,6 +117,7 @@ DEFINE SCHEMA
     RECORD TYPE CD_ScheduledWorkout (
         CD_completedStrengthWorkout STRING QUERYABLE SEARCHABLE SORTABLE,
         CD_completedWorkout         STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_customWorkoutName        STRING QUERYABLE SEARCHABLE SORTABLE,
         CD_entityName               STRING QUERYABLE SEARCHABLE SORTABLE,
         CD_healthKitPlanID          STRING QUERYABLE SEARCHABLE SORTABLE,
         CD_id                       STRING QUERYABLE SEARCHABLE SORTABLE,
