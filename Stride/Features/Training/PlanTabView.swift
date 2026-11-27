@@ -613,7 +613,7 @@ struct PlanTabView: View {
     }
 
     private func workoutLabel(_ workout: ScheduledWorkout) -> String {
-        "\(workout.workoutType.localizedName) on \(workout.scheduledDate.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))"
+        "\(workout.displayTitle) on \(workout.scheduledDate.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))"
     }
 }
 
@@ -1274,7 +1274,7 @@ private struct PlanWorkoutSummaryRow: View {
             }
 
             VStack(alignment: .leading, spacing: 1) {
-                Text(workout.workoutType.localizedName)
+                Text(workout.displayTitle)
                     .font(.bodyRegular)
                 Text(workout.scheduledDate.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
                     .font(.dsCaption)

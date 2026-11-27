@@ -210,7 +210,7 @@ enum WidgetSnapshotBuilder {
     ) -> WidgetSnapshot.NextWorkout {
         let isRest = workout.workoutType == .rest
         return WidgetSnapshot.NextWorkout(
-            title: workout.workoutType.localizedName,
+            title: workout.displayTitle,
             detail: isRest ? nil : detail(for: workout, unit: unit),
             paceTarget: isRest ? nil : paceTarget(for: workout, unit: unit),
             note: note(for: workout),

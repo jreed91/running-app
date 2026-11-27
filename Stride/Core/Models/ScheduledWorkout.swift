@@ -38,6 +38,11 @@ final class ScheduledWorkout {
     /// JSON-encoded ``StrengthWorkoutPlan`` — set for `.strength` workouts.
     var strengthData: Data?
 
+    /// The name of the runner's own workout swapped onto this day ("6 × 800 m"), shown in
+    /// place of the session type (Custom workouts, PR 4). Cleared when the coach rewrites
+    /// the session, since the structure is then no longer the one the name describes.
+    var customWorkoutName: String?
+
     var week: TrainingWeek?
 
     @Relationship(deleteRule: .nullify, inverse: \RunWorkout.scheduledWorkout)
@@ -58,6 +63,15 @@ final class ScheduledWorkout {
     var intervals: [WorkoutInterval] {
         get { intervalsData?.decode([WorkoutInterval].self) ?? [] }
         set { intervalsData = .encoded(newValue, keeping: intervalsData) }
+    }
+
+    /// What the plan, the widgets and the Watch call the session: the custom workout's
+    /// name when one was swapped in, else the session type ("Intervals").
+    var displayTitle: String {
+        if let name = customWorkoutName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
+            return name
+        }
+        return workoutType.localizedName
     }
 
     var targetPaceRange: ClosedRange<Double>? {
@@ -135,6 +149,29 @@ extension ScheduledWorkout {
         targetPaceUpperBound = adapted.targetPaceUpperBound
         notes = adapted.notes
         intervals = adapted.intervals
+        customWorkoutName = nil
+        healthKitPlanID = nil
+        AdaptedSessions.record(id)
+    }
+
+    /// Puts one of the runner's own workouts on this day in place of what the plan had
+    /// (Custom workouts, PR 4).
+    ///
+    /// The day, its place in the week and its completion state stay; what is run changes.
+    /// The plan's pace band goes, because the reps carry their own paces, and so does the
+    /// coach's note, which described the old session. `healthKitPlanID` is cleared so the
+    /// Workout app copy is rebuilt from the new structure on the next sync, and the day is
+    /// noted in ``AdaptedSessions`` so the next run's automatic pace refresh leaves the
+    /// runner's choice alone, as it does the coach's.
+    func applyCustomWorkout(name: String, structure: WorkoutStructure, notes: String?) {
+        workoutType = .interval
+        workoutStructure = structure
+        intervals = []
+        targetDistanceMeters = structure.totalEstimatedDistanceMeters > 0 ? structure.totalEstimatedDistanceMeters : nil
+        targetPaceLowerBound = nil
+        targetPaceUpperBound = nil
+        self.notes = notes.flatMap { $0.isEmpty ? nil : $0 }
+        customWorkoutName = name
         healthKitPlanID = nil
         AdaptedSessions.record(id)
     }

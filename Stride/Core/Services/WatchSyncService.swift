@@ -117,7 +117,7 @@ final class WatchSyncService: NSObject {
         return WatchRunSession(
             sessionID: session.id,
             scheduledDate: session.scheduledDate,
-            title: session.workoutType.localizedName,
+            title: session.displayTitle,
             targetDistanceMeters: session.targetDistanceMeters,
             targetPaceLowerSecondsPerKm: session.targetPaceRange?.lowerBound,
             targetPaceUpperSecondsPerKm: session.targetPaceRange?.upperBound,
