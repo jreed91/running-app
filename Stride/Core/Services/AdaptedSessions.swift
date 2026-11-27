@@ -23,10 +23,17 @@ enum AdaptedSessions {
     /// How long an edit outlasts the automatic refresh.
     static let protection: TimeInterval = 7 * 24 * 60 * 60
 
+    /// Serializes ``record(_:at:in:)``. Swift Testing ran `CustomWorkoutSwapTests` alongside
+    /// other tests recording into `.standard`, and a lost update failed it (run 46070097517).
+    private static let lock = NSLock()
+
     /// Notes that `sessionID` was just changed on purpose. Edits older than
     /// ``protection`` are dropped on the way, so the dictionary stays the size of a week's
     /// edits.
     static func record(_ sessionID: UUID, at date: Date = Date(), in defaults: UserDefaults = .standard) {
+        // Read-modify-write: two records at once could each drop the other's entry.
+        lock.lock()
+        defer { lock.unlock() }
         var edits = load(from: defaults).filter { isProtected(editedAt: $0.value, now: date) }
         edits[sessionID] = date
         defaults.set(

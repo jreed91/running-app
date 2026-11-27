@@ -260,11 +260,12 @@ jobs:
 
       - name: Run UI tests
         continue-on-error: true
-        # Two simulator clones, one test class each. The scheme keeps StrideUITests
-        # serial for local runs; here the two classes overlap, so the run takes about
-        # as long as StrideUITests alone (246 s in run 41554674880) instead of that
-        # plus UXCaptureTests (131 s). xcodebuild splits work by class, so a third
-        # worker would have nothing to do.
+        # Serial, on one simulator. Two parallel clones saved about 3 minutes, but
+        # with both running the simulator stalled under the load: in run 46061511892
+        # the app's main thread sat for minutes in SwiftUI's renderer waiting on the
+        # simulator's Metal shader compiler (MTLCompilerService), and another test
+        # lost the app's accessibility connection right after launch. Neither is app
+        # code, and both failed tests that pass on their own.
         run: |
           mkdir -p TestResults
           set -o pipefail
@@ -274,8 +275,7 @@ jobs:
             -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
             -derivedDataPath ~/Library/Developer/Xcode/DerivedData \
             -only-testing:StrideUITests \
-            -parallel-testing-enabled YES \
-            -parallel-testing-worker-count 2 \
+            -parallel-testing-enabled NO \
             -resultBundlePath TestResults/ui.xcresult \
             CODE_SIGNING_ALLOWED=NO \
             | xcbeautify --renderer github-actions
