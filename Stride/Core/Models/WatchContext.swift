@@ -41,10 +41,24 @@ struct WatchContext: Sendable, Equatable {
     /// never a rest day or a finished session. A watch build from before this key ignores it.
     var runSession: WatchRunSession?
 
-    init(snapshot: WidgetSnapshot, startableWorkout: Data? = nil, runSession: WatchRunSession? = nil) {
+    /// The runner's own workouts, most recently used first, for the watch to start without
+    /// the phone (Custom workouts, PR 5). Each is a ``WatchRunSession`` whose `sessionID`
+    /// is the ``SavedWorkout``'s id, so the run it records names the workout it followed.
+    /// Capped at ``maxCustomWorkouts``: the application context is meant to be small.
+    var customWorkouts: [WatchRunSession]
+
+    static let maxCustomWorkouts = 10
+
+    init(
+        snapshot: WidgetSnapshot,
+        startableWorkout: Data? = nil,
+        runSession: WatchRunSession? = nil,
+        customWorkouts: [WatchRunSession] = []
+    ) {
         self.snapshot = snapshot
         self.startableWorkout = startableWorkout
         self.runSession = runSession
+        self.customWorkouts = Array(customWorkouts.prefix(Self.maxCustomWorkouts))
     }
 
     /// Whether the watch should offer to start ``startableWorkout`` at `now`.
@@ -66,6 +80,7 @@ struct WatchContext: Sendable, Equatable {
         static let snapshot = "snapshot"
         static let startableWorkout = "startableWorkout"
         static let runSession = "runSession"
+        static let customWorkouts = "customWorkouts"
     }
 
     /// The form `WCSession.updateApplicationContext(_:)` takes.
@@ -76,6 +91,9 @@ struct WatchContext: Sendable, Equatable {
         }
         if let runSession {
             context[Key.runSession] = try Self.encoder.encode(runSession)
+        }
+        if !customWorkouts.isEmpty {
+            context[Key.customWorkouts] = try Self.encoder.encode(customWorkouts)
         }
         return context
     }
@@ -90,10 +108,14 @@ struct WatchContext: Sendable, Equatable {
         else { return nil }
         let runSession = (applicationContext[Key.runSession] as? Data)
             .flatMap { try? Self.decoder.decode(WatchRunSession.self, from: $0) }
+        // Like the run session, dropped on its own if it no longer decodes.
+        let customWorkouts = (applicationContext[Key.customWorkouts] as? Data)
+            .flatMap { try? Self.decoder.decode([WatchRunSession].self, from: $0) } ?? []
         self.init(
             snapshot: snapshot,
             startableWorkout: applicationContext[Key.startableWorkout] as? Data,
-            runSession: runSession
+            runSession: runSession,
+            customWorkouts: customWorkouts
         )
     }
 

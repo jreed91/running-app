@@ -213,6 +213,7 @@ final class WorkoutSyncService {
                 context.insert(workout)
             }
             ShoeAssignment.assignDefaultShoe(to: newWorkouts, in: context)
+            nameCustomWorkoutRuns(newWorkouts)
             linkToScheduledWorkouts(newWorkouts)
             do {
                 try context.save()
@@ -661,6 +662,28 @@ final class WorkoutSyncService {
     /// that session whatever its day, so a session run a day or two late, or one the plan
     /// moved while the phone was away, is still the one completed. A named session that is
     /// no longer available (deleted, retired, already done) falls back to the day match.
+    /// Titles a run recorded on the Watch from one of the runner's own workouts with that
+    /// workout's name (Custom workouts, PR 5). The Watch names the ``SavedWorkout`` it
+    /// followed the way it names a plan session, through ``RunWorkout/namedSessionID``; an id
+    /// that is no saved workout (a plan session, or a workout deleted since) changes nothing.
+    ///
+    /// Before the plan link, which still day-matches such a run like any free run.
+    func nameCustomWorkoutRuns(_ runWorkouts: [RunWorkout]) {
+        let named = runWorkouts.filter { $0.namedSessionID != nil && $0.customWorkoutName == nil }
+        guard !named.isEmpty,
+              let saved = try? context.fetch(FetchDescriptor<SavedWorkout>()),
+              !saved.isEmpty else { return }
+        let byID = Dictionary(saved.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        for run in named {
+            guard let id = run.namedSessionID, let workout = byID[id] else { continue }
+            run.customWorkoutName = workout.name
+            run.customWorkoutID = workout.id
+            if workout.lastUsedAt.map({ $0 < run.date }) ?? true {
+                workout.markUsed(now: run.date)
+            }
+        }
+    }
+
     func linkToScheduledWorkouts(_ runWorkouts: [RunWorkout]) {
         let toLink = runWorkouts.runsOnly.filter { $0.scheduledWorkout == nil }
         guard !toLink.isEmpty else { return }

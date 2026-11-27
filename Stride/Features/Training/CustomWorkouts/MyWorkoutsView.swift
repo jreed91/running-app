@@ -100,6 +100,7 @@ struct MyWorkoutsView: View {
                 if let workout = pendingDeletion {
                     context.delete(workout)
                     context.saveOrLog("the deletion of a custom workout")
+                    WidgetRefreshService.refresh(context: context, appSettings: appSettings)
                 }
                 pendingDeletion = nil
             }
@@ -138,6 +139,7 @@ struct MyWorkoutsView: View {
         )
         context.insert(copy)
         context.saveOrLog("the copy of a custom workout")
+        WidgetRefreshService.refresh(context: context, appSettings: appSettings)
     }
 }
 
