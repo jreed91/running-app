@@ -54,7 +54,7 @@ struct PlanTabView: View {
     @State private var space = PlanSpace()
 
     private enum PlanPage: Hashable {
-        case raceDay, paceInsights, raceInsights, planHistory, friends
+        case raceDay, paceInsights, raceInsights, planHistory, friends, myWorkouts
     }
 
     /// "Train with friends" pushed in a stack because a group link was just joined.
@@ -295,6 +295,20 @@ struct PlanTabView: View {
                             }
                             .buttonStyle(.plain)
                             .accessibilityIdentifier("plan.friendsRow")
+
+                            // The runner's own structured sessions (Custom workouts). Any plan
+                            // kind: they are run on their own, not generated from the plan.
+                            pageLink(to: .myWorkouts) {
+                                MyWorkoutsView()
+                            } label: {
+                                PlanToolTile(
+                                    title: "My workouts",
+                                    subtitle: "Build your own intervals",
+                                    glyph: .timer
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("plan.myWorkoutsRow")
                         }
                         if hasPaceTools {
                             // Running, and after: the outcome stays until the next run.
@@ -404,6 +418,8 @@ struct PlanTabView: View {
                 TrainingPlanListView()
             case .friends:
                 TrainingGroupsView()
+            case .myWorkouts:
+                MyWorkoutsView()
             }
         } else if let workout = detailWorkout {
             WorkoutDetailView(workout: workout)
