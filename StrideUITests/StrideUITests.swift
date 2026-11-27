@@ -15,7 +15,14 @@ final class StrideUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         app = XCUIApplication()
-        app.launchArguments = ["--uitesting"]
+    }
+
+    /// Each test launches once, with its own arguments. setUp used to launch with the
+    /// defaults, and the tests that need other arguments terminated that copy straight
+    /// away to relaunch. On CI that terminate sometimes never finished ("Failed to
+    /// terminate com.running.stride") and failed the test in its first second.
+    private func launch(_ extraArguments: String...) {
+        app.launchArguments = ["--uitesting"] + extraArguments
         app.launch()
     }
 
@@ -24,6 +31,7 @@ final class StrideUITests: XCTestCase {
     }
 
     func testE2EOnboardingCreatesTrainingPlanAndDashboard() throws {
+        launch()
         completeOnboarding()
 
         XCTAssertTrue(tabBar.waitForExistence(timeout: 8))
@@ -55,6 +63,7 @@ final class StrideUITests: XCTestCase {
     }
 
     func testE2ETabNavigationShowsPrimaryScreens() throws {
+        launch()
         completeOnboarding()
 
         XCTAssertTrue(tabBar.waitForExistence(timeout: 8))
@@ -75,6 +84,7 @@ final class StrideUITests: XCTestCase {
     }
 
     func testE2EFreeRunHUDOpensFromDashboard() throws {
+        launch()
         completeOnboarding()
 
         XCTAssertTrue(tabBar.waitForExistence(timeout: 8))
@@ -98,6 +108,7 @@ final class StrideUITests: XCTestCase {
     /// no session to minimise, so the control closes outright — that is the path here,
     /// because starting one would need location permission and a GPS fix.
     func testRunHUDClosesBeforeTheRunStarts() throws {
+        launch()
         completeOnboarding()
 
         XCTAssertTrue(tabBar.waitForExistence(timeout: 8))
@@ -119,9 +130,7 @@ final class StrideUITests: XCTestCase {
     /// environment and state, and building them in a lazy destination (outside the screen's
     /// body) crashed the app on device.
     func testBreakdownRowOpensItsPage() throws {
-        app.terminate()
-        app.launchArguments = ["--uitesting", "--seed-demo-data"]
-        app.launch()
+        launch("--seed-demo-data")
         completeOnboarding()
 
         XCTAssertTrue(tabBar.buttons["History"].waitForExistence(timeout: 5))
@@ -172,9 +181,7 @@ final class StrideUITests: XCTestCase {
     /// releases" reaches the changelog. Opened with `--show-whats-new`, since UI tests
     /// otherwise never see it (`ContentView.checkWhatsNew()`).
     func testWhatsNewPagesThroughAndOpensTheChangelog() throws {
-        app.terminate()
-        app.launchArguments = ["--uitesting", "--show-whats-new"]
-        app.launch()
+        launch("--show-whats-new")
         completeOnboarding()
 
         let next = app.buttons["whatsNew.next"]

@@ -891,18 +891,18 @@ struct OnboardingView: View {
         let locStatus = locationManager.authorizationStatus
         let notifStatus = await UNUserNotificationCenter.current()
             .notificationSettings().authorizationStatus
-        let healthShareAuthorized: Bool = {
-            guard HKHealthStore.isHealthDataAvailable(),
-                  let distType = HKQuantityType.quantityType(forIdentifier: .distanceWalkingRunning)
-            else { return false }
-            return HKHealthStore().authorizationStatus(for: distType) == .sharingAuthorized
-        }()
-
         withAnimation {
             locationEnabled = (locStatus == .authorizedWhenInUse || locStatus == .authorizedAlways)
             notificationsEnabled = (notifStatus == .authorized || notifStatus == .provisional)
-            if healthShareAuthorized { healthEnabled = true }
         }
+
+        // Health share status is a synchronous call into healthd. Made here on the main
+        // actor it froze the permissions step for minutes on CI (healthd never answered;
+        // the spindump in run 45896042847 is parked in this function). Off the main
+        // actor and the cooperative pool, and after the other rows, so a slow healthd
+        // only delays the Health row.
+        guard await container.healthKitRepository.isAuthorizedOffCooperativePool() else { return }
+        withAnimation { healthEnabled = true }
     }
 
     private func requestPermissionsSequentially() async {
