@@ -17,14 +17,32 @@ struct PlanToolsGrid<Content: View>: View {
         self.content = content()
     }
 
-    private var columns: [GridItem] {
-        let count = typeSize.isAccessibilitySize ? 1 : 2
-        return Array(repeating: GridItem(.flexible(), spacing: AppSpacing.md, alignment: .top), count: count)
-    }
+    private var columnCount: Int { typeSize.isAccessibilitySize ? 1 : 2 }
 
+    /// An eager `Grid`, not a `LazyVGrid`. With five tiles there is nothing to save by
+    /// building lazily, and the lazy grid left the fifth tile (My workouts, alone on the
+    /// third row, below the fold) out of the accessibility tree even once it was scrolled
+    /// on screen: UI tests could not find it (CI runs 46071560695 and 46075739921), so
+    /// VoiceOver most likely could not reach it either.
     var body: some View {
-        LazyVGrid(columns: columns, spacing: AppSpacing.md) {
-            content
+        Group(subviews: content) { tiles in
+            let columns = columnCount
+            Grid(horizontalSpacing: AppSpacing.md, verticalSpacing: AppSpacing.md) {
+                ForEach(Array(stride(from: 0, to: tiles.count, by: columns)), id: \.self) { start in
+                    GridRow(alignment: .top) {
+                        ForEach(start..<(start + columns), id: \.self) { index in
+                            if index < tiles.count {
+                                tiles[index]
+                            } else {
+                                // Holds the odd tile to half the width, as the lazy grid did.
+                                Color.clear
+                                    .gridCellUnsizedAxes(.vertical)
+                                    .accessibilityHidden(true)
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
