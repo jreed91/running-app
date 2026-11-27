@@ -85,6 +85,7 @@ jobs:
               - 'StrideUITests/**'
               - 'project.yml'
               - 'ci_scripts/**'
+              - 'scripts/export_screenshots.py'
               - '.github/workflows/ci.yml'
               - '.github/actions/**'
 
@@ -310,6 +311,27 @@ jobs:
             [[ -n "$out" ]] && echo "$out" || grep -m1 -A160 "com.apple.main-thread" "$f"
             echo "::endgroup::"
           done
+
+      # Every screenshot the UI tests attached (UXCaptureTests' walk through the app,
+      # plus any failure shots) as loose PNGs in a small artifact of their own, so a
+      # reviewer or an agent can look at the running app without pulling the whole
+      # result bundle. `python3 scripts/fetch_app_screenshots.py --pr N` downloads them.
+      - name: Export app screenshots
+        if: always()
+        continue-on-error: true
+        run: |
+          [[ -d TestResults/ui.xcresult ]] || exit 0
+          python3 scripts/export_screenshots.py TestResults/ui.xcresult AppScreenshots
+
+      - name: Upload app screenshots
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-screenshots
+          path: AppScreenshots/
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload test results
         if: always()

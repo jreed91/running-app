@@ -868,6 +868,22 @@ func testName() {
 
 UI tests use XCTest in `StrideUITests/` and launch with `--uitesting`. `Stride/App/UITestingSupport.swift` contains app-side support for deterministic UI-test behavior.
 
+### Seeing the running app
+
+`StrideUITests/UXCaptureTests` walks the app with demo data (onboarding, every tab, each
+Plan tools page, a run summary, Achievements, Settings, the run screen) and screenshots each
+screen. CI runs it on every iOS change and uploads the shots as the `app-screenshots`
+artifact. To look at them, from any machine with `gh` signed in (Linux works):
+
+```bash
+python3 scripts/fetch_app_screenshots.py --pr 123      # or --branch main, --run <id>
+```
+
+It prints where the PNGs and the contact sheets (`sheet-N.png`, eight screens each) landed.
+Open the sheets first, then a full-size shot for detail. When a change adds or moves a
+screen, add it to `UXCaptureTests` so the next PR shows it, and check the PR's shots before
+calling a UI change done. `scripts/export_screenshots.py` pulls PNGs out of any `.xcresult`.
+
 A test that needs SwiftData goes through `StrideTests/TestStore.swift`, never through
 `AppContainer.preview()` or a hand-rolled in-memory `ModelConfiguration` — both share one
 store across the host and abort the whole run. It has two entry points, and the choice
