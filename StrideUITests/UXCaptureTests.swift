@@ -190,6 +190,8 @@ final class UXCaptureTests: XCTestCase {
 
     /// Brings `element` above the floating tab bar, which covers the bottom of the screen
     /// and would take a tap meant for a tile under it. `isHittable` alone does not see that.
+    /// Swipes while the element does not exist yet, too: Plan's tools are a `LazyVGrid`,
+    /// so a tile below the fold is not in the accessibility tree until it is scrolled to.
     @discardableResult
     private func scrollIntoView(_ element: XCUIElement) -> Bool {
         let limit = app.frame.height * 0.82
@@ -205,7 +207,8 @@ final class UXCaptureTests: XCTestCase {
     /// with the bar's back button.
     private func capturePage(from identifier: String, title: String, named name: String) {
         let row = app.buttons[identifier]
-        guard row.waitForExistence(timeout: 5), scrollIntoView(row) else {
+        _ = row.waitForExistence(timeout: 3)
+        guard scrollIntoView(row) else {
             return XCTFail("Could not reach \(identifier) to open \(title)")
         }
         row.tap()
