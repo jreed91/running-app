@@ -38,6 +38,10 @@ struct WatchHomeView: View {
                         WatchRacePage(race: race, now: now)
                             .tag(2)
                     }
+                    if !context.customWorkouts.isEmpty {
+                        WatchCustomWorkoutsPage(workouts: context.customWorkouts)
+                            .tag(3)
+                    }
                 }
                 .tabViewStyle(.verticalPage)
             }
@@ -265,6 +269,54 @@ private struct WatchRacePage: View {
         }
         .navigationTitle("Race")
         .containerBackground(Color.strideInk.gradient, for: .tabView)
+    }
+}
+
+// MARK: - My workouts
+
+/// The runner's own workouts, built on the phone and recorded here without it (Custom
+/// workouts, PR 5). Each starts in Stride's recorder with its steps, as today's session
+/// does; the run it records names the workout, so the phone titles it on import.
+private struct WatchCustomWorkoutsPage: View {
+    @Environment(WatchRunRecorder.self) private var recorder
+    let workouts: [WatchRunSession]
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(workouts, id: \.sessionID) { workout in
+                    Button {
+                        Task { await recorder.start(runSession: workout) }
+                    } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(verbatim: workout.title)
+                                .font(.headline)
+                                .lineLimit(2)
+                            if let summary = Self.summary(workout) {
+                                Text(verbatim: summary)
+                                    .font(.footnote.monospacedDigit())
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .accessibilityHint(Text("Records this workout in Stride on your Watch"))
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .navigationTitle("My Workouts")
+        .containerBackground(Color.strideInk.gradient, for: .tabView)
+    }
+
+    /// "6 steps · about 45 min": step count from the same flattening the recorder runs,
+    /// and the phone's estimate.
+    private static func summary(_ workout: WatchRunSession) -> String? {
+        guard let structure = workout.structure else { return nil }
+        let steps = GuidedWorkoutState.flatten(structure).count
+        let minutes = Int((structure.totalEstimatedDurationSeconds / 60).rounded())
+        guard minutes > 0 else { return String(localized: "\(steps) steps") }
+        return String(localized: "\(steps) steps · about \(minutes) min")
     }
 }
 

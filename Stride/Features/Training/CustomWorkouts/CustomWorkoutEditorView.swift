@@ -190,6 +190,8 @@ struct CustomWorkoutEditorView: View {
             context.insert(SavedWorkout(name: name, structure: structure, notes: notes.isEmpty ? nil : notes))
         }
         context.saveOrLog("a custom workout")
+        // The Watch is sent the library with the widgets' refresh (Custom workouts, PR 5).
+        WidgetRefreshService.refresh(context: context, appSettings: appSettings)
         dismiss()
     }
 
@@ -197,6 +199,7 @@ struct CustomWorkoutEditorView: View {
         guard let existing else { return }
         context.delete(existing)
         context.saveOrLog("the deletion of a custom workout")
+        WidgetRefreshService.refresh(context: context, appSettings: appSettings)
         dismiss()
     }
 }

@@ -49,6 +49,7 @@ final class WatchSyncService: NSObject {
         nextSession: ScheduledWorkout?,
         unit: UnitPreference,
         maxHeartRateBPM: Int? = nil,
+        customWorkouts: [SavedWorkout] = [],
         now: Date = Date(),
         calendar: Calendar = .current
     ) {
@@ -66,6 +67,11 @@ final class WatchSyncService: NSObject {
                 maxHeartRateBPM: maxHeartRateBPM,
                 now: now,
                 calendar: calendar
+            ),
+            customWorkouts: Self.customWorkoutSessions(
+                for: customWorkouts,
+                unit: unit,
+                maxHeartRateBPM: maxHeartRateBPM
             )
         )
         activateIfNeeded()
@@ -128,6 +134,43 @@ final class WatchSyncService: NSObject {
             speaksSplits: spokenCues.splits,
             speaksSteps: spokenCues.steps
         )
+    }
+
+    /// The runner's own workouts in Stride's watch terms (Custom workouts, PR 5): the ones
+    /// with a structure, most recently used first and then most recently edited, at most
+    /// ``WatchContext/maxCustomWorkouts``. Never gated on a day: a library workout has none.
+    static func customWorkoutSessions(
+        for workouts: [SavedWorkout],
+        unit: UnitPreference,
+        maxHeartRateBPM: Int?,
+        spokenCues: (splits: Bool, steps: Bool) = AppSettings.syncedSpokenCues()
+    ) -> [WatchRunSession] {
+        let ordered = workouts.sorted { lhs, rhs in
+            let left = lhs.lastUsedAt ?? .distantPast
+            let right = rhs.lastUsedAt ?? .distantPast
+            if left != right { return left > right }
+            return lhs.updatedAt > rhs.updatedAt
+        }
+        return ordered.compactMap { workout -> WatchRunSession? in
+            guard let structure = workout.structure, !structure.mainSets.isEmpty else { return nil }
+            return WatchRunSession(
+                sessionID: workout.id,
+                scheduledDate: workout.updatedAt,
+                title: workout.name,
+                targetDistanceMeters: structure.totalEstimatedDistanceMeters > 0
+                    ? structure.totalEstimatedDistanceMeters : nil,
+                targetPaceLowerSecondsPerKm: nil,
+                targetPaceUpperSecondsPerKm: nil,
+                structure: structure,
+                usesRunWalkCues: false,
+                maxHeartRateBPM: maxHeartRateBPM.flatMap { $0 > 0 ? $0 : nil },
+                usesMetricUnits: unit == .metric,
+                speaksSplits: spokenCues.splits,
+                speaksSteps: spokenCues.steps
+            )
+        }
+        .prefix(WatchContext.maxCustomWorkouts)
+        .map { $0 }
     }
 
     /// `session` when the watch may be sent it: not a rest day, not done, not overdue.
