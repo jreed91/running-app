@@ -12,6 +12,9 @@ import XCTest
 /// xcodebuild test -scheme Stride -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
 ///   -only-testing:StrideUITests/UXCaptureTests
 /// ```
+/// CI runs it with the other UI tests and uploads every shot as the `app-screenshots`
+/// artifact; `scripts/fetch_app_screenshots.py` downloads them for a PR or branch.
+///
 /// Screenshots land as attachments in the resulting `.xcresult`. To get loose PNGs
 /// instead — easier to flip through, and diffable between runs — point `UX_CAPTURE_DIR`
 /// at a directory in the scheme's test-action environment, or:
@@ -113,6 +116,10 @@ final class UXCaptureTests: XCTestCase {
             captureScrollingScreen(named: "tab-\(tab.lowercased())")
         }
 
+        capturePlanTools()
+        captureRunSummary()
+        captureAchievements()
+
         // Settings opens as a sheet from Home's profile button.
         selectTab("Home")
         sleep(1)
@@ -177,6 +184,93 @@ final class UXCaptureTests: XCTestCase {
         app.swipeUp(velocity: .slow)
         sleep(1)
         capture("\(name)-bottom")
+    }
+
+    // MARK: - One level down
+
+    /// Brings `element` above the floating tab bar, which covers the bottom of the screen
+    /// and would take a tap meant for a tile under it. `isHittable` alone does not see that.
+    /// Swipes while the element does not exist yet, too: Plan's tools are a `LazyVGrid`,
+    /// so a tile below the fold is not in the accessibility tree until it is scrolled to.
+    @discardableResult
+    private func scrollIntoView(_ element: XCUIElement) -> Bool {
+        let limit = app.frame.height * 0.82
+        for _ in 0..<6 {
+            if element.exists, element.isHittable, element.frame.maxY < limit { return true }
+            app.swipeUp(velocity: .slow)
+            sleep(1)
+        }
+        return element.exists && element.isHittable
+    }
+
+    /// Opens a page from `identifier` on the current screen, captures it, and comes back
+    /// with the bar's back button.
+    private func capturePage(from identifier: String, title: String, named name: String) {
+        let row = app.buttons[identifier]
+        _ = row.waitForExistence(timeout: 3)
+        guard scrollIntoView(row) else {
+            return XCTFail("Could not reach \(identifier) to open \(title)")
+        }
+        row.tap()
+        let bar = app.navigationBars[title]
+        guard bar.waitForExistence(timeout: 8) else {
+            return XCTFail("\(title) did not open from \(identifier)")
+        }
+        sleep(2)
+        captureScrollingScreen(named: name)
+        scrollToTop()
+        bar.buttons.element(boundBy: 0).tap()
+        sleep(1)
+    }
+
+    /// Each Plan tools tile's page. The tiles open full pages that the tab's own capture
+    /// never shows, and they are where new features have been landing.
+    private func capturePlanTools() {
+        let tools = [
+            ("plan.paceInsightsRow", "Pace insights", "plan-pace-insights"),
+            ("plan.raceInsightsRow", "Race insights", "plan-race-insights"),
+            ("plan.friendsRow", "Train with friends", "plan-friends"),
+            ("plan.myWorkoutsRow", "My workouts", "plan-my-workouts")
+        ]
+        for (identifier, title, name) in tools {
+            selectTab("Plan")
+            sleep(1)
+            capturePage(from: identifier, title: title, named: name)
+        }
+    }
+
+    /// The newest demo run's summary, the screen a run ends on.
+    private func captureRunSummary() {
+        selectTab("History")
+        sleep(1)
+        let firstRun = app.buttons["history.run"].firstMatch
+        guard firstRun.waitForExistence(timeout: 10) else {
+            return XCTFail("The demo history has no runs to open")
+        }
+        firstRun.tap()
+        guard app.buttons["runSummary.breakdown.splits"].waitForExistence(timeout: 10) else {
+            return XCTFail("The run summary did not open")
+        }
+        sleep(2)
+        captureScrollingScreen(named: "run-summary")
+        scrollToTop()
+        app.navigationBars.firstMatch.buttons.element(boundBy: 0).tap()
+        sleep(1)
+    }
+
+    /// Progress's second segment, which the tab's capture never switches to.
+    private func captureAchievements() {
+        selectTab("Progress")
+        sleep(1)
+        let achievements = app.buttons["Achievements"].firstMatch
+        guard achievements.waitForExistence(timeout: 5) else {
+            return XCTFail("Progress has no Achievements segment")
+        }
+        achievements.tap()
+        sleep(2)
+        captureScrollingScreen(named: "progress-achievements")
+        scrollToTop()
+        app.buttons["Stats"].firstMatch.tap()
     }
 
     private func captureRunHUD() {
