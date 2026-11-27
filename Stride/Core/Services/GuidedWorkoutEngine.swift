@@ -178,7 +178,13 @@ struct GuidedWorkoutState: Equatable, Sendable {
     static func flatten(_ structure: WorkoutStructure) -> [GuidedStep] {
         var out: [GuidedStep] = []
 
-        out.append(step(from: structure.warmup, kind: .warmup, fallbackLabel: "Warm-up"))
+        // A warm-up or cool-down left out (no distance, time or name) is not a step. It used
+        // to be an open "Warm-up" the runner had to tap Next through before the first rep —
+        // every pregnancy-plan session started that way — and a custom workout built with
+        // no warm-up would have too.
+        if !structure.warmup.isEmpty {
+            out.append(step(from: structure.warmup, kind: .warmup, fallbackLabel: "Warm-up"))
+        }
 
         for (setIndex, set) in structure.mainSets.enumerated() {
             let reps = max(1, set.repetitions)
@@ -220,7 +226,9 @@ struct GuidedWorkoutState: Equatable, Sendable {
             }
         }
 
-        out.append(step(from: structure.cooldown, kind: .cooldown, fallbackLabel: "Cool-down"))
+        if !structure.cooldown.isEmpty {
+            out.append(step(from: structure.cooldown, kind: .cooldown, fallbackLabel: "Cool-down"))
+        }
         return out
     }
 

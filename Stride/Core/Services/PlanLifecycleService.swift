@@ -528,6 +528,7 @@ final class PlanLifecycleService {
             try context.delete(model: TrainingPlan.self)
             try context.delete(model: UserProfile.self)
             try context.delete(model: SavedRoute.self)
+            try context.delete(model: SavedWorkout.self)
             try context.delete(model: DeletedWorkout.self)
             try context.delete(model: Shoe.self)
             try context.save()

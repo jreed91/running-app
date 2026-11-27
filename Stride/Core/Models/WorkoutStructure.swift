@@ -17,6 +17,17 @@ struct WorkoutSegment: Codable, Hashable, Sendable {
     var targetPaceSecondsPerKm: Double?
     /// Human-readable label, e.g. "Warm-up", "Cool-down", "Recovery jog".
     var label: String
+
+    /// No distance, no time and no name: a warm-up or cool-down the runner left out.
+    ///
+    /// Such a bookend is skipped when the session is run (``GuidedWorkoutState/flatten(_:)``)
+    /// and when it is sent to the Workout app, rather than becoming an open "Warm-up" step
+    /// that waits for a tap on Next before the first rep. A *named* open segment is kept:
+    /// that is a step the session means to be run until the runner moves on.
+    var isEmpty: Bool {
+        (distanceMeters ?? 0) <= 0 && (durationSeconds ?? 0) <= 0
+            && label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 }
 
 // MARK: - WorkoutSet

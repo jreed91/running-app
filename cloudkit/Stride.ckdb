@@ -91,6 +91,27 @@ DEFINE SCHEMA
         GRANT READ TO "_world"
     );
 
+    RECORD TYPE CD_SavedWorkout (
+        CD_createdAt             TIMESTAMP QUERYABLE SORTABLE,
+        CD_entityName            STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_id                    STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_lastUsedAt            TIMESTAMP QUERYABLE SORTABLE,
+        CD_name                  STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_notes                 STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_structureData         BYTES QUERYABLE SORTABLE,
+        CD_structureData_ckAsset ASSET,
+        CD_updatedAt             TIMESTAMP QUERYABLE SORTABLE,
+        "___createTime"          TIMESTAMP,
+        "___createdBy"           REFERENCE,
+        "___etag"                STRING,
+        "___modTime"             TIMESTAMP,
+        "___modifiedBy"          REFERENCE,
+        "___recordID"            REFERENCE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
     RECORD TYPE CD_ScheduledWorkout (
         CD_completedStrengthWorkout STRING QUERYABLE SEARCHABLE SORTABLE,
         CD_completedWorkout         STRING QUERYABLE SEARCHABLE SORTABLE,
