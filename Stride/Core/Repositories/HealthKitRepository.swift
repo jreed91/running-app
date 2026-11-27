@@ -369,7 +369,12 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
 
         // Structured workouts (warmup + interval blocks + cooldown) → CustomWorkout.
         if let structure = workout.workoutStructure, !structure.mainSets.isEmpty {
-            let custom = makeCustomWorkout(from: structure, workout: workout, unitPreference: unitPreference)
+            let custom = makeCustomWorkout(
+                from: structure,
+                isIndoor: workout.workoutLocation == .indoor,
+                displayName: workout.workoutType.displayName,
+                unitPreference: unitPreference
+            )
             return WorkoutPlan(.custom(custom), id: planID)
         }
 
@@ -401,9 +406,12 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
     }
 
     /// Builds a ``CustomWorkout`` from a ``WorkoutStructure`` with precise distance/time goals.
-    private static func makeCustomWorkout(
+    /// Internal, not private: a runner's own workout is built with it too (Custom workouts,
+    /// PR 6, in `HealthKitRepository+WorkoutPlan.swift`).
+    static func makeCustomWorkout(
         from structure: WorkoutStructure,
-        workout: ScheduledWorkout,
+        isIndoor: Bool,
+        displayName: String,
         unitPreference: UnitPreference
     ) -> CustomWorkout {
         let warmupStep = bookendStep(structure.warmup, unitPreference: unitPreference)
@@ -460,8 +468,8 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
 
         return CustomWorkout(
             activity: .running,
-            location: workout.workoutLocation == .indoor ? .indoor : .outdoor,
-            displayName: workout.workoutType.displayName,
+            location: isIndoor ? .indoor : .outdoor,
+            displayName: displayName,
             warmup: warmupStep,
             blocks: blocks,
             cooldown: cooldownStep

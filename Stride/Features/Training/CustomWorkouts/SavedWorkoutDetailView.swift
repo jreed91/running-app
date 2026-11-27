@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+@preconcurrency import WorkoutKit
 
 // MARK: - SavedWorkoutDetailView
 
@@ -39,6 +40,9 @@ struct SavedWorkoutDetailView: View {
                         .strideCard()
                 }
                 startButton
+                if let plan = HealthKitRepository.makeWorkoutPlan(for: workout, unitPreference: unit) {
+                    SendToWorkoutAppButton(plan: plan)
+                }
             }
             .padding(AppSpacing.lg)
         }
@@ -118,3 +122,30 @@ struct SavedWorkoutDetailView: View {
         )
     }
 }
+
+// MARK: - Send to Apple Watch
+
+/// Hands the workout to Apple's Workout app through WorkoutKit's own preview sheet, for a
+/// runner who would rather run it there than in Stride's watch app (Custom workouts, PR 6).
+/// The sheet is Apple's: it shows the steps and offers to add the workout to the Watch.
+/// Sending it again replaces the earlier copy, since the plan keeps the workout's id.
+private struct SendToWorkoutAppButton: View {
+    let plan: WorkoutPlan
+    @State private var isPresented = false
+
+    var body: some View {
+        Button {
+            isPresented = true
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "applewatch")
+                Text("Send to the Workout app")
+            }
+        }
+        .buttonStyle(.strideButton(.quiet))
+        .accessibilityHint(Text("Adds this workout to the Workout app on your Apple Watch"))
+        .accessibilityIdentifier("savedWorkout.sendToWorkoutApp")
+        .workoutPreview(plan, isPresented: $isPresented)
+    }
+}
+

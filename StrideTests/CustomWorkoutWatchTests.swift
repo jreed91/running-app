@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import Testing
+@preconcurrency import WorkoutKit
 @testable import Stride
 
 // MARK: - Custom workouts (PR 5): the library on the Watch, and the runs it records
@@ -105,5 +106,28 @@ struct CustomWorkoutWatchTests {
         #expect(run.customWorkoutID == saved.id)
         #expect(saved.lastUsedAt == run.date)
         #expect(other.customWorkoutName == nil, "an id that is no saved workout changes nothing")
+    }
+
+    // MARK: Workout app (PR 6)
+
+    @Test("A saved workout becomes a Workout app plan with its own id and name")
+    func workoutKitPlan() throws {
+        let saved = workout("6 × 800 m", updated: 1)
+        let plan = try #require(HealthKitRepository.makeWorkoutPlan(for: saved, unitPreference: .metric))
+        #expect(plan.id == saved.id)
+        guard case .custom(let custom) = plan.workout else {
+            Issue.record("expected a custom workout")
+            return
+        }
+        #expect(custom.displayName == "6 × 800 m")
+        #expect(custom.cooldown == nil, "a left-out cool-down is not sent")
+        #expect(custom.warmup != nil)
+    }
+
+    @Test("A saved workout with no steps has no plan")
+    func noStepsNoPlan() {
+        let saved = workout("Empty", updated: 1)
+        saved.structureData = nil
+        #expect(HealthKitRepository.makeWorkoutPlan(for: saved, unitPreference: .metric) == nil)
     }
 }

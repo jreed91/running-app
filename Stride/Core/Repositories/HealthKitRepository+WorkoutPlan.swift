@@ -78,3 +78,29 @@ extension HealthKitRepository {
         return ids
     }
 }
+
+// MARK: - A runner's own workout
+
+extension HealthKitRepository {
+
+    /// One of the runner's own workouts as a WorkoutKit plan, for "Send to Apple Watch"
+    /// (Custom workouts, PR 6): the same builder, step goals and pace alerts as a plan
+    /// session, named as the runner named it. `nil` when it has no steps to send.
+    ///
+    /// The plan id is the ``SavedWorkout``'s, so sending it again replaces the copy in the
+    /// Workout app's library rather than adding a second one.
+    static func makeWorkoutPlan(
+        for workout: SavedWorkout,
+        isIndoor: Bool = false,
+        unitPreference: UnitPreference
+    ) -> WorkoutPlan? {
+        guard let structure = workout.structure, !structure.mainSets.isEmpty else { return nil }
+        let custom = makeCustomWorkout(
+            from: structure,
+            isIndoor: isIndoor,
+            displayName: workout.name,
+            unitPreference: unitPreference
+        )
+        return WorkoutPlan(.custom(custom), id: workout.id)
+    }
+}
