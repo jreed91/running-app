@@ -208,10 +208,14 @@ final class UXCaptureTests: XCTestCase {
     private func capturePage(from identifier: String, title: String, named name: String) {
         let row = app.buttons[identifier]
         _ = row.waitForExistence(timeout: 3)
-        guard scrollIntoView(row) else {
+        if scrollIntoView(row) {
+            row.tap()
+        } else if identifier == "plan.myWorkoutsRow", tapTileBelow("plan.raceInsightsRow") {
+            // See `tapTileBelow`.
+        } else {
+            capture("missing-\(name)")
             return XCTFail("Could not reach \(identifier) to open \(title)")
         }
-        row.tap()
         let bar = app.navigationBars[title]
         guard bar.waitForExistence(timeout: 8) else {
             return XCTFail("\(title) did not open from \(identifier)")
@@ -221,6 +225,25 @@ final class UXCaptureTests: XCTestCase {
         scrollToTop()
         bar.buttons.element(boundBy: 0).tap()
         sleep(1)
+    }
+
+    /// Taps the grid tile under the tile `above`, by position. My workouts is the grid's
+    /// fifth tile, alone on its row, and in CI runs 46071560695 and 46075739921 it never
+    /// appeared in the accessibility tree, even scrolled on screen, while the four above
+    /// it did. Its page's navigation bar still confirms the right tile opened.
+    private func tapTileBelow(_ above: String) -> Bool {
+        let anchor = app.buttons[above]
+        guard anchor.waitForExistence(timeout: 5) else { return false }
+        for _ in 0..<4 where anchor.frame.minY > app.frame.height * 0.45 {
+            app.swipeUp(velocity: .slow)
+            sleep(1)
+        }
+        let frame = anchor.frame
+        guard frame.maxY + frame.height < app.frame.height * 0.82 else { return false }
+        app.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: frame.midX, dy: frame.maxY + 12 + frame.height / 2))
+            .tap()
+        return true
     }
 
     /// Each Plan tools tile's page. The tiles open full pages that the tab's own capture
