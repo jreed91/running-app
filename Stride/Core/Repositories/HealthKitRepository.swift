@@ -406,25 +406,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
         workout: ScheduledWorkout,
         unitPreference: UnitPreference
     ) -> CustomWorkout {
-        // Distance, then duration, then open — the same order the work segments below use.
-        // A time-based bookend used to fall through to `.open`, which quietly turned a
-        // prescribed five-minute walk into "run until you press next" on the Watch. Every
-        // pregnancy-plan session is built that way, and so is any structure that measures a
-        // warm-up in minutes.
-        let warmupGoal: WorkoutGoal
-        if let dist = structure.warmup.distanceMeters {
-            warmupGoal = distanceGoal(meters: dist, unitPreference: unitPreference)
-        } else if let duration = structure.warmup.durationSeconds, duration > 0 {
-            warmupGoal = .time(duration, UnitDuration.seconds)
-        } else {
-            warmupGoal = .open
-        }
-        let warmupName: String? = structure.warmup.label.isEmpty ? nil : structure.warmup.label
-        let warmupStep = WorkoutStep(
-            goal: warmupGoal,
-            alert: paceAlert(secondsPerKm: structure.warmup.targetPaceSecondsPerKm),
-            displayName: warmupName
-        )
+        let warmupStep = bookendStep(structure.warmup, unitPreference: unitPreference)
 
         var blocks: [IntervalBlock] = []
         for (setIndex, set) in structure.mainSets.enumerated() {
@@ -474,20 +456,7 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             }
         }
 
-        let cooldownGoal: WorkoutGoal
-        if let dist = structure.cooldown.distanceMeters {
-            cooldownGoal = distanceGoal(meters: dist, unitPreference: unitPreference)
-        } else if let duration = structure.cooldown.durationSeconds, duration > 0 {
-            cooldownGoal = .time(duration, UnitDuration.seconds)
-        } else {
-            cooldownGoal = .open
-        }
-        let cooldownName: String? = structure.cooldown.label.isEmpty ? nil : structure.cooldown.label
-        let cooldownStep = WorkoutStep(
-            goal: cooldownGoal,
-            alert: paceAlert(secondsPerKm: structure.cooldown.targetPaceSecondsPerKm),
-            displayName: cooldownName
-        )
+        let cooldownStep = bookendStep(structure.cooldown, unitPreference: unitPreference)
 
         return CustomWorkout(
             activity: .running,
@@ -496,6 +465,31 @@ final class HealthKitRepository: HealthKitRepositoryProtocol, @unchecked Sendabl
             warmup: warmupStep,
             blocks: blocks,
             cooldown: cooldownStep
+        )
+    }
+
+    /// The Workout app's step for a warm-up or cool-down, or `nil` for one the session
+    /// leaves out (``WorkoutSegment/isEmpty``), as `GuidedWorkoutState.flatten` skips it.
+    ///
+    /// Distance, then duration, then open — the same order the work segments use. A
+    /// time-based bookend used to fall through to `.open`, which quietly turned a
+    /// prescribed five-minute walk into "run until you press next" on the Watch. Every
+    /// pregnancy-plan session is built that way, and so is any structure that measures a
+    /// warm-up in minutes.
+    private static func bookendStep(_ segment: WorkoutSegment, unitPreference: UnitPreference) -> WorkoutStep? {
+        guard !segment.isEmpty else { return nil }
+        let goal: WorkoutGoal
+        if let dist = segment.distanceMeters, dist > 0 {
+            goal = distanceGoal(meters: dist, unitPreference: unitPreference)
+        } else if let duration = segment.durationSeconds, duration > 0 {
+            goal = .time(duration, UnitDuration.seconds)
+        } else {
+            goal = .open
+        }
+        return WorkoutStep(
+            goal: goal,
+            alert: paceAlert(secondsPerKm: segment.targetPaceSecondsPerKm),
+            displayName: segment.label.isEmpty ? nil : segment.label
         )
     }
 

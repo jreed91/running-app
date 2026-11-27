@@ -16,6 +16,7 @@ enum StrideSchema {
         TrainingWeek.self,
         ScheduledWorkout.self,
         SavedRoute.self,
+        SavedWorkout.self,
         DeletedWorkout.self,
         Shoe.self
     ]

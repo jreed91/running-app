@@ -72,6 +72,23 @@ struct GuidedWorkoutEngineTests {
         #expect(workSteps.allSatisfy { $0.repCount == 3 })
     }
 
+    @Test("A left-out warm-up and cool-down are not steps; a named open one still is")
+    func emptyBookendsAreSkipped() throws {
+        var structure = intervalStructure(reps: 2)
+        structure.warmup = WorkoutSegment(label: "")
+        structure.cooldown = WorkoutSegment(label: "  ")
+        #expect(GuidedWorkoutState.flatten(structure).map(\.kind) == [.work, .recovery, .work])
+
+        // The run starts on the first rep, not on an open "Warm-up" waiting for Next.
+        let state = try #require(GuidedWorkoutState(structure: structure))
+        #expect(state.currentStep.kind == .work)
+
+        structure.cooldown = WorkoutSegment(label: "Jog home")
+        let last = try #require(GuidedWorkoutState.flatten(structure).last)
+        #expect(last.kind == .cooldown)
+        #expect(last.isOpen)
+    }
+
     @Test("A single rep goes straight into the cool-down, recovery or not")
     func singleRepHasNoRecovery() {
         let steps = GuidedWorkoutState.flatten(intervalStructure(reps: 1))
