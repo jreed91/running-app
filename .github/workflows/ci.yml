@@ -321,6 +321,10 @@ jobs:
         continue-on-error: true
         run: |
           [[ -d TestResults/ui.xcresult ]] || exit 0
+          # xcresulttool writes the bundle's database.sqlite3 index the first time it
+          # reads the bundle. On a passing run nothing has read it yet (the step above
+          # only reads failures), and without the index the script has no names.
+          xcrun xcresulttool get test-results summary --path TestResults/ui.xcresult > /dev/null
           python3 scripts/export_screenshots.py TestResults/ui.xcresult AppScreenshots
 
       - name: Upload app screenshots
