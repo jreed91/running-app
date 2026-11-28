@@ -6,11 +6,11 @@
     python3 scripts/fetch_app_screenshots.py --branch main
     python3 scripts/fetch_app_screenshots.py --run 46061511892 --out /tmp/shots
 
-CI's `Test — iOS` job runs `UXCaptureTests`, which walks onboarding, every tab, the Plan
+CI's `Test — iOS (screenshots)` job runs `UXCaptureTests`, which walks onboarding, every tab, the Plan
 tools pages, a run summary, Achievements, Settings and the run screen, and uploads the
 shots as the `app-screenshots` artifact. This finds the newest CI run for the PR, branch
 or run id, downloads that artifact (or, for runs from before it existed, pulls the PNGs
-out of `test-results-ios`), and writes:
+out of `test-results-ios-capture`, or `test-results-ios` before CI was split), and writes:
 
     <out>/UXCaptureTests/NN-<screen>.png   full-size shots, in the order they were taken
     <out>/sheet-N.png                      contact sheets, eight shots each (needs Pillow)
@@ -31,6 +31,9 @@ from pathlib import Path
 
 REPO = "jreed91/running-app"
 HERE = Path(__file__).resolve().parent
+# The result bundle holding UXCaptureTests: its own runner's since CI was split into
+# three runners (2026-11-27), the one test job's before that.
+RESULTS = ("test-results-ios-capture", "test-results-ios")
 
 
 def gh(path: str, raw: bool = False):
@@ -56,7 +59,7 @@ def find_run(args) -> dict:
     # or still in progress has no artifacts yet, so skip to the one before it.
     for run in runs:
         names = {a["name"] for a in gh(f"repos/{REPO}/actions/runs/{run['id']}/artifacts")["artifacts"] if not a["expired"]}
-        if names & {"app-screenshots", "test-results-ios"}:
+        if names & {"app-screenshots", *RESULTS}:
             return run
     sys.exit(f"No CI run on {branch} has screenshots yet (checked {len(runs)} runs).")
 
@@ -67,10 +70,11 @@ def download(run: dict, out: Path) -> None:
         blob = gh(f"repos/{REPO}/actions/artifacts/{artifacts['app-screenshots']['id']}/zip", raw=True)
         zipfile.ZipFile(io.BytesIO(blob)).extractall(out)
         return
-    if "test-results-ios" not in artifacts:
+    results = next((name for name in RESULTS if name in artifacts), None)
+    if not results:
         sys.exit(f"Run {run['id']} has no screenshots artifact.")
-    print("No app-screenshots artifact on this run; extracting from test-results-ios (large download).")
-    blob = gh(f"repos/{REPO}/actions/artifacts/{artifacts['test-results-ios']['id']}/zip", raw=True)
+    print(f"No app-screenshots artifact on this run; extracting from {results} (large download).")
+    blob = gh(f"repos/{REPO}/actions/artifacts/{artifacts[results]['id']}/zip", raw=True)
     with tempfile.TemporaryDirectory() as tmp:
         zipfile.ZipFile(io.BytesIO(blob)).extractall(tmp)
         bundle = Path(tmp) / "ui.xcresult"
