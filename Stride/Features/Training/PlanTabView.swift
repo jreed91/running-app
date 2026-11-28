@@ -44,6 +44,7 @@ struct PlanTabView: View {
     /// `SmartAdaptState`.
     @State private var smartAdapt: SmartAdaptState = .idle
     @State private var adaptTask: Task<Void, Never>?
+    @State private var asksToEnableCoach = false
     /// The session a week row's tap opens. One destination for the whole tab rather than a
     /// `NavigationLink` per row: a link inside the reorder container would claim the drag.
     @State private var selectedWorkout: ScheduledWorkout?
@@ -248,10 +249,25 @@ struct PlanTabView: View {
                                 SmartAdaptTile(
                                     workoutCount: remainingAdaptableWorkouts(in: plan).count,
                                     state: smartAdapt,
-                                    unavailableReason: smartAdaptUnavailableReason(for: plan)
+                                    unavailableReason: smartAdaptUnavailableReason(for: plan),
+                                    fixUnavailable: smartAdaptNeedsCoachOnly(for: plan)
+                                        ? { asksToEnableCoach = true }
+                                        : nil
                                 ) {
                                     adaptTask?.cancel()
                                     adaptTask = Task { await adaptRemainingWorkouts(in: plan) }
+                                }
+                                .confirmationDialog(
+                                    "Turn on AI Coach?",
+                                    isPresented: $asksToEnableCoach,
+                                    titleVisibility: .visible
+                                ) {
+                                    Button("Turn On AI Coach") {
+                                        appSettings.aiInsightsEnabled = true
+                                    }
+                                    Button("Not Now", role: .cancel) {}
+                                } message: {
+                                    Text("Smart Adapt uses AI Coach to rework your remaining workouts. You can switch it off again in Settings.")
                                 }
 
                                 // A value destination, built in this body: the page reads this
@@ -487,6 +503,14 @@ struct PlanTabView: View {
         AdaptableWorkoutSelector.adaptableWorkouts(in: plan)
     }
 
+    /// True when AI Coach being off is the only thing stopping Smart Adapt, so the
+    /// tile can offer to turn it on instead of sitting greyed out.
+    private func smartAdaptNeedsCoachOnly(for plan: TrainingPlan) -> Bool {
+        !appSettings.aiInsightsEnabled
+            && !profiles.isEmpty
+            && !remainingAdaptableWorkouts(in: plan).isEmpty
+    }
+
     private func smartAdaptUnavailableReason(for plan: TrainingPlan) -> String? {
         guard !remainingAdaptableWorkouts(in: plan).isEmpty else {
             return "No remaining run workouts are available to adapt."
@@ -495,7 +519,7 @@ struct PlanTabView: View {
             return "Create a runner profile before adapting your plan."
         }
         guard appSettings.aiInsightsEnabled else {
-            return "Turn on AI Coach in Settings to adapt your plan."
+            return "Tap to turn on AI Coach and adapt your plan."
         }
         return nil
     }

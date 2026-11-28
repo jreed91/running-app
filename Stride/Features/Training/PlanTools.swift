@@ -97,9 +97,14 @@ struct SmartAdaptTile: View {
     let workoutCount: Int
     let state: SmartAdaptState
     let unavailableReason: String?
+    /// Set when the runner can fix the reason from here (AI Coach is off). The tile then
+    /// stays tappable and runs this instead of `action`, rather than sitting greyed out.
+    var fixUnavailable: (() -> Void)?
     let action: () -> Void
 
     private var isAdapting: Bool { state.isRunning }
+
+    private var canFix: Bool { unavailableReason != nil && fixUnavailable != nil && !isAdapting }
 
     private var isEnabled: Bool {
         workoutCount > 0 && unavailableReason == nil && !isAdapting
@@ -115,7 +120,9 @@ struct SmartAdaptTile: View {
     }
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            if canFix { fixUnavailable?() } else { action() }
+        } label: {
             PlanToolTile(title: "Smart Adapt", subtitle: subtitle) {
                 if isAdapting {
                     ProgressView()
@@ -129,11 +136,11 @@ struct SmartAdaptTile: View {
             }
         }
         .buttonStyle(.plain)
-        .disabled(!isEnabled)
+        .disabled(!isEnabled && !canFix)
         // Not `.opacity(0.55)`: that multiplied into the `.secondary` subtitle and read
         // as broken. Grey accent signals "off"; the reason stays readable.
-        .grayscale(isEnabled ? 0 : 1)
-        .opacity(isEnabled ? 1 : 0.9)
+        .grayscale(isEnabled || canFix ? 0 : 1)
+        .opacity(isEnabled || canFix ? 1 : 0.9)
         .accessibilityIdentifier("plan.smartAdaptTile")
     }
 }
