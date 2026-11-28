@@ -1355,12 +1355,18 @@ struct OBEquipmentCard: View {
         // The same selection as every other onboarding card: a card, a brand stroke and
         // `OBRadio`, rather than a brand-tinted fill and a system checkmark.
         Button(action: onTap) {
-            HStack(spacing: 12) {
-                iconView
+            // Icon and radio on a row above the name, so the name gets the card's full
+            // width: beside them, "Bodyweight", "Dumbbells" and "Kettlebell" broke
+            // mid-word and "Resistance Bands" shrank to fit.
+            VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                HStack {
+                    iconView
+                    Spacer(minLength: 0)
+                    OBRadio(isSelected: isSelected, color: .brand)
+                }
                 labelView
-                Spacer(minLength: 0)
-                OBRadio(isSelected: isSelected, color: .brand)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 14)
             .padding(.vertical, AppSpacing.md)
             .strideCard(cornerRadius: AppRadius.md)
@@ -1376,20 +1382,17 @@ struct OBEquipmentCard: View {
     private var iconView: some View {
         Image(systemName: equipment.systemImage)
             .font(.dsBody.weight(.medium))
-            .frame(width: 28)
             .foregroundStyle(isSelected ? Color.brand : Color.secondary)
     }
 
-    /// Two lines, not one: "Resistance Bands" is the longest of the six names and does not
-    /// fit a half-width grid cell at default Dynamic Type even at the 0.8 scale floor, so a
-    /// single line truncated it to "Resistance…" while its grid neighbour fit (S2).
+    /// Two lines reserved on every card, so "Resistance Bands" wraps at its space and the
+    /// grid's cards stay one height. No scale factor: every name is set at one size.
     private var labelView: some View {
         Text(equipment.localizedName)
             .font(.dsSubhead.weight(.semibold))
             .foregroundStyle(isSelected ? Color.primary : Color.secondary)
             .multilineTextAlignment(.leading)
-            .lineLimit(2)
-            .minimumScaleFactor(0.7)
+            .lineLimit(2, reservesSpace: true)
             .fixedSize(horizontal: false, vertical: true)
     }
 }
