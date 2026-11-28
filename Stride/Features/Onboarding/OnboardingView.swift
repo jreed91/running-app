@@ -1044,8 +1044,8 @@ struct OnboardingView: View {
             profile.prePregnancyWeeklyRunMinutes = prePregnancyWeeklyMinutes
             profile.pregnancyHabituallyVigorous = pregnancyHabituallyVigorous
         }
-        // Only record HR-zone inputs if the user actually engaged with them; otherwise leave
-        // them nil so no zones are shown until the user opts in (Settings › Heart Rate Zones).
+        // Only record HR-zone inputs if the user actually engaged with them. Left nil, zones
+        // use the same assumed-age estimate this step showed (`effectiveMaxHeartRate`).
         if didEnterHR {
             profile.age = age
             profile.maxHeartRateBPM = maxHROverride

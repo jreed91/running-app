@@ -95,11 +95,11 @@ struct UserProfileHeartRateTests {
         #expect(p.effectiveMaxHeartRate == 195)
     }
 
-    @Test("Effective max HR falls back to the age estimate, then nil")
+    @Test("Effective max HR falls back to the age estimate, then the assumed-age estimate Settings shows")
     func fallbacks() {
         let p = makeProfile()
-        #expect(p.effectiveMaxHeartRate == nil)       // nothing set
-        p.age = 30
-        #expect(p.effectiveMaxHeartRate == 187)        // age estimate
+        #expect(p.effectiveMaxHeartRate == 187)       // nothing set: assumed age 30
+        p.age = 40
+        #expect(p.effectiveMaxHeartRate == 180)        // age estimate
     }
 }

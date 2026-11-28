@@ -130,11 +130,17 @@ extension UserProfile {
     }
 
     /// Effective max HR for zone math: an explicit user value wins, else the age-based
-    /// estimate, else nil (no zones can be computed until one is available).
+    /// estimate, else the estimate for `assumedAge`.
+    ///
+    /// The last fallback used to be nil, so no zones were drawn until the runner entered an
+    /// age or a max HR. But onboarding and Settings both show the assumed-age estimate
+    /// (187 bpm) as the runner's max HR, so Progress then asked them to "set your max HR"
+    /// next to a Settings screen that already showed one. Use the number on screen.
+    /// Optional still, so callers keep handling a profile with nothing to go on.
     var effectiveMaxHeartRate: Int? {
         if let maxHeartRateBPM, maxHeartRateBPM > 0 { return maxHeartRateBPM }
         if let age, age > 0 { return Self.estimatedMaxHeartRate(forAge: age) }
-        return nil
+        return Self.estimatedMaxHeartRate(forAge: Self.assumedAge)
     }
 
     /// VDOT implied by the runner's own 5K estimate, before any run has been logged.
