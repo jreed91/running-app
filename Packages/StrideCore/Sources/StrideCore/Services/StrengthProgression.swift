@@ -7,54 +7,84 @@ import Foundation
 /// `StrengthWorkout` keeps sets as `CompletedStrengthSet`, which points into a plan by
 /// index and, before numbers, held its weight as text. This is the same set with both
 /// questions already answered, so the rules below never touch SwiftData.
-struct LoggedStrengthSet: Equatable, Sendable {
-    let exerciseName: String
-    let reps: Int
-    let weightKilograms: Double?
-    let skipped: Bool
+public struct LoggedStrengthSet: Equatable, Sendable {
+    public let exerciseName: String
+    public let reps: Int
+    public let weightKilograms: Double?
+    public let skipped: Bool
+
+    public init(
+        exerciseName: String,
+        reps: Int,
+        weightKilograms: Double?,
+        skipped: Bool
+    ) {
+        self.exerciseName = exerciseName
+        self.reps = reps
+        self.weightKilograms = weightKilograms
+        self.skipped = skipped
+    }
 }
 
 /// One finished strength session as values.
-struct StrengthSessionLog: Equatable, Sendable {
-    let date: Date
-    let sets: [LoggedStrengthSet]
+public struct StrengthSessionLog: Equatable, Sendable {
+    public let date: Date
+    public let sets: [LoggedStrengthSet]
     /// How long the session lasted. The only measure a workout from the Watch or another
     /// app has: those come in from Apple Health with no sets.
-    var durationSeconds: Double = 0
+    public var durationSeconds: Double = 0
+
+    public init(
+        date: Date,
+        sets: [LoggedStrengthSet],
+        durationSeconds: Double = 0
+    ) {
+        self.date = date
+        self.sets = sets
+        self.durationSeconds = durationSeconds
+    }
 }
 
 // MARK: - ExercisePerformance
 
 /// How an exercise went the last time it was done: its working sets, skipped ones left out.
-struct ExercisePerformance: Equatable, Sendable {
-    let date: Date
-    let sets: [LoggedStrengthSet]
+public struct ExercisePerformance: Equatable, Sendable {
+    public let date: Date
+    public let sets: [LoggedStrengthSet]
 
     /// The heaviest load lifted, or nil when no set carried one.
-    var topWeightKilograms: Double? {
+    public var topWeightKilograms: Double? {
         sets.compactMap(\.weightKilograms).max()
     }
 
     /// The sets done at the top load, or every set when none carried a load.
-    var topSets: [LoggedStrengthSet] {
+    public var topSets: [LoggedStrengthSet] {
         guard let top = topWeightKilograms else { return sets }
         return sets.filter { $0.weightKilograms == top }
     }
 
     /// The best Epley estimate across the sets, for the Progress tab's strength trend.
-    var estimatedOneRepMaxKilograms: Double? {
+    public var estimatedOneRepMaxKilograms: Double? {
         sets.compactMap { set in
             set.weightKilograms.flatMap { StrengthProgression.estimatedOneRepMax(weightKilograms: $0, reps: set.reps) }
         }.max()
+    }
+
+    public init(
+        date: Date,
+        sets: [LoggedStrengthSet]
+    ) {
+        self.date = date
+        self.sets = sets
     }
 }
 
 // MARK: - LoadSuggestion
 
 /// What to lift next time, and why, in the words the session screen shows.
-struct LoadSuggestion: Equatable, Sendable {
+public struct LoadSuggestion: Equatable, Sendable {
 
-    enum Reason: Equatable, Sendable {
+    public enum Reason: Equatable, Sendable {
         /// Never done before: no number to go on, so the plan's description stands.
         case firstTime
         /// Every set at the top load reached the target: one step heavier.
@@ -70,10 +100,20 @@ struct LoadSuggestion: Equatable, Sendable {
     }
 
     /// The load to put on the bar or pick up, or nil when there is none to suggest.
-    let weightKilograms: Double?
+    public let weightKilograms: Double?
     /// The reps to aim for per set: the plan's, which move with the training phase.
-    let reps: Int
-    let reason: Reason
+    public let reps: Int
+    public let reason: Reason
+
+    public init(
+        weightKilograms: Double?,
+        reps: Int,
+        reason: Reason
+    ) {
+        self.weightKilograms = weightKilograms
+        self.reps = reps
+        self.reason = reason
+    }
 }
 
 // MARK: - StrengthProgression
@@ -88,23 +128,23 @@ struct LoadSuggestion: Equatable, Sendable {
 /// Weights are kilograms throughout. Steps are taken in the runner's unit, because that
 /// is what the plates and dumbbells in front of them are marked in, and the result is
 /// rounded to that step so the screen never suggests 22.68 kg.
-enum StrengthProgression {
+public enum StrengthProgression {
 
     /// Reps short of the target that count as falling well short: two short is a hard
     /// last set, three or more on most sets means the load was too heavy.
-    static let wellShortReps = 3
+    public static let wellShortReps = 3
 
     /// A gap longer than this starts one step back.
-    static let returningAfterDays = 42
+    public static let returningAfterDays = 42
 
     /// Epley is only fair up to about twelve reps; past that it guesses wildly high.
-    static let oneRepMaxRepLimit = 12
+    public static let oneRepMaxRepLimit = 12
 
     // MARK: History
 
     /// The most recent session in `sessions` with a working set of `exerciseName`, before
     /// `before` when given (so a session being logged does not answer for itself).
-    static func lastPerformance(
+    public static func lastPerformance(
         of exerciseName: String,
         in sessions: [StrengthSessionLog],
         before: Date? = nil
@@ -125,7 +165,7 @@ enum StrengthProgression {
     // MARK: Suggestion
 
     /// What to aim for on `exercise` this session, given how it went `last` time.
-    static func suggestion(
+    public static func suggestion(
         for exercise: StrengthExercise,
         last: ExercisePerformance?,
         unit: UnitPreference,
@@ -191,13 +231,13 @@ enum StrengthProgression {
     // MARK: Equipment
 
     /// The exercise's equipment: stamped on newer plans, looked up by name on older ones.
-    static func equipment(for exercise: StrengthExercise) -> StrengthEquipment? {
+    public static func equipment(for exercise: StrengthExercise) -> StrengthEquipment? {
         exercise.equipment ?? StrengthLibrary.equipment(forExerciseNamed: exercise.name)
     }
 
     /// Whether a set of this equipment is logged with a load. Bodyweight, bands and the
     /// pull-up bar progress by reps and harder variations, not by a number.
-    static func takesLoad(_ equipment: StrengthEquipment?) -> Bool {
+    public static func takesLoad(_ equipment: StrengthEquipment?) -> Bool {
         switch equipment {
         case .dumbbells, .kettlebell, .barbell: return true
         case .bodyweight, .resistanceBands, .pullUpBar, nil: return false
@@ -207,7 +247,7 @@ enum StrengthProgression {
     /// The smallest sensible jump, in kilograms: a pair of 1.25 kg plates on a bar, the
     /// next dumbbell up, the next kettlebell (they come in 4 kg steps). In pounds, 5 lb for
     /// a bar or a dumbbell and 5 lb for a kettlebell too, since US bells step by 5.
-    static func stepKilograms(for equipment: StrengthEquipment?, unit: UnitPreference) -> Double {
+    public static func stepKilograms(for equipment: StrengthEquipment?, unit: UnitPreference) -> Double {
         switch unit {
         case .metric:
             switch equipment {
@@ -222,10 +262,10 @@ enum StrengthProgression {
 
     // MARK: Rounding and units
 
-    static let kilogramsPerPound = 0.45359237
+    public static let kilogramsPerPound = 0.45359237
 
     /// `weightKilograms` rounded to the nearest step in the runner's unit, as kilograms.
-    static func rounded(_ weightKilograms: Double, equipment: StrengthEquipment?, unit: UnitPreference) -> Double {
+    public static func rounded(_ weightKilograms: Double, equipment: StrengthEquipment?, unit: UnitPreference) -> Double {
         let step = displayValue(stepKilograms(for: equipment, unit: unit), unit: unit)
         let shown = displayValue(weightKilograms, unit: unit)
         let snapped = max(step, (shown / step).rounded() * step)
@@ -238,17 +278,17 @@ enum StrengthProgression {
     }
 
     /// Kilograms as the runner reads them: kilograms, or pounds.
-    static func displayValue(_ kilograms: Double, unit: UnitPreference) -> Double {
+    public static func displayValue(_ kilograms: Double, unit: UnitPreference) -> Double {
         unit == .metric ? kilograms : kilograms / kilogramsPerPound
     }
 
     /// A number the runner entered in their unit, as kilograms.
-    static func kilograms(fromDisplay value: Double, unit: UnitPreference) -> Double {
+    public static func kilograms(fromDisplay value: Double, unit: UnitPreference) -> Double {
         unit == .metric ? value : value * kilogramsPerPound
     }
 
     /// "42.5 kg" or "95 lb", with no trailing ".0".
-    static func weightText(_ kilograms: Double, unit: UnitPreference) -> String {
+    public static func weightText(_ kilograms: Double, unit: UnitPreference) -> String {
         let value = displayValue(kilograms, unit: unit)
         let rounded = (value * 10).rounded() / 10
         let number = rounded == rounded.rounded()
@@ -262,21 +302,21 @@ enum StrengthProgression {
     /// Rest between sets: two minutes after a heavy set (a load for eight reps or fewer),
     /// ninety seconds after a loaded set, a minute after bodyweight, band or timed work.
     /// The runner can still add or take off time on the rest card.
-    static func restSeconds(for exercise: StrengthExercise) -> Int {
+    public static func restSeconds(for exercise: StrengthExercise) -> Int {
         guard exercise.durationSeconds == nil, takesLoad(equipment(for: exercise)) else { return 60 }
         return (1...8).contains(exercise.reps) ? 120 : 90
     }
 
     /// How far one tap on the rest card moves the timer, and its bounds.
-    static let restAdjustSeconds = 15
-    static let restRange: ClosedRange<Int> = 15...300
+    public static let restAdjustSeconds = 15
+    public static let restRange: ClosedRange<Int> = 15...300
 
     // MARK: Words
 
     /// Last time's working sets in a line: "3 × 10 at 20 kg", "10, 10, 8 at 20 kg",
     /// "3 × 12" with no load. Sets at a lighter warm-up load are left out when a heavier
     /// load was used, because the top sets are what the suggestion is about.
-    static func summary(of performance: ExercisePerformance, unit: UnitPreference) -> String {
+    public static func summary(of performance: ExercisePerformance, unit: UnitPreference) -> String {
         let sets = performance.topSets
         let reps = sets.map(\.reps)
         let repsText: String
@@ -294,7 +334,7 @@ enum StrengthProgression {
 
     /// Why the suggested load is what it is, in a short line under it. Nil when there is
     /// nothing to explain (first time, unloaded work).
-    static func explanation(of suggestion: LoadSuggestion, unit: UnitPreference) -> String? {
+    public static func explanation(of suggestion: LoadSuggestion, unit: UnitPreference) -> String? {
         guard let weight = suggestion.weightKilograms else { return nil }
         let text = weightText(weight, unit: unit)
         switch suggestion.reason {
@@ -315,7 +355,7 @@ enum StrengthProgression {
 
     /// Epley's one-rep-max estimate, `w × (1 + r/30)`, or nil past ``oneRepMaxRepLimit``
     /// reps or for an empty set.
-    static func estimatedOneRepMax(weightKilograms: Double, reps: Int) -> Double? {
+    public static func estimatedOneRepMax(weightKilograms: Double, reps: Int) -> Double? {
         guard weightKilograms > 0, (1...oneRepMaxRepLimit).contains(reps) else { return nil }
         if reps == 1 { return weightKilograms }
         return weightKilograms * (1 + Double(reps) / 30)
@@ -326,7 +366,7 @@ enum StrengthProgression {
     /// A number read out of a weight typed as text before weights were numbers: "40 kg",
     /// "90lb", "12.5", "20 kgs". A bare number is taken in `unit`. Words ("Light",
     /// "Bodyweight", "red band") give nil.
-    static func legacyWeightKilograms(from text: String?, unit: UnitPreference) -> Double? {
+    public static func legacyWeightKilograms(from text: String?, unit: UnitPreference) -> Double? {
         guard let text else { return nil }
         let lowered = text.lowercased().replacingOccurrences(of: ",", with: ".")
         let scanner = Scanner(string: lowered)

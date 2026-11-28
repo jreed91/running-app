@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Stride
+@testable import StrideCore
 
 /// Covers correcting a finished session's sets: weights entered in the runner's unit,
 /// stored in kilograms, with older free-text weights read and kept sensibly.

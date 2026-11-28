@@ -16,16 +16,16 @@ import Foundation
 ///
 /// Kept in `UserDefaults`, like ``StrengthPreferences``: per device, no CloudKit schema
 /// change, and a home location that never reaches iCloud key-value storage.
-struct RoutePrivacy: Codable, Equatable, Sendable {
+public struct RoutePrivacy: Codable, Equatable, Sendable {
 
     /// A place whose surroundings never appear on a shared route.
-    struct Place: Codable, Hashable, Sendable, Identifiable {
-        var id: UUID
-        var name: String
-        var center: Coordinate
-        var radiusMeters: Double
+    public struct Place: Codable, Hashable, Sendable, Identifiable {
+        public var id: UUID
+        public var name: String
+        public var center: Coordinate
+        public var radiusMeters: Double
 
-        init(id: UUID = UUID(), name: String, center: Coordinate, radiusMeters: Double) {
+        public init(id: UUID = UUID(), name: String, center: Coordinate, radiusMeters: Double) {
             self.id = id
             self.name = name
             self.center = center
@@ -34,16 +34,16 @@ struct RoutePrivacy: Codable, Equatable, Sendable {
     }
 
     /// Metres hidden from the start and from the finish of every shared run. 0 is off.
-    var hideEndsMeters: Double
-    var places: [Place]
+    public var hideEndsMeters: Double
+    public var places: [Place]
 
-    init(hideEndsMeters: Double = Self.defaultHideEndsMeters, places: [Place] = []) {
+    public init(hideEndsMeters: Double = Self.defaultHideEndsMeters, places: [Place] = []) {
         self.hideEndsMeters = hideEndsMeters
         self.places = places
     }
 
     // Written out so settings saved before a field existed still load.
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         hideEndsMeters = try container.decodeIfPresent(Double.self, forKey: .hideEndsMeters)
             ?? Self.defaultHideEndsMeters
@@ -52,16 +52,16 @@ struct RoutePrivacy: Codable, Equatable, Sendable {
 
     /// Hides nothing. What the share card did before privacy existed, and what tests of
     /// the card's layout use.
-    static let off = RoutePrivacy(hideEndsMeters: 0, places: [])
+    public static let off = RoutePrivacy(hideEndsMeters: 0, places: [])
 
     /// On by default: a runner who never opens the setting still doesn't post their door.
     /// 200 m is the smallest that reliably covers a GPS fix settling at the start.
-    static let defaultHideEndsMeters: Double = 200
-    static let hideEndsOptions: [Double] = [0, 200, 400, 800]
-    static let radiusOptions: [Double] = [200, 400, 800]
-    static let defaultRadiusMeters: Double = 400
+    public static let defaultHideEndsMeters: Double = 200
+    public static let hideEndsOptions: [Double] = [0, 200, 400, 800]
+    public static let radiusOptions: [Double] = [200, 400, 800]
+    public static let defaultRadiusMeters: Double = 400
 
-    var hidesAnything: Bool { hideEndsMeters > 0 || !places.isEmpty }
+    public var hidesAnything: Bool { hideEndsMeters > 0 || !places.isEmpty }
 
     // MARK: Trimming
 
@@ -76,7 +76,7 @@ struct RoutePrivacy: Codable, Equatable, Sendable {
     ///
     /// Indices rather than coordinates so a caller holding a parallel array (GPX
     /// timestamps) can keep the two aligned.
-    func visibleRanges(of route: [Coordinate]) -> [Range<Int>] {
+    public func visibleRanges(of route: [Coordinate]) -> [Range<Int>] {
         guard route.count >= 2 else { return [] }
 
         var along = [Double](repeating: 0, count: route.count)
@@ -107,7 +107,7 @@ struct RoutePrivacy: Codable, Equatable, Sendable {
     }
 
     /// The visible parts of `route` as coordinate pieces. See ``visibleRanges(of:)``.
-    func visibleSegments(of route: [Coordinate]) -> [[Coordinate]] {
+    public func visibleSegments(of route: [Coordinate]) -> [[Coordinate]] {
         visibleRanges(of: route).map { Array(route[$0]) }
     }
 
@@ -116,7 +116,7 @@ struct RoutePrivacy: Codable, Equatable, Sendable {
     /// Great-circle distance in metres (haversine, mean Earth radius). Accurate to well
     /// under a metre at the few-hundred-metre scale this works at, and free of CoreLocation
     /// so it can be asserted on directly.
-    static func distanceMeters(_ a: Coordinate, _ b: Coordinate) -> Double {
+    public static func distanceMeters(_ a: Coordinate, _ b: Coordinate) -> Double {
         let earthRadius = 6_371_008.8
         let lat1 = a.latitude * .pi / 180
         let lat2 = b.latitude * .pi / 180
@@ -128,16 +128,16 @@ struct RoutePrivacy: Codable, Equatable, Sendable {
 
     // MARK: Storage
 
-    static let defaultsKey = "routePrivacy"
+    public static let defaultsKey = "routePrivacy"
 
-    static func load(from defaults: UserDefaults = .standard) -> RoutePrivacy {
+    public static func load(from defaults: UserDefaults = .standard) -> RoutePrivacy {
         guard let data = defaults.data(forKey: defaultsKey),
               let stored = try? JSONDecoder().decode(RoutePrivacy.self, from: data)
         else { return RoutePrivacy() }
         return stored
     }
 
-    func save(to defaults: UserDefaults = .standard) {
+    public func save(to defaults: UserDefaults = .standard) {
         guard let data = try? JSONEncoder().encode(self) else { return }
         defaults.set(data, forKey: Self.defaultsKey)
     }

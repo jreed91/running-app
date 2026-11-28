@@ -4,18 +4,18 @@ import Foundation
 /// paths so both bucket splits identically. Splits are bucketed by the user's distance unit
 /// at record time — one bucket per kilometre or per mile — so imperial runners get genuine
 /// per-mile splits rather than kilometre buckets merely relabelled "mi" (A1).
-enum SplitBucketing {
+public enum SplitBucketing {
 
     /// The count of whole split buckets completed at a given cumulative distance.
     /// e.g. at 2 400 m with a 1 000 m bucket this is `2`; with a 1 609.344 m (mile) bucket, `1`.
-    static func bucketIndex(distanceMeters: Double, splitLengthMeters: Double) -> Int {
+    public static func bucketIndex(distanceMeters: Double, splitLengthMeters: Double) -> Int {
         guard splitLengthMeters > 0, distanceMeters > 0 else { return 0 }
         return Int(distanceMeters / splitLengthMeters)
     }
 
     /// Whether advancing from `previousMeters` to `currentMeters` completes at least one new
     /// bucket, i.e. a split should be recorded for `currentMeters`.
-    static func crossedBoundary(
+    public static func crossedBoundary(
         previousMeters: Double,
         currentMeters: Double,
         splitLengthMeters: Double
@@ -30,7 +30,7 @@ enum SplitBucketing {
     /// Usually none or one. A single reading can complete several: the pedometer reports
     /// all the distance covered while the app was suspended in one callback, and a GPS
     /// gap does the same outdoors. Recording one split per reading dropped the others.
-    static func bucketsCompleted(
+    public static func bucketsCompleted(
         previousMeters: Double,
         currentMeters: Double,
         splitLengthMeters: Double
@@ -55,7 +55,7 @@ enum SplitBucketing {
     ///
     /// Returns `nil` for a bucket with no measurable distance or non-positive
     /// elapsed time, so callers fall back rather than store an infinite pace.
-    static func splitPaceSecondsPerKm(deltaSeconds: Double, deltaMeters: Double) -> Double? {
+    public static func splitPaceSecondsPerKm(deltaSeconds: Double, deltaMeters: Double) -> Double? {
         guard deltaSeconds > 0, deltaMeters > 0,
               deltaSeconds.isFinite, deltaMeters.isFinite else { return nil }
         return deltaSeconds / deltaMeters * 1_000
@@ -74,21 +74,21 @@ extension SplitBucketing {
     /// the whole mile its stored `splits` were closed on (N34). The coding keys are one
     /// character each: a long run stores a few thousand of these, and the field names are
     /// otherwise three times the payload.
-    struct DistancePoint: Sendable, Equatable, Codable {
-        var elapsedSeconds: Double
-        var cumulativeMeters: Double
+    public struct DistancePoint: Sendable, Equatable, Codable {
+        public var elapsedSeconds: Double
+        public var cumulativeMeters: Double
         /// Altitude at this reading, in metres, when the source had one. GPS fixes carry it;
         /// HealthKit's distance samples do not, so imported runs leave it `nil` and their
         /// re-bucketed splits report no gain — exactly what they reported before.
-        var altitudeMeters: Double?
+        public var altitudeMeters: Double?
 
-        enum CodingKeys: String, CodingKey {
+        public enum CodingKeys: String, CodingKey {
             case elapsedSeconds = "t"
             case cumulativeMeters = "d"
             case altitudeMeters = "a"
         }
 
-        init(elapsedSeconds: Double, cumulativeMeters: Double, altitudeMeters: Double? = nil) {
+        public init(elapsedSeconds: Double, cumulativeMeters: Double, altitudeMeters: Double? = nil) {
             self.elapsedSeconds = elapsedSeconds
             self.cumulativeMeters = cumulativeMeters
             self.altitudeMeters = altitudeMeters
@@ -114,7 +114,7 @@ extension SplitBucketing {
     ///   - splitLengthMeters: bucket size, from the runner's unit preference.
     ///   - heartRateSamples: the workout's heart-rate series, if it has one.
     ///   - totalDurationSeconds: the workout's full duration; defaults to the last reading.
-    static func splits(
+    public static func splits(
         from points: [DistancePoint],
         splitLengthMeters: Double,
         heartRateSamples: [Double] = [],
@@ -216,7 +216,7 @@ extension SplitBucketing {
     /// it lays them back out (`HealthKitRepository.sampleTimestamps`). An
     /// approximation, but a better one than leaving every imported split without a
     /// heart rate and the split HR chart permanently hidden.
-    static func averageHeartRate(
+    public static func averageHeartRate(
         samples: [Double],
         fromSeconds: Double,
         toSeconds: Double,

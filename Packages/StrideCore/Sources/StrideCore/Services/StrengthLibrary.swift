@@ -4,7 +4,7 @@ import Foundation
 
 /// Pure-value exercise catalog and plan generator for strength workouts.
 /// No UI dependencies — fully unit-testable.
-struct StrengthLibrary: Sendable {
+public struct StrengthLibrary: Sendable {
 
     // MARK: - Public API
 
@@ -12,7 +12,7 @@ struct StrengthLibrary: Sendable {
     /// `minutes`, when the runner chose a session length, drops exercises from the end of
     /// the list (the least relevant, given how it is ordered) until the session fits,
     /// keeping at least ``minimumExercisesForLength``. Nil keeps the phase's full session.
-    static func plan(
+    public static func plan(
         for equipment: [StrengthEquipment],
         focus: StrengthFocus,
         phase: TrainingPhase,
@@ -43,7 +43,7 @@ struct StrengthLibrary: Sendable {
     /// where the stand-in's equipment is at hand, with the original's sets and reps.
     /// `excluded` names are then left out before the list is capped, so the next exercise
     /// in line takes an excluded one's place.
-    static func exercises(
+    public static func exercises(
         for equipment: [StrengthEquipment],
         focus: StrengthFocus,
         phase: TrainingPhase,
@@ -96,7 +96,7 @@ struct StrengthLibrary: Sendable {
 
     /// ``plan(for:focus:phase:minutes:excluding:replacing:)`` with the runner's
     /// session length, excluded exercises and standing swaps from Settings.
-    static func plan(
+    public static func plan(
         for equipment: [StrengthEquipment],
         focus: StrengthFocus,
         phase: TrainingPhase,
@@ -120,7 +120,7 @@ struct StrengthLibrary: Sendable {
     /// equipment, focus and phase, with bodyweight when no equipment was ever chosen.
     /// Nil on a pregnancy plan with no session to copy: the library knows nothing about
     /// pregnancy, so it must not write one.
-    static func unplannedPlan(
+    public static func unplannedPlan(
         weekStrengthPlan: StrengthWorkoutPlan?,
         isPregnancyPlan: Bool,
         equipment: [StrengthEquipment],
@@ -141,7 +141,7 @@ struct StrengthLibrary: Sendable {
     /// What a library exercise is done with, by name, for plans saved before
     /// ``StrengthExercise/equipment`` was stamped on them. Nil for a name the library
     /// does not have (renamed since, or never one of its own).
-    static func equipment(forExerciseNamed name: String) -> StrengthEquipment? {
+    public static func equipment(forExerciseNamed name: String) -> StrengthEquipment? {
         equipmentByName[name]
     }
 
@@ -157,7 +157,7 @@ struct StrengthLibrary: Sendable {
     /// running-specific anchors as bodyweight, then each equipment's moves for both
     /// focuses. Sets and reps are placeholders; the swap list and the name lookup only
     /// read names, muscle groups, equipment and whether a move is held for time.
-    static let catalog: [StrengthExercise] = {
+    public static let catalog: [StrengthExercise] = {
         var seen = Set<String>()
         var result: [StrengthExercise] = []
         for exercise in runningSpecificAnchors(sets: 3, reps: 10) where seen.insert(exercise.name).inserted {
@@ -185,7 +185,7 @@ struct StrengthLibrary: Sendable {
     /// survive the cap. Running-specific focus prioritizes glute/posterior-chain and
     /// single-leg tools; general-strength focus prioritizes heavy compound loading.
     /// Ties are impossible (each equipment has a distinct rank), so the result is stable.
-    static func prioritizedEquipment(
+    public static func prioritizedEquipment(
         _ equipment: [StrengthEquipment],
         focus: StrengthFocus
     ) -> [StrengthEquipment] {
@@ -227,7 +227,7 @@ struct StrengthLibrary: Sendable {
 
     /// The fewest exercises a chosen session length cuts a session to: below this it is
     /// a warm-up, not a session.
-    static let minimumExercisesForLength = 3
+    public static let minimumExercisesForLength = 3
 
     private static func fitted(_ exercises: [StrengthExercise], toMinutes minutes: Int, phase: TrainingPhase) -> [StrengthExercise] {
         var kept = exercises
@@ -239,7 +239,7 @@ struct StrengthLibrary: Sendable {
     }
 
     /// A session's estimated minutes, for a session edited by hand.
-    static func estimatedMinutes(of exercises: [StrengthExercise]) -> Int {
+    public static func estimatedMinutes(of exercises: [StrengthExercise]) -> Int {
         estimatedDuration(exercises: exercises, phase: .base)
     }
 
@@ -606,6 +606,11 @@ struct StrengthLibrary: Sendable {
             ]
         }
         return exercises
+    }
+
+    public init(
+
+    ) {
     }
 }
 

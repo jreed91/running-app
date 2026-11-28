@@ -13,7 +13,7 @@ import Foundation
 ///
 /// **Stride is not a clinician.** These are the settings for a starting draft that a runner
 /// with clearance from their own maternity provider can then take back to that provider.
-enum PregnancyRunningPolicy {
+public enum PregnancyRunningPolicy {
 
     // MARK: The dose (§1)
 
@@ -21,20 +21,20 @@ enum PregnancyRunningPolicy {
     /// minutes of moderate-intensity activity per week during pregnancy. A generated week
     /// that prescribes less running than this is topped up with cross-training rather than
     /// left short.
-    static let minimumWeeklyActiveMinutes = 150
+    public static let minimumWeeklyActiveMinutes = 150
 
     /// SOGC/CSEP 2019: accumulated over a minimum of three days per week, with activity on
     /// most days encouraged.
-    static let minimumActiveDaysPerWeek = 3
+    public static let minimumActiveDaysPerWeek = 3
 
     /// Below this a session is not worth scheduling as a run; the day becomes cross-training
     /// instead. Not a guideline figure — an editorial floor so late-pregnancy weeks do not
     /// degrade into a scatter of six-minute jogs.
-    static let minimumSessionMinutes = 20
+    public static let minimumSessionMinutes = 20
 
     /// What we assume a runner's pre-pregnancy weekly running was when they have not told us.
     /// Only a starting point: the setup screen asks, and the answer is what actually gets used.
-    static func defaultWeeklyRunMinutes(for level: FitnessLevel) -> Int {
+    public static func defaultWeeklyRunMinutes(for level: FitnessLevel) -> Int {
         switch level {
         case .beginner:     return 90
         case .intermediate: return 150
@@ -59,7 +59,7 @@ enum PregnancyRunningPolicy {
     /// The corresponding *outcome* evidence is why the curve is a taper and not a stop:
     /// Kuhrt et al. (2018, n = 1,293) found continuing to run affected neither gestational
     /// age at delivery nor birthweight centile, at any weekly distance or trimester.
-    static func runningVolumeShare(atGestationalWeek week: Int) -> Double {
+    public static func runningVolumeShare(atGestationalWeek week: Int) -> Double {
         switch week {
         case ..<9:    return 1.00   // T1, early: no reason to change anything
         case 9...13:  return 0.90   // T1, late: fatigue and nausea are the usual limiter
@@ -84,7 +84,7 @@ enum PregnancyRunningPolicy {
     /// RH. Ordinary moderate running in temperate conditions is nowhere near that. These
     /// caps keep sessions inside the studied window with room to spare and cut dehydration
     /// exposure, and they also match the shortening durations Tenforde et al. observed.
-    static func sessionMinutesCap(for trimester: PregnancyTrimester) -> Int {
+    public static func sessionMinutesCap(for trimester: PregnancyTrimester) -> Int {
         switch trimester {
         case .first:  return 90
         case .second: return 75
@@ -92,7 +92,7 @@ enum PregnancyRunningPolicy {
         }
     }
 
-    static var heatAndHydrationNote: String {
+    public static var heatAndHydrationNote: String {
         String(
             localized: "Drink before, during, and after. Skip or move the session indoors if it is hot or humid, and stop if you feel overheated.",
             comment: "Heat and hydration guidance attached to every pregnancy run"
@@ -108,13 +108,13 @@ enum PregnancyRunningPolicy {
     /// keeps one steadier session. It ends at 28 weeks: the third-trimester evidence base
     /// for vigorous work (Beetham et al. 2019) is reassuring but small and drawn almost
     /// entirely from already-trained women, which is not the margin to design a default on.
-    static func allowsModerateSession(atGestationalWeek week: Int, habituallyVigorous: Bool) -> Bool {
+    public static func allowsModerateSession(atGestationalWeek week: Int, habituallyVigorous: Bool) -> Bool {
         habituallyVigorous && week < 28
     }
 
     /// The longest continuous moderate-effort block inside a session. Keeps the sustained
     /// portion well inside Ravanelli et al.'s studied window (§4).
-    static let moderateBlockMinutesCap = 20
+    public static let moderateBlockMinutesCap = 20
 
     // MARK: Run/walk (§2)
 
@@ -122,22 +122,22 @@ enum PregnancyRunningPolicy {
     /// balance, and heat all argue for breaking the run up, and it is the change runners
     /// report making themselves. Running the block continuously is fine if it feels fine —
     /// the workout note says so.
-    static func usesRunWalk(atGestationalWeek week: Int) -> Bool { week >= 28 }
+    public static func usesRunWalk(atGestationalWeek week: Int) -> Bool { week >= 28 }
 
-    static let runWalkRunMinutes = 4
-    static let runWalkWalkMinutes = 1
+    public static let runWalkRunMinutes = 4
+    public static let runWalkWalkMinutes = 1
 
     // MARK: Position and falls (§5)
 
     /// Exercising supine is avoided from here on: the gravid uterus compresses the inferior
     /// vena cava, lowering cardiac output and causing symptomatic hypotension (ACOG 804;
     /// SOGC/CSEP 2019).
-    static let supineCutoffGestationalWeek = 16
+    public static let supineCutoffGestationalWeek = 16
 
     /// Where to run as pregnancy progresses. ACOG 804's fall-risk guidance names sports
     /// rather than surfaces — running is not on its list — so this applies the same logic to
     /// the thing this app actually schedules.
-    static func terrainGuidance(for trimester: PregnancyTrimester) -> String {
+    public static func terrainGuidance(for trimester: PregnancyTrimester) -> String {
         switch trimester {
         case .first:
             return String(
@@ -161,7 +161,7 @@ enum PregnancyRunningPolicy {
 
     /// The low-fall-risk moderate options the guidelines themselves name: brisk walking,
     /// stationary cycling, swimming and aqua aerobics, elliptical.
-    static var crossTrainingNote: String {
+    public static var crossTrainingNote: String {
         String(
             localized: "Brisk walking, stationary cycling, swimming, aqua aerobics, or the elliptical — anything moderate with no fall risk.",
             comment: "What counts as cross-training on a pregnancy plan"
@@ -172,7 +172,7 @@ enum PregnancyRunningPolicy {
 
     /// SOGC/CSEP 2019 recommends a variety of aerobic *and* resistance training. Volume
     /// eases in the third trimester alongside everything else.
-    static func strengthSessionsPerWeek(for trimester: PregnancyTrimester) -> Int {
+    public static func strengthSessionsPerWeek(for trimester: PregnancyTrimester) -> Int {
         trimester == .third ? 1 : 2
     }
 
@@ -185,7 +185,7 @@ enum PregnancyRunningPolicy {
     /// NNT ≈ 4 — and found no benefit for women who are already incontinent. It is
     /// prophylaxis, which is why it starts on day one of the plan rather than when something
     /// goes wrong.
-    static var pelvicFloorExercise: StrengthExercise {
+    public static var pelvicFloorExercise: StrengthExercise {
         StrengthExercise(
             name: "Pelvic Floor (Kegel) Training",
             sets: 3,
@@ -205,7 +205,7 @@ enum PregnancyRunningPolicy {
     /// What the plan says at the end. Generating a postpartum return-to-running block is out
     /// of scope: the 2019 postnatal return-to-running guidance (Goom, Donnelly, Brockwell) is
     /// criteria-based, and the criteria are a clinical screen this app cannot perform.
-    static var postpartumHandoff: String {
+    public static var postpartumHandoff: String {
         String(
             // swiftlint:disable:next line_length
             localized: "After the birth, walking and pelvic floor work can restart as soon as your provider says so. Impact running is different: the postnatal guidance is no running before 12 weeks postpartum, and then only once you can walk 30 minutes and load your pelvic floor symptom-free — ideally after a pelvic health physiotherapy assessment. Stride will not schedule it for you.",
@@ -219,7 +219,7 @@ enum PregnancyRunningPolicy {
     /// list, the onboarding step, and the plan's guidance card. It was three sentences, and
     /// three sentences repeated on four screens reads as boilerplate, which is how a notice
     /// stops being read at all.
-    static var medicalDisclaimer: String {
+    public static var medicalDisclaimer: String {
         String(
             localized: "Please consult your doctor before starting.",
             comment: "Standing disclaimer on a pregnancy training plan"
@@ -234,12 +234,12 @@ enum PregnancyRunningPolicy {
 /// The filter is deliberately narrow — it removes what a guideline actually names, and
 /// annotates the rest. ACOG 804 supports resistance training throughout pregnancy, so
 /// stripping a session down to nothing would be its own kind of wrong.
-enum PregnancyStrengthAdapter {
+public enum PregnancyStrengthAdapter {
 
     /// Exercises performed lying on the back. Excluded from `supineCutoffGestationalWeek`
     /// onward for aortocaval compression (§5). Matched by name against `StrengthLibrary`'s
     /// catalogue — if a supine exercise is added there, add it here too.
-    static let supineExerciseNames: Set<String> = [
+    public static let supineExerciseNames: Set<String> = [
         "Glute Bridge",
         "Banded Glute Bridge",
         "Dead Bug",
@@ -250,13 +250,13 @@ enum PregnancyStrengthAdapter {
 
     /// Exercises whose whole shape is a floor-to-standing transition through supine. Same
     /// reason as above, but they cannot simply be re-cued into side-lying.
-    static let supineTransitionExerciseNames: Set<String> = [
+    public static let supineTransitionExerciseNames: Set<String> = [
         "KB Turkish Get-Up"
     ]
 
     /// Single-leg work, kept but cued. Balance changes as the centre of gravity moves, and
     /// ACOG 804's fall-risk guidance is the reason to hold something rather than to stop.
-    static let singleLegExerciseNames: Set<String> = [
+    public static let singleLegExerciseNames: Set<String> = [
         "Single-Leg Deadlift",
         "Single-Leg KB Deadlift",
         "Walking Lunge",
@@ -266,7 +266,7 @@ enum PregnancyStrengthAdapter {
         "Copenhagen Plank"
     ]
 
-    static func adapt(
+    public static func adapt(
         _ plan: StrengthWorkoutPlan,
         atGestationalWeek week: Int
     ) -> StrengthWorkoutPlan {

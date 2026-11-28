@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Stride
+@testable import StrideCore
 
 /// Covers `BestEffortsCache`: each run is worked out once, again only when its series
 /// changes, and dropped when it is gone.

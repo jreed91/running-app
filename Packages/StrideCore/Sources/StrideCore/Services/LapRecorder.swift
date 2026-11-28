@@ -11,22 +11,22 @@ import Foundation
 /// for the boundaries that math cannot know about: the top of a rep, a turnaround, the lap
 /// line on a track. So a run with no taps has no laps at all — a single lap spanning the
 /// whole run would just restate the run's own distance, duration and average pace.
-enum LapRecorder {
+public enum LapRecorder {
 
     /// A lap boundary: where one lap closed and the next opened.
-    struct Mark: Equatable, Sendable, Codable {
+    public struct Mark: Equatable, Sendable, Codable {
         /// Elapsed run time at the boundary, in seconds.
-        var elapsedSeconds: Double
+        public var elapsedSeconds: Double
         /// Cumulative run distance at the boundary, in metres.
-        var distanceMeters: Double
+        public var distanceMeters: Double
 
-        init(elapsedSeconds: Double, distanceMeters: Double) {
+        public init(elapsedSeconds: Double, distanceMeters: Double) {
             self.elapsedSeconds = elapsedSeconds
             self.distanceMeters = distanceMeters
         }
 
         /// The implicit boundary every run opens with.
-        static let start = Mark(elapsedSeconds: 0, distanceMeters: 0)
+        public static let start = Mark(elapsedSeconds: 0, distanceMeters: 0)
     }
 
     /// The laps the runner has already closed — everything between `Mark.start` and the
@@ -34,7 +34,7 @@ enum LapRecorder {
     ///
     /// This is what the HUD counts: after two taps the runner is on lap 3, with laps 1
     /// and 2 behind them.
-    static func closedLaps(marks: [Mark]) -> [Lap] {
+    public static func closedLaps(marks: [Mark]) -> [Lap] {
         laps(boundaries: [.start] + marks)
     }
 
@@ -43,7 +43,7 @@ enum LapRecorder {
     ///
     /// Returns `[]` when no lap was ever marked — see the type's note on why a run is not
     /// its own single lap.
-    static func laps(marks: [Mark], finish: Mark) -> [Lap] {
+    public static func laps(marks: [Mark], finish: Mark) -> [Lap] {
         guard !marks.isEmpty else { return [] }
         return laps(boundaries: [.start] + marks + [finish])
     }

@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Stride
+@testable import StrideCore
 
 /// Covers `StrengthSessionCheckpoint`: which interrupted session reopens, and that it
 /// survives the trip through storage.

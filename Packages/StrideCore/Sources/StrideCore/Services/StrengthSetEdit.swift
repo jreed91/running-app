@@ -6,7 +6,7 @@ extension StrengthProgression {
 
     /// The weight to show in a finished set's editor, in the runner's unit: the stored
     /// kilograms, or a number read from an older free-text weight. Nil when there's none.
-    static func editableWeight(of set: CompletedStrengthSet, unit: UnitPreference) -> Double? {
+    public static func editableWeight(of set: CompletedStrengthSet, unit: UnitPreference) -> Double? {
         let kilograms = set.weightKilograms ?? legacyWeightKilograms(from: set.actualWeight, unit: unit)
         return kilograms.map { (displayValue($0, unit: unit) * 10).rounded() / 10 }
     }
@@ -17,7 +17,7 @@ extension StrengthProgression {
     /// copy older app versions read, as a live set is. Clearing the weight (nil or 0)
     /// removes it; a free-text note with no number in it ("Light", "Red band") is kept,
     /// because the editor never showed it as a weight to clear.
-    static func edited(
+    public static func edited(
         _ set: CompletedStrengthSet,
         reps: Int,
         displayWeight: Double?,

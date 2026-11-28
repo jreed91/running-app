@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Stride
+@testable import StrideCore
 
 /// Covers the runner's own strength amount: sessions a week, where they go, and how a
 /// chosen session length trims the session.

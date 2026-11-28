@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Stride
+@testable import StrideCore
 
 /// Covers `StrengthProgression`: what was lifted last time, and what to lift next.
 /// A wrong suggestion is a lifter loading a bar they can't move, so the steps, the

@@ -9,27 +9,27 @@ import Foundation
 /// view's state, so twenty minutes of sets disappeared with the process. One checkpoint
 /// at a time, in `UserDefaults`: it is small (sets and positions), device-local, and
 /// only ever read back by the session screen.
-struct StrengthSessionCheckpoint: Codable, Equatable, Sendable {
+public struct StrengthSessionCheckpoint: Codable, Equatable, Sendable {
     /// The scheduled session being done, or nil for an unplanned one.
-    let scheduledWorkoutID: UUID?
+    public let scheduledWorkoutID: UUID?
     /// The exercises as planned, so an unplanned session can be rebuilt as it was.
-    let plan: StrengthWorkoutPlan
+    public let plan: StrengthWorkoutPlan
     /// Swapped exercises by position, as on the session screen.
-    let swaps: [Int: StrengthExercise]
-    let completedSets: [CompletedStrengthSet]
-    let currentExerciseIndex: Int
-    let currentSetIndex: Int
-    let startTime: Date
-    let savedAt: Date
+    public let swaps: [Int: StrengthExercise]
+    public let completedSets: [CompletedStrengthSet]
+    public let currentExerciseIndex: Int
+    public let currentSetIndex: Int
+    public let startTime: Date
+    public let savedAt: Date
 
     /// Older than this, a checkpoint is a session abandoned, not one interrupted.
-    static let resumableForSeconds: TimeInterval = 6 * 3_600
+    public static let resumableForSeconds: TimeInterval = 6 * 3_600
 
-    static let defaultsKey = "strength.sessionCheckpoint"
+    public static let defaultsKey = "strength.sessionCheckpoint"
 
     /// Whether this checkpoint is the session about to open: the same scheduled session,
     /// or both unplanned; recent enough; and with a set actually done.
-    func resumes(scheduledWorkoutID id: UUID?, now: Date = Date()) -> Bool {
+    public func resumes(scheduledWorkoutID id: UUID?, now: Date = Date()) -> Bool {
         id == scheduledWorkoutID
             && now.timeIntervalSince(savedAt) <= Self.resumableForSeconds
             && now >= savedAt.addingTimeInterval(-60)
@@ -38,17 +38,37 @@ struct StrengthSessionCheckpoint: Codable, Equatable, Sendable {
 
     // MARK: Storage
 
-    static func load(from defaults: UserDefaults = .standard) -> StrengthSessionCheckpoint? {
+    public static func load(from defaults: UserDefaults = .standard) -> StrengthSessionCheckpoint? {
         guard let data = defaults.data(forKey: defaultsKey) else { return nil }
         return try? JSONDecoder().decode(StrengthSessionCheckpoint.self, from: data)
     }
 
-    func save(to defaults: UserDefaults = .standard) {
+    public func save(to defaults: UserDefaults = .standard) {
         guard let data = try? JSONEncoder().encode(self) else { return }
         defaults.set(data, forKey: Self.defaultsKey)
     }
 
-    static func clear(from defaults: UserDefaults = .standard) {
+    public static func clear(from defaults: UserDefaults = .standard) {
         defaults.removeObject(forKey: defaultsKey)
+    }
+
+    public init(
+        scheduledWorkoutID: UUID?,
+        plan: StrengthWorkoutPlan,
+        swaps: [Int: StrengthExercise],
+        completedSets: [CompletedStrengthSet],
+        currentExerciseIndex: Int,
+        currentSetIndex: Int,
+        startTime: Date,
+        savedAt: Date
+    ) {
+        self.scheduledWorkoutID = scheduledWorkoutID
+        self.plan = plan
+        self.swaps = swaps
+        self.completedSets = completedSets
+        self.currentExerciseIndex = currentExerciseIndex
+        self.currentSetIndex = currentSetIndex
+        self.startTime = startTime
+        self.savedAt = savedAt
     }
 }

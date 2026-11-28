@@ -4,15 +4,15 @@ import Foundation
 
 /// What the full-screen heatmap colours the streets by: how often you run them (the
 /// heatmap), or how you run them there.
-enum HeatmapLayer: String, CaseIterable, Identifiable, Sendable {
+public enum HeatmapLayer: String, CaseIterable, Identifiable, Sendable {
     case runs
     case heartRate
     case pace
     case hills
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var title: String {
+    public var title: String {
         switch self {
         case .runs: return String(localized: "Runs")
         case .heartRate: return String(localized: "Heart rate")
@@ -22,7 +22,7 @@ enum HeatmapLayer: String, CaseIterable, Identifiable, Sendable {
     }
 
     /// The stat this layer shows, or `nil` for the run-count heatmap.
-    var stat: RouteHeatmap.Stat? {
+    public var stat: RouteHeatmap.Stat? {
         switch self {
         case .runs: return nil
         case .heartRate: return .heartRate
@@ -36,7 +36,7 @@ enum HeatmapLayer: String, CaseIterable, Identifiable, Sendable {
 
 extension RouteHeatmap {
     /// A number measured along a run, placed on the streets where it was measured.
-    enum Stat: Int, CaseIterable, Sendable {
+    public enum Stat: Int, CaseIterable, Sendable {
         /// Beats per minute.
         case heartRate
         /// Seconds per kilometre. Faster is hotter.
@@ -46,22 +46,22 @@ extension RouteHeatmap {
         case grade
 
         /// Whether a bigger number is the hotter colour.
-        var higherIsHotter: Bool { self != .pace }
+        public var higherIsHotter: Bool { self != .pace }
     }
 
     /// One run's heart rate, pace and steepness averaged in each cell it went through.
     /// ``none`` where the run had no reading of that stat. Every stat is zero or more, so
     /// a negative number can mean "none" and still store in a property list, which NaN
     /// can't be trusted to.
-    struct RunStats: Codable, Equatable, Sendable {
-        var cells: [Cell]
-        var heartRate: [Float]
-        var pace: [Float]
-        var grade: [Float]
+    public struct RunStats: Codable, Equatable, Sendable {
+        public var cells: [Cell]
+        public var heartRate: [Float]
+        public var pace: [Float]
+        public var grade: [Float]
 
-        var isEmpty: Bool { cells.isEmpty }
+        public var isEmpty: Bool { cells.isEmpty }
 
-        func values(_ stat: Stat) -> [Float] {
+        public func values(_ stat: Stat) -> [Float] {
             switch stat {
             case .heartRate: return heartRate
             case .pace: return pace
@@ -69,22 +69,34 @@ extension RouteHeatmap {
             }
         }
 
-        static let empty = RunStats(cells: [], heartRate: [], pace: [], grade: [])
-        static let none: Float = -1
+        public static let empty = RunStats(cells: [], heartRate: [], pace: [], grade: [])
+        public static let none: Float = -1
+
+        public init(
+            cells: [Cell],
+            heartRate: [Float],
+            pace: [Float],
+            grade: [Float]
+        ) {
+            self.cells = cells
+            self.heartRate = heartRate
+            self.pace = pace
+            self.grade = grade
+        }
     }
 
     /// Metres between the readings taken along a route.
-    static let statStepMeters = 10.0
+    public static let statStepMeters = 10.0
     /// Pace and steepness are measured over this much road either side of a spot, so GPS
     /// noise on one fix doesn't make a sprint or a cliff.
-    static let statWindowMeters = 100.0
+    public static let statWindowMeters = 100.0
     /// Heart rate is averaged over this many seconds either side of a spot: a beat-to-beat
     /// reading jumps around more than the effort does.
-    static let heartRateWindowSeconds = 15.0
+    public static let heartRateWindowSeconds = 15.0
     /// Paces outside this are standing still or a GPS jump, like ``TrendSeries``.
-    static let plausiblePace = 150.0...1200.0
-    static let plausibleHeartRate = 70.0...230.0
-    static let maxGrade = 30.0
+    public static let plausiblePace = 150.0...1200.0
+    public static let plausibleHeartRate = 70.0...230.0
+    public static let maxGrade = 30.0
 
     /// Where along the route each reading was taken.
     ///
@@ -99,7 +111,7 @@ extension RouteHeatmap {
     /// have none in the series (distance samples carry no altitude), so their route's own
     /// altitudes are used instead: `altitudes`, one per route point, `nil` where a fix had
     /// none.
-    static func stats(
+    public static func stats(
         route: [Point],
         series: [SplitBucketing.DistancePoint],
         heartRate: [Double],
@@ -173,7 +185,7 @@ extension RouteHeatmap {
     /// Points every ``statStepMeters`` along the route, with how far along each is. A jump
     /// longer than ``fillMeters`` (a pause, lost signal) isn't filled in, but its length
     /// still counts, as it does in the distance series.
-    static func walk(_ route: [Point]) -> [(point: Point, meters: Double)] {
+    public static func walk(_ route: [Point]) -> [(point: Point, meters: Double)] {
         var spots: [(point: Point, meters: Double)] = []
         var meters = 0.0
         var previous: Point?
@@ -214,15 +226,15 @@ extension RouteHeatmap {
     }
 
     /// A run's distance series, asked for time, pace and altitude at a distance.
-    struct Timeline {
-        let meters: [Double]
-        let seconds: [Double]
+    public struct Timeline {
+        public let meters: [Double]
+        public let seconds: [Double]
         /// Distance and altitude of the readings that have one.
-        let altitudes: [(meters: Double, altitude: Double)]
+        public let altitudes: [(meters: Double, altitude: Double)]
 
-        var length: Double { meters.last ?? 0 }
+        public var length: Double { meters.last ?? 0 }
 
-        init?(_ series: [SplitBucketing.DistancePoint]) {
+        public init?(_ series: [SplitBucketing.DistancePoint]) {
             // Readings in order of distance, each further along than the last.
             var meters: [Double] = []
             var seconds: [Double] = []
@@ -242,12 +254,12 @@ extension RouteHeatmap {
             self.altitudes = altitudes
         }
 
-        func time(at distance: Double) -> Double {
+        public func time(at distance: Double) -> Double {
             Self.interpolate(meters, seconds, at: distance)
         }
 
         /// Seconds per kilometre over the road either side of `distance`.
-        func pace(at distance: Double) -> Double? {
+        public func pace(at distance: Double) -> Double? {
             let (from, to) = window(around: distance)
             guard to - from > 1 else { return nil }
             let pace = (time(at: to) - time(at: from)) / (to - from) * 1000
@@ -255,7 +267,7 @@ extension RouteHeatmap {
         }
 
         /// How steep the road either side of `distance` is, in percent.
-        func grade(at distance: Double) -> Double? {
+        public func grade(at distance: Double) -> Double? {
             guard altitudes.count >= 2 else { return nil }
             return Profile(meters: altitudes.map(\.meters), altitudes: altitudes.map(\.altitude), length: length)
                 .grade(at: distance)
@@ -267,7 +279,7 @@ extension RouteHeatmap {
         }
 
         /// Straight-line between the two readings either side of `x`; held flat past the ends.
-        static func interpolate(_ xs: [Double], _ ys: [Double], at x: Double) -> Double {
+        public static func interpolate(_ xs: [Double], _ ys: [Double], at x: Double) -> Double {
             guard let first = xs.first, let last = xs.last else { return 0 }
             if x <= first { return ys[0] }
             if x >= last { return ys[ys.count - 1] }
@@ -285,12 +297,12 @@ extension RouteHeatmap {
     }
 
     /// Altitude by distance along a run, asked how steep it is at a distance.
-    struct Profile {
-        let meters: [Double]
-        let altitudes: [Double]
-        let length: Double
+    public struct Profile {
+        public let meters: [Double]
+        public let altitudes: [Double]
+        public let length: Double
 
-        init(meters: [Double], altitudes: [Double], length: Double) {
+        public init(meters: [Double], altitudes: [Double], length: Double) {
             self.meters = meters
             self.altitudes = altitudes
             self.length = length
@@ -298,7 +310,7 @@ extension RouteHeatmap {
 
         /// The route's own altitudes, measured along the route the way ``walk(_:)``
         /// measures it. `nil` with fewer than two fixes that have one.
-        init?(route: [Point], altitudes: [Double?]) {
+        public init?(route: [Point], altitudes: [Double?]) {
             guard altitudes.count == route.count else { return nil }
             var meters: [Double] = []
             var heights: [Double] = []
@@ -317,7 +329,7 @@ extension RouteHeatmap {
         }
 
         /// Percent, uphill or downhill alike, over ``statWindowMeters`` either side.
-        func grade(at distance: Double) -> Double? {
+        public func grade(at distance: Double) -> Double? {
             let half = RouteHeatmap.statWindowMeters
             let from = max(0, distance - half)
             let to = min(length, distance + half)
@@ -332,25 +344,25 @@ extension RouteHeatmap {
 
     /// A stat across many runs: each cell's average, smoothed along the street, coloured
     /// from cool to hot.
-    struct StatMap: Equatable, Sendable {
+    public struct StatMap: Equatable, Sendable {
         /// The cells, drawn like the heatmap's. `runs` is how many runs had a reading there.
-        var heatmap: Heatmap
-        var stat: Stat
+        public var heatmap: Heatmap
+        public var stat: Stat
         /// The coolest and hottest colours' values, for the legend: the 5th and 95th
         /// percentile of the cells, so one odd cell doesn't stretch the scale.
-        var low: Double
-        var high: Double
+        public var low: Double
+        public var high: Double
         /// Each cell's colour level, to colour the heatmap's own lines with.
-        var levels: [Cell: Int] = [:]
+        public var levels: [Cell: Int] = [:]
 
-        static func == (lhs: StatMap, rhs: StatMap) -> Bool { lhs.heatmap == rhs.heatmap }
+        public static func == (lhs: StatMap, rhs: StatMap) -> Bool { lhs.heatmap == rhs.heatmap }
 
-        var isEmpty: Bool { heatmap.isEmpty }
+        public var isEmpty: Bool { heatmap.isEmpty }
 
         /// The run heatmap's own squares and lines, each coloured by this stat, so the stat
         /// follows the same streets, positions and joins as the heatmap. Squares with no
         /// reading are left out, with their lines.
-        func colouring(_ base: Heatmap) -> Heatmap {
+        public func colouring(_ base: Heatmap) -> Heatmap {
             var kept = Set<Cell>()
             var cells: [HeatCell] = []
             for heat in base.cells {
@@ -371,16 +383,30 @@ extension RouteHeatmap {
                 edges: base.edges.filter { kept.contains($0.a) && kept.contains($0.b) }
             )
         }
+
+        public init(
+            heatmap: Heatmap,
+            stat: Stat,
+            low: Double,
+            high: Double,
+            levels: [Cell: Int] = [:]
+        ) {
+            self.heatmap = heatmap
+            self.stat = stat
+            self.low = low
+            self.high = high
+            self.levels = levels
+        }
     }
 
     /// How many cells either way a cell's value is blended with, so one slow crossing or
     /// one spike doesn't make a block of its own colour: about 40 m.
-    static let statSmoothingCells: Int32 = 2
+    public static let statSmoothingCells: Int32 = 2
 
     /// Each cell's stat averaged over the runs that had a reading there, each run once,
     /// then blended with the cells around it. Colours run evenly from the 5th to the 95th
     /// percentile, so a small difference stays a small difference in colour.
-    static func statMap(_ runs: [RunStats], stat: Stat) -> StatMap {
+    public static func statMap(_ runs: [RunStats], stat: Stat) -> StatMap {
         var sums: [Cell: (value: Double, runs: Int)] = [:]
         var runCount = 0
         for run in runs {
@@ -451,7 +477,7 @@ extension RouteHeatmap {
     }
 
     /// The middle of a cell.
-    static func center(of cell: Cell) -> Point {
+    public static func center(of cell: Cell) -> Point {
         let origin = origin(of: cell)
         return Point(
             latitude: origin.latitude + rowHeight / 2,

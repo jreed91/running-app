@@ -10,7 +10,7 @@ extension StrengthLibrary {
     /// Written for a runner with no coach in the room, so each cue is something to do,
     /// not anatomy. Keyed by the library's own names; a test checks every exercise the
     /// library can produce has cues, so a new exercise can't ship without them.
-    static func cues(forExerciseNamed name: String) -> [String]? {
+    public static func cues(forExerciseNamed name: String) -> [String]? {
         guidance[name]
     }
 
@@ -221,7 +221,7 @@ extension StrengthLibrary {
     /// share its main muscle group, or failing that any of its groups. Bodyweight is
     /// always at hand. The sets, reps and hold time stay the plan's, so a swap changes
     /// the movement and not the session's size. At most `limit`, closest first.
-    static func alternatives(
+    public static func alternatives(
         to exercise: StrengthExercise,
         equipment: [StrengthEquipment],
         excluding excluded: Set<String> = [],
@@ -251,7 +251,7 @@ extension StrengthLibrary {
 
     /// `candidate` doing `exercise`'s job: the plan's sets, and its reps unless one of the
     /// two is a timed hold. A swap changes the movement, not the session's size.
-    static func standIn(_ candidate: StrengthExercise, for exercise: StrengthExercise) -> StrengthExercise {
+    public static func standIn(_ candidate: StrengthExercise, for exercise: StrengthExercise) -> StrengthExercise {
         var swapped = candidate
         swapped.sets = exercise.sets
         if candidate.durationSeconds != nil {
@@ -268,7 +268,7 @@ extension StrengthLibrary {
     /// Library exercises that could be added to a session: done with equipment at hand
     /// (bodyweight always), not already in it, not excluded. Grouped by nothing, sorted
     /// by name, for a picker.
-    static func addable(
+    public static func addable(
         to exercises: [StrengthExercise],
         equipment: [StrengthEquipment],
         excluding excluded: Set<String> = []
@@ -287,7 +287,7 @@ extension StrengthLibrary {
     /// `candidate` ready to add to a session: the session's own sets and reps (from its
     /// first exercise done for reps), so an added move matches the day's volume. A timed
     /// hold keeps its time.
-    static func added(_ candidate: StrengthExercise, to exercises: [StrengthExercise]) -> StrengthExercise {
+    public static func added(_ candidate: StrengthExercise, to exercises: [StrengthExercise]) -> StrengthExercise {
         guard let template = exercises.first(where: { $0.durationSeconds == nil }) ?? exercises.first else {
             return candidate
         }

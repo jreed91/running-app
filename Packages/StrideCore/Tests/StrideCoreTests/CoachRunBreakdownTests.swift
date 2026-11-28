@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import Stride
+@testable import StrideCore
 
 private func split(
     _ index: Int,

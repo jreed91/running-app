@@ -63,11 +63,14 @@ The Xcode project is generated from `project.yml` using XcodeGen. Edit `project.
   `WatchContext`, `WatchRunSession`, `WorkoutStructure`, `GuidedWorkoutEngine`,
   `HeartRateZoneService`, the spoken cues, `UnitPreference`, `Double` formatting and
   `LocationQualityFilter`; and, in `Models/`, `Services/` and `Extensions/`, the shared enums
-  (`Enums.swift`) and every pure service that needs no SwiftData model or `ValueTypes.swift`
-  type (pace calculator, training load, best efforts, route heatmap, custom workouts, training
-  breaks, trend and volume series, coach prompt helpers). The services still in the app are
-  the ones that read `RunWorkout`, `ScheduledWorkout`, `TrainingPlan`, `UserProfile` or a
-  `ValueTypes.swift` type. It exists to cut build time: it is its own module, so an app change
+  (`Enums.swift`), the value types (`ValueTypes.swift`: `Split`, `Lap`, `Coordinate`,
+  `WorkoutWeather`, the strength types) and every pure service that needs no SwiftData model
+  (pace calculator, training load, best efforts, route heatmap and privacy, splits and laps,
+  the strength library and progression, custom workouts, training breaks, trend and volume
+  series, coach prompt helpers). What stays in the app reads `RunWorkout`, `ScheduledWorkout`,
+  `TrainingPlan`, `UserProfile` or another app type, or a framework other than Foundation;
+  `Coordinate`'s CoreLocation conversions are an app extension
+  (`Stride/Core/Models/Coordinate+CoreLocation.swift`). It exists to cut build time: it is its own module, so an app change
   does not recompile it, and its tests run with
   `swift test --package-path Packages/StrideCore` on a Mac (or the Linux toolchain) with no
   simulator. Each target re-exports it (`StrideCoreExports.swift`), so no file needs
@@ -153,7 +156,7 @@ Business logic belongs in services or repositories, not directly in SwiftUI view
   `.applePrivateCloud` is the **default** for new installs; see "AI coaching models" below
 - `StrengthEquipment` and `StrengthFocus`
 
-`Stride/Core/Models/ValueTypes.swift` contains codable/sendable value types used inside SwiftData models:
+`Packages/StrideCore/Sources/StrideCore/Models/ValueTypes.swift` contains codable/sendable value types used inside SwiftData models:
 
 - `Coordinate`: `CLLocationCoordinate2D` storage wrapper
 - `Split`: one bucket per kilometre or per mile, closed automatically by `SplitBucketing`
@@ -579,7 +582,7 @@ judgement (pure, tested in `ShoeTrackingTests`), `ShoeAssignment` the few writes
 ## Sharing and route privacy
 
 Anything that sends a route out of the app goes through `RoutePrivacy`
-(`Stride/Core/Services/RoutePrivacy.swift`): it hides the first and last stretch of every run
+(`Packages/StrideCore/Sources/StrideCore/Services/RoutePrivacy.swift`): it hides the first and last stretch of every run
 (200 m by default) and any private place the runner adds in Settings → Route privacy, and
 splits what is left into pieces so no line is drawn across a hidden stretch. The run card
 (`ShareCardModel`, `RouteSnapshotService.routeSnapshot(segments:)`) and a single run's GPX

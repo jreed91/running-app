@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Stride
+@testable import StrideCore
 
 struct RouteHeatmapStatsTests {
     /// A straight run north from a point, `meters` long, one GPS fix every 5 m.

@@ -9,42 +9,60 @@ import Foundation
 /// only those (route, distance series and heart-rate samples), then ask for the map. Kept
 /// apart from the route cache so the run-count heatmap never waits on, or reads, the
 /// heavier blobs a stat layer needs.
-actor RouteStatsCache {
-    static let shared = RouteStatsCache(storeURL: defaultStoreURL)
+public actor RouteStatsCache {
+    public static let shared = RouteStatsCache(storeURL: defaultStoreURL)
 
     /// A run with the blobs a stat layer needs, read from the model off the main actor.
-    struct Input: Sendable, Equatable {
-        let id: UUID
-        let date: Date
+    public struct Input: Sendable, Equatable {
+        public let id: UUID
+        public let date: Date
         /// The stored route; may be swapped for Health's copy, which has altitudes.
-        var route: Data
-        let series: Data
-        let heartRate: Data
-        let durationSeconds: Double
-        var healthKitID: String? = nil
+        public var route: Data
+        public let series: Data
+        public let heartRate: Data
+        public let durationSeconds: Double
+        public var healthKitID: String? = nil
 
         /// Whether Hills has nothing to go on: neither the distance series nor the route
         /// has an altitude. True of runs imported from Health before routes kept the
         /// altitude, whose Health route still has it. Looks for the JSON keys rather than
         /// decoding, since it's asked of every run read.
-        var lacksAltitude: Bool {
+        public var lacksAltitude: Bool {
             !route.isEmpty
                 && route.range(of: Data(#""altitude""#.utf8)) == nil
                 && series.range(of: Data(#""a""#.utf8)) == nil
+        }
+
+        public init(
+            id: UUID,
+            date: Date,
+            route: Data,
+            series: Data,
+            heartRate: Data,
+            durationSeconds: Double,
+            healthKitID: String? = nil
+        ) {
+            self.id = id
+            self.date = date
+            self.route = route
+            self.series = series
+            self.heartRate = heartRate
+            self.durationSeconds = durationSeconds
+            self.healthKitID = healthKitID
         }
     }
 
     /// A route point as stored: a ``Coordinate``, altitude and all.
     private struct StoredPoint: Decodable {
-        let latitude: Double
-        let longitude: Double
-        let altitude: Double?
+        public let latitude: Double
+        public let longitude: Double
+        public let altitude: Double?
     }
 
     private struct Entry: Codable {
-        let date: Date
+        public let date: Date
         /// `nil` for a run with no route or no stats, so it isn't read again.
-        let stats: RouteHeatmap.RunStats?
+        public let stats: RouteHeatmap.RunStats?
     }
 
     private let storeURL: URL?
@@ -53,18 +71,18 @@ actor RouteStatsCache {
     private var isDirty = false
     private var lastBuilt: (keys: [RouteHeatmapCache.Key], stat: RouteHeatmap.Stat, map: RouteHeatmap.StatMap)?
 
-    init(storeURL: URL? = nil) {
+    public init(storeURL: URL? = nil) {
         self.storeURL = storeURL
     }
 
     /// The runs among `keys` not worked out yet: new runs, and runs whose date changed.
-    func missing(_ keys: [RouteHeatmapCache.Key]) -> [UUID] {
+    public func missing(_ keys: [RouteHeatmapCache.Key]) -> [UUID] {
         loadIfNeeded()
         return keys.compactMap { key in entries[key.id]?.date == key.date ? nil : key.id }
     }
 
     /// Works out the stats of the runs handed over, a few at a time like the route cache.
-    func add(_ inputs: [Input]) {
+    public func add(_ inputs: [Input]) {
         loadIfNeeded()
         guard !inputs.isEmpty else { return }
         for input in inputs {
@@ -74,7 +92,7 @@ actor RouteStatsCache {
         lastBuilt = nil
     }
 
-    static func stats(of input: Input) -> RouteHeatmap.RunStats? {
+    public static func stats(of input: Input) -> RouteHeatmap.RunStats? {
         guard !input.route.isEmpty,
               let stored = try? JSONDecoder().decode([StoredPoint].self, from: input.route) else { return nil }
         let route = stored.map { RouteHeatmap.Point(latitude: $0.latitude, longitude: $0.longitude) }
@@ -95,7 +113,7 @@ actor RouteStatsCache {
     }
 
     /// Drops every run not in `ids`, then writes the cache to disk if anything changed.
-    func keep(only ids: Set<UUID>) {
+    public func keep(only ids: Set<UUID>) {
         loadIfNeeded()
         let before = entries.count
         entries = entries.filter { ids.contains($0.key) }
@@ -107,7 +125,7 @@ actor RouteStatsCache {
     }
 
     /// The stat across the runs in `keys`. Runs not worked out yet are left out.
-    func statMap(for keys: [RouteHeatmapCache.Key], stat: RouteHeatmap.Stat) -> RouteHeatmap.StatMap {
+    public func statMap(for keys: [RouteHeatmapCache.Key], stat: RouteHeatmap.Stat) -> RouteHeatmap.StatMap {
         loadIfNeeded()
         if let lastBuilt, lastBuilt.keys == keys, lastBuilt.stat == stat { return lastBuilt.map }
         let runs = keys.compactMap { key -> RouteHeatmap.RunStats? in
@@ -124,7 +142,7 @@ actor RouteStatsCache {
     /// In Caches: the stats can always be worked out again.
     /// v2: traces no longer fill gaps over ``RouteHeatmap/fillMeters`` with a straight line.
     /// v3: hills from the route's own altitudes, for runs whose series has none.
-    static var defaultStoreURL: URL? {
+    public static var defaultStoreURL: URL? {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
             .appendingPathComponent("route-stats-v3.plist")
     }

@@ -18,31 +18,49 @@ import Foundation
 ///
 /// An actor, so the work runs off the main actor, and two cards asking at once don't
 /// work out the same run twice.
-actor BestEffortsCache {
-    static let shared = BestEffortsCache(storeURL: defaultStoreURL)
+public actor BestEffortsCache {
+    public static let shared = BestEffortsCache(storeURL: defaultStoreURL)
 
     /// A run as the cache knows it without its series: enough to tell whether its
     /// efforts are already worked out.
-    struct Key: Sendable, Hashable {
-        let id: UUID
-        let date: Date
+    public struct Key: Sendable, Hashable {
+        public let id: UUID
+        public let date: Date
+
+        public init(
+            id: UUID,
+            date: Date
+        ) {
+            self.id = id
+            self.date = date
+        }
     }
 
     /// A run with its series, read from the model on the main actor.
-    struct Input: Sendable, Equatable {
-        let id: UUID
-        let date: Date
-        let series: Data
+    public struct Input: Sendable, Equatable {
+        public let id: UUID
+        public let date: Date
+        public let series: Data
 
-        var key: Key { Key(id: id, date: date) }
+        public var key: Key { Key(id: id, date: date) }
+
+        public init(
+            id: UUID,
+            date: Date,
+            series: Data
+        ) {
+            self.id = id
+            self.date = date
+            self.series = series
+        }
     }
 
     private struct Entry: Codable {
-        let date: Date
+        public let date: Date
         /// `nil` when unknown, for an entry read back from disk.
-        let seriesSize: Int?
+        public let seriesSize: Int?
         /// `nil` for a run too short for any effort, so it isn't worked out again.
-        let efforts: [BestEfforts.Distance: Double]?
+        public let efforts: [BestEfforts.Distance: Double]?
     }
 
     private let storeURL: URL?
@@ -50,9 +68,9 @@ actor BestEffortsCache {
     private var hasLoaded = false
 
     /// How many runs have been worked out from their series so far. For tests.
-    private(set) var computed = 0
+    public private(set) var computed = 0
 
-    init(storeURL: URL? = nil) {
+    public init(storeURL: URL? = nil) {
         self.storeURL = storeURL
     }
 
@@ -60,7 +78,7 @@ actor BestEffortsCache {
 
     /// The runs among `keys` whose efforts aren't known yet: new runs, and runs whose
     /// date changed. Only these need their series read.
-    func missing(_ keys: [Key]) -> [UUID] {
+    public func missing(_ keys: [Key]) -> [UUID] {
         loadIfNeeded()
         return keys.compactMap { key in entries[key.id]?.date == key.date ? nil : key.id }
     }
@@ -68,7 +86,7 @@ actor BestEffortsCache {
     /// The best efforts of every run in `keys` that has any, in the order given, after
     /// working out `adding` (the series of the runs ``missing`` named). Runs no longer
     /// in `keys` are dropped, so a deleted run's record goes with it.
-    func efforts(for keys: [Key], adding inputs: [Input]) -> [BestEfforts.RunEfforts] {
+    public func efforts(for keys: [Key], adding inputs: [Input]) -> [BestEfforts.RunEfforts] {
         loadIfNeeded()
         for input in inputs {
             entries[input.id] = Entry(date: input.date, seriesSize: input.series.count, efforts: Self.work(input))
@@ -88,7 +106,7 @@ actor BestEffortsCache {
 
     /// The best efforts of every run in `inputs` that has any, in the order given.
     /// Works out a run again when its series changed size.
-    func efforts(for inputs: [Input]) -> [BestEfforts.RunEfforts] {
+    public func efforts(for inputs: [Input]) -> [BestEfforts.RunEfforts] {
         loadIfNeeded()
         let stale = inputs.filter { input in
             guard let entry = entries[input.id], entry.date == input.date else { return true }
@@ -111,7 +129,7 @@ actor BestEffortsCache {
     // MARK: Disk
 
     /// In Caches: the efforts can always be worked out again, so the system may clear it.
-    static var defaultStoreURL: URL? {
+    public static var defaultStoreURL: URL? {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
             .appendingPathComponent("best-efforts-v1.json")
     }

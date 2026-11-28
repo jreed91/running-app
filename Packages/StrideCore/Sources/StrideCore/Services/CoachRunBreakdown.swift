@@ -7,19 +7,19 @@ import Foundation
 /// directly above the coach card, so the coaching read has to be grounded in the same
 /// numbers the runner just scrolled past. Pure arithmetic and string building — no UI, no
 /// persistence — so it stays unit-testable.
-enum CoachRunBreakdown {
+public enum CoachRunBreakdown {
 
     /// How many per-split rows the prompt carries.
     ///
     /// Longer runs keep their opening and closing splits and drop the middle rather than
     /// truncating at the front: the closing splits are exactly what the coach reads for
     /// fade, and a front-truncated marathon hid all of them.
-    static let splitLineLimit = 20
+    public static let splitLineLimit = 20
 
     // MARK: - Splits
 
     /// The per-split table as prompt lines, e.g. `km 3: pace 5:10 min/km, hr 152, elev 12 m`.
-    static func splitSection(
+    public static func splitSection(
         splits: [Split],
         unit: UnitPreference,
         splitLabel: String,
@@ -47,19 +47,33 @@ enum CoachRunBreakdown {
     /// The shape of a run's split pacing: extremes, spread, consistency, and how the second
     /// half compared with the first. All second values are in *display*-unit seconds
     /// (per mile for imperial), so they read the same way as the paces beside them.
-    struct SplitTrend: Sendable, Equatable {
-        let fastest: Split
-        let slowest: Split
+    public struct SplitTrend: Sendable, Equatable {
+        public let fastest: Split
+        public let slowest: Split
         /// Gap between the slowest and the fastest split.
-        let spreadSeconds: Double
+        public let spreadSeconds: Double
         /// Standard deviation of split pace.
-        let consistencySeconds: Double
+        public let consistencySeconds: Double
         /// Second-half average minus first-half average. Negative means the run finished
         /// faster than it started.
-        let secondHalfDeltaSeconds: Double
+        public let secondHalfDeltaSeconds: Double
+
+        public init(
+            fastest: Split,
+            slowest: Split,
+            spreadSeconds: Double,
+            consistencySeconds: Double,
+            secondHalfDeltaSeconds: Double
+        ) {
+            self.fastest = fastest
+            self.slowest = slowest
+            self.spreadSeconds = spreadSeconds
+            self.consistencySeconds = consistencySeconds
+            self.secondHalfDeltaSeconds = secondHalfDeltaSeconds
+        }
     }
 
-    static func splitTrend(splits: [Split], unit: UnitPreference) -> SplitTrend? {
+    public static func splitTrend(splits: [Split], unit: UnitPreference) -> SplitTrend? {
         let paced = splits.filter { $0.paceSecondsPerKm > 0 && $0.paceSecondsPerKm.isFinite }
         guard paced.count >= 2,
               let fastest = paced.min(by: { $0.paceSecondsPerKm < $1.paceSecondsPerKm }),
@@ -86,7 +100,7 @@ enum CoachRunBreakdown {
     }
 
     /// The full trend line for the prompt.
-    static func splitTrendLine(_ trend: SplitTrend, splitLabel: String, unit: UnitPreference) -> String {
+    public static func splitTrendLine(_ trend: SplitTrend, splitLabel: String, unit: UnitPreference) -> String {
         "fastest \(splitLabel) \(trend.fastest.kilometer) at \(trend.fastest.paceSecondsPerKm.paceString(unit: unit)), "
             + "slowest \(splitLabel) \(trend.slowest.kilometer) at \(trend.slowest.paceSecondsPerKm.paceString(unit: unit)), "
             + "spread \(secondsString(trend.spreadSeconds)), consistency ±\(secondsString(trend.consistencySeconds)), "
@@ -94,12 +108,12 @@ enum CoachRunBreakdown {
     }
 
     /// Range and consistency only — for summaries that already carry a pace-fade sentence.
-    static func splitRangeSentence(_ trend: SplitTrend, splitLabel: String, unit: UnitPreference) -> String {
+    public static func splitRangeSentence(_ trend: SplitTrend, splitLabel: String, unit: UnitPreference) -> String {
         splitRangeFragment(trend, splitLabel: splitLabel, unit: unit) + "."
     }
 
     /// Range, consistency, and the half-to-half comparison as one sentence.
-    static func splitTrendSentence(_ trend: SplitTrend, splitLabel: String, unit: UnitPreference) -> String {
+    public static func splitTrendSentence(_ trend: SplitTrend, splitLabel: String, unit: UnitPreference) -> String {
         splitRangeFragment(trend, splitLabel: splitLabel, unit: unit)
             + ", and the \(halfComparison(trend, unit: unit))."
     }
@@ -136,7 +150,7 @@ enum CoachRunBreakdown {
     /// - Parameter plain: name each zone by how it feels ("hard") rather than by its
     ///   training name ("Threshold"), for a runner the coach talks to without jargon
     ///   (`CoachVoice.usesPlainFacts`). The model copies these names into the read.
-    static func zoneSection(
+    public static func zoneSection(
         _ slices: [HRZoneSlice],
         maxHR: Double?,
         maxHRIsEstimated: Bool = false,
@@ -167,7 +181,7 @@ enum CoachRunBreakdown {
     }
 
     /// A zone named by how it feels, for prompts written for a runner without jargon.
-    static func plainZoneName(_ zone: HRZone) -> String {
+    public static func plainZoneName(_ zone: HRZone) -> String {
         switch zone {
         case .z1: return "very easy"
         case .z2: return "easy"
@@ -180,7 +194,7 @@ enum CoachRunBreakdown {
     /// Where the run's heart rate actually sat, as one sentence.
     ///
     /// - Parameter plain: say "a hard effort" rather than "threshold" (see `zoneSection`).
-    static func zoneSentence(_ slices: [HRZoneSlice], plain: Bool = false) -> String? {
+    public static func zoneSentence(_ slices: [HRZoneSlice], plain: Bool = false) -> String? {
         let active = slices.filter { $0.seconds > 0 }
         let total = active.reduce(0) { $0 + $1.seconds }
         guard total > 0, let dominant = active.max(by: { $0.seconds < $1.seconds }) else { return nil }
@@ -199,7 +213,7 @@ enum CoachRunBreakdown {
     }
 
     /// Fraction of recorded time spent in Z4–Z5, or nil when there is no zone data.
-    static func hardEffortShare(_ slices: [HRZoneSlice]) -> Double? {
+    public static func hardEffortShare(_ slices: [HRZoneSlice]) -> Double? {
         let total = slices.reduce(0) { $0 + $1.seconds }
         guard total > 0 else { return nil }
         let hard = slices
@@ -219,21 +233,21 @@ enum CoachRunBreakdown {
     /// line falls with it (`lowCadenceStepsPerMinute(paceSecondsPerKm:)`): a fixed 160
     /// told a runner averaging 10 minutes a mile at 153 spm that they were overstriding,
     /// which is a normal cadence for that pace.
-    static let lowCadenceStepsPerMinute: Double = 160
+    public static let lowCadenceStepsPerMinute: Double = 160
 
     /// Pace at and faster than which the full `lowCadenceStepsPerMinute` line applies.
-    static let lowCadenceReferencePaceSecondsPerKm: Double = 300
+    public static let lowCadenceReferencePaceSecondsPerKm: Double = 300
     /// How far the line drops for each 30 s/km slower than the reference pace.
-    static let lowCadenceDropPerHalfMinute: Double = 4
+    public static let lowCadenceDropPerHalfMinute: Double = 4
     /// The line never drops below this, however slow the run.
-    static let lowCadenceFloorStepsPerMinute: Double = 148
+    public static let lowCadenceFloorStepsPerMinute: Double = 148
 
     /// The cadence below which this run's is called low, given its average pace.
     ///
     /// A rough line, not a measurement: cadence also moves with height and terrain. It is
     /// meant to flag only cadences that are low *for the pace*, so a slow run is not
     /// read as a form fault. With no pace, the fixed line applies.
-    static func lowCadenceStepsPerMinute(paceSecondsPerKm: Double?) -> Double {
+    public static func lowCadenceStepsPerMinute(paceSecondsPerKm: Double?) -> Double {
         guard let pace = paceSecondsPerKm, pace.isFinite, pace > lowCadenceReferencePaceSecondsPerKm else {
             return lowCadenceStepsPerMinute
         }
@@ -249,7 +263,7 @@ enum CoachRunBreakdown {
     /// Reported as an observation, not a diagnosis: cadence varies with pace, terrain and
     /// height, so the sentence says what it was and — only when it is low for the pace —
     /// what that can mean.
-    static func cadenceSentence(
+    public static func cadenceSentence(
         _ stepsPerMinute: Double?,
         paceSecondsPerKm: Double? = nil,
         plain: Bool = false
@@ -268,7 +282,7 @@ enum CoachRunBreakdown {
     /// Only for cadence that is low for the pace on an easy or long run: those are the
     /// sessions where a runner has the attention to change something about their form,
     /// and where doing so does not cost them the workout's own target.
-    static func cadenceFocus(
+    public static func cadenceFocus(
         _ stepsPerMinute: Double?,
         workoutType: WorkoutType,
         paceSecondsPerKm: Double? = nil

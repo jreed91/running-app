@@ -10,20 +10,20 @@ import Foundation
 /// makes "does this run carry heart rate / elevation per split?" a rule the UI depends
 /// on rather than decoration — so it belongs outside the view (D1), where an app-recorded
 /// run with no HR strap and an imported run with no elevation series can both be checked.
-enum SplitChartMetric: String, CaseIterable, Hashable, Sendable {
+public enum SplitChartMetric: String, CaseIterable, Hashable, Sendable {
     case pace = "Pace"
     case heartRate = "HR"
     case elevation = "Elev"
 
     /// Label for the metric's tab.
-    var tabTitle: String { rawValue }
+    public var tabTitle: String { rawValue }
 
     /// The line under the chart explaining how to read it.
     ///
     /// The pace chart plots each split against the run's own average, so the view replaces
     /// this with a footnote naming that average's pace; this wording is what's left when the
     /// run has no average to name.
-    var footnote: String {
+    public var footnote: String {
         switch self {
         case .pace:      return "Higher is faster. The dashed line is this run's average"
         case .heartRate: return "Average heart rate in each split"
@@ -36,7 +36,7 @@ enum SplitChartMetric: String, CaseIterable, Hashable, Sendable {
     /// `bucket` is what a bar actually covers, not the runner's unit: a short run is charted
     /// in fractions of it (`SplitChartSeries`), and "Pace per mi" over tenth-mile bars would
     /// name a reading the chart is not showing (N34).
-    func heading(bucket: String) -> String {
+    public func heading(bucket: String) -> String {
         switch self {
         case .pace:      return "Pace per \(bucket)"
         case .heartRate: return "Heart rate per \(bucket)"
@@ -56,7 +56,7 @@ enum SplitChartMetric: String, CaseIterable, Hashable, Sendable {
     ///
     /// Empty splits yield no metrics at all, which is the caller's signal to hide the
     /// card rather than to render an empty chart.
-    static func available(for splits: [Split]) -> [SplitChartMetric] {
+    public static func available(for splits: [Split]) -> [SplitChartMetric] {
         guard !splits.isEmpty else { return [] }
 
         var metrics: [SplitChartMetric] = [.pace]
@@ -71,7 +71,7 @@ enum SplitChartMetric: String, CaseIterable, Hashable, Sendable {
     /// The selection is view state that outlives the data it points at — switching to the
     /// HR tab and then opening a run with no heart rate would otherwise chart a series
     /// that isn't there.
-    static func resolved(selection: SplitChartMetric, in available: [SplitChartMetric]) -> SplitChartMetric {
+    public static func resolved(selection: SplitChartMetric, in available: [SplitChartMetric]) -> SplitChartMetric {
         available.contains(selection) ? selection : (available.first ?? .pace)
     }
 }

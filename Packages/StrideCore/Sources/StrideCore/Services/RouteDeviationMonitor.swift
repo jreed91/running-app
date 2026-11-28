@@ -17,9 +17,9 @@ import Foundation
 /// - **Confirmation.** One stray fix is GPS, not a wrong turn, so a change of state needs
 ///   several consecutive fixes that agree. The tracker drops fixes closer than 5 m apart,
 ///   so three fixes are at least ~15 m of actual movement.
-struct RouteDeviationMonitor: Sendable {
+public struct RouteDeviationMonitor: Sendable {
 
-    enum Status: Equatable, Sendable {
+    public enum Status: Equatable, Sendable {
         /// Not yet on the route; the associated value is how far away it is.
         case approaching(distanceMeters: Double)
         case onRoute
@@ -28,33 +28,33 @@ struct RouteDeviationMonitor: Sendable {
     }
 
     /// The transitions worth telling the runner about.
-    enum Event: Equatable, Sendable {
+    public enum Event: Equatable, Sendable {
         case leftRoute(distanceMeters: Double)
         case rejoinedRoute
     }
 
     /// Farther than this from the route counts towards leaving it. Wider than a city
     /// street plus consumer-GPS error, so running on the other pavement is not "off".
-    static let offRouteThresholdMeters = 50.0
+    public static let offRouteThresholdMeters = 50.0
     /// Closer than this counts towards being on it — joining it the first time, or
     /// coming back after leaving.
-    static let backOnRouteThresholdMeters = 30.0
+    public static let backOnRouteThresholdMeters = 30.0
     /// Consecutive agreeing fixes needed before the state changes.
-    static let confirmingFixes = 3
+    public static let confirmingFixes = 3
 
-    let route: [Coordinate]
-    private(set) var status: Status = .approaching(distanceMeters: .infinity)
+    public let route: [Coordinate]
+    public private(set) var status: Status = .approaching(distanceMeters: .infinity)
 
     private var fixesBeyond = 0
     private var fixesWithin = 0
 
-    init(route: [Coordinate]) {
+    public init(route: [Coordinate]) {
         self.route = route
     }
 
     /// Feeds one accepted fix. Returns an event when the fix confirms a change the runner
     /// should hear about; joining the route for the first time is not one.
-    mutating func update(with fix: Coordinate) -> Event? {
+    public mutating func update(with fix: Coordinate) -> Event? {
         guard let distance = Self.distanceMeters(from: fix, toRoute: route) else { return nil }
 
         if distance > Self.offRouteThresholdMeters {
@@ -98,7 +98,7 @@ struct RouteDeviationMonitor: Sendable {
     /// Projects onto a flat plane centred on `point` (equirectangular). Over the few
     /// hundred metres that matter here the error is far below GPS error, and it keeps the
     /// per-fix cost to a few multiplications per route vertex.
-    static func distanceMeters(from point: Coordinate, toRoute route: [Coordinate]) -> Double? {
+    public static func distanceMeters(from point: Coordinate, toRoute route: [Coordinate]) -> Double? {
         guard let first = route.first else { return nil }
 
         let earthRadius = 6_371_000.0
