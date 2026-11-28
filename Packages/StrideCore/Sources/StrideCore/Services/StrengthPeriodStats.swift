@@ -6,35 +6,49 @@ import Foundation
 /// how often, how much, and how the main lifts moved.
 ///
 /// Pure over ``StrengthSessionLog`` values, like ``ProgressPeriodStats`` is over runs.
-struct StrengthPeriodStats: Equatable, Sendable {
+public struct StrengthPeriodStats: Equatable, Sendable {
 
     /// One lift's movement over the period, from its first loaded session in it to its
     /// latest.
-    struct LiftTrend: Equatable, Sendable {
-        let exerciseName: String
+    public struct LiftTrend: Equatable, Sendable {
+        public let exerciseName: String
         /// Sessions in the period with a loaded set of this lift.
-        let sessions: Int
-        let latestWeightKilograms: Double
+        public let sessions: Int
+        public let latestWeightKilograms: Double
         /// Reps of the best set at the latest top load.
-        let latestReps: Int
+        public let latestReps: Int
         /// Change in the Epley estimate from the first session to the latest, as a
         /// fraction (0.08 = 8% stronger). Nil with one session, or when either end had
         /// no set the estimate is fair for (over twelve reps).
-        let change: Double?
+        public let change: Double?
+
+        public init(
+            exerciseName: String,
+            sessions: Int,
+            latestWeightKilograms: Double,
+            latestReps: Int,
+            change: Double?
+        ) {
+            self.exerciseName = exerciseName
+            self.sessions = sessions
+            self.latestWeightKilograms = latestWeightKilograms
+            self.latestReps = latestReps
+            self.change = change
+        }
     }
 
-    let sessions: Int
+    public let sessions: Int
     /// Sessions per week across the period.
-    let sessionsPerWeek: Double
+    public let sessionsPerWeek: Double
     /// Sets done, skipped ones left out.
-    let workingSets: Int
+    public let workingSets: Int
     /// The lifts done with a load most often, at most ``maxLifts``, most sessions first.
-    let lifts: [LiftTrend]
+    public let lifts: [LiftTrend]
 
-    static let maxLifts = 3
+    public static let maxLifts = 3
 
     /// The stats for sessions dated within `days` of `now`.
-    static func make(
+    public static func make(
         from sessions: [StrengthSessionLog],
         withinDays days: Int,
         now: Date = Date()
@@ -86,5 +100,17 @@ struct StrengthPeriodStats: Equatable, Sendable {
             workingSets: working.count,
             lifts: Array(lifts.prefix(maxLifts))
         )
+    }
+
+    public init(
+        sessions: Int,
+        sessionsPerWeek: Double,
+        workingSets: Int,
+        lifts: [LiftTrend]
+    ) {
+        self.sessions = sessions
+        self.sessionsPerWeek = sessionsPerWeek
+        self.workingSets = workingSets
+        self.lifts = lifts
     }
 }

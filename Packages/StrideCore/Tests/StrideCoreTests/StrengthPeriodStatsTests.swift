@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Stride
+@testable import StrideCore
 
 /// Covers `StrengthPeriodStats`, the strength card on Progress.
 struct StrengthPeriodStatsTests {

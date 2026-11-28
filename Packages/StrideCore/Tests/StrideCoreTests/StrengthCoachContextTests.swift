@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Stride
+@testable import StrideCore
 
 /// Covers `StrengthCoachContext`, strength as the coach chat sees it.
 struct StrengthCoachContextTests {
