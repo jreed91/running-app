@@ -31,6 +31,9 @@ xcodebuild test -scheme Stride -destination 'platform=iOS Simulator,name=iPhone 
 # Run UI tests
 xcodebuild test -scheme Stride -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:StrideUITests
 
+# Run the StrideCore package's tests: no simulator, no app build (seconds, not minutes)
+swift test --package-path Packages/StrideCore
+
 # Build for release/archive
 xcodebuild archive -scheme Stride -archivePath build/Stride.xcarchive
 
@@ -50,12 +53,23 @@ The Xcode project is generated from `project.yml` using XcodeGen. Edit `project.
   the Home Screen / Lock Screen widgets), `StrideWatch` (the Apple Watch app — see "Watch
   app" below), `StrideTests`, `StrideUITests`. The app embeds the extension and the watch
   app via target dependencies.
-- `StrideWidgets` compiles `Stride/Core/Models/RunActivityAttributes.swift`,
-  `Stride/Core/Models/WidgetSnapshot.swift` and `Stride/Resources/Assets.xcassets` from the
-  app's tree: ActivityKit matches the two sides on the attributes *type*, the snapshot is the
-  payload the app publishes for the widgets to read, and a widget bundle cannot read the app's
-  asset catalog. Keep both Swift files free of app-only dependencies (Foundation only) or the
-  extension stops building.
+- `StrideWidgets` compiles `Stride/Core/Models/RunActivityAttributes.swift` and
+  `Stride/Resources/Assets.xcassets` from the app's tree: ActivityKit matches the two sides on
+  the attributes *type*, and a widget bundle cannot read the app's asset catalog. Keep the
+  Swift file free of app-only dependencies or the extension stops building. The snapshot the
+  app publishes for the widgets (`WidgetSnapshot`) comes from the StrideCore package.
+- **StrideCore** (`Packages/StrideCore`, a local Swift package linked by the app, the widgets
+  and the watch) holds the Foundation-only models and services they share: `WidgetSnapshot`,
+  `WatchContext`, `WatchRunSession`, `WorkoutStructure`, `GuidedWorkoutEngine`,
+  `HeartRateZoneService`, the spoken cues, `UnitPreference`, `Double` formatting and
+  `LocationQualityFilter`. It exists to cut build time: it is its own module, so an app change
+  does not recompile it, and its tests run with
+  `swift test --package-path Packages/StrideCore` on a Mac (or the Linux toolchain) with no
+  simulator. Each target re-exports it (`StrideCoreExports.swift`), so no file needs
+  `import StrideCore`. Rules: Foundation only; anything another target reads is `public`; a
+  public struct the app builds needs an explicit `public init`; public types state `Sendable`.
+  A test that touches only StrideCore types belongs in `Packages/StrideCore/Tests`, not
+  `StrideTests`.
 - App Group `group.com.running.stride` is the only channel between the app and the extension —
   a widget runs in its own process with its own container. Both targets declare it; see
   "Widget data flow" below.
@@ -106,6 +120,7 @@ Business logic belongs in services or repositories, not directly in SwiftUI view
 | `Stride/Shared/` | Reusable components, extensions, icons, theme primitives |
 | `StrideWidgets/` | Widget extension target — the run's Live Activity (Lock Screen + Dynamic Island) and the Home Screen / Lock Screen widgets |
 | `StrideWatch/` | watchOS app target (B3) — today's session with a Start button, the week, the race |
+| `Packages/StrideCore/` | Local Swift package: Foundation-only models and services shared by the app, widgets and watch, with their own tests (`swift test`) |
 | `StrideTests/` | Unit tests using Swift Testing (`@Test`, `#expect`) |
 | `StrideUITests/` | UI tests using XCTest and `XCUIApplication` |
 | `ci_scripts/` | Xcode Cloud helper scripts |

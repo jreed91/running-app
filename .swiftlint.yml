@@ -12,6 +12,10 @@ included:
   # than weakening it for the app.
   - StrideTests
   - StrideUITests
+  # The StrideCore package (shared models and services) and its tests. Its Tests folder
+  # carries the same nested relaxations as StrideTests.
+  - Packages/StrideCore/Sources
+  - Packages/StrideCore/Tests
 
 excluded:
   - Stride/Resources
