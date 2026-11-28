@@ -215,7 +215,10 @@ struct StrengthProgressionTests {
 
     @Test func epleyEstimate() {
         #expect(StrengthProgression.estimatedOneRepMax(weightKilograms: 100, reps: 1) == 100)
-        #expect(StrengthProgression.estimatedOneRepMax(weightKilograms: 100, reps: 10) == 100 * (1 + 10.0 / 30))
+        // Precomputed: inside `#expect` the literal arithmetic timed out the type checker
+        // on the CI Mac's Swift 6.3.
+        let tenRepEstimate: Double = 100 * (1 + 10.0 / 30)
+        #expect(StrengthProgression.estimatedOneRepMax(weightKilograms: 100, reps: 10) == tenRepEstimate)
         #expect(StrengthProgression.estimatedOneRepMax(weightKilograms: 100, reps: 15) == nil)
         #expect(StrengthProgression.estimatedOneRepMax(weightKilograms: 0, reps: 5) == nil)
     }
