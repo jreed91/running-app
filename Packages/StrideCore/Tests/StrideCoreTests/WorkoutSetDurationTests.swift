@@ -1,5 +1,5 @@
 import Testing
-@testable import Stride
+@testable import StrideCore
 
 @Suite("WorkoutSet recovery duration")
 struct WorkoutSetDurationTests {

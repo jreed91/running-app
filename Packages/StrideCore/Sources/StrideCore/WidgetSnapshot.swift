@@ -330,7 +330,11 @@ enum StrideAppGroup {
     /// exactly the case both sides have to survive: the app skips the write and the
     /// widget falls back to its empty state rather than either of them trapping.
     static var containerURL: URL? {
+        #if canImport(Darwin)
         FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: identifier)
+        #else
+        nil // Linux `swift test` only: there are no App Groups. Tests inject a directory.
+        #endif
     }
 }
 

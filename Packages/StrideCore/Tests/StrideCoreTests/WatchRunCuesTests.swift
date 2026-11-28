@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Stride
+@testable import StrideCore
 
 // MARK: - Watch run cues tests
 //

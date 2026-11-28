@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import Stride
+@testable import StrideCore
 
 // MARK: - Spoken guided-workout cues
 //

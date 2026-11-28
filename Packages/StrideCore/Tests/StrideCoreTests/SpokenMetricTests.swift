@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Stride
+@testable import StrideCore
 
 /// Covers the spoken form of a metric cell (N18), now shared by the run HUD, the run
 /// detail stats grid, and the Progress period summary rather than living in one view.
