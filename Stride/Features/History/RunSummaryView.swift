@@ -357,10 +357,16 @@ struct RunSummaryView: View {
             titleBlock
             // A walk is not training, so there is nothing for its rating to adjust. The
             // rating is read against a *run's* intended type, so not a ride either (B8).
-            if workout.countsAsRunning {
+            // Under the hero while the run is fresh, which is when the question is worth
+            // asking; under the route once it is a day old, so a run opened from History
+            // leads with its own data rather than with a question.
+            if workout.countsAsRunning, asksFeelFirst {
                 feelSection
             }
             routeMap
+            if workout.countsAsRunning, !asksFeelFirst {
+                feelSection
+            }
         } trailing: {
             // The coach and the pace read are both written against the runner's
             // training paces, which say nothing about a walk. Absent rather than
@@ -386,6 +392,13 @@ struct RunSummaryView: View {
                 RunShoeRow(workout: workout)
             }
         }
+    }
+
+    /// Whether "How did that feel?" sits right under the hero: within a day of the run's
+    /// end, when it is the one thing the screen asks of the runner.
+    private var asksFeelFirst: Bool {
+        let end = workout.date.addingTimeInterval(workout.durationSeconds)
+        return Date().timeIntervalSince(end) < 24 * 60 * 60
     }
 
     /// Scroll anchors: the top for an opened page, and the breakdown for coming back to it.

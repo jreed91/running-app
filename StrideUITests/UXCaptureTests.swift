@@ -117,7 +117,10 @@ final class UXCaptureTests: XCTestCase {
         }
 
         capturePlanTools()
+        captureSmartAdaptPrompt()
         captureRunSummary()
+        captureShareStudio()
+        captureOlderRunSummary()
         captureAchievements()
 
         // Settings opens as a sheet from Home's profile button.
@@ -133,6 +136,65 @@ final class UXCaptureTests: XCTestCase {
         }
 
         captureRunHUD()
+    }
+
+    /// The coach page and the coach chat. They only draw with AI Coach on and a finished
+    /// read on the run, which `--seed-coach-read` provides; the CI simulator has no Apple
+    /// Intelligence, so the chat shows whatever it says when no model is available.
+    func testCaptureCoachScreens() throws {
+        app.terminate()
+        app.launchArguments = ["--uitesting", "--seed-demo-data", "--seed-coach-read"]
+        app.launch()
+        skipOnboarding()
+
+        selectTab("History")
+        let newestRun = app.buttons["history.run"].firstMatch
+        guard newestRun.waitForExistence(timeout: 10) else {
+            return XCTFail("The demo history has no runs to open")
+        }
+        newestRun.tap()
+        let coachCard = app.buttons["runSummary.coachCard"]
+        _ = coachCard.waitForExistence(timeout: 10)
+        guard scrollIntoView(coachCard) else {
+            capture("missing-coach")
+            return XCTFail("The run had no coach card; the seeded read did not load")
+        }
+        coachCard.tap()
+        sleep(2)
+        captureScrollingScreen(named: "coach-read")
+
+        let ask = app.buttons["runSummary.askCoach"]
+        _ = ask.waitForExistence(timeout: 3)
+        guard scrollIntoView(ask) else {
+            capture("missing-coach-chat")
+            return XCTFail("The coach page has no Ask about this run button")
+        }
+        ask.tap()
+        guard app.navigationBars["Coach"].waitForExistence(timeout: 8) else {
+            return XCTFail("The coach chat did not open")
+        }
+        sleep(3)
+        capture("coach-chat")
+    }
+
+    /// Onboarding with every default, for a pass that has already captured it once.
+    private func skipOnboarding() {
+        let getStarted = app.buttons["onboarding.getStarted"]
+        XCTAssertTrue(getStarted.waitForExistence(timeout: 15), "Onboarding never appeared")
+        getStarted.tap()
+        for step in 1...6 {
+            let button = app.buttons["onboarding.primaryCTA.\(step)"]
+            if button.waitForExistence(timeout: 8) { button.tap() }
+        }
+        let skipPermissions = app.buttons["onboarding.secondaryCTA.7"]
+        if skipPermissions.waitForExistence(timeout: 8) { skipPermissions.tap() }
+        let startTraining = app.buttons["onboarding.startTraining"]
+        if startTraining.waitForExistence(timeout: 8) { startTraining.tap() }
+        XCTAssertTrue(
+            app.buttons["dashboard.startFreeRun"].waitForExistence(timeout: 20),
+            "Never reached Home"
+        )
+        sleep(2)
     }
 
     private func captureOnboarding() {
@@ -285,6 +347,93 @@ final class UXCaptureTests: XCTestCase {
         sleep(1)
     }
 
+    /// The Smart Adapt tile with AI Coach off (a UI-test launch wipes preferences): it
+    /// asks to turn the coach on. Dismissed without answering, so the rest of the pass
+    /// is unchanged.
+    private func captureSmartAdaptPrompt() {
+        selectTab("Plan")
+        sleep(1)
+        let tile = app.buttons["plan.smartAdaptTile"]
+        _ = tile.waitForExistence(timeout: 5)
+        guard scrollIntoView(tile) else {
+            capture("missing-smart-adapt")
+            return XCTFail("Could not reach the Smart Adapt tile")
+        }
+        tile.tap()
+        // iOS shows the dialog as a popover anchored on the tile, which drops the cancel
+        // button, so dismiss it by tapping outside (the navigation title).
+        let turnOn = app.buttons["Turn On AI Coach"]
+        guard turnOn.waitForExistence(timeout: 5) else {
+            capture("missing-smart-adapt-prompt")
+            return XCTFail("Smart Adapt did not offer to turn on AI Coach")
+        }
+        sleep(1)
+        capture("plan-smart-adapt-prompt")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.04)).tap()
+        sleep(1)
+        if turnOn.exists {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9)).tap()
+            sleep(1)
+        }
+        scrollToTop()
+    }
+
+    /// The share studio, from the newest run's Run actions menu.
+    private func captureShareStudio() {
+        selectTab("History")
+        sleep(1)
+        let firstRun = app.buttons["history.run"].firstMatch
+        guard firstRun.waitForExistence(timeout: 10) else { return }
+        firstRun.tap()
+        let actions = app.buttons["runSummary.actions"]
+        guard actions.waitForExistence(timeout: 10) else {
+            capture("missing-share-studio")
+            return XCTFail("The run summary has no Run actions menu")
+        }
+        actions.tap()
+        let share = app.buttons["runSummary.shareCard"]
+        guard share.waitForExistence(timeout: 5) else {
+            capture("missing-share-studio")
+            return XCTFail("Run actions has no Share run card")
+        }
+        share.tap()
+        guard app.navigationBars["Share run"].waitForExistence(timeout: 8) else {
+            return XCTFail("The share studio did not open")
+        }
+        // The card renders after the sheet appears.
+        sleep(3)
+        captureScrollingScreen(named: "share-studio", screens: 2)
+        app.navigationBars["Share run"].buttons["Close"].tap()
+        sleep(1)
+        app.navigationBars.firstMatch.buttons.element(boundBy: 0).tap()
+        sleep(1)
+    }
+
+    /// A run from a week ago, where "How did that feel?" sits under the route instead of
+    /// right under the hero (the newest run may be less than a day old).
+    private func captureOlderRunSummary() {
+        selectTab("History")
+        sleep(1)
+        let runs = app.buttons.matching(identifier: "history.run")
+        guard runs.element(boundBy: 0).waitForExistence(timeout: 10), runs.count > 3 else {
+            return XCTFail("The demo history has too few runs for an older summary")
+        }
+        let older = runs.element(boundBy: 3)
+        guard scrollIntoView(older) else {
+            return XCTFail("Could not reach an older run in History")
+        }
+        older.tap()
+        guard app.buttons["runSummary.breakdown.splits"].waitForExistence(timeout: 10) else {
+            return XCTFail("The older run's summary did not open")
+        }
+        sleep(2)
+        captureScrollingScreen(named: "run-summary-older", screens: 2)
+        scrollToTop()
+        app.navigationBars.firstMatch.buttons.element(boundBy: 0).tap()
+        sleep(1)
+        scrollToTop()
+    }
+
     /// Progress's second segment, which the tab's capture never switches to.
     private func captureAchievements() {
         selectTab("Progress")
@@ -313,7 +462,14 @@ final class UXCaptureTests: XCTestCase {
         // which is what this pass is checking.
         capture("run-hud")
 
-        let close = app.buttons["activeRun.minimize"]
-        if close.waitForExistence(timeout: 5) { close.tap() }
+        // Started: the running layout, with whatever the simulator gives for location.
+        // Last in the pass, because the run is left going.
+        let start = app.buttons["activeRun.start"]
+        guard start.waitForExistence(timeout: 5) else {
+            return XCTFail("The run HUD has no Start button")
+        }
+        start.tap()
+        sleep(6)
+        capture("run-hud-running")
     }
 }

@@ -249,11 +249,12 @@ struct RaceInsightsView: View {
                         // gap means "no data", not "on goal pace".
                         if let gap {
                             if gap > 0 {
-                                Text(String(format: "%.0f sec behind goal", gap))
+                                // m:ss, like Pace insights' "2:57 ahead of goal".
+                                Text("\(gap.durationString) behind goal")
                                     .font(.captionStrong)
                                     .foregroundStyle(.destructive)
                             } else if gap < 0 {
-                                Text(String(format: "%.0f sec ahead of goal", -gap))
+                                Text("\((-gap).durationString) ahead of goal")
                                     .font(.captionStrong)
                                     .foregroundStyle(.success)
                             } else {

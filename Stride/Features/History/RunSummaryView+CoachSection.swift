@@ -269,6 +269,7 @@ extension RunSummaryView {
                 .overlay(Capsule().strokeBorder(.cardStroke, lineWidth: 1))
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("runSummary.askCoach")
         }
     }
 

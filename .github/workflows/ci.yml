@@ -132,9 +132,33 @@ jobs:
 
   # ── Build & Test (iOS) ──────────────────────────────────────────────────────
   test-ios:
-    name: Test — iOS
+    name: Test — iOS (${{ matrix.title }})
     runs-on: xcode-27      # see the runner-label note in `env` above
     timeout-minutes: 60
+    # Three runners, each building and running one slice, instead of one runner
+    # running unit tests and then every UI test in a row. On 2026-11-27 (run
+    # 46091670703) the one-runner job took 32 minutes: build 10, unit tests 3, UI
+    # tests 17, of which the screenshot walk was 9. Split, the slowest runner is
+    # build plus the screenshot walk. Each runner has its own simulator, so this is
+    # not the two-clones-on-one-simulator parallelism the UI test step warns about.
+    # The repository is public, so the extra macOS runners cost no minutes.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: unit
+            title: unit tests
+            only: StrideTests
+            bundle: unit
+          - shard: ui
+            title: UI tests
+            only: StrideUITests
+            skip: StrideUITests/UXCaptureTests
+            bundle: ui
+          - shard: capture
+            title: screenshots
+            only: StrideUITests/UXCaptureTests
+            bundle: ui
     # Deliberately NOT `needs: lint`. Lint gating tests bought nothing — a lint
     # failure and a test failure are independent facts about the same commit, and
     # both are wanted on the first run rather than one after the other — while
@@ -219,10 +243,14 @@ jobs:
         # package product" failure. The pins already constrain the versions.
         run: |
           set -o pipefail
+          # `-only-testing`: each runner builds the app and only its own test bundle.
+          # StrideTests is ~180 files that `@testable import Stride`, so any change to
+          # the app's interface recompiles all of them; the UI runners don't need it.
           xcodebuild build-for-testing \
             -scheme "$SCHEME" \
             -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
             -derivedDataPath ~/Library/Developer/Xcode/DerivedData \
+            -only-testing:${{ matrix.only }} \
             -skipMacroValidation \
             -skipPackagePluginValidation \
             COMPILER_INDEX_STORE_ENABLE=NO \
@@ -234,13 +262,16 @@ jobs:
       # failed, no build was ever cached and every run started cold (14-19 min on
       # 2026-11-24, against 4.4 min warm).
       - name: Save DerivedData
-        if: steps.build.outcome == 'success'
+        # One runner saves; all three build the same commit, and a second save of
+        # the same key is refused anyway.
+        if: steps.build.outcome == 'success' && matrix.shard == 'unit'
         uses: actions/cache/save@v4
         with:
           path: ~/Library/Developer/Xcode/DerivedData
           key: deriveddata-ios-${{ github.sha }}
 
       - name: Run unit tests
+        if: matrix.shard == 'unit'
         continue-on-error: true
         run: |
           mkdir -p TestResults
@@ -259,6 +290,7 @@ jobs:
           exit "$status"
 
       - name: Run UI tests
+        if: matrix.bundle == 'ui'
         continue-on-error: true
         # Serial, on one simulator. Two parallel clones saved about 3 minutes, but
         # with both running the simulator stalled under the load: in run 46061511892
@@ -274,7 +306,8 @@ jobs:
             -scheme "$SCHEME" \
             -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
             -derivedDataPath ~/Library/Developer/Xcode/DerivedData \
-            -only-testing:StrideUITests \
+            -only-testing:${{ matrix.only }} \
+            ${{ matrix.skip && format('-skip-testing:{0}', matrix.skip) || '' }} \
             -parallel-testing-enabled NO \
             -resultBundlePath TestResults/ui.xcresult \
             CODE_SIGNING_ALLOWED=NO \
@@ -332,7 +365,9 @@ jobs:
         continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
-          name: app-screenshots
+          # The screenshot walk's shots keep the name scripts/fetch_app_screenshots.py
+          # looks for; the UI tests runner only has failure shots.
+          name: ${{ matrix.shard == 'capture' && 'app-screenshots' || format('screenshots-{0}', matrix.shard) }}
           path: AppScreenshots/
           if-no-files-found: ignore
           retention-days: 14
@@ -341,18 +376,16 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results-ios
+          name: test-results-ios-${{ matrix.shard }}
           path: TestResults/
           retention-days: 7
 
       - name: Fail if tests failed
         if: always()
         run: |
-          unit_status=$(cat TestResults/unit.exit 2>/dev/null || echo 1)
-          ui_status=$(cat TestResults/ui.exit 2>/dev/null || echo 1)
-
-          if [[ "$unit_status" != "0" || "$ui_status" != "0" ]]; then
-            echo "::error::Unit tests exited with $unit_status; UI tests exited with $ui_status."
+          status=$(cat TestResults/${{ matrix.bundle }}.exit 2>/dev/null || echo 1)
+          if [[ "$status" != "0" ]]; then
+            echo "::error::${{ matrix.title }} exited with $status."
             exit 1
           fi
 
