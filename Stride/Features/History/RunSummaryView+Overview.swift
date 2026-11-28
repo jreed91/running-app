@@ -136,7 +136,9 @@ extension RunSummaryView {
             } else {
                 // No label on the map: the run's type is already the title and the hero's
                 // eyebrow, and a third "Easy" on the route only crowded it.
-                Map {
+                // Pinch to zoom, but no panning: a one-finger drag that started on the map
+                // moved the map instead of scrolling the summary.
+                Map(interactionModes: [.zoom]) {
                     MapPolyline(coordinates: workout.routeCoordinates.map(\.clCoordinate))
                         .stroke(.route, style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
                     if let start = workout.routeCoordinates.first {
