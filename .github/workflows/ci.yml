@@ -10,9 +10,12 @@ permissions:
   contents: read
   pull-requests: read
 
+# A new push to a PR cancels that PR's older run. A push to main or develop does not:
+# back-to-back merges were cancelling every main run before its tests finished
+# (2026-11-27, #546-#548), so main never got a result. Main runs queue instead.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   SCHEME: Stride
