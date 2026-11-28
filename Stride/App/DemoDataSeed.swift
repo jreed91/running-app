@@ -132,9 +132,15 @@ enum DemoDataSeed {
             paces: PaceCalculatorService.trainingPaces(from5KTimeSeconds: 25 * 60 + 40),
             unit: unit
         )
-        let picks: [(starter: String, name: String, notes: String?, daysAgo: Int, usedDaysAgo: Int?)] = [
-            ("800s", "Track Tuesday 6 × 800", "Lane 1, 90 s standing jog", 40, 4),
-            ("pyramid", "Park pyramid", "Grass loop by the lake", 12, nil)
+        let picks = [
+            DemoSavedWorkout(
+                starter: "800s", name: "Track Tuesday 6 × 800", notes: "Lane 1, 90 s standing jog",
+                daysAgo: 40, usedDaysAgo: 4
+            ),
+            DemoSavedWorkout(
+                starter: "pyramid", name: "Park pyramid", notes: "Grass loop by the lake",
+                daysAgo: 12, usedDaysAgo: nil
+            )
         ]
         for pick in picks {
             guard let starter = starters.first(where: { $0.id == pick.starter }),
@@ -502,4 +508,13 @@ enum DemoDataSeed {
         }
         return workout
     }
+}
+
+/// One saved workout `DemoDataSeed` adds: a classic starter, renamed the way a runner would.
+private struct DemoSavedWorkout {
+    let starter: String
+    let name: String
+    let notes: String?
+    let daysAgo: Int
+    let usedDaysAgo: Int?
 }
