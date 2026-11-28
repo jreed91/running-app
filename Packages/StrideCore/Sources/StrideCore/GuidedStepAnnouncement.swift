@@ -25,19 +25,19 @@ import Foundation
 /// A run/walk session (``GuidedCueStyle/runWalk``) is called in its own words: "Run 3 of
 /// 8. 2 minutes. Go.", "Walk. 90 seconds.", and the warm-up and cool-down by the names the
 /// banner shows ("Brisk walk", "Walk to finish").
-enum GuidedStepAnnouncement {
+public enum GuidedStepAnnouncement {
 
     /// How long before a time-based step ends its heads-up is spoken, in seconds.
-    static let headsUpSeconds: Double = 10
+    public static let headsUpSeconds: Double = 10
 
     /// Steps shorter than this get no time heads-up: on a 20-second stride the warning
     /// would land halfway through, and the start cue has only just finished.
-    static let minimumSecondsForHeadsUp: Double = 30
+    public static let minimumSecondsForHeadsUp: Double = 30
 
     /// How far before a distance-based step ends its heads-up is spoken, in metres, per
     /// display unit — 100 m for a metric runner, 100 yd for an imperial one, so the
     /// number spoken is a round one in the unit they think in.
-    static func headsUpMeters(unit: UnitPreference) -> Double {
+    public static func headsUpMeters(unit: UnitPreference) -> Double {
         switch unit {
         case .metric:   return 100
         case .imperial: return 100 * yardInMeters
@@ -47,7 +47,7 @@ enum GuidedStepAnnouncement {
     // MARK: Step start
 
     /// The announcement for a step that has just begun.
-    static func stepStart(_ step: GuidedStep, unit: UnitPreference, style: GuidedCueStyle = .reps) -> String {
+    public static func stepStart(_ step: GuidedStep, unit: UnitPreference, style: GuidedCueStyle = .reps) -> String {
         var sentences: [String] = []
 
         switch (step.kind, style) {
@@ -170,7 +170,7 @@ enum GuidedStepAnnouncement {
     ///     tail could be.
     ///   - old: the progress on the previous tick.
     ///   - new: the progress now.
-    static func headsUp(
+    public static func headsUp(
         for step: GuidedStep,
         from old: GuidedStepProgress,
         to new: GuidedStepProgress,
@@ -228,7 +228,7 @@ enum GuidedStepAnnouncement {
     /// switch to yards below a mile for the same reason. Longer ones are kilometres or
     /// miles with at most two decimals and no trailing zeros, so a warm-up is "1
     /// kilometre" rather than "1.0 kilometres".
-    static func spokenDistance(meters: Double, unit: UnitPreference) -> String {
+    public static func spokenDistance(meters: Double, unit: UnitPreference) -> String {
         switch unit {
         case .metric:
             if meters < 1_000 {
@@ -259,7 +259,7 @@ enum GuidedStepAnnouncement {
     ///
     /// Anything under two minutes stays in seconds, because that is how recoveries are
     /// prescribed and called ("90 seconds", not "1 minute 30").
-    static func spokenDuration(seconds: Double) -> String {
+    public static func spokenDuration(seconds: Double) -> String {
         let total = max(0, Int(seconds.rounded()))
         if total < 120 {
             return total == 1

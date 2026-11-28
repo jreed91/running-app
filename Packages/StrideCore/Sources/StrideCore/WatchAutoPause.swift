@@ -13,30 +13,32 @@ import Foundation
 /// Off for plan sessions with steps, because a paused workout's clock stops, and a timed
 /// recovery spent standing would then never end.
 ///
-/// Compiled into the app and `StrideWatch`, Foundation only, and tested in `StrideTests`.
-struct WatchAutoPause: Equatable, Sendable {
+/// Compiled into the app and `StrideWatch`, Foundation only, and tested in `StrideCoreTests` (`swift test`).
+public struct WatchAutoPause: Equatable, Sendable {
 
-    enum Action: Equatable, Sendable {
+    public enum Action: Equatable, Sendable {
         case pause
         case resume
     }
 
     /// Below this, in metres per second, the runner is standing or walking to a stop.
     /// The phone's tracker stops counting distance at the same speed.
-    static let stopSpeed: Double = 0.5
+    public static let stopSpeed: Double = 0.5
     /// Above this the runner is moving again: a slow jog, not a step or two at a light.
-    static let moveSpeed: Double = 1.0
-    static let stopSeconds: TimeInterval = 6
-    static let moveSeconds: TimeInterval = 3
+    public static let moveSpeed: Double = 1.0
+    public static let stopSeconds: TimeInterval = 6
+    public static let moveSeconds: TimeInterval = 3
 
     /// The run is paused because of this, not because the runner tapped Pause.
-    private(set) var isAutoPaused = false
+    public private(set) var isAutoPaused = false
     private var slowSince: Date?
     private var fastSince: Date?
 
+    public init() {}
+
     /// What to do for a fix with `speed` (CoreLocation's, negative when unknown) at `date`.
     /// - Parameter isRunning: the workout is running, not paused by hand or saving.
-    mutating func update(speed: Double, at date: Date, isRunning: Bool) -> Action? {
+    public mutating func update(speed: Double, at date: Date, isRunning: Bool) -> Action? {
         guard speed >= 0 else { return nil }
         if isAutoPaused {
             guard speed >= Self.moveSpeed else {
@@ -62,7 +64,7 @@ struct WatchAutoPause: Equatable, Sendable {
     }
 
     /// Forgets any auto-pause, when the runner pauses or resumes by hand.
-    mutating func reset() {
+    public mutating func reset() {
         isAutoPaused = false
         slowSince = nil
         fastSince = nil

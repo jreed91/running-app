@@ -5,16 +5,16 @@ import Foundation
 /// A five-zone heart-rate model expressed as fractions of the runner's max HR.
 /// Standard % of max-HR bands (Z1 50–60 … Z5 90–100). Readings below Z1's floor
 /// (warm-up walking) clamp into Z1.
-enum HRZone: Int, CaseIterable, Sendable, Identifiable {
+public enum HRZone: Int, CaseIterable, Sendable, Identifiable {
     case z1 = 1, z2, z3, z4, z5
 
-    var id: Int { rawValue }
+    public var id: Int { rawValue }
 
     /// Short label, e.g. "Z3".
-    var shortName: String { "Z\(rawValue)" }
+    public var shortName: String { "Z\(rawValue)" }
 
     /// Human description of the training effect of the zone.
-    var label: String {
+    public var label: String {
         switch self {
         case .z1: return "Recovery"
         case .z2: return "Easy"
@@ -25,7 +25,7 @@ enum HRZone: Int, CaseIterable, Sendable, Identifiable {
     }
 
     /// Inclusive lower bound as a fraction of max HR.
-    var lowerFraction: Double {
+    public var lowerFraction: Double {
         switch self {
         case .z1: return 0.50
         case .z2: return 0.60
@@ -36,7 +36,7 @@ enum HRZone: Int, CaseIterable, Sendable, Identifiable {
     }
 
     /// Exclusive upper bound as a fraction of max HR (Z5 is open-ended, capped at 1.0 for display).
-    var upperFraction: Double {
+    public var upperFraction: Double {
         switch self {
         case .z1: return 0.60
         case .z2: return 0.70
@@ -50,10 +50,18 @@ enum HRZone: Int, CaseIterable, Sendable, Identifiable {
 // MARK: - HRZoneSlice
 
 /// Time spent in a single zone, used as a chart datum.
-struct HRZoneSlice: Identifiable, Sendable, Hashable {
-    let zone: HRZone
-    var seconds: Double
-    var id: Int { zone.rawValue }
+public struct HRZoneSlice: Identifiable, Sendable, Hashable {
+    public let zone: HRZone
+    public var seconds: Double
+    public var id: Int { zone.rawValue }
+
+    public init(
+        zone: HRZone,
+        seconds: Double
+    ) {
+        self.zone = zone
+        self.seconds = seconds
+    }
 }
 
 // MARK: - HeartRateZoneService
@@ -61,10 +69,10 @@ struct HRZoneSlice: Identifiable, Sendable, Hashable {
 /// Pure heart-rate-zone math: classify readings, derive display bounds, and distribute a
 /// run's duration across zones from its bpm sample series. No persistence or UI so it is
 /// fully unit-testable (A6).
-enum HeartRateZoneService {
+public enum HeartRateZoneService {
 
     /// Classify a single bpm reading into a zone given max HR. Sub-Z1 readings clamp to Z1.
-    static func zone(forBPM bpm: Double, maxHR: Double) -> HRZone {
+    public static func zone(forBPM bpm: Double, maxHR: Double) -> HRZone {
         guard maxHR > 0 else { return .z1 }
         switch bpm / maxHR {
         case ..<0.60: return .z1
@@ -76,7 +84,7 @@ enum HeartRateZoneService {
     }
 
     /// Lower/upper bpm bounds for a zone, rounded for display.
-    static func bounds(for zone: HRZone, maxHR: Double) -> (lower: Int, upper: Int) {
+    public static func bounds(for zone: HRZone, maxHR: Double) -> (lower: Int, upper: Int) {
         (
             lower: Int((zone.lowerFraction * maxHR).rounded()),
             upper: Int((zone.upperFraction * maxHR).rounded())
@@ -87,7 +95,7 @@ enum HeartRateZoneService {
     /// without per-sample timestamps, so each valid sample is assumed to represent an equal
     /// slice of the run (true for Apple Watch ~5 s sampling and the app's live collection).
     /// Returns a slice for every zone in order — including zeros — so charts stay stable.
-    static func timeInZones(bpmSamples: [Double], totalSeconds: Double, maxHR: Double) -> [HRZoneSlice] {
+    public static func timeInZones(bpmSamples: [Double], totalSeconds: Double, maxHR: Double) -> [HRZoneSlice] {
         guard maxHR > 0, totalSeconds > 0, !bpmSamples.isEmpty else {
             return HRZone.allCases.map { HRZoneSlice(zone: $0, seconds: 0) }
         }
@@ -100,7 +108,7 @@ enum HeartRateZoneService {
     }
 
     /// Merge multiple per-run distributions into one aggregate (for the Progress tab).
-    static func aggregate(_ distributions: [[HRZoneSlice]]) -> [HRZoneSlice] {
+    public static func aggregate(_ distributions: [[HRZoneSlice]]) -> [HRZoneSlice] {
         var seconds: [HRZone: Double] = [:]
         for dist in distributions {
             for s in dist { seconds[s.zone, default: 0] += s.seconds }

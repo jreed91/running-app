@@ -13,13 +13,13 @@ import Foundation
 /// unit-testable, the way ``SpokenMetric`` and ``ChartAccessibility`` are. The phrase is
 /// built out of `SpokenMetric` rather than the on-screen strings, so a spoken pace says
 /// "minutes per kilometre" and not "slash km".
-enum SplitAnnouncement {
+public enum SplitAnnouncement {
 
     /// How a closing split's pace compared to the run's target.
     ///
     /// Deltas are in seconds *per display unit*, so an imperial runner hears the number
     /// they would compute from the paces they see, not a per-km figure relabelled.
-    enum PaceVerdict: Equatable, Sendable {
+    public enum PaceVerdict: Equatable, Sendable {
         case onPace
         case fast(bySeconds: Int)
         case slow(bySeconds: Int)
@@ -32,7 +32,7 @@ enum SplitAnnouncement {
     /// Watch workout coaches to — so the phone and the Watch agree about what counts as
     /// on pace. GPS pace inside a single kilometre is not accurate to the second, and a
     /// runner told "2 seconds slow" would be being corrected by the noise.
-    static let toleranceSecondsPerKm: Double = 8
+    public static let toleranceSecondsPerKm: Double = 8
 
     /// The full announcement for a split that has just closed, or `nil` when there is
     /// nothing worth saying.
@@ -47,7 +47,7 @@ enum SplitAnnouncement {
     ///   - targetPaceSecondsPerKm: the band this run is being coached to, when there is
     ///     one — a scheduled workout's target range, or a guided step's single target
     ///     passed as `pace...pace`. A free run has none and hears no verdict.
-    static func phrase(
+    public static func phrase(
         splitNumber: Int,
         paceSecondsPerKm: Double,
         unit: UnitPreference,
@@ -75,7 +75,7 @@ enum SplitAnnouncement {
     ///
     /// Spelled the way ``SpokenMetric`` spells it ("kilometre"), not the way the Units
     /// setting does ("Kilometers"): the two halves land in the same spoken sentence.
-    static func milestone(splitNumber: Int, unit: UnitPreference) -> String {
+    public static func milestone(splitNumber: Int, unit: UnitPreference) -> String {
         switch unit {
         case .metric:
             return String(localized: "Kilometre \(splitNumber).", comment: "Spoken split milestone, metric")
@@ -90,7 +90,7 @@ enum SplitAnnouncement {
     ///
     /// Pace is inverted: a *smaller* seconds-per-unit figure is *faster*, so undershooting
     /// the band's lower bound is `.fast`.
-    static func verdict(
+    public static func verdict(
         paceSecondsPerKm: Double,
         target: ClosedRange<Double>,
         unit: UnitPreference

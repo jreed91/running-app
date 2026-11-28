@@ -9,49 +9,77 @@ import Foundation
 /// through it live we flatten that shape into an ordered list of concrete steps
 /// — one per warm-up, per rep's work, per recovery between reps, and per cool-down —
 /// each carrying the target the runner should hit before advancing.
-struct GuidedStep: Equatable, Sendable {
+public struct GuidedStep: Equatable, Sendable {
 
-    enum Kind: String, Equatable, Sendable {
+    public enum Kind: String, Equatable, Sendable {
         case warmup, work, recovery, cooldown
     }
 
     /// What finishes the step. Distance/time targets auto-advance; `.open`
     /// segments (a recovery with no prescribed distance or time) advance only
     /// when the runner taps "Next".
-    enum Target: Equatable, Sendable {
+    public enum Target: Equatable, Sendable {
         case distance(meters: Double)
         case time(seconds: Double)
         case open
     }
 
-    let kind: Kind
-    let label: String
-    let target: Target
+    public let kind: Kind
+    public let label: String
+    public let target: Target
     /// Target pace in seconds/km, when the segment prescribes one.
-    let targetPaceSecondsPerKm: Double?
+    public let targetPaceSecondsPerKm: Double?
     /// 1-based repetition index within a multi-rep set (e.g. rep 3 of 6). Nil for
     /// warm-up, cool-down, and single-rep sets.
-    let repIndex: Int?
+    public let repIndex: Int?
     /// Total repetitions in this step's set, paired with ``repIndex``.
-    let repCount: Int?
+    public let repCount: Int?
 
-    var isOpen: Bool { target == .open }
+    public var isOpen: Bool { target == .open }
+
+    public init(
+        kind: Kind,
+        label: String,
+        target: Target,
+        targetPaceSecondsPerKm: Double?,
+        repIndex: Int?,
+        repCount: Int?
+    ) {
+        self.kind = kind
+        self.label = label
+        self.target = target
+        self.targetPaceSecondsPerKm = targetPaceSecondsPerKm
+        self.repIndex = repIndex
+        self.repCount = repCount
+    }
 }
 
 // MARK: - GuidedStepProgress
 
 /// Live progress through the current step, derived purely from the tracker's
 /// cumulative distance and elapsed time.
-struct GuidedStepProgress: Equatable, Sendable {
+public struct GuidedStepProgress: Equatable, Sendable {
     /// Completion fraction, 0...1. Always 0 for an `.open` target (indeterminate).
-    let fraction: Double
+    public let fraction: Double
     /// True once the step's distance/time target has been met. Always false for
     /// an `.open` target (which the runner must advance manually).
-    let isTargetReached: Bool
+    public let isTargetReached: Bool
     /// Remaining distance in metres for a distance-based step, else nil.
-    let remainingDistanceMeters: Double?
+    public let remainingDistanceMeters: Double?
     /// Remaining time in seconds for a time-based step, else nil.
-    let remainingSeconds: Double?
+    public let remainingSeconds: Double?
+
+    public init(
+        fraction: Double,
+        isTargetReached: Bool,
+        remainingDistanceMeters: Double?,
+        remainingSeconds: Double?
+    ) {
+        self.fraction = fraction
+        self.isTargetReached = isTargetReached
+        self.remainingDistanceMeters = remainingDistanceMeters
+        self.remainingSeconds = remainingSeconds
+    }
 }
 
 // MARK: - GuidedCueStyle
@@ -62,7 +90,7 @@ struct GuidedStepProgress: Equatable, Sendable {
 /// prescribed in minutes rather than pace (`PlanKind.prescribesByTime`), whose sessions are
 /// runs with walks between them: "Run 3 of 8", "Walk", and the segments' own names for the
 /// walks either side. A new runner told to "recover" has to work out that it means walk.
-enum GuidedCueStyle: Equatable, Sendable {
+public enum GuidedCueStyle: Equatable, Sendable {
     case reps
     case runWalk
 }
@@ -77,12 +105,12 @@ enum GuidedCueStyle: Equatable, Sendable {
 /// The tracker reports *cumulative* distance and elapsed time. This type records
 /// the cumulative values at which the current step began, so progress and the
 /// auto-advance decision are always measured *within* the active step.
-struct GuidedWorkoutState: Equatable, Sendable {
+public struct GuidedWorkoutState: Equatable, Sendable {
 
-    private(set) var steps: [GuidedStep]
-    private(set) var currentIndex: Int
+    public private(set) var steps: [GuidedStep]
+    public private(set) var currentIndex: Int
     /// How the steps are called out loud. Fixed for the session.
-    let cueStyle: GuidedCueStyle
+    public let cueStyle: GuidedCueStyle
     /// Cumulative distance/time snapshot captured when the current step began.
     private var stepStartDistanceMeters: Double
     private var stepStartElapsedSeconds: Double
@@ -91,7 +119,7 @@ struct GuidedWorkoutState: Equatable, Sendable {
 
     /// Builds the guided state for a structured workout, or returns `nil` when
     /// the structure has no meaningful multi-segment shape to guide (a flat run).
-    init?(structure: WorkoutStructure, cueStyle: GuidedCueStyle = .reps) {
+    public init?(structure: WorkoutStructure, cueStyle: GuidedCueStyle = .reps) {
         let flattened = GuidedWorkoutState.flatten(structure)
         // Guided mode only earns its screen space when there is real work to
         // step through — a warm-up/cool-down-only shell is just a free run.
@@ -105,15 +133,15 @@ struct GuidedWorkoutState: Equatable, Sendable {
 
     // MARK: Derived
 
-    var currentStep: GuidedStep { steps[currentIndex] }
-    var stepNumber: Int { currentIndex + 1 }
-    var stepCount: Int { steps.count }
-    var isOnFinalStep: Bool { currentIndex >= steps.count - 1 }
-    var nextStep: GuidedStep? { isOnFinalStep ? nil : steps[currentIndex + 1] }
+    public var currentStep: GuidedStep { steps[currentIndex] }
+    public var stepNumber: Int { currentIndex + 1 }
+    public var stepCount: Int { steps.count }
+    public var isOnFinalStep: Bool { currentIndex >= steps.count - 1 }
+    public var nextStep: GuidedStep? { isOnFinalStep ? nil : steps[currentIndex + 1] }
 
     // MARK: Progress
 
-    func progress(
+    public func progress(
         cumulativeDistanceMeters distance: Double,
         cumulativeElapsedSeconds elapsed: Double
     ) -> GuidedStepProgress {
@@ -149,7 +177,7 @@ struct GuidedWorkoutState: Equatable, Sendable {
 
     /// True when the current step's distance/time target has been met and there
     /// is a further step to advance to. `.open` steps never auto-advance.
-    func shouldAutoAdvance(
+    public func shouldAutoAdvance(
         cumulativeDistanceMeters distance: Double,
         cumulativeElapsedSeconds elapsed: Double
     ) -> Bool {
@@ -163,7 +191,7 @@ struct GuidedWorkoutState: Equatable, Sendable {
     /// Moves to the next step, anchoring its start to the supplied cumulative
     /// values. Used by both auto-advance and the manual "Next" control (early
     /// advance / stepping past an open recovery). No-op on the final step.
-    mutating func advance(
+    public mutating func advance(
         cumulativeDistanceMeters distance: Double,
         cumulativeElapsedSeconds elapsed: Double
     ) {
@@ -175,7 +203,7 @@ struct GuidedWorkoutState: Equatable, Sendable {
 
     // MARK: Flattening
 
-    static func flatten(_ structure: WorkoutStructure) -> [GuidedStep] {
+    public static func flatten(_ structure: WorkoutStructure) -> [GuidedStep] {
         var out: [GuidedStep] = []
 
         // A warm-up or cool-down left out (no distance, time or name) is not a step. It used

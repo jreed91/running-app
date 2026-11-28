@@ -19,7 +19,7 @@ import Foundation
 /// two implementations happening to round the same way. The exceptions are the handful of
 /// numbers a widget *draws* rather than prints — a goal ring's fraction, a streak's day
 /// count — and the dates the system counts down for us.
-struct WidgetSnapshot: Codable, Sendable, Equatable {
+public struct WidgetSnapshot: Codable, Sendable, Equatable {
 
     // MARK: Tint
 
@@ -29,7 +29,7 @@ struct WidgetSnapshot: Codable, Sendable, Equatable {
     /// `Assets.xcassets` (see `project.yml`), so it resolves these against the same
     /// asset catalog the app does and light/dark/increase-contrast keep working. An
     /// encoded hex string would have frozen one appearance into the snapshot.
-    enum Tint: String, Codable, Sendable {
+    public enum Tint: String, Codable, Sendable {
         case brand
         case easy
         case tempo
@@ -44,28 +44,48 @@ struct WidgetSnapshot: Codable, Sendable, Equatable {
     /// next day that holds work. A plan-scheduled rest day is a value here rather than
     /// `nil`: "the plan says rest" and "there is no plan" read the same on a widget and
     /// mean very different things (the distinction `ScheduledDayResolver.DayState` draws).
-    struct NextWorkout: Codable, Sendable, Equatable {
+    public struct NextWorkout: Codable, Sendable, Equatable {
         /// What the session is — "Tempo", "Long Run", "Rest".
-        var title: String
+        public var title: String
         /// The headline prescription — "8.0 km", "45 min" — or `nil` for a rest day.
-        var detail: String?
+        public var detail: String?
         /// Target pace range in the runner's own unit — "4:32–4:45 /km".
-        var paceTarget: String?
+        public var paceTarget: String?
         /// Coaching note, trimmed to a widget-sized length.
-        var note: String?
-        var symbolName: String
-        var tint: Tint
+        public var note: String?
+        public var symbolName: String
+        public var tint: Tint
         /// The day the plan asks for this. A **date**, not a rendered "Today", because a
         /// snapshot written on Tuesday is still on disk on Wednesday — the app is not
         /// running at midnight to rewrite it, and a card reading "Today" about yesterday
         /// is worse than no card. The widget derives the words at render time via
         /// ``WidgetRelativeDay``.
-        var scheduledDate: Date
-        var isRest: Bool
+        public var scheduledDate: Date
+        public var isRest: Bool
 
         /// "Today", "Tomorrow", "Friday", "8 Aug", "Overdue".
-        func dayLabel(asOf now: Date, calendar: Calendar = .current) -> String {
+        public func dayLabel(asOf now: Date, calendar: Calendar = .current) -> String {
             WidgetRelativeDay.label(for: scheduledDate, asOf: now, calendar: calendar)
+        }
+
+        public init(
+            title: String,
+            detail: String? = nil,
+            paceTarget: String? = nil,
+            note: String? = nil,
+            symbolName: String,
+            tint: Tint,
+            scheduledDate: Date,
+            isRest: Bool
+        ) {
+            self.title = title
+            self.detail = detail
+            self.paceTarget = paceTarget
+            self.note = note
+            self.symbolName = symbolName
+            self.tint = tint
+            self.scheduledDate = scheduledDate
+            self.isRest = isRest
         }
     }
 
@@ -73,49 +93,77 @@ struct WidgetSnapshot: Codable, Sendable, Equatable {
 
     /// Progress toward the weekly distance goal, for the Monday-anchored week the
     /// snapshot was built in.
-    struct WeeklyGoal: Codable, Sendable, Equatable {
+    public struct WeeklyGoal: Codable, Sendable, Equatable {
         /// Distance run so far this week — "18.4 km".
-        var completedText: String
+        public var completedText: String
         /// The goal — "40 km".
-        var goalText: String
+        public var goalText: String
         /// What is left — "21.6 km to go" — or a congratulation once the goal is met.
-        var statusText: String
+        public var statusText: String
         /// 0–1, clamped. Drawn as a ring, which is why this one stays numeric.
-        var fraction: Double
-        var runCount: Int
-        var isMet: Bool
+        public var fraction: Double
+        public var runCount: Int
+        public var isMet: Bool
         /// Whether a goal was ever set. Zero-goal installs get a neutral card rather
         /// than a ring that can only ever read empty.
-        var hasGoal: Bool
+        public var hasGoal: Bool
+
+        public init(
+            completedText: String,
+            goalText: String,
+            statusText: String,
+            fraction: Double,
+            runCount: Int,
+            isMet: Bool,
+            hasGoal: Bool
+        ) {
+            self.completedText = completedText
+            self.goalText = goalText
+            self.statusText = statusText
+            self.fraction = fraction
+            self.runCount = runCount
+            self.isMet = isMet
+            self.hasGoal = hasGoal
+        }
     }
 
     // MARK: Streak
 
-    struct Streak: Codable, Sendable, Equatable {
+    public struct Streak: Codable, Sendable, Equatable {
         /// Consecutive calendar days with a run, ending today or yesterday.
-        var current: Int
-        var longest: Int
+        public var current: Int
+        public var longest: Int
         /// Whether today's run is already in. The difference between "keep it going"
         /// and "done for today", which is the whole point of glancing at this.
-        var isActiveToday: Bool
+        public var isActiveToday: Bool
+
+        public init(
+            current: Int,
+            longest: Int,
+            isActiveToday: Bool
+        ) {
+            self.current = current
+            self.longest = longest
+            self.isActiveToday = isActiveToday
+        }
     }
 
     // MARK: Race
 
     /// The goal race the active plan is pointed at.
-    struct RaceCountdown: Codable, Sendable, Equatable {
-        var name: String
+    public struct RaceCountdown: Codable, Sendable, Equatable {
+        public var name: String
         /// Race day. Counted down from at render time for the same reason
         /// ``NextWorkout/scheduledDate`` is a date: a countdown frozen at the moment the
         /// app was last opened is a countdown that is wrong by the second day.
-        var date: Date
+        public var date: Date
         /// Where the plan is — "Peak · Week 12 of 16".
-        var phaseLabel: String?
+        public var phaseLabel: String?
         /// Goal finish time — "3:29:00".
-        var goalTimeText: String?
+        public var goalTimeText: String?
 
         /// Whole days from `now`'s day to race day. Zero on race day, negative after it.
-        func daysRemaining(asOf now: Date, calendar: Calendar = .current) -> Int {
+        public func daysRemaining(asOf now: Date, calendar: Calendar = .current) -> Int {
             calendar.dateComponents(
                 [.day],
                 from: calendar.startOfDay(for: now),
@@ -125,8 +173,20 @@ struct WidgetSnapshot: Codable, Sendable, Equatable {
 
         /// Whether the countdown is still worth showing. A race that has been and gone
         /// stops counting rather than showing a negative number.
-        func isUpcoming(asOf now: Date, calendar: Calendar = .current) -> Bool {
+        public func isUpcoming(asOf now: Date, calendar: Calendar = .current) -> Bool {
             daysRemaining(asOf: now, calendar: calendar) >= 0
+        }
+
+        public init(
+            name: String,
+            date: Date,
+            phaseLabel: String? = nil,
+            goalTimeText: String? = nil
+        ) {
+            self.name = name
+            self.date = date
+            self.phaseLabel = phaseLabel
+            self.goalTimeText = goalTimeText
         }
     }
 
@@ -148,45 +208,61 @@ struct WidgetSnapshot: Codable, Sendable, Equatable {
     /// `WidgetRefreshService` skip a reload. A tip reading "about 30 minutes ago" would
     /// differ on every write and spend WidgetKit's whole daily reload budget on
     /// foregrounds.
-    struct CoachTip: Codable, Sendable, Equatable {
+    public struct CoachTip: Codable, Sendable, Equatable {
         /// The card's heading — "Practise your fuelling", "Race day".
-        var title: String
+        public var title: String
         /// One short, time-independent sentence of advice.
-        var message: String
+        public var message: String
         /// "FUEL" or "TRAINING", the same overline the dashboard card carries.
-        var categoryLabel: String
-        var symbolName: String
-        var tint: Tint
+        public var categoryLabel: String
+        public var symbolName: String
+        public var tint: Tint
         /// When the advice stops being worth showing — the end of a refuelling window, or
         /// of race day. `nil` for tips that do not go off.
         ///
         /// A **date**, resolved at render time, for the same reason
         /// ``NextWorkout/scheduledDate`` is: the app is not running two hours later to
         /// retract it, and the widget's timeline already crosses those boundaries itself.
-        var expiresAt: Date?
+        public var expiresAt: Date?
 
         /// Whether the tip is still worth drawing. A widget that has one expire falls
         /// back to its empty state rather than showing advice that has gone off.
-        func isValid(asOf now: Date) -> Bool {
+        public func isValid(asOf now: Date) -> Bool {
             guard let expiresAt else { return true }
             return now < expiresAt
+        }
+
+        public init(
+            title: String,
+            message: String,
+            categoryLabel: String,
+            symbolName: String,
+            tint: Tint,
+            expiresAt: Date? = nil
+        ) {
+            self.title = title
+            self.message = message
+            self.categoryLabel = categoryLabel
+            self.symbolName = symbolName
+            self.tint = tint
+            self.expiresAt = expiresAt
         }
     }
 
     // MARK: Payload
 
-    var nextWorkout: NextWorkout?
-    var weekly: WeeklyGoal
-    var streak: Streak
-    var race: RaceCountdown?
+    public var nextWorkout: NextWorkout?
+    public var weekly: WeeklyGoal
+    public var streak: Streak
+    public var race: RaceCountdown?
     /// Optional so a snapshot written before this field existed still decodes — the app
     /// is the only writer, but a widget can be woken against a file the previous build
     /// left behind.
-    var coachTip: CoachTip?
+    public var coachTip: CoachTip?
 
     /// When the app last wrote this. The widget uses it to notice a snapshot that has
     /// gone stale enough to be misleading rather than merely old.
-    var generatedAt: Date
+    public var generatedAt: Date
 
     /// How old a snapshot may get before a widget stops presenting it as current.
     ///
@@ -195,9 +271,9 @@ struct WidgetSnapshot: Codable, Sendable, Equatable {
     /// It has to clear the widget timeline's horizon too — the provider pre-renders
     /// several days of entries, and a threshold inside that window would blank the last
     /// of them on a snapshot that had only just been written.
-    static let staleAfter: TimeInterval = 60 * 60 * 24 * 8
+    public static let staleAfter: TimeInterval = 60 * 60 * 24 * 8
 
-    func isStale(asOf now: Date = Date()) -> Bool {
+    public func isStale(asOf now: Date = Date()) -> Bool {
         now.timeIntervalSince(generatedAt) > Self.staleAfter
     }
 
@@ -206,7 +282,7 @@ struct WidgetSnapshot: Codable, Sendable, Equatable {
     /// What a widget shows before the app has ever written a snapshot — a real install
     /// that has not been opened since the widget was added, and every render in the
     /// widget gallery.
-    static func empty(generatedAt: Date = Date()) -> WidgetSnapshot {
+    public static func empty(generatedAt: Date = Date()) -> WidgetSnapshot {
         WidgetSnapshot(
             nextWorkout: nil,
             weekly: WeeklyGoal(
@@ -228,7 +304,7 @@ struct WidgetSnapshot: Codable, Sendable, Equatable {
     /// A plausible week, for the widget gallery and for SwiftUI previews. The gallery
     /// renders every widget before the user picks one, and an empty card there is a
     /// widget nobody adds.
-    static func sample(now: Date = Date()) -> WidgetSnapshot {
+    public static func sample(now: Date = Date()) -> WidgetSnapshot {
         WidgetSnapshot(
             nextWorkout: NextWorkout(
                 title: String(localized: "Tempo", comment: "Workout type"),
@@ -270,6 +346,22 @@ struct WidgetSnapshot: Codable, Sendable, Equatable {
             generatedAt: now
         )
     }
+
+    public init(
+        nextWorkout: NextWorkout? = nil,
+        weekly: WeeklyGoal,
+        streak: Streak,
+        race: RaceCountdown? = nil,
+        coachTip: CoachTip? = nil,
+        generatedAt: Date
+    ) {
+        self.nextWorkout = nextWorkout
+        self.weekly = weekly
+        self.streak = streak
+        self.race = race
+        self.coachTip = coachTip
+        self.generatedAt = generatedAt
+    }
 }
 
 // MARK: - WidgetRelativeDay
@@ -285,9 +377,9 @@ struct WidgetSnapshot: Codable, Sendable, Equatable {
 ///
 /// Weekday and date come from `Date.FormatStyle`, so they arrive already localized and in
 /// the device's own calendar; hand-built abbreviations would not.
-enum WidgetRelativeDay {
+public enum WidgetRelativeDay {
 
-    static func label(for date: Date, asOf now: Date, calendar: Calendar = .current) -> String {
+    public static func label(for date: Date, asOf now: Date, calendar: Calendar = .current) -> String {
         switch dayDelta(for: date, asOf: now, calendar: calendar) {
         case ..<0:
             return String(localized: "Overdue", comment: "Widget day label for a missed session")
@@ -303,7 +395,7 @@ enum WidgetRelativeDay {
     }
 
     /// Whole days from `now`'s day to `date`'s day. Negative for the past.
-    static func dayDelta(for date: Date, asOf now: Date, calendar: Calendar = .current) -> Int {
+    public static func dayDelta(for date: Date, asOf now: Date, calendar: Calendar = .current) -> Int {
         calendar.dateComponents(
             [.day],
             from: calendar.startOfDay(for: now),
@@ -323,13 +415,13 @@ enum WidgetRelativeDay {
 /// `com.running.stride.StrideWidgets`) before a signed build will export — automatic
 /// signing cannot create it, least of all through Xcode Cloud's read-only signing proxy.
 /// See the note in `AGENTS.md`.
-enum StrideAppGroup {
-    static let identifier = "group.com.running.stride"
+public enum StrideAppGroup {
+    public static let identifier = "group.com.running.stride"
 
     /// `nil` when the entitlement is missing or the group is not registered, which is
     /// exactly the case both sides have to survive: the app skips the write and the
     /// widget falls back to its empty state rather than either of them trapping.
-    static var containerURL: URL? {
+    public static var containerURL: URL? {
         #if canImport(Darwin)
         FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: identifier)
         #else
@@ -349,27 +441,27 @@ enum StrideAppGroup {
 /// Every failure path is silent by design. Nothing here is load-bearing for the app: the
 /// worst case is a widget one refresh behind, and a `try!` in a Home Screen extension is
 /// a crash in the one process the user cannot see a log from.
-struct WidgetSnapshotStore: Sendable {
+public struct WidgetSnapshotStore: Sendable {
 
     /// The instance both sides use. `directory` is injectable so the round-trip can be
     /// tested against a temporary directory rather than a real entitled container.
-    static let shared = WidgetSnapshotStore()
+    public static let shared = WidgetSnapshotStore()
 
     private let directory: URL?
 
-    init(directory: URL? = StrideAppGroup.containerURL) {
+    public init(directory: URL? = StrideAppGroup.containerURL) {
         self.directory = directory
     }
 
     private static let fileName = "WidgetSnapshot.json"
 
-    var fileURL: URL? {
+    public var fileURL: URL? {
         directory?.appending(path: Self.fileName)
     }
 
     // MARK: Read
 
-    func load() -> WidgetSnapshot? {
+    public func load() -> WidgetSnapshot? {
         guard let fileURL, let data = try? Data(contentsOf: fileURL) else { return nil }
         return try? Self.decoder.decode(WidgetSnapshot.self, from: data)
     }
@@ -382,7 +474,7 @@ struct WidgetSnapshotStore: Sendable {
     /// asking WidgetKit to reload — spending a reload on a snapshot that never reached
     /// the container just burns budget.
     @discardableResult
-    func save(_ snapshot: WidgetSnapshot) -> Bool {
+    public func save(_ snapshot: WidgetSnapshot) -> Bool {
         guard let fileURL, let data = try? Self.encoder.encode(snapshot) else { return false }
         do {
             try data.write(to: fileURL, options: .atomic)
@@ -394,7 +486,7 @@ struct WidgetSnapshotStore: Sendable {
 
     /// Removes the snapshot — used when the app's data is reset, so widgets do not go on
     /// showing a plan the runner just deleted.
-    func clear() {
+    public func clear() {
         guard let fileURL else { return }
         try? FileManager.default.removeItem(at: fileURL)
     }

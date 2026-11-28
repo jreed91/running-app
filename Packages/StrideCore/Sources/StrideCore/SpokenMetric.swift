@@ -9,7 +9,7 @@ import Foundation
 /// speaks placeholders as a run of dashes. The run HUD fixed this for its own grid (N18);
 /// this is the same rule with one home, so the run detail stats, the Progress period
 /// summary, and any future metric cell all sound the same.
-enum SpokenMetric {
+public enum SpokenMetric {
 
     /// The spoken form of a metric: `nil`/placeholder values become "No data yet" and
     /// abbreviated units are spelled out.
@@ -17,7 +17,7 @@ enum SpokenMetric {
     /// Unrecognised units are passed through unchanged — a unit already written in words
     /// ("minutes", "sets") needs no translation, and a new abbreviation reads no worse
     /// than it looks.
-    static func spoken(value: String, unit: String? = nil) -> String {
+    public static func spoken(value: String, unit: String? = nil) -> String {
         guard !isPlaceholder(value) else { return String(localized: "No data yet", comment: "Spoken value of a metric cell with nothing in it") }
         guard let unit, !unit.isEmpty else { return value }
         return "\(value) \(spokenUnit(unit))"
@@ -29,7 +29,7 @@ enum SpokenMetric {
     ///
     /// Only a recognised trailing unit is translated; anything else is spoken as written,
     /// so a value that is already a sentence is left alone.
-    static func spoken(measurement: String) -> String {
+    public static func spoken(measurement: String) -> String {
         guard !isPlaceholder(measurement) else { return String(localized: "No data yet", comment: "Spoken value of a metric cell with nothing in it") }
         let parts = measurement.split(separator: " ")
         guard parts.count >= 2, let unit = parts.last else { return measurement }
@@ -39,7 +39,7 @@ enum SpokenMetric {
     }
 
     /// Whether a rendered value is one of the app's "nothing to show" placeholders.
-    static func isPlaceholder(_ value: String) -> Bool {
+    public static func isPlaceholder(_ value: String) -> Bool {
         let trimmed = value.trimmingCharacters(in: .whitespaces)
         return trimmed.isEmpty || trimmed.allSatisfy { $0 == "-" || $0 == ":" }
     }

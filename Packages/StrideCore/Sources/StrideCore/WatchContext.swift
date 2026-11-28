@@ -16,9 +16,9 @@ import Foundation
 /// WatchConnectivity's application context carries the value instead. The system keeps
 /// only the newest context and hands it to the watch app the next time it runs, which
 /// is exactly the delivery a glance wants.
-struct WatchContext: Sendable, Equatable {
+public struct WatchContext: Sendable, Equatable {
 
-    var snapshot: WidgetSnapshot
+    public var snapshot: WidgetSnapshot
 
     /// The next session as a WorkoutKit plan, in `WorkoutPlan.dataRepresentation` form,
     /// or `nil` when there is nothing the watch could offer to start.
@@ -34,22 +34,22 @@ struct WatchContext: Sendable, Equatable {
     /// nothing. The phone never sends an overdue one, and sends a future one ahead of its
     /// day so the Watch can start it without the phone app having run that morning (P2.2);
     /// ``canStart(asOf:calendar:)`` holds the button back until the day comes.
-    var startableWorkout: Data?
+    public var startableWorkout: Data?
 
     /// The same session in Stride's own terms, for Stride's watch app to record itself
     /// (Watch runs). Sent under the same rules as ``startableWorkout``: never overdue,
     /// never a rest day or a finished session. A watch build from before this key ignores it.
-    var runSession: WatchRunSession?
+    public var runSession: WatchRunSession?
 
     /// The runner's own workouts, most recently used first, for the watch to start without
     /// the phone (Custom workouts, PR 5). Each is a ``WatchRunSession`` whose `sessionID`
     /// is the ``SavedWorkout``'s id, so the run it records names the workout it followed.
     /// Capped at ``maxCustomWorkouts``: the application context is meant to be small.
-    var customWorkouts: [WatchRunSession]
+    public var customWorkouts: [WatchRunSession]
 
-    static let maxCustomWorkouts = 10
+    public static let maxCustomWorkouts = 10
 
-    init(
+    public init(
         snapshot: WidgetSnapshot,
         startableWorkout: Data? = nil,
         runSession: WatchRunSession? = nil,
@@ -65,7 +65,7 @@ struct WatchContext: Sendable, Equatable {
     ///
     /// Checked at render time as well as when the phone builds the value: the watch can
     /// hold yesterday's context well past midnight if the phone app has not run since.
-    func canStart(asOf now: Date, calendar: Calendar = .current) -> Bool {
+    public func canStart(asOf now: Date, calendar: Calendar = .current) -> Bool {
         guard startableWorkout != nil,
               let next = snapshot.nextWorkout,
               !next.isRest else { return false }
@@ -76,15 +76,15 @@ struct WatchContext: Sendable, Equatable {
 
     /// The dictionary keys. Property-list values only — `WCSession` rejects anything else
     /// — so the snapshot travels as encoded JSON `Data` rather than as a nested dictionary.
-    enum Key {
-        static let snapshot = "snapshot"
-        static let startableWorkout = "startableWorkout"
-        static let runSession = "runSession"
-        static let customWorkouts = "customWorkouts"
+    public enum Key {
+        public static let snapshot = "snapshot"
+        public static let startableWorkout = "startableWorkout"
+        public static let runSession = "runSession"
+        public static let customWorkouts = "customWorkouts"
     }
 
     /// The form `WCSession.updateApplicationContext(_:)` takes.
-    func applicationContext() throws -> [String: Any] {
+    public func applicationContext() throws -> [String: Any] {
         var context: [String: Any] = [Key.snapshot: try Self.encoder.encode(snapshot)]
         if let startableWorkout {
             context[Key.startableWorkout] = startableWorkout
@@ -102,7 +102,7 @@ struct WatchContext: Sendable, Equatable {
     /// no longer decodes — the watch then shows its "open Stride on your iPhone" state
     /// rather than a half-read card. A run session that no longer decodes is dropped on
     /// its own: the glance and the Workout app's Start still work without it.
-    init?(applicationContext: [String: Any]) {
+    public init?(applicationContext: [String: Any]) {
         guard let data = applicationContext[Key.snapshot] as? Data,
               let snapshot = try? Self.decoder.decode(WidgetSnapshot.self, from: data)
         else { return nil }

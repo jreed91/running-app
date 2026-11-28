@@ -11,19 +11,19 @@ import Foundation
 /// them from the readings the recorder takes, and keeps the state that needs: where the
 /// last split ended and how far into the step the previous reading was.
 ///
-/// Compiled into the app and `StrideWatch`, Foundation only, and tested in `StrideTests`.
-struct WatchRunCues: Equatable, Sendable {
+/// Compiled into the app and `StrideWatch`, Foundation only, and tested in `StrideCoreTests` (`swift test`).
+public struct WatchRunCues: Equatable, Sendable {
 
-    let unit: UnitPreference
-    let speaksSplits: Bool
-    let speaksSteps: Bool
-    let targetPaceRange: ClosedRange<Double>?
+    public let unit: UnitPreference
+    public let speaksSplits: Bool
+    public let speaksSteps: Bool
+    public let targetPaceRange: ClosedRange<Double>?
 
     private var splitsAnnounced = 0
     private var lastSplitElapsedSeconds: TimeInterval = 0
     private var previous: WatchRunMetrics?
 
-    init(
+    public init(
         unit: UnitPreference,
         speaksSplits: Bool,
         speaksSteps: Bool,
@@ -35,7 +35,7 @@ struct WatchRunCues: Equatable, Sendable {
         self.targetPaceRange = targetPaceRange
     }
 
-    init(session: WatchRunSession?, fallbackUnit: UnitPreference) {
+    public init(session: WatchRunSession?, fallbackUnit: UnitPreference) {
         self.init(
             unit: session?.unit ?? fallbackUnit,
             speaksSplits: session?.speaksSplits ?? false,
@@ -44,7 +44,7 @@ struct WatchRunCues: Equatable, Sendable {
         )
     }
 
-    var isSilent: Bool { !speaksSplits && !speaksSteps }
+    public var isSilent: Bool { !speaksSplits && !speaksSteps }
 
     /// The phrases to speak for the reading `metrics`, in order.
     ///
@@ -53,7 +53,7 @@ struct WatchRunCues: Equatable, Sendable {
     ///     moved them on.
     ///   - guidedAfter: the steps after this reading. Different from `guidedBefore` only
     ///     when a step just ended.
-    mutating func phrases(
+    public mutating func phrases(
         for metrics: WatchRunMetrics,
         guidedBefore: WatchGuidedRun?,
         guidedAfter: WatchGuidedRun?
@@ -98,14 +98,14 @@ struct WatchRunCues: Equatable, Sendable {
 
     /// Picks up a run the Watch recovered after a crash (PR 6) at `metrics`, so the splits
     /// already run are not announced again, all at once, on the next reading.
-    mutating func resume(at metrics: WatchRunMetrics) {
+    public mutating func resume(at metrics: WatchRunMetrics) {
         splitsAnnounced = Int((max(0, metrics.distanceMeters) / unit.splitLengthMeters).rounded(.down))
         lastSplitElapsedSeconds = metrics.elapsedSeconds
         previous = metrics
     }
 
     /// The first step's cue, spoken as the run starts.
-    func startPhrase(guided: WatchGuidedRun?) -> String? {
+    public func startPhrase(guided: WatchGuidedRun?) -> String? {
         guard speaksSteps, let guided else { return nil }
         return GuidedStepAnnouncement.stepStart(guided.currentStep, unit: unit, style: guided.state.cueStyle)
     }

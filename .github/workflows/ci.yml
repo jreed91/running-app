@@ -80,6 +80,7 @@ jobs:
           filters: |
             ios:
               - 'Stride/**'
+              - 'Packages/**'
               - 'StrideWatch/**'
               - 'StrideTests/**'
               - 'StrideUITests/**'
@@ -419,3 +420,22 @@ jobs:
             COMPILER_INDEX_STORE_ENABLE=NO \
             CODE_SIGNING_ALLOWED=NO \
             | xcbeautify --renderer github-actions
+
+  # ── StrideCore package tests ────────────────────────────────────────────────
+  test-core:
+    name: Test — StrideCore package
+    # A plain macOS runner: the package builds for macOS too, so its tests need no
+    # simulator, no XcodeGen and no app build. No build cache: a cold build of the
+    # package is seconds, and a fresh checkout's mtimes would defeat one anyway.
+    runs-on: macos-26      # see the runner-label note in `env` above
+    timeout-minutes: 20
+    needs: [changes]
+    if: needs.changes.outputs.ios == 'true'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run StrideCore tests
+        run: |
+          swift --version
+          swift test --package-path Packages/StrideCore --parallel

@@ -8,15 +8,15 @@ import Foundation
 // MARK: - WorkoutSegment
 
 /// A single continuous segment of a run (warm-up, work repeat, recovery, cool-down).
-struct WorkoutSegment: Codable, Hashable, Sendable {
+public struct WorkoutSegment: Codable, Hashable, Sendable {
     /// Target distance in meters. Nil when segment is time-based or open.
-    var distanceMeters: Double?
+    public var distanceMeters: Double?
     /// Target duration in seconds. Nil when segment is distance-based or open.
-    var durationSeconds: Double?
+    public var durationSeconds: Double?
     /// Target pace in seconds/km. Nil for open/recovery segments.
-    var targetPaceSecondsPerKm: Double?
+    public var targetPaceSecondsPerKm: Double?
     /// Human-readable label, e.g. "Warm-up", "Cool-down", "Recovery jog".
-    var label: String
+    public var label: String
 
     /// No distance, no time and no name: a warm-up or cool-down the runner left out.
     ///
@@ -24,21 +24,33 @@ struct WorkoutSegment: Codable, Hashable, Sendable {
     /// and when it is sent to the Workout app, rather than becoming an open "Warm-up" step
     /// that waits for a tap on Next before the first rep. A *named* open segment is kept:
     /// that is a step the session means to be run until the runner moves on.
-    var isEmpty: Bool {
+    public var isEmpty: Bool {
         (distanceMeters ?? 0) <= 0 && (durationSeconds ?? 0) <= 0
             && label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    public init(
+        distanceMeters: Double? = nil,
+        durationSeconds: Double? = nil,
+        targetPaceSecondsPerKm: Double? = nil,
+        label: String
+    ) {
+        self.distanceMeters = distanceMeters
+        self.durationSeconds = durationSeconds
+        self.targetPaceSecondsPerKm = targetPaceSecondsPerKm
+        self.label = label
     }
 }
 
 // MARK: - WorkoutSet
 
 /// One repeated block: N repetitions of a work segment followed by a recovery segment.
-struct WorkoutSet: Codable, Hashable, Sendable {
-    var repetitions: Int
-    var workSegment: WorkoutSegment
-    var recoverySegment: WorkoutSegment
+public struct WorkoutSet: Codable, Hashable, Sendable {
+    public var repetitions: Int
+    public var workSegment: WorkoutSegment
+    public var recoverySegment: WorkoutSegment
     /// Human-readable label, e.g. "VO2max Intervals", "Tempo Block".
-    var label: String
+    public var label: String
 
     /// Total recovery time across the whole set, in seconds.
     ///
@@ -46,9 +58,21 @@ struct WorkoutSet: Codable, Hashable, Sendable {
     /// followed by the cool-down, not another recovery, so a recovery is never
     /// counted after the last rep. Returns 0 when there is a single rep (or none)
     /// or when the recovery segment has no duration.
-    var totalRecoverySeconds: Double {
+    public var totalRecoverySeconds: Double {
         guard repetitions > 1, let recovery = recoverySegment.durationSeconds else { return 0 }
         return Double(repetitions - 1) * recovery
+    }
+
+    public init(
+        repetitions: Int,
+        workSegment: WorkoutSegment,
+        recoverySegment: WorkoutSegment,
+        label: String
+    ) {
+        self.repetitions = repetitions
+        self.workSegment = workSegment
+        self.recoverySegment = recoverySegment
+        self.label = label
     }
 }
 
@@ -56,10 +80,24 @@ struct WorkoutSet: Codable, Hashable, Sendable {
 
 /// Full structured representation of a workout with warm-up, main sets, and cool-down.
 /// Serialised to JSON and stored in ``ScheduledWorkout/structureData``.
-struct WorkoutStructure: Codable, Hashable, Sendable {
-    var warmup: WorkoutSegment
-    var mainSets: [WorkoutSet]
-    var cooldown: WorkoutSegment
-    var totalEstimatedDistanceMeters: Double
-    var totalEstimatedDurationSeconds: Double
+public struct WorkoutStructure: Codable, Hashable, Sendable {
+    public var warmup: WorkoutSegment
+    public var mainSets: [WorkoutSet]
+    public var cooldown: WorkoutSegment
+    public var totalEstimatedDistanceMeters: Double
+    public var totalEstimatedDurationSeconds: Double
+
+    public init(
+        warmup: WorkoutSegment,
+        mainSets: [WorkoutSet],
+        cooldown: WorkoutSegment,
+        totalEstimatedDistanceMeters: Double,
+        totalEstimatedDurationSeconds: Double
+    ) {
+        self.warmup = warmup
+        self.mainSets = mainSets
+        self.cooldown = cooldown
+        self.totalEstimatedDistanceMeters = totalEstimatedDistanceMeters
+        self.totalEstimatedDurationSeconds = totalEstimatedDurationSeconds
+    }
 }

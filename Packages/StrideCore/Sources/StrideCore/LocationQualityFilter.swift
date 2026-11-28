@@ -15,20 +15,20 @@ import Foundation
 ///
 /// The decision is expressed as a pure function over plain numbers so it can be
 /// tested without Core Location.
-enum LocationQualityFilter {
+public enum LocationQualityFilter {
 
     /// The properties of one fix the filter needs, decoupled from `CLLocation`.
-    struct Fix: Sendable, Equatable {
+    public struct Fix: Sendable, Equatable {
         /// Core Location's `horizontalAccuracy`, in metres. Negative means invalid.
-        var horizontalAccuracy: Double
+        public var horizontalAccuracy: Double
         /// How long ago the fix was taken, in seconds. Negative (clock skew) counts as fresh.
-        var ageSeconds: TimeInterval
+        public var ageSeconds: TimeInterval
         /// Metres from the previously accepted fix. `nil` for the first fix of a segment.
-        var distanceFromPreviousMeters: Double?
+        public var distanceFromPreviousMeters: Double?
         /// Seconds between the previously accepted fix and this one. `nil` for the first fix.
-        var secondsSincePreviousFix: TimeInterval?
+        public var secondsSincePreviousFix: TimeInterval?
 
-        init(
+        public init(
             horizontalAccuracy: Double,
             ageSeconds: TimeInterval,
             distanceFromPreviousMeters: Double? = nil,
@@ -42,7 +42,7 @@ enum LocationQualityFilter {
     }
 
     /// Why a fix was discarded. Recorded for diagnostics; never surfaced to the runner.
-    enum Rejection: String, Sendable, CaseIterable {
+    public enum Rejection: String, Sendable, CaseIterable {
         /// Core Location reports the horizontal reading as unusable.
         case invalidAccuracy
         /// The reading is real but too imprecise to attribute distance to.
@@ -57,20 +57,20 @@ enum LocationQualityFilter {
 
     /// Fixes less precise than this contribute jitter rather than distance.
     /// Generous for `kCLLocationAccuracyBestForNavigation`, which settles well inside it.
-    static let maximumHorizontalAccuracyMeters: Double = 25
+    public static let maximumHorizontalAccuracyMeters: Double = 25
 
     /// Fixes older than this are cached or badly delayed. Deliberately forgiving —
     /// a live fix that took a moment to reach the main actor must never be dropped,
     /// while the cached fix Core Location replays when updates start is
     /// typically minutes old.
-    static let maximumFixAgeSeconds: TimeInterval = 15
+    public static let maximumFixAgeSeconds: TimeInterval = 15
 
     /// ~45 km/h. Above the world-record sprint speed, so any delta implying more is
     /// a GPS jump, not running.
-    static let maximumPlausibleSpeedMetersPerSecond: Double = 12.5
+    public static let maximumPlausibleSpeedMetersPerSecond: Double = 12.5
 
     /// The reason this fix should be discarded, or `nil` if it should be used.
-    static func rejection(for fix: Fix) -> Rejection? {
+    public static func rejection(for fix: Fix) -> Rejection? {
         guard fix.horizontalAccuracy >= 0, fix.horizontalAccuracy.isFinite else { return .invalidAccuracy }
         guard fix.horizontalAccuracy <= maximumHorizontalAccuracyMeters else { return .poorAccuracy }
         guard fix.ageSeconds <= maximumFixAgeSeconds else { return .stale }
@@ -89,7 +89,7 @@ enum LocationQualityFilter {
     }
 
     /// Whether the fix is good enough to append to the route and accumulate distance from.
-    static func accepts(_ fix: Fix) -> Bool { rejection(for: fix) == nil }
+    public static func accepts(_ fix: Fix) -> Bool { rejection(for: fix) == nil }
 
     // MARK: - Signal quality (U5c)
 
@@ -100,7 +100,7 @@ enum LocationQualityFilter {
     /// showed a plausible pace with no hint that the fixes behind it were being
     /// thrown away. This is the same accuracy reading, expressed as something a
     /// screen can display.
-    enum SignalQuality: String, Sendable, CaseIterable {
+    public enum SignalQuality: String, Sendable, CaseIterable {
         /// Fixes are precise enough to trust the pace between them.
         case strong
         /// Usable, but the live pace will wander.
@@ -110,7 +110,7 @@ enum LocationQualityFilter {
         case weak
 
         /// Filled bars out of three, so the indicator reads without colour (U3d).
-        var bars: Int {
+        public var bars: Int {
             switch self {
             case .strong: return 3
             case .fair:   return 2
@@ -120,7 +120,7 @@ enum LocationQualityFilter {
 
         /// Spoken by VoiceOver, so it is localized (unlike `rawValue`, which is
         /// compared and logged).
-        var localizedName: String {
+        public var localizedName: String {
             switch self {
             case .strong:
                 return String(localized: "Strong", comment: "GPS signal quality")
@@ -133,14 +133,14 @@ enum LocationQualityFilter {
     }
 
     /// Precise enough that the pace between two fixes is worth believing.
-    static let strongHorizontalAccuracyMeters: Double = 8
+    public static let strongHorizontalAccuracyMeters: Double = 8
 
     /// Grades reception from one fix's `horizontalAccuracy`, in metres.
     ///
     /// Deliberately graded from accuracy alone rather than from the rejection
     /// reasons: staleness and out-of-order fixes say something about the delivery
     /// path, not about reception, and a runner cannot act on either.
-    static func signalQuality(forHorizontalAccuracy accuracy: Double) -> SignalQuality {
+    public static func signalQuality(forHorizontalAccuracy accuracy: Double) -> SignalQuality {
         guard accuracy >= 0, accuracy.isFinite else { return .weak }
         if accuracy <= strongHorizontalAccuracyMeters { return .strong }
         if accuracy <= maximumHorizontalAccuracyMeters { return .fair }

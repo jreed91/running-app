@@ -6,7 +6,7 @@ import Foundation
 
 // MARK: - UnitPreference
 
-enum UnitPreference: String, CaseIterable, Sendable {
+public enum UnitPreference: String, CaseIterable, Sendable {
     case metric = "metric"
     case imperial = "imperial"
 
@@ -19,11 +19,11 @@ enum UnitPreference: String, CaseIterable, Sendable {
     ///
     /// Anything that is not the metric system maps to miles: `.uk` measures road
     /// distance in miles, which is the only measurement this app makes.
-    static var localeDefault: UnitPreference {
+    public static var localeDefault: UnitPreference {
         Locale.current.measurementSystem == .metric ? .metric : .imperial
     }
 
-    var displayName: String {
+    public var displayName: String {
         switch self {
         case .metric: return "Kilometers"
         case .imperial: return "Miles"
@@ -33,14 +33,14 @@ enum UnitPreference: String, CaseIterable, Sendable {
     /// The name a runner reads. `displayName` is the canonical English form — it is what
     /// the AI prompts, the logs, and the seeded race names use, and several of those are
     /// compared or persisted, so it must not move with the device language (D8).
-    var localizedName: String {
+    public var localizedName: String {
         switch self {
         case .metric:   return String(localized: "Kilometers", comment: "Unit preference")
         case .imperial: return String(localized: "Miles", comment: "Unit preference")
         }
     }
 
-    var distanceLabel: String {
+    public var distanceLabel: String {
         switch self {
         case .metric: return "km"
         case .imperial: return "mi"
@@ -48,24 +48,24 @@ enum UnitPreference: String, CaseIterable, Sendable {
     }
 
     /// Uppercased distance label used as a split/segment header (e.g. "KM" / "MI").
-    var splitLabel: String { distanceLabel.uppercased() }
+    public var splitLabel: String { distanceLabel.uppercased() }
 
     /// Length in metres of one split bucket in this unit: 1 km or 1 mile.
-    var splitLengthMeters: Double {
+    public var splitLengthMeters: Double {
         switch self {
         case .metric:   return 1_000
         case .imperial: return 1_609.344
         }
     }
 
-    var paceLabel: String {
+    public var paceLabel: String {
         switch self {
         case .metric: return "min/km"
         case .imperial: return "min/mi"
         }
     }
 
-    var elevationLabel: String {
+    public var elevationLabel: String {
         switch self {
         case .metric:   return "m"
         case .imperial: return "ft"
