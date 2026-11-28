@@ -49,8 +49,10 @@ struct ProgressStatsService: Sendable {
     }
 
     /// Riegel-extrapolates `run`'s actual performance to the equivalent time
-    /// at `targetMeters`.
-    private static func normalizedSeconds(for run: RunWorkout, targetMeters: Double) -> Double {
+    /// at `targetMeters`. This, not the run's own duration, is the time to show
+    /// for a record the run holds: a 5-mile tempo is the mile record because of
+    /// its pace, and its 39-minute total is not a mile time.
+    static func normalizedSeconds(for run: RunWorkout, targetMeters: Double) -> Double {
         guard run.distanceMeters > 0 else { return .greatestFiniteMagnitude }
         return run.durationSeconds * pow(targetMeters / run.distanceMeters, riegelExponent)
     }

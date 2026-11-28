@@ -113,7 +113,7 @@ final class UXCaptureTests: XCTestCase {
         for tab in ["Plan", "History", "Progress"] {
             selectTab(tab)
             sleep(2)
-            captureScrollingScreen(named: "tab-\(tab.lowercased())")
+            captureScrollingScreen(named: "tab-\(tab.lowercased())", screens: tab == "Progress" ? 7 : 3)
         }
 
         capturePlanTools()
@@ -176,14 +176,18 @@ final class UXCaptureTests: XCTestCase {
 
     /// Top, one screen down, and the far end — enough to catch content colliding with
     /// the tab bar and empty states that only appear below the fold.
-    private func captureScrollingScreen(named name: String) {
+    /// `screens` is how many screenfuls to take; past three the middle ones are numbered.
+    /// Progress gets more, because its lower cards (best efforts, fitness and freshness)
+    /// never made it into a three-shot pass.
+    private func captureScrollingScreen(named name: String, screens: Int = 3) {
         capture("\(name)-top")
-        app.swipeUp(velocity: .slow)
-        sleep(1)
-        capture("\(name)-scrolled")
-        app.swipeUp(velocity: .slow)
-        sleep(1)
-        capture("\(name)-bottom")
+        for page in 1..<max(screens, 2) {
+            app.swipeUp(velocity: .slow)
+            sleep(1)
+            let isLast = page == max(screens, 2) - 1
+            let label = isLast ? "bottom" : (screens == 3 ? "scrolled" : "scrolled-\(page)")
+            capture("\(name)-\(label)")
+        }
     }
 
     // MARK: - One level down
