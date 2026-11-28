@@ -348,7 +348,8 @@ final class UXCaptureTests: XCTestCase {
     }
 
     /// The Smart Adapt tile with AI Coach off (a UI-test launch wipes preferences): it
-    /// asks to turn the coach on. Answers "Not Now", so the rest of the pass is unchanged.
+    /// asks to turn the coach on. Dismissed without answering, so the rest of the pass
+    /// is unchanged.
     private func captureSmartAdaptPrompt() {
         selectTab("Plan")
         sleep(1)
@@ -359,15 +360,21 @@ final class UXCaptureTests: XCTestCase {
             return XCTFail("Could not reach the Smart Adapt tile")
         }
         tile.tap()
-        let notNow = app.buttons["Not Now"]
-        guard notNow.waitForExistence(timeout: 5) else {
+        // iOS shows the dialog as a popover anchored on the tile, which drops the cancel
+        // button, so dismiss it by tapping outside (the navigation title).
+        let turnOn = app.buttons["Turn On AI Coach"]
+        guard turnOn.waitForExistence(timeout: 5) else {
             capture("missing-smart-adapt-prompt")
             return XCTFail("Smart Adapt did not offer to turn on AI Coach")
         }
         sleep(1)
         capture("plan-smart-adapt-prompt")
-        notNow.tap()
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.04)).tap()
         sleep(1)
+        if turnOn.exists {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9)).tap()
+            sleep(1)
+        }
         scrollToTop()
     }
 
