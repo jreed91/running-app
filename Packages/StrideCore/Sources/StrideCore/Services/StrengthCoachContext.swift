@@ -7,15 +7,15 @@ import Foundation
 ///
 /// Short on purpose: the chat prompt has a budget, and the coach needs the last session's
 /// shape and whether the week's planned sessions are getting done, not every set.
-enum StrengthCoachContext {
+public enum StrengthCoachContext {
 
     /// Lifts named from the last session, at most.
-    static let maxLifts = 4
+    public static let maxLifts = 4
 
     /// Sessions older than this are not "recent" enough to describe.
-    static let lookbackDays = 28
+    public static let lookbackDays = 28
 
-    static func summary(
+    public static func summary(
         sessions: [StrengthSessionLog],
         plannedThisWeek: Int,
         doneThisWeek: Int,
