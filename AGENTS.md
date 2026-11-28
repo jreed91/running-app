@@ -62,7 +62,15 @@ The Xcode project is generated from `project.yml` using XcodeGen. Edit `project.
   and the watch) holds the Foundation-only models and services they share: `WidgetSnapshot`,
   `WatchContext`, `WatchRunSession`, `WorkoutStructure`, `GuidedWorkoutEngine`,
   `HeartRateZoneService`, the spoken cues, `UnitPreference`, `Double` formatting and
-  `LocationQualityFilter`. It exists to cut build time: it is its own module, so an app change
+  `LocationQualityFilter`; and, in `Models/`, `Services/` and `Extensions/`, the shared enums
+  (`Enums.swift`), the value types (`ValueTypes.swift`: `Split`, `Lap`, `Coordinate`,
+  `WorkoutWeather`, the strength types) and every pure service that needs no SwiftData model
+  (pace calculator, training load, best efforts, route heatmap and privacy, splits and laps,
+  the strength library and progression, custom workouts, training breaks, trend and volume
+  series, coach prompt helpers). What stays in the app reads `RunWorkout`, `ScheduledWorkout`,
+  `TrainingPlan`, `UserProfile` or another app type, or a framework other than Foundation;
+  `Coordinate`'s CoreLocation conversions are an app extension
+  (`Stride/Core/Models/Coordinate+CoreLocation.swift`). It exists to cut build time: it is its own module, so an app change
   does not recompile it, and its tests run with
   `swift test --package-path Packages/StrideCore` on a Mac (or the Linux toolchain) with no
   simulator. Each target re-exports it (`StrideCoreExports.swift`), so no file needs
@@ -127,7 +135,7 @@ Business logic belongs in services or repositories, not directly in SwiftUI view
 
 ## Core Domain Types
 
-`Stride/Core/Models/Enums.swift` contains shared enums:
+`Packages/StrideCore/Sources/StrideCore/Models/Enums.swift` contains shared enums:
 
 - `RaceType`: `.maintainFitness`, `.fiveK`, `.tenK`, `.halfMarathon`, `.marathon`, `.custom`.
   `allCases` order is the goal-step order. A custom distance trains in the style of the nearest
@@ -148,7 +156,7 @@ Business logic belongs in services or repositories, not directly in SwiftUI view
   `.applePrivateCloud` is the **default** for new installs; see "AI coaching models" below
 - `StrengthEquipment` and `StrengthFocus`
 
-`Stride/Core/Models/ValueTypes.swift` contains codable/sendable value types used inside SwiftData models:
+`Packages/StrideCore/Sources/StrideCore/Models/ValueTypes.swift` contains codable/sendable value types used inside SwiftData models:
 
 - `Coordinate`: `CLLocationCoordinate2D` storage wrapper
 - `Split`: one bucket per kilometre or per mile, closed automatically by `SplitBucketing`
@@ -161,13 +169,13 @@ Business logic belongs in services or repositories, not directly in SwiftUI view
 - `RouteStep`, `GeneratedRoute`: route-generation results
 - `StrengthExercise`, `StrengthWorkoutPlan`, `CompletedStrengthSet`: strength workout representation
 
-`Stride/Core/Models/RunFeel.swift` is the runner's post-run "how did that feel?" answer, five
+`Packages/StrideCore/Sources/StrideCore/Models/RunFeel.swift` is the runner's post-run "how did that feel?" answer, five
 steps stored on `RunWorkout.feelRaw` (raw values are persisted — never renumber them).
 `RunFeelSignal` is the one place that judges a rating against the session's intended type
 (an easy run rated hard is a fatigue signal; a tempo rated easy means soft paces); the coach
 read, the coach chat and both plan-adaptation prompts all read it through that type.
 
-`Stride/Core/Models/PregnancyPlanTypes.swift` holds the pregnancy vocabulary: `GestationalAge`
+`Packages/StrideCore/Sources/StrideCore/Models/PregnancyPlanTypes.swift` holds the pregnancy vocabulary: `GestationalAge`
 (weeks+days from the due date — a pregnancy plan's clock, the way `raceDate` is a race plan's),
 `PregnancyTrimester`, `PregnancyEffort` (talk test + Borg range, the only intensity prescription
 a pregnancy plan makes), `PregnancyRedFlag`, and `PregnancyContraindication`.
@@ -574,7 +582,7 @@ judgement (pure, tested in `ShoeTrackingTests`), `ShoeAssignment` the few writes
 ## Sharing and route privacy
 
 Anything that sends a route out of the app goes through `RoutePrivacy`
-(`Stride/Core/Services/RoutePrivacy.swift`): it hides the first and last stretch of every run
+(`Packages/StrideCore/Sources/StrideCore/Services/RoutePrivacy.swift`): it hides the first and last stretch of every run
 (200 m by default) and any private place the runner adds in Settings → Route privacy, and
 splits what is left into pieces so no line is drawn across a hidden stretch. The run card
 (`ShareCardModel`, `RouteSnapshotService.routeSnapshot(segments:)`) and a single run's GPX

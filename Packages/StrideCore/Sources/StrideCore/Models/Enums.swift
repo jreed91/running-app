@@ -1,0 +1,554 @@
+import Foundation
+
+// MARK: - RaceType
+
+/// What the runner is training for.
+///
+/// `allCases` order is the order the goal step lists them in, in onboarding and New Plan.
+///
+/// The raw value is what syncs (`goalRaceRaw`, `targetRaceRaw`), and both getters decode an
+/// unknown one as `.fiveK`. So a case added later reads as 5K on an older build sharing the
+/// same iCloud data: its plan's sessions and race-day distance are stored and stay right, only
+/// the labels and a rebuild made there fall back to 5K. Version 1.0 reads `.tenK` that way.
+public enum RaceType: String, Codable, CaseIterable, Sendable {
+    case maintainFitness = "Maintain Fitness"
+    case fiveK = "5K"
+    /// Its own training style, between 5K and half marathon: 5K-style phasing, more volume,
+    /// and a race-day pace from the runner's VDOT. Before it existed a 10K goal was a custom
+    /// distance, trained half-marathon style.
+    case tenK = "10K"
+    case halfMarathon = "Half Marathon"
+    case marathon = "Marathon"
+    /// A user-defined goal distance. The actual distance is stored alongside the
+    /// race type on `UserProfile`/`TrainingPlan` as `customDistanceMeters`; the
+    /// value here is only a fallback used when no distance has been supplied.
+    case custom = "Custom"
+
+    public var displayName: String {
+        self == .custom ? "Custom Distance" : rawValue
+    }
+
+    /// The name a runner reads. `displayName` is the canonical English form — it is what
+    /// the AI prompts, the logs, and the seeded race names use, and several of those are
+    /// compared or persisted, so it must not move with the device language (D8).
+    public var localizedName: String {
+        switch self {
+        case .maintainFitness: return String(localized: "Maintain Fitness", comment: "Goal race type")
+        case .fiveK:           return String(localized: "5K", comment: "Goal race type")
+        case .tenK:            return String(localized: "10K", comment: "Goal race type")
+        case .halfMarathon:    return String(localized: "Half Marathon", comment: "Goal race type")
+        case .marathon:        return String(localized: "Marathon", comment: "Goal race type")
+        case .custom:          return String(localized: "Custom Distance", comment: "Goal race type")
+        }
+    }
+
+    public var isGoalRace: Bool {
+        self != .maintainFitness
+    }
+
+    /// Whether this race type carries a user-defined distance. When `true`, callers
+    /// should prefer the stored `customDistanceMeters` over `distanceMeters`.
+    public var usesCustomDistance: Bool { self == .custom }
+
+    public var distanceMeters: Double {
+        switch self {
+        case .maintainFitness: return 10_000
+        case .fiveK:        return 5_000
+        case .tenK:         return 10_000
+        case .halfMarathon: return 21_097.5
+        case .marathon:     return 42_195
+        case .custom:       return 10_000   // fallback only — see `customDistanceMeters`
+        }
+    }
+
+    public var typicalWeeks: ClosedRange<Int> {
+        switch self {
+        case .maintainFitness: return 6...16
+        case .fiveK:        return 8...12
+        case .tenK:         return 8...14
+        case .halfMarathon: return 12...20
+        case .marathon:     return 16...24
+        case .custom:       return 6...24
+        }
+    }
+
+    /// The closest standard race used to derive training characteristics
+    /// (phasing, quality sessions, intervals, and pace targets) for a given
+    /// distance. Returns `self` for the standard race types; for `.custom` it
+    /// maps the supplied distance onto the nearest training archetype.
+    public func trainingStyle(forDistanceMeters meters: Double) -> RaceType {
+        guard self == .custom else { return self }
+        switch meters {
+        case ..<8_000:   return .fiveK          // 5K-and-under: speed focused
+        // 15K itself trains 10K style. It is a common race (and the first quick pick on the
+        // custom-distance card), and half-marathon style gave it a half's starting volume:
+        // a "Recreational" 15K runner on three days got an 8.7 mile long run in week one.
+        case ...15_000:  return .tenK           // 8K–15K: tempo and intervals in balance
+        case ..<32_000:  return .halfMarathon   // over 15K up to 30K: threshold/tempo focused
+        default:         return .marathon       // 30K+: long-run focused
+        }
+    }
+}
+
+// MARK: - PlanKind
+
+/// What kind of plan a `TrainingPlan` is.
+///
+/// A separate axis from `RaceType` rather than another case on it, because the two answer
+/// different questions: `RaceType` is *what the runner is training for*, `PlanKind` is *which
+/// generator built the plan and which rules govern it*. A pregnancy plan has no goal race —
+/// it carries `.maintainFitness` — but it must never be re-paced from VDOT, adapted by the
+/// AI coach, or handed intervals, and that is what this discriminates on. A Start Running
+/// plan is the same shape of exception: run/walk sessions prescribed by the clock, built by
+/// `StartRunningPlanService`, with no race at the end of it.
+///
+/// Decoding an unknown raw value falls back to `.standard` so an older client reading a
+/// synced plan degrades rather than fails, the way `FitnessLevel` does.
+public enum PlanKind: String, Codable, CaseIterable, Sendable {
+    case standard
+    case pregnancy
+    /// Run/walk sessions for someone new to running, or coming back to it, that end in
+    /// thirty minutes of running without a break. See `StartRunningProgram`.
+    case startRunning
+
+    public var displayName: String {
+        switch self {
+        case .standard:     return "Training Plan"
+        case .pregnancy:    return "Pregnancy Plan"
+        case .startRunning: return "Start Running"
+        }
+    }
+
+    public var localizedName: String {
+        switch self {
+        case .standard:     return String(localized: "Training Plan", comment: "Kind of training plan")
+        case .pregnancy:    return String(localized: "Pregnancy Plan", comment: "Kind of training plan")
+        case .startRunning: return String(localized: "Start Running", comment: "Kind of training plan: a run/walk plan for new runners")
+        }
+    }
+
+    /// True when the plan's sessions are prescribed by minutes and effort, with no pace
+    /// targets at all.
+    ///
+    /// Everything built on VDOT paces has to leave such a plan alone: the post-run pace
+    /// refresh, Smart Adapt and the coach's "update next session" (`AdaptableWorkoutSelector`),
+    /// and the heat sheet, which would widen or clear a band the plan never had and trim the
+    /// run/walk structure that *is* the prescription. Each of those asks this, not a
+    /// particular kind, so a new kind of time-based plan is covered by saying so here.
+    public var prescribesByTime: Bool {
+        switch self {
+        case .standard:                   return false
+        case .pregnancy, .startRunning:   return true
+        }
+    }
+
+    /// Whether a plan of this kind can be building toward a race. A race-day hub, a
+    /// countdown or a finish prediction must not appear for one that cannot, even when an
+    /// older race date is still on the profile.
+    public var hasGoalRace: Bool {
+        switch self {
+        case .standard:                   return true
+        case .pregnancy, .startRunning:   return false
+        }
+    }
+}
+
+// MARK: - FitnessLevel
+
+public enum FitnessLevel: String, Codable, CaseIterable, Sendable {
+    case beginner
+    case intermediate
+    case advanced
+    /// Added so onboarding's four-way choice has four outcomes. It used to fold into
+    /// `.advanced`, which the screen itself gave away: "Experienced" and "Competitive" both
+    /// read "Plan starts ~25 mi/week" (S10). Decoding an unknown raw value falls back to
+    /// `.beginner` at every call site, so an older client reading a synced profile degrades
+    /// rather than fails.
+    case competitive
+
+    public var displayName: String { rawValue.capitalized }
+
+    /// The name a runner reads. `displayName` is the canonical English form — it is what
+    /// the AI prompts, the logs, and the seeded race names use, and several of those are
+    /// compared or persisted, so it must not move with the device language (D8).
+    ///
+    /// These are the words onboarding asks the question in. They used to be a second
+    /// vocabulary — pick "Recreational" in onboarding and Settings reported "Intermediate",
+    /// a word the runner was never shown (S9).
+    public var localizedName: String {
+        switch self {
+        case .beginner:     return String(localized: "New to running", comment: "Fitness level")
+        case .intermediate: return String(localized: "Recreational", comment: "Fitness level")
+        case .advanced:     return String(localized: "Experienced", comment: "Fitness level")
+        case .competitive:  return String(localized: "Competitive", comment: "Fitness level")
+        }
+    }
+
+    /// Starting weekly volume in km, scaled to the target race distance.
+    ///
+    /// 5K plans use lower base volumes than half marathon plans because the
+    /// race-specific adaptations require less overall mileage and more speed work.
+    public func startingWeeklyKm(for raceType: RaceType) -> Double {
+        switch raceType {
+        case .maintainFitness:
+            switch self {
+            case .beginner:     return 12
+            case .intermediate: return 20
+            case .advanced:     return 30
+            case .competitive:  return 38
+            }
+        case .fiveK:
+            switch self {
+            case .beginner:     return 15   // ~9 mi/wk start, ~14 mi/wk peak
+            case .intermediate: return 20   // ~12 mi/wk start, ~19 mi/wk peak
+            case .advanced:     return 40   // ~25 mi/wk start, ~37 mi/wk peak
+            case .competitive:  return 52   // ~32 mi/wk start, ~48 mi/wk peak
+            }
+        case .tenK:
+            // Between the 5K and half marathon rows: twice the race distance asks for more
+            // aerobic base than a 5K, not the long-run volume of a half.
+            switch self {
+            case .beginner:     return 18   // ~11 mi/wk start, ~17 mi/wk peak
+            case .intermediate: return 30   // ~19 mi/wk start, ~28 mi/wk peak
+            case .advanced:     return 50   // ~31 mi/wk start, ~47 mi/wk peak
+            case .competitive:  return 62   // ~39 mi/wk start, ~58 mi/wk peak
+            }
+        case .halfMarathon:
+            switch self {
+            case .beginner:     return 25   // ~15 mi/wk
+            case .intermediate: return 40   // ~25 mi/wk
+            case .advanced:     return 60   // ~37 mi/wk
+            case .competitive:  return 75   // ~47 mi/wk
+            }
+        case .marathon:
+            switch self {
+            case .beginner:     return 40   // ~25 mi/wk
+            case .intermediate: return 55   // ~34 mi/wk
+            case .advanced:     return 80   // ~50 mi/wk
+            case .competitive:  return 100  // ~62 mi/wk
+            }
+        case .custom:
+            // Custom distances route through `trainingStyle(forDistanceMeters:)`
+            // during generation, so this is only a neutral mid-range fallback.
+            switch self {
+            case .beginner:     return 25
+            case .intermediate: return 40
+            case .advanced:     return 60
+            case .competitive:  return 75
+            }
+        }
+    }
+}
+
+// MARK: - Gender
+
+public enum Gender: String, Codable, CaseIterable, Sendable {
+    case male               = "male"
+    case female             = "female"
+    case preferNotToShare   = "prefer_not_to_share"
+
+    public var displayName: String {
+        switch self {
+        case .male:             return "Male"
+        case .female:           return "Female"
+        case .preferNotToShare: return "Prefer not to share"
+        }
+    }
+
+    /// The name a runner reads. `displayName` is the canonical English form — it is what
+    /// the AI prompts, the logs, and the seeded race names use, and several of those are
+    /// compared or persisted, so it must not move with the device language (D8).
+    public var localizedName: String {
+        switch self {
+        case .male:             return String(localized: "Male", comment: "Gender")
+        case .female:           return String(localized: "Female", comment: "Gender")
+        case .preferNotToShare: return String(localized: "Prefer not to share", comment: "Gender")
+        }
+    }
+}
+
+// MARK: - WorkoutType
+
+public enum WorkoutType: String, Codable, CaseIterable, Sendable {
+    case easy = "Easy"
+    case tempo = "Tempo"
+    case interval = "Interval"
+    case longRun = "Long Run"
+    case race = "Race"
+    case rest = "Rest"
+    /// A cross-training day in a plan, and since B8 also what an imported ride, swim, row
+    /// or elliptical session is recorded as. Never running: see `countsAsRunning`.
+    case crossTraining = "Cross Training"
+    case strength = "Strength"
+    /// A walk imported from Apple Health.
+    ///
+    /// The only type here that no generator ever prescribes: it exists so a walking
+    /// workout can be *recorded* without being mistaken for a run. Everything that
+    /// reasons about training load asks `countsAsRunning` (or `Sequence.runsOnly`)
+    /// rather than listing types, because a walk in the weekly mileage, the VDOT
+    /// trend, or the streak is a wrong number rather than a missing one.
+    case walk = "Walk"
+
+    public var displayName: String { rawValue }
+
+    /// The name a runner reads. `displayName` is the canonical English form — it is what
+    /// the AI prompts, the logs, and the seeded race names use, and several of those are
+    /// compared or persisted, so it must not move with the device language (D8).
+    public var localizedName: String {
+        switch self {
+        case .easy:          return String(localized: "Easy", comment: "Workout type")
+        case .tempo:         return String(localized: "Tempo", comment: "Workout type")
+        case .interval:      return String(localized: "Interval", comment: "Workout type")
+        case .longRun:       return String(localized: "Long Run", comment: "Workout type")
+        case .race:          return String(localized: "Race", comment: "Workout type")
+        case .rest:          return String(localized: "Rest", comment: "Workout type")
+        case .crossTraining: return String(localized: "Cross Training", comment: "Workout type")
+        case .strength:      return String(localized: "Strength", comment: "Workout type")
+        case .walk:          return String(localized: "Walk", comment: "Workout type")
+        }
+    }
+
+    public var isQualitySession: Bool {
+        switch self {
+        case .tempo, .interval, .race: return true
+        default: return false
+        }
+    }
+
+    /// True for workout types that are fulfilled by a run and can therefore be
+    /// linked to an imported `RunWorkout`. Strength, cross-training, rest days, and
+    /// walks must never be matched to (or completed by) an imported run.
+    public var isRunType: Bool {
+        switch self {
+        case .easy, .tempo, .interval, .longRun, .race: return true
+        case .rest, .crossTraining, .strength, .walk: return false
+        }
+    }
+
+    /// Whether a *completed* workout of this type is running that counts as training.
+    ///
+    /// `isRunType` answers a question about the plan — "can an imported run complete a
+    /// day scheduled as this?" — and every non-run type answers it the same way, which
+    /// is why the two are separate. This one is asked of recorded history: weekly volume,
+    /// VDOT, pace trends, personal records, the streak, and everything the coach reads.
+    /// `.walk` is the case that makes the distinction earn its keep — a walk is real
+    /// history and belongs in the log, but it is not a run and must never be averaged,
+    /// totalled, or extrapolated with them.
+    ///
+    /// `.crossTraining` joins it once a ride or a swim can be *recorded* (B8): a 30 km
+    /// ride in the weekly running distance, or an hour on the bike as a VDOT sample, is
+    /// the same wrong number a walk would be, only larger.
+    public var countsAsRunning: Bool {
+        switch self {
+        case .walk, .crossTraining: return false
+        case .easy, .tempo, .interval, .longRun, .race, .rest, .strength: return true
+        }
+    }
+
+    /// The kind of session a workout type represents.
+    ///
+    /// A training day can legitimately hold one session of each kind — a plan pairs
+    /// an easy run with a gym session, and a missed-workout shift can move a run onto
+    /// a strength day. Everything that reasons about a day therefore has to treat the
+    /// kinds separately: collapsing "every workout on this date" into one is what
+    /// silently deleted the runner's strength session (N6), and the dashboard's day
+    /// resolution orders and renders a day's sessions by kind (N12).
+    public enum SessionKind: String, Sendable {
+        case run, walk, strength, crossTraining, rest
+    }
+
+    public var sessionKind: SessionKind {
+        switch self {
+        case .easy, .tempo, .interval, .longRun, .race: return .run
+        case .walk:          return .walk
+        case .strength:      return .strength
+        case .crossTraining: return .crossTraining
+        case .rest:          return .rest
+        }
+    }
+}
+
+// MARK: - TrainingPhase
+
+public enum TrainingPhase: String, Codable, Sendable {
+    case base = "Base"
+    case build = "Build"
+    case peak = "Peak"
+    case taper = "Taper"
+
+    public var displayName: String { rawValue }
+
+    /// The name a runner reads. `displayName` is the canonical English form — it is what
+    /// the AI prompts, the logs, and the seeded race names use, and several of those are
+    /// compared or persisted, so it must not move with the device language (D8).
+    public var localizedName: String {
+        switch self {
+        case .base:  return String(localized: "Base", comment: "Training phase")
+        case .build: return String(localized: "Build", comment: "Training phase")
+        case .peak:  return String(localized: "Peak", comment: "Training phase")
+        case .taper: return String(localized: "Taper", comment: "Training phase")
+        }
+    }
+}
+
+// MARK: - RecoveryType
+
+public enum RecoveryType: String, Codable, Sendable {
+    case walk
+    case jog
+    case standing
+}
+
+// MARK: - RouteType
+
+public enum RouteType: String, Codable, CaseIterable, Sendable {
+    case loop = "Loop"
+    case outAndBack = "Out & Back"
+
+    public var displayName: String { rawValue }
+
+    /// The name a runner reads. `displayName` is the canonical English form — it is what
+    /// the AI prompts, the logs, and the seeded race names use, and several of those are
+    /// compared or persisted, so it must not move with the device language (D8).
+    public var localizedName: String {
+        switch self {
+        case .loop:       return String(localized: "Loop", comment: "Route shape")
+        case .outAndBack: return String(localized: "Out & Back", comment: "Route shape")
+        }
+    }
+
+    public var systemImage: String {
+        switch self {
+        case .loop:       return "arrow.trianglehead.2.clockwise"
+        case .outAndBack: return "arrow.left.arrow.right"
+        }
+    }
+}
+
+// MARK: - WorkoutLocation
+
+public enum WorkoutLocation: String, Codable, CaseIterable, Sendable {
+    case outdoor = "Outdoor"
+    case indoor = "Indoor"
+
+    public var displayName: String { rawValue }
+
+    /// The name a runner reads. `displayName` is the canonical English form — it is what
+    /// the AI prompts, the logs, and the seeded race names use, and several of those are
+    /// compared or persisted, so it must not move with the device language (D8).
+    public var localizedName: String {
+        switch self {
+        case .outdoor: return String(localized: "Outdoor", comment: "Where a run happens")
+        case .indoor:  return String(localized: "Indoor", comment: "Where a run happens")
+        }
+    }
+
+    public var systemImage: String {
+        switch self {
+        case .outdoor: return "figure.run"
+        case .indoor:  return "house.fill"
+        }
+    }
+}
+
+// UnitPreference lives in UnitPreference.swift, which the Watch app compiles too.
+
+
+// MARK: - AIProvider
+
+/// AI coaching runs entirely on Apple's Foundation Models framework — there are no
+/// third-party providers and no API keys. `appleOnDevice` uses the on-device
+/// Apple Intelligence model; `applePrivateCloud` routes the heaviest requests to
+/// Apple's Private Cloud Compute model (iOS 27+). Both are keyless and private.
+public enum AIProvider: String, CaseIterable, Sendable {
+    case appleOnDevice = "apple_on_device"
+    case applePrivateCloud = "apple_pcc"
+
+    public var displayName: String {
+        switch self {
+        case .appleOnDevice: return "On-device (Apple Intelligence)"
+        case .applePrivateCloud: return "Apple Private Cloud Compute"
+        }
+    }
+
+    /// The name a runner reads. `displayName` is the canonical English form — it is what
+    /// the AI prompts, the logs, and the seeded race names use, and several of those are
+    /// compared or persisted, so it must not move with the device language (D8).
+    public var localizedName: String {
+        switch self {
+        case .appleOnDevice:
+            return String(localized: "On-device (Apple Intelligence)", comment: "Where AI coaching runs")
+        case .applePrivateCloud:
+            return String(localized: "Apple Private Cloud Compute", comment: "Where AI coaching runs")
+        }
+    }
+
+    /// Apple's server-backed model (Private Cloud Compute); only meaningful on iOS 27+.
+    public var usesPrivateCloudCompute: Bool { self == .applePrivateCloud }
+}
+
+// MARK: - StrengthEquipment
+
+public enum StrengthEquipment: String, Codable, CaseIterable, Sendable {
+    case bodyweight      = "Bodyweight"
+    case dumbbells       = "Dumbbells"
+    case resistanceBands = "Resistance Bands"
+    case pullUpBar       = "Pull-Up Bar"
+    case kettlebell      = "Kettlebell"
+    case barbell         = "Barbell"
+
+    public var displayName: String { rawValue }
+
+    /// The name a runner reads. `displayName` is the canonical English form — it is what
+    /// the AI prompts, the logs, and the seeded race names use, and several of those are
+    /// compared or persisted, so it must not move with the device language (D8).
+    public var localizedName: String {
+        switch self {
+        case .bodyweight:      return String(localized: "Bodyweight", comment: "Strength equipment")
+        case .dumbbells:       return String(localized: "Dumbbells", comment: "Strength equipment")
+        case .resistanceBands: return String(localized: "Resistance Bands", comment: "Strength equipment")
+        case .pullUpBar:       return String(localized: "Pull-Up Bar", comment: "Strength equipment")
+        case .kettlebell:      return String(localized: "Kettlebell", comment: "Strength equipment")
+        case .barbell:         return String(localized: "Barbell", comment: "Strength equipment")
+        }
+    }
+
+    public var systemImage: String {
+        switch self {
+        case .bodyweight:      return "figure.strengthtraining.traditional"
+        case .dumbbells:       return "dumbbell.fill"
+        case .resistanceBands: return "circle.grid.2x2.fill"
+        case .pullUpBar:       return "minus.rectangle.fill"
+        case .kettlebell:      return "drop.fill"
+        case .barbell:         return "line.horizontal.3"
+        }
+    }
+}
+
+// MARK: - StrengthFocus
+
+public enum StrengthFocus: String, Codable, CaseIterable, Sendable {
+    case runningSpecific = "Running-Specific"
+    case generalStrength = "General Strength"
+
+    public var displayName: String { rawValue }
+
+    /// The name a runner reads. `displayName` is the canonical English form — it is what
+    /// the AI prompts, the logs, and the seeded race names use, and several of those are
+    /// compared or persisted, so it must not move with the device language (D8).
+    public var localizedName: String {
+        switch self {
+        case .runningSpecific: return String(localized: "Running-Specific", comment: "Strength focus")
+        case .generalStrength: return String(localized: "General Strength", comment: "Strength focus")
+        }
+    }
+
+    public var subtitle: String {
+        switch self {
+        case .runningSpecific:
+            return String(localized: "Glutes, hips, core, and single-leg stability", comment: "Strength focus subtitle")
+        case .generalStrength:
+            return String(localized: "Full-body strength with push, pull, and hinge patterns", comment: "Strength focus subtitle")
+        }
+    }
+}
