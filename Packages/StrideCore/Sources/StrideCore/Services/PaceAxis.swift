@@ -10,7 +10,7 @@ import Foundation
 /// chosen in the display unit and converted back, so they read 9:00, 10:00, 11:00.
 ///
 /// Pure and `Sendable`, so the Linux toolchain can test it.
-enum PaceAxis {
+public enum PaceAxis {
 
     /// Steps tried, in display seconds, largest first.
     private static let steps: [Double] = [300, 120, 60, 30, 15]
@@ -21,7 +21,7 @@ enum PaceAxis {
     ///
     /// Picks the largest step that puts three to `maxTicks` ticks inside the data, else the
     /// largest that puts two. Empty when the range is not a usable pace.
-    static func ticks(
+    public static func ticks(
         lowerSecondsPerKm lower: Double,
         upperSecondsPerKm upper: Double,
         factor: Double,
@@ -57,7 +57,7 @@ enum PaceAxis {
     /// "9:00" for a tick, rounded to the second in the display unit. Truncating, as
     /// `paceValueString` does, can turn 540 display seconds into "8:59" after the round
     /// trip through seconds per km.
-    static func label(secondsPerKm: Double, factor: Double) -> String {
+    public static func label(secondsPerKm: Double, factor: Double) -> String {
         guard secondsPerKm.isFinite, secondsPerKm > 0, factor > 0 else { return "--:--" }
         let total = Int((secondsPerKm * factor).rounded())
         return String(format: "%d:%02d", total / 60, total % 60)
@@ -65,7 +65,7 @@ enum PaceAxis {
 
     /// Round-number ticks for any other measure (heart rate, VDOT, cadence): steps of
     /// 1, 2, 5, 10 and so on, three to `maxTicks` of them inside the data where possible.
-    static func roundTicks(lower: Double, upper: Double, maxTicks: Int = 5) -> [Double] {
+    public static func roundTicks(lower: Double, upper: Double, maxTicks: Int = 5) -> [Double] {
         guard lower.isFinite, upper.isFinite, upper >= lower else { return [] }
         let steps: [Double] = [100, 50, 20, 10, 5, 2, 1, 0.5]
         func inside(_ step: Double) -> [Double] {

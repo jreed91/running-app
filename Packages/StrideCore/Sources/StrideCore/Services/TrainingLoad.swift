@@ -17,31 +17,45 @@ import Foundation
 ///
 /// Pure and `Sendable`. The view turns runs into ``Session``s, choosing the fallback
 /// intensity, so this is tested without SwiftData.
-enum TrainingLoad {
+public enum TrainingLoad {
 
-    static let fitnessDays = 42.0
-    static let fatigueDays = 7.0
+    public static let fitnessDays = 42.0
+    public static let fatigueDays = 7.0
     /// Used when the runner's resting heart rate isn't known. Most adult runners sit
     /// between 50 and 70; an error here shifts every run's intensity the same way, so
     /// the shape of the chart holds even when the absolute numbers drift.
-    static let defaultRestingHeartRate = 60.0
+    public static let defaultRestingHeartRate = 60.0
 
     /// One session's inputs.
-    struct Session: Equatable, Sendable {
-        let id: UUID
-        let date: Date
-        let durationSeconds: Double
-        let averageHeartRate: Double?
+    public struct Session: Equatable, Sendable {
+        public let id: UUID
+        public let date: Date
+        public let durationSeconds: Double
+        public let averageHeartRate: Double?
         /// Heart-rate reserve fraction to assume when the session has no usable heart
         /// rate, from ``fallbackIntensity(feel:typeIntensity:)``.
-        let fallbackIntensity: Double
+        public let fallbackIntensity: Double
+
+        public init(
+            id: UUID,
+            date: Date,
+            durationSeconds: Double,
+            averageHeartRate: Double?,
+            fallbackIntensity: Double
+        ) {
+            self.id = id
+            self.date = date
+            self.durationSeconds = durationSeconds
+            self.averageHeartRate = averageHeartRate
+            self.fallbackIntensity = fallbackIntensity
+        }
     }
 
     // MARK: Per session
 
     /// The fraction of heart-rate reserve a session averaged, clamped to 0...1, or `nil`
     /// without a usable heart rate or max.
-    static func intensity(
+    public static func intensity(
         averageHeartRate: Double?,
         maxHeartRate: Double?,
         restingHeartRate: Double = defaultRestingHeartRate
@@ -55,7 +69,7 @@ enum TrainingLoad {
 
     /// The intensity to assume without heart rate: from a 1–5 feel rating when there is
     /// one, otherwise the workout type's typical intensity.
-    static func fallbackIntensity(feel: Int?, typeIntensity: Double) -> Double {
+    public static func fallbackIntensity(feel: Int?, typeIntensity: Double) -> Double {
         switch feel {
         case 1: return 0.50
         case 2: return 0.60
@@ -67,14 +81,14 @@ enum TrainingLoad {
     }
 
     /// Heart-rate TRIMP: minutes weighted so that harder minutes count for much more.
-    static func load(durationSeconds: Double, intensity: Double) -> Double {
+    public static func load(durationSeconds: Double, intensity: Double) -> Double {
         guard durationSeconds > 0, durationSeconds.isFinite, intensity.isFinite else { return 0 }
         let minutes = durationSeconds / 60
         let clamped = min(max(intensity, 0), 1)
         return minutes * clamped * 0.64 * exp(1.92 * clamped)
     }
 
-    static func load(of session: Session, maxHeartRate: Double?, restingHeartRate: Double) -> Double {
+    public static func load(of session: Session, maxHeartRate: Double?, restingHeartRate: Double) -> Double {
         let measured = intensity(
             averageHeartRate: session.averageHeartRate,
             maxHeartRate: maxHeartRate,
@@ -85,21 +99,35 @@ enum TrainingLoad {
 
     // MARK: Daily series
 
-    struct Day: Equatable, Sendable, Identifiable {
-        let date: Date
+    public struct Day: Equatable, Sendable, Identifiable {
+        public let date: Date
         /// Total load of the sessions that day.
-        let load: Double
-        let fitness: Double
-        let fatigue: Double
-        let sessionIDs: [UUID]
+        public let load: Double
+        public let fitness: Double
+        public let fatigue: Double
+        public let sessionIDs: [UUID]
 
-        var id: Date { date }
-        var form: Double { fitness - fatigue }
+        public var id: Date { date }
+        public var form: Double { fitness - fatigue }
+
+        public init(
+            date: Date,
+            load: Double,
+            fitness: Double,
+            fatigue: Double,
+            sessionIDs: [UUID]
+        ) {
+            self.date = date
+            self.load = load
+            self.fitness = fitness
+            self.fatigue = fatigue
+            self.sessionIDs = sessionIDs
+        }
     }
 
     /// One day per calendar day from the first session's day to `now`'s, rest days
     /// included: a day off is what lets fatigue fall.
-    static func days(
+    public static func days(
         for sessions: [Session],
         maxHeartRate: Double?,
         restingHeartRate: Double = defaultRestingHeartRate,
@@ -134,7 +162,7 @@ enum TrainingLoad {
 
     // MARK: Reading form
 
-    enum FormZone: Equatable, Sendable {
+    public enum FormZone: Equatable, Sendable {
         /// Well rested; fitness may be slipping if it lasts.
         case fresh
         /// Balanced.
@@ -147,7 +175,7 @@ enum TrainingLoad {
 
     /// Bands on form, in the same load units: the conventional TSB ranges, which hold up
     /// for TRIMP-scaled loads of a typical recreational runner.
-    static func zone(forForm form: Double) -> FormZone {
+    public static func zone(forForm form: Double) -> FormZone {
         switch form {
         case 5...: return .fresh
         case -10..<5: return .neutral

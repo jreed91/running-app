@@ -11,29 +11,47 @@ import Foundation
 /// and date, read the routes of only those, then ask for the map.
 ///
 /// An actor, so tracing and building run off the main actor.
-actor RouteHeatmapCache {
-    static let shared = RouteHeatmapCache(storeURL: defaultStoreURL)
+public actor RouteHeatmapCache {
+    public static let shared = RouteHeatmapCache(storeURL: defaultStoreURL)
 
     /// A run as the cache knows it without its route.
-    struct Key: Sendable, Hashable {
-        let id: UUID
-        let date: Date
+    public struct Key: Sendable, Hashable {
+        public let id: UUID
+        public let date: Date
+
+        public init(
+            id: UUID,
+            date: Date
+        ) {
+            self.id = id
+            self.date = date
+        }
     }
 
     /// A run with its route blob, read from the model on the main actor.
-    struct Input: Sendable, Equatable {
-        let id: UUID
-        let date: Date
-        let route: Data
+    public struct Input: Sendable, Equatable {
+        public let id: UUID
+        public let date: Date
+        public let route: Data
 
-        var key: Key { Key(id: id, date: date) }
+        public var key: Key { Key(id: id, date: date) }
+
+        public init(
+            id: UUID,
+            date: Date,
+            route: Data
+        ) {
+            self.id = id
+            self.date = date
+            self.route = route
+        }
     }
 
     private struct Entry: Codable {
-        let date: Date
+        public let date: Date
         /// `nil` for a run with no route (indoor, or recorded without location), so it
         /// isn't read again.
-        let trace: RouteHeatmap.Trace?
+        public let trace: RouteHeatmap.Trace?
     }
 
     private let storeURL: URL?
@@ -46,14 +64,14 @@ actor RouteHeatmapCache {
     private var lastBuilt: (keys: [Key], heatmap: RouteHeatmap.Heatmap)?
 
     /// How many routes have been traced so far. For tests.
-    private(set) var traced = 0
+    public private(set) var traced = 0
 
-    init(storeURL: URL? = nil) {
+    public init(storeURL: URL? = nil) {
         self.storeURL = storeURL
     }
 
     /// The runs among `keys` not traced yet: new runs, and runs whose date changed.
-    func missing(_ keys: [Key]) -> [UUID] {
+    public func missing(_ keys: [Key]) -> [UUID] {
         loadIfNeeded()
         return keys.compactMap { key in entries[key.id]?.date == key.date ? nil : key.id }
     }
@@ -61,7 +79,7 @@ actor RouteHeatmapCache {
     /// Traces the routes handed over. Call it as many times as it takes to hand over
     /// every route ``missing`` named, a few at a time, so no more than a handful of route
     /// blobs are in memory at once.
-    func add(_ inputs: [Input]) {
+    public func add(_ inputs: [Input]) {
         loadIfNeeded()
         guard !inputs.isEmpty else { return }
         for input in inputs {
@@ -74,7 +92,7 @@ actor RouteHeatmapCache {
 
     /// Drops every run not in `ids`, so a deleted run leaves the map, then writes the
     /// cache to disk if anything changed.
-    func keep(only ids: Set<UUID>) {
+    public func keep(only ids: Set<UUID>) {
         loadIfNeeded()
         let before = entries.count
         entries = entries.filter { ids.contains($0.key) }
@@ -86,7 +104,7 @@ actor RouteHeatmapCache {
     }
 
     /// The map of the runs in `keys`. Runs not traced yet are left out.
-    func heatmap(for keys: [Key]) -> RouteHeatmap.Heatmap {
+    public func heatmap(for keys: [Key]) -> RouteHeatmap.Heatmap {
         loadIfNeeded()
         if let lastBuilt, lastBuilt.keys == keys { return lastBuilt.heatmap }
         let heatmap = RouteHeatmap.build(traces(keys))
@@ -96,7 +114,7 @@ actor RouteHeatmapCache {
 
     /// The runs among `keys` whose route went within about `radiusMeters` of `point`, in
     /// the order given.
-    func runs(near point: RouteHeatmap.Point, radiusMeters: Double, among keys: [Key]) -> [UUID] {
+    public func runs(near point: RouteHeatmap.Point, radiusMeters: Double, among keys: [Key]) -> [UUID] {
         loadIfNeeded()
         let area = RouteHeatmap.cells(around: point, radiusMeters: radiusMeters)
         return keys.compactMap { key in
@@ -108,13 +126,13 @@ actor RouteHeatmapCache {
 
     /// The map of the runs in `keys` with the runner's privacy applied to every run,
     /// for an image that leaves the phone. Not kept: it is built once per share.
-    func sharedHeatmap(for keys: [Key], privacy: RouteHeatmap.Privacy) -> RouteHeatmap.Heatmap {
+    public func sharedHeatmap(for keys: [Key], privacy: RouteHeatmap.Privacy) -> RouteHeatmap.Heatmap {
         loadIfNeeded()
         return RouteHeatmap.build(traces(keys).map { $0.trimmed(privacy) })
     }
 
     /// The streets the runs in `keys` went along that no run in `earlier` had.
-    func newGround(for keys: [Key], before earlier: [Key]) -> RouteHeatmap.NewGround {
+    public func newGround(for keys: [Key], before earlier: [Key]) -> RouteHeatmap.NewGround {
         loadIfNeeded()
         return RouteHeatmap.newGround(in: traces(keys), before: traces(earlier))
     }
@@ -130,7 +148,7 @@ actor RouteHeatmapCache {
 
     /// In Caches: traces can always be worked out again, so the system may clear it.
     /// v2: traces no longer fill gaps over ``RouteHeatmap/fillMeters`` with a straight line.
-    static var defaultStoreURL: URL? {
+    public static var defaultStoreURL: URL? {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
             .appendingPathComponent("route-heatmap-v2.plist")
     }

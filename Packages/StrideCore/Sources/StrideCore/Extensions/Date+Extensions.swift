@@ -2,30 +2,30 @@ import Foundation
 
 extension Date {
     /// Monday of the week containing this date.
-    var startOfWeek: Date {
+    public var startOfWeek: Date {
         var cal = Calendar.current
         cal.firstWeekday = 2 // Monday
         let components = cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: self)
         return cal.date(from: components) ?? self
     }
 
-    var startOfDay: Date {
+    public var startOfDay: Date {
         Calendar.current.startOfDay(for: self)
     }
 
-    var isToday: Bool {
+    public var isToday: Bool {
         Calendar.current.isDateInToday(self)
     }
 
-    var isTomorrow: Bool {
+    public var isTomorrow: Bool {
         Calendar.current.isDateInTomorrow(self)
     }
 
-    func adding(days: Int) -> Date {
+    public func adding(days: Int) -> Date {
         Calendar.current.date(byAdding: .day, value: days, to: self) ?? self
     }
 
-    func adding(weeks: Int) -> Date {
+    public func adding(weeks: Int) -> Date {
         Calendar.current.date(byAdding: .weekOfYear, value: weeks, to: self) ?? self
     }
 }

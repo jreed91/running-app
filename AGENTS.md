@@ -62,7 +62,12 @@ The Xcode project is generated from `project.yml` using XcodeGen. Edit `project.
   and the watch) holds the Foundation-only models and services they share: `WidgetSnapshot`,
   `WatchContext`, `WatchRunSession`, `WorkoutStructure`, `GuidedWorkoutEngine`,
   `HeartRateZoneService`, the spoken cues, `UnitPreference`, `Double` formatting and
-  `LocationQualityFilter`. It exists to cut build time: it is its own module, so an app change
+  `LocationQualityFilter`; and, in `Models/`, `Services/` and `Extensions/`, the shared enums
+  (`Enums.swift`) and every pure service that needs no SwiftData model or `ValueTypes.swift`
+  type (pace calculator, training load, best efforts, route heatmap, custom workouts, training
+  breaks, trend and volume series, coach prompt helpers). The services still in the app are
+  the ones that read `RunWorkout`, `ScheduledWorkout`, `TrainingPlan`, `UserProfile` or a
+  `ValueTypes.swift` type. It exists to cut build time: it is its own module, so an app change
   does not recompile it, and its tests run with
   `swift test --package-path Packages/StrideCore` on a Mac (or the Linux toolchain) with no
   simulator. Each target re-exports it (`StrideCoreExports.swift`), so no file needs
@@ -127,7 +132,7 @@ Business logic belongs in services or repositories, not directly in SwiftUI view
 
 ## Core Domain Types
 
-`Stride/Core/Models/Enums.swift` contains shared enums:
+`Packages/StrideCore/Sources/StrideCore/Models/Enums.swift` contains shared enums:
 
 - `RaceType`: `.maintainFitness`, `.fiveK`, `.tenK`, `.halfMarathon`, `.marathon`, `.custom`.
   `allCases` order is the goal-step order. A custom distance trains in the style of the nearest
@@ -161,13 +166,13 @@ Business logic belongs in services or repositories, not directly in SwiftUI view
 - `RouteStep`, `GeneratedRoute`: route-generation results
 - `StrengthExercise`, `StrengthWorkoutPlan`, `CompletedStrengthSet`: strength workout representation
 
-`Stride/Core/Models/RunFeel.swift` is the runner's post-run "how did that feel?" answer, five
+`Packages/StrideCore/Sources/StrideCore/Models/RunFeel.swift` is the runner's post-run "how did that feel?" answer, five
 steps stored on `RunWorkout.feelRaw` (raw values are persisted — never renumber them).
 `RunFeelSignal` is the one place that judges a rating against the session's intended type
 (an easy run rated hard is a fatigue signal; a tempo rated easy means soft paces); the coach
 read, the coach chat and both plan-adaptation prompts all read it through that type.
 
-`Stride/Core/Models/PregnancyPlanTypes.swift` holds the pregnancy vocabulary: `GestationalAge`
+`Packages/StrideCore/Sources/StrideCore/Models/PregnancyPlanTypes.swift` holds the pregnancy vocabulary: `GestationalAge`
 (weeks+days from the due date — a pregnancy plan's clock, the way `raceDate` is a race plan's),
 `PregnancyTrimester`, `PregnancyEffort` (talk test + Borg range, the only intensity prescription
 a pregnancy plan makes), `PregnancyRedFlag`, and `PregnancyContraindication`.

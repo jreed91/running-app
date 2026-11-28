@@ -13,19 +13,19 @@ import Foundation
 /// street, coloured by how many runs used it.
 ///
 /// Foundation only, so it can be tested anywhere.
-enum RouteHeatmap {
+public enum RouteHeatmap {
 
     /// The side of a grid cell. Close enough that two streets a block apart never share a
     /// cell, loose enough that GPS wander on one street stays in one.
-    static let cellMeters = 20.0
+    public static let cellMeters = 20.0
 
     /// The longest gap between two fixes filled with a straight line. A watch or phone
     /// records a fix every few metres; a longer gap means a lost signal or a sparse
     /// recording, and a straight line across it cut corners through gardens.
-    static let fillMeters = 50.0
+    public static let fillMeters = 50.0
 
     /// How many heat colours the map uses, coolest first.
-    static let levels = 5
+    public static let levels = 5
 
     private static let metersPerDegree = 111_320.0
 
@@ -33,37 +33,53 @@ enum RouteHeatmap {
 
     /// A point on the map. Decodes the stored route blob as it is (`latitude`,
     /// `longitude`), so this file needs no CoreLocation.
-    struct Point: Codable, Hashable, Sendable {
-        var latitude: Double
-        var longitude: Double
+    public struct Point: Codable, Hashable, Sendable {
+        public var latitude: Double
+        public var longitude: Double
+
+        public init(
+            latitude: Double,
+            longitude: Double
+        ) {
+            self.latitude = latitude
+            self.longitude = longitude
+        }
     }
 
     /// One square of the grid.
-    struct Cell: Codable, Hashable, Sendable, Comparable {
-        var x: Int32
-        var y: Int32
+    public struct Cell: Codable, Hashable, Sendable, Comparable {
+        public var x: Int32
+        public var y: Int32
 
-        static func < (lhs: Cell, rhs: Cell) -> Bool {
+        public static func < (lhs: Cell, rhs: Cell) -> Bool {
             lhs.y == rhs.y ? lhs.x < rhs.x : lhs.y < rhs.y
+        }
+
+        public init(
+            x: Int32,
+            y: Int32
+        ) {
+            self.x = x
+            self.y = y
         }
     }
 
     /// One run's route on the grid: each cell it touched with where in that cell it went,
     /// and the order it went through them, broken at GPS gaps.
-    struct Trace: Codable, Equatable, Sendable {
+    public struct Trace: Codable, Equatable, Sendable {
         /// Every cell touched, once, with the run's mean position inside it.
-        var cells: [Cell]
-        var centers: [Point]
+        public var cells: [Cell]
+        public var centers: [Point]
         /// Stretches of the route as indexes into `cells`, in running order.
-        var segments: [[Int32]]
+        public var segments: [[Int32]]
 
-        var isEmpty: Bool { cells.isEmpty }
+        public var isEmpty: Bool { cells.isEmpty }
 
         /// The trace with the runner's private parts taken out: cells within
         /// `hideEndsMeters` of the start or finish (along the route) and cells near a
         /// private place. Segments split where cells were hidden, so nothing is drawn
         /// across a gap.
-        func trimmed(_ privacy: Privacy) -> Trace {
+        public func trimmed(_ privacy: Privacy) -> Trace {
             guard privacy.hidesAnything, !isEmpty else { return self }
             // How far along the route each step of each segment is.
             var along: [[Double]] = []
@@ -120,11 +136,11 @@ enum RouteHeatmap {
         }
 
         /// Whether the route went through any of `area`'s cells.
-        func passes(through area: Set<Cell>) -> Bool {
+        public func passes(through area: Set<Cell>) -> Bool {
             cells.contains { area.contains($0) }
         }
 
-        init(cells: [Cell], centers: [Point], segments: [[Int32]]) {
+        public init(cells: [Cell], centers: [Point], segments: [[Int32]]) {
             self.cells = cells
             self.centers = centers
             self.segments = segments
@@ -132,7 +148,7 @@ enum RouteHeatmap {
 
         // Stored packed: years of traces as JSON numbers were tens of megabytes.
 
-        init(from decoder: Decoder) throws {
+        public init(from decoder: Decoder) throws {
             let data = try decoder.singleValueContainer().decode(Data.self)
             guard let trace = Trace(packed: data) else {
                 throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Bad trace"))
@@ -140,14 +156,14 @@ enum RouteHeatmap {
             self = trace
         }
 
-        func encode(to encoder: Encoder) throws {
+        public func encode(to encoder: Encoder) throws {
             var container = encoder.singleValueContainer()
             try container.encode(packed())
         }
 
         /// Each cell as its column, row and where in it the run went (to 1/65535 of a
         /// cell, a few millimetres), then each segment's cell indexes. Little-endian.
-        func packed() -> Data {
+        public func packed() -> Data {
             var data = Data(capacity: 8 + cells.count * 12 + segments.reduce(0) { $0 + 4 + $1.count * 4 })
             func put<T: FixedWidthInteger>(_ value: T) {
                 withUnsafeBytes(of: value.littleEndian) { data.append(contentsOf: $0) }
@@ -170,7 +186,7 @@ enum RouteHeatmap {
             return data
         }
 
-        init?(packed data: Data) {
+        public init?(packed data: Data) {
             var offset = data.startIndex
             func take<T: FixedWidthInteger>(_: T.Type) -> T? {
                 let size = MemoryLayout<T>.size
@@ -217,18 +233,30 @@ enum RouteHeatmap {
     }
 
     /// One square of the map and how many runs went through it, ready to draw.
-    struct HeatCell: Equatable, Sendable {
+    public struct HeatCell: Equatable, Sendable {
         /// Where the runs went inside the cell, on average.
-        var center: Point
-        var runs: Int
+        public var center: Point
+        public var runs: Int
         /// 1 (run once) to ``RouteHeatmap/levels`` (run most).
-        var level: Int
+        public var level: Int
         /// Its square on the grid, when it came from runs' traces.
-        var cell: Cell?
+        public var cell: Cell?
+
+        public init(
+            center: Point,
+            runs: Int,
+            level: Int,
+            cell: Cell? = nil
+        ) {
+            self.center = center
+            self.runs = runs
+            self.level = level
+            self.cell = cell
+        }
     }
 
     /// What a set of runs adds up to on the map.
-    struct Heatmap: Equatable, Sendable {
+    public struct Heatmap: Equatable, Sendable {
         /// Every cell any run went through, coolest first, so the hottest draw on top.
         ///
         /// Cells rather than lines: GPS wanders a few metres either side of the street,
@@ -236,22 +264,22 @@ enum RouteHeatmap {
         /// into lines made a mesh of tens of thousands of tiny lines, which MapKit drew on
         /// every frame. Cells are drawn by a tiled renderer that only looks at the ones on
         /// screen, off the main thread.
-        var cells: [HeatCell]
+        public var cells: [HeatCell]
         /// Runs that had a route.
-        var runCount: Int
+        public var runCount: Int
         /// The most runs that went through any one cell.
-        var maxRuns: Int
+        public var maxRuns: Int
         /// The length of ground covered, each street counted once however often it was run.
-        var uniqueMeters: Double
+        public var uniqueMeters: Double
         /// Every step a run took from one square to the next, so the map joins only the
         /// squares a run went between, never two squares that just happen to be side by
         /// side (two runs' GPS a street's width apart).
-        var edges: [Edge]
+        public var edges: [Edge]
         /// Which build this is. Two maps are equal when they are the same build, so
         /// SwiftUI and the map view never compare every cell on the main actor.
-        var id: UUID
+        public var id: UUID
 
-        init(
+        public init(
             cells: [HeatCell],
             runCount: Int,
             maxRuns: Int,
@@ -267,37 +295,37 @@ enum RouteHeatmap {
             self.id = id
         }
 
-        static func == (lhs: Heatmap, rhs: Heatmap) -> Bool { lhs.id == rhs.id }
+        public static func == (lhs: Heatmap, rhs: Heatmap) -> Bool { lhs.id == rhs.id }
 
-        static let empty = Heatmap(
+        public static let empty = Heatmap(
             cells: [], runCount: 0, maxRuns: 0, uniqueMeters: 0,
             id: UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
         )
 
-        var isEmpty: Bool { cells.isEmpty }
+        public var isEmpty: Bool { cells.isEmpty }
     }
 
     // MARK: Grid
 
     /// The cell a point falls in. Rows are a fixed height; each row's cells are as wide as
     /// `cellMeters` at that row's latitude, so cells stay square away from the equator.
-    static func cell(of point: Point) -> Cell {
+    public static func cell(of point: Point) -> Cell {
         let y = (point.latitude / rowHeight).rounded(.down)
         let x = (point.longitude / columnWidth(row: y)).rounded(.down)
         return Cell(x: Int32(clamping: Int(x)), y: Int32(clamping: Int(y)))
     }
 
     /// The height of a row, in degrees of latitude.
-    static var rowHeight: Double { cellMeters / metersPerDegree }
+    public static var rowHeight: Double { cellMeters / metersPerDegree }
 
     /// The width of a cell in row `y`, in degrees of longitude.
-    static func columnWidth(row y: Double) -> Double {
+    public static func columnWidth(row y: Double) -> Double {
         let rowLatitude = (y + 0.5) * rowHeight
         return rowHeight / max(cos(rowLatitude * .pi / 180), 0.01)
     }
 
     /// The south-west corner of a cell.
-    static func origin(of cell: Cell) -> Point {
+    public static func origin(of cell: Cell) -> Point {
         Point(
             latitude: Double(cell.y) * rowHeight,
             longitude: Double(cell.x) * columnWidth(row: Double(cell.y))
@@ -306,7 +334,7 @@ enum RouteHeatmap {
 
     /// Every cell within about `radiusMeters` of a point: a square of cells around the
     /// one it falls in. For "which runs went here?", where a tap is never exact.
-    static func cells(around point: Point, radiusMeters: Double) -> Set<Cell> {
+    public static func cells(around point: Point, radiusMeters: Double) -> Set<Cell> {
         let center = cell(of: point)
         let reach = max(0, Int((radiusMeters / cellMeters).rounded(.up)))
         var cells = Set<Cell>()
@@ -323,7 +351,7 @@ enum RouteHeatmap {
     }
 
     /// Metres between two points: flat-earth, which is exact enough across a few hundred metres.
-    static func distance(_ a: Point, _ b: Point) -> Double {
+    public static func distance(_ a: Point, _ b: Point) -> Double {
         let meanLatitude = (a.latitude + b.latitude) / 2 * .pi / 180
         let dy = (b.latitude - a.latitude) * metersPerDegree
         let dx = (b.longitude - a.longitude) * metersPerDegree * cos(meanLatitude)
@@ -334,7 +362,7 @@ enum RouteHeatmap {
 
     /// The stored route blob (JSON of latitude/longitude pairs) as a trace. `nil` for a
     /// run with no route or one that can't be read.
-    static func trace(routeData: Data) -> Trace? {
+    public static func trace(routeData: Data) -> Trace? {
         guard !routeData.isEmpty, let points = try? JSONDecoder().decode([Point].self, from: routeData) else {
             return nil
         }
@@ -343,7 +371,7 @@ enum RouteHeatmap {
 
     /// A route as the cells it passed through. Points are filled in between GPS fixes so a
     /// sparse route still touches every cell along the street.
-    static func trace(_ points: [Point]) -> Trace {
+    public static func trace(_ points: [Point]) -> Trace {
         var index: [Cell: Int32] = [:]
         var cells: [Cell] = []
         var sums: [(latitude: Double, longitude: Double, count: Double)] = []
@@ -436,11 +464,11 @@ enum RouteHeatmap {
     // MARK: Building the map
 
     /// Two neighbouring cells a run went between, either way round.
-    struct Edge: Hashable, Sendable {
-        let a: Cell
-        let b: Cell
+    public struct Edge: Hashable, Sendable {
+        public let a: Cell
+        public let b: Cell
 
-        init(_ first: Cell, _ second: Cell) {
+        public init(_ first: Cell, _ second: Cell) {
             if first < second { a = first; b = second } else { a = second; b = first }
         }
     }
@@ -448,7 +476,7 @@ enum RouteHeatmap {
     /// The heat level of a cell run `runs` times when the busiest was run `maxRuns` times.
     /// Logarithmic, because a home street run 400 times would otherwise leave every other
     /// street in the coolest colour.
-    static func level(runs: Int, maxRuns: Int) -> Int {
+    public static func level(runs: Int, maxRuns: Int) -> Int {
         guard runs > 0 else { return 0 }
         guard maxRuns > 1 else { return 1 }
         // A cell run once is always the coolest colour, the busiest always the hottest.
@@ -458,7 +486,7 @@ enum RouteHeatmap {
 
     /// Every trace folded into one map. A run counts once in a cell however many times it
     /// went through it, so an out-and-back is one run, not two.
-    static func build(_ traces: [Trace]) -> Heatmap {
+    public static func build(_ traces: [Trace]) -> Heatmap {
         var cellRuns: [Cell: Int] = [:]
         var centerSums: [Cell: (latitude: Double, longitude: Double, count: Double)] = [:]
         var runCount = 0
@@ -506,7 +534,7 @@ enum RouteHeatmap {
     /// own cells are added to what's known once it is done, so a run counts in full, and a
     /// step into a cell it already went through this run (the way back of an
     /// out-and-back) doesn't count again.
-    static func groundMeters(_ traces: [Trace], alreadyKnown: Set<Cell> = []) -> Double {
+    public static func groundMeters(_ traces: [Trace], alreadyKnown: Set<Cell> = []) -> Double {
         var known = alreadyKnown
         var meters = 0.0
         for trace in traces where !trace.isEmpty {
@@ -528,40 +556,66 @@ enum RouteHeatmap {
 
     /// What a shared heatmap leaves out, from the runner's ``RoutePrivacy``: the first and
     /// last stretch of every run, and anything near a private place.
-    struct Privacy: Sendable, Equatable {
-        struct Zone: Sendable, Equatable {
-            var center: Point
-            var radiusMeters: Double
+    public struct Privacy: Sendable, Equatable {
+        public struct Zone: Sendable, Equatable {
+            public var center: Point
+            public var radiusMeters: Double
+
+            public init(
+                center: Point,
+                radiusMeters: Double
+            ) {
+                self.center = center
+                self.radiusMeters = radiusMeters
+            }
         }
 
-        var hideEndsMeters: Double
-        var zones: [Zone]
+        public var hideEndsMeters: Double
+        public var zones: [Zone]
 
-        static let off = Privacy(hideEndsMeters: 0, zones: [])
+        public static let off = Privacy(hideEndsMeters: 0, zones: [])
 
-        var hidesAnything: Bool { hideEndsMeters > 0 || !zones.isEmpty }
+        public var hidesAnything: Bool { hideEndsMeters > 0 || !zones.isEmpty }
+
+        public init(
+            hideEndsMeters: Double,
+            zones: [Zone]
+        ) {
+            self.hideEndsMeters = hideEndsMeters
+            self.zones = zones
+        }
     }
 
     // MARK: New ground
 
     /// Streets run for the first time in a period.
-    struct NewGround: Equatable, Sendable {
+    public struct NewGround: Equatable, Sendable {
         /// The new cells' centres.
-        var cells: [Point]
+        public var cells: [Point]
         /// Length of the new streets.
-        var meters: Double
+        public var meters: Double
         /// Which result this is; equal only to itself, like ``Heatmap``.
-        var id = UUID()
+        public var id = UUID()
 
-        static func == (lhs: NewGround, rhs: NewGround) -> Bool { lhs.id == rhs.id }
+        public static func == (lhs: NewGround, rhs: NewGround) -> Bool { lhs.id == rhs.id }
 
-        static let none = NewGround(cells: [], meters: 0, id: UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1)))
+        public static let none = NewGround(cells: [], meters: 0, id: UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1)))
+
+        public init(
+            cells: [Point],
+            meters: Double,
+            id: UUID = UUID()
+        ) {
+            self.cells = cells
+            self.meters = meters
+            self.id = id
+        }
     }
 
     /// The cells the period's runs went through that no earlier run came within a cell
     /// of: where the period broke new ground. "Within a cell" so GPS wander on a familiar
     /// street doesn't show up as new.
-    static func newGround(in traces: [Trace], before earlier: [Trace]) -> NewGround {
+    public static func newGround(in traces: [Trace], before earlier: [Trace]) -> NewGround {
         var known = Set<Cell>()
         for trace in earlier {
             for cell in trace.cells { known.formUnion(neighbourhood(of: cell)) }
@@ -583,7 +637,7 @@ enum RouteHeatmap {
     }
 
     /// A cell and its eight neighbours.
-    static func neighbourhood(of cell: Cell) -> [Cell] {
+    public static func neighbourhood(of cell: Cell) -> [Cell] {
         var cells: [Cell] = []
         cells.reserveCapacity(9)
         for dy in -1...1 {
@@ -595,7 +649,7 @@ enum RouteHeatmap {
     }
 
     /// Every pair of neighbouring cells a trace went between.
-    static func edges(of trace: Trace) -> Set<Edge> {
+    public static func edges(of trace: Trace) -> Set<Edge> {
         var edges = Set<Edge>()
         for segment in trace.segments {
             for (from, to) in zip(segment, segment.dropFirst()) {

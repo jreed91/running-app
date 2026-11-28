@@ -3,13 +3,25 @@ import Foundation
 // MARK: - TrainingBreakRequest
 
 /// What the runner told the plan: why, what they want it to do, and when.
-struct TrainingBreakRequest: Equatable, Sendable {
-    let reason: TrainingBreak.Reason
-    let mode: TrainingBreak.Mode
+public struct TrainingBreakRequest: Equatable, Sendable {
+    public let reason: TrainingBreak.Reason
+    public let mode: TrainingBreak.Mode
     /// The break's first day.
-    let startDate: Date
+    public let startDate: Date
     /// How many days it lasts, the first day included.
-    let days: Int
+    public let days: Int
+
+    public init(
+        reason: TrainingBreak.Reason,
+        mode: TrainingBreak.Mode,
+        startDate: Date,
+        days: Int
+    ) {
+        self.reason = reason
+        self.mode = mode
+        self.startDate = startDate
+        self.days = days
+    }
 }
 
 // MARK: - TrainingBreakPlanner
@@ -35,54 +47,86 @@ struct TrainingBreakRequest: Equatable, Sendable {
 /// - **Ease off only on a pace-based plan.** A Start Running or pregnancy plan prescribes
 ///   by minutes and effort; it can pause, but it has no easy-distance version of a
 ///   session to write, and no ramp: Start Running has "Repeat this week" for that.
-enum TrainingBreakPlanner {
+public enum TrainingBreakPlanner {
 
-    typealias Plan = PlanChangePlanner.Plan
-    typealias Session = PlanChangePlanner.Session
+    public typealias Plan = PlanChangePlanner.Plan
+    public typealias Session = PlanChangePlanner.Session
 
     /// One session the break changes.
-    struct Edit: Equatable, Sendable, Identifiable {
-        enum Stage: Equatable, Sendable {
+    public struct Edit: Equatable, Sendable, Identifiable {
+        public enum Stage: Equatable, Sendable {
             case onBreak
             case easingBack
         }
 
-        enum Outcome: Equatable, Sendable {
+        public enum Outcome: Equatable, Sendable {
             case rest
             /// A run of this type and distance. Nil distance only for intervals kept as
             /// intervals, whose distance is in the reps.
             case run(WorkoutType, distanceMeters: Double?)
         }
 
-        let sessionID: UUID
-        let date: Date
-        let stage: Stage
-        let fromType: WorkoutType
-        let fromDistanceMeters: Double?
-        let outcome: Outcome
+        public let sessionID: UUID
+        public let date: Date
+        public let stage: Stage
+        public let fromType: WorkoutType
+        public let fromDistanceMeters: Double?
+        public let outcome: Outcome
 
-        var id: UUID { sessionID }
-    }
+        public var id: UUID { sessionID }
 
-    /// What the break would do, for the sheet to show and the applier to write.
-    struct Proposal: Equatable, Sendable {
-        let request: TrainingBreakRequest
-        /// The break's first and last day, at the start of the day.
-        let startDate: Date
-        let endDate: Date
-        let ramp: TrainingBreakPolicy.Ramp?
-        /// The last easing-back day the plan actually reaches: the ramp's last day,
-        /// brought in to the day before the race or the plan's end.
-        let rampEndDate: Date?
-        /// Soonest first.
-        let edits: [Edit]
-
-        var suggestsRebuild: Bool {
-            request.mode == .pause && request.days >= TrainingBreakPolicy.rebuildSuggestedAfterDays
+        public init(
+            sessionID: UUID,
+            date: Date,
+            stage: Stage,
+            fromType: WorkoutType,
+            fromDistanceMeters: Double?,
+            outcome: Outcome
+        ) {
+            self.sessionID = sessionID
+            self.date = date
+            self.stage = stage
+            self.fromType = fromType
+            self.fromDistanceMeters = fromDistanceMeters
+            self.outcome = outcome
         }
     }
 
-    enum Refusal: Error, Equatable, Sendable {
+    /// What the break would do, for the sheet to show and the applier to write.
+    public struct Proposal: Equatable, Sendable {
+        public let request: TrainingBreakRequest
+        /// The break's first and last day, at the start of the day.
+        public let startDate: Date
+        public let endDate: Date
+        public let ramp: TrainingBreakPolicy.Ramp?
+        /// The last easing-back day the plan actually reaches: the ramp's last day,
+        /// brought in to the day before the race or the plan's end.
+        public let rampEndDate: Date?
+        /// Soonest first.
+        public let edits: [Edit]
+
+        public var suggestsRebuild: Bool {
+            request.mode == .pause && request.days >= TrainingBreakPolicy.rebuildSuggestedAfterDays
+        }
+
+        public init(
+            request: TrainingBreakRequest,
+            startDate: Date,
+            endDate: Date,
+            ramp: TrainingBreakPolicy.Ramp?,
+            rampEndDate: Date?,
+            edits: [Edit]
+        ) {
+            self.request = request
+            self.startDate = startDate
+            self.endDate = endDate
+            self.ramp = ramp
+            self.rampEndDate = rampEndDate
+            self.edits = edits
+        }
+    }
+
+    public enum Refusal: Error, Equatable, Sendable {
         case noPlan
         case easeOffNeedsPacePlan
         case startInPast
@@ -94,7 +138,7 @@ enum TrainingBreakPlanner {
         case nothingToChange
     }
 
-    static func propose(
+    public static func propose(
         _ request: TrainingBreakRequest,
         in plan: Plan?,
         now: Date = Date(),
@@ -154,7 +198,7 @@ enum TrainingBreakPlanner {
     /// restores them first), so the ramp is worked out from the sessions as planned.
     /// - Returns: nil when the days they had were too few to need a ramp, or the ramp
     ///   finds nothing to change.
-    static func rampForEarlyReturn(
+    public static func rampForEarlyReturn(
         reason: TrainingBreak.Reason,
         mode: TrainingBreak.Mode,
         breakStart: Date,

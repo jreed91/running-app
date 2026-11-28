@@ -16,7 +16,7 @@ import Foundation
 /// showing, it just cannot be specific yet.
 ///
 /// Pure and Foundation-only, so all of it is testable without a store or a view.
-enum CoachNutrition {
+public enum CoachNutrition {
 
     // MARK: Rates
     //
@@ -27,58 +27,68 @@ enum CoachNutrition {
     /// Carbohydrate per hour, per kg of body mass, for a session long enough to fuel
     /// during. Below the ~1.2 g/kg/h that trained guts tolerate, because this is the rate
     /// to *practise* at rather than the maximum to attempt.
-    static let carbGramsPerKilogramPerHour = 0.9
+    public static let carbGramsPerKilogramPerHour = 0.9
     /// Absorption ceiling. Past roughly this, more carbohydrate goes through the runner
     /// rather than into them, whatever their mass.
-    static let carbGramsPerHourCeiling = 90.0
+    public static let carbGramsPerHourCeiling = 90.0
     /// Floor, so a very light runner is not told to take a rate that would not sustain
     /// anyone over a long effort.
-    static let carbGramsPerHourFloor = 30.0
+    public static let carbGramsPerHourFloor = 30.0
 
     /// Carbohydrate per kg for the meal 2–3 hours before a quality session.
-    static let preSessionCarbGramsPerKilogram = 1.5
+    public static let preSessionCarbGramsPerKilogram = 1.5
     /// Carbohydrate per kg inside the recovery window.
-    static let recoveryCarbGramsPerKilogram = 1.0
+    public static let recoveryCarbGramsPerKilogram = 1.0
     /// Protein per kg inside the recovery window.
-    static let recoveryProteinGramsPerKilogram = 0.3
+    public static let recoveryProteinGramsPerKilogram = 0.3
 
     /// Fluid in ml per kg per hour in temperate conditions.
-    static let fluidMillilitresPerKilogramPerHour = 6.0
+    public static let fluidMillilitresPerKilogramPerHour = 6.0
     /// The same in heat — sweat rate rises with the apparent temperature, and this is the
     /// upper anchor the heat card interpolates toward.
-    static let fluidMillilitresPerKilogramPerHourInHeat = 10.0
+    public static let fluidMillilitresPerKilogramPerHourInHeat = 10.0
     /// Apparent temperature at which the heat anchor is reached.
-    static let fluidHeatCeilingCelsius = 32.0
+    public static let fluidHeatCeilingCelsius = 32.0
     /// Apparent temperature below which the temperate rate applies unchanged.
-    static let fluidHeatFloorCelsius = 20.0
+    public static let fluidHeatFloorCelsius = 20.0
     /// The guideline hourly range quoted when body mass is unknown, in millilitres.
     /// Stored metric and converted for display, so the two units cannot drift apart.
-    static let fluidGuidelineLowerMillilitres = 400.0
-    static let fluidGuidelineUpperMillilitres = 800.0
+    public static let fluidGuidelineLowerMillilitres = 400.0
+    public static let fluidGuidelineUpperMillilitres = 800.0
 
     // MARK: Conversions
 
-    static let poundsPerKilogram = 2.20462
-    static let millilitresPerFluidOunce = 29.5735
+    public static let poundsPerKilogram = 2.20462
+    public static let millilitresPerFluidOunce = 29.5735
 
     // MARK: - Target
 
     /// One computed amount and the working behind it.
-    struct Target: Equatable, Sendable {
+    public struct Target: Equatable, Sendable {
         /// The amount, already formatted — "62 g an hour", "30–60 g an hour".
-        let amount: String
+        public let amount: String
         /// What it was computed from, for the card's derivation line. Nil only when there
         /// is genuinely nothing to show.
-        let derivation: String?
+        public let derivation: String?
         /// Whether `amount` was computed from this runner's mass rather than quoted as a
         /// guideline range. Drives whether the card can claim to be specific.
-        let isPersonalised: Bool
+        public let isPersonalised: Bool
+
+        public init(
+            amount: String,
+            derivation: String?,
+            isPersonalised: Bool
+        ) {
+            self.amount = amount
+            self.derivation = derivation
+            self.isPersonalised = isPersonalised
+        }
     }
 
     // MARK: - In-session carbohydrate
 
     /// Carbohydrate per hour for a session long enough to fuel during it.
-    static func inSessionCarbohydrate(
+    public static func inSessionCarbohydrate(
         bodyMassKg: Double?,
         durationSeconds: Double,
         unit: UnitPreference
@@ -121,7 +131,7 @@ enum CoachNutrition {
     // MARK: - Pre-session carbohydrate
 
     /// The carbohydrate in the meal before a quality session.
-    static func preSessionCarbohydrate(bodyMassKg: Double?, unit: UnitPreference) -> Target {
+    public static func preSessionCarbohydrate(bodyMassKg: Double?, unit: UnitPreference) -> Target {
         guard let mass = validMass(bodyMassKg) else {
             return Target(
                 amount: String(
@@ -147,7 +157,7 @@ enum CoachNutrition {
     // MARK: - Recovery
 
     /// Carbohydrate and protein for the window straight after a demanding run.
-    static func recovery(bodyMassKg: Double?, unit: UnitPreference) -> Target {
+    public static func recovery(bodyMassKg: Double?, unit: UnitPreference) -> Target {
         guard let mass = validMass(bodyMassKg) else {
             return Target(
                 amount: String(
@@ -181,7 +191,7 @@ enum CoachNutrition {
     ///
     /// Linear between the two anchors rather than stepped: a card that says 6 ml/kg at
     /// 19° and 10 at 21° would be describing the threshold, not the weather.
-    static func fluid(
+    public static func fluid(
         bodyMassKg: Double?,
         feelsLikeCelsius: Double?,
         unit: UnitPreference
@@ -217,7 +227,7 @@ enum CoachNutrition {
     }
 
     /// The ml/kg/h anchor for the conditions, interpolated between temperate and hot.
-    static func fluidRate(feelsLikeCelsius: Double?) -> Double {
+    public static func fluidRate(feelsLikeCelsius: Double?) -> Double {
         guard let feelsLike = feelsLikeCelsius, feelsLike > fluidHeatFloorCelsius else {
             return fluidMillilitresPerKilogramPerHour
         }
@@ -232,13 +242,13 @@ enum CoachNutrition {
     /// A mass only counts if it is physically plausible. HealthKit will hand back whatever
     /// was written to it, including a value in the wrong unit or a stale entry from a
     /// scale that reported zero.
-    static func validMass(_ kilograms: Double?) -> Double? {
+    public static func validMass(_ kilograms: Double?) -> Double? {
         guard let kilograms, kilograms.isFinite, (25.0...250.0).contains(kilograms) else { return nil }
         return kilograms
     }
 
     /// Joins the parts of a derivation line with the separator the cards use.
-    static func derivation(_ parts: [String?]) -> String? {
+    public static func derivation(_ parts: [String?]) -> String? {
         let kept = parts.compactMap { $0 }
         return kept.isEmpty ? nil : kept.joined(separator: " · ")
     }
@@ -252,7 +262,7 @@ enum CoachNutrition {
     /// bottles are marked in ounces, so converting them would be translating away from
     /// the number printed on the packet. Fluid is the opposite — a runner filling a
     /// 20 oz bottle cannot act on "450 ml".
-    static func convertedVolume(millilitres: Double, unit: UnitPreference) -> Double {
+    public static func convertedVolume(millilitres: Double, unit: UnitPreference) -> Double {
         switch unit {
         case .metric:   return millilitres
         case .imperial: return millilitres / millilitresPerFluidOunce
@@ -264,7 +274,7 @@ enum CoachNutrition {
     /// Metric rounds to 50 ml and imperial to the nearest fluid ounce (about 30 ml) —
     /// both far coarser than the arithmetic, because a sweat-rate anchor does not support
     /// "637 ml" and nobody pours to that anyway.
-    static func volumeText(millilitres: Double, unit: UnitPreference) -> String {
+    public static func volumeText(millilitres: Double, unit: UnitPreference) -> String {
         switch unit {
         case .metric:
             let rounded = Int((millilitres / 50).rounded() * 50)
@@ -277,7 +287,7 @@ enum CoachNutrition {
 
     /// A total for one session ("about 14 fl oz"), rounded the same way as `volumeText`,
     /// so a runner reads what to carry rather than multiplying an hourly rate out.
-    static func volumeTotalText(millilitres: Double, unit: UnitPreference) -> String {
+    public static func volumeTotalText(millilitres: Double, unit: UnitPreference) -> String {
         switch unit {
         case .metric:
             let rounded = max(50, Int((millilitres / 50).rounded() * 50))
@@ -289,7 +299,7 @@ enum CoachNutrition {
     }
 
     /// The guideline range, converted the same way, so the two units cannot drift.
-    static func volumeRangeText(
+    public static func volumeRangeText(
         lowerMillilitres: Double,
         upperMillilitres: Double,
         unit: UnitPreference

@@ -10,32 +10,32 @@ import Foundation
 /// thing every weekly prescription is indexed by is gestational age, not week number.
 ///
 /// See `docs/PREGNANCY_RUNNING_EVIDENCE.md`.
-struct GestationalAge: Hashable, Sendable, Comparable {
+public struct GestationalAge: Hashable, Sendable, Comparable {
 
     /// Completed weeks since LMP.
-    let weeks: Int
+    public let weeks: Int
     /// Completed days beyond `weeks`, always 0…6.
-    let days: Int
+    public let days: Int
 
     /// Days from LMP to the estimated due date — the 40-week convention.
-    static let termDays = 280
+    public static let termDays = 280
 
-    init(weeks: Int, days: Int) {
+    public init(weeks: Int, days: Int) {
         self.init(totalDays: weeks * 7 + days)
     }
 
     /// Clamped at zero: a start date more than 40 weeks before the due date is a data-entry
     /// error, not a negative pregnancy, and the callers downstream index tables by week.
-    init(totalDays: Int) {
+    public init(totalDays: Int) {
         let clamped = max(0, totalDays)
         self.weeks = clamped / 7
         self.days = clamped % 7
     }
 
-    var totalDays: Int { weeks * 7 + days }
+    public var totalDays: Int { weeks * 7 + days }
 
     /// Gestational age on `date` for a pregnancy with estimated due date `dueDate`.
-    static func on(_ date: Date, dueDate: Date, calendar: Calendar = .current) -> GestationalAge {
+    public static func on(_ date: Date, dueDate: Date, calendar: Calendar = .current) -> GestationalAge {
         let daysUntilDue = calendar.dateComponents(
             [.day],
             from: calendar.startOfDay(for: date),
@@ -44,26 +44,26 @@ struct GestationalAge: Hashable, Sendable, Comparable {
         return GestationalAge(totalDays: termDays - daysUntilDue)
     }
 
-    var trimester: PregnancyTrimester { PregnancyTrimester(gestationalWeek: weeks) }
+    public var trimester: PregnancyTrimester { PregnancyTrimester(gestationalWeek: weeks) }
 
     /// The maternity-note form, e.g. "24+3". Digits and a `+` in every language, so this is
     /// deliberately not localized.
-    var noteForm: String { "\(weeks)+\(days)" }
+    public var noteForm: String { "\(weeks)+\(days)" }
 
-    static func < (lhs: GestationalAge, rhs: GestationalAge) -> Bool {
+    public static func < (lhs: GestationalAge, rhs: GestationalAge) -> Bool {
         lhs.totalDays < rhs.totalDays
     }
 }
 
 // MARK: - PregnancyTrimester
 
-enum PregnancyTrimester: String, Codable, CaseIterable, Sendable {
+public enum PregnancyTrimester: String, Codable, CaseIterable, Sendable {
     case first
     case second
     case third
 
     /// Standard obstetric boundaries: T1 through 13+6, T2 through 27+6, T3 from 28+0.
-    init(gestationalWeek week: Int) {
+    public init(gestationalWeek week: Int) {
         switch week {
         case ..<14:   self = .first
         case 14..<28: self = .second
@@ -71,7 +71,7 @@ enum PregnancyTrimester: String, Codable, CaseIterable, Sendable {
         }
     }
 
-    var gestationalWeeks: ClosedRange<Int> {
+    public var gestationalWeeks: ClosedRange<Int> {
         switch self {
         case .first:  return 0...13
         case .second: return 14...27
@@ -81,7 +81,7 @@ enum PregnancyTrimester: String, Codable, CaseIterable, Sendable {
 
     /// The canonical English form — used by AI prompts and logs, which compare and persist
     /// it, so it must not move with the device language (D8).
-    var displayName: String {
+    public var displayName: String {
         switch self {
         case .first:  return "First Trimester"
         case .second: return "Second Trimester"
@@ -89,7 +89,7 @@ enum PregnancyTrimester: String, Codable, CaseIterable, Sendable {
         }
     }
 
-    var localizedName: String {
+    public var localizedName: String {
         switch self {
         case .first:  return String(localized: "First Trimester", comment: "Stage of pregnancy")
         case .second: return String(localized: "Second Trimester", comment: "Stage of pregnancy")
@@ -107,14 +107,14 @@ enum PregnancyTrimester: String, Codable, CaseIterable, Sendable {
 /// guideline's own method is the **talk test**, backed by a Borg 6–20 rating; that is what
 /// this type carries, and it is why every generated pregnancy workout leaves
 /// `targetPaceLowerBound` / `targetPaceUpperBound` nil.
-enum PregnancyEffort: String, Codable, CaseIterable, Sendable {
+public enum PregnancyEffort: String, Codable, CaseIterable, Sendable {
     case walk
     case easy
     /// The guideline's "moderate": can talk but not sing. Borg 12–14.
     case moderate
 
     /// Rating of perceived exertion on the Borg 6–20 scale.
-    var borgRange: ClosedRange<Int> {
+    public var borgRange: ClosedRange<Int> {
         switch self {
         case .walk:     return 9...11
         case .easy:     return 11...13
@@ -122,7 +122,7 @@ enum PregnancyEffort: String, Codable, CaseIterable, Sendable {
         }
     }
 
-    var displayName: String {
+    public var displayName: String {
         switch self {
         case .walk:     return "Walk"
         case .easy:     return "Easy"
@@ -130,7 +130,7 @@ enum PregnancyEffort: String, Codable, CaseIterable, Sendable {
         }
     }
 
-    var localizedName: String {
+    public var localizedName: String {
         switch self {
         case .walk:     return String(localized: "Walk", comment: "Pregnancy run effort")
         case .easy:     return String(localized: "Easy", comment: "Pregnancy run effort")
@@ -139,7 +139,7 @@ enum PregnancyEffort: String, Codable, CaseIterable, Sendable {
     }
 
     /// The talk test, in the words the guideline uses for it.
-    var talkTest: String {
+    public var talkTest: String {
         switch self {
         case .walk:
             return String(
@@ -160,7 +160,7 @@ enum PregnancyEffort: String, Codable, CaseIterable, Sendable {
     }
 
     /// Effort plus its Borg range, for a workout note.
-    var prescription: String {
+    public var prescription: String {
         String(
             localized: "\(localizedName) effort (RPE \(borgRange.lowerBound)–\(borgRange.upperBound) of 20). \(talkTest)",
             comment: "Effort prescription on a pregnancy workout: effort name, Borg range, talk test"
@@ -175,7 +175,7 @@ enum PregnancyEffort: String, Codable, CaseIterable, Sendable {
 /// The shared list from ACOG Committee Opinion 804 and the 2019 Canadian guideline. It is
 /// deliberately reproduced in full and never summarised for a smaller screen: a shortened
 /// red-flag list is worse than none, because it reads as complete.
-enum PregnancyRedFlag: String, CaseIterable, Sendable, Identifiable {
+public enum PregnancyRedFlag: String, CaseIterable, Sendable, Identifiable {
     case vaginalBleeding
     case fluidLoss
     case contractions
@@ -187,9 +187,9 @@ enum PregnancyRedFlag: String, CaseIterable, Sendable, Identifiable {
     case calfPainOrSwelling
     case reducedFetalMovement
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var localizedText: String {
+    public var localizedText: String {
         switch self {
         case .vaginalBleeding:
             return String(localized: "Vaginal bleeding", comment: "Pregnancy exercise red flag")
@@ -223,23 +223,23 @@ enum PregnancyRedFlag: String, CaseIterable, Sendable, Identifiable {
 /// than the usual activities of daily living. `relative` means the decision belongs with the
 /// runner's own maternity provider, not with this app. Either way Stride's job is the same:
 /// stop, and say who to ask.
-struct PregnancyContraindication: Hashable, Sendable, Identifiable {
+public struct PregnancyContraindication: Hashable, Sendable, Identifiable {
 
-    enum Severity: String, Hashable, Sendable {
+    public enum Severity: String, Hashable, Sendable {
         case absolute
         case relative
     }
 
-    let id: String
-    let severity: Severity
-    let localizedText: String
+    public let id: String
+    public let severity: Severity
+    public let localizedText: String
 
     private static func entry(_ id: String, _ severity: Severity, _ text: String) -> PregnancyContraindication {
         PregnancyContraindication(id: id, severity: severity, localizedText: text)
     }
 
     /// ACOG Committee Opinion 804; 2019 Canadian guideline (triplets or higher).
-    static let absolute: [PregnancyContraindication] = [
+    public static let absolute: [PregnancyContraindication] = [
         entry("heart_disease", .absolute, String(localized: "Haemodynamically significant heart disease", comment: "Absolute contraindication to exercise in pregnancy")),
         entry("restrictive_lung", .absolute, String(localized: "Restrictive lung disease", comment: "Absolute contraindication to exercise in pregnancy")),
         entry("cerclage", .absolute, String(localized: "Incompetent cervix, or a cerclage in place", comment: "Absolute contraindication to exercise in pregnancy")),
@@ -253,7 +253,7 @@ struct PregnancyContraindication: Hashable, Sendable, Identifiable {
     ]
 
     /// ACOG Committee Opinion 804; 2019 Canadian guideline (twin pregnancy after 28 weeks).
-    static let relative: [PregnancyContraindication] = [
+    public static let relative: [PregnancyContraindication] = [
         entry("anaemia", .relative, String(localized: "Anaemia", comment: "Relative contraindication to exercise in pregnancy")),
         entry("arrhythmia", .relative, String(localized: "Unevaluated maternal cardiac arrhythmia", comment: "Relative contraindication to exercise in pregnancy")),
         entry("chronic_bronchitis", .relative, String(localized: "Chronic bronchitis", comment: "Relative contraindication to exercise in pregnancy")),
@@ -270,5 +270,15 @@ struct PregnancyContraindication: Hashable, Sendable, Identifiable {
         entry("twins_after_28", .relative, String(localized: "Twin pregnancy after 28 weeks", comment: "Relative contraindication to exercise in pregnancy"))
     ]
 
-    static var all: [PregnancyContraindication] { absolute + relative }
+    public static var all: [PregnancyContraindication] { absolute + relative }
+
+    public init(
+        id: String,
+        severity: Severity,
+        localizedText: String
+    ) {
+        self.id = id
+        self.severity = severity
+        self.localizedText = localizedText
+    }
 }

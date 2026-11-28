@@ -9,7 +9,7 @@ import Foundation
 /// artwork and nothing about the beat — so a tier here is an editorial claim about how a
 /// stretch of music feels, never a claim about how fast it is. Anything in the UI that
 /// implied "160 bpm for your intervals" would be inventing data Apple does not publish.
-enum RunPlaylistEnergy: String, Codable, CaseIterable, Sendable, Identifiable {
+public enum RunPlaylistEnergy: String, Codable, CaseIterable, Sendable, Identifiable {
     /// Warm-ups, cool-downs, and the walking bookends of a pregnancy session.
     case calm
     /// Steady running: easy days, long runs, and the recovery jogs inside a hard set.
@@ -17,10 +17,10 @@ enum RunPlaylistEnergy: String, Codable, CaseIterable, Sendable, Identifiable {
     /// The working part of a tempo, an interval session, or a race.
     case hard
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
     /// The canonical English form, for logs and stored keys. Never shown to a runner.
-    var displayName: String {
+    public var displayName: String {
         switch self {
         case .calm:   return "Calm"
         case .steady: return "Steady"
@@ -28,7 +28,7 @@ enum RunPlaylistEnergy: String, Codable, CaseIterable, Sendable, Identifiable {
         }
     }
 
-    var localizedName: String {
+    public var localizedName: String {
         switch self {
         case .calm:
             return String(localized: "Calm", comment: "Run-playlist energy tier: warm-ups and cool-downs")
@@ -41,7 +41,7 @@ enum RunPlaylistEnergy: String, Codable, CaseIterable, Sendable, Identifiable {
 
     /// What this tier is for, in the runner's words. Used by the Settings picker, where
     /// the tier name alone does not say which part of a run it scores.
-    var localizedDescription: String {
+    public var localizedDescription: String {
         switch self {
         case .calm:
             return String(
@@ -65,10 +65,18 @@ enum RunPlaylistEnergy: String, Codable, CaseIterable, Sendable, Identifiable {
 // MARK: - Plan
 
 /// One contiguous stretch of a session that should be scored at a single energy.
-struct RunPlaylistBlock: Codable, Hashable, Sendable {
-    var energy: RunPlaylistEnergy
+public struct RunPlaylistBlock: Codable, Hashable, Sendable {
+    public var energy: RunPlaylistEnergy
     /// How long this stretch of the session lasts, in seconds — before any buffer.
-    var seconds: Double
+    public var seconds: Double
+
+    public init(
+        energy: RunPlaylistEnergy,
+        seconds: Double
+    ) {
+        self.energy = energy
+        self.seconds = seconds
+    }
 }
 
 /// The shape of a session, expressed as music rather than as pace.
@@ -77,15 +85,23 @@ struct RunPlaylistBlock: Codable, Hashable, Sendable {
 /// ``RunPlaylistService``, which is the only half that needs MusicKit. Keeping the shape
 /// in a value type is what lets every interesting decision in this feature be tested
 /// without an Apple Music subscription, a network, or a device.
-struct RunPlaylistPlan: Codable, Hashable, Sendable {
+public struct RunPlaylistPlan: Codable, Hashable, Sendable {
     /// Blocks in the order the runner will meet them.
-    var blocks: [RunPlaylistBlock]
+    public var blocks: [RunPlaylistBlock]
     /// The session's own estimated duration, before buffers.
-    var sessionSeconds: Double
+    public var sessionSeconds: Double
 
     /// Total music to gather, including each block's buffer.
-    var targetSeconds: Double {
+    public var targetSeconds: Double {
         blocks.reduce(0) { $0 + $1.seconds + MusicEnergyPolicy.bufferSeconds(forBlockOf: $1.seconds) }
+    }
+
+    public init(
+        blocks: [RunPlaylistBlock],
+        sessionSeconds: Double
+    ) {
+        self.blocks = blocks
+        self.sessionSeconds = sessionSeconds
     }
 }
 
@@ -103,28 +119,42 @@ struct RunPlaylistPlan: Codable, Hashable, Sendable {
 /// What it costs is that it shows the playlist **as Stride built it**. If the runner reorders
 /// or deletes tracks in Apple Music, this does not follow — which is why the detail screen
 /// says so rather than presenting itself as a live mirror.
-struct RunPlaylistTrack: Codable, Hashable, Sendable, Identifiable {
+public struct RunPlaylistTrack: Codable, Hashable, Sendable, Identifiable {
     /// `MusicItemID.rawValue`. Also what makes a track unique within a playlist.
-    var id: String
-    var title: String
-    var artist: String
-    var seconds: Double
+    public var id: String
+    public var title: String
+    public var artist: String
+    public var seconds: Double
     /// The block this track was placed in — the reason a playlist is worth looking at rather
     /// than just playing, since it is what shows the shape actually landed.
-    var energy: RunPlaylistEnergy
+    public var energy: RunPlaylistEnergy
+
+    public init(
+        id: String,
+        title: String,
+        artist: String,
+        seconds: Double,
+        energy: RunPlaylistEnergy
+    ) {
+        self.id = id
+        self.title = title
+        self.artist = artist
+        self.seconds = seconds
+        self.energy = energy
+    }
 }
 
 /// A run of consecutive tracks sharing an energy — one block of the playlist, as heard.
-struct RunPlaylistTrackSection: Identifiable, Hashable, Sendable {
-    var energy: RunPlaylistEnergy
-    var tracks: [RunPlaylistTrack]
+public struct RunPlaylistTrackSection: Identifiable, Hashable, Sendable {
+    public var energy: RunPlaylistEnergy
+    public var tracks: [RunPlaylistTrack]
 
     /// Stable within a playlist: blocks never repeat an energy back-to-back (the planner
     /// coalesces them), so position plus energy identifies a section.
-    var id: String { "\(index)-\(energy.rawValue)" }
-    var index: Int
+    public var id: String { "\(index)-\(energy.rawValue)" }
+    public var index: Int
 
-    var seconds: Double { tracks.reduce(0) { $0 + $1.seconds } }
+    public var seconds: Double { tracks.reduce(0) { $0 + $1.seconds } }
 
     /// Groups an ordered track list back into the blocks it was built from.
     ///
@@ -132,7 +162,7 @@ struct RunPlaylistTrackSection: Identifiable, Hashable, Sendable {
     /// exactly, because `RunPlaylistPlanner` guarantees no two neighbouring blocks share an
     /// energy — so a change of energy in this list is always a block boundary and never a
     /// split within one.
-    static func sections(from tracks: [RunPlaylistTrack]) -> [RunPlaylistTrackSection] {
+    public static func sections(from tracks: [RunPlaylistTrack]) -> [RunPlaylistTrackSection] {
         var sections: [RunPlaylistTrackSection] = []
         for track in tracks {
             if var last = sections.last, last.energy == track.energy {
@@ -145,6 +175,16 @@ struct RunPlaylistTrackSection: Identifiable, Hashable, Sendable {
             }
         }
         return sections
+    }
+
+    public init(
+        energy: RunPlaylistEnergy,
+        tracks: [RunPlaylistTrack],
+        index: Int
+    ) {
+        self.energy = energy
+        self.tracks = tracks
+        self.index = index
     }
 }
 
@@ -161,28 +201,28 @@ struct RunPlaylistTrackSection: Identifiable, Hashable, Sendable {
 /// account. What stays local is only Stride's note of which playlist belongs to which
 /// session, and the cost of that being device-local is that a second device offers to
 /// build the playlist again rather than offering to open it.
-struct RunPlaylistLink: Codable, Hashable, Sendable {
+public struct RunPlaylistLink: Codable, Hashable, Sendable {
     /// The `ScheduledWorkout` this playlist was built for.
-    var workoutID: UUID
+    public var workoutID: UUID
     /// `MusicItemID.rawValue` of the created library playlist.
-    var playlistID: String
+    public var playlistID: String
     /// The name the playlist was given, so the UI can name it without a MusicKit round trip.
-    var name: String
-    var trackCount: Int
-    var totalSeconds: Double
-    var builtAt: Date
+    public var name: String
+    public var trackCount: Int
+    public var totalSeconds: Double
+    public var builtAt: Date
     /// False when the runner has no Apple Music subscription and the playlist was filled
     /// from their own library. Drives nothing but the wording of the confirmation.
-    var usedCatalog: Bool
+    public var usedCatalog: Bool
 
     /// The playlist's tracks in order. Empty for links written before they were stored, which
     /// is what the detail screen checks before offering to show them.
-    var tracks: [RunPlaylistTrack]
+    public var tracks: [RunPlaylistTrack]
 
     /// The tracks grouped back into the blocks they were built from.
-    var sections: [RunPlaylistTrackSection] { RunPlaylistTrackSection.sections(from: tracks) }
+    public var sections: [RunPlaylistTrackSection] { RunPlaylistTrackSection.sections(from: tracks) }
 
-    init(
+    public init(
         workoutID: UUID,
         playlistID: String,
         name: String,
@@ -204,12 +244,12 @@ struct RunPlaylistLink: Codable, Hashable, Sendable {
 
     /// Decodes `tracks` as empty when absent, so a link written by an earlier build still
     /// decodes instead of taking the whole stored link down with it.
-    enum CodingKeys: String, CodingKey {
+    public enum CodingKeys: String, CodingKey {
         case workoutID, playlistID, name, trackCount, totalSeconds, builtAt, usedCatalog
         case tracks
     }
 
-    init(from decoder: any Decoder) throws {
+    public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         workoutID = try container.decode(UUID.self, forKey: .workoutID)
         playlistID = try container.decode(String.self, forKey: .playlistID)

@@ -7,39 +7,57 @@ import Foundation
 /// at 130 bpm). Each question here has a reason to be asked about this run, from the
 /// app's own numbers rather than a model call, so they are ready the moment the page
 /// opens and cost nothing. Pure and Foundation-only.
-enum CoachQuestionSuggestions {
+public enum CoachQuestionSuggestions {
 
     /// How many questions the page shows.
-    static let limit = 3
+    public static let limit = 3
 
     /// What stood out in the run, as the questions need it.
-    struct Signals: Sendable {
-        var workoutType: WorkoutType
+    public struct Signals: Sendable {
+        public var workoutType: WorkoutType
         /// Share of heart-rate time in zones 4–5, 0...1; `nil` without zone data.
-        var hardEffortShare: Double?
+        public var hardEffortShare: Double?
         /// Second-half pace minus first-half pace, display-unit seconds; positive is a fade.
-        var secondHalfDeltaSeconds: Double?
+        public var secondHalfDeltaSeconds: Double?
         /// Actual distance over planned distance; `nil` without a planned distance.
-        var planDistanceRatio: Double?
+        public var planDistanceRatio: Double?
         /// Average pace against the planned range: negative faster, positive slower,
         /// zero inside it; `nil` without a planned pace.
-        var planPaceOffsetSeconds: Double?
-        var feel: RunFeel?
+        public var planPaceOffsetSeconds: Double?
+        public var feel: RunFeel?
         /// The next planned run, named for the question ("Thu tempo"); `nil` when none.
-        var nextPlannedLabel: String?
+        public var nextPlannedLabel: String?
+
+        public init(
+            workoutType: WorkoutType,
+            hardEffortShare: Double? = nil,
+            secondHalfDeltaSeconds: Double? = nil,
+            planDistanceRatio: Double? = nil,
+            planPaceOffsetSeconds: Double? = nil,
+            feel: RunFeel? = nil,
+            nextPlannedLabel: String? = nil
+        ) {
+            self.workoutType = workoutType
+            self.hardEffortShare = hardEffortShare
+            self.secondHalfDeltaSeconds = secondHalfDeltaSeconds
+            self.planDistanceRatio = planDistanceRatio
+            self.planPaceOffsetSeconds = planPaceOffsetSeconds
+            self.feel = feel
+            self.nextPlannedLabel = nextPlannedLabel
+        }
     }
 
     /// A hard share above this on an easy or long run is worth asking about.
-    static let hardShareThreshold = 0.20
+    public static let hardShareThreshold = 0.20
     /// A second half this many seconds slower is a fade worth asking about.
-    static let fadeThresholdSeconds = 10.0
+    public static let fadeThresholdSeconds = 10.0
     /// Finishing this much short of the planned distance is worth asking about.
-    static let shortDistanceRatio = 0.9
+    public static let shortDistanceRatio = 0.9
     /// This far off the planned pace range, in seconds, is worth asking about.
-    static let paceOffsetThresholdSeconds = 5.0
+    public static let paceOffsetThresholdSeconds = 5.0
 
     /// Up to `limit` questions, most specific first, topped up with general ones.
-    static func questions(for signals: Signals) -> [String] {
+    public static func questions(for signals: Signals) -> [String] {
         var picked: [String] = []
         let isEasyKind = signals.workoutType == .easy || signals.workoutType == .longRun
 

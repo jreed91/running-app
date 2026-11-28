@@ -11,7 +11,7 @@ import Foundation
 /// Only the wording moves with the level. What the coach judges — the plan's pace, the
 /// usual for this kind of run, the verdict — is the same for every runner, so the rules
 /// for that stay in the shared instructions and this paragraph is appended after them.
-enum CoachVoice: Equatable, Sendable {
+public enum CoachVoice: Equatable, Sendable {
     /// New to running, or coming back. No jargon at all.
     case newRunner
     /// Runs regularly. Everyday words, and a training term explained the first time.
@@ -23,7 +23,7 @@ enum CoachVoice: Equatable, Sendable {
     /// Races to a goal. As `.experienced`, framed around the goal race.
     case competitive
 
-    init(_ level: FitnessLevel?) {
+    public init(_ level: FitnessLevel?) {
         switch level {
         case .beginner:            self = .newRunner
         case .intermediate, nil:   self = .recreational
@@ -33,7 +33,7 @@ enum CoachVoice: Equatable, Sendable {
     }
 
     /// The paragraph appended to the chat, run read and adaptation instructions.
-    var guidance: String {
+    public var guidance: String {
         switch self {
         case .newRunner:
             return """
@@ -93,7 +93,7 @@ enum CoachVoice: Equatable, Sendable {
     /// cadence note) are written without training terms. The model copies those lines
     /// almost word for word, so a plain voice over jargon-laden facts still came out
     /// as "67% was at threshold or harder".
-    var usesPlainFacts: Bool {
+    public var usesPlainFacts: Bool {
         self == .newRunner || self == .recreational
     }
 
@@ -102,7 +102,7 @@ enum CoachVoice: Equatable, Sendable {
     /// Up front rather than at the end: appended after several paragraphs of judging
     /// rules, the on-device model gave it little weight. The opening paragraph (the role)
     /// still comes first.
-    func instructions(_ base: String) -> String {
+    public func instructions(_ base: String) -> String {
         guard let split = base.range(of: "\n\n") else { return guidance + "\n\n" + base }
         let opening = String(base[..<split.lowerBound])
         let rest = String(base[split.upperBound...])
@@ -114,7 +114,7 @@ enum CoachVoice: Equatable, Sendable {
     /// The tiles fit about ten characters, so the model reaches for "spm" and "Threshold
     /// time" even when told to write plainly. For a plain voice those two are swapped
     /// for everyday words here; anything else is left as written.
-    func tileText(_ text: String) -> String {
+    public func tileText(_ text: String) -> String {
         guard usesPlainFacts else { return text }
         var result = text.replacingOccurrences(
             of: #"\bspm\b"#,

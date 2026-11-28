@@ -6,24 +6,46 @@ import Foundation
 ///
 /// Plain strings so `OnDeviceCoachGenerating` can hand it across without the caller
 /// importing `FoundationModels` — the same split every other coach output makes.
-struct CoachTipDraft: Sendable, Equatable {
+public struct CoachTipDraft: Sendable, Equatable {
     /// The card's `SmartCoachCard.Kind` raw value, as the model copied it back.
-    let id: String
-    let title: String
-    let message: String
+    public let id: String
+    public let title: String
+    public let message: String
+
+    public init(
+        id: String,
+        title: String,
+        message: String
+    ) {
+        self.id = id
+        self.title = title
+        self.message = message
+    }
 }
 
 /// A model-written title and message that passed ``CoachTipRewriter/validated(_:for:)``,
 /// bound to the exact card text it was written from.
-struct CoachTipWording: Sendable, Equatable {
-    let kind: SmartCoachCard.Kind
-    let title: String
-    let message: String
+public struct CoachTipWording: Sendable, Equatable {
+    public let kind: SmartCoachCard.Kind
+    public let title: String
+    public let message: String
     /// The card's hard-coded title and message this wording replaces. A wording is only
     /// ever drawn over a card whose text still matches, so a tip written for "Tomorrow's
     /// Long Run" never lands on Thursday's, and one written for a gym day never lands on
     /// the `.prep` card for an easy run.
-    let source: String
+    public let source: String
+
+    public init(
+        kind: SmartCoachCard.Kind,
+        title: String,
+        message: String,
+        source: String
+    ) {
+        self.kind = kind
+        self.title = title
+        self.message = message
+        self.source = source
+    }
 }
 
 // MARK: - CoachTipRewriter
@@ -44,15 +66,15 @@ struct CoachTipWording: Sendable, Equatable {
 /// reload; `derivation` stays because it is the working behind the numbers.
 ///
 /// Pure: the generation itself is `AICoachService.writeCoachTips(for:provider:)`.
-enum CoachTipRewriter {
+public enum CoachTipRewriter {
 
     /// Longest title and message accepted. Generous against the hard-coded copy (the
     /// longest message is about 370 characters) so a slightly wordier rewrite still
     /// lands, but short enough that a runaway one does not take over the Home tab.
-    static let maximumTitleLength = 60
-    static let maximumMessageLength = 480
+    public static let maximumTitleLength = 60
+    public static let maximumMessageLength = 480
 
-    static let instructions = """
+    public static let instructions = """
     You are Stride's running coach, writing the short tips on the runner's home screen.
 
     The app has already chosen each tip and worked out its numbers. Rewrite each one in \
@@ -73,7 +95,7 @@ enum CoachTipRewriter {
     /// Leaves out `derivation`: its figures ("0.9 g/kg/h · 72 kg") are working the
     /// message does not quote, and a rewrite that picked one up would fail the number
     /// check below and be thrown away.
-    static func prompt(for cards: [SmartCoachCard]) -> String {
+    public static func prompt(for cards: [SmartCoachCard]) -> String {
         let blocks = cards.map { card in
             """
             id: \(card.kind.rawValue)
@@ -90,18 +112,18 @@ enum CoachTipRewriter {
     }
 
     /// What a card's wording is bound to — see ``CoachTipWording/source``.
-    static func source(of card: SmartCoachCard) -> String {
+    public static func source(of card: SmartCoachCard) -> String {
         "\(card.title)\n\(card.message)"
     }
 
     /// Changes whenever any card's text does, and only then. The dashboard keys its
     /// generation task on this, so a render that leaves the cards alone asks for nothing.
-    static func requestKey(for cards: [SmartCoachCard]) -> [String] {
+    public static func requestKey(for cards: [SmartCoachCard]) -> [String] {
         cards.map { "\($0.kind.rawValue)\n\(source(of: $0))" }
     }
 
     /// The cards that have no wording written from their current text yet.
-    static func cardsNeedingWording(
+    public static func cardsNeedingWording(
         _ cards: [SmartCoachCard],
         existing: [CoachTipWording]
     ) -> [SmartCoachCard] {
@@ -115,7 +137,7 @@ enum CoachTipRewriter {
     /// numbers differ from the card's in either direction. The number check is what makes
     /// letting a model near nutrition advice acceptable: "65 g an hour" cannot quietly
     /// become "80 g an hour", and no figure the app did not compute can appear.
-    static func validated(_ drafts: [CoachTipDraft], for cards: [SmartCoachCard]) -> [CoachTipWording] {
+    public static func validated(_ drafts: [CoachTipDraft], for cards: [SmartCoachCard]) -> [CoachTipWording] {
         var accepted: [CoachTipWording] = []
         for draft in drafts {
             let id = draft.id.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -143,7 +165,7 @@ enum CoachTipRewriter {
     /// Keeps the wording of cards that did not change while another one did, so a single
     /// card moving does not flip the whole strip back to the hard-coded copy. Anything
     /// written for text no longer on screen is dropped rather than left to accumulate.
-    static func merging(
+    public static func merging(
         _ fresh: [CoachTipWording],
         into existing: [CoachTipWording],
         keeping cards: [SmartCoachCard]
@@ -159,7 +181,7 @@ enum CoachTipRewriter {
     /// one written from its current text. Everything else about the card — kind, score,
     /// tone, glance, derivation, expiry — is untouched, so ordering and every other
     /// surface are exactly what they would be without the model.
-    static func apply(_ wordings: [CoachTipWording], to cards: [SmartCoachCard]) -> [SmartCoachCard] {
+    public static func apply(_ wordings: [CoachTipWording], to cards: [SmartCoachCard]) -> [SmartCoachCard] {
         cards.map { card in
             guard let rewrite = Self.wording(for: card, in: wordings) else { return card }
             return SmartCoachCard(
@@ -179,7 +201,7 @@ enum CoachTipRewriter {
     /// "60–90". Numbers spelled as words ("forty-five") are not seen; the instructions
     /// ask for those to be copied as written, and a rewrite that turns one into digits
     /// fails the check, which errs the safe way.
-    static func numbers(in text: String) -> Set<String> {
+    public static func numbers(in text: String) -> Set<String> {
         var found: Set<String> = []
         var current = ""
         let characters = Array(text)

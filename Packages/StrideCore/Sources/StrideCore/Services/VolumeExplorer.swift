@@ -12,12 +12,12 @@ import Foundation
 ///
 /// Pure and `Sendable`. It takes ``Run`` values rather than `RunWorkout` models, so it can
 /// be tested without SwiftData and the view decides which runs count.
-enum VolumeExplorer {
+public enum VolumeExplorer {
 
     // MARK: Inputs
 
     /// What a bar measures.
-    enum Metric: String, CaseIterable, Sendable {
+    public enum Metric: String, CaseIterable, Sendable {
         case distance
         case time
         case runs
@@ -25,11 +25,11 @@ enum VolumeExplorer {
     }
 
     /// How wide a bar is.
-    enum Grouping: String, CaseIterable, Sendable {
+    public enum Grouping: String, CaseIterable, Sendable {
         case week
         case month
 
-        var component: Calendar.Component {
+        public var component: Calendar.Component {
             switch self {
             case .week: return .weekOfYear
             case .month: return .month
@@ -38,7 +38,7 @@ enum VolumeExplorer {
     }
 
     /// How far back the chart reaches.
-    enum Window: String, CaseIterable, Sendable {
+    public enum Window: String, CaseIterable, Sendable {
         case month = "1M"
         case threeMonths = "3M"
         case sixMonths = "6M"
@@ -48,7 +48,7 @@ enum VolumeExplorer {
         /// Days the window spans, or `nil` for all time. The same counts Progress's range
         /// chips used, so "3M" totals the same runs on both:
         /// counting calendar months here gave 58.6 mi where Progress said 55.9 mi.
-        var days: Int? {
+        public var days: Int? {
             switch self {
             case .month: return 30
             case .threeMonths: return 90
@@ -59,7 +59,7 @@ enum VolumeExplorer {
         }
 
         /// Weeks read well up to half a year; past that there are too many bars to tap.
-        var defaultGrouping: Grouping {
+        public var defaultGrouping: Grouping {
             switch self {
             case .month, .threeMonths, .sixMonths: return .week
             case .year, .all: return .month
@@ -68,33 +68,47 @@ enum VolumeExplorer {
     }
 
     /// One run, as much of it as the explorer reads.
-    struct Run: Equatable, Sendable {
-        let id: UUID
-        let date: Date
-        let meters: Double
-        let seconds: Double
+    public struct Run: Equatable, Sendable {
+        public let id: UUID
+        public let date: Date
+        public let meters: Double
+        public let seconds: Double
         /// `nil` when the run carried no elevation, which counts as no climb.
-        let climbMeters: Double?
+        public let climbMeters: Double?
+
+        public init(
+            id: UUID,
+            date: Date,
+            meters: Double,
+            seconds: Double,
+            climbMeters: Double?
+        ) {
+            self.id = id
+            self.date = date
+            self.meters = meters
+            self.seconds = seconds
+            self.climbMeters = climbMeters
+        }
     }
 
     // MARK: Buckets
 
     /// One bar: a week or a month and what was run in it.
-    struct Bucket: Equatable, Sendable, Identifiable {
-        let start: Date
+    public struct Bucket: Equatable, Sendable, Identifiable {
+        public let start: Date
         /// Exclusive: the start of the next period.
-        let end: Date
-        var meters: Double = 0
-        var seconds: Double = 0
-        var climbMeters: Double = 0
+        public let end: Date
+        public var meters: Double = 0
+        public var seconds: Double = 0
+        public var climbMeters: Double = 0
         /// Oldest first, so the list under the chart reads in the order they were run.
-        var runIDs: [UUID] = []
+        public var runIDs: [UUID] = []
 
-        var id: Date { start }
-        var runCount: Int { runIDs.count }
+        public var id: Date { start }
+        public var runCount: Int { runIDs.count }
 
         /// The bar's height, in base units: metres, seconds, runs or metres climbed.
-        func value(_ metric: Metric) -> Double {
+        public func value(_ metric: Metric) -> Double {
             switch metric {
             case .distance: return meters
             case .time: return seconds
@@ -103,25 +117,41 @@ enum VolumeExplorer {
             }
         }
 
-        func contains(_ date: Date) -> Bool { date >= start && date < end }
+        public func contains(_ date: Date) -> Bool { date >= start && date < end }
+
+        public init(
+            start: Date,
+            end: Date,
+            meters: Double = 0,
+            seconds: Double = 0,
+            climbMeters: Double = 0,
+            runIDs: [UUID] = []
+        ) {
+            self.start = start
+            self.end = end
+            self.meters = meters
+            self.seconds = seconds
+            self.climbMeters = climbMeters
+            self.runIDs = runIDs
+        }
     }
 
     /// The calendar the explorer counts in: weeks start on Monday, as `Date.startOfWeek`
     /// and every other weekly figure in the app do.
-    static func calendar(base: Calendar = .current) -> Calendar {
+    public static func calendar(base: Calendar = .current) -> Calendar {
         var calendar = base
         calendar.firstWeekday = 2
         return calendar
     }
 
     /// The start of the week or month that holds `date`.
-    static func periodStart(of date: Date, grouping: Grouping, calendar: Calendar) -> Date {
+    public static func periodStart(of date: Date, grouping: Grouping, calendar: Calendar) -> Date {
         calendar.dateInterval(of: grouping.component, for: date)?.start ?? date
     }
 
     /// Where the window begins: exactly `days` back from `now`, as Progress counts, or the
     /// first run for all time. With no runs at all, all time is just the current period.
-    static func windowStart(
+    public static func windowStart(
         _ window: Window,
         now: Date,
         earliestRun: Date?,
@@ -136,7 +166,7 @@ enum VolumeExplorer {
     /// Every week or month from the one holding `start` to the one holding `now`, each
     /// holding the runs that fell in it. Empty periods are kept, so a week off reads as a
     /// gap. Runs outside those periods are ignored.
-    static func buckets(
+    public static func buckets(
         for runs: [Run],
         grouping: Grouping,
         from start: Date,
@@ -183,7 +213,7 @@ enum VolumeExplorer {
     }
 
     /// The bucket nearest a chart selection, for turning a tap into a bar.
-    static func bucket(nearest date: Date, in buckets: [Bucket]) -> Bucket? {
+    public static func bucket(nearest date: Date, in buckets: [Bucket]) -> Bucket? {
         if let index = bucketIndex(for: date, in: buckets) { return buckets[index] }
         return buckets.min { lhs, rhs in
             abs(lhs.start.timeIntervalSince(date)) < abs(rhs.start.timeIntervalSince(date))
@@ -193,23 +223,35 @@ enum VolumeExplorer {
     // MARK: Summary
 
     /// The headline over the chart.
-    struct Summary: Equatable, Sendable {
+    public struct Summary: Equatable, Sendable {
         /// Sum over the window, in the metric's base unit.
-        let total: Double
+        public let total: Double
         /// Per week or month of the window, empty ones included, so a week off pulls the
         /// average down.
-        let averagePerBucket: Double
+        public let averagePerBucket: Double
         /// The biggest bucket, or `nil` when every bucket is empty.
-        let best: Bucket?
+        public let best: Bucket?
         /// The same length of time just before the window, or `nil` for all time.
-        let previousTotal: Double?
+        public let previousTotal: Double?
 
         /// Fractional change against the previous window: 0.12 is 12% more. `nil` when
         /// there is nothing to compare with, including a previous window with no running,
         /// where any percentage would be infinite.
-        var change: Double? {
+        public var change: Double? {
             guard let previousTotal, previousTotal > 0 else { return nil }
             return (total - previousTotal) / previousTotal
+        }
+
+        public init(
+            total: Double,
+            averagePerBucket: Double,
+            best: Bucket?,
+            previousTotal: Double?
+        ) {
+            self.total = total
+            self.averagePerBucket = averagePerBucket
+            self.best = best
+            self.previousTotal = previousTotal
         }
     }
 
@@ -218,7 +260,7 @@ enum VolumeExplorer {
     /// The total counts only runs from `start` to `now`, not whole buckets: the first bar
     /// begins on the Monday (or the 1st) before `start`, and summing the bars added up to
     /// six days the runner never asked for, so the headline disagreed with Progress.
-    static func summary(
+    public static func summary(
         metric: Metric,
         runs: [Run],
         buckets: [Bucket],

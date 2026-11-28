@@ -2,17 +2,31 @@ import Foundation
 
 // MARK: - Training Paces
 
-struct TrainingPaces: Sendable {
+public struct TrainingPaces: Sendable {
     /// Easy run pace range (seconds/km). Lower = faster.
-    var easyRange: ClosedRange<Double>
+    public var easyRange: ClosedRange<Double>
     /// Marathon pace (seconds/km).
-    var marathon: Double
+    public var marathon: Double
     /// Threshold / tempo pace (seconds/km).
-    var threshold: Double
+    public var threshold: Double
     /// Interval pace (seconds/km).
-    var interval: Double
+    public var interval: Double
     /// Short repetition pace (seconds/km).
-    var repetition: Double
+    public var repetition: Double
+
+    public init(
+        easyRange: ClosedRange<Double>,
+        marathon: Double,
+        threshold: Double,
+        interval: Double,
+        repetition: Double
+    ) {
+        self.easyRange = easyRange
+        self.marathon = marathon
+        self.threshold = threshold
+        self.interval = interval
+        self.repetition = repetition
+    }
 }
 
 // MARK: - PaceCalculatorService
@@ -24,17 +38,17 @@ struct TrainingPaces: Sendable {
 /// - VO₂ at speed: `VO₂ = 0.000104v² + 0.182258v − 4.60`  (v in m/min)
 /// - %VO₂max at time t (min): `0.8 + 0.1894393·e^(−0.012778t) + 0.2989558·e^(−0.1932605t)`
 /// - VDOT = VO₂ / %VO₂max
-enum PaceCalculatorService {
+public enum PaceCalculatorService {
 
     // MARK: Core VDOT equations
 
     /// VO₂ demand for a given running speed (m/min).
-    static func vo2(forSpeedMetersPerMinute speed: Double) -> Double {
+    public static func vo2(forSpeedMetersPerMinute speed: Double) -> Double {
         -4.60 + 0.182258 * speed + 0.000104 * speed * speed
     }
 
     /// Fraction of VO₂max that can be sustained for `duration` minutes.
-    static func fractionVO2max(forDurationMinutes duration: Double) -> Double {
+    public static func fractionVO2max(forDurationMinutes duration: Double) -> Double {
         0.8
         + 0.1894393 * exp(-0.012778 * duration)
         + 0.2989558 * exp(-0.1932605 * duration)
@@ -47,7 +61,7 @@ enum PaceCalculatorService {
     /// Returns 0 for degenerate input (non-positive time or distance) rather than
     /// ∞/NaN, so callers that guard on `v > 0` / `v.isFinite` reject it cleanly and
     /// comparators (e.g. sorting workouts by VDOT) stay well-defined.
-    static func vdot(distanceMeters: Double, timeSeconds: Double) -> Double {
+    public static func vdot(distanceMeters: Double, timeSeconds: Double) -> Double {
         guard timeSeconds > 0, distanceMeters > 0 else { return 0 }
         let timeMinutes = timeSeconds / 60
         let speed = distanceMeters / timeMinutes
@@ -57,7 +71,7 @@ enum PaceCalculatorService {
     // MARK: Race prediction
 
     /// Predicts finish time (seconds) for a given distance using binary search.
-    static func predictedTime(vdot: Double, distanceMeters: Double) -> TimeInterval {
+    public static func predictedTime(vdot: Double, distanceMeters: Double) -> TimeInterval {
         var lo = 1.0          // 1 minute
         var hi = 600.0        // 10 hours
         for _ in 0..<64 {
@@ -75,7 +89,7 @@ enum PaceCalculatorService {
     /// Returns all training paces derived from a runner's VDOT.
     ///
     /// The fractions are Daniels' %VO₂max intensities for each training zone.
-    static func trainingPaces(forVDOT vdot: Double) -> TrainingPaces {
+    public static func trainingPaces(forVDOT vdot: Double) -> TrainingPaces {
         TrainingPaces(
             easyRange: paceRange(fractionLo: 0.59, fractionHi: 0.74, vdot: vdot),
             marathon: pace(fraction: 0.79, vdot: vdot),
@@ -86,7 +100,7 @@ enum PaceCalculatorService {
     }
 
     /// Convenience: derive training paces directly from a 5 K time (seconds).
-    static func trainingPaces(from5KTimeSeconds time: Double) -> TrainingPaces {
+    public static func trainingPaces(from5KTimeSeconds time: Double) -> TrainingPaces {
         let v = vdot(distanceMeters: 5_000, timeSeconds: time)
         return trainingPaces(forVDOT: v)
     }
@@ -96,7 +110,7 @@ enum PaceCalculatorService {
     /// Returns predicted race pace (sec/km) for `raceDistanceMeters`, derived
     /// from a single workout's distance and duration via VDOT. Returns nil if
     /// the workout is too short (< 1.5 km), duration is invalid, or VDOT is degenerate.
-    static func predictedRacePaceSecondsPerKm(
+    public static func predictedRacePaceSecondsPerKm(
         workoutDistanceMeters: Double,
         workoutDurationSeconds: Double,
         raceDistanceMeters: Double
@@ -111,7 +125,7 @@ enum PaceCalculatorService {
     /// OLS slope for an array of (x, y) pairs. Returns nil for fewer than 2 points
     /// or zero x-variance. When x is `timeIntervalSinceReferenceDate`, slope is in
     /// y-units per second.
-    static func linearRegressionSlope(_ points: [(x: Double, y: Double)]) -> Double? {
+    public static func linearRegressionSlope(_ points: [(x: Double, y: Double)]) -> Double? {
         guard points.count >= 2 else { return nil }
         let n = Double(points.count)
         let xMean = points.reduce(0) { $0 + $1.x } / n

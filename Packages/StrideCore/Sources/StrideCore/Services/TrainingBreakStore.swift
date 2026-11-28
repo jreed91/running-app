@@ -5,13 +5,13 @@ import Foundation
 /// `UserDefaults`, like ``AdaptedSessions`` and ``RunPlaylistStore``: a new `@Model` or a
 /// stored property on one would need a CloudKit schema deployment. Finished breaks are
 /// dropped as the store is read, so it holds at most one live break per plan.
-enum TrainingBreakStore {
+public enum TrainingBreakStore {
 
-    static let key = "trainingBreaks"
+    public static let key = "trainingBreaks"
 
     /// The break the plan is in, about to start, or easing back from; nil once it is
     /// finished.
-    static func current(
+    public static func current(
         forPlan planID: UUID,
         now: Date = Date(),
         calendar: Calendar = .current,
@@ -23,13 +23,13 @@ enum TrainingBreakStore {
     }
 
     /// Saves `trainingBreak`, replacing any stored break with its id.
-    static func save(_ trainingBreak: TrainingBreak, now: Date = Date(), in defaults: UserDefaults = .standard) {
+    public static func save(_ trainingBreak: TrainingBreak, now: Date = Date(), in defaults: UserDefaults = .standard) {
         var breaks = live(now: now, in: defaults).filter { $0.id != trainingBreak.id }
         breaks.append(trainingBreak)
         write(breaks, to: defaults)
     }
 
-    static func remove(id: UUID, in defaults: UserDefaults = .standard) {
+    public static func remove(id: UUID, in defaults: UserDefaults = .standard) {
         write(load(from: defaults).filter { $0.id != id }, to: defaults)
     }
 
@@ -37,12 +37,12 @@ enum TrainingBreakStore {
     /// changed. The refresh keeps a session's type and distance, but it rewrites the note
     /// that says why the session is shorter, and a break outlasts the week
     /// ``AdaptedSessions`` protects an edit for.
-    static func protectedIDs(now: Date = Date(), in defaults: UserDefaults = .standard) -> Set<UUID> {
+    public static func protectedIDs(now: Date = Date(), in defaults: UserDefaults = .standard) -> Set<UUID> {
         Set(live(now: now, in: defaults).flatMap { $0.changes.map(\.sessionID) })
     }
 
     /// Called from `AppContainer.resetAllData`.
-    static func removeAll(from defaults: UserDefaults = .standard) {
+    public static func removeAll(from defaults: UserDefaults = .standard) {
         defaults.removeObject(forKey: key)
     }
 

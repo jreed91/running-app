@@ -22,7 +22,7 @@ import Foundation
 /// The screens draw from `phase`-like reads: `waiting` is the typing dots or skeleton,
 /// `streaming` is the text so far. Partials are cumulative snapshots (see
 /// `OnDeviceCoachGenerating`), so `receive` replaces the text rather than appending.
-enum CoachReplyStream: Equatable, Sendable {
+public enum CoachReplyStream: Equatable, Sendable {
     /// Nothing asked, or the last reply has landed.
     case idle
     /// Asked; the model has not written a word yet.
@@ -33,10 +33,10 @@ enum CoachReplyStream: Equatable, Sendable {
     // MARK: Reading
 
     /// True from `begin()` until `finish()`: what disables Send and Rewrite.
-    var isActive: Bool { self != .idle }
+    public var isActive: Bool { self != .idle }
 
     /// The reply written so far; empty unless streaming.
-    var partialText: String {
+    public var partialText: String {
         guard case .streaming(let text) = self else { return "" }
         return text
     }
@@ -44,19 +44,19 @@ enum CoachReplyStream: Equatable, Sendable {
     // MARK: Transitions
 
     /// The request has gone out.
-    mutating func begin() {
+    public mutating func begin() {
         self = .waiting
     }
 
     /// The model's latest cumulative partial. An empty partial reads as still waiting, as
     /// it did when the screens checked `buffer.isEmpty`. Ignored once `finish()` has run.
-    mutating func receive(_ text: String) {
+    public mutating func receive(_ text: String) {
         guard isActive else { return }
         self = text.isEmpty ? .waiting : .streaming(text)
     }
 
     /// The reply has landed or failed; the screen shows the result in its own state.
-    mutating func finish() {
+    public mutating func finish() {
         self = .idle
     }
 }

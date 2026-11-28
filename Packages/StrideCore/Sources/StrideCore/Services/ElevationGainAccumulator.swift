@@ -12,26 +12,26 @@ import Foundation
 ///
 /// The live tracker and `SplitBucketing.splits(from:)` both use this, so a run's total,
 /// its live splits and its re-bucketed chart splits measure climb the same way.
-struct ElevationGainAccumulator: Sendable, Equatable {
+public struct ElevationGainAccumulator: Sendable, Equatable {
 
     /// Three metres: iPhone altitude is barometer-assisted, so its jitter sits inside this,
     /// while a short real rise still clears it.
-    static let defaultThresholdMeters: Double = 3
+    public static let defaultThresholdMeters: Double = 3
 
     /// Altitudes reported with a vertical accuracy worse than this are left out of the
     /// climb, and out of the stored series.
-    static let maximumVerticalAccuracyMeters: Double = 15
+    public static let maximumVerticalAccuracyMeters: Double = 15
 
-    let thresholdMeters: Double
-    private(set) var confirmedAltitude: Double?
+    public let thresholdMeters: Double
+    public private(set) var confirmedAltitude: Double?
 
-    init(thresholdMeters: Double = defaultThresholdMeters) {
+    public init(thresholdMeters: Double = defaultThresholdMeters) {
         self.thresholdMeters = thresholdMeters
     }
 
     /// Feeds one reading and returns the climb it confirms, which is zero for most
     /// readings.
-    mutating func add(_ altitude: Double) -> Double {
+    public mutating func add(_ altitude: Double) -> Double {
         guard altitude.isFinite else { return 0 }
         guard let confirmed = confirmedAltitude else {
             confirmedAltitude = altitude
@@ -50,7 +50,7 @@ struct ElevationGainAccumulator: Sendable, Equatable {
 
     /// The altitude of a fix if it is worth using: Core Location reports a negative
     /// vertical accuracy when the altitude is invalid.
-    static func usableAltitude(_ altitude: Double, verticalAccuracy: Double) -> Double? {
+    public static func usableAltitude(_ altitude: Double, verticalAccuracy: Double) -> Double? {
         guard altitude.isFinite,
               verticalAccuracy >= 0,
               verticalAccuracy <= maximumVerticalAccuracyMeters

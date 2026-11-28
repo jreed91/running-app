@@ -13,9 +13,9 @@ import Foundation
 ///
 /// Only a number followed by a unit is touched. "The fourth kilometre", "a 5K", "36 min"
 /// and anything already in the runner's unit are left as written.
-enum CoachProseUnits {
+public enum CoachProseUnits {
 
-    static func localized(_ text: String, to unit: UnitPreference) -> String {
+    public static func localized(_ text: String, to unit: UnitPreference) -> String {
         let source: SourceUnit = unit == .imperial ? .kilometres : .miles
         // Paces first: once "6:40 per km" is "10:44 per mile" there is no number left in
         // front of a unit for the distance pass to misread.
@@ -100,14 +100,14 @@ enum CoachProseUnits {
 
         private static let metresPerMile = 1_609.344
 
-        var pacePhrase: String {
+        public var pacePhrase: String {
             switch self {
             case .kilometres: return #"per\s+(?:km|kilomet(?:re|er))|/\s?km"#
             case .miles:      return #"per\s+(?:mi|mile)|/\s?mi"#
             }
         }
 
-        var distanceWord: String {
+        public var distanceWord: String {
             switch self {
             case .kilometres: return #"km|kilomet(?:re|er)s?"#
             case .miles:      return #"mi|miles?"#
@@ -115,7 +115,7 @@ enum CoachProseUnits {
         }
 
         /// Seconds per source unit → seconds per target unit.
-        var paceFactor: Double {
+        public var paceFactor: Double {
             switch self {
             case .kilometres: return Self.metresPerMile / 1_000
             case .miles:      return 1_000 / Self.metresPerMile
@@ -123,10 +123,10 @@ enum CoachProseUnits {
         }
 
         /// Source distance → target distance.
-        var distanceFactor: Double { 1 / paceFactor }
+        public var distanceFactor: Double { 1 / paceFactor }
 
         /// Keeps the shape the model used: "/km" becomes "/mi", "per km" becomes "per mile".
-        func targetPacePhrase(replacing phrase: String) -> String {
+        public func targetPacePhrase(replacing phrase: String) -> String {
             let isSlash = phrase.hasPrefix("/")
             switch self {
             case .kilometres: return isSlash ? "/mi" : "per mile"
@@ -134,7 +134,7 @@ enum CoachProseUnits {
             }
         }
 
-        func targetDistanceWord(replacing word: String, value: String) -> String {
+        public func targetDistanceWord(replacing word: String, value: String) -> String {
             switch self {
             case .kilometres:
                 if word.lowercased() == "km" { return "mi" }

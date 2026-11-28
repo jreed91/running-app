@@ -11,31 +11,31 @@ import Foundation
 /// reads one back, so an edit round-trips through a ``SavedWorkout``.
 ///
 /// Pure and `Sendable`, with no SwiftUI, so the conversion is tested without a view.
-struct CustomWorkoutDraft: Equatable, Sendable {
+public struct CustomWorkoutDraft: Equatable, Sendable {
 
-    var name: String
-    var notes: String
-    var warmup: StepLength?
-    var sets: [SetDraft]
-    var cooldown: StepLength?
+    public var name: String
+    public var notes: String
+    public var warmup: StepLength?
+    public var sets: [SetDraft]
+    public var cooldown: StepLength?
 
     /// How long a step lasts.
-    enum StepLength: Equatable, Hashable, Sendable {
+    public enum StepLength: Equatable, Hashable, Sendable {
         case distance(meters: Double)
         case time(seconds: Double)
 
-        var isDistance: Bool {
+        public var isDistance: Bool {
             if case .distance = self { return true }
             return false
         }
     }
 
     /// What the runner does between reps.
-    enum RecoveryKind: String, CaseIterable, Equatable, Sendable {
+    public enum RecoveryKind: String, CaseIterable, Equatable, Sendable {
         case jog, walk, rest
 
         /// The recovery segment's label, which the guided run and its cues show.
-        var label: String {
+        public var label: String {
             switch self {
             case .jog: String(localized: "Jog", comment: "Custom workout recovery: jog between reps")
             case .walk: String(localized: "Walk", comment: "Custom workout recovery: walk between reps")
@@ -43,27 +43,45 @@ struct CustomWorkoutDraft: Equatable, Sendable {
             }
         }
 
-        init(label: String) {
+        public init(label: String) {
             let lowered = label.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             self = Self.allCases.first { $0.label.lowercased() == lowered || $0.rawValue == lowered } ?? .jog
         }
     }
 
     /// One block of reps.
-    struct SetDraft: Equatable, Identifiable, Sendable {
-        var id = UUID()
+    public struct SetDraft: Equatable, Identifiable, Sendable {
+        public var id = UUID()
         /// Optional name, for example "Tempo". Empty falls back to the guided run's "Work".
-        var label: String = ""
-        var repetitions: Int = 1
-        var work: StepLength = .distance(meters: 400)
+        public var label: String = ""
+        public var repetitions: Int = 1
+        public var work: StepLength = .distance(meters: 400)
         /// Seconds per kilometre, or `nil` for "no pace, just run it".
-        var workPaceSecondsPerKm: Double?
+        public var workPaceSecondsPerKm: Double?
         /// `nil` is no recovery: the reps run back to back.
-        var recovery: StepLength?
-        var recoveryKind: RecoveryKind = .jog
+        public var recovery: StepLength?
+        public var recoveryKind: RecoveryKind = .jog
+
+        public init(
+            id: UUID = UUID(),
+            label: String = "",
+            repetitions: Int = 1,
+            work: StepLength = .distance(meters: 400),
+            workPaceSecondsPerKm: Double? = nil,
+            recovery: StepLength? = nil,
+            recoveryKind: RecoveryKind = .jog
+        ) {
+            self.id = id
+            self.label = label
+            self.repetitions = repetitions
+            self.work = work
+            self.workPaceSecondsPerKm = workPaceSecondsPerKm
+            self.recovery = recovery
+            self.recoveryKind = recoveryKind
+        }
     }
 
-    init(
+    public init(
         name: String = "",
         notes: String = "",
         warmup: StepLength? = nil,
@@ -82,7 +100,7 @@ struct CustomWorkoutDraft: Equatable, Sendable {
     /// The structure to save, without its totals (``CustomWorkoutRules/finalized(_:fallback:)``
     /// adds those). The warm-up, cool-down and recoveries are run easy, so they carry no
     /// pace: a pace there would have the Workout app alerting a runner for jogging slowly.
-    func structure() -> WorkoutStructure {
+    public func structure() -> WorkoutStructure {
         WorkoutStructure(
             warmup: Self.segment(warmup, label: String(localized: "Warm-up")),
             mainSets: sets.map { set in
@@ -101,7 +119,7 @@ struct CustomWorkoutDraft: Equatable, Sendable {
 
     /// Reads a stored workout back for editing. A segment with neither a distance nor a time
     /// reads as left out.
-    init(name: String, structure: WorkoutStructure, notes: String?) {
+    public init(name: String, structure: WorkoutStructure, notes: String?) {
         self.init(
             name: name,
             notes: notes ?? "",
@@ -142,7 +160,7 @@ struct CustomWorkoutDraft: Equatable, Sendable {
 
     /// Adds a set copied from the last one, which is what a runner building "3 × 1 mile,
     /// then 4 × 400 m" usually wants to start the next set from.
-    mutating func addSet() {
+    public mutating func addSet() {
         var next = sets.last ?? SetDraft()
         next.id = UUID()
         sets.append(next)
@@ -152,11 +170,11 @@ struct CustomWorkoutDraft: Equatable, Sendable {
 // MARK: - Typed values
 
 /// Parsing and formatting of the "m:ss" fields the builder uses for times and paces.
-enum MinutesSecondsText {
+public enum MinutesSecondsText {
 
     /// "1:30" is 90 s, "12" is 12 minutes, "1:02:00" is 62 minutes. `nil` for anything else,
     /// including seconds of 60 or more ("1:75").
-    static func seconds(from text: String) -> Double? {
+    public static func seconds(from text: String) -> Double? {
         let parts = text.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: ":", omittingEmptySubsequences: false)
         guard (1...3).contains(parts.count) else { return nil }
         let values = parts.compactMap { Int($0) }
@@ -176,12 +194,12 @@ enum MinutesSecondsText {
     }
 
     /// "1:30", or "1:02:00" past an hour.
-    static func text(seconds: Double) -> String {
+    public static func text(seconds: Double) -> String {
         seconds.durationString
     }
 
     /// A pace typed per the runner's unit, as seconds per kilometre.
-    static func paceSecondsPerKm(from text: String, unit: UnitPreference) -> Double? {
+    public static func paceSecondsPerKm(from text: String, unit: UnitPreference) -> Double? {
         guard let perUnit = seconds(from: text) else { return nil }
         return unit == .metric ? perUnit : perUnit / 1.60934
     }
@@ -189,7 +207,7 @@ enum MinutesSecondsText {
     /// Seconds per kilometre shown per the runner's unit, "4:05". Rounded rather than
     /// truncated, so a pace typed per mile and stored per kilometre reads back as typed
     /// ("8:00", not "7:59").
-    static func paceText(secondsPerKm: Double, unit: UnitPreference) -> String {
+    public static func paceText(secondsPerKm: Double, unit: UnitPreference) -> String {
         let perUnit = Int((unit == .metric ? secondsPerKm : secondsPerKm * 1.60934).rounded())
         return String(format: "%d:%02d", perUnit / 60, perUnit % 60)
     }
@@ -198,10 +216,10 @@ enum MinutesSecondsText {
 // MARK: - Distance units
 
 /// The units a step's distance can be typed in. Track reps read in metres for everyone.
-enum CustomWorkoutDistanceUnit: String, CaseIterable, Sendable {
+public enum CustomWorkoutDistanceUnit: String, CaseIterable, Sendable {
     case meters, kilometers, miles
 
-    var metersPerUnit: Double {
+    public var metersPerUnit: Double {
         switch self {
         case .meters: 1
         case .kilometers: 1_000
@@ -209,7 +227,7 @@ enum CustomWorkoutDistanceUnit: String, CaseIterable, Sendable {
         }
     }
 
-    var symbol: String {
+    public var symbol: String {
         switch self {
         case .meters: "m"
         case .kilometers: "km"
@@ -219,7 +237,7 @@ enum CustomWorkoutDistanceUnit: String, CaseIterable, Sendable {
 
     /// The unit a stored distance reads best in: metres under a kilometre, else a whole
     /// number of miles or kilometres if it is one, else the runner's unit.
-    static func display(for meters: Double, unit: UnitPreference) -> CustomWorkoutDistanceUnit {
+    public static func display(for meters: Double, unit: UnitPreference) -> CustomWorkoutDistanceUnit {
         if meters < 1_000 { return .meters }
         let miles = meters / CustomWorkoutDistanceUnit.miles.metersPerUnit
         if abs(miles - miles.rounded()) < 0.001 { return .miles }

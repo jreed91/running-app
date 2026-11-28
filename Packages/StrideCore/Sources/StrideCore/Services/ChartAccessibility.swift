@@ -14,15 +14,15 @@ import Foundation
 /// and quick to compare between charts: how many values there are, where the series
 /// starts and ends, and its extremes. Formatting is the caller's, so a pace chart speaks
 /// "4:32 per kilometre" while a volume chart speaks "42.1 km".
-enum ChartAccessibility {
+public enum ChartAccessibility {
 
     /// One plotted value: the label of the thing it was measured on (a date, a split
     /// number, a zone) and the value itself, unformatted.
-    struct Point: Sendable, Equatable {
-        var label: String
-        var value: Double
+    public struct Point: Sendable, Equatable {
+        public var label: String
+        public var value: Double
 
-        init(label: String, value: Double) {
+        public init(label: String, value: Double) {
             self.label = label
             self.value = value
         }
@@ -37,22 +37,22 @@ enum ChartAccessibility {
     /// formatter the summary uses, or the two would disagree about the chart in front of
     /// them (U10). Passing this instead of a pre-built `String` is what keeps them one
     /// thing.
-    struct Series {
-        var points: [Point]
+    public struct Series {
+        public var points: [Point]
         /// Name of the value axis, e.g. "Pace" or "Distance". Spoken when a VoiceOver user
         /// asks what the graph's axes are.
-        var valueAxisLabel: String
+        public var valueAxisLabel: String
         /// Renders one value the way the chart's axis does, units included.
-        var format: (Double) -> String
+        public var format: (Double) -> String
 
-        init(points: [Point], valueAxisLabel: String, format: @escaping (Double) -> String) {
+        public init(points: [Point], valueAxisLabel: String, format: @escaping (Double) -> String) {
             self.points = points
             self.valueAxisLabel = valueAxisLabel
             self.format = format
         }
 
         /// The sentence VoiceOver speaks as the chart's value.
-        var summary: String {
+        public var summary: String {
             ChartAccessibility.summary(points, format: format)
         }
     }
@@ -66,7 +66,7 @@ enum ChartAccessibility {
     /// - Parameters:
     ///   - points: the plotted values, in the order the chart draws them.
     ///   - format: renders one value the way the chart's axis does, units included.
-    static func summary(_ points: [Point], format: (Double) -> String) -> String {
+    public static func summary(_ points: [Point], format: (Double) -> String) -> String {
         guard let first = points.first, let last = points.last else {
             return String(localized: "No data", comment: "Spoken summary of an empty chart")
         }

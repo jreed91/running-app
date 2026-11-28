@@ -12,25 +12,33 @@ import Foundation
 /// `ProgressFilter.Period.grouping` like the volume chart above them.
 ///
 /// Pure and `Sendable`, like `VolumeExplorer`, whose calendar and grouping it reuses.
-enum TrendSeries {
+public enum TrendSeries {
 
     // MARK: Plausible values
 
     /// Average paces outside this are a recording fault (a run left going in a bag, a
     /// GPS glitch over a few metres), not a run: 2:30 to 20:00 per km.
-    static let plausiblePaceSecondsPerKm: ClosedRange<Double> = 150...1_200
+    public static let plausiblePaceSecondsPerKm: ClosedRange<Double> = 150...1_200
 
     /// Average heart rates outside this are a strap that dropped out, not a run.
-    static let plausibleHeartRate: ClosedRange<Double> = 70...230
+    public static let plausibleHeartRate: ClosedRange<Double> = 70...230
 
     // MARK: Buckets
 
-    struct Point: Equatable, Sendable {
-        let date: Date
-        let value: Double
+    public struct Point: Equatable, Sendable {
+        public let date: Date
+        public let value: Double
+
+        public init(
+            date: Date,
+            value: Double
+        ) {
+            self.date = date
+            self.value = value
+        }
     }
 
-    enum Statistic: Sendable {
+    public enum Statistic: Sendable {
         /// The mean of the period's values: average heart rate.
         case mean
         /// The median, so one hilly or windy run doesn't drag it: easy pace.
@@ -41,21 +49,33 @@ enum TrendSeries {
         case max
     }
 
-    struct Bucket: Equatable, Sendable, Identifiable {
+    public struct Bucket: Equatable, Sendable, Identifiable {
         /// Start of the week or month.
-        let start: Date
+        public let start: Date
         /// The mean time of the period's values, where the chart places the point, so
         /// it sits among the runs it summarises and never past today.
-        let plotDate: Date
-        let value: Double
+        public let plotDate: Date
+        public let value: Double
         /// How many values the period had.
-        let count: Int
+        public let count: Int
 
-        var id: Date { start }
+        public var id: Date { start }
+
+        public init(
+            start: Date,
+            plotDate: Date,
+            value: Double,
+            count: Int
+        ) {
+            self.start = start
+            self.plotDate = plotDate
+            self.value = value
+            self.count = count
+        }
     }
 
     /// One bucket per week or month that has a value, oldest first.
-    static func buckets(
+    public static func buckets(
         _ points: [Point],
         grouping: VolumeExplorer.Grouping,
         statistic: Statistic,
@@ -79,11 +99,11 @@ enum TrendSeries {
     }
 
     /// The bucket nearest `date`, for a chart's selection.
-    static func nearest(to date: Date, in buckets: [Bucket]) -> Bucket? {
+    public static func nearest(to date: Date, in buckets: [Bucket]) -> Bucket? {
         buckets.min { abs($0.plotDate.timeIntervalSince(date)) < abs($1.plotDate.timeIntervalSince(date)) }
     }
 
-    static func reduce(_ values: [Double], _ statistic: Statistic) -> Double? {
+    public static func reduce(_ values: [Double], _ statistic: Statistic) -> Double? {
         guard !values.isEmpty else { return nil }
         switch statistic {
         case .mean: return values.reduce(0, +) / Double(values.count)
@@ -99,9 +119,9 @@ enum TrendSeries {
     // MARK: Date axis
 
     /// How a time axis is labelled.
-    struct DateAxis: Equatable, Sendable {
-        enum Unit: Sendable { case month, year }
-        enum Label: Sendable {
+    public struct DateAxis: Equatable, Sendable {
+        public enum Unit: Sendable { case month, year }
+        public enum Label: Sendable {
             /// "Mar"
             case month
             /// "Mar 25", for a span that crosses a new year but isn't years long.
@@ -110,14 +130,24 @@ enum TrendSeries {
             case year
         }
 
-        let unit: Unit
-        let count: Int
-        let label: Label
+        public let unit: Unit
+        public let count: Int
+        public let label: Label
+
+        public init(
+            unit: Unit,
+            count: Int,
+            label: Label
+        ) {
+            self.unit = unit
+            self.count = count
+            self.label = label
+        }
     }
 
     /// At most about six labels whatever the span: monthly up to half a year, every
     /// few months up to two years, then yearly (every other year past six).
-    static func dateAxis(from start: Date, to end: Date, calendar: Calendar = VolumeExplorer.calendar()) -> DateAxis {
+    public static func dateAxis(from start: Date, to end: Date, calendar: Calendar = VolumeExplorer.calendar()) -> DateAxis {
         let months = max(0, calendar.dateComponents([.month], from: start, to: end).month ?? 0)
         switch months {
         case ..<7: return DateAxis(unit: .month, count: 1, label: .month)

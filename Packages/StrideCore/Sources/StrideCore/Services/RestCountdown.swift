@@ -11,13 +11,13 @@ import Foundation
 /// remaining seconds from a fixed deadline keeps it wall-clock accurate: a
 /// backgrounded phone resumes showing the true remaining time. Every method
 /// takes an explicit `Date` so the type is fully deterministic under test.
-enum RestCountdown {
+public enum RestCountdown {
 
     /// Whole seconds remaining until `deadline` as of `now` (never negative).
     ///
     /// Rounds up so a countdown started at 60 s still reads "60" on the first
     /// tick and only reaches 0 once the deadline has actually passed.
-    static func secondsRemaining(deadline: Date, now: Date) -> Int {
+    public static func secondsRemaining(deadline: Date, now: Date) -> Int {
         let remaining = deadline.timeIntervalSince(now)
         guard remaining > 0 else { return 0 }
         return Int(remaining.rounded(.up))

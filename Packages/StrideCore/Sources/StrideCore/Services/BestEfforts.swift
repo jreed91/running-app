@@ -13,11 +13,11 @@ import Foundation
 ///
 /// Pure and `Sendable`, and it takes ``Sample``s rather than the tracker's own point type
 /// so it can be tested without the rest of the app.
-enum BestEfforts {
+public enum BestEfforts {
 
     // MARK: Distances
 
-    enum Distance: String, CaseIterable, Sendable, Codable, Comparable {
+    public enum Distance: String, CaseIterable, Sendable, Codable, Comparable {
         case fourHundred
         case oneK
         case mile
@@ -26,7 +26,7 @@ enum BestEfforts {
         case half
         case marathon
 
-        var meters: Double {
+        public var meters: Double {
             switch self {
             case .fourHundred: return 400
             case .oneK: return 1_000
@@ -41,7 +41,7 @@ enum BestEfforts {
         /// The fastest believable average speed over this distance, in metres per second:
         /// just above the men's world record. Anything quicker is a GPS jump, not a run,
         /// and would otherwise sit at the top of the records for good.
-        var fastestPlausibleSpeed: Double {
+        public var fastestPlausibleSpeed: Double {
             switch self {
             case .fourHundred: return 9.4   // WR 43.03 s ≈ 9.30 m/s
             case .oneK: return 7.7          // WR 2:11.96 ≈ 7.58 m/s
@@ -53,13 +53,21 @@ enum BestEfforts {
             }
         }
 
-        static func < (lhs: Distance, rhs: Distance) -> Bool { lhs.meters < rhs.meters }
+        public static func < (lhs: Distance, rhs: Distance) -> Bool { lhs.meters < rhs.meters }
     }
 
     /// One cumulative distance reading.
-    struct Sample: Equatable, Sendable {
-        let elapsedSeconds: Double
-        let meters: Double
+    public struct Sample: Equatable, Sendable {
+        public let elapsedSeconds: Double
+        public let meters: Double
+
+        public init(
+            elapsedSeconds: Double,
+            meters: Double
+        ) {
+            self.elapsedSeconds = elapsedSeconds
+            self.meters = meters
+        }
     }
 
     // MARK: One run
@@ -71,7 +79,7 @@ enum BestEfforts {
     /// reading interval costs at most a reading's worth of time. Readings that go
     /// backwards in time or distance are dropped, no effort spans a GPS jump, and
     /// efforts faster than ``Distance/fastestPlausibleSpeed`` are discarded.
-    static func efforts(in samples: [Sample]) -> [Distance: Double] {
+    public static func efforts(in samples: [Sample]) -> [Distance: Double] {
         let stretches = pieces(of: cleaned(samples))
         let longest = stretches.map { ($0.last?.meters ?? 0) - ($0.first?.meters ?? 0) }.max() ?? 0
         guard longest > 0 else { return [:] }
@@ -87,7 +95,7 @@ enum BestEfforts {
     }
 
     /// Faster than anyone has ever sprinted, between two readings: a GPS jump.
-    static let jumpSpeed = 12.5
+    public static let jumpSpeed = 12.5
 
     /// Readings in order, from a zero start, each strictly later and no shorter than the
     /// one before.
@@ -148,24 +156,44 @@ enum BestEfforts {
     // MARK: Across runs
 
     /// One run's best efforts.
-    struct RunEfforts: Equatable, Sendable, Identifiable {
-        let id: UUID
-        let date: Date
-        let efforts: [Distance: Double]
+    public struct RunEfforts: Equatable, Sendable, Identifiable {
+        public let id: UUID
+        public let date: Date
+        public let efforts: [Distance: Double]
+
+        public init(
+            id: UUID,
+            date: Date,
+            efforts: [Distance: Double]
+        ) {
+            self.id = id
+            self.date = date
+            self.efforts = efforts
+        }
     }
 
     /// One effort, placed in time.
-    struct Effort: Equatable, Sendable, Identifiable {
-        let runID: UUID
-        let date: Date
-        let seconds: Double
+    public struct Effort: Equatable, Sendable, Identifiable {
+        public let runID: UUID
+        public let date: Date
+        public let seconds: Double
 
-        var id: UUID { runID }
+        public var id: UUID { runID }
+
+        public init(
+            runID: UUID,
+            date: Date,
+            seconds: Double
+        ) {
+            self.runID = runID
+            self.date = date
+            self.seconds = seconds
+        }
     }
 
     /// Every run's effort at `distance`, quickest first. Ties go to the earlier run, which
     /// set the mark first.
-    static func ranked(_ distance: Distance, in runs: [RunEfforts]) -> [Effort] {
+    public static func ranked(_ distance: Distance, in runs: [RunEfforts]) -> [Effort] {
         runs.compactMap { run in
             run.efforts[distance].map { Effort(runID: run.id, date: run.date, seconds: $0) }
         }
@@ -175,7 +203,7 @@ enum BestEfforts {
     }
 
     /// The all-time record at each distance anyone has run.
-    static func records(in runs: [RunEfforts]) -> [Distance: Effort] {
+    public static func records(in runs: [RunEfforts]) -> [Distance: Effort] {
         var result: [Distance: Effort] = [:]
         for distance in Distance.allCases {
             if let best = ranked(distance, in: runs).first { result[distance] = best }
@@ -185,7 +213,7 @@ enum BestEfforts {
 
     /// The efforts that set a new record when they were run, oldest first: the record's
     /// history, drawn as a falling step line.
-    static func progression(_ distance: Distance, in runs: [RunEfforts]) -> [Effort] {
+    public static func progression(_ distance: Distance, in runs: [RunEfforts]) -> [Effort] {
         var steps: [Effort] = []
         let inOrder = runs.sorted { $0.date < $1.date }
         for run in inOrder {
@@ -199,7 +227,7 @@ enum BestEfforts {
 
     /// Where a run's effort sits among every run's at `distance`, 1 for the record, or
     /// `nil` when the run has no effort there.
-    static func rank(of runID: UUID, _ distance: Distance, in runs: [RunEfforts]) -> Int? {
+    public static func rank(of runID: UUID, _ distance: Distance, in runs: [RunEfforts]) -> Int? {
         ranked(distance, in: runs).firstIndex { $0.runID == runID }.map { $0 + 1 }
     }
 }

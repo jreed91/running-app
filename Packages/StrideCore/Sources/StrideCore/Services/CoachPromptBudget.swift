@@ -14,7 +14,7 @@ import Foundation
 /// validated against downstream (the workout ids `adaptScheduledWorkoutsWithProvider`
 /// keys its result on), so dropping any of it buys tokens at the price of a wrong
 /// answer. Losing the oldest run costs the coach context it already weights least.
-enum CoachPromptBudget {
+public enum CoachPromptBudget {
 
     /// Characters per token this assumes when sizing a prompt.
     ///
@@ -39,7 +39,7 @@ enum CoachPromptBudget {
     /// it; not worth guessing at from here, which is how the first attempt broke the
     /// archive build. The *window* is still read from the model — only the prompt's size
     /// is estimated.
-    static let charactersPerToken = 3
+    public static let charactersPerToken = 3
 
     /// Tokens a session with tools holds back before the prompt is sized.
     ///
@@ -50,7 +50,7 @@ enum CoachPromptBudget {
     /// that fits on its own can overflow the on-device window once tools are attached.
     ///
     /// - Parameter toolTexts: each tool's name and description.
-    static func toolReserve(toolTexts: [String]) -> Int {
+    public static func toolReserve(toolTexts: [String]) -> Int {
         guard !toolTexts.isEmpty else { return 0 }
         return toolTexts.reduce(0) { $0 + estimatedTokenCount(of: $1) + schemaTokensPerTool }
             + expectedToolCalls * tokensPerToolCall
@@ -58,22 +58,22 @@ enum CoachPromptBudget {
 
     /// A generous estimate of one tool's argument schema in the prompt: two or three
     /// fields, each with a short guide and a range or an enum's cases.
-    static let schemaTokensPerTool = 60
+    public static let schemaTokensPerTool = 60
     /// Lookups a typical answer makes. More are allowed; this sizes the reserve.
-    static let expectedToolCalls = 2
+    public static let expectedToolCalls = 2
     /// One call's arguments and answer: up to `CoachLookup.maximumRows` lines of about a
     /// hundred characters each.
-    static let tokensPerToolCall = 350
+    public static let tokensPerToolCall = 350
 
     /// Roughly how many tokens `text` will cost, rounded up.
-    static func estimatedTokenCount(of text: String) -> Int {
+    public static func estimatedTokenCount(of text: String) -> Int {
         (text.count + charactersPerToken - 1) / charactersPerToken
     }
 
     /// The headers `AICoachService` writes above a block of recent runs. Each block runs
     /// until the first blank line, and its rows are newest first — every caller sorts
     /// history by date descending (`RunWorkout.runsOnlyDescriptor`) before formatting it.
-    static let historyHeaders = [
+    public static let historyHeaders = [
         "Recent completed runs:",
         "Recent history:",
         "Recent runs:"
@@ -85,7 +85,7 @@ enum CoachPromptBudget {
     /// The last row is kept on purpose. A history block trimmed to nothing would leave a
     /// bare header, and a coach that cites "your recent runs" with none supplied is worse
     /// than one working from a single run.
-    static func droppingOldestHistoryRow(from prompt: String) -> String? {
+    public static func droppingOldestHistoryRow(from prompt: String) -> String? {
         var lines = prompt.components(separatedBy: "\n")
         guard let block = historyBlock(in: lines), block.count > 1 else { return nil }
         lines.remove(at: block.upperBound - 1)
@@ -94,7 +94,7 @@ enum CoachPromptBudget {
 
     /// How many run rows `prompt` still carries. Used by the tests, and by the backend's
     /// trimming loop to tell "nothing more to give" from "one more pass to make".
-    static func historyRowCount(in prompt: String) -> Int {
+    public static func historyRowCount(in prompt: String) -> Int {
         historyBlock(in: prompt.components(separatedBy: "\n"))?.count ?? 0
     }
 

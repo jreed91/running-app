@@ -20,16 +20,16 @@ import Foundation
 ///
 /// Pure by design: `AppContainer` owned this date math (D2), which is why N6 had no
 /// natural test home.
-enum MissedWorkoutShift {
+public enum MissedWorkoutShift {
 
     // MARK: Outcome
 
     /// What a requested shift resolves to once the race date is taken into account.
-    struct Outcome: Equatable {
+    public struct Outcome: Equatable {
         /// The shift the caller asked for, floored at zero.
-        let requestedDays: Int
+        public let requestedDays: Int
         /// The shift that may actually be applied.
-        let appliedDays: Int
+        public let appliedDays: Int
 
         /// Whether the race date is what held this shift back.
         ///
@@ -38,16 +38,26 @@ enum MissedWorkoutShift {
         /// the first is the race's doing, and only the first is worth telling the runner
         /// about — `DashboardView.pickUpNotice` reads these flags to decide whether to
         /// blame race day, and without this it blamed race day for an empty plan.
-        let isRaceLimited: Bool
+        public let isRaceLimited: Bool
 
         /// Nothing moves — either nothing was asked for, or the race leaves no room.
-        var isNoOp: Bool { appliedDays <= 0 }
+        public var isNoOp: Bool { appliedDays <= 0 }
 
         /// The race date forced a smaller shift than the one requested.
-        var wasClampedByRace: Bool { isRaceLimited && appliedDays < requestedDays }
+        public var wasClampedByRace: Bool { isRaceLimited && appliedDays < requestedDays }
 
         /// The race date left no room to move at all, and something was asked for.
-        var wasBlockedByRace: Bool { isRaceLimited && requestedDays > 0 && appliedDays <= 0 }
+        public var wasBlockedByRace: Bool { isRaceLimited && requestedDays > 0 && appliedDays <= 0 }
+
+        public init(
+            requestedDays: Int,
+            appliedDays: Int,
+            isRaceLimited: Bool
+        ) {
+            self.requestedDays = requestedDays
+            self.appliedDays = appliedDays
+            self.isRaceLimited = isRaceLimited
+        }
     }
 
     // MARK: Resolution
@@ -62,7 +72,7 @@ enum MissedWorkoutShift {
     /// - Returns: The requested and applicable shifts. An open-ended plan applies the
     ///   request unchanged; a plan with nothing left to move resolves to a no-op, and
     ///   says so without implicating the race.
-    static func resolve(
+    public static func resolve(
         requestedDays: Int,
         lastMovableDate: Date?,
         raceDate: Date?,

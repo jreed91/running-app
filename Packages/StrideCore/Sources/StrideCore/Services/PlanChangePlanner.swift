@@ -11,9 +11,9 @@ import Foundation
 /// ``PlanChangeApplier`` with the same rules the plan was generated with. The model is
 /// good at reading "something for my cardio midweek"; it is not the thing that should
 /// decide how fast an interval is.
-struct PlanChangeRequest: Equatable, Sendable {
+public struct PlanChangeRequest: Equatable, Sendable {
 
-    enum Action: String, Equatable, Sendable {
+    public enum Action: String, Equatable, Sendable {
         /// Put a new run on a day that has none.
         case add
         /// Turn the run already on a day into a different kind of run.
@@ -22,7 +22,7 @@ struct PlanChangeRequest: Equatable, Sendable {
         case makeRest
     }
 
-    enum Day: Equatable, Sendable {
+    public enum Day: Equatable, Sendable {
         /// Let the planner choose. For ``Action/add`` that is the free day in the next week
         /// furthest from the other runs; for the other actions, the soonest session it may
         /// change.
@@ -34,15 +34,15 @@ struct PlanChangeRequest: Equatable, Sendable {
         case weekday(Int)
     }
 
-    let action: Action
-    let day: Day
+    public let action: Action
+    public let day: Day
     /// The kind of run to add or change to. Ignored by ``Action/makeRest``.
-    let type: WorkoutType?
+    public let type: WorkoutType?
     /// A distance the runner asked for. Optional: without one the planner picks a
     /// distance from the plan itself.
-    let distanceMeters: Double?
+    public let distanceMeters: Double?
 
-    init(action: Action, day: Day, type: WorkoutType? = nil, distanceMeters: Double? = nil) {
+    public init(action: Action, day: Day, type: WorkoutType? = nil, distanceMeters: Double? = nil) {
         self.action = action
         self.day = day
         self.type = type
@@ -74,17 +74,17 @@ struct PlanChangeRequest: Equatable, Sendable {
 ///   easy run" should not get one longer than the run the week is built around.
 /// - **A distance on its own is a change.** "Make Saturday's long run 8 miles" is a
 ///   ``PlanChangeRequest/Action/changeType`` to the same type with a distance.
-enum PlanChangePlanner {
+public enum PlanChangePlanner {
 
     /// A planned session as the planner reads it.
-    struct Session: Equatable, Sendable {
-        let id: UUID
-        let date: Date
-        let type: WorkoutType
-        let isCompleted: Bool
-        let targetDistanceMeters: Double?
+    public struct Session: Equatable, Sendable {
+        public let id: UUID
+        public let date: Date
+        public let type: WorkoutType
+        public let isCompleted: Bool
+        public let targetDistanceMeters: Double?
 
-        init(id: UUID = UUID(), date: Date, type: WorkoutType, isCompleted: Bool = false, targetDistanceMeters: Double? = nil) {
+        public init(id: UUID = UUID(), date: Date, type: WorkoutType, isCompleted: Bool = false, targetDistanceMeters: Double? = nil) {
             self.id = id
             self.date = date
             self.type = type
@@ -94,18 +94,18 @@ enum PlanChangePlanner {
     }
 
     /// The plan as the planner reads it.
-    struct Plan: Equatable, Sendable {
-        let sessions: [Session]
-        let startDate: Date
+    public struct Plan: Equatable, Sendable {
+        public let sessions: [Session]
+        public let startDate: Date
         /// The plan's last day.
-        let endDate: Date
-        let raceDate: Date?
-        let prescribesByTime: Bool
+        public let endDate: Date
+        public let raceDate: Date?
+        public let prescribesByTime: Bool
         /// The days of a live training break, its easing-back days included: no run is
         /// added there and no run made harder (``Refusal/duringTrainingBreak(_:)``).
-        let breakDays: ClosedRange<Date>?
+        public let breakDays: ClosedRange<Date>?
 
-        init(
+        public init(
             sessions: [Session],
             startDate: Date,
             endDate: Date,
@@ -123,14 +123,14 @@ enum PlanChangePlanner {
     }
 
     /// The change the planner would make.
-    enum Change: Equatable, Sendable {
+    public enum Change: Equatable, Sendable {
         /// A new run. `replacingRestID` is a stored rest day on that date, which becomes
         /// the run rather than sitting beside it.
         case add(date: Date, type: WorkoutType, distanceMeters: Double?, replacingRestID: UUID?)
         case changeType(sessionID: UUID, date: Date, from: WorkoutType, to: WorkoutType, distanceMeters: Double?)
         case makeRest(sessionID: UUID, date: Date, type: WorkoutType)
 
-        var date: Date {
+        public var date: Date {
             switch self {
             case .add(let date, _, _, _), .changeType(_, let date, _, _, _), .makeRest(_, let date, _):
                 return date
@@ -139,7 +139,7 @@ enum PlanChangePlanner {
     }
 
     /// Why a request can't go into the plan.
-    enum Refusal: Error, Equatable, Sendable {
+    public enum Refusal: Error, Equatable, Sendable {
         case noPlan
         case planPrescribesByTime
         /// Add or change without a run type, or with one the coach can't plan (race,
@@ -160,17 +160,17 @@ enum PlanChangePlanner {
     }
 
     /// How many days a change may reach, today included.
-    static let windowDays = 7
+    public static let windowDays = 7
 
     /// The run types the coach may add or change a session to.
-    static let plannableTypes: Set<WorkoutType> = [.easy, .tempo, .interval, .longRun]
+    public static let plannableTypes: Set<WorkoutType> = [.easy, .tempo, .interval, .longRun]
 
     /// The shortest run the planner will add.
-    static let minimumDistanceMeters: Double = 1_500
+    public static let minimumDistanceMeters: Double = 1_500
     /// The cap on a run when the week has no long run to measure against.
-    static let maximumDistanceMeters: Double = 32_000
+    public static let maximumDistanceMeters: Double = 32_000
 
-    static func plan(
+    public static func plan(
         _ request: PlanChangeRequest,
         in plan: Plan?,
         now: Date = Date(),
@@ -213,7 +213,7 @@ enum PlanChangePlanner {
     }
 
     /// Whether a type is a hard day for spacing: quality, the long run, the race.
-    static func isHard(_ type: WorkoutType) -> Bool {
+    public static func isHard(_ type: WorkoutType) -> Bool {
         type.isQualitySession || type == .longRun
     }
 }

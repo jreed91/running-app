@@ -8,16 +8,26 @@ import Foundation
 /// Paces come from the runner's training paces when they are known and are left off when
 /// they are not: a made-up 4:00/km rep is worse than none. Every starter is a draft the
 /// runner edits before saving, never saved on its own.
-enum CustomWorkoutStarters {
+public enum CustomWorkoutStarters {
 
-    struct Starter: Identifiable, Equatable, Sendable {
-        let id: String
-        let draft: CustomWorkoutDraft
+    public struct Starter: Identifiable, Equatable, Sendable {
+        public let id: String
+        public let draft: CustomWorkoutDraft
         /// One line under the name in the picker.
-        let summary: String
+        public let summary: String
+
+        public init(
+            id: String,
+            draft: CustomWorkoutDraft,
+            summary: String
+        ) {
+            self.id = id
+            self.draft = draft
+            self.summary = summary
+        }
     }
 
-    static func all(paces: TrainingPaces?, unit: UnitPreference) -> [Starter] {
+    public static func all(paces: TrainingPaces?, unit: UnitPreference) -> [Starter] {
         let warmup = CustomWorkoutDraft.StepLength.time(seconds: 10 * 60)
         let cooldown = CustomWorkoutDraft.StepLength.time(seconds: 10 * 60)
         let mile = CustomWorkoutDistanceUnit.miles.metersPerUnit

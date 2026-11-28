@@ -17,13 +17,13 @@ import Foundation
 /// It stays a named type rather than an inline `split`: the display limit belongs with
 /// the rule that produces the list, and `PlanTabView` is not where either wants to live
 /// (D1).
-enum SmartAdaptSummaryStream {
+public enum SmartAdaptSummaryStream {
 
     /// Every completed explanation in `text`, in the order the coach wrote them.
     ///
     /// Returns an empty array while nothing has been completed yet, which the caller
     /// shows as "reading coach summary…" rather than as an empty result.
-    static func summaries(in text: String) -> [String] {
+    public static func summaries(in text: String) -> [String] {
         text
             .components(separatedBy: "\n")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -31,5 +31,5 @@ enum SmartAdaptSummaryStream {
     }
 
     /// How many of the most recent summaries the progress card shows at once.
-    static let displayLimit = 4
+    public static let displayLimit = 4
 }

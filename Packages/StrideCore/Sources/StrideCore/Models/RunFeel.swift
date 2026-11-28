@@ -12,16 +12,16 @@ import Foundation
 /// breath, and five named choices are quicker to tell apart than ten numbers. The raw
 /// values are the scale position and are what is persisted, so they must never be
 /// renumbered.
-enum RunFeel: Int, CaseIterable, Codable, Sendable, Identifiable {
+public enum RunFeel: Int, CaseIterable, Codable, Sendable, Identifiable {
     case veryEasy = 1
     case easy = 2
     case moderate = 3
     case hard = 4
     case veryHard = 5
 
-    var id: Int { rawValue }
+    public var id: Int { rawValue }
 
-    var localizedName: String {
+    public var localizedName: String {
         switch self {
         case .veryEasy: return String(localized: "Very easy", comment: "How a run felt, lowest of five")
         case .easy:     return String(localized: "Easy", comment: "How a run felt, second of five")
@@ -33,7 +33,7 @@ enum RunFeel: Int, CaseIterable, Codable, Sendable, Identifiable {
 
     /// English form for coach prompts, which are written in English whatever the app's
     /// language — the same reason prompts use `displayName` rather than `localizedName`.
-    var promptName: String {
+    public var promptName: String {
         switch self {
         case .veryEasy: return "very easy"
         case .easy:     return "easy"
@@ -44,7 +44,7 @@ enum RunFeel: Int, CaseIterable, Codable, Sendable, Identifiable {
     }
 
     /// The rating as the coach reads it, e.g. "hard (4 of 5)".
-    var promptDescription: String {
+    public var promptDescription: String {
         "\(promptName) (\(rawValue) of 5)"
     }
 }

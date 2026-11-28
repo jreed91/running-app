@@ -16,12 +16,12 @@ import Foundation
 /// `ScheduledWorkout` would mean a CloudKit schema deployment. The refresh runs on the
 /// device that recorded or imported the run, which in practice is the phone the edit was
 /// made on; an edit made on another device is not protected on this one.
-enum AdaptedSessions {
+public enum AdaptedSessions {
 
-    static let key = "adaptedSessions"
+    public static let key = "adaptedSessions"
 
     /// How long an edit outlasts the automatic refresh.
-    static let protection: TimeInterval = 7 * 24 * 60 * 60
+    public static let protection: TimeInterval = 7 * 24 * 60 * 60
 
     /// Serializes ``record(_:at:in:)``. Swift Testing ran `CustomWorkoutSwapTests` alongside
     /// other tests recording into `.standard`, and a lost update failed it (run 46070097517).
@@ -30,7 +30,7 @@ enum AdaptedSessions {
     /// Notes that `sessionID` was just changed on purpose. Edits older than
     /// ``protection`` are dropped on the way, so the dictionary stays the size of a week's
     /// edits.
-    static func record(_ sessionID: UUID, at date: Date = Date(), in defaults: UserDefaults = .standard) {
+    public static func record(_ sessionID: UUID, at date: Date = Date(), in defaults: UserDefaults = .standard) {
         // Read-modify-write: two records at once could each drop the other's entry.
         lock.lock()
         defer { lock.unlock() }
@@ -43,13 +43,13 @@ enum AdaptedSessions {
     }
 
     /// The sessions the refresh must leave alone at `now`.
-    static func protectedIDs(now: Date = Date(), in defaults: UserDefaults = .standard) -> Set<UUID> {
+    public static func protectedIDs(now: Date = Date(), in defaults: UserDefaults = .standard) -> Set<UUID> {
         Set(load(from: defaults).filter { isProtected(editedAt: $0.value, now: now) }.keys)
     }
 
     /// Called from `AppContainer.resetAllData`: the entries name sessions that are about to
     /// stop existing.
-    static func removeAll(from defaults: UserDefaults = .standard) {
+    public static func removeAll(from defaults: UserDefaults = .standard) {
         defaults.removeObject(forKey: key)
     }
 

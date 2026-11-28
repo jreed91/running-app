@@ -9,26 +9,26 @@ import Foundation
 /// ``SavedWorkout`` agree on one set of rules. The limits are generous on purpose: they
 /// are there to keep a typo (a 500-rep set, a 0:30/km pace) from reaching the guided
 /// stepper and the Workout app, not to second-guess a hard session.
-enum CustomWorkoutRules {
+public enum CustomWorkoutRules {
 
     // MARK: Limits
 
-    static let maxNameLength = 60
-    static let maxSets = 20
-    static let repetitionRange = 1...50
+    public static let maxNameLength = 60
+    public static let maxSets = 20
+    public static let repetitionRange = 1...50
     /// Any one segment: a marathon and change.
-    static let maxSegmentMeters: Double = 50_000
+    public static let maxSegmentMeters: Double = 50_000
     /// Any one segment: four hours.
-    static let maxSegmentSeconds: Double = 4 * 3_600
+    public static let maxSegmentSeconds: Double = 4 * 3_600
     /// 2:30/km to 20:00/km. Faster is a typo; slower is a walk with no pace to hold.
-    static let paceRange: ClosedRange<Double> = 150...1_200
+    public static let paceRange: ClosedRange<Double> = 150...1_200
     /// Steps once the sets are unrolled, as ``GuidedWorkoutState/flatten(_:)`` does.
-    static let maxSteps = 100
+    public static let maxSteps = 100
 
     // MARK: Problems
 
     /// One reason a workout cannot be saved yet. `setIndex` is 0-based.
-    enum Problem: Equatable, Sendable {
+    public enum Problem: Equatable, Sendable {
         case missingName
         case nameTooLong
         case noSets
@@ -40,7 +40,7 @@ enum CustomWorkoutRules {
         case tooManySteps
 
         /// The line the builder shows under the field.
-        var message: String {
+        public var message: String {
             switch self {
             case .missingName:
                 String(
@@ -93,7 +93,7 @@ enum CustomWorkoutRules {
 
     /// Everything wrong with `structure` named `name`, in the order the builder lays the
     /// fields out. Empty means it can be saved.
-    static func problems(name: String, structure: WorkoutStructure) -> [Problem] {
+    public static func problems(name: String, structure: WorkoutStructure) -> [Problem] {
         var out: [Problem] = []
 
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -148,22 +148,22 @@ enum CustomWorkoutRules {
     // MARK: Totals
 
     /// The paces a step with no pace of its own is costed at, in seconds per kilometre.
-    struct FallbackPaces: Equatable, Sendable {
+    public struct FallbackPaces: Equatable, Sendable {
         /// Warm-up, cool-down and recovery.
-        var easy: Double
+        public var easy: Double
         /// A rep with no target pace.
-        var work: Double
+        public var work: Double
 
         /// 6:30/km and 5:00/km, for a runner whose training paces are not known yet.
-        static let standard = FallbackPaces(easy: 390, work: 300)
+        public static let standard = FallbackPaces(easy: 390, work: 300)
 
-        init(easy: Double, work: Double) {
+        public init(easy: Double, work: Double) {
             self.easy = easy
             self.work = work
         }
 
         /// The easy end of the runner's easy band, and their threshold pace for reps.
-        init(paces: TrainingPaces) {
+        public init(paces: TrainingPaces) {
             self.init(easy: paces.easyRange.upperBound, work: paces.threshold)
         }
     }
@@ -175,7 +175,7 @@ enum CustomWorkoutRules {
     /// A distance step is timed at its pace, a time step is measured at its pace, and a step
     /// with no pace uses `fallback`. An open step adds nothing: there is no knowing how long
     /// the runner will take before tapping Next.
-    static func estimate(
+    public static func estimate(
         _ structure: WorkoutStructure,
         fallback: FallbackPaces = .standard
     ) -> (distanceMeters: Double, durationSeconds: Double) {
@@ -202,7 +202,7 @@ enum CustomWorkoutRules {
     /// ``SavedWorkout`` keeps. The totals are what lists, the plan and the Watch show
     /// before the session is run, so they are written once at save rather than worked out
     /// by every reader.
-    static func finalized(
+    public static func finalized(
         _ structure: WorkoutStructure,
         fallback: FallbackPaces = .standard
     ) -> WorkoutStructure {

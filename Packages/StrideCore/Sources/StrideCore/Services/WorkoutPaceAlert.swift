@@ -7,7 +7,7 @@ import Foundation
 /// Kept free of WorkoutKit so the (inverse, easy-to-get-wrong) pace→speed maths
 /// is unit-testable; the thin `SpeedRangeAlert` construction lives at the call
 /// site in ``HealthKitRepository``.
-enum WorkoutPaceAlert {
+public enum WorkoutPaceAlert {
 
     /// Converts a target pace (seconds/km) into a speed range in metres/second.
     ///
@@ -17,7 +17,7 @@ enum WorkoutPaceAlert {
     /// symmetrically in pace space.
     ///
     /// Returns `nil` for a non-positive pace so the caller attaches no alert.
-    static func speedRangeMetersPerSecond(
+    public static func speedRangeMetersPerSecond(
         forPaceSecondsPerKm pace: Double,
         toleranceSecondsPerKm tolerance: Double = 8
     ) -> ClosedRange<Double>? {

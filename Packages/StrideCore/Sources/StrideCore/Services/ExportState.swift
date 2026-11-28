@@ -18,7 +18,7 @@ import Foundation
 ///    │                  └───────────────▶ failed(message) ──── dismiss() ───┘
 ///    └──────────────── abandon() (nothing to show, e.g. a render that came back empty)
 /// ```
-enum ExportState<Output> {
+public enum ExportState<Output> {
     case idle
     case working
     case ready(Output)
@@ -26,19 +26,19 @@ enum ExportState<Output> {
 
     // MARK: Reading
 
-    var isWorking: Bool {
+    public var isWorking: Bool {
         if case .working = self { return true }
         return false
     }
 
     /// What the share sheet presents; nil when it should not show.
-    var output: Output? {
+    public var output: Output? {
         guard case .ready(let output) = self else { return nil }
         return output
     }
 
     /// What the error alert says; nil when it should not show.
-    var errorMessage: String? {
+    public var errorMessage: String? {
         guard case .failed(let message) = self else { return nil }
         return message
     }
@@ -49,39 +49,39 @@ enum ExportState<Output> {
     /// writes nil, which dismisses. A key path rather than a `Binding(get:set:)` built in
     /// the body: two of those inline pushed `RunSummaryView.body` past the type checker's
     /// time limit.
-    var shareItem: Output? {
+    public var shareItem: Output? {
         get { output }
         set { if newValue == nil { dismiss() } }
     }
 
     /// For `.alert(isPresented: $state.isShowingError)`: the alert closing dismisses.
-    var isShowingError: Bool {
+    public var isShowingError: Bool {
         get { errorMessage != nil }
         set { if !newValue { dismiss() } }
     }
 
     // MARK: Transitions
 
-    mutating func begin() {
+    public mutating func begin() {
         self = .working
     }
 
-    mutating func succeed(_ output: Output) {
+    public mutating func succeed(_ output: Output) {
         self = .ready(output)
     }
 
-    mutating func fail(_ message: String) {
+    public mutating func fail(_ message: String) {
         self = .failed(message)
     }
 
     /// The work ended with nothing to show and nothing to say (logged instead).
-    mutating func abandon() {
+    public mutating func abandon() {
         guard isWorking else { return }
         self = .idle
     }
 
     /// The share sheet or the alert went away. A run still working is left alone.
-    mutating func dismiss() {
+    public mutating func dismiss() {
         guard !isWorking else { return }
         self = .idle
     }

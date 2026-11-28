@@ -9,12 +9,12 @@ import Foundation
 /// emitted in a hand-written priority order, so the answer to "why am I seeing this" was
 /// "because it was seventh in a list"; now every rule reports how far past its threshold
 /// the runner actually is, and the highest number leads.
-struct SmartCoachCard: Identifiable, Equatable, Sendable {
+public struct SmartCoachCard: Identifiable, Equatable, Sendable {
 
     /// What the card is about. Doubles as identity — at most one card of each kind is
     /// ever produced, so this is stable across rebuilds and SwiftUI can diff the list
     /// without cards animating past each other on every render.
-    enum Kind: String, Sendable, CaseIterable {
+    public enum Kind: String, Sendable, CaseIterable {
 
         // Situation cards. Exactly one of these is a candidate at any moment, chosen by
         // `CoachSituation`, and it competes on score like everything else — except for
@@ -64,7 +64,7 @@ struct SmartCoachCard: Identifiable, Equatable, Sendable {
 
     /// Which half of the coaching a card belongs to. Rendered as the card's overline so a
     /// fuelling tip and a form tip are distinguishable at a glance.
-    enum Category: String, Sendable {
+    public enum Category: String, Sendable {
         case nutrition
         case training
 
@@ -72,7 +72,7 @@ struct SmartCoachCard: Identifiable, Equatable, Sendable {
         /// because the widget snapshot ships it too, and the dashboard and the Home
         /// Screen calling the same card two different things is exactly the drift the
         /// snapshot's "finished strings" rule exists to prevent.
-        var label: String {
+        public var label: String {
             switch self {
             case .nutrition: return String(localized: "FUEL", comment: "Coach card category overline")
             case .training:  return String(localized: "TRAINING", comment: "Coach card category overline")
@@ -80,17 +80,17 @@ struct SmartCoachCard: Identifiable, Equatable, Sendable {
         }
     }
 
-    enum Tone: String, Sendable {
+    public enum Tone: String, Sendable {
         case positive
         case neutral
         case caution
     }
 
-    let kind: Kind
-    let title: String
+    public let kind: Kind
+    public let title: String
     /// The dashboard's copy: two to four sentences, written for a screen the runner is
     /// already looking at.
-    let message: String
+    public let message: String
     /// The same advice in one short sentence, for the surfaces that cannot take the long
     /// form — a `systemSmall` widget, a Lock Screen accessory, a spoken Siri answer.
     ///
@@ -105,14 +105,14 @@ struct SmartCoachCard: Identifiable, Equatable, Sendable {
     /// WidgetKit budgets reloads per widget per day. A glance containing an elapsed time
     /// would differ on every single write, so every foreground would spend a reload and
     /// the one that matters, right after a run is saved, would be the one dropped.
-    let glance: String
-    let tone: Tone
+    public let glance: String
+    public let tone: Tone
     /// How much this matters right now, 0–1. Ordering is by this and nothing else.
-    let score: Double
+    public let score: Double
     /// The working behind any number in `message` — "0.9 g/kg/h · 72 kg · ~1.6 h · 105 g
     /// total". Shown under the primary card, because a computed figure with no visible
     /// basis reads as a guess. Nil for cards that assert no number.
-    let derivation: String?
+    public let derivation: String?
     /// When this card stops being worth showing, or `nil` when it does not go off.
     ///
     /// Where `glance` keeps the *wording* true, this keeps the *relevance* true: a refuel
@@ -123,9 +123,9 @@ struct SmartCoachCard: Identifiable, Equatable, Sendable {
     /// Anchored to the data — a run's finish, a race's date — and never to `now`. An
     /// expiry computed as "two hours from this write" would move on every write, which
     /// is the reload-budget trap again.
-    let expiresAt: Date?
+    public let expiresAt: Date?
 
-    init(
+    public init(
         kind: Kind,
         title: String,
         message: String,
@@ -149,14 +149,14 @@ struct SmartCoachCard: Identifiable, Equatable, Sendable {
     }
 
     /// Whether the card is still worth showing at `now`.
-    func isValid(asOf now: Date) -> Bool {
+    public func isValid(asOf now: Date) -> Bool {
         guard let expiresAt else { return true }
         return now < expiresAt
     }
 
-    var id: String { kind.rawValue }
+    public var id: String { kind.rawValue }
 
-    var category: Category {
+    public var category: Category {
         switch kind {
         case .raceDay, .raceWeek, .refuel, .longRunFuel, .sessionFuel, .heat, .restDay:
             return .nutrition
@@ -183,7 +183,7 @@ extension SmartCoachCard {
     ///   - threshold: where the rule starts having something to say.
     ///   - ceiling: where it is as urgent as it will get. Beyond this the score is 1.
     ///   - base: the score at exactly `threshold`.
-    static func urgency(
+    public static func urgency(
         _ value: Double,
         threshold: Double,
         saturatingAt ceiling: Double,
@@ -197,7 +197,7 @@ extension SmartCoachCard {
 
     /// The same, for readings where *smaller* is worse — cadence, or the gap between easy
     /// and hard pace.
-    static func inverseUrgency(
+    public static func inverseUrgency(
         _ value: Double,
         threshold: Double,
         saturatingAt floor: Double,

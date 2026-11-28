@@ -18,39 +18,63 @@ import Foundation
 ///   the map marker is placed by elapsed-time fraction in the same way.
 ///
 /// Pure and `Sendable`; tested without the app.
-enum RunAnalysis {
+public enum RunAnalysis {
 
-    struct Reading: Equatable, Sendable {
-        let elapsedSeconds: Double
-        let meters: Double
-        let altitudeMeters: Double?
+    public struct Reading: Equatable, Sendable {
+        public let elapsedSeconds: Double
+        public let meters: Double
+        public let altitudeMeters: Double?
+
+        public init(
+            elapsedSeconds: Double,
+            meters: Double,
+            altitudeMeters: Double?
+        ) {
+            self.elapsedSeconds = elapsedSeconds
+            self.meters = meters
+            self.altitudeMeters = altitudeMeters
+        }
     }
 
     /// One point on the shared timeline.
-    struct Point: Equatable, Sendable, Identifiable {
-        let meters: Double
-        let elapsedSeconds: Double
+    public struct Point: Equatable, Sendable, Identifiable {
+        public let meters: Double
+        public let elapsedSeconds: Double
         /// Seconds per km over the surrounding ``paceWindowMeters``, or `nil` while
         /// standing still or before there is enough distance to say.
-        let paceSecondsPerKm: Double?
-        let heartRate: Double?
-        let altitudeMeters: Double?
+        public let paceSecondsPerKm: Double?
+        public let heartRate: Double?
+        public let altitudeMeters: Double?
 
-        var id: Double { meters }
+        public var id: Double { meters }
+
+        public init(
+            meters: Double,
+            elapsedSeconds: Double,
+            paceSecondsPerKm: Double?,
+            heartRate: Double?,
+            altitudeMeters: Double?
+        ) {
+            self.meters = meters
+            self.elapsedSeconds = elapsedSeconds
+            self.paceSecondsPerKm = paceSecondsPerKm
+            self.heartRate = heartRate
+            self.altitudeMeters = altitudeMeters
+        }
     }
 
     /// How many points the charts draw: enough to show a surge, few enough to scrub
     /// smoothly on a marathon.
-    static let targetPointCount = 240
+    public static let targetPointCount = 240
     /// Pace is averaged over this much distance either side of a point, so GPS wobble
     /// over 10 m doesn't read as a sprint.
-    static let paceWindowMeters = 100.0
+    public static let paceWindowMeters = 100.0
     /// Slower than this is a stop, not a pace: 30:00 per km.
-    static let slowestPaceSecondsPerKm = 1_800.0
+    public static let slowestPaceSecondsPerKm = 1_800.0
 
     /// The run resampled onto evenly spaced distances. Empty when the series is too short
     /// to draw.
-    static func points(
+    public static func points(
         readings: [Reading],
         heartRateSamples: [Double],
         durationSeconds: Double
@@ -78,7 +102,7 @@ enum RunAnalysis {
     }
 
     /// The point nearest a distance along the run.
-    static func point(nearest meters: Double, in points: [Point]) -> Point? {
+    public static func point(nearest meters: Double, in points: [Point]) -> Point? {
         guard !points.isEmpty else { return nil }
         // Evenly spaced, so the index is arithmetic, then checked either side.
         let step = points.count > 1 ? points[1].meters - points[0].meters : 1
@@ -90,7 +114,7 @@ enum RunAnalysis {
 
     /// Which route coordinate the runner was at after `elapsedSeconds`, assuming the
     /// coordinates are spread evenly over the run's duration.
-    static func routeIndex(atElapsed elapsedSeconds: Double, duration: Double, coordinateCount: Int) -> Int? {
+    public static func routeIndex(atElapsed elapsedSeconds: Double, duration: Double, coordinateCount: Int) -> Int? {
         guard coordinateCount > 0, duration > 0 else { return nil }
         let fraction = min(max(elapsedSeconds / duration, 0), 1)
         return min(coordinateCount - 1, Int((fraction * Double(coordinateCount - 1)).rounded()))
@@ -121,7 +145,7 @@ enum RunAnalysis {
         return low
     }
 
-    static func time(at meters: Double, in series: [Reading]) -> Double {
+    public static func time(at meters: Double, in series: [Reading]) -> Double {
         let lower = index(atOrBefore: meters, in: series)
         guard lower + 1 < series.count else { return series[lower].elapsedSeconds }
         let before = series[lower]

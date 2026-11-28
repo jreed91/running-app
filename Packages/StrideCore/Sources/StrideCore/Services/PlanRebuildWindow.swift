@@ -12,7 +12,7 @@ import Foundation
 /// `AppContainer` did this inline (D2), which put calendar arithmetic on the DI
 /// container with no test home — the same reason N6's race clamp had none until
 /// `MissedWorkoutShift` moved out.
-enum PlanRebuildWindow {
+public enum PlanRebuildWindow {
 
     /// Whole weeks to generate for a rebuild running from `startDate` to `endDate`.
     ///
@@ -24,7 +24,7 @@ enum PlanRebuildWindow {
     /// - Returns: At least ``minimumWeeks``. An end date already in the past means the
     ///   old block is spent; the runner asked for a plan, so they get the shortest real
     ///   one rather than an empty one.
-    static func remainingWeeks(
+    public static func remainingWeeks(
         from startDate: Date,
         to endDate: Date,
         calendar: Calendar = .current
@@ -37,7 +37,7 @@ enum PlanRebuildWindow {
     }
 
     /// The floor on a rebuilt plan's length.
-    static let minimumWeeks = 1
+    public static let minimumWeeks = 1
 
     private static let daysPerWeek = 7
 }

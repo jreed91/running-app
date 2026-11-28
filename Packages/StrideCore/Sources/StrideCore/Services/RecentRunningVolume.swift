@@ -17,33 +17,41 @@ import Foundation
 ///
 /// No runs at all in the last ``lookbackWeeks`` means there is nothing to go on: no Health
 /// access, a new watch, or a first plan. That is `nil`, and the plan is built as before.
-struct RecentRunningVolume: Equatable, Sendable {
+public struct RecentRunningVolume: Equatable, Sendable {
     /// One run, as Health has it.
-    struct Run: Equatable, Sendable {
-        let date: Date
-        let meters: Double
+    public struct Run: Equatable, Sendable {
+        public let date: Date
+        public let meters: Double
+
+        public init(
+            date: Date,
+            meters: Double
+        ) {
+            self.date = date
+            self.meters = meters
+        }
     }
 
     /// The window the starting volume is averaged over.
-    static let averageWeeks = 4
+    public static let averageWeeks = 4
     /// How far back any run counts as evidence that Health knows this runner's running.
-    static let lookbackWeeks = 26
+    public static let lookbackWeeks = 26
     /// Week one may be this much more than the recent weekly average.
-    static let startAllowance = 1.10
+    public static let startAllowance = 1.10
     /// Each later week's ceiling grows by this much over the one before.
-    static let weeklyGrowth = 1.10
+    public static let weeklyGrowth = 1.10
     /// The smallest starting week, so someone who has barely run still gets real sessions.
-    static let floorKm = 12.0
+    public static let floorKm = 12.0
     /// The smallest long-run ceiling, so a runner with only short runs lately can build.
-    static let longRunFloorKm = 5.0
+    public static let longRunFloorKm = 5.0
 
     /// Average weekly distance over the last ``averageWeeks`` weeks, in km.
-    let averageWeeklyKm: Double
+    public let averageWeeklyKm: Double
     /// The longest single run in the last ``averageWeeks`` weeks, in km. 0 when there was none.
-    let longestRunKm: Double
+    public let longestRunKm: Double
 
     /// - Returns: `nil` when no run of any distance falls in the last ``lookbackWeeks``.
-    init?(runs: [Run], now: Date = Date()) {
+    public init?(runs: [Run], now: Date = Date()) {
         let week: TimeInterval = 7 * 86_400
         let lookbackStart = now.addingTimeInterval(-Double(Self.lookbackWeeks) * week)
         let recent = runs.filter { $0.date <= now && $0.date >= lookbackStart && $0.meters > 0 }
@@ -54,24 +62,24 @@ struct RecentRunningVolume: Equatable, Sendable {
         longestRunKm = (window.map(\.meters).max() ?? 0) / 1_000
     }
 
-    init(averageWeeklyKm: Double, longestRunKm: Double) {
+    public init(averageWeeklyKm: Double, longestRunKm: Double) {
         self.averageWeeklyKm = averageWeeklyKm
         self.longestRunKm = longestRunKm
     }
 
     /// The most a plan built today may ask for in week one, in km.
-    var startingKm: Double {
+    public var startingKm: Double {
         max(Self.floorKm, averageWeeklyKm * Self.startAllowance)
     }
 
     /// The most the plan's week at `weekIndex` (0 for week one) may ask for, in km, before
     /// that week's own cutback or taper reduction.
-    func ceilingKm(weekIndex: Int) -> Double {
+    public func ceilingKm(weekIndex: Int) -> Double {
         startingKm * pow(Self.weeklyGrowth, Double(max(0, weekIndex)))
     }
 
     /// The longest the long run in the plan's week at `weekIndex` may be, in km.
-    func longRunCeilingKm(weekIndex: Int) -> Double {
+    public func longRunCeilingKm(weekIndex: Int) -> Double {
         max(Self.longRunFloorKm, longestRunKm * Self.startAllowance)
             * pow(Self.weeklyGrowth, Double(max(0, weekIndex)))
     }

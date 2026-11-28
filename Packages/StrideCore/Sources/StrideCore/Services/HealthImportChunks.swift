@@ -12,18 +12,18 @@ import Foundation
 /// range, and what was imported before a failure stays imported.
 ///
 /// Newest first, so the runs a runner cares about most land first.
-enum HealthImportChunks {
+public enum HealthImportChunks {
     /// A month of running is a few dozen workouts at most.
-    static let defaultDays = 30
+    public static let defaultDays = 30
 
     /// Weather is fetched only for runs this recent. It feeds the coach's look at recent
     /// runs and the heat tips; a WeatherKit request for every run of the last five years
     /// was hundreds of requests for nothing anyone reads.
-    static let weatherDays = 14
+    public static let weatherDays = 14
 
     /// `[start, end)` stretches of at most `days` days covering `start` to `end`, newest
     /// first. Empty when `start` is not before `end`.
-    static func ranges(from start: Date, to end: Date, days: Int = defaultDays) -> [DateInterval] {
+    public static func ranges(from start: Date, to end: Date, days: Int = defaultDays) -> [DateInterval] {
         guard start < end, days > 0 else { return [] }
         let length = Double(days) * 86_400
         var result: [DateInterval] = []
@@ -37,7 +37,7 @@ enum HealthImportChunks {
     }
 
     /// Whether a run on `date` gets weather attached when imported at `now`.
-    static func wantsWeather(_ date: Date, now: Date) -> Bool {
+    public static func wantsWeather(_ date: Date, now: Date) -> Bool {
         date >= now.addingTimeInterval(-Double(weatherDays) * 86_400)
     }
 }

@@ -11,19 +11,19 @@ import Foundation
 /// follows it.
 ///
 /// Pure and `Sendable`, like ``VolumeExplorer``, whose windows and buckets it reuses.
-enum ProgressFilter {
+public enum ProgressFilter {
 
     // MARK: Period
 
     /// How far back the page reaches.
-    enum Period: String, CaseIterable, Sendable {
+    public enum Period: String, CaseIterable, Sendable {
         case month = "1M"
         case threeMonths = "3M"
         case sixMonths = "6M"
         case year = "1Y"
         case all = "All"
 
-        var window: VolumeExplorer.Window {
+        public var window: VolumeExplorer.Window {
             switch self {
             case .month: return .month
             case .threeMonths: return .threeMonths
@@ -34,16 +34,16 @@ enum ProgressFilter {
         }
 
         /// Days back from now, or `nil` for all time.
-        var days: Int? { window.days }
+        public var days: Int? { window.days }
 
         /// Bars by week up to half a year, by month past that.
-        var grouping: VolumeExplorer.Grouping { window.defaultGrouping }
+        public var grouping: VolumeExplorer.Grouping { window.defaultGrouping }
     }
 
     // MARK: Run type
 
     /// The kind of session a run was, as far as the filter cares.
-    enum RunKind: Sendable, Equatable {
+    public enum RunKind: Sendable, Equatable {
         case easy
         case long
         case workout
@@ -54,13 +54,13 @@ enum ProgressFilter {
     }
 
     /// Which runs the page counts.
-    enum RunType: String, CaseIterable, Sendable {
+    public enum RunType: String, CaseIterable, Sendable {
         case all
         case easyAndLong
         case workouts
         case races
 
-        func includes(_ kind: RunKind) -> Bool {
+        public func includes(_ kind: RunKind) -> Bool {
             switch self {
             case .all: return true
             case .easyAndLong: return kind == .easy || kind == .long
@@ -73,18 +73,18 @@ enum ProgressFilter {
     // MARK: Drill-in
 
     /// The stretch of time a tapped bar covers.
-    static func drill(for bucket: VolumeExplorer.Bucket) -> DateInterval {
+    public static func drill(for bucket: VolumeExplorer.Bucket) -> DateInterval {
         DateInterval(start: bucket.start, end: max(bucket.start, bucket.end))
     }
 
     /// The bar a tap at `date` picks, if any: the one holding it, else the nearest.
-    static func bucket(at date: Date, in buckets: [VolumeExplorer.Bucket]) -> VolumeExplorer.Bucket? {
+    public static func bucket(at date: Date, in buckets: [VolumeExplorer.Bucket]) -> VolumeExplorer.Bucket? {
         VolumeExplorer.bucket(nearest: date, in: buckets)
     }
 
     /// Whether a run on `date` falls in the drill-in. Start inclusive, end exclusive, so
     /// a run at midnight on Monday belongs to the new week, as the bars count it.
-    static func contains(_ drill: DateInterval?, _ date: Date) -> Bool {
+    public static func contains(_ drill: DateInterval?, _ date: Date) -> Bool {
         guard let drill else { return true }
         return date >= drill.start && date < drill.end
     }

@@ -15,43 +15,51 @@ import Foundation
 /// `accumulated`; `resume` opens a new segment; the gap in between is not
 /// counted. Every method takes an explicit `Date` so the type is fully
 /// deterministic under test.
-struct WallClockStopwatch: Equatable, Sendable {
+public struct WallClockStopwatch: Equatable, Sendable {
 
     /// Seconds banked from previously completed active segments.
-    private(set) var accumulated: TimeInterval = 0
+    public private(set) var accumulated: TimeInterval = 0
     /// Start of the currently running segment, or `nil` while paused/stopped.
-    private(set) var segmentStart: Date?
+    public private(set) var segmentStart: Date?
 
-    var isRunning: Bool { segmentStart != nil }
+    public var isRunning: Bool { segmentStart != nil }
 
     /// Begins timing from `date`, discarding any prior state.
-    mutating func start(at date: Date) {
+    public mutating func start(at date: Date) {
         accumulated = 0
         segmentStart = date
     }
 
     /// Banks the running segment and stops accruing time. No-op if not running.
-    mutating func pause(at date: Date) {
+    public mutating func pause(at date: Date) {
         guard let start = segmentStart else { return }
         accumulated += max(0, date.timeIntervalSince(start))
         segmentStart = nil
     }
 
     /// Opens a new active segment from `date`. No-op if already running.
-    mutating func resume(at date: Date) {
+    public mutating func resume(at date: Date) {
         guard segmentStart == nil else { return }
         segmentStart = date
     }
 
     /// Total elapsed seconds as of `date` (banked plus the live segment).
-    func elapsed(at date: Date) -> TimeInterval {
+    public func elapsed(at date: Date) -> TimeInterval {
         guard let start = segmentStart else { return accumulated }
         return accumulated + max(0, date.timeIntervalSince(start))
     }
 
     /// Returns to the zeroed, stopped state.
-    mutating func reset() {
+    public mutating func reset() {
         accumulated = 0
         segmentStart = nil
+    }
+
+    public init(
+        accumulated: TimeInterval = 0,
+        segmentStart: Date? = nil
+    ) {
+        self.accumulated = accumulated
+        self.segmentStart = segmentStart
     }
 }

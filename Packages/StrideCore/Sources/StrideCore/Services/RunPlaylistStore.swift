@@ -7,7 +7,7 @@ import Foundation
 /// Apple Music account, so the only thing that would have earned a CloudKit schema
 /// deployment is the note, and a second device losing the note offers to build rather than
 /// to open — which is a smaller cost than a release gated on a console deploy.
-enum RunPlaylistStore {
+public enum RunPlaylistStore {
 
     private static let keyPrefix = "runPlaylist."
 
@@ -15,23 +15,23 @@ enum RunPlaylistStore {
         keyPrefix + workoutID.uuidString
     }
 
-    static func link(for workoutID: UUID, in defaults: UserDefaults = .standard) -> RunPlaylistLink? {
+    public static func link(for workoutID: UUID, in defaults: UserDefaults = .standard) -> RunPlaylistLink? {
         guard let data = defaults.data(forKey: key(for: workoutID)) else { return nil }
         return try? JSONDecoder().decode(RunPlaylistLink.self, from: data)
     }
 
-    static func save(_ link: RunPlaylistLink, in defaults: UserDefaults = .standard) {
+    public static func save(_ link: RunPlaylistLink, in defaults: UserDefaults = .standard) {
         guard let data = try? JSONEncoder().encode(link) else { return }
         defaults.set(data, forKey: key(for: link.workoutID))
     }
 
-    static func remove(for workoutID: UUID, in defaults: UserDefaults = .standard) {
+    public static func remove(for workoutID: UUID, in defaults: UserDefaults = .standard) {
         defaults.removeObject(forKey: key(for: workoutID))
     }
 
     /// How long a link is kept. A playlist built for a session four months ago is not something
     /// anyone is going back to look at.
-    static let retention: TimeInterval = 120 * 24 * 60 * 60
+    public static let retention: TimeInterval = 120 * 24 * 60 * 60
 
     /// Drops links older than ``retention``.
     ///
@@ -42,7 +42,7 @@ enum RunPlaylistStore {
     ///
     /// Pruning a link does not touch the playlist: that is in the runner's Apple Music library
     /// and stays there. All they lose is Stride's offer to play it from the session.
-    static func prune(now: Date = Date(), in defaults: UserDefaults = .standard) {
+    public static func prune(now: Date = Date(), in defaults: UserDefaults = .standard) {
         for key in defaults.dictionaryRepresentation().keys where key.hasPrefix(keyPrefix) {
             guard let data = defaults.data(forKey: key),
                   let link = try? JSONDecoder().decode(RunPlaylistLink.self, from: data)
@@ -65,7 +65,7 @@ enum RunPlaylistStore {
     /// deliberately left alone — they are in the runner's Apple Music library, not Stride's,
     /// and deleting a runner's music behind a "reset app data" button is not a thing this
     /// button gets to do.
-    static func removeAll(in defaults: UserDefaults = .standard) {
+    public static func removeAll(in defaults: UserDefaults = .standard) {
         for key in defaults.dictionaryRepresentation().keys where key.hasPrefix(keyPrefix) {
             defaults.removeObject(forKey: key)
         }

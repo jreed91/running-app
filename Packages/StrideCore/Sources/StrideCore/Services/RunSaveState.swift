@@ -22,7 +22,7 @@ import Foundation
 ///
 /// Generic over the run so the transitions are tested with plain values, without a
 /// SwiftData container; the app uses `RunSaveState<RunWorkout>`.
-enum RunSaveState<Run> {
+public enum RunSaveState<Run> {
     /// Nothing finished and unsaved: recording, or the run is already in the store.
     case unsaved
     /// Finished and handed to the save; retried from here rather than re-finishing the
@@ -34,7 +34,7 @@ enum RunSaveState<Run> {
     // MARK: Reading
 
     /// The finished run not yet in the store, if any.
-    var heldRun: Run? {
+    public var heldRun: Run? {
         switch self {
         case .unsaved: nil
         case .held(let run), .failed(let run, _): run
@@ -42,7 +42,7 @@ enum RunSaveState<Run> {
     }
 
     /// What the "Couldn't save your run" alert says; nil when it should not show.
-    var errorMessage: String? {
+    public var errorMessage: String? {
         guard case .failed(_, let message) = self else { return nil }
         return message
     }
@@ -50,30 +50,30 @@ enum RunSaveState<Run> {
     // MARK: Transitions
 
     /// The run is finished and about to be saved.
-    mutating func hold(_ run: Run) {
+    public mutating func hold(_ run: Run) {
         self = .held(run)
     }
 
     /// Saving `run` failed with `message`.
-    mutating func fail(_ run: Run, message: String) {
+    public mutating func fail(_ run: Run, message: String) {
         self = .failed(run, message: message)
     }
 
     /// The alert went away without a choice. The run stays held.
-    mutating func dismissError() {
+    public mutating func dismissError() {
         guard case .failed(let run, _) = self else { return }
         self = .held(run)
     }
 
     /// Try Again: clears the error and hands back the run to save, or nil when none is
     /// held.
-    mutating func retry() -> Run? {
+    public mutating func retry() -> Run? {
         dismissError()
         return heldRun
     }
 
     /// Saved, or discarded: nothing is held any more.
-    mutating func clear() {
+    public mutating func clear() {
         self = .unsaved
     }
 }
