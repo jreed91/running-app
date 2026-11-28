@@ -13,6 +13,11 @@ private struct MedalBucket: Identifiable {
     let name: String
     let targetMeters: Double
     let bestRun: RunWorkout?
+
+    /// The record's time at `targetMeters` (Riegel-equivalent from `bestRun`), 0 without one.
+    var recordSeconds: Double {
+        bestRun.map { ProgressStatsService.normalizedSeconds(for: $0, targetMeters: targetMeters) } ?? 0
+    }
 }
 
 @MainActor
@@ -268,7 +273,7 @@ struct AchievementsView: View {
             Text("Distance records")
                 .strideEyebrow()
                 .foregroundStyle(.secondary)
-            Text("Your fastest time at each distance")
+            Text("Equivalent time from your fastest run at or past each distance")
                 .font(.bodyRegular)
                 .foregroundStyle(.secondary)
                 .padding(.bottom, AppSpacing.xs)
@@ -316,7 +321,10 @@ struct AchievementsView: View {
                 Text(bucket.name)
                     .font(.bodyStrong)
                 if let run = bucket.bestRun {
-                    Text(run.durationSeconds.durationString)
+                    // The run's time *at this distance*, not its whole duration: the
+                    // record for 1 mile is usually a longer run, and its total read as
+                    // a 39-minute mile.
+                    Text(bucket.recordSeconds.durationString)
                         .font(.metricS)
                         .foregroundStyle(.primary)
                 } else {
@@ -333,7 +341,7 @@ struct AchievementsView: View {
                     Text(run.date, format: .dateTime.month(.abbreviated).day().year())
                         .font(.dsCaption)
                         .foregroundStyle(.secondary)
-                    Text(run.averagePaceSecondsPerKm.paceString(unit: appSettings.unitPreference))
+                    Text((bucket.recordSeconds / bucket.targetMeters * 1_000).paceString(unit: appSettings.unitPreference))
                         .font(.captionStrong)
                         .foregroundStyle(.secondary)
                         .monospacedDigit()

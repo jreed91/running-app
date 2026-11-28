@@ -106,6 +106,8 @@ enum DemoDataSeed {
             }
         }
 
+        seedSavedWorkouts(into: context, today: today)
+
         if seedsCoachRead, let newestRun {
             newestRun.cachedAIInsight = coachRead(metric: UnitPreference.localeDefault == .metric)
         }
@@ -114,6 +116,43 @@ enum DemoDataSeed {
             try context.save()
         } catch {
             AppLogger.log("Demo data seed failed to save: \(error)", label: "UITest", level: .error)
+        }
+    }
+
+    // MARK: - My workouts
+
+    /// Two workouts in the runner's own library, built from the classics the way a runner
+    /// would (pick one, rename it, add a note), so My workouts shows its list rather than
+    /// only the empty state. One has been used recently, one not yet.
+    @MainActor
+    private static func seedSavedWorkouts(into context: ModelContext, today: Date) {
+        let unit = UnitPreference.localeDefault
+        // The demo runner's paces: a 25:40 5K, in line with the history's tempo runs.
+        let starters = CustomWorkoutStarters.all(
+            paces: PaceCalculatorService.trainingPaces(from5KTimeSeconds: 25 * 60 + 40),
+            unit: unit
+        )
+        let picks: [(starter: String, name: String, notes: String?, daysAgo: Int, usedDaysAgo: Int?)] = [
+            ("800s", "Track Tuesday 6 × 800", "Lane 1, 90 s standing jog", 40, 4),
+            ("pyramid", "Park pyramid", "Grass loop by the lake", 12, nil)
+        ]
+        for pick in picks {
+            guard let starter = starters.first(where: { $0.id == pick.starter }),
+                  let created = Calendar.current.date(byAdding: .day, value: -pick.daysAgo, to: today) else {
+                continue
+            }
+            let workout = SavedWorkout(
+                name: pick.name,
+                structure: starter.draft.structure(),
+                notes: pick.notes,
+                now: created
+            )
+            if let used = pick.usedDaysAgo,
+               let usedAt = Calendar.current.date(byAdding: .day, value: -used, to: today) {
+                workout.markUsed(now: usedAt)
+                workout.updatedAt = usedAt
+            }
+            context.insert(workout)
         }
     }
 
