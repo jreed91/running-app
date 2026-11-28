@@ -311,9 +311,11 @@ struct RunSummaryView: View {
     /// The small uppercase label over the hero number: "Tempo run", but plain "Walk" or
     /// "Cross Training" for the imported sessions that are not runs.
     var kickerTitle: String {
-        workout.countsAsRunning
-            ? String(localized: "\(displayType.localizedName) run", comment: "Run summary kicker, e.g. Tempo run")
-            : displayType.localizedName
+        // "Long Run" already says run; "Long Run run" read as a typo on every long run.
+        guard workout.countsAsRunning, displayType != .longRun else {
+            return displayType.localizedName
+        }
+        return String(localized: "\(displayType.localizedName) run", comment: "Run summary kicker, e.g. Tempo run")
     }
 
     /// Whether the screen shows a running pace. A ride's minutes per kilometre is not
