@@ -49,6 +49,22 @@ def payload(data_dir: Path, ref: str) -> bytes | None:
         return None
 
 
+def export_unnamed(bundle: Path, out: Path) -> int:
+    folder = out / "unnamed"
+    folder.mkdir(parents=True, exist_ok=True)
+    written = []
+    for path in sorted((bundle / "Data").glob("data.*")):
+        with path.open("rb") as handle:
+            if handle.read(8) != PNG_MAGIC:
+                continue
+        target = folder / f"{len(written) + 1:03d}.png"
+        target.write_bytes(path.read_bytes())
+        written.append(target)
+    (out / "index.txt").write_text("".join(f"{p.relative_to(out)}\n" for p in written))
+    print(f"Exported {len(written)} unnamed screenshot(s) to {out}")
+    return 0
+
+
 def main() -> int:
     if len(sys.argv) != 3:
         print(__doc__.strip().splitlines()[2], file=sys.stderr)
@@ -56,8 +72,11 @@ def main() -> int:
     bundle, out = Path(sys.argv[1]), Path(sys.argv[2])
     db = bundle / "database.sqlite3"
     if not db.exists():
-        print(f"{db} not found: not an Xcode 16+ result bundle", file=sys.stderr)
-        return 1
+        # The index only exists once xcresulttool has read the bundle (CI's export step
+        # does that first). Without it, the PNGs can still be found by their magic bytes,
+        # just not named or ordered.
+        print(f"{db} not found; saving PNGs by content, without names", file=sys.stderr)
+        return export_unnamed(bundle, out)
 
     con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
     # Attachment → activity → test case run → test case → suite. Any link can be
