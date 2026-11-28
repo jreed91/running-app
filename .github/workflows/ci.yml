@@ -243,10 +243,14 @@ jobs:
         # package product" failure. The pins already constrain the versions.
         run: |
           set -o pipefail
+          # `-only-testing`: each runner builds the app and only its own test bundle.
+          # StrideTests is ~180 files that `@testable import Stride`, so any change to
+          # the app's interface recompiles all of them; the UI runners don't need it.
           xcodebuild build-for-testing \
             -scheme "$SCHEME" \
             -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
             -derivedDataPath ~/Library/Developer/Xcode/DerivedData \
+            -only-testing:${{ matrix.only }} \
             -skipMacroValidation \
             -skipPackagePluginValidation \
             COMPILER_INDEX_STORE_ENABLE=NO \
